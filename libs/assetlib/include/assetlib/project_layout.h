@@ -49,6 +49,11 @@ namespace assetlib
 	// its `.bskel` by swapping the half and the extension, so the two directories are one layout.
 	inline constexpr auto c_AvatarsDirectoryName = "Authored/Skeletons";
 
+	// A clip set's authored half, mirroring `Derived/Animations` the same way. Where a *new*
+	// `.bblend` is written; unlike an avatar the path is not the attachment, since a set stores the
+	// `.banim` it is authored against, so one moved elsewhere still resolves.
+	inline constexpr auto c_BlendSetsDirectoryName = "Authored/Animations";
+
 	inline constexpr auto c_MeshesDirectoryName     = "Derived/Meshes";
 	inline constexpr auto c_SkeletonsDirectoryName  = "Derived/Skeletons";
 	inline constexpr auto c_AnimationsDirectoryName = "Derived/Animations";

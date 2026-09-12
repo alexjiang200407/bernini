@@ -80,4 +80,34 @@ namespace assetlib
 			who,
 			normalized);
 	}
+
+	std::string
+	swapHalf(
+		const std::string_view subject,
+		const std::string_view from,
+		const AssetHalf&       fromHalf,
+		const AssetHalf&       toHalf)
+	{
+		const std::string key = normalizeRef(from);
+
+		core::throw_runtime_error_if(
+			extensionOf(key) != fromHalf.extension,
+			"{}: '{}' is not a '{}'",
+			subject,
+			from,
+			fromHalf.extension);
+
+		core::throw_runtime_error_if(
+			!isUnder(key, fromHalf.directory),
+			"{}: '{}' is not under '{}'",
+			subject,
+			from,
+			fromHalf.directory);
+
+		const std::string_view tail = std::string_view(key).substr(
+			fromHalf.directory.size(),
+			key.size() - fromHalf.directory.size() - fromHalf.extension.size());
+
+		return std::string(toHalf.directory).append(tail).append(toHalf.extension);
+	}
 }

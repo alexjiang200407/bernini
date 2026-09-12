@@ -541,11 +541,11 @@ namespace bgl
 		}
 
 		{
-			auto blendMemberBufferDesc         = RangeBufferDesc();
-			blendMemberBufferDesc.initialCount = 1;
-			blendMemberBufferDesc.debugName    = "Blend Member Buffer";
+			auto blendSampleBufferDesc         = RangeBufferDesc();
+			blendSampleBufferDesc.initialCount = 1;
+			blendSampleBufferDesc.debugName    = "Blend Sample Buffer";
 
-			m_BlendMembers.Init(std::move(blendMemberBufferDesc), m_ResourceManager);
+			m_BlendSamples.Init(std::move(blendSampleBufferDesc), m_ResourceManager);
 		}
 	}
 
@@ -858,70 +858,81 @@ namespace bgl
 
 		for (size_t s = 0; s < blendSet.spaces.size(); ++s)
 		{
-			const std::vector<BlendSpaceMemberDesc>& members = blendSet.spaces[s].members;
+			const std::vector<BlendSpaceSampleDesc>& samples = blendSet.spaces[s].samples;
 
-			// One member is a clip, and every clip is already a node under its own index.
-			if (members.size() < 2)
+			ValidateBlendSpaceRun(s, samples);
+
+			for (size_t m = 0; m < samples.size(); ++m)
 			{
-				throw SceneError(
-					std::format(
-						"skinned geometry: blend space {} holds {} members, and a blend space "
-						"needs at least two",
-						s,
-						members.size()));
-			}
+				const BlendSpaceSampleDesc& sample = samples[m];
 
-			for (size_t m = 0; m < members.size(); ++m)
-			{
-				const BlendSpaceMemberDesc& member = members[m];
-
-				if (member.clipIndex >= animations.clips.size())
+				if (sample.clipIndex >= animations.clips.size())
 				{
 					throw SceneError(
 						std::format(
-							"skinned geometry: member {} of blend space {} names clip {} of a set "
+							"skinned geometry: sample {} of blend space {} names clip {} of a set "
 							"that holds {}",
 							m,
 							s,
-							member.clipIndex,
+							sample.clipIndex,
 							animations.clips.size()));
 				}
 
-				// A parameter sets one normalized phase every member plays at, and a clip that
+				// A parameter sets one normalized phase every sample plays at, and a clip that
 				// clamps rather than wraps would sit on its last frame while the others cycle.
-				if (animations.clips[member.clipIndex].loop == 0)
+				if (animations.clips[sample.clipIndex].loop == 0)
 				{
 					throw SceneError(
 						std::format(
-							"skinned geometry: member {} of blend space {} names a clip that does "
-							"not loop, and a blend space shares one phase across its members",
+							"skinned geometry: sample {} of blend space {} names a clip that does "
+							"not loop, and a blend space shares one phase across its samples",
 							m,
 							s));
 				}
+			}
+		}
+	}
 
-				if (!std::isfinite(member.parameter))
-				{
-					throw SceneError(
-						std::format(
-							"skinned geometry: member {} of blend space {} has a parameter of {}",
-							m,
-							s,
-							member.parameter));
-				}
+	void
+	Scene::ValidateBlendSpaceRun(const size_t space, std::span<const BlendSpaceSampleDesc> samples)
+	{
+		// One sample is a clip, and every clip is already a node under its own index.
+		if (samples.size() < 2)
+		{
+			throw SceneError(
+				std::format(
+					"skinned geometry: blend space {} holds {} samples, and a blend space needs at "
+					"least two",
+					space,
+					samples.size()));
+		}
 
-				// Strictly increasing, not merely sorted: the span between two members is what a
-				// weight divides by.
-				if (m > 0 && !(member.parameter > members[m - 1].parameter))
-				{
-					throw SceneError(
-						std::format(
-							"skinned geometry: blend space {} has parameter {} at member {} after "
-							"{}, and they must strictly increase",
-							s,
-							member.parameter,
-							m,
-							members[m - 1].parameter));
-				}
+		for (size_t m = 0; m < samples.size(); ++m)
+		{
+			const BlendSpaceSampleDesc& sample = samples[m];
+
+			if (!std::isfinite(sample.parameter))
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: sample {} of blend space {} has a parameter of {}",
+						m,
+						space,
+						sample.parameter));
+			}
+
+			// Strictly increasing, not merely sorted: the span between two samples is what a
+			// weight divides by.
+			if (m > 0 && !(sample.parameter > samples[m - 1].parameter))
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: blend space {} has parameter {} at sample {} after {}, "
+						"and they must strictly increase",
+						space,
+						sample.parameter,
+						m,
+						samples[m - 1].parameter));
 			}
 		}
 	}
@@ -1010,8 +1021,10 @@ namespace bgl
 		// The node table: one clip node per clip in clip order, then the authored spaces. Clips
 		// first is what lets a slot naming node `n` below the clip count play clip `n`, so a
 		// one-clip spawn means what it did before blend spaces existed.
-		auto nodes   = std::vector<idl::BlendNode>();
-		auto members = std::vector<idl::BlendSpaceMember>();
+		auto nodes = std::vector<idl::BlendNode>();
+
+		// Not `samples`: the bone samples above already own that name here, and the rig holds both.
+		auto blendSamples = std::vector<idl::BlendSpaceSample>();
 		nodes.reserve(clips.size() + blendSet.spaces.size());
 		for (uint32_t clip = 0; clip < clips.size(); ++clip)
 		{
@@ -1024,16 +1037,16 @@ namespace bgl
 		{
 			auto node        = idl::BlendNode();
 			node.kind        = idl::BlendNodeKind::kSpace;
-			node.firstMember = static_cast<uint32_t>(members.size());
-			node.memberCount = static_cast<uint32_t>(space.members.size());
+			node.firstSample = static_cast<uint32_t>(blendSamples.size());
+			node.sampleCount = static_cast<uint32_t>(space.samples.size());
 			nodes.emplace_back(node);
 
-			for (const BlendSpaceMemberDesc& member : space.members)
+			for (const BlendSpaceSampleDesc& sample : space.samples)
 			{
-				auto entry      = idl::BlendSpaceMember();
-				entry.clip      = member.clipIndex;
-				entry.parameter = member.parameter;
-				members.emplace_back(entry);
+				auto entry      = idl::BlendSpaceSample();
+				entry.clip      = sample.clipIndex;
+				entry.parameter = sample.parameter;
+				blendSamples.emplace_back(entry);
 			}
 		}
 
@@ -1052,10 +1065,10 @@ namespace bgl
 					rollback.Track(m_PlantWeights, m_PlantWeights.Add(std::span(weights)));
 			}
 			record.nodes = rollback.Track(m_BlendNodes, m_BlendNodes.Add(std::span(nodes)));
-			if (!members.empty())
+			if (!blendSamples.empty())
 			{
-				record.members =
-					rollback.Track(m_BlendMembers, m_BlendMembers.Add(std::span(members)));
+				record.blendSamples =
+					rollback.Track(m_BlendSamples, m_BlendSamples.Add(std::span(blendSamples)));
 			}
 
 			record.boneCount = boneCount;
@@ -1077,6 +1090,95 @@ namespace bgl
 		catch (const std::runtime_error& e)
 		{
 			throw SceneError(e.what());
+		}
+	}
+
+	void
+	Scene::SetRigBlendParameters(RigHandle rig, const BlendSetDesc& blendSet)
+	{
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError(
+				"RigHandle passed to SetRigBlendParameters is null, or already deleted");
+		}
+
+		const idl::Rig& record = m_Rigs.AtIndex(rig.handle.index);
+
+		// Clips come first in the node table, so the spaces are whatever is left over.
+		const size_t spaceCount = meta->nodeCount - meta->clipCount;
+		if (blendSet.spaces.size() != spaceCount)
+		{
+			throw SceneError(
+				std::format(
+					"skinned geometry: the rig carries {} blend spaces and the set names {}; only "
+					"the parameters may move, and a rig whose spaces change shape is re-uploaded",
+					spaceCount,
+					blendSet.spaces.size()));
+		}
+
+		// A rig with no spaces has a null sample range, so there is no handle to take: an empty set
+		// against one is the write that was asked for, and it is no bytes.
+		if (spaceCount == 0)
+		{
+			return;
+		}
+
+		const uint32_t firstSpaceNode = record.nodes.range.offsetStart + meta->clipCount;
+		const uint32_t sampleBase     = record.blendSamples.offsetStart;
+
+		// Checked in full before a byte is written: a half-applied set is a rig posing from a run
+		// nobody authored, and there is no rollback for a write straight into the mirror.
+		for (size_t s = 0; s < spaceCount; ++s)
+		{
+			const std::vector<BlendSpaceSampleDesc>& samples = blendSet.spaces[s].samples;
+			ValidateBlendSpaceRun(s, samples);
+
+			const idl::BlendNode& node =
+				m_BlendNodes.AtIndex(firstSpaceNode + static_cast<uint32_t>(s));
+			if (samples.size() != node.sampleCount)
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: blend space {} holds {} samples and the set names {}; "
+						"adding or removing one moves the sample table",
+						s,
+						node.sampleCount,
+						samples.size()));
+			}
+
+			for (uint32_t m = 0; m < node.sampleCount; ++m)
+			{
+				const uint32_t clip =
+					m_BlendSamples.AtIndex(sampleBase + node.firstSample + m).clip;
+				if (samples[m].clipIndex != clip)
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: sample {} of blend space {} plays clip {} and the "
+							"set names clip {}; only the parameters may move",
+							m,
+							s,
+							clip,
+							samples[m].clipIndex));
+				}
+			}
+		}
+
+		const core::multi_slot_handle handle = m_BlendSamples.HandleAt(sampleBase);
+
+		for (size_t s = 0; s < spaceCount; ++s)
+		{
+			const idl::BlendNode& node =
+				m_BlendNodes.AtIndex(firstSpaceNode + static_cast<uint32_t>(s));
+
+			for (uint32_t m = 0; m < node.sampleCount; ++m)
+			{
+				auto entry      = idl::BlendSpaceSample();
+				entry.clip      = blendSet.spaces[s].samples[m].clipIndex;
+				entry.parameter = blendSet.spaces[s].samples[m].parameter;
+				m_BlendSamples.Set(handle, node.firstSample + m, entry);
+			}
 		}
 	}
 
@@ -1217,9 +1319,9 @@ namespace bgl
 			m_PlantWeights.EraseByIndex(record.plantWeights.offsetStart);
 		}
 		m_BlendNodes.EraseByIndex(record.nodes.range.offsetStart);
-		if (!record.members.Null())
+		if (!record.blendSamples.Null())
 		{
-			m_BlendMembers.EraseByIndex(record.members.offsetStart);
+			m_BlendSamples.EraseByIndex(record.blendSamples.offsetStart);
 		}
 		m_Rigs.Erase(rig.handle);
 	}

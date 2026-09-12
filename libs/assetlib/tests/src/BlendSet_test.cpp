@@ -33,9 +33,9 @@ namespace
 
 		auto space = BlendSpace();
 		space.name = "Locomotion";
-		space.members.push_back({ "Idle", 0.0f });
-		space.members.push_back({ "Walk", 1.5f });
-		space.members.push_back({ "Run", 5.0f });
+		space.samples.push_back({ "Idle", 0.0f });
+		space.samples.push_back({ "Walk", 1.5f });
+		space.samples.push_back({ "Run", 5.0f });
 		set.spaces.push_back(std::move(space));
 
 		return set;
@@ -101,7 +101,7 @@ TEST_CASE("A blend set round-trips through its document", "[blend][codec]")
 			"animations": "Derived/Animations/wolf.banim",
 			"name": "Wolf Locomotion",
 			"note": "from Ada",
-			"spaces": [{"members":[{"clip":"Idle","parameter":0.0},
+			"spaces": [{"samples":[{"clip":"Idle","parameter":0.0},
 			                       {"clip":"Run","parameter":5.0}],"name":"Locomotion"}]
 		})"));
 
@@ -119,11 +119,11 @@ TEST_CASE("A blend set round-trips through its document", "[blend][codec]")
 
 TEST_CASE("A blend set refuses what has no defined meaning", "[blend][codec]")
 {
-	SECTION("a space of fewer than two members")
+	SECTION("a space of fewer than two samples")
 	{
-		// One member is a clip, and a clip is already a node under its own name.
+		// One sample is a clip, and a clip is already a node under its own name.
 		auto set = MakeSet();
-		set.spaces[0].members.resize(1);
+		set.spaces[0].samples.resize(1);
 		CHECK_THROWS_WITH(
 			validateBlendSet(set),
 			Catch::Matchers::ContainsSubstring("at least two"));
@@ -132,7 +132,7 @@ TEST_CASE("A blend set refuses what has no defined meaning", "[blend][codec]")
 	SECTION("parameters that do not strictly increase")
 	{
 		auto set                           = MakeSet();
-		set.spaces[0].members[2].parameter = set.spaces[0].members[1].parameter;
+		set.spaces[0].samples[2].parameter = set.spaces[0].samples[1].parameter;
 		CHECK_THROWS_WITH(
 			validateBlendSet(set),
 			Catch::Matchers::ContainsSubstring("strictly increase"));
@@ -141,7 +141,7 @@ TEST_CASE("A blend set refuses what has no defined meaning", "[blend][codec]")
 	SECTION("parameters out of order")
 	{
 		auto set                           = MakeSet();
-		set.spaces[0].members[2].parameter = -1.0f;
+		set.spaces[0].samples[2].parameter = -1.0f;
 		CHECK_THROWS(validateBlendSet(set));
 	}
 
@@ -169,16 +169,16 @@ TEST_CASE("A blend set refuses what has no defined meaning", "[blend][codec]")
 		CHECK(Parse(Text(BlendSet())) == BlendSet());
 	}
 
-	SECTION("a member naming no clip")
+	SECTION("a sample naming no clip")
 	{
 		auto set                      = MakeSet();
-		set.spaces[0].members[1].clip = {};
+		set.spaces[0].samples[1].clip = {};
 		CHECK_THROWS(validateBlendSet(set));
 	}
 
 	SECTION("a document whose space is malformed")
 	{
-		CHECK_THROWS(Parse(R"({"spaces":[{"name":"X","members":[{"clip":"Idle"}]}]})"));
+		CHECK_THROWS(Parse(R"({"spaces":[{"name":"X","samples":[{"clip":"Idle"}]}]})"));
 	}
 
 	SECTION("bytes that are not a text document")
@@ -263,7 +263,7 @@ TEST_CASE(
 	// The same content spelled as a hand edit or a merge leaves it: unsorted keys, spaces.
 	constexpr std::string_view c_Older =
 		R"({"name": "Wolf Locomotion", "animations": "Derived/Animations/wolf.banim", )"
-		R"("spaces": [{"members": [{"clip": "Idle", "parameter": 0.0}, )"
+		R"("spaces": [{"samples": [{"clip": "Idle", "parameter": 0.0}, )"
 		R"({"clip": "Walk", "parameter": 1.5}, {"clip": "Run", "parameter": 5.0}], )"
 		R"("name": "Locomotion"}]})";
 	const auto older = std::as_bytes(std::span(c_Older.data(), c_Older.size()));
@@ -281,4 +281,37 @@ TEST_CASE(
 		AssetCodec<BlendSet>::Serialize(StoreAt(root.path).Load<BlendSet>(
 			"Authored/Animations/canonical.bblend")) == canonical);
 	CHECK(StoreAt(root.path).Load<BlendSet>("Authored/Animations/older.bblend") == MakeSet());
+}
+
+TEST_CASE("A blend set's key is its clip set's, with both halves swapped", "[assetlib][blend]")
+{
+	CHECK(
+		assetlib::blendSetKeyFor("Derived/Animations/loco.banim") ==
+		"Authored/Animations/loco.bblend");
+
+	SECTION("a nested clip set keeps its tail")
+	{
+		CHECK(
+			assetlib::blendSetKeyFor("Derived/Animations/dog/loco.banim") ==
+			"Authored/Animations/dog/loco.bblend");
+	}
+
+	SECTION("an unnormalized key is normalized first")
+	{
+		CHECK(
+			assetlib::blendSetKeyFor("./Derived/Meshes/../Animations/loco.banim") ==
+			"Authored/Animations/loco.bblend");
+	}
+
+	SECTION("anything that is not a .banim under the animations directory is refused")
+	{
+		CHECK_THROWS(assetlib::blendSetKeyFor(""));
+		CHECK_THROWS(assetlib::blendSetKeyFor("Derived/Animations/loco.bmesh"));
+		CHECK_THROWS(assetlib::blendSetKeyFor("Authored/Animations/loco.banim"));
+
+		// The refusal names the convention the caller asked about, not the helper behind it.
+		CHECK_THROWS_WITH(
+			assetlib::blendSetKeyFor("Derived/Meshes/loco.banim"),
+			Catch::Matchers::ContainsSubstring("blend set"));
+	}
 }

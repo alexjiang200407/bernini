@@ -24,6 +24,7 @@
 #include <gamelib/ClipInfo.h>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -230,9 +231,9 @@ namespace game
 		 *         set no longer matches the skeleton it names, the geom is live with clips from a
 		 *         different `.banim`, the geom is live with a different blend set, the rig is live
 		 *         with a different one, the blend set names another `.banim` than this one, or a
-		 *         member names a clip the set does not hold;
+		 *         sample names a clip the set does not hold;
 		 *         bgl::SceneError for anything AddRig or AddSkinnedMeshGeom refuses -- a space of
-		 *         fewer than two members, a member that does not loop, parameters that do not
+		 *         fewer than two samples, a sample that does not loop, parameters that do not
 		 *         strictly increase. A failed acquire owns nothing.
 		 */
 		SkinnedMesh
@@ -321,6 +322,30 @@ namespace game
 		 */
 		bgl::MeshInstanceHandle
 		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
+
+		/**
+		 * Moves where each sample of `geom`'s rig's blend spaces plays alone, and nothing else.
+		 *
+		 * `spaces` describes the set the rig already carries, in the form AcquireSkinnedMesh handed
+		 * back: the same spaces, each holding the same samples naming the same clips, differing only
+		 * in each sample's `parameter`. Anything else is refused. The rig is not re-uploaded and no
+		 * geom on it is released, so every live instance keeps playing what it was playing -- which
+		 * is what makes this usable while an author drags a threshold and watches the pose.
+		 *
+		 * The manager's own copy of the spaces moves with it, on the rig and on every geom sharing
+		 * it, so a later shared acquire hands back what the rig now carries rather than what it was
+		 * uploaded with.
+		 *
+		 * Adding or removing a sample or a space is not this: those change the rig's node table.
+		 * Release every geom on the rig and acquire again against the new set.
+		 *
+		 * @throws bgl::SceneError if the geom is not this manager's, has expired, or is not skinned;
+		 *         anything IScene::SetRigBlendParameters refuses -- a different number of spaces or
+		 *         of samples, a sample naming a different clip, parameters that are not finite and
+		 *         strictly increasing. Nothing is written unless all of it passes.
+		 */
+		void
+		SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces);
 
 		/**
 		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
@@ -682,7 +707,7 @@ namespace game
 			const assetlib::BlendSet*     blendSet);
 
 		/**
-		 * `blendSet`'s spaces resolved against `animations`: a member's clip name becomes the index
+		 * `blendSet`'s spaces resolved against `animations`: a sample's clip name becomes the index
 		 * `bgl` takes, and `spaces` is filled with what a caller needs to steer each one.
 		 *
 		 * Refused rather than warned when a name resolves to nothing, unlike an avatar naming a bone
@@ -690,7 +715,7 @@ namespace game
 		 * none is ordinary, but a `.bblend` was named by the caller and silently dropping its spaces
 		 * would hand back a node table missing what was asked for.
 		 *
-		 * @throws std::runtime_error if a member names a clip `animations` does not hold.
+		 * @throws std::runtime_error if a sample names a clip `animations` does not hold.
 		 */
 		[[nodiscard]] static bgl::BlendSetDesc
 		BlendSetFor(

@@ -14,6 +14,8 @@
 #include <bgl/types/FootIKDesc.h>
 #include <cstdint>
 #include <filesystem>
+#include <gamelib/BlendSpaceInfo.h>
+#include <gamelib/ClipInfo.h>
 #include <qcontainerfwd.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -92,10 +94,19 @@ public:
 	 * played from `animationsRelPath` -- or from the first resolved candidate when empty. A rig
 	 * whose clips are stale re-bakes under the loading screen before anything is uploaded.
 	 *
+	 * `blendRelPath` names a `.bblend` whose spaces become nodes after the clips, so the rig can be
+	 * *shown* a space rather than only its clips. Empty acquires the clips alone, which is every
+	 * load until somebody opens a set. A set that will not resolve is refused like any other
+	 * refusal -- the mesh stays on screen and the reason is shown -- rather than clearing the
+	 * viewport.
+	 *
 	 * What ends up shown is announced by the signals below; a failure warns and clears.
 	 */
 	void
-	LoadMesh(const std::filesystem::path& absolutePath, const std::string& animationsRelPath = {});
+	LoadMesh(
+		const std::filesystem::path& absolutePath,
+		const std::string&           animationsRelPath = {},
+		const std::string&           blendRelPath      = {});
 
 	/**
 	 * Respawns the animated instances on clip `index`, and resets the record onto it. `nowSeconds`
@@ -113,9 +124,57 @@ public:
 	SetActiveClip(uint32_t index, float nowSeconds);
 
 	/**
-	 * Stamps a fade from clip `fromNode` onto `toNode`, beginning at `startSeconds` and taking
+	 * Moves where each sample of the open set's spaces plays alone, on the rig already uploaded.
+	 * Returns the refusal, or an empty string when it took.
+	 *
+	 * `spaces` must be the set the acquire handed back with its parameters moved and nothing else;
+	 * adding or removing a sample or a space changes the rig's node table and is a reload instead
+	 * (ADR-3). `editor::IsParameterMove` is what decides which of the two an edit was.
+	 *
+	 * One call covers the whole preview: every animated entry here was acquired from one file
+	 * against one clip set, so they share a rig, and the manager sweeps every geom on it.
+	 *
+	 * Refusals are returned rather than thrown because the caller is a control being dragged: a
+	 * threshold that will not go live leaves the pose where it was and says why, which is the same
+	 * bargain LoadMesh strikes when an acquire is refused.
+	 */
+	[[nodiscard]] QString
+	RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces);
+
+	/**
+	 * Puts every animated instance on blend space `spaceIndex`, playing at `parameter`.
+	 *
+	 * A space is a node like a clip, after the clips -- `clipCount + spaceIndex` -- so this is
+	 * SetActiveClip's gesture with a parameter attached, and it respawns for the same reason: the
+	 * pose jumps, and the temporal epoch a respawn moves is what drops the history rather than
+	 * reprojecting through it.
+	 *
+	 * Nothing happens on the crowd source, whose shared table holds one clip and no slots.
+	 */
+	void
+	ShowSpace(uint32_t spaceIndex, float parameter, float nowSeconds);
+
+	/**
+	 * Moves the space already playing to `parameter` over `duration` from `nowSeconds`.
+	 *
+	 * `game::RetargetParameter`, which rebases the slot's phase first: a space's phase advances at
+	 * the reciprocal of the weighted cycle length, so a parameter that moves changes the rate, and
+	 * integrating the new path from the old reference time would jump on the frame of the write.
+	 * This is the cursor's door; ShowSpace is what starts the space playing at all.
+	 *
+	 * A no-op when no slot is playing that space, exactly as RetargetParameter is.
+	 */
+	void
+	RetargetSpace(uint32_t spaceIndex, float parameter, float nowSeconds, float duration);
+
+	/**
+	 * Stamps a fade from `fromNode` onto `toNode`, beginning at `startSeconds` and taking
 	 * `duration`, and writes it to every animated instance. Nothing happens on the crowd source,
 	 * whose shared table holds one clip and no slots to write.
+	 *
+	 * Either node may be a blend space -- the rig's node table is its clips and then its spaces --
+	 * and `fromParameter` and `toParameter` are where each end sits on its axis. A clip end reads
+	 * neither; passing zero for one is what a caller with no space says.
 	 *
 	 * Written once and then read by moving the clock, which is the whole of how a transition is
 	 * previewed: the ramps are stamped in absolute time, so `SetTime` across a window bracketing
@@ -126,7 +185,13 @@ public:
 	 * caller parks the clock outside the window before re-stamping, which is what makes that hold.
 	 */
 	void
-	StampTransition(uint32_t fromNode, uint32_t toNode, float startSeconds, float duration);
+	StampTransition(
+		uint32_t fromNode,
+		uint32_t toNode,
+		float    fromParameter,
+		float    toParameter,
+		float    startSeconds,
+		float    duration);
 
 	/**
 	 * Where the preview's instances read their pose, as of `nowSeconds`. Switching respawns them on
@@ -239,6 +304,19 @@ Q_SIGNALS:
 	void
 	ClipsChanged(const std::vector<editor::ClipInfo>& clips);
 
+	/**
+	 * The blend sets authored against the clip set now playing, and which one is open (-1: none).
+	 *
+	 * Emitted with every load, so a panel showing them never has to scan the project itself -- the
+	 * scan is the same one that found the `.banim` candidates, one edge over.
+	 */
+	void
+	BlendSetsChanged(const QStringList& candidates, int activeIndex);
+
+	/** The spaces the open set resolved to, in the acquire's own terms. Empty when none is open. */
+	void
+	SpacesChanged(const std::vector<game::BlendSpaceInfo>& spaces);
+
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
@@ -332,6 +410,11 @@ private:
 	// entries of one file on one rig, and the panel drives them as a unit. On the crowd source only
 	// its dominant node means anything -- a shared table holds one clip and no slots.
 	bgl::SkinnedPlaybackDesc m_Playback;
+
+	// The acquire's own tables, kept because a space is played from them: RetargetParameter needs
+	// the cycle length at a parameter, which is the clips' and the space's together.
+	std::vector<game::ClipInfo>       m_Clips;
+	std::vector<game::BlendSpaceInfo> m_Spaces;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included

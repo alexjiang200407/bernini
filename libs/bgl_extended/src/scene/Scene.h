@@ -36,7 +36,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl_common/idl/BlendNode.h>
-#include <bgl_common/idl/BlendSpaceMember.h>
+#include <bgl_common/idl/BlendSpaceSample.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Geom.h>
@@ -287,9 +287,9 @@ namespace bgl
 		}
 
 		[[nodiscard]] auto&
-		GetBlendMemberBuffer() noexcept
+		GetBlendSampleBuffer() noexcept
 		{
-			return m_BlendMembers;
+			return m_BlendSamples;
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -461,6 +461,9 @@ namespace bgl
 			const BlendSetDesc&           blendSet  = {}) override;
 
 		void
+		SetRigBlendParameters(RigHandle rig, const BlendSetDesc& blendSet) override;
+
+		void
 		DeleteRig(RigHandle rig) override;
 
 		GeomHandle
@@ -581,6 +584,17 @@ namespace bgl
 			const BlendSetDesc&           blendSet);
 
 		/**
+		 * What a sample run must be whichever door it arrives at: two or more samples, every
+		 * parameter finite, and strictly increasing. `space` names it in a refusal.
+		 *
+		 * Here rather than inline at each door so an upload and a later parameter move refuse the
+		 * same run in the same words -- the clip-side checks stay with ValidateSkinnedRig, since
+		 * only it has the clip set to check against.
+		 */
+		static void
+		ValidateBlendSpaceRun(size_t space, std::span<const BlendSpaceSampleDesc> samples);
+
+		/**
 		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
 		 * pointer is into the entry buffer's metadata and is invalidated by the next AddRig.
 		 */
@@ -689,10 +703,10 @@ namespace bgl
 		RangeBuffer<uint32_t>             m_PlantWeights;
 
 		// The node table every rig carries -- one clip node per clip, then its authored spaces --
-		// and the members those spaces address. Only the members are empty on a scene whose rigs
+		// and the samples those spaces address. Only the samples are empty on a scene whose rigs
 		// author no blend set; a rig always has nodes.
 		RangeBuffer<idl::BlendNode>        m_BlendNodes;
-		RangeBuffer<idl::BlendSpaceMember> m_BlendMembers;
+		RangeBuffer<idl::BlendSpaceSample> m_BlendSamples;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
@@ -704,7 +718,7 @@ namespace bgl
 		TextureAssetStore m_Textures;
 
 		// Every buffer the scene imports into the frame graph, each with the name it is imported
-		// under. Declared after the members it names.
+		// under. Declared after the samples it names.
 		static constexpr auto c_Buffers = std::tuple{
 			NamedBuffer{ c_GeomBufferName, &Scene::m_GeomBuffer },
 			NamedBuffer{ c_SubmeshBufferName, &Scene::m_SubmeshBuffer },
@@ -720,7 +734,7 @@ namespace bgl
 			NamedBuffer{ c_SkinnedLegBufferName, &Scene::m_SkinnedLegs },
 			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
 			NamedBuffer{ c_BlendNodeBufferName, &Scene::m_BlendNodes },
-			NamedBuffer{ c_BlendMemberBufferName, &Scene::m_BlendMembers },
+			NamedBuffer{ c_BlendSampleBufferName, &Scene::m_BlendSamples },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

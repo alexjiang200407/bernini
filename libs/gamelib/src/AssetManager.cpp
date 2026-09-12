@@ -5,6 +5,7 @@
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
+#include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <format>
 #include <gamelib/AssetManager.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 #include <assetlib/RegenMesh.h>
@@ -658,7 +660,7 @@ namespace game
 		{
 			blendSet = m_Store.Load<assetlib::BlendSet>(blendNorm);
 
-			// A set is authored against exactly one clip set, and its members are clip names in
+			// A set is authored against exactly one clip set, and its samples are clip names in
 			// that one. Against the normalized path on both sides: the two spellings of one key
 			// are the same key.
 			core::throw_runtime_error_if(
@@ -717,7 +719,8 @@ namespace game
 					clip.frameCount,
 					clip.sampleRate,
 					clip.duration,
-					clip.loop != 0);
+					clip.loop != 0,
+					clip.locomotionSpeed);
 			}
 
 			// The box the geom culls by. Not the bind pose's: a clip carrying root motion walks the
@@ -840,26 +843,26 @@ namespace game
 		for (const assetlib::BlendSpace& space : blendSet->spaces)
 		{
 			auto resolved = bgl::BlendSpaceDesc();
-			resolved.members.reserve(space.members.size());
+			resolved.samples.reserve(space.samples.size());
 
-			for (const assetlib::BlendSpaceMember& member : space.members)
+			for (const assetlib::BlendSpaceSample& sample : space.samples)
 			{
-				const std::optional<uint32_t> clip = assetlib::findClip(animations, member.clip);
+				const std::optional<uint32_t> clip = assetlib::findClip(animations, sample.clip);
 				core::throw_runtime_error_if(
 					!clip.has_value(),
 					"AssetManager: blend space '{}' names the clip '{}', which '{}' does not hold",
 					space.name,
-					member.clip,
+					sample.clip,
 					blendSet->animations);
 
-				resolved.members.push_back({ *clip, member.parameter });
+				resolved.samples.push_back({ *clip, sample.parameter });
 			}
 
 			auto info = BlendSpaceInfo();
 			info.name = space.name;
-			info.members.reserve(resolved.members.size());
-			for (const bgl::BlendSpaceMemberDesc& member : resolved.members)
-				info.members.push_back({ member.clipIndex, member.parameter });
+			info.samples.reserve(resolved.samples.size());
+			for (const bgl::BlendSpaceSampleDesc& sample : resolved.samples)
+				info.samples.push_back({ sample.clipIndex, sample.parameter });
 			spaces.emplace_back(std::move(info));
 
 			desc.spaces.push_back(std::move(resolved));
@@ -1010,6 +1013,49 @@ namespace game
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
 		return instance;
+	}
+
+	void
+	AssetManager::SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces)
+	{
+		const auto it = m_Geoms.find(geom.handle.index);
+		if (it == m_Geoms.end() || !m_Scene->IsGeomAlive(geom))
+		{
+			throw bgl::SceneError(
+				"GeomHandle passed to SetBlendParameters is not owned by this AssetManager, or has "
+				"expired");
+		}
+
+		GeomRecord& record = it->second;
+
+		// A rig is keyed on the clip set it was cooked against, which is the one thing a skinned
+		// geom always records and a static one never does.
+		const auto rig =
+			record.skinnedAnimations.empty() ? m_Rigs.end() : m_Rigs.find(record.skinnedAnimations);
+		if (rig == m_Rigs.end())
+			throw bgl::SceneError("GeomHandle passed to SetBlendParameters is not skinned");
+
+		auto desc = bgl::BlendSetDesc();
+		desc.spaces.reserve(spaces.size());
+		for (const BlendSpaceInfo& space : spaces)
+		{
+			auto resolved = bgl::BlendSpaceDesc();
+			resolved.samples.reserve(space.samples.size());
+			for (const BlendSpaceSampleInfo& sample : space.samples)
+				resolved.samples.emplace_back(sample.clipIndex, sample.parameter);
+
+			desc.spaces.push_back(std::move(resolved));
+		}
+
+		// The scene decides whether this is a parameter move at all, and refuses before writing.
+		m_Scene->SetRigBlendParameters(rig->second.handle, desc);
+
+		// Only now: the cached spaces are what a shared acquire answers with, so moving them ahead
+		// of a refusal would leave the manager describing a rig that never changed.
+		rig->second.spaces.assign(spaces.begin(), spaces.end());
+		for (auto& [slot, other] : m_Geoms)
+			if (other.skinnedAnimations == record.skinnedAnimations)
+				other.skinnedSpaces.assign(spaces.begin(), spaces.end());
 	}
 
 	bgl::MeshInstanceHandle

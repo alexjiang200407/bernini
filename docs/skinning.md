@@ -357,11 +357,36 @@ to keep in agreement beyond the one below.
   optimisation — the ramps are stamped in absolute time, so the same scrub position is the same pose
   every time, two durations compare against each other rather than against a memory, and the record
   still says at `prevTime` what the previous frame drew, so the motion vector stays exact mid-drag.
-  A stamp always rebuilds from the From clip with the clock parked before the window, so it is never
+  A stamp always rebuilds from the From end with the clock parked before the window, so it is never
   a fade interrupting a live one.
 
+  **A fade can land on a blend space, and that is a row of its own** — a checkbox, which space, and
+  where on its axis it arrives. Not an entry in the To combo: a space is a different kind of
+  destination from a clip, and one worth having is worth seeing without opening anything. Checked,
+  the space *is* the To end and the combo above goes insensitive *and blank*, its placeholder saying
+  which control took over: a greyed combo still showing a clip name reads as the answer to what the
+  fade lands on, which is the one question it has stopped answering. The clip it held is remembered,
+  so unchecking puts it back. The checkbox is itself insensitive while no space is chosen,
+  rather than a switch that does nothing. The fade reaches it as a node — the rig's table is its
+  clips in clip order, then its spaces — so the row's selection is node `clipCount + its row`.
+  Unblended, the cut is still one sample interval of what is *playing* (`editor::NodeSampleRate`,
+  which for a space is the lower of the two clips it straddles, since a space has no rate of its own
+  and an average of a pair is no clip's interval at all).
+
+  **Opening a set re-acquires the rig, and the fade survives it.** The acquire walks the panel back
+  through `SetClips`, which clears the transport's window — but the ends are still on screen saying
+  what they said, so a cleared record is the panel disagreeing with itself. The load's last emission
+  re-stamps, which restores a fade exactly when there was one.
+
+  **The parameter here is standing in for a machine variable.** Unity's blend tree reads an Animator
+  parameter, Unreal's Blend Space player takes its X on a pin, Godot's `BlendSpace1D` is reached
+  through a parameter path — in all three a transition names a state and the value is whatever the
+  graph feeds. There is no graph here, so the box stands in for the variable exactly as the From and
+  To combos stand in for the edge, and it retires the same way.
+
   The panel's properties column is a header over a `QTabWidget` for this: the header holds what the
-  clip set *is* and the tabs what is being done with it, with the ground, the plant switch and the
+  clip set *is* -- its `.banim`, and now the `.bblend` whose spaces the rig carries -- and the tabs
+  what is being done with it, with the ground, the plant switch and the
   IK sliders staying in the header because a blended plant weight has to be judgeable on a slope
   while the blend controls are visible. **The tab is the mode** — entering *Blend* stamps whatever
   its controls describe and leaving it puts the clip back, which is also how a named target is
@@ -377,6 +402,76 @@ to keep in agreement beyond the one below.
   **The crowd source cannot hold one and the controls say so.** The shared table plays one clip per
   instance and holds no slots, so `SetSkinnedPlayback` throws there; it still interpolates frames
   within that clip, which is a different thing from blending between two.
+
+* **A blend set is opened from the header, and its spaces listed in *Space*.** The sets authored
+  against the live clip set come from the same reference scan that found the `.banim` candidates,
+  one `kBlendClips` edge over (`editor::ResolveBlendSets`), and choosing one **reloads the mesh** --
+  a rig already uploaded refuses a set it was not built with, so this cannot be a rebind. Switching
+  `.banim` drops the set with it: a set names one clip set, and carrying it across would name a
+  file the rig no longer plays.
+
+  *Create Blend Set* writes the empty document at `assetlib::blendSetKeyFor`'s key and opens it.
+  The convention lives in assetlib beside `avatarKeyFor` rather than in the panel, since the layout
+  is the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it
+  was authored against and no spaces, which is what makes it findable by the scan the moment it
+  exists -- nothing else attaches a set to a clip set.
+
+  The *Space* tab lists the open set's spaces and the samples of the selected one, clip by name and
+  threshold, and is where both are authored. It stamps nothing into the playback record: only
+  *Blend* does, which is why entering either *Clip* or *Space* clears whatever fade was live.
+
+  **An edit takes one of two paths, and which one is the shape of the change.** A threshold that
+  moved is written onto the rig already uploaded (`AssetManager::SetBlendParameters`), so the pose
+  keeps playing while the box is dragged -- live on `valueChanged`, saved on `editingFinished`,
+  because a file rewritten per keystroke is not the point and a pose that waits for the save is.
+  Anything that changes the rig's node table -- a sample or a space added or removed, a space
+  renamed -- saves and then **reloads the mesh**, which is the same reacquire choosing a set already
+  does. `editor::IsParameterMove` is the fork, and it compares the two *authored* sets rather than
+  the resolved ones: the resolved form holds clip indices, so a sample pointed at another clip would
+  read as no change there and reach a rig that refuses it.
+
+  **The panel edits the document, not what the acquire resolved.** `editor::LoadBlendSet` reads the
+  `.bblend` back when a set opens, and that is what every gesture mutates and what is saved. Building
+  a save out of the resolved spaces instead would silently drop the set's `name` and the `extraJson`
+  holding whatever keys a later tool wrote. The two forms correspond position for position --
+  `AssetManager::BlendSetFor` resolves a set in its own order and throws rather than skipping a clip
+  it cannot find -- which is what lets `editor::ApplyParameters` move a threshold onto the live space
+  without resolving a name twice.
+
+  **The cursor is what makes a space watchable.** A `Scrubber` under the run addresses the space's
+  own parameter range through `editor::ParameterForTick` -- integer-valued on a closed range, so the
+  bar needs a map rather than a cast -- and moving it calls `game::RetargetParameter` rather than
+  restamping the record. That is the whole reason a retarget exists: a space's phase advances at the
+  reciprocal of the weighted cycle length, so a parameter that moves changes the *rate*, and
+  integrating the new path from the old reference time would jump on the frame of the write. The slot
+  is rebased onto now first, so the pose keeps the cycle it was already walking.
+
+  Entering the tab puts the preview on the selected space -- node `clipCount + spaceIndex`, which is
+  what the node ordering is for -- and leaving it returns to the selected clip. Each tab owns exactly
+  what it stamps into the playback record (ADR-8), and a space and a crossfade are two different
+  clocks.
+
+  **The weight readout comes from `BlendSpaceInfo::StraddleAt`, not from a second copy of the rule**
+  (ADR-4). It is the CPU twin of what the pose pass computes, and nothing mechanically holds the two
+  in step -- a readout that disagreed with the pose on screen is the failure this shape exists to
+  make *visible* rather than to rule out. Outside the authored range both ends name the same sample,
+  which reads as that clip alone at 100%.
+
+  **Thresholds can be taken from measurement rather than guessed.** Every clip carries the speed its
+  root travelled at, measured at cook (`ClipInfo::locomotionSpeed`, ADR-7), and *Thresholds from
+  speed* writes each sample's threshold from its clip's. `editor::ThresholdsFromSpeed` **re-sorts the
+  run** by those speeds, because thresholds from speed *are* an ordering by speed: a run authored
+  walk-then-run but measured the other way round would otherwise stop strictly increasing. Two clips
+  animated at one speed -- two that do not travel included, since both measure zero -- are refused
+  with both names, because the span between two samples is what a weight divides by.
+
+  **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
+  a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
+  there is no empty space to add and fill in afterwards. *New* seeds the first two looping clips at
+  0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip that does
+  not loop is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
+  the author is looking for that clip, and its absence would read as a bad clip set rather than as
+  one a blend space cannot hold.
 
 * **One timeline serves both tabs.** `TransitionStrip` draws two clip bars on a shared window with
   the fade between them, and a single clip is the same widget with its second end at the far edge —

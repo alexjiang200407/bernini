@@ -9,6 +9,7 @@
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
+#include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -19,6 +20,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 #include <QDragEnterEvent>
@@ -33,6 +35,7 @@
 
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
@@ -266,9 +269,15 @@ AnimationPreviewWindow::Clear()
 	RestoreConfiguredEnvironment();
 	SetTime(0.0f);
 
+	// Both tables, because both are node halves: a panel left listing the old rig's spaces would
+	// offer a fade onto a node nothing holds.
+	m_Clips.clear();
+	m_Spaces.clear();
+
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
 	Q_EMIT ClipsChanged({});
+	Q_EMIT SpacesChanged({});
 }
 
 void
@@ -336,12 +345,15 @@ AnimationPreviewWindow::ClearGeometry()
 	m_AnimatedDraws.clear();
 	m_Instances.clear();
 	m_Geoms.clear();
+	m_Clips.clear();
+	m_Spaces.clear();
 }
 
 void
 AnimationPreviewWindow::LoadMesh(
 	const std::filesystem::path& absolutePath,
-	const std::string&           animationsRelPath)
+	const std::string&           animationsRelPath,
+	const std::string&           blendRelPath)
 {
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
@@ -368,6 +380,8 @@ AnimationPreviewWindow::LoadMesh(
 	assetlib::BMesh           mesh;
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
+	std::vector<std::string>  blendSets;
+	std::string               blend = blendRelPath;
 
 	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
@@ -393,9 +407,18 @@ AnimationPreviewWindow::LoadMesh(
 				throw std::runtime_error("mesh contains no meshes");
 
 			progress.Report(0, 0, "Resolving animations...");
-			bindings = editor::ResolveAnimationBindings(m_DataRoot, mesh.skeleton);
+
+			// One scan answers both questions. It reads and parses every asset in the project, so
+			// asking each of them for its own would double the cost of every load.
+			const auto graph = assetlib::AssetRefGraph::Scan(assetlib::AssetStore(m_DataRoot));
+
+			bindings = editor::ResolveAnimationBindings(graph, mesh.skeleton);
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
+
+			// One edge over: the sets are per clip set, so which ones exist is only knowable once
+			// the `.banim` is settled.
+			blendSets = editor::ResolveBlendSets(graph, animations);
 
 			plan = editor::PlanAnimationDraws(mesh);
 
@@ -454,9 +477,10 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		struct Loaded
 		{
-			glm::vec3                   center;
-			float                       radius;
-			std::vector<game::ClipInfo> clips;
+			glm::vec3                         center;
+			float                             radius;
+			std::vector<game::ClipInfo>       clips;
+			std::vector<game::BlendSpaceInfo> spaces;
 
 			// Empty when the tier stood up. A refusal is shown rather than thrown: the mesh is
 			// still on screen in its bind pose, which beats a viewport cleared to nothing.
@@ -536,7 +560,7 @@ AnimationPreviewWindow::LoadMesh(
 							game::AssetManager::SkinnedMesh skinned = m_Assets->AcquireSkinnedMesh(
 								rel,
 								animations,
-								{},
+								blend,
 								placement.meshIndex,
 								posed);
 
@@ -545,6 +569,7 @@ AnimationPreviewWindow::LoadMesh(
 							m_AnimatedDraws.push_back(
 								{ geom, placement.world, SpawnAnimated(geom, placement.world, 0) });
 							out.clips  = std::move(skinned.clips);
+							out.spaces = std::move(skinned.spaces);
 							m_Playback = bgl::SkinnedPlaybackDesc::FromClip(0);
 						}
 						catch (const std::exception& e)
@@ -607,9 +632,23 @@ AnimationPreviewWindow::LoadMesh(
 			bindings.animations.begin(),
 			std::find(bindings.animations.begin(), bindings.animations.end(), animations)));
 
+		auto setNames = QStringList();
+		for (const std::string& set : blendSets) setNames << QString::fromStdString(set);
+		const auto activeSet =
+			static_cast<int>(std::distance(blendSets.begin(), std::ranges::find(blendSets, blend)));
+
+		m_Clips  = loaded.clips;
+		m_Spaces = loaded.spaces;
+
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
+		// Before SpacesChanged, and the order is read: a space is a node past the clips, so the
+		// panel cannot place one until it knows how many clips there are.
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
+		Q_EMIT BlendSetsChanged(
+			setNames,
+			blend.empty() || activeSet >= setNames.size() ? -1 : activeSet);
+		Q_EMIT SpacesChanged(loaded.spaces);
 
 		if (!loaded.refusal.isEmpty())
 			OfferBakeForRefusal(
@@ -777,17 +816,32 @@ void
 AnimationPreviewWindow::StampTransition(
 	const uint32_t fromNode,
 	const uint32_t toNode,
+	const float    fromParameter,
+	const float    toParameter,
 	const float    startSeconds,
 	const float    duration)
 {
 	if (m_Assets == nullptr || m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
 		return;
 
-	m_Playback = game::CrossfadeTo(
-		bgl::SkinnedPlaybackDesc::FromClip(fromNode),
-		toNode,
-		startSeconds,
-		duration);
+	const auto nodes = static_cast<uint32_t>(m_Clips.size() + m_Spaces.size());
+	if (fromNode >= nodes || toNode >= nodes)
+	{
+		qWarning(
+			"AnimationPreview: a transition names node %u or %u, past the rig's %u",
+			fromNode,
+			toNode,
+			nodes);
+		return;
+	}
+
+	// FromClip seeds a slot's phase and rate but has no parameter, so a space at the outgoing end
+	// is written here; CrossfadeTo carries the incoming one.
+	auto from           = bgl::SkinnedPlaybackDesc::FromClip(fromNode);
+	from.slot[0].param0 = fromParameter;
+	from.slot[0].param1 = fromParameter;
+
+	m_Playback = game::CrossfadeTo(from, toNode, startSeconds, duration, 0.0f, 1.0f, toParameter);
 
 	GetRenderer()->Invoke([&] {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)
@@ -846,6 +900,129 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float 
 	});
 
 	Q_EMIT PoseSourceChanged(m_Source);
+}
+
+QString
+AnimationPreviewWindow::RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty())
+		return QStringLiteral("Nothing is loaded to retarget.");
+
+	auto refusal = QString();
+
+	// One geom, not all of them: every animated entry here came from one file against one clip set,
+	// so they are on one rig, and the manager writes the rig and sweeps every geom sharing it.
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			m_Assets->SetBlendParameters(m_AnimatedDraws.front().geom, spaces);
+		}
+		catch (const std::exception& e)
+		{
+			refusal = QString::fromUtf8(e.what());
+		}
+	});
+
+	// Only once the scene took it: the cursor's own math reads these for cycle lengths, and a table
+	// ahead of the rig would retarget from a path the pose pass never walked.
+	if (refusal.isEmpty())
+		m_Spaces = spaces;
+
+	return refusal;
+}
+
+void
+AnimationPreviewWindow::ShowSpace(
+	const uint32_t spaceIndex,
+	const float    parameter,
+	const float    nowSeconds)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	    !editor::RewritesPlayback(m_Source))
+	{
+		return;
+	}
+
+	// Clips first and then the authored spaces, which is what makes a space's node index its
+	// position after them -- and why adding a set never moves a clip's.
+	const game::BlendSpaceInfo& space = m_Spaces[spaceIndex];
+	const uint32_t              node  = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+
+	// The spawn names a *clip* and the record names the space. `SkinnedInstanceDesc::clip` is
+	// checked against the clip table and a space is past the end of it, while a playback slot is
+	// checked against the node count -- so a space is reached by writing the record, which is what
+	// SetSkinnedPlayback is for. The clip chosen is the one the parameter sits on, so the spawn pose
+	// is already near what the record shows rather than a jump away from it.
+	const uint32_t seed = space.samples[space.StraddleAt(parameter).lower].clipIndex;
+
+	m_Playback                = bgl::SkinnedPlaybackDesc::FromClip(node);
+	m_Playback.slot[0].param0 = parameter;
+	m_Playback.slot[0].param1 = parameter;
+	m_Playback.slot[0].tRef   = nowSeconds;
+
+	GetRenderer()->Invoke([&] {
+		for (AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				draw.instance = bgl::MeshInstanceHandle();
+				draw.instance = SpawnAnimated(draw.geom, draw.world, seed);
+				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to show a blend space: %s", e.what());
+			}
+		}
+	});
+}
+
+void
+AnimationPreviewWindow::RetargetSpace(
+	const uint32_t spaceIndex,
+	const float    parameter,
+	const float    nowSeconds,
+	const float    duration)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	    !editor::RewritesPlayback(m_Source))
+	{
+		return;
+	}
+
+	const uint32_t node = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+
+	try
+	{
+		m_Playback = game::RetargetParameter(
+			m_Playback,
+			node,
+			m_Spaces[spaceIndex],
+			m_Clips,
+			parameter,
+			nowSeconds,
+			duration);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("AnimationPreview: failed to retarget a blend space: %s", e.what());
+		return;
+	}
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to write a retargeted space: %s", e.what());
+			}
+		}
+	});
 }
 
 void

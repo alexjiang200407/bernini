@@ -39,9 +39,9 @@ public:
 		return m_Layout;
 	}
 
-	/** What the two bars are labelled. Empty for a slot not yet chosen. */
+	/** What the two bars are labelled -- a clip or a blend space. Empty for an end not yet chosen. */
 	void
-	SetClipNames(const QString& from, const QString& to);
+	SetEndNames(const QString& from, const QString& to);
 
 	/** True while the playhead is held, so a driver leaves the widget alone. */
 	[[nodiscard]] bool

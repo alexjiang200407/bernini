@@ -60,7 +60,12 @@ namespace editor
 		infos.reserve(clips.size());
 		for (const game::ClipInfo& clip : clips)
 			infos.push_back(
-				{ clip.name, clip.frameCount, clip.sampleRate, clip.duration, clip.loop });
+				{ clip.name,
+			      clip.frameCount,
+			      clip.sampleRate,
+			      clip.duration,
+			      clip.loop,
+			      clip.locomotionSpeed });
 		return infos;
 	}
 }

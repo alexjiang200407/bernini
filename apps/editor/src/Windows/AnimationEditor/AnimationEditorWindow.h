@@ -2,7 +2,9 @@
 
 #include <QElapsedTimer>
 #include <QWidget>
+#include <assetlib/blend.h>
 #include <cstdint>
+#include <gamelib/BlendSpaceInfo.h>
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
@@ -138,9 +140,10 @@ private:
 	void
 	OpenMeshDialog();
 
-	// Reloads the mesh currently shown, played from `animationsRelPath`.
+	// Reloads the mesh currently shown, played from `animationsRelPath` and blended by
+	// `blendRelPath`.
 	void
-	LoadShownMesh(const QString& animationsRelPath);
+	LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath = {});
 
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
@@ -152,6 +155,130 @@ private:
 
 	[[nodiscard]] QWidget*
 	BuildBlendTab();
+
+	// The spaces the open set holds, listed. Read-only here: editing them is its own task, and a
+	// tab that showed nothing until it could edit would leave the acquire's own work unverifiable.
+	[[nodiscard]] QWidget*
+	BuildSpaceTab();
+
+	// Offers the sets authored against the live clip set, and opens the chosen one -- which is a
+	// reload, since a rig already uploaded refuses a different set.
+	void
+	SetBlendSets(const QStringList& sets, int activeIndex);
+
+	// Re-lists the spaces and their samples for whatever set is open.
+	void
+	ShowSpaces(const std::vector<game::BlendSpaceInfo>& spaces);
+
+	// Lists the samples of space `index`, or the empty-state note when there is none.
+	void
+	SelectSpace(int index);
+
+	// Mirrors the selected sample into the threshold box and greys what has nothing to act on.
+	void
+	UpdateSpaceControls();
+
+	/**
+	 * Writes the edited document back and puts what it says on screen.
+	 *
+	 * Which of ADR-3's two paths it takes is decided here and not by the caller:
+	 * `editor::IsParameterMove` against the set the rig was acquired with. A threshold that moved
+	 * goes live on the uploaded rig; anything that changed the node table -- a sample or a space
+	 * added or removed, a space renamed -- reloads the mesh. Asking the document rather than
+	 * trusting a flag is what stops an edit taking the wrong branch: the weaker check downstream is
+	 * `ApplyParameters`, which compares counts and not the clips they name.
+	 *
+	 * A refusal from the store leaves the document in memory as the author left it -- the edit is
+	 * still on screen and can be corrected, which a revert would throw away.
+	 */
+	void
+	CommitBlendSet();
+
+	// Adds a space seeded with the first two looping clips, named by the author.
+	void
+	AddSpace();
+
+	void
+	RemoveSpace();
+
+	void
+	RenameSpace();
+
+	// Adds the combo's clip past the run's last sample, one whole step clear of it.
+	void
+	AddSample();
+
+	void
+	RemoveSample();
+
+	// Holds the selected sample's threshold between its neighbours and pushes it live.
+	void
+	RetargetSample(float parameter);
+
+	// The clips that may be sampled, non-looping ones greyed with the reason (ADR-5).
+	void
+	ShowSampleClips();
+
+	/**
+	 * Puts the preview on the selected space at the cursor's parameter, or back on the selected
+	 * clip when the Space tab is not the one showing.
+	 *
+	 * The tab decides what is being watched, which is the rule the Blend tab already follows: each
+	 * one owns exactly what it stamps into the playback record (ADR-8).
+	 */
+	void
+	ShowSelectedSpace();
+
+	// Moves the space on screen to the cursor's parameter, and re-reads the weights under it.
+	void
+	MoveCursor(int tick);
+
+	// The cursor's range and position for the selected space, and the weights beneath it.
+	void
+	SyncCursor();
+
+	/**
+	 * Which two clips are live under the cursor and what each weighs, from `BlendSpaceInfo`'s own
+	 * `StraddleAt` rather than a second copy of the rule (ADR-4).
+	 *
+	 * It is the CPU twin of what the pose pass computes, and nothing mechanically holds the two in
+	 * step -- a readout disagreeing with the pose on screen is what this is here to make visible.
+	 */
+	void
+	ShowCursorWeights();
+
+	/**
+	 * Takes the selected space's thresholds from each clip's measured `locomotionSpeed` (ADR-7).
+	 *
+	 * The run is re-sorted by the speeds it takes, because thresholds from speed *are* an ordering
+	 * by speed. Refused when two of its clips were animated at the same speed, or when one does not
+	 * travel -- neither gives a run that strictly increases, and a blend space divides by the span
+	 * between two samples.
+	 */
+	void
+	ThresholdsFromSpeed();
+
+	// How many clips of the live set may be sampled at all, and the `n`th of them (-1: no such
+	// clip). What decides whether a space can be added, since one needs two of them.
+	[[nodiscard]] int
+	LoopingClipCount() const;
+
+	[[nodiscard]] int
+	NthLoopingClip(int n) const;
+
+	// The document's space `index`, or nullptr when there is none -- the edited spaces and the
+	// resolved ones are the same length, so this is the selector's index either way.
+	[[nodiscard]] assetlib::BlendSpace*
+	EditedSpace(int index);
+
+	// Creates the empty set for the live clip set and opens it.
+	void
+	CreateBlendSet();
+
+	// Where a set for the live clip set would be written, or empty when there is no clip set or the
+	// convention does not cover it. What decides whether creating one is offered at all.
+	[[nodiscard]] QString
+	CanonicalBlendSetKey() const;
 
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
@@ -198,6 +325,37 @@ private:
 	void
 	UpdateTransitionControls();
 
+	/**
+	 * Fills the two end combos with the clip set and the space row's combo with the open set's
+	 * spaces. A space is never an entry in an end combo: exactly one control says the fade arrives
+	 * at a space, so the two can never disagree about the destination.
+	 *
+	 * Everything is restored by name, because an edit that re-acquires the rig comes back through
+	 * here and removing a space moves every space after it. A From whose name is gone falls back to
+	 * the playing clip, a To to nothing -- the resting state: one clip playing, no fade pending.
+	 */
+	void
+	RefreshTransitionEnds();
+
+	/**
+	 * Ranges the space row's parameter box to the chosen space's authored axis, and hides it when
+	 * no space is chosen -- there is then nothing for it to name, which is not a refusal.
+	 */
+	void
+	UpdateParameterBoxes();
+
+	// The space the row's combo names, or null when it names none.
+	[[nodiscard]] const game::BlendSpaceInfo*
+	ChosenSpace() const;
+
+	// Whether the fade's destination is that space rather than the To combo's clip.
+	[[nodiscard]] bool
+	SpaceIsDestination() const;
+
+	// The space `node` names, or null when it names a clip or nothing.
+	[[nodiscard]] const game::BlendSpaceInfo*
+	SpaceForNode(int node) const;
+
 	AnimationPreviewWindow* m_Preview = nullptr;
 	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
@@ -231,7 +389,78 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
+	// Which `.bblend` is open, and the button that writes the first one. A set is the rig's rather
+	// than the panel's, so choosing one reloads the mesh.
+	QComboBox*   m_BlendSetSelector = nullptr;
+	QPushButton* m_CreateBlendSet   = nullptr;
+
 	QTabWidget* m_Surfaces = nullptr;
+
+	// The Space tab: the spaces the open set holds, and the samples of the selected one.
+	QWidget*     m_SpaceGroup    = nullptr;
+	QComboBox*   m_SpaceSelector = nullptr;
+	QListWidget* m_SampleList    = nullptr;
+	QLabel*      m_SpaceNote     = nullptr;
+
+	// Editing the run: the spaces, then the samples of the selected one, then its threshold.
+	QPushButton* m_AddSpace    = nullptr;
+	QPushButton* m_RemoveSpace = nullptr;
+	QPushButton* m_RenameSpace = nullptr;
+
+	// Which clip the next sample plays. A clip that does not loop is listed and disabled rather
+	// than hidden: the author is looking for it, and its absence would read as a bad clip set.
+	QComboBox*      m_SampleClip      = nullptr;
+	QPushButton*    m_AddSample       = nullptr;
+	QPushButton*    m_RemoveSample    = nullptr;
+	QDoubleSpinBox* m_SampleParameter = nullptr;
+
+	// The parameter cursor over the selected space's range, the two clips live under it, and the
+	// action that takes every threshold from its clip's measured speed.
+	Scrubber*    m_SpaceCursor  = nullptr;
+	QLabel*      m_CursorLabel  = nullptr;
+	QLabel*      m_SpaceWeights = nullptr;
+	QPushButton* m_FromSpeed    = nullptr;
+
+	// Where the cursor sits on the selected space, in the space's own parameter. Kept across a
+	// reload for the reason the selection is: an edit should not move what is being watched.
+	float m_SpaceParameter = 0.0f;
+
+	/**
+	 * The open set as authored -- clips by name -- which is what every rule takes and what is saved.
+	 *
+	 * Held beside the resolved `m_Spaces` rather than derived from them: the resolved form carries
+	 * clip indices and neither the document's `name` nor its `extraJson`, so a save built from it
+	 * would drop what it never held. The two correspond position for position, which is what lets a
+	 * moved threshold reach the rig without resolving a name twice.
+	 */
+	assetlib::BlendSet m_BlendSet;
+
+	// Whether a threshold has moved since the last save. The box's editingFinished fires on losing
+	// focus too, and rewriting the whole document because it was clicked away from is a write for
+	// nothing.
+	bool m_BlendSetDirty = false;
+
+	// The spaces the rig was acquired with, as authored. What an edit is compared against to decide
+	// whether it can go live, and the reason that decision cannot be taken by whoever made the edit.
+	std::vector<assetlib::BlendSpace> m_AcquiredSpaces;
+
+	/**
+	 * What the author was looking at, kept across the reload an edit causes (ADR-3).
+	 *
+	 * The space by name rather than by index, since adding or removing one moves every index after
+	 * it. `m_PendingSampleRow` is where the cursor should land once the reload arrives -- the sample
+	 * just added -- and is spent the first time it is read.
+	 */
+	QString m_SelectedSpace;
+	int     m_PendingSampleRow = -1;
+	int     m_SelectedClip     = -1;
+
+	// What the open set resolved to, as the acquire reported it: what the Space tab lists, and
+	// what a later task edits.
+	std::vector<game::BlendSpaceInfo> m_Spaces;
+
+	// The set the panel has open, empty when none is. Kept because a reload names it again.
+	QString m_BlendRelPath;
 
 	// The stamped fade's layout, which the shared strip is redrawn from every tick.
 	editor::TransitionLayout m_TransitionLayout;
@@ -241,13 +470,22 @@ private:
 	// Previewing a crossfade: which two clips, how long, and the strip that is all three at once.
 	// The duration is typed rather than dragged because the question it answers is whether 0.2 s
 	// beats 0.35 s, and two values have to be reachable exactly to be compared at all.
-	QWidget*         m_TransitionGroup = nullptr;
-	QComboBox*       m_FromClip        = nullptr;
-	QComboBox*       m_ToClip          = nullptr;
-	QDoubleSpinBox*  m_FadeSeconds     = nullptr;
-	QCheckBox*       m_BlendEnabled    = nullptr;
-	TransitionStrip* m_Strip           = nullptr;
-	QLabel*          m_TransitionNote  = nullptr;
+	QWidget*   m_TransitionGroup = nullptr;
+	QComboBox* m_FromEnd         = nullptr;
+	QComboBox* m_ToEnd           = nullptr;
+	// The clip m_ToEnd last named, kept while the space row takes the destination over and across
+	// a re-acquire, so unchecking puts back what was chosen rather than nothing.
+	QString m_ToClip;
+
+	// The destination when it is on, in place of m_ToEnd: a checkbox, which space, and where on
+	// its axis the fade arrives.
+	QCheckBox*       m_SpaceEnabled      = nullptr;
+	QComboBox*       m_SpaceEnd          = nullptr;
+	QDoubleSpinBox*  m_SpaceEndParameter = nullptr;
+	QDoubleSpinBox*  m_FadeSeconds       = nullptr;
+	QCheckBox*       m_BlendEnabled      = nullptr;
+	TransitionStrip* m_Strip             = nullptr;
+	QLabel*          m_TransitionNote    = nullptr;
 
 	QWidget*        m_TransportBar = nullptr;
 	QToolButton*    m_PlayButton   = nullptr;

@@ -43,7 +43,7 @@ TransitionStrip::SetLayout(const editor::TransitionLayout& layout)
 }
 
 void
-TransitionStrip::SetClipNames(const QString& from, const QString& to)
+TransitionStrip::SetEndNames(const QString& from, const QString& to)
 {
 	m_FromName = from;
 	m_ToName   = to;
