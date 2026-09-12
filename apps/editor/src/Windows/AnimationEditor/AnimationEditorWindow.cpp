@@ -472,8 +472,6 @@ AnimationEditorWindow::BuildSpaceTab()
 		if (!m_SyncingUi)
 			SelectSpace(index);
 	});
-	layout->addWidget(m_SpaceSelector);
-
 	m_AddSpace    = new QPushButton(QStringLiteral("New"), m_SpaceGroup);
 	m_RenameSpace = new QPushButton(QStringLiteral("Rename"), m_SpaceGroup);
 	m_RemoveSpace = new QPushButton(QStringLiteral("Delete"), m_SpaceGroup);
@@ -969,6 +967,17 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 void
 AnimationEditorWindow::SelectSpace(const int index)
 {
+	// The combo is pushed to `index` rather than assumed to be there. It is only there when this
+	// came *from* the combo: a QComboBox carrying a placeholder does not select its first item on
+	// insert -- that is what the placeholder is for -- so a fresh fill leaves it at -1 while
+	// ShowSpaces asks for space 0. Everything below reads currentIndex(), never `index`, so the two
+	// disagreeing is a tab listing one space's samples with every control saying none is chosen.
+	if (m_SpaceSelector->currentIndex() != index)
+	{
+		const QSignalBlocker blocker(m_SpaceSelector);
+		m_SpaceSelector->setCurrentIndex(index);
+	}
+
 	m_SampleList->clear();
 
 	if (index < 0 || static_cast<size_t>(index) >= m_Spaces.size())
