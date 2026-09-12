@@ -148,7 +148,8 @@ namespace game
 		float                           now,
 		float                           duration,
 		float                           phase,
-		float                           rate)
+		float                           rate,
+		float                           parameter)
 	{
 		RequireWindow(now, duration, "CrossfadeTo");
 
@@ -206,6 +207,11 @@ namespace game
 			next.slot[incoming].phase     = phase;
 			next.slot[incoming].rate      = rate;
 			next.slot[incoming].tRef      = now;
+
+			// Both ends, so the slot holds one value rather than a ramp: a fade says where a space
+			// arrives, and a parameter that moves afterwards is RetargetParameter's window.
+			next.slot[incoming].param0 = parameter;
+			next.slot[incoming].param1 = parameter;
 		}
 
 		bgl::PlaybackSlot& arriving = next.slot[incoming];

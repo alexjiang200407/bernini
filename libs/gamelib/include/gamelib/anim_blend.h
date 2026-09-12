@@ -45,12 +45,14 @@ namespace game
 	 * `desc` with a fade onto `nodeIndex` begun at `now` and finished `duration` later: every slot that
 	 * carries weight ramps to zero over that window, and one slot takes `nodeIndex` up from zero.
 	 *
-	 * The incoming slot starts at `phase` with `tRef = now`, so it begins where the caller says
-	 * rather than where the clock happens to be.
+	 * The incoming slot starts at `phase`, `rate` and `parameter` with `tRef = now`, so it begins
+	 * where the caller says rather than where the clock happens to be. `parameter` is what a space
+	 * node arrives at and is ignored by a clip node, which reads none; moving it afterwards is
+	 * `RetargetParameter`, not a second fade.
 	 *
 	 * A record already fading onto `nodeIndex` is *not* restarted -- the same request twice in
 	 * consecutive frames would otherwise never arrive. The incoming slot is the one already playing
-	 * it, and its ramp is left alone.
+	 * it, and its ramp, phase, rate and parameter are all left alone.
 	 *
 	 * When every slot is taken, the lightest at `now` is evicted outright. That is the one place a
 	 * pop is accepted, and it takes three fades interrupting each other inside one window to reach.
@@ -63,8 +65,9 @@ namespace game
 		uint32_t                        nodeIndex,
 		float                           now,
 		float                           duration,
-		float                           phase = 0.0f,
-		float                           rate  = 1.0f);
+		float                           phase     = 0.0f,
+		float                           rate      = 1.0f,
+		float                           parameter = 0.0f);
 
 	/**
 	 * `desc` with the slot playing `nodeIndex` moved to `parameter` over `duration` from `now`.

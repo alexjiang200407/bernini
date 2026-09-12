@@ -28,6 +28,14 @@ The reasoning that is not obvious from a signature. The headers linked below are
   `prevTime` on the interrupting frame, and only when a fade interrupts a fade. The pose is exact
   throughout, and the header says why the alternative is worse.
 
+* **A fade says where a slot begins, on all three axes.** `CrossfadeTo` seeds the arriving slot's
+  `phase`, `rate` and `parameter`, so *fade onto the locomotion space at 3.2* is one call. A clip
+  node reads no parameter; a space node arrives at the bottom of its run without one, which is
+  silent rather than refused, and is why the argument exists. Moving it afterwards is
+  `RetargetParameter` — the seam a state machine would drive, and the reason the fade holds one
+  value rather than a ramp. A slot already playing that node keeps all three: fading back to what is
+  showing reuses it, and steering is not this write's job.
+
 * **Four slots, and the lightest is evicted.** A crossfade between two blend spaces is two nodes,
   and interrupting it is three. Four is the fixed bound the shader's loop needs. A write that wants
   a fifth evicts the lightest slot outright — the one place a pop is accepted, and it takes three
