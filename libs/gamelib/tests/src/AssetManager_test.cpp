@@ -30,6 +30,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -113,12 +114,12 @@ namespace
 		std::span<const std::string> materials,
 		std::span<const uint32_t>    materialIndices)
 	{
-		constexpr uint16_t kStride = 12;  // one float32x3 position
+		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
 		mesh.materials.assign(materials.begin(), materials.end());
 
-		mesh.vertexData.resize(materialIndices.size() * 3 * kStride);
+		mesh.vertexData.resize(materialIndices.size() * 3 * c_Stride);
 
 		uint32_t vertexCursor = 0;
 		for (const uint32_t materialIndex : materialIndices)
@@ -139,11 +140,11 @@ namespace
 
 			auto submesh                  = assetlib::Submesh();
 			submesh.layout.attributeCount = 1;
-			submesh.layout.stride         = kStride;
+			submesh.layout.stride         = c_Stride;
 			submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
 				                              assetlib::VertexFormat::kFloat32x3,
 				                              0 };
-			submesh.vertexByteOffset      = vertexCursor * kStride;
+			submesh.vertexByteOffset      = vertexCursor * c_Stride;
 			submesh.vertexCount           = 3;
 			submesh.firstMeshlet          = firstMeshlet;
 			submesh.meshletCount          = 1;
@@ -726,6 +727,25 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	REQUIRE(ch.size() == assetlib::c_LooseChannelCount);
 	CHECK(ch[0] == "Textures/albedo.ktx2");
 	CHECK(ch[1].empty());
+
+	// A surface material is its slots in document order; a routed slot names its composited map,
+	// never a source, and the routes win where a document carries a whole binding too.
+	auto surface         = assetlib::BMaterial();
+	surface.shadingModel = assetlib::ShadingModel::kPbrSurface;
+
+	auto& whole       = surface.surface.textures.emplace_back();
+	whole.name        = "baseColor";
+	whole.texturePath = "Textures/albedo.ktx2";
+
+	auto& routed       = surface.surface.textures.emplace_back();
+	routed.name        = "orm";
+	routed.texturePath = "Textures/ignored.ktx2";
+	routed.routes[0]   = { "Textures/ao.ktx2", 0 };
+	routed.bakedPath   = "Derived/BakedTextures/slot_abc.ktx2";
+
+	CHECK(
+		game::MaterialTextures(surface, false) ==
+		std::vector<std::string>{ "Textures/albedo.ktx2", "Derived/BakedTextures/slot_abc.ktx2" });
 }
 
 TEST_CASE("A prefetched texture is uploaded without its file being read", "[gamelib][assets]")

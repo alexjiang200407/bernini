@@ -17,14 +17,18 @@
 #include "fs_util.h"
 #include <assetlib_structs/VkFormat.h>
 
+#include <core/err/util.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <stb_image_resize2.h>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unordered_map>
 #include <utility>
@@ -76,6 +80,16 @@ namespace assetlib
 			// An unrouted normal axis is 0.5, i.e. zero once the shader maps [0,1] to [-1,1].
 			{ c_NormalChannels, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
 		} };
+
+		// Every routed surface slot bakes under this one prefix, whatever the slot is called: the
+		// slot's own name goes in the content key instead, so texture pruning recognises the family
+		// without enumerating names no engine list holds.
+		constexpr std::string_view c_SurfaceSlotBakePrefix = "slot";
+
+		// The one rule for a slot's map, shared by the disk bake and the in-memory compose: linear
+		// data, white where nothing routes (the factor alone drives that component), BC7 on disk.
+		constexpr uint8_t         c_SlotFallback    = 0xFF;
+		constexpr Ktx2Compression c_SlotCompression = Ktx2Compression::kBC7_RGBA;
 
 		bool
 		isRgba8(VkFormat vk)
@@ -176,12 +190,12 @@ namespace assetlib
 			}
 
 		private:
-			std::filesystem::path                   m_DataRoot;
-			std::unordered_map<std::string, Source> m_Decoded;
+			std::filesystem::path                m_DataRoot;
+			core::str::unordered_str_map<Source> m_Decoded;
 		};
 
 		/**
-		 * The size + content hash of every distinct source the material routes.
+		 * The size + content hash of every distinct source `routes` name, merged into `stamps`.
 		 *
 		 * Read up front because both halves of the bake need it: the key each map is named by, and the
 		 * `routeStamps` written back once the maps are current.
@@ -189,12 +203,13 @@ namespace assetlib
 		 * @throws std::runtime_error if a routed source cannot be read. Routing nothing is not an
 		 *         error: see bakeMaterial.
 		 */
-		std::unordered_map<std::string, SourceStamp>
-		stampRoutes(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		void
+		stampRoutes(
+			std::span<const ChannelRoute>              routes,
+			const std::filesystem::path&               dataRoot,
+			core::str::unordered_str_map<SourceStamp>& stamps)
 		{
-			auto stamps = std::unordered_map<std::string, SourceStamp>();
-
-			for (const ChannelRoute& route : pbr.routes)
+			for (const ChannelRoute& route : routes)
 			{
 				if (route.texture.empty() || stamps.contains(route.texture))
 					continue;
@@ -206,8 +221,22 @@ namespace assetlib
 
 				stamps.emplace(route.texture, stamp);
 			}
+		}
 
-			return stamps;
+		bool
+		anyRouted(std::span<const ChannelRoute> routes) noexcept
+		{
+			return std::ranges::any_of(routes, [](const ChannelRoute& route) {
+				return !route.texture.empty();
+			});
+		}
+
+		/** The `group.count`-long slice of the PBR routes (or stamps) one map composites. */
+		template <typename T>
+		std::span<T>
+		groupSlice(std::span<T> all, const ChannelGroup& group) noexcept
+		{
+			return all.subspan(channelIndex(group, 0), group.count);
 		}
 
 		/**
@@ -262,18 +291,15 @@ namespace assetlib
 			return groupCarriesAlpha(layer, group) ? Ktx2Compression::kBC7_RGBA : group.compression;
 		}
 
-		// A group is sized to the largest source routed into *it*, so its output does not depend on any
-		// texture outside the group -- which is what lets two materials share the baked file.
+		// A map is sized to the largest source routed into *it*, so its output does not depend on any
+		// texture outside its routes -- which is what lets two materials share the baked file.
 		std::pair<uint32_t, uint32_t>
-		groupExtent(const PbrParams& pbr, const Group& group, SourceCache& sources)
+		mapExtent(std::span<const ChannelRoute> routes, SourceCache& sources)
 		{
 			uint32_t width  = 0;
 			uint32_t height = 0;
-			for (size_t i = channelIndex(group.channels, 0);
-			     i < channelIndex(group.channels, group.channels.count);
-			     ++i)
+			for (const ChannelRoute& route : routes)
 			{
-				const ChannelRoute& route = pbr.routes[i];
 				if (route.texture.empty())
 					continue;
 
@@ -285,48 +311,34 @@ namespace assetlib
 		}
 
 		/**
-		 * Everything that determines a baked map's bytes, as a canonical string: the group, the target
-		 * format, and the ordered (source, channel, source content) triple feeding each of its
-		 * components. Two materials that agree on all of this produce byte-identical output, so they
-		 * should -- and do -- name the same file.
+		 * Everything that determines a baked map's bytes, as a canonical string: the caller's lead
+		 * (name, token and *resolved* format, from keyLead, plus whatever else feeds the bytes --
+		 * the base-colour cut segment, a surface slot's name) and the ordered (source, channel,
+		 * source content) triple feeding each component. Two materials that agree on all of this
+		 * produce byte-identical output, so they should -- and do -- name the same file.
 		 *
-		 * The target resolution is deliberately absent: a group is sized to the largest source routed
+		 * The target resolution is deliberately absent: a map is sized to the largest source routed
 		 * into it, so identical source content already implies it -- and leaving it out is what lets a
 		 * bake decide without decoding an image. See docs/asset_standards.md.
 		 *
-		 * `compression` is the *resolved* format, not `group.compression`: base color bakes to BC1 or
-		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
-		 * name. `mipCutoff` is likewise part of the identity: a cutout and a blend material can route
-		 * the same base color to the same BC7 format yet need different (coverage vs plain) mips.
 		 * c_TextureBakeToken leads, so a revision of the chain itself takes a new name rather than
 		 * finding the old one already on disk.
 		 */
 		std::string
 		bakeKey(
-			const PbrParams&                                    pbr,
-			const Group&                                        group,
-			const std::unordered_map<std::string, SourceStamp>& stamps,
-			Ktx2Compression                                     compression,
-			std::optional<float>                                mipCutoff)
+			std::string                                      lead,
+			std::span<const ChannelRoute>                    routes,
+			const core::str::unordered_str_map<SourceStamp>& stamps,
+			uint8_t                                          fallback)
 		{
-			std::string key = std::string(group.name) + '|' + std::to_string(c_TextureBakeToken) +
-			                  '|' + std::to_string(static_cast<uint32_t>(compression));
-
-			if (group.channels.count == c_BaseColorChannels.count)
+			std::string key = std::move(lead);
+			for (const ChannelRoute& route : routes)
 			{
-				key += mipCutoff ? "|cut:" + std::to_string(*mipCutoff) : "|cut:none";
-			}
-
-			for (size_t i = channelIndex(group.channels, 0);
-			     i < channelIndex(group.channels, group.channels.count);
-			     ++i)
-			{
-				const ChannelRoute& route = pbr.routes[i];
 				key += '|';
 
 				if (route.texture.empty())
 				{
-					key += ':' + std::to_string(group.fallback);
+					key += ':' + std::to_string(fallback);
 					continue;
 				}
 
@@ -338,35 +350,43 @@ namespace assetlib
 			return key;
 		}
 
+		/** The lead every map's key starts from -- everything before the per-route segments. */
+		std::string
+		keyLead(std::string_view name, Ktx2Compression compression)
+		{
+			return std::string(name) + '|' + std::to_string(c_TextureBakeToken) + '|' +
+			       std::to_string(static_cast<uint32_t>(compression));
+		}
+
 		/**
-		 * Gathers a group's channels into a packed RGBA8 map at `width` x `height`. Destination
-		 * component i takes its routed source's channel; an unrouted one takes the group's fallback, the
-		 * value that makes the shader's factor alone drive that output. Components past the group's count
-		 * stay 255 (BC1 ignores alpha; BC5 ignores B and A).
+		 * Gathers a map's channels into packed RGBA8 at `width` x `height`. Destination component i
+		 * takes its routed source's channel; an unrouted one takes `fallback`, the value that makes
+		 * the shader's factor alone drive that output. Components past the routes' count stay 255
+		 * (BC1 ignores alpha; BC5 ignores B and A).
 		 */
 		Rgba8
 		compose(
-			const PbrParams& pbr,
-			const Group&     group,
-			SourceCache&     sources,
-			uint32_t         width,
-			uint32_t         height)
+			std::span<const ChannelRoute> routes,
+			uint8_t                       fallback,
+			SourceCache&                  sources,
+			uint32_t                      width,
+			uint32_t                      height)
 		{
 			const size_t texels = static_cast<size_t>(width) * height;
 
 			// Resampling is per (source, extent), so a source feeding two components of one group is
 			// only scaled once.
-			auto scaled = std::unordered_map<std::string, Rgba8>();
+			auto scaled = core::str::unordered_str_map<Rgba8>();
 
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
-			for (size_t component = 0; component < group.channels.count; ++component)
+			for (size_t component = 0; component < routes.size(); ++component)
 			{
-				const ChannelRoute& route = pbr.routes[channelIndex(group.channels, component)];
+				const ChannelRoute& route = routes[component];
 
 				if (route.texture.empty())
 				{
 					for (size_t t = 0; t < texels; ++t)
-						out[t * 4u + component] = static_cast<std::byte>(group.fallback);
+						out[t * 4u + component] = static_cast<std::byte>(fallback);
 					continue;
 				}
 
@@ -406,17 +426,13 @@ namespace assetlib
 	}
 
 	static void
-	bakeMaterial(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
+	bakePbr(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
 	{
-		if (material.shadingModel != ShadingModel::kPbr)
-			throw std::runtime_error(
-				"assetlib::bakeMaterial: shading model " +
-				std::to_string(static_cast<uint32_t>(material.shadingModel)) + " has no bake step");
-
 		const MaterialLayer& layer = material.layer;
 		PbrParams&           pbr   = material.pbr;
 
-		const std::unordered_map<std::string, SourceStamp> stamps = stampRoutes(pbr, desc.dataRoot);
+		auto stamps = core::str::unordered_str_map<SourceStamp>();
+		stampRoutes(pbr.routes, desc.dataRoot, stamps);
 
 		// Routing nothing is a complete material, not a failed one: its factors are the whole
 		// description, and the triplet it may already carry is what draws it. Nothing to composite is
@@ -443,10 +459,12 @@ namespace assetlib
 		for (size_t g = 0; g < c_Groups.size(); ++g)
 		{
 			const Group& group = c_Groups[g];
+			const auto   routes =
+				groupSlice(std::span<const ChannelRoute>(pbr.routes), group.channels);
 
 			// A group with nothing routed is not baked at all: an empty triplet entry makes the runtime
 			// fall back to white / flat-normal, exactly what an all-default map would have been.
-			if (!groupIsRouted(pbr, group.channels))
+			if (!anyRouted(routes))
 				continue;
 
 			throwIfCancelled(cancel);
@@ -459,15 +477,22 @@ namespace assetlib
 			                                           std::optional(layer.alphaCutoff) :
 			                                           std::nullopt;
 
-			const std::string name =
-				bakedMapFileName(group.name, bakeKey(pbr, group, stamps, compression, mipCutoff));
+			// The cut segment is written for base colour whether or not there is a cutoff, so a
+			// cutout and a blend material never converge on one file name.
+			std::string lead = keyLead(group.name, compression);
+			if (group.channels.count == c_BaseColorChannels.count)
+				lead += mipCutoff ? "|cut:" + std::to_string(*mipCutoff) : "|cut:none";
+
+			const std::string name = bakedMapFileName(
+				group.name,
+				bakeKey(std::move(lead), routes, stamps, group.fallback));
 			const auto target = outDir / name;
 
 			if (desc.write && !hasBytes(target))
 			{
-				const auto [width, height] = groupExtent(pbr, group, sources);
+				const auto [width, height] = mapExtent(routes, sources);
 
-				Rgba8 composed = compose(pbr, group, sources, width, height);
+				Rgba8 composed = compose(routes, group.fallback, sources, width, height);
 
 				// A cutout/blend base colour keeps its alpha channel, so bleed opaque colour under the
 				// transparent texels before BC7 sees them -- otherwise a block on a cutout edge stores
@@ -502,13 +527,101 @@ namespace assetlib
 		// The routes stay: they are how it gets re-baked, and what it draws from until then.
 	}
 
+	// A routed surface slot bakes as ADR-7 in the surface-material-panel plan records: linear
+	// data, white fallback, BC7, under one shared "slot" prefix so texture pruning can recognise
+	// the family without enumerating slot names. The slot's declared name is in the key, so two
+	// slots routing the same sources still name distinct files only when their names differ --
+	// identical content under one name is the same sharing the PBR groups have.
+	static void
+	bakeSurface(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
+	{
+		auto stamps = core::str::unordered_str_map<SourceStamp>();
+		for (const SurfaceTextureBinding& slot : material.surface.textures)
+			stampRoutes(slot.routes, desc.dataRoot, stamps);
+
+		// Binding everything whole is the common surface material, and it has nothing to bake --
+		// the loop below then only zeroes what is already zero, and touches no directory.
+		SourceCache sources(desc.dataRoot);
+
+		const std::filesystem::path outDir = desc.dataRoot / desc.textureDir;
+		if (desc.write && !stamps.empty())
+			createDirectories(outDir);
+
+		for (SurfaceTextureBinding& slot : material.surface.textures)
+		{
+			const auto routes = std::span<const ChannelRoute>(slot.routes);
+
+			// Stamps are zeroed where nothing routes, whether or not the slot bakes -- a de-routed
+			// channel must not keep claiming the provenance of a bake it is no longer part of.
+			for (size_t i = 0; i < c_SurfaceSlotChannelCount; ++i)
+			{
+				const std::string& texture = slot.routes[i].texture;
+				slot.routeStamps[i]        = texture.empty() ? SourceStamp{} : stamps.at(texture);
+			}
+
+			if (!anyRouted(routes))
+			{
+				// A slot that stopped routing loses its map with it. The PBR triplet stays after a
+				// de-route because the material still draws it; an unrouted slot samples its whole
+				// binding instead, so a kept map would be dead yet marked live by texture pruning.
+				slot.bakedPath.clear();
+				slot.bakeToken = 0;
+				continue;
+			}
+
+			throwIfCancelled(cancel);
+
+			const std::string name = bakedMapFileName(
+				c_SurfaceSlotBakePrefix,
+				bakeKey(
+					keyLead(c_SurfaceSlotBakePrefix, c_SlotCompression) + '|' + slot.name,
+					routes,
+					stamps,
+					c_SlotFallback));
+			const auto target = outDir / name;
+
+			if (desc.write && !hasBytes(target))
+			{
+				const auto [width, height] = mapExtent(routes, sources);
+
+				const Rgba8     composed = compose(routes, c_SlotFallback, sources, width, height);
+				const ImageData image = rgba8ToImage(composed, width, height, std::nullopt, false);
+
+				writeKTX2(image, target, false, c_SlotCompression);
+			}
+
+			slot.bakedPath = (desc.textureDir / name).generic_string();
+			slot.bakeToken = c_TextureBakeToken;
+		}
+	}
+
+	static void
+	bakeMaterial(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
+	{
+		switch (material.shadingModel)
+		{
+		case ShadingModel::kPbr:
+			bakePbr(material, desc, cancel);
+			return;
+		case ShadingModel::kPbrSurface:
+			bakeSurface(material, desc, cancel);
+			return;
+		case ShadingModel::kCount:
+			break;
+		}
+		core::throw_runtime_error(
+			"assetlib::bakeMaterial: shading model {} has no bake step",
+			static_cast<uint32_t>(material.shadingModel));
+	}
+
 	bool
 	isBakedMapName(std::string_view fileName) noexcept
 	{
-		static constexpr std::array<std::string_view, c_Groups.size()> c_Names = { {
+		static constexpr std::array<std::string_view, c_Groups.size() + 1> c_Names = { {
 			c_Groups[0].name,
 			c_Groups[1].name,
 			c_Groups[2].name,
+			c_SurfaceSlotBakePrefix,
 		} };
 		return isBakedNameAmong(fileName, c_Names);
 	}
@@ -516,10 +629,11 @@ namespace assetlib
 	void
 	stripAuthoringData(BMaterial& material)
 	{
-		// Routes are a PBR notion, so PBR is the only model that can be stripped down to nothing. A
-		// model with no authoring form has nothing to lose and is validated by its absence.
-		const bool isPbr = material.shadingModel == ShadingModel::kPbr;
+		const bool isPbr     = material.shadingModel == ShadingModel::kPbr;
+		const bool isSurface = material.shadingModel == ShadingModel::kPbrSurface;
 
+		// Checked before anything is cleared: a material that cannot be stripped must come out of
+		// this call untouched, not half-stripped.
 		if (isPbr)
 		{
 			const PbrParams& pbr = material.pbr;
@@ -528,8 +642,6 @@ namespace assetlib
 				return !route.texture.empty();
 			});
 
-			// Checked before anything is cleared: a material that cannot be stripped must come out of
-			// this call untouched, not half-stripped.
 			if (hasRoutes && pbr.baseColorTexture.empty() && pbr.ormTexture.empty() &&
 			    pbr.normalTexture.empty())
 			{
@@ -540,10 +652,29 @@ namespace assetlib
 			}
 		}
 
+		if (isSurface)
+		{
+			for (const SurfaceTextureBinding& slot : material.surface.textures)
+				core::throw_runtime_error_if(
+					slotIsRouted(slot) && slot.bakedPath.empty(),
+					"assetlib::stripAuthoringData: slot '{}' has never been baked; stripping its "
+					"routes would leave nothing to render",
+					slot.name);
+		}
+
 		if (isPbr)
 		{
 			material.pbr.routes      = {};
 			material.pbr.routeStamps = {};
+		}
+
+		if (isSurface)
+		{
+			for (SurfaceTextureBinding& slot : material.surface.textures)
+			{
+				slot.routes      = {};
+				slot.routeStamps = {};
+			}
 		}
 
 		material.editorGraph.clear();
@@ -569,5 +700,44 @@ namespace assetlib
 			material,
 			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName, .write = false },
 			{});
+	}
+
+	bool
+	AssetStore::CanComposeSurfaceSlots(const BMaterial& material) const
+	{
+		// The host, deliberately, because it is where the compositor reads (SourceCache above):
+		// on a packed mount the sources resolve through the archive but cannot be composited, and
+		// a routed material there should have been stripped anyway.
+		for (const SurfaceTextureBinding& slot : material.surface.textures)
+			for (const ChannelRoute& route : slot.routes)
+				if (!route.texture.empty() && stampOf(m_DataRoot / route.texture).size == 0)
+					return false;
+		return true;
+	}
+
+	ImageData
+	AssetStore::ComposeSurfaceSlot(const BMaterial& material, std::string_view slotName) const
+	{
+		const auto slot = std::ranges::find_if(
+			material.surface.textures,
+			[&](const SurfaceTextureBinding& binding) { return binding.name == slotName; });
+		core::throw_runtime_error_if(
+			slot == material.surface.textures.end(),
+			"assetlib::ComposeSurfaceSlot: material '{}' has no slot '{}'",
+			material.name,
+			slotName);
+
+		const auto routes = std::span<const ChannelRoute>(slot->routes);
+		core::throw_runtime_error_if(
+			!anyRouted(routes),
+			"assetlib::ComposeSurfaceSlot: slot '{}' routes nothing",
+			slotName);
+
+		SourceCache sources(m_DataRoot);
+
+		const auto [width, height] = mapExtent(routes, sources);
+		const Rgba8 composed       = compose(routes, c_SlotFallback, sources, width, height);
+
+		return rgba8ToImage(composed, width, height, std::nullopt, false);
 	}
 }

@@ -89,7 +89,10 @@ namespace assetlib
 
 					case ShadingModel::kPbrSurface:
 						for (const SurfaceTextureBinding& texture : material.surface.textures)
-							markMap(live, texture.texture);
+						{
+							markMap(live, texture.texturePath);
+							markMap(live, texture.bakedPath);
+						}
 						break;
 
 					case ShadingModel::kCount:

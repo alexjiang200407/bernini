@@ -161,9 +161,9 @@ A material drawn by a surface says so, names it, and sets what it wants by name
 
 The model is **`pbrSurface`**, not `surface`, and the name is the whole story: the lighting is the
 engine's PBR, and what a surface supplies is the material's half of it — a `PbrSurface`, which is
-the struct `Evaluate` returns. It is where the inputs come from rather than a second shading model,
-which is also why there is no route, no bake and no graph behind one. A game-defined *lighting*
-model would be a third value, and nothing in today's contract can write one.
+the struct `Evaluate` returns. It is where the inputs come from rather than a second shading
+model. A game-defined *lighting* model would be a third value, and nothing in today's contract can
+write one.
 
 ```json
 {
@@ -186,9 +186,17 @@ model would be a third value, and nothing in today's contract can write one.
 * **`parameters`** is one to four numbers per name, as many as the parameter was declared with. A
   scalar may be written as a number. A name the surface does not declare is an error, not a value
   dropped on the floor.
-* **`textures`** is one mount key per name. A surface texture is *bound*, not composited: there is
-  no channel routing behind one and no bake, so what the renderer samples is what the document
-  names.
+* **`textures`** is one mount key per name — the whole binding — or, for a slot composited from
+  channel routes, an object: `routes` maps `r`/`g`/`b`/`a` to `{texture, channel}` with the
+  source stamps beside them, and `baked`/`token` name the packed map the bake wrote. The two
+  forms are exclusive per slot, the routes winning where a document carries both. Routing is the
+  editor's offer on *data* slots only — a colour or a normal map is authored whole — and the bake
+  behind it is `AssetStore::BakeMaterial`, the same compositor the PBR triplet uses, writing one
+  linear BC7 map per routed slot under the shared `slot_` prefix. A routed slot whose bake is
+  stale or absent is composited in memory at load (`AssetStore::ComposeSurfaceSlot`), so the
+  material renders the same either way; the bake is the shipping form, and it is also what removes
+  the stand-in's cost — the in-memory map is uncompressed RGBA8, several times the baked BC7's
+  device memory, held for the material's lifetime.
 * **The layer keys are every model's** and sit beside `shadingModel`, not inside the parameters —
   `alphaMode`, `alphaCutoff`, `doubleSided`.
 * **Everything else is PBR's.** `baseColorFactor`, `routes`, `baked` and the rest belong to
@@ -215,9 +223,11 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 
 Deliberate, and each is a decision rather than an omission:
 
-* **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
-  reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
-  yet.
+* **A bake per routed data slot, and nothing else.** A colour, normal or coverage slot names a
+  `.ktx2` the project already holds; a data slot may instead be composited from channel routes
+  (`textures` above). Slot kinds are reflected and reported through
+  `IGraphics::GetSurfaceTypes()`, but beyond choosing which slots offer routing they drive no
+  format or colour-space rule yet.
 * **Editor UI is reflected, never authored twice.** A surface material opens in the Material
   Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
   per value — the layer keys are edited in the properties panel beside the board, and Save writes
