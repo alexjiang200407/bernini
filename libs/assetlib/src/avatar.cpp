@@ -91,10 +91,8 @@ namespace assetlib
 		return swapHalf(
 			"avatar",
 			skeletonKey,
-			c_SkeletonsDirectoryName,
-			c_AvatarsDirectoryName,
-			c_SkeletonExtension,
-			c_AvatarExtension);
+			{ c_SkeletonsDirectoryName, c_SkeletonExtension },
+			{ c_AvatarsDirectoryName, c_AvatarExtension });
 	}
 
 	std::string
@@ -103,10 +101,8 @@ namespace assetlib
 		return swapHalf(
 			"avatar",
 			avatarKey,
-			c_AvatarsDirectoryName,
-			c_SkeletonsDirectoryName,
-			c_AvatarExtension,
-			c_SkeletonExtension);
+			{ c_AvatarsDirectoryName, c_AvatarExtension },
+			{ c_SkeletonsDirectoryName, c_SkeletonExtension });
 	}
 
 	ResolvedAvatar

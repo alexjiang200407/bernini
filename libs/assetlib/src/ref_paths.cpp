@@ -85,31 +85,29 @@ namespace assetlib
 	swapHalf(
 		const std::string_view subject,
 		const std::string_view from,
-		const std::string_view fromDirectory,
-		const std::string_view toDirectory,
-		const std::string_view fromExtension,
-		const std::string_view toExtension)
+		const AssetHalf&       fromHalf,
+		const AssetHalf&       toHalf)
 	{
 		const std::string key = normalizeRef(from);
 
 		core::throw_runtime_error_if(
-			extensionOf(key) != fromExtension,
+			extensionOf(key) != fromHalf.extension,
 			"{}: '{}' is not a '{}'",
 			subject,
 			from,
-			fromExtension);
+			fromHalf.extension);
 
 		core::throw_runtime_error_if(
-			!isUnder(key, fromDirectory),
+			!isUnder(key, fromHalf.directory),
 			"{}: '{}' is not under '{}'",
 			subject,
 			from,
-			fromDirectory);
+			fromHalf.directory);
 
 		const std::string_view tail = std::string_view(key).substr(
-			fromDirectory.size(),
-			key.size() - fromDirectory.size() - fromExtension.size());
+			fromHalf.directory.size(),
+			key.size() - fromHalf.directory.size() - fromHalf.extension.size());
 
-		return std::string(toDirectory).append(tail).append(toExtension);
+		return std::string(toHalf.directory).append(tail).append(toHalf.extension);
 	}
 }

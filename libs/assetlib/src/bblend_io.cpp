@@ -92,10 +92,8 @@ namespace assetlib
 		return swapHalf(
 			"blend set",
 			animationsKey,
-			c_AnimationsDirectoryName,
-			c_BlendSetsDirectoryName,
-			c_AnimationExtension,
-			c_BlendExtension);
+			{ c_AnimationsDirectoryName, c_AnimationExtension },
+			{ c_BlendSetsDirectoryName, c_BlendExtension });
 	}
 
 	void
