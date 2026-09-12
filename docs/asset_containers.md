@@ -242,6 +242,18 @@ current meshes), everything else as read. A second run rewrites nothing; a file 
 reported per-file, and the CLI exits non-zero. `assetlib_cli describe -p <project> <key> --key`
 prints a cache entry's key without loading its payload.
 
+**It also bakes down a re-addressing.** A mesh or clip set cooked against a rig that has since
+*gained* a bone is re-addressed at load, every load, by `AssetManager::AcquireSkinnedMesh` (see
+[Skinned Meshes](skinning.md)). `migrate` applies the same remap to the file, so the pairing is
+signature-equal again and no load has to. A pairing the remap will not resolve — a rename, a
+deletion, a reparent — is left exactly as it was: there is no current state to put it at, and the
+acquire refuses it by name where it is read.
+
+What this does not put back is a posed box. Re-addressing a *mesh* rewrites its joint indices, so
+its geometry no longer hashes to what the box beside it was measured against, and a re-measure runs
+once per load until `assetlib_cli bakebounds -p <project>` writes a current one. A clip set
+re-addressed on its own is unaffected — its geometry never moved.
+
 `pack` is the other writer: stale geometry and env bakes are made current *in the archive* (and
 for env, on disk first), because a shipped read-only mount has nowhere to regenerate — see
 [Asset Archives](archives.md).

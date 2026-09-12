@@ -18,6 +18,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <concepts>
 
 #include "cook_threads.h"
 #include "fs_util.h"
@@ -91,6 +92,32 @@ namespace assetlib
 		}
 
 		/**
+		 * Re-addresses `container` to the rig it names, where that rig has grown a bone since the
+		 * container was cooked -- what AcquireSkinnedMesh does at load, done once to the file so no
+		 * load has to (ADR-1).
+		 *
+		 * A pairing the remap will not resolve is left exactly as it was: there is no current state
+		 * to put it at, and the acquire refuses it by name where it is read. One that names no rig
+		 * is a static mesh and has nothing to address.
+		 */
+		template <typename T, std::invocable<T&, const Skeleton&> Remap>
+		void
+		remapToItsRig(const AssetStore& store, T& container, Remap&& remap)
+		{
+			if (container.skeleton.empty())
+				return;
+
+			// Through the regeneration seam, not a plain load: migrate walks meshes before rigs,
+			// so the `.bskel` beside this one may still be stale on disk, and a plain load refuses
+			// a stale container rather than re-cooking it.
+			const Skeleton rig = store.LoadRegenSkeleton(container.skeleton);
+			if (container.skeletonSignature == skeletonSignature(rig))
+				return;
+
+			(void)remap(container, rig);
+		}
+
+		/**
 		 * The bytes the project's current state says `key` should hold, or nullopt for a type
 		 * this does not migrate. Geometry goes through the regeneration seam, so a stale group
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
@@ -120,12 +147,17 @@ namespace assetlib
 						"rebind or re-export",
 						current.unboundBindings.front());
 				}
+				remapToItsRig(store, current.mesh, remapMesh);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
 				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
+			{
+				AnimationSet clips = store.LoadRegenAnimations(key);
+				remapToItsRig(store, clips, remapAnimations);
+				return AssetCodec<AnimationSet>::Serialize(clips);
+			}
 			case AssetType::kMaterial:
 			{
 				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
