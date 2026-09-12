@@ -10,6 +10,52 @@ import lib.forward.common;
 import lib.math.HashedAlpha;
 import lib.types.Texture;
 
+// A data slot gathered from its record's channel routes: component c of slot `slot` reads the
+// routeChannels-named component of routeTextures[slot * cGameSurfaceRouteChannels + c], as
+// SampleLooseChannel routes the engine's own channels. This exists so a slot packed from other
+// textures' channels -- an ORM split across two maps -- draws unbaked with no CPU composite:
+// rewiring a channel rewrites the record instead of rebuilding a texture. The route handles sit
+// contiguously behind the slot handles in the arena's typed view, which is what GetTextureAt's
+// index arithmetic rests on.
+// Whether the record composes `slot` from its routes, written at record build (GameSurfaceRecord
+// .routedMask): the whole-bound and unbound cases stay on the single fetch they always took.
+bool SlotIsRouted(uint byteOffset, uint slot)
+{
+    let mask = materialData.materials.LoadAt<uint>(byteOffset + cGameSurfaceRoutedMaskByteOffset);
+    return ((mask >> slot) & 1u) != 0u;
+}
+
+float4 SampleRoutedSlot(uint byteOffset, uint slot, float2 uv)
+{
+    float4 gathered;
+    [ForceUnroll]
+    for (uint c = 0; c < cGameSurfaceRouteChannels; ++c)
+    {
+        let route = slot * cGameSurfaceRouteChannels + c;
+        let source = materialData.GetTextureAt(byteOffset, cGameSurfaceTextureSlots + route);
+        let channel = materialData.materials.LoadAt<uint>(byteOffset + cGameSurfaceRouteChannelsByteOffset + route * 4);
+        gathered[c] = SelectComponent(source.Sample(materialData.anisoLinearWrapSampler, uv), channel);
+    }
+    return gathered;
+}
+
+// SampleRoutedSlot displaced along the mip chain, for BiasedArenaReader -- a second function for
+// the reason that reader is a wrapper: a bias parameter here would put SampleBias on every row's
+// material sampling path to serve the coverage read.
+float4 SampleRoutedSlotBias(uint byteOffset, uint slot, float2 uv, float lodBias)
+{
+    float4 gathered;
+    [ForceUnroll]
+    for (uint c = 0; c < cGameSurfaceRouteChannels; ++c)
+    {
+        let route = slot * cGameSurfaceRouteChannels + c;
+        let source = materialData.GetTextureAt(byteOffset, cGameSurfaceTextureSlots + route);
+        let channel = materialData.materials.LoadAt<uint>(byteOffset + cGameSurfaceRouteChannelsByteOffset + route * 4);
+        gathered[c] = SelectComponent(source.SampleBias(materialData.anisoLinearWrapSampler, uv, lodBias), channel);
+    }
+    return gathered;
+}
+
 // The engine's side of the contract: every handle a surface reads is dereferenced here, and the
 // surface sees a slot index and a UV, never the arena.
 public struct MaterialArenaReader : IMaterialReader
@@ -19,6 +65,13 @@ public struct MaterialArenaReader : IMaterialReader
 
     public float4 Sample<S : ISlot>(S slot, float2 uv)
     {
+        // S.Routed() is a compile-time constant per specialization, so only a data slot carries
+        // the branch at all -- and its mask load is one scalar, uniform per material, keeping a
+        // whole-bound slot (the shipped, baked case) at the single fetch.
+        if (S.Routed() && SlotIsRouted(byteOffset, slot.Index()))
+        {
+            return SampleRoutedSlot(byteOffset, slot.Index(), uv);
+        }
         return materialData.GetTextureAt(byteOffset, slot.Index()).Sample(materialData.anisoLinearWrapSampler, uv);
     }
 
@@ -44,6 +97,10 @@ public struct BiasedArenaReader : IMaterialReader
 
     public float4 Sample<S : ISlot>(S slot, float2 uv)
     {
+        if (S.Routed() && SlotIsRouted(inner.byteOffset, slot.Index()))
+        {
+            return SampleRoutedSlotBias(inner.byteOffset, slot.Index(), uv, lodBias);
+        }
         return materialData.GetTextureAt(inner.byteOffset, slot.Index()).SampleBias(materialData.anisoLinearWrapSampler, uv, lodBias);
     }
 
