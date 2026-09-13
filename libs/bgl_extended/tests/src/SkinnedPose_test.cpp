@@ -1132,6 +1132,45 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 			expected(0.5f, 0.25f, 0.0f, 0.0f));
 	}
 
+	SECTION("a sample whose clip does not loop wraps with the space")
+	{
+		// Clips cooked as one-shots, which played alone would hold their last frame. A space wraps
+		// its own phase and plays each sample at that fraction of its cycle, so past one cycle they
+		// have come round again rather than stopping.
+		assetlib::AnimationSet held = MakeSpaceClipSet();
+		for (assetlib::AnimationClip& clip : held.clips) clip.loop = 0;
+
+		const auto heldRig = scene->AddRig(skeleton, held, bgl::FootPlantDesc(), MakeSpaceSet());
+		REQUIRE(heldRig.IsValid());
+
+		const auto heldGeom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			heldRig,
+			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+		REQUIRE(heldGeom.IsValid());
+
+		constexpr float c_Parameter = 0.5f;
+		constexpr float c_Rate      = 1.0f;
+
+		// Past one whole cycle and off a frame: a clamp would read each clip's last frame, a wrap
+		// reads 0.3 of the way round.
+		const float time =
+			1.3f * glm::mix(CycleSeconds(held.clips[0]), CycleSeconds(held.clips[1]), c_Parameter);
+
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, c_Rate, c_Parameter);
+
+		const auto instance = view->CreateSkinnedMeshInstance(heldGeom, glm::mat4(1.0f), desc);
+
+		CheckAgainstReference(
+			paletteAt(instance, time),
+			skeleton,
+			held,
+			expected(c_Parameter, 0.0f, c_Rate, time));
+	}
+
 	SECTION("the phase is exact mid-ramp, not merely at the ramp's ends")
 	{
 		// What ADR-11's closed form buys over the approximation it rejected: while the parameter

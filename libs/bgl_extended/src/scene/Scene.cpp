@@ -878,14 +878,15 @@ namespace bgl
 							animations.clips.size()));
 				}
 
-				// A parameter sets one normalized phase every sample plays at, and a clip that
-				// clamps rather than wraps would sit on its last frame while the others cycle.
-				if (animations.clips[sample.clipIndex].loop == 0)
+				// The space wraps its phase and plays each sample at that fraction of the sample's
+				// cycle, whatever the clip's own loop flag says. A single frame has no cycle, and the
+				// weighted cycle is what the phase advances by.
+				if (animations.clips[sample.clipIndex].frameCount < 2)
 				{
 					throw SceneError(
 						std::format(
-							"skinned geometry: sample {} of blend space {} names a clip that does "
-							"not loop, and a blend space shares one phase across its samples",
+							"skinned geometry: sample {} of blend space {} names a clip of one "
+							"frame, which has no cycle for the space to share",
 							m,
 							s));
 				}

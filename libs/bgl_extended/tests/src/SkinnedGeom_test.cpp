@@ -211,9 +211,9 @@ namespace
 	constexpr std::array<uint8_t, c_Frames> c_Weights = { { 0, 128, 255 } };
 
 	/**
-	 * Two looping clips of different lengths, which is what a blend space needs: its samples share
-	 * one normalized phase, so clips that wrap over different numbers of intervals is the case the
-	 * phase exists to handle, and a clip that clamps has no cycle to share.
+	 * Two clips of different lengths, which is what a blend space's shared normalized phase exists
+	 * to handle: they wrap over different numbers of intervals. Looping is incidental -- the space
+	 * wraps a sample whatever its flag says -- and a single frame has no cycle to share.
 	 */
 	assetlib::AnimationSet
 	MakeBlendClips(uint32_t boneCount = c_BoneCount)
@@ -1228,6 +1228,23 @@ TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[sk
 	}
 }
 
+TEST_CASE("AddRig takes a blend space sample whose clip does not loop", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	// The space wraps its own phase, so a clip cooked as a one-shot cycles with it: a pack's walk
+	// whose last pose misses its first is still a walk a space can hold.
+	auto clips          = MakeBlendClips();
+	clips.clips[0].loop = 0;
+	clips.clips[1].loop = 0;
+	CHECK(scene->AddRig(MakeRig(), clips, bgl::FootPlantDesc(), MakeBlendSet()).IsValid());
+}
+
 TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[skinned][blend]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -1255,15 +1272,14 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("clip 7"));
 	}
 
-	SECTION("a sample that does not loop")
+	SECTION("a sample of a single frame")
 	{
-		// One phase is shared across the samples, and a clip that clamps would sit on its last
-		// frame while the others cycle.
-		auto clips          = MakeBlendClips();
-		clips.clips[1].loop = 0;
+		// A single frame has no cycle, and the weighted cycle is what the shared phase advances by.
+		auto clips                = MakeBlendClips();
+		clips.clips[1].frameCount = 1;
 		CHECK_THROWS_WITH(
 			scene->AddRig(MakeRig(), clips, bgl::FootPlantDesc(), MakeBlendSet()),
-			Catch::Matchers::ContainsSubstring("does not loop"));
+			Catch::Matchers::ContainsSubstring("one frame"));
 	}
 
 	SECTION("parameters that do not strictly increase")

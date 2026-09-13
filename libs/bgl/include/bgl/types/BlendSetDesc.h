@@ -22,8 +22,9 @@ namespace bgl
 	 * One 1D blend space: its clips in strictly increasing parameter order.
 	 *
 	 * Two samples is the floor -- one is a clip, and every clip is already a node under its own
-	 * index. Every sample must be a looping clip: the parameter sets a shared normalized phase, and
-	 * a clip that clamps rather than wraps would sit on its last frame while the others cycle.
+	 * index. Every sample loops with the space, whatever its clip's own `loop` says: the parameter
+	 * sets a shared normalized phase that wraps, and each sample plays at that fraction of its
+	 * cycle. So a sample needs two frames, and nothing else about how the clip was cooked.
 	 */
 	struct BlendSpaceDesc
 	{

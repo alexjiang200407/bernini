@@ -481,9 +481,9 @@ to keep in agreement beyond the one below.
 
   **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
   a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
-  there is no empty space to add and fill in afterwards. *New* seeds the first two looping clips at
-  0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip that does
-  not loop is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
+  there is no empty space to add and fill in afterwards. *New* seeds the first two clips a space can
+  sample at 0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip of
+  a single frame is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
   the author is looking for that clip, and its absence would read as a bad clip set rather than as
   one a blend space cannot hold.
 
