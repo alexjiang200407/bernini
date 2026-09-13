@@ -34,6 +34,16 @@ namespace editor
 	ResolveBlendSetMeshes(const assetlib::AssetRefGraph& graph, std::string_view blendSetKey);
 
 	/**
+	 * Every clip set in `graph` a new blend set can be started on, sorted: each `.banim` under the
+	 * animations directory with nothing yet at `assetlib::blendSetKeyFor`'s key.
+	 *
+	 * A set stored anywhere else does not take the clip set, because that is not where
+	 * `CreateEmptyBlendSet` writes -- what this answers is whether that write would be refused.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	ClipSetsWithoutBlendSet(const assetlib::AssetRefGraph& graph);
+
+	/**
 	 * Writes the empty set -- no spaces -- for the clip set at `animationsKey`, at the key
 	 * `assetlib::blendSetKeyFor` names, through the project's store. Returns that key.
 	 *
