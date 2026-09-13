@@ -35,7 +35,7 @@ namespace game
 		 * authored rate. `frameCount` counts both ends, so a two-frame clip spans one interval.
 		 *
 		 * What a blend space advances its shared phase by. Meaningful on a clip that does not loop
-		 * too -- it is just the clip's length then, since nothing wraps.
+		 * too: a space wraps every sample by it, whatever the clip's own flag says.
 		 */
 		[[nodiscard]] float
 		CycleSeconds() const noexcept

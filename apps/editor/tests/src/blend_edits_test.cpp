@@ -372,21 +372,29 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("A clip that does not loop cannot be a sample", "[animation][blend]")
+TEST_CASE("Any clip with a cycle can be a sample, looping or not", "[animation][blend]")
 {
-	auto clip = editor::ClipInfo();
-	clip.name = "walk";
+	auto clip       = editor::ClipInfo();
+	clip.name       = "walk";
+	clip.frameCount = 20;
 
-	SECTION("a one-shot is refused, and says why")
+	SECTION("a one-shot is a sample like any other: the space wraps it")
 	{
 		clip.loop = false;
-		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
+		CHECK(editor::ClipRefusalReason(clip).empty());
 	}
 
 	SECTION("a looping clip is not refused")
 	{
 		clip.loop = true;
 		CHECK(editor::ClipRefusalReason(clip).empty());
+	}
+
+	SECTION("a single frame has no cycle, and says why")
+	{
+		clip.loop       = true;
+		clip.frameCount = 1;
+		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
 	}
 }
 

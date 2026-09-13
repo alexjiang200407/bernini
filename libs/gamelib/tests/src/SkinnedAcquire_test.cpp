@@ -739,10 +739,10 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 			Catch::Matchers::ContainsSubstring("authored against"));
 	}
 
-	SECTION("a member that does not loop is refused by the rig")
+	SECTION("a member that does not loop is taken, since the space wraps it")
 	{
-		// Forwarded from AddRig: a space shares one phase, and a clip that clamps would sit on its
-		// last frame while the others cycle.
+		// A clip cooked as a one-shot cycles with the space: its phase wraps whatever the clip's own
+		// flag says.
 		WriteClips(root.path, "Derived/Animations/held.banim", "held", 0.5f, 2);
 		WriteBlendSet(
 			root.path,
@@ -750,12 +750,30 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 			"Derived/Animations/held.banim",
 			{ { "held", 0.0f }, { "held", 4.0f } });
 
+		const auto skinned = assets.AcquireSkinnedMesh(
+			"Derived/Meshes/rig.bmesh",
+			"Derived/Animations/held.banim",
+			"Authored/Animations/held.bblend");
+		CHECK(skinned.spaces.size() == 1);
+		assets.ReleaseGeom(skinned.geom);
+	}
+
+	SECTION("a member of a single frame is refused by the rig")
+	{
+		// Forwarded from AddRig: one frame has no cycle for the space to share.
+		WriteClips(root.path, "Derived/Animations/still.banim", "still", 0.5f, 1);
+		WriteBlendSet(
+			root.path,
+			"Authored/Animations/still.bblend",
+			"Derived/Animations/still.banim",
+			{ { "still", 0.0f }, { "still", 4.0f } });
+
 		CHECK_THROWS_WITH(
 			assets.AcquireSkinnedMesh(
 				"Derived/Meshes/rig.bmesh",
-				"Derived/Animations/held.banim",
-				"Authored/Animations/held.bblend"),
-			Catch::Matchers::ContainsSubstring("does not loop"));
+				"Derived/Animations/still.banim",
+				"Authored/Animations/still.bblend"),
+			Catch::Matchers::ContainsSubstring("one frame"));
 
 		const auto material = assets.AcquireMaterial("Authored/Materials/skin.bmaterial");
 		CHECK(assets.MaterialRefCount(material) == 1);

@@ -757,15 +757,17 @@ BlendSpaceEditorWindow::UpdateSpaceControls()
 
 	ShowSampleClips();
 
-	const int looping = LoopingClipCount();
-	m_AddSpace->setEnabled(editable && looping >= 2);
+	const int sampleable = SampleableClipCount();
+	m_AddSpace->setEnabled(editable && sampleable >= 2);
 	m_AddSpace->setToolTip(
-		!editable   ? QString() :
-		!clips      ? QStringLiteral(
-						  "A new space is seeded from the clip set, which is read from the "
-						  "mesh this set is shown on -- and there is none.") :
-		looping < 2 ? QStringLiteral("A blend space needs two looping clips; this set has fewer.") :
-					  QString());
+		!editable ? QString() :
+		!clips    ? QStringLiteral(
+						"A new space is seeded from the clip set, which is read from the "
+						"mesh this set is shown on -- and there is none.") :
+		sampleable < 2 ?
+				 QStringLiteral(
+					 "A blend space needs two clips of more than one frame; this set has fewer.") :
+				 QString());
 	m_RenameSpace->setEnabled(editable && space != nullptr);
 	m_RemoveSpace->setEnabled(editable && space != nullptr);
 
@@ -816,13 +818,13 @@ BlendSpaceEditorWindow::ShowSampleClips()
 	}
 
 	const int restored = m_SampleClip->findText(wanted);
-	m_SampleClip->setCurrentIndex(restored >= 0 ? restored : NthLoopingClip(0));
+	m_SampleClip->setCurrentIndex(restored >= 0 ? restored : NthSampleableClip(0));
 
 	m_SyncingUi = syncing;
 }
 
 int
-BlendSpaceEditorWindow::LoopingClipCount() const
+BlendSpaceEditorWindow::SampleableClipCount() const
 {
 	return static_cast<int>(std::ranges::count_if(m_Clips, [](const editor::ClipInfo& clip) {
 		return editor::ClipRefusalReason(clip).empty();
@@ -830,7 +832,7 @@ BlendSpaceEditorWindow::LoopingClipCount() const
 }
 
 int
-BlendSpaceEditorWindow::NthLoopingClip(const int n) const
+BlendSpaceEditorWindow::NthSampleableClip(const int n) const
 {
 	int seen = 0;
 	for (size_t i = 0; i < m_Clips.size(); ++i)
@@ -945,12 +947,12 @@ BlendSpaceEditorWindow::AddSpace()
 	}
 
 	// Two samples, because `validateBlendSet` refuses a shorter run: there is no empty space to add
-	// and fill in. The first two looping clips at 0 and 1 are a run to edit, not a guess at intent.
+	// and fill in. The first two clips a space can sample, at 0 and 1, are a run to edit, not a guess at intent.
 	auto space = assetlib::BlendSpace();
 	space.name = wanted;
 	for (int n = 0; n < 2; ++n)
 	{
-		const int clip = NthLoopingClip(n);
+		const int clip = NthSampleableClip(n);
 		if (clip < 0)
 			return;
 
