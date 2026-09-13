@@ -4,6 +4,7 @@
 #include <bgl/glm.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -29,6 +30,9 @@ namespace bgl
 		uint32_t channel = 0;
 	};
 
+	/// One route per component of a sample.
+	constexpr size_t c_SurfaceRouteChannels = 4;
+
 	/// One texture a material binds, under the name the surface declared it as.
 	struct SurfaceTextureBinding
 	{
@@ -36,15 +40,12 @@ namespace bgl
 		TextureAssetHandle texture;
 
 		/**
-		 * A data slot's alternative to `texture`: component c gathered from routes[c] by the
-		 * shader at draw time, with no composited texture existing anywhere — which is what
-		 * lets a caller rewire a channel by updating the material rather than by building a
-		 * map. Four wide because a sample is — a route left null samples white for its
-		 * component. Only a data slot takes routes, and a binding carrying both a texture and
-		 * routes is refused: a whole binding *is* the identity routing, and the engine writes
-		 * it as one.
+		 * A data slot's alternative to `texture`: component c is gathered from routes[c] by the
+		 * shader at draw, so rewiring a channel is a material update rather than a texture
+		 * build. A null route samples white. Only a data slot takes routes, and a texture and
+		 * routes at once is refused — a whole binding is the identity routing.
 		 */
-		std::array<SurfaceChannelRoute, 4> routes{};
+		std::array<SurfaceChannelRoute, c_SurfaceRouteChannels> routes{};
 	};
 
 	/**
