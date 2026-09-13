@@ -19,6 +19,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QPointF>
@@ -536,8 +537,9 @@ TEST_CASE("The node re-measures when its widget resizes", "[materialgraph][surfa
 TEST_CASE("A colour value carries a swatch, and picking writes it", "[materialgraph][surfacesink]")
 {
 	// A [Color] float4 and an unmarked float3, so the swatch provably follows the flag rather
-	// than the width. The picker's own dialog is modal and cannot run headless; SetValue is the
-	// write it lands, so it is what the case drives.
+	// than the width. A marked value is the swatch alone -- no spins beside it -- so the spin
+	// count is the unmarked value's. The picker's own dialog is modal and cannot run headless;
+	// SetValue is the write it lands, so it is what the case drives.
 	auto surface = bgl::SurfaceType();
 	surface.name = "Swatch";
 
@@ -561,6 +563,7 @@ TEST_CASE("A colour value carries a swatch, and picking writes it", "[materialgr
 	// One swatch: the marked value's row alone, an unmarked float3 keeps its spins alone.
 	const auto swatches = widget->findChildren<QPushButton*>();
 	REQUIRE(swatches.size() == 1);
+	CHECK(widget->findChildren<QDoubleSpinBox*>().size() == 3);
 
 	// A float4's alpha rides the swatch as text; the swatch itself stays opaque.
 	CHECK(swatches[0]->text() == QStringLiteral("A 0.40"));

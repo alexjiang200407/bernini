@@ -251,22 +251,9 @@ SurfaceOutputNode::embeddedWidget()
 		auto* row   = new QHBoxLayout(field);
 		row->setContentsMargins(0, 0, 0, 0);
 
-		for (uint32_t c = 0; c < components; ++c)
-		{
-			QDoubleSpinBox* spin =
-				MakeValueSpin(field, static_cast<double>(m_Values[i][static_cast<int>(c)]));
-			row->addWidget(spin);
-			m_Spins[i].push_back(spin);
-
-			connect(spin, &QDoubleSpinBox::valueChanged, this, [this, i, c](double edited) {
-				m_Values[i][static_cast<int>(c)] = static_cast<float>(edited);
-				RefreshSwatch(i);
-				Q_EMIT Changed();
-			});
-		}
-
-		// The spins stay: a colour is still any float, and a value past [0, 1] -- an emissive
-		// chroma over one -- is one a picker cannot say.
+		// A colour is the swatch alone -- numbers beside a picker are the same value said twice.
+		// A magnitude a picker cannot say rides a separate scalar by convention (rimIntensity),
+		// so the swatch stays a normalized chroma.
 		if (value.isColor)
 		{
 			auto* swatch = new QPushButton(field);
@@ -283,6 +270,22 @@ SurfaceOutputNode::embeddedWidget()
 				this,
 				[this, i]() { PickColor(i); },
 				Qt::QueuedConnection);
+
+			form->addRow(QString::fromStdString(value.name), field);
+			continue;
+		}
+
+		for (uint32_t c = 0; c < components; ++c)
+		{
+			QDoubleSpinBox* spin =
+				MakeValueSpin(field, static_cast<double>(m_Values[i][static_cast<int>(c)]));
+			row->addWidget(spin);
+			m_Spins[i].push_back(spin);
+
+			connect(spin, &QDoubleSpinBox::valueChanged, this, [this, i, c](double edited) {
+				m_Values[i][static_cast<int>(c)] = static_cast<float>(edited);
+				Q_EMIT Changed();
+			});
 		}
 
 		form->addRow(QString::fromStdString(value.name), field);
