@@ -27,6 +27,7 @@ namespace assetlib
 		constexpr std::string_view c_ParametersKey       = "parameters";
 		constexpr std::string_view c_SampleRateKey       = "sampleRate";
 		constexpr std::string_view c_ClipFloorKey        = "clipFloor";
+		constexpr std::string_view c_ClipLoopKey         = "clipLoop";
 		constexpr std::string_view c_BindingsKey         = "bindings";
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
@@ -39,7 +40,7 @@ namespace assetlib
 		 * The document's parameter subtree, built once: this is both what Serialize writes and what
 		 * parametersHashOf hashes, so a parameter cannot reach the file without reaching the key.
 		 *
-		 * An empty `clipFloor` is omitted rather than written, so a document that authors none
+		 * An empty `clipFloor` or `clipLoop` is omitted rather than written, so a document that authors none
 		 * hashes exactly as it did before the key existed -- writing `{}` would stale every
 		 * container in every project.
 		 */
@@ -63,6 +64,20 @@ namespace assetlib
 					grounds[ground.clip] = doc::plainFloat(ground.floor);
 				}
 				parameters[c_ClipFloorKey] = std::move(grounds);
+			}
+
+			if (!document.clipLoops.empty())
+			{
+				auto loops = nlohmann::json::object();
+				for (const ClipLoop& authored : document.clipLoops)
+				{
+					core::throw_runtime_error_if(
+						loops.contains(authored.clip),
+						"import document: two authored loops for clip '{}'",
+						authored.clip);
+					loops[authored.clip] = authored.loop;
+				}
+				parameters[c_ClipLoopKey] = std::move(loops);
 			}
 
 			return parameters;
@@ -143,6 +158,22 @@ namespace assetlib
 					document.clipFloors.push_back({ clip, floor.get<float>() });
 				}
 				it->erase(grounds);
+			}
+			if (auto loops = it->find(c_ClipLoopKey); loops != it->end())
+			{
+				core::throw_runtime_error_if(
+					!loops->is_object(),
+					"import document: '{}' is not an object",
+					c_ClipLoopKey);
+				for (const auto& [clip, loop] : loops->items())
+				{
+					core::throw_runtime_error_if(
+						!loop.is_boolean(),
+						"import document: the authored loop for clip '{}' is not true or false",
+						clip);
+					document.clipLoops.push_back({ clip, loop.get<bool>() });
+				}
+				it->erase(loops);
 			}
 			document.extraParametersJson = it->dump();
 			json.erase(it);

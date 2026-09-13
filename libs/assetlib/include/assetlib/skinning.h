@@ -28,6 +28,7 @@ namespace assetlib
 	struct BMesh;
 	struct Bounds;
 	struct ClipFloor;
+	struct ClipLoop;
 	struct PlantWeights;
 	struct Skeleton;
 	struct Submesh;
@@ -328,6 +329,17 @@ namespace assetlib
 		const Skeleton&                 skeleton,
 		std::span<const ClipFloor>      authored = {},
 		std::span<const AvatarLegChain> legs     = {});
+
+	/**
+	 * Sets `AnimationClip::loop` on each clip `authored` names to what it says, overruling the
+	 * inference from the clip's first and last poses. A name matching no clip is ignored.
+	 *
+	 * The escape hatch for a clip authored to loop whose ends do not quite meet: the Coyote's
+	 * `Walk_InPlace` ends with its spine 0.039 off its first pose, which cooks as a one-shot and so
+	 * cannot be a blend space's sample. What the seam looks like at the wrap is the author's to judge.
+	 */
+	void
+	applyClipLoops(AnimationSet& animations, std::span<const ClipLoop> authored) noexcept;
 
 	/**
 	 * How close a sole must sit to the grounded floor to count as planted. Two centimetres: below a

@@ -360,6 +360,8 @@ namespace assetlib
 		BMesh mesh = toBMesh(group.import);
 		generateTangents(mesh);
 
+		applyClipLoops(clips, group.document->clipLoops);
+
 		// Ahead of every box: a box measured before the clips are grounded describes a rig standing
 		// somewhere the runtime will never draw it.
 		const std::span<const ClipFloor> authored = group.document->clipFloors;

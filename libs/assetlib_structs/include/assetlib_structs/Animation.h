@@ -52,6 +52,16 @@ namespace assetlib
 		operator==(const ClipFloor&) const = default;
 	};
 
+	/** A loop authored for one clip, overruling what the cook infers; see assetlib::applyClipLoops. */
+	struct ClipLoop
+	{
+		std::string clip;  // the clip's name, as its source gave it
+		bool        loop = false;
+
+		bool
+		operator==(const ClipLoop&) const = default;
+	};
+
 	/**
 	 * The box one mesh entry sweeps through every pose of every clip, measured at cook so a load
 	 * culls by it without re-skinning the rig -- see assetlib::findPosedBounds.

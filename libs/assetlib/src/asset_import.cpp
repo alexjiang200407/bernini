@@ -110,8 +110,8 @@ namespace assetlib
 		 *
 		 * Only the parameter half is carried across. Bindings and the texture stamp describe what
 		 * *this* import wrote, and a previous one's would be a lie -- but an authored `clipFloor`
-		 * is the reason a person edits this file by hand, and a re-import that discarded it would
-		 * take a rig back to the floor the cook measured.
+		 * or `clipLoop` is the reason a person edits this file by hand, and a re-import that discarded
+		 * it would take a rig back to what the cook measured.
 		 */
 		ImportDocument
 		importParameters(const std::filesystem::path& existing, float sampleRate)
@@ -125,6 +125,7 @@ namespace assetlib
 				{
 					const ImportDocument authored = loadImportDocument(existing);
 					document.clipFloors           = authored.clipFloors;
+					document.clipLoops            = authored.clipLoops;
 					document.extraParametersJson  = authored.extraParametersJson;
 				}
 			}
@@ -144,9 +145,9 @@ namespace assetlib
 			return parametersHashOf(importParameters(existing, sampleRate));
 		}
 
-		/** What the document beside `source` authors for its clips, or nothing. */
-		std::vector<ClipFloor>
-		authoredFloors(const core::file::IFileSystem& files, const SourceRef& source)
+		/** The document beside `source`, or an empty one when there is none or it will not read. */
+		ImportDocument
+		authoredDocument(const core::file::IFileSystem& files, const SourceRef& source)
 		{
 			if (source.key.empty())
 				return {};
@@ -157,7 +158,7 @@ namespace assetlib
 
 			try
 			{
-				return loadImportDocument(files, key).clipFloors;
+				return loadImportDocument(files, key);
 			}
 			catch (const std::exception&)
 			{
@@ -471,6 +472,9 @@ namespace assetlib
 		// source's.
 		const Skeleton bound = Load<Skeleton>(mesh.skeleton);
 
+		const ImportDocument authored = authoredDocument(GetFiles(), source);
+		applyClipLoops(clips, authored.clipLoops);
+
 		// Ahead of the boxes: a box measured before the clips are grounded describes a rig standing
 		// somewhere the runtime will never draw it.
 		groundClipsForRig(
@@ -478,7 +482,7 @@ namespace assetlib
 			clips,
 			std::span<const BMesh>(&mesh, 1),
 			bound,
-			authoredFloors(GetFiles(), source));
+			authored.clipFloors);
 		bakePosedBounds(clips, mesh, bound);
 		bakePlantWeightsForRig(GetFiles(), clips, std::span<const BMesh>(&mesh, 1), bound);
 		Save(clips, banimKey);
@@ -626,6 +630,9 @@ namespace assetlib
 		clips.skeleton     = KeyFor(rig);
 		clips.source       = source;
 
+		const ImportDocument authored = authoredDocument(GetFiles(), source);
+		applyClipLoops(clips, authored.clipLoops);
+
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.
 		bakeBoundsForRig(
@@ -633,7 +640,7 @@ namespace assetlib
 			clips,
 			normalizePath(clips.skeleton),
 			Load<Skeleton>(clips.skeleton),
-			authoredFloors(GetFiles(), source));
+			authored.clipFloors);
 
 		Save(clips, banimKey);
 		return clips.skeleton;

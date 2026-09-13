@@ -425,6 +425,37 @@ TEST_CASE("A re-import rests a clip on the floor its document authors", "[reimpo
 	CHECK(again.clips[1].groundOffset == Catch::Approx(cooked.clips[1].groundOffset));
 }
 
+TEST_CASE("A re-import loops a clip as its document authors", "[reimport][cliploop]")
+{
+	const test::SkinnedGltf source("bernini_reimport_loop_gltf");
+	const ImportedProject   project("bernini_reimport_loop", source.PackGlb());
+
+	const fs::path     banim = project.dataRoot / "Derived/Animations/unit.banim";
+	const AnimationSet cooked =
+		AssetCodec<AnimationSet>::Deserialize(core::file::read_file_bytes(banim.string()));
+	REQUIRE(cooked.clips.size() >= 2);
+
+	const bool     inferred     = cooked.clips[0].loop != 0u;
+	const fs::path documentPath = project.dataRoot / "Authored/Meshes/unit.bimport";
+	ImportDocument document     = loadImportDocument(documentPath);
+	document.clipLoops          = { { std::string(cooked.stringPool.at(cooked.clips[0].nameOffset)),
+		                              !inferred } };
+	core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
+
+	fs::remove(banim);
+	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
+	REQUIRE(report.GetFailedCount() == 0);
+
+	const AnimationSet again =
+		AssetCodec<AnimationSet>::Deserialize(core::file::read_file_bytes(banim.string()));
+	REQUIRE(again.clips.size() == cooked.clips.size());
+
+	CHECK((again.clips[0].loop != 0u) == !inferred);
+
+	// Named clips only: the one the document says nothing about keeps what the cook inferred.
+	CHECK(again.clips[1].loop == cooked.clips[1].loop);
+}
+
 // The two rules a threaded rebuild has to keep, and neither is visible in the report it returns:
 // what it says it is doing while it does it, and that a stage is finished before the next begins.
 

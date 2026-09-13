@@ -214,6 +214,14 @@ not obvious from a signature. The headers linked below are the source of truth.
   also stales the `.banim` and the next load re-cooks it; `assetlib_cli describe` prints the floor
   each clip was authored at, which is where the number to author comes from.
 
+  **A clip's loop can be authored the same way.** The cook flags a clip as looping only when its last
+  pose meets its first within 1e-4 on every bone, and a pack's loop does not always close: the
+  Coyote's `Walk_InPlace` ends with its spine 0.039 off its first frame, so it cooks as a one-shot
+  and no blend space can hold it. The `.bimport`'s `clipLoop` names the answer per clip, true or
+  false (`assetlib::applyClipLoops`). Like `clipFloor` it is a parameter: every writer honours it, a
+  re-import carries it forward, and editing one re-cooks the `.banim` on its next load. What the seam
+  looks like at the wrap is the author's to judge.
+
   **The measurement is exact but walks neither every frame nor every vertex.** A bone's box from
   `posedBounds` holds every vertex weighted to it, and a skinned position is a convex combination of
   its bones' products, so the lowest box corner is a lower bound on the lowest vertex. That one
