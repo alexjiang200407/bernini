@@ -38,6 +38,11 @@ namespace editor
 	 * -- so a subtraction refuses the very value the box was going to offer next.
 	 */
 
+	// What every threshold box in the editor shows and steps by, and so the `precision` the rules
+	// below are handed: two samples are apart when they display apart.
+	inline constexpr int   c_ParameterDecimals = 2;
+	inline constexpr float c_ParameterStep     = 0.01f;
+
 	/**
 	 * Where `parameter` belongs in `run`, which is in strictly increasing order.
 	 *

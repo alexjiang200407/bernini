@@ -1061,7 +1061,8 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSecon
 void
 AnimationPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if ((m_MeshDropsEnabled && editor::IsMeshDrag(event->mimeData())) ||
+	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
@@ -1069,7 +1070,8 @@ void
 AnimationPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if ((m_MeshDropsEnabled && editor::IsMeshDrag(event->mimeData())) ||
+	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
@@ -1082,6 +1084,9 @@ AnimationPreviewWindow::dropEvent(QDropEvent* event)
 		event->acceptProposedAction();
 		return;
 	}
+
+	if (!m_MeshDropsEnabled)
+		return;
 
 	const editor::MeshDrop drop =
 		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
