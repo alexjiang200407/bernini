@@ -1,11 +1,10 @@
 #include "AnimationEditorWindow.h"
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/AnimationEditor/GroundControls.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
-#include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/TransitionStrip.h"
 #include "Windows/AnimationEditor/blend_edits.h"
-#include "Windows/AnimationEditor/foot_ik_weights.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "util/mesh_drop.h"
@@ -24,7 +23,6 @@
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -263,112 +261,8 @@ AnimationEditorWindow::BuildPropertiesColumn()
 
 	layout->addSpacing(8);
 
-	// Off to begin with, so a panel just opened shows the clip as its author left it: the ground is
-	// a thing to try, and a preview that silently moved a foot on the way in would be answering a
-	// question nobody had asked yet.
-	m_PlantFeet = new QGroupBox(QStringLiteral("Plant feet"), column);
-	m_PlantFeet->setCheckable(true);
-	m_PlantFeet->setChecked(false);
-
-	// Flat, because the frame is the platform's and the column is not: every other control here is
-	// a bare label over a Scrubber, so a border would be the only one in the panel -- and collapsed
-	// it draws as an empty rounded sliver under the title, which reads as a stray rule.
-	m_PlantFeet->setFlat(true);
-	m_PlantFeet->setToolTip(QStringLiteral(
-		"Stands the rig on a ground plane and solves each leg onto it. Off, there is no floor and "
-		"the clip plays exactly as authored, which is the other half of judging the solve."));
-	layout->addWidget(m_PlantFeet);
-
-	// The four sliders sit in one body so the group collapses as a unit; hiding them one by one
-	// would leave the box's own height behind and the tabs under it would not move up.
-	auto* groundBox = new QVBoxLayout(m_PlantFeet);
-	groundBox->setContentsMargins(0, 0, 0, 0);
-	m_GroundBody = new QWidget(m_PlantFeet);
-	groundBox->addWidget(m_GroundBody);
-
-	auto* ground = new QVBoxLayout(m_GroundBody);
-	ground->setContentsMargins(0, 0, 0, 0);
-
-	// Connected once the body it hides exists, so no future setChecked above can fire into a
-	// half-built group.
-	connect(m_PlantFeet, &QGroupBox::toggled, this, [this] { UpdateGroundControls(); });
-
-	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0\u00b0"), m_GroundBody);
-	ground->addWidget(m_SlopeLabel);
-
-	m_SlopeSlider = new Scrubber(m_GroundBody);
-	m_SlopeSlider->SetRange(-30, 30);
-	m_SlopeSlider->SetValue(0);
-	m_SlopeSlider->setToolTip(QStringLiteral(
-		"Tilts the ground the rig stands on. A rig with an avatar plants its feet against it; one "
-		"without stands through it. Rises toward +X."));
-
-	// The label follows the thumb so the number is readable mid-drag; the ground follows the
-	// release, because moving it moves the temporal epoch and a drag would hold the preview
-	// unaccumulated until it ended. A click or a keypress moves the thumb without a drag, and
-	// commits through the same release path.
-	connect(m_SlopeSlider, &Scrubber::ValueChanged, this, [this](int degrees) {
-		m_SlopeLabel->setText(QStringLiteral("Ground Slope: %1\u00b0").arg(degrees));
-	});
-	connect(m_SlopeSlider, &Scrubber::Committed, this, [this](int degrees) {
-		m_Preview->SetGroundSlope(static_cast<float>(degrees));
-	});
-	ground->addWidget(m_SlopeSlider);
-
-	// Which way uphill points. Nothing in the path knows which way a rig moves -- the test coyote
-	// runs along +Z -- so a person turns the hill to face the stride. Committed like the slope.
-	m_HeadingLabel = new QLabel(QStringLiteral("Uphill Heading: 0\u00b0"), m_GroundBody);
-	ground->addWidget(m_HeadingLabel);
-
-	m_HeadingSlider = new Scrubber(m_GroundBody);
-	m_HeadingSlider->SetRange(0, 359);
-	m_HeadingSlider->SetValue(0);
-	m_HeadingSlider->setToolTip(QStringLiteral(
-		"Which way the ground rises, in degrees about the up axis from +X. Turn it to face the way "
-		"the rig moves to see it climb the slope rather than cross it."));
-	connect(m_HeadingSlider, &Scrubber::ValueChanged, this, [this](int degrees) {
-		m_HeadingLabel->setText(QStringLiteral("Uphill Heading: %1\u00b0").arg(degrees));
-	});
-	connect(m_HeadingSlider, &Scrubber::Committed, this, [this](int degrees) {
-		m_Preview->SetGroundHeading(static_cast<float>(degrees));
-	});
-	ground->addWidget(m_HeadingSlider);
-
-	// One write carries both weights, so either slider's release commits the pair.
-	const auto commitFootIK = [this] {
-		m_Preview->SetFootIK(
-			editor::FootIKForSliders(m_IKWeightSlider->GetValue(), m_SoleTurnSlider->GetValue()));
-	};
-
-	m_IKWeightLabel = new QLabel(QStringLiteral("IK Weight: 100%"), m_GroundBody);
-	ground->addWidget(m_IKWeightLabel);
-
-	m_IKWeightSlider = new Scrubber(m_GroundBody);
-	m_IKWeightSlider->SetRange(0, 100);
-	m_IKWeightSlider->SetValue(100);
-	m_IKWeightSlider->setToolTip(QStringLiteral(
-		"How far each foot is carried onto the ground, over what the clip baked. 0 leaves the "
-		"ankle where the animation put it; 100 seats it on the plane."));
-	connect(m_IKWeightSlider, &Scrubber::ValueChanged, this, [this](int percent) {
-		m_IKWeightLabel->setText(QStringLiteral("IK Weight: %1%").arg(percent));
-	});
-	connect(m_IKWeightSlider, &Scrubber::Committed, this, commitFootIK);
-	ground->addWidget(m_IKWeightSlider);
-
-	m_SoleTurnLabel = new QLabel(QStringLiteral("Sole Turn: 100%"), m_GroundBody);
-	ground->addWidget(m_SoleTurnLabel);
-
-	m_SoleTurnSlider = new Scrubber(m_GroundBody);
-	m_SoleTurnSlider->SetRange(0, 100);
-	m_SoleTurnSlider->SetValue(100);
-	m_SoleTurnSlider->setToolTip(QStringLiteral(
-		"How far each sole turns onto the slope under it. 0 keeps the foot's authored tilt with "
-		"its contact still on the ground; 100 lays it on the slope."));
-	connect(m_SoleTurnSlider, &Scrubber::ValueChanged, this, [this](int percent) {
-		m_SoleTurnLabel->setText(QStringLiteral("Sole Turn: %1%").arg(percent));
-	});
-	connect(m_SoleTurnSlider, &Scrubber::Committed, this, commitFootIK);
-	ground->addWidget(m_SoleTurnSlider);
+	m_GroundControls = new GroundControls(m_Preview, column);
+	layout->addWidget(m_GroundControls);
 
 	// What is being done with the clip set, rather than what it is: one clip watched, or two
 	// blended. Everything above stays shared -- the ground and the plant switch especially, since a
@@ -400,11 +294,10 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
 
-	// The group is the state; this is what puts the preview on it. Reaches the preview before it is
-	// on screen, where a rebind is recorded and applied when it is shown. It runs after the width
-	// above is taken, because collapsing the group takes its sliders out of the column's hint and
-	// the floor would then be measured without the widest ground label.
-	UpdateGroundControls();
+	// After the width above is taken: collapsing the group takes its sliders out of the column's
+	// hint. Reaches the preview before it is on screen, where a rebind is recorded and applied when
+	// it is shown.
+	m_GroundControls->Apply();
 
 	// The viewport gets a surface of its own, and that is not cosmetic: a scroll is a blit of the
 	// top-level's backing store, and the preview beside this one is `WA_PaintOnScreen` -- a native
@@ -543,20 +436,6 @@ AnimationEditorWindow::BuildBlendTab()
 
 	fade->addStretch(1);
 	return m_TransitionGroup;
-}
-
-void
-AnimationEditorWindow::UpdateGroundControls()
-{
-	// One switch for the whole group: the floor, the solve against it, and the four sliders it
-	// titles. There is nothing to see in a floor nothing stands on, and nothing to plant against
-	// without one.
-	const bool planting = m_PlantFeet->isChecked();
-
-	m_GroundBody->setVisible(planting);
-
-	m_Preview->SetFloorVisible(planting);
-	m_Preview->SetFootPlanting(planting);
 }
 
 QWidget*

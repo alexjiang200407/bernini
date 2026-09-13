@@ -321,9 +321,10 @@ to keep in agreement beyond the one below.
   shows the clip as its author left it and a greyed body would be the resting view of the column
   rather than an occasional one. The sliders keep their values, so turning it back on restores what
   was set. Off, the clip plays exactly as authored, which is the other half of judging what the
-  solve does, and like the slope it holds only while the panel is shown. The group holds that state
-  and one method pushes it, construction included — after the column's minimum width is measured,
-  since a collapsed body contributes no slider to the hint.
+  solve does, and like the slope it holds only while the panel is shown. The group is one widget,
+  `GroundControls`, which the Blend Space Editor hosts too; it holds that state and `Apply` pushes
+  it, construction included — after the host's column width is measured, since a collapsed body
+  contributes no slider to the hint.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline used before
@@ -420,7 +421,9 @@ to keep in agreement beyond the one below.
   The first by key is shown, a selector appears only when there are several, and the choice is not
   saved. A set nothing is skinned to still lists and still edits, because the list is the
   document's rather than the rig's; a new space or sample, thresholds from speed and the cursor wait
-  for a clip table, which only an acquired rig supplies.
+  for a clip table, which only an acquired rig supplies. It carries the *Plant feet* group as well,
+  so whether a space plants — across its parameter, and at the wrap of a clip that does not close —
+  is judged where the space is authored.
 
   *New Blend Set...* starts one, from the editor's empty page or beside *Close*. It lists every clip
   set with nothing yet at `assetlib::blendSetKeyFor`'s key (`editor::ClipSetsWithoutBlendSet`),

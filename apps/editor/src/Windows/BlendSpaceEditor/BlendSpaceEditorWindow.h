@@ -17,6 +17,7 @@
 #include "util/held_open_assets.h"
 
 class AnimationPreviewWindow;
+class GroundControls;
 class QComboBox;
 class QDoubleSpinBox;
 class QDragEnterEvent;
@@ -258,6 +259,8 @@ private:
 	// Which mesh the set is shown on. Only shown when a rig has more than one, and never saved.
 	QLabel*    m_MeshCaption  = nullptr;
 	QComboBox* m_MeshSelector = nullptr;
+
+	GroundControls* m_GroundControls = nullptr;
 
 	QComboBox*   m_SpaceSelector = nullptr;
 	QPushButton* m_AddSpace      = nullptr;
