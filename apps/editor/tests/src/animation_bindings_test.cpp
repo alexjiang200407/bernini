@@ -3,10 +3,8 @@
 #include <assetlib/Project.h>  // IWYU pragma: keep
 #include <assetlib/asset_refs.h>
 
-#include "StoreAt.h"
+#include "util/rig_containers.h"
 #include <assetlib/project_layout.h>
-#include <assetlib_structs/Animation.h>
-#include <assetlib_structs/BMesh.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
@@ -63,40 +61,8 @@ namespace
 		fs::path m_Root;
 	};
 
-	// A mesh that names its rig and nothing else -- a static attachment's shape, and all the
-	// resolver reads.
-	void
-	WriteMesh(const fs::path& dataRoot, const fs::path& rel, std::string_view skeleton)
-	{
-		auto mesh     = assetlib::BMesh();
-		mesh.skeleton = std::string(skeleton);
-		fs::create_directories((dataRoot / rel).parent_path());
-		SaveAt(mesh, dataRoot / rel);
-	}
-
-	// A minimal valid clip set recording `skeleton` as its rig.
-	void
-	WriteBanim(const fs::path& dataRoot, const fs::path& rel, std::string_view skeleton)
-	{
-		auto animations      = assetlib::AnimationSet();
-		animations.skeleton  = std::string(skeleton);
-		animations.boneCount = 1;
-
-		auto clip        = assetlib::AnimationClip();
-		clip.nameOffset  = animations.stringPool.add("walk");
-		clip.firstSample = 0;
-		clip.frameCount  = 2;
-		clip.sampleRate  = 30.0f;
-		clip.duration    = 1.0f / 30.0f;
-		animations.clips.push_back(clip);
-
-		for (int frame = 0; frame < 2; ++frame)
-			animations.samples.push_back(
-				{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
-
-		fs::create_directories((dataRoot / rel).parent_path());
-		SaveAt(animations, dataRoot / rel);
-	}
+	using editor::test::WriteBanim;
+	using editor::test::WriteMesh;
 }
 
 TEST_CASE("Bindings collect every .banim naming the mesh's rig, sorted", "[animation]")

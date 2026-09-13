@@ -27,6 +27,31 @@ namespace editor
 		return sets;
 	}
 
+	std::vector<std::string>
+	ResolveBlendSetMeshes(const assetlib::AssetRefGraph& graph, const std::string_view blendSetKey)
+	{
+		auto meshes = std::vector<std::string>();
+
+		for (const assetlib::AssetRef& clips : graph.ReferencesOf(blendSetKey))
+		{
+			if (clips.kind != assetlib::RefKind::kBlendClips)
+				continue;
+
+			for (const assetlib::AssetRef& rig : graph.ReferencesOf(clips.target))
+			{
+				if (rig.kind != assetlib::RefKind::kClipSkeleton)
+					continue;
+
+				for (const assetlib::AssetRef& mesh : graph.ReferrersOf(rig.target))
+					if (mesh.kind == assetlib::RefKind::kMeshSkeleton)
+						meshes.push_back(mesh.referrer);
+			}
+		}
+
+		std::ranges::sort(meshes);
+		return meshes;
+	}
+
 	std::string
 	CreateEmptyBlendSet(const std::filesystem::path& dataRoot, const std::string_view animationsKey)
 	{

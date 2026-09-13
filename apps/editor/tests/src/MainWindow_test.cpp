@@ -1,22 +1,32 @@
 #include "MainWindow.h"
 
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
+#include "util/rig_containers.h"
 #include <algorithm>
+#include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
+#include <assetlib/blend.h>
 
 #include <QAction>
 #include <QCoreApplication>
 #include <QDockWidget>
+#include <QLabel>
+#include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPointer>
+#include <QPushButton>
+#include <QString>
+#include <QStringList>
 #include <QTabBar>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
@@ -37,8 +47,8 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	// The panels that own a viewport today. The count below is what makes a third one loud.
-	constexpr int c_ViewportCount = 2;
+	// The panels that own a viewport today. The count below is what makes another one loud.
+	constexpr int c_ViewportCount = 3;
 
 	/** A scaffolded project and a config.json naming it, both in a directory of their own. */
 	struct HeadlessEditor
@@ -240,7 +250,7 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 
 	const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 
-	// The Material Editor's preview and the Animation Editor's. A panel added later fails this
+	// The Material Editor's preview, the Animation Editor's and the Blend Space Editor's. A panel added later fails this
 	// line, which is the point: it then has to say whether it threads `headless` through, rather
 	// than being window-backed in a suite that cannot realise a window.
 	CHECK(static_cast<int>(viewports.size()) == c_ViewportCount);
@@ -433,4 +443,136 @@ TEST_CASE("What a project enables and an empty editor does not", "[mainwindow][r
 		CHECK_FALSE(edit->isEnabled());
 		CHECK_FALSE(panes->isEnabled());
 	}
+}
+
+namespace
+{
+	/**
+	 * A set of one space over a clip set whose rig nothing is skinned to: an authored document with
+	 * nothing to show it on. Returns its key.
+	 */
+	QString
+	WriteUnshownSet(const fs::path& dataRoot)
+	{
+		editor::test::WriteBanim(
+			dataRoot,
+			"Derived/Animations/loco.banim",
+			"Derived/Skeletons/rig.bskel");
+
+		auto set       = assetlib::BlendSet();
+		set.animations = "Derived/Animations/loco.banim";
+		set.spaces.push_back({ "Locomotion", { { "walk", 0.0f }, { "run", 1.0f } } });
+
+		const std::string key = "Authored/Animations/loco.bblend";
+		assetlib::AssetStore(dataRoot).Save(set, key);
+		return QString::fromStdString(key);
+	}
+}
+
+TEST_CASE(
+	"The Blend Space Editor is a tab of the editors' group",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	REQUIRE(animationDock != nullptr);
+	REQUIRE(blendDock != nullptr);
+
+	CHECK(window.tabifiedDockWidgets(animationDock).contains(blendDock));
+
+	// Neither movable nor floatable: a tab dragged out would put a second viewport into the frame loop.
+	CHECK(blendDock->features() == QDockWidget::DockWidgetClosable);
+}
+
+TEST_CASE(
+	"A blend space is not authored on the Animation panel",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+
+	auto* surfaces = animation->findChild<QTabWidget*>();
+	REQUIRE(surfaces != nullptr);
+
+	auto tabs = QStringList();
+	for (int i = 0; i < surfaces->count(); ++i) tabs << surfaces->tabText(i);
+
+	CHECK(tabs == QStringList({ QStringLiteral("Clip"), QStringLiteral("Blend") }));
+}
+
+TEST_CASE(
+	"A blend set with nothing to show it on still opens, and still edits",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+	const QString        key = WriteUnshownSet(editor.DataRoot());
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(blend != nullptr);
+
+	blend->OpenBlendSet(key);
+	REQUIRE(blend->GetBlendSetKey() == key);
+
+	auto* samples  = blend->findChild<QListWidget*>("BlendSpaceSamples");
+	auto* addSpace = blend->findChild<QPushButton*>("AddBlendSpace");
+	auto* remove   = blend->findChild<QPushButton*>("RemoveBlendSpace");
+	auto* note     = blend->findChild<QLabel*>("BlendSpaceViewNote");
+	REQUIRE(samples != nullptr);
+	REQUIRE(addSpace != nullptr);
+	REQUIRE(remove != nullptr);
+	REQUIRE(note != nullptr);
+
+	// Listed from the document, which needs no rig.
+	CHECK(samples->count() == 2);
+	CHECK(note->text().contains(QStringLiteral("Nothing is skinned")));
+
+	const QStringList held = blend->GetHeldOpenPaths();
+	CHECK(std::ranges::any_of(held, [&key](const QString& path) { return path.endsWith(key); }));
+
+	// Seeding a space takes clips, and only an acquired rig lists them.
+	CHECK_FALSE(addSpace->isEnabled());
+
+	REQUIRE(remove->isEnabled());
+	remove->click();
+
+	const auto saved =
+		assetlib::AssetStore(editor.DataRoot()).Load<assetlib::BlendSet>(key.toStdString());
+	CHECK(saved.spaces.empty());
+	CHECK(samples->count() == 0);
+}
+
+TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+	const QString        key = WriteUnshownSet(editor.DataRoot());
+
+	MainWindow window(nullptr, editor.ConfigFile());
+	window.show();
+
+	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* blend         = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(animationDock != nullptr);
+	REQUIRE(blendDock != nullptr);
+	REQUIRE(blend != nullptr);
+
+	blendDock->raise();
+	REQUIRE(editor::test::WaitFor([blendDock] { return blendDock->isVisible(); }));
+
+	blend->OpenBlendSet(key);
+	REQUIRE(blend->GetBlendSetKey() == key);
+
+	animationDock->raise();
+	CHECK(editor::test::WaitFor([blend] { return blend->GetBlendSetKey().isEmpty(); }));
+	CHECK(blend->GetHeldOpenPaths().isEmpty());
 }
