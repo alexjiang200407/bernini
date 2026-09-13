@@ -1022,20 +1022,23 @@ BlendSpaceEditorWindow::AddSpace()
 	if (dialog.exec() != QDialog::Accepted)
 		return;
 
-	// Checked again rather than carried across exec(): its nested event loop can reload the rig.
-	const auto sampleable = [this](const int clip) {
-		return clip >= 0 && static_cast<size_t>(clip) < m_Clips.size() &&
-		       editor::ClipRefusalReason(m_Clips[static_cast<size_t>(clip)]).empty();
+	// By name rather than by the combos' rows: exec()'s nested event loop can reload the rig and
+	// reorder the clip table under them.
+	const auto sampleableNamed = [this](const QString& picked) -> const editor::ClipInfo* {
+		const auto clip = std::ranges::find_if(m_Clips, [&picked](const editor::ClipInfo& c) {
+			return QString::fromStdString(c.name) == picked;
+		});
+		return clip != m_Clips.end() && editor::ClipRefusalReason(*clip).empty() ? &*clip : nullptr;
 	};
-	const int firstPicked  = firstClip->currentIndex();
-	const int secondPicked = secondClip->currentIndex();
-	if (!nameIsFree() || !sampleable(firstPicked) || !sampleable(secondPicked))
+	const editor::ClipInfo* firstPicked  = sampleableNamed(firstClip->currentText());
+	const editor::ClipInfo* secondPicked = sampleableNamed(secondClip->currentText());
+	if (!nameIsFree() || firstPicked == nullptr || secondPicked == nullptr)
 		return;
 
 	auto space = assetlib::BlendSpace();
 	space.name = name->text().trimmed().toStdString();
-	space.samples.emplace_back(m_Clips[static_cast<size_t>(firstPicked)].name, 0.0f);
-	space.samples.emplace_back(m_Clips[static_cast<size_t>(secondPicked)].name, c_ParameterGap);
+	space.samples.emplace_back(firstPicked->name, 0.0f);
+	space.samples.emplace_back(secondPicked->name, c_ParameterGap);
 
 	m_SelectedSpace = QString::fromStdString(space.name);
 	m_BlendSet.spaces.push_back(std::move(space));

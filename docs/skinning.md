@@ -453,7 +453,8 @@ to keep in agreement beyond the one below.
   **A sample's order is its threshold.** A threshold typed past a neighbour re-sorts the run
   (`editor::MoveSample`) and the moved row stays selected. There are no reorder buttons, which would
   be a second way to say what the threshold already says; Unreal places a sample by value the same
-  way. A crossing reloads the mesh, since every row it passed now names another clip. The box tracks
+  way. A crossing reloads the mesh, since the rows it passed now name other clips; crossing a
+  sample of the same clip is still a parameter move and stays live. The box tracks
   no keystrokes, so a value arrives on Enter, focus loss or a step and never mid-number; a step never
   crosses a neighbour, because landing on its displayed value is a duplicate, which is refused and
   puts the box back. *Replace* points the selected sample at the combo's clip and keeps its

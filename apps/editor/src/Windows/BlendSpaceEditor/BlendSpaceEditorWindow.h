@@ -192,7 +192,8 @@ private:
 
 	/**
 	 * Moves the selected sample's threshold. Inside its neighbours it goes live; typed past one, the
-	 * run re-sorts and the mesh reloads, since every row it crossed now names another clip.
+	 * run re-sorts and the mesh reloads, since the rows it crossed name other clips -- unless they
+	 * name the same one, which is still a parameter move and stays live.
 	 */
 	void
 	RetargetSample(float parameter);
