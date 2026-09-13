@@ -209,3 +209,34 @@ TEST_CASE("Noisy GPU timings stay affordable relative to flat timings", "[gputim
 	// Equal samples and passes: spikes must not multiply the cost of inspecting a slow frame.
 	CHECK(noisyNs < 8 * flatNs);
 }
+
+TEST_CASE("A longer capture draws and selects only its latest 600 samples", "[gputiming]")
+{
+	bgl::PassHistory capture(3600);
+	bgl::PassHistory recent;
+	for (uint64_t frame = 1; frame <= 3600; ++frame)
+	{
+		auto timings = SyntheticFrame(frame);
+		if (frame == 1)
+			timings.passes[3].milliseconds = 10000.0;
+		capture.Append(timings);
+		recent.Append(timings);
+	}
+	const QImage full = Render(capture, 3100);
+	const QImage tail = Render(recent, 100);
+	// Only the footer's retained count differs; old spikes cannot change the visible scale.
+	const QRect chart = full.rect().adjusted(0, 0, 0, -28);
+	CHECK(full.copy(chart) == tail.copy(chart));
+	CHECK(Render(capture, 2999) == Render(capture, std::nullopt));
+	CHECK(full != Render(capture, std::nullopt));
+
+	for (const int x : { -1, 0, 60, 300, 673, 899, 900 })
+	{
+		CAPTURE(x);
+		const auto selected = editor::PassGraphSampleAt(full.rect(), capture, x);
+		const auto local    = editor::PassGraphSampleAt(tail.rect(), recent, x);
+		REQUIRE(selected.has_value() == local.has_value());
+		if (local)
+			CHECK(*selected == 3000 + *local);
+	}
+}

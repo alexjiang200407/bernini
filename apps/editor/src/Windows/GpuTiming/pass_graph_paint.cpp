@@ -20,13 +20,20 @@
 
 namespace
 {
-	constexpr int    c_Margin      = 8;
-	constexpr int    c_AxisWidth   = 52;
-	constexpr int    c_AxisHeight  = 18;
-	constexpr int    c_LegendWidth = 210;
-	constexpr int    c_RowHeight   = 17;
-	constexpr int    c_GridLines   = 4;
-	constexpr double c_MinAxisMs   = 0.5;
+	constexpr int         c_Margin            = 8;
+	constexpr int         c_AxisWidth         = 52;
+	constexpr int         c_AxisHeight        = 18;
+	constexpr int         c_LegendWidth       = 210;
+	constexpr int         c_RowHeight         = 17;
+	constexpr int         c_GridLines         = 4;
+	constexpr double      c_MinAxisMs         = 0.5;
+	constexpr std::size_t c_MaxVisibleSamples = 600;
+
+	[[nodiscard]] std::size_t
+	VisibleSampleCount(const bgl::PassHistory& history)
+	{
+		return std::min(history.SampleCount(), c_MaxVisibleSamples);
+	}
 
 	// A round number at or above `peak`, so the axis labels read 2.0 rather than 1.87 and a spike
 	// does not rescale the graph on every frame.
@@ -77,14 +84,16 @@ namespace editor
 	std::optional<std::size_t>
 	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, const int x)
 	{
-		const std::size_t samples = history.SampleCount();
+		const std::size_t samples = VisibleSampleCount(history);
+		const std::size_t first   = history.SampleCount() - samples;
 		const QRect       plot    = PlotRect(rect);
 		if (samples == 0 || x < plot.left() || x > plot.right())
 			return std::nullopt;
 
 		const double span     = static_cast<double>(samples > 1 ? samples - 1 : 1);
 		const double fraction = static_cast<double>(x - plot.left()) / plot.width();
-		return std::min(samples - 1, static_cast<std::size_t>(std::lround(fraction * span)));
+		return first +
+		       std::min(samples - 1, static_cast<std::size_t>(std::lround(fraction * span)));
 	}
 
 	QColor
@@ -108,7 +117,8 @@ namespace editor
 		painter.setRenderHint(QPainter::Antialiasing, true);
 		painter.fillRect(rect, palette.base());
 
-		const std::size_t samples = history.SampleCount();
+		const std::size_t samples = VisibleSampleCount(history);
+		const std::size_t first   = history.SampleCount() - samples;
 		if (samples == 0)
 		{
 			painter.setPen(palette.color(QPalette::Disabled, QPalette::Text));
@@ -119,7 +129,10 @@ namespace editor
 
 		const QRect plot = PlotRect(rect);
 
-		const double axisMax = AxisCeiling(history.PeakTotal());
+		double peak = 0.0;
+		for (std::size_t sample = first; sample < history.SampleCount(); ++sample)
+			peak = std::max(peak, history.TotalAt(sample));
+		const double axisMax = AxisCeiling(peak);
 		const auto   xOf     = [&plot, samples](const std::size_t sample) {
 			return SampleX(plot, sample, samples);
 		};
@@ -155,12 +168,12 @@ namespace editor
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(PassBandColor(pass));
 			double previousBottom = below[0];
-			below[0] += history.At(0, pass).value_or(0.0);
+			below[0] += history.At(first, pass).value_or(0.0);
 			// Convex spans avoid the rasterizer's growing cost for a whole jagged history polygon.
 			for (std::size_t sample = 1; sample < samples; ++sample)
 			{
 				const double bottom = below[sample];
-				below[sample] += history.At(sample, pass).value_or(0.0);
+				below[sample] += history.At(first + sample, pass).value_or(0.0);
 				const QPointF band[] = {
 					{ xOf(sample - 1), yOf(below[sample - 1]) },
 					{ xOf(sample), yOf(below[sample]) },
@@ -174,16 +187,20 @@ namespace editor
 		painter.setRenderHint(QPainter::Antialiasing, true);
 
 		const std::size_t marked =
-			selected.has_value() && *selected < samples ? *selected : samples - 1;
+			selected.has_value() && *selected >= first && *selected < history.SampleCount() ?
+				*selected :
+				history.SampleCount() - 1;
 
 		painter.setPen(QPen(palette.color(QPalette::Highlight), 1.0));
-		painter.drawLine(QPointF(xOf(marked), plot.top()), QPointF(xOf(marked), plot.bottom()));
+		painter.drawLine(
+			QPointF(xOf(marked - first), plot.top()),
+			QPointF(xOf(marked - first), plot.bottom()));
 
 		painter.setPen(palette.color(QPalette::Text));
 		painter.drawText(
 			QRect(plot.left(), plot.bottom() + 2, plot.width(), c_AxisHeight),
 			Qt::AlignLeft | Qt::AlignVCenter,
-			QString("oldest of %1 frames").arg(samples));
+			QString("latest %1 of %2 frames").arg(samples).arg(history.SampleCount()));
 		painter.drawText(
 			QRect(plot.left(), plot.bottom() + 2, plot.width(), c_AxisHeight),
 			Qt::AlignRight | Qt::AlignVCenter,

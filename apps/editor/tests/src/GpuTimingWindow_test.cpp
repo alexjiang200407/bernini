@@ -84,7 +84,7 @@ TEST_CASE("A window on screen asks for timing, and stops asking when it closes",
 	CHECK_FALSE(wanted.at(1).at(0).toBool());
 }
 
-TEST_CASE("An export writes every frame the graph holds, and nothing else", "[gputiming]")
+TEST_CASE("An export writes every retained frame, and nothing else", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
 	window.SetSource("Material Editor");
@@ -107,6 +107,27 @@ TEST_CASE("An export writes every frame the graph holds, and nothing else", "[gp
 	QFile csv(written.filePath(file));
 	REQUIRE(csv.open(QIODevice::ReadOnly | QIODevice::Text));
 	CHECK(QString::fromUtf8(csv.readAll()).split('\n', Qt::SkipEmptyParts).size() == 31);
+}
+
+TEST_CASE("Export retains the latest 3600 samples beyond the visible graph", "[gputiming]")
+{
+	editor::GpuTimingWindow window;
+	window.SetSource("Animation Editor");
+	window.AddFrames(Frames(1, 4000));
+	REQUIRE(window.History().SampleCount() == 3600);
+	CHECK(window.History().FrameAt(0) == 401);
+	CHECK(window.History().FrameAt(3599) == 4000);
+
+	const QTemporaryDir directory;
+	REQUIRE(directory.isValid());
+	const QString file = window.Export(QDir(directory.path()));
+	REQUIRE_FALSE(file.isEmpty());
+	QFile csv(QDir(directory.path()).filePath(file));
+	REQUIRE(csv.open(QIODevice::ReadOnly | QIODevice::Text));
+	const QStringList rows = QString::fromUtf8(csv.readAll()).split('\n', Qt::SkipEmptyParts);
+	REQUIRE(rows.size() == 3601);
+	CHECK(rows.at(1).startsWith("0,401,"));
+	CHECK(rows.back().startsWith("3599,4000,"));
 }
 
 TEST_CASE("An export with nothing recorded writes no files", "[gputiming]")
