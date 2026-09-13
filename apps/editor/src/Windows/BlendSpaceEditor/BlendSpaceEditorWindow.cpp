@@ -12,10 +12,13 @@
 #include "util/mime_files.h"
 
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -46,12 +49,14 @@
 #include <filesystem>
 #include <gamelib/BlendSpaceInfo.h>
 #include <limits>
+#include <optional>
 #include <qcontainerfwd.h>
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qsizepolicy.h>
 #include <qstringliteral.h>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -92,6 +97,45 @@ namespace
 		return QStringLiteral("%1    %2")
 		    .arg(QString::fromStdString(sample.clip))
 		    .arg(sample.parameter, 0, 'f', editor::c_ParameterDecimals);
+	}
+
+	// Why a space cannot hold `clip`, as a sentence naming it, or empty when it can.
+	[[nodiscard]] QString
+	RefusalOf(const editor::ClipInfo& clip)
+	{
+		const std::string_view reason = editor::ClipRefusalReason(clip);
+		if (reason.empty())
+			return {};
+
+		return QStringLiteral("'%1' %2.")
+		    .arg(QString::fromStdString(clip.name))
+		    .arg(QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
+	}
+
+	// Every clip, those a space cannot hold listed and disabled rather than dropped: the author is
+	// looking for the clip, and its absence would read as a bad clip set rather than as one a blend
+	// space cannot hold.
+	void
+	ListClips(QComboBox* combo, const std::span<const editor::ClipInfo> clips)
+	{
+		combo->clear();
+
+		auto* model = qobject_cast<QStandardItemModel*>(combo->model());
+		for (const editor::ClipInfo& clip : clips)
+		{
+			combo->addItem(QString::fromStdString(clip.name));
+
+			const std::string_view reason = editor::ClipRefusalReason(clip);
+			if (reason.empty() || model == nullptr)
+				continue;
+
+			if (QStandardItem* item = model->item(combo->count() - 1); item != nullptr)
+			{
+				item->setEnabled(false);
+				item->setToolTip(
+					QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
+			}
+		}
 	}
 }
 
@@ -264,12 +308,17 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_SampleList, /*stretch*/ 1);
 
-	m_SampleClip   = new QComboBox(column);
-	m_AddSample    = new QPushButton(QStringLiteral("Add"), column);
-	m_RemoveSample = new QPushButton(QStringLiteral("Remove"), column);
+	m_SampleClip    = new QComboBox(column);
+	m_AddSample     = new QPushButton(QStringLiteral("Add"), column);
+	m_ReplaceSample = new QPushButton(QStringLiteral("Replace"), column);
+	m_RemoveSample  = new QPushButton(QStringLiteral("Remove"), column);
 	m_AddSample->setObjectName(QStringLiteral("AddBlendSample"));
+	m_ReplaceSample->setObjectName(QStringLiteral("ReplaceBlendSample"));
 	m_RemoveSample->setObjectName(QStringLiteral("RemoveBlendSample"));
+	m_ReplaceSample->setToolTip(
+		QStringLiteral("Point the selected sample at this clip, keeping its threshold."));
 	connect(m_AddSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::AddSample);
+	connect(m_ReplaceSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::ReplaceSample);
 	connect(m_RemoveSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::RemoveSample);
 	connect(m_SampleClip, &QComboBox::currentIndexChanged, this, [this](int) {
 		if (!m_SyncingUi)
@@ -279,6 +328,7 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	auto* sampleRow = new QHBoxLayout();
 	sampleRow->addWidget(m_SampleClip, /*stretch*/ 1);
 	sampleRow->addWidget(m_AddSample);
+	sampleRow->addWidget(m_ReplaceSample);
 	sampleRow->addWidget(m_RemoveSample);
 	layout->addLayout(sampleRow);
 
@@ -293,8 +343,9 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 		static_cast<double>(std::numeric_limits<float>::max()));
 	m_SampleParameter->setKeyboardTracking(false);
 
-	// Live while it moves, written when the edit ends: a file rewritten per keystroke is not the
-	// point, and a pose that waits for the save is.
+	// With no keyboard tracking a value arrives on Enter, focus loss or a step, never mid-number, so
+	// a threshold typed on its way past a neighbour does not re-sort the run at every digit. Live
+	// when it arrives, written when the edit ends.
 	connect(m_SampleParameter, &QDoubleSpinBox::valueChanged, this, [this](double value) {
 		if (!m_SyncingUi)
 			RetargetSample(static_cast<float>(value));
@@ -786,7 +837,11 @@ BlendSpaceEditorWindow::UpdateSpaceControls()
 		space != nullptr && row >= 0 && static_cast<size_t>(row) < space->samples.size();
 
 	m_SampleClip->setEnabled(editable && space != nullptr && clips);
-	m_AddSample->setEnabled(editable && space != nullptr && m_SampleClip->currentIndex() >= 0);
+	const int picked = m_SampleClip->currentIndex();
+	m_AddSample->setEnabled(editable && space != nullptr && picked >= 0);
+	m_ReplaceSample->setEnabled(
+		editable && onSample && picked >= 0 && static_cast<size_t>(picked) < m_Clips.size() &&
+		m_Clips[static_cast<size_t>(picked)].name != space->samples[static_cast<size_t>(row)].clip);
 	m_RemoveSample->setEnabled(editable && onSample && editor::CanRemoveSample(space->samples));
 	m_SampleParameter->setEnabled(editable && onSample);
 	m_FromSpeed->setEnabled(editable && space != nullptr && clips);
@@ -806,26 +861,7 @@ BlendSpaceEditorWindow::ShowSampleClips()
 	m_SyncingUi        = true;
 
 	const QString wanted = m_SampleClip->currentText();
-	m_SampleClip->clear();
-
-	auto* model = qobject_cast<QStandardItemModel*>(m_SampleClip->model());
-	for (const editor::ClipInfo& clip : m_Clips)
-	{
-		m_SampleClip->addItem(QString::fromStdString(clip.name));
-
-		const std::string_view reason = editor::ClipRefusalReason(clip);
-		if (reason.empty() || model == nullptr)
-			continue;
-
-		// Listed and disabled rather than dropped: the author is looking for the clip, and its absence
-		// would read as a bad clip set rather than as one a blend space cannot hold.
-		if (QStandardItem* item = model->item(m_SampleClip->count() - 1); item != nullptr)
-		{
-			item->setEnabled(false);
-			item->setToolTip(
-				QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
-		}
-	}
+	ListClips(m_SampleClip, m_Clips);
 
 	const int restored = m_SampleClip->findText(wanted);
 	m_SampleClip->setCurrentIndex(restored >= 0 ? restored : NthSampleableClip(0));
@@ -920,6 +956,16 @@ BlendSpaceEditorWindow::CommitBlendSet()
 
 	RelabelSamples();
 
+	// A run re-sorted across two samples of one clip is still a parameter move, and its row still
+	// moved.
+	if (m_PendingSampleRow >= 0)
+	{
+		m_SyncingUi = true;
+		m_SampleList->setCurrentRow(std::exchange(m_PendingSampleRow, -1));
+		m_SyncingUi = false;
+		UpdateSpaceControls();
+	}
+
 	if (!editor::ApplyParameters(m_BlendSet.spaces, m_Spaces))
 		return;
 
@@ -933,43 +979,63 @@ BlendSpaceEditorWindow::CommitBlendSet()
 void
 BlendSpaceEditorWindow::AddSpace()
 {
-	bool          accepted = false;
-	const QString name     = QInputDialog::getText(
-		window(),
-		QStringLiteral("New Blend Space"),
-		QStringLiteral("Name"),
-		QLineEdit::Normal,
-		QString(),
-		&accepted);
-
-	if (!accepted)
+	const int first  = NthSampleableClip(0);
+	const int second = NthSampleableClip(1);
+	if (first < 0 || second < 0)
 		return;
 
-	const std::string wanted = name.trimmed().toStdString();
-	if (!editor::CanNameSpace(m_BlendSet.spaces, wanted))
-	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("New Blend Space"),
-			QStringLiteral("A space needs a name of its own; '%1' is empty or already taken.")
-				.arg(name));
-		return;
-	}
+	// Both clips are asked for with the name: `validateBlendSet` refuses a run under two samples, so
+	// there is no empty space to fill in afterwards, and a guessed pair is one the author then undoes.
+	QDialog dialog(window());
+	dialog.setWindowTitle(QStringLiteral("New Blend Space"));
 
-	// Two samples, because `validateBlendSet` refuses a shorter run: there is no empty space to add
-	// and fill in. The first two clips a space can sample, at 0 and 1, are a run to edit, not a guess at intent.
+	auto* name       = new QLineEdit(&dialog);
+	auto* firstClip  = new QComboBox(&dialog);
+	auto* secondClip = new QComboBox(&dialog);
+	ListClips(firstClip, m_Clips);
+	ListClips(secondClip, m_Clips);
+	firstClip->setCurrentIndex(first);
+	secondClip->setCurrentIndex(second);
+
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+	auto* form = new QFormLayout(&dialog);
+	form->addRow(QStringLiteral("Name"), name);
+	form->addRow(QStringLiteral("At %1").arg(0.0f, 0, 'f', editor::c_ParameterDecimals), firstClip);
+	form->addRow(
+		QStringLiteral("At %1").arg(c_ParameterGap, 0, 'f', editor::c_ParameterDecimals),
+		secondClip);
+	form->addRow(buttons);
+
+	// An empty or taken name is refused while it is typed, not after the dialog has closed.
+	const auto nameIsFree = [this, name] {
+		return editor::CanNameSpace(m_BlendSet.spaces, name->text().trimmed().toStdString());
+	};
+	QPushButton* ok = buttons->button(QDialogButtonBox::Ok);
+	ok->setEnabled(false);
+	connect(name, &QLineEdit::textChanged, &dialog, [ok, nameIsFree] {
+		ok->setEnabled(nameIsFree());
+	});
+
+	if (dialog.exec() != QDialog::Accepted)
+		return;
+
+	// Checked again rather than carried across exec(): its nested event loop can reload the rig.
+	const auto sampleable = [this](const int clip) {
+		return clip >= 0 && static_cast<size_t>(clip) < m_Clips.size() &&
+		       editor::ClipRefusalReason(m_Clips[static_cast<size_t>(clip)]).empty();
+	};
+	const int firstPicked  = firstClip->currentIndex();
+	const int secondPicked = secondClip->currentIndex();
+	if (!nameIsFree() || !sampleable(firstPicked) || !sampleable(secondPicked))
+		return;
+
 	auto space = assetlib::BlendSpace();
-	space.name = wanted;
-	for (int n = 0; n < 2; ++n)
-	{
-		const int clip = NthSampleableClip(n);
-		if (clip < 0)
-			return;
-
-		space.samples.emplace_back(
-			m_Clips[static_cast<size_t>(clip)].name,
-			static_cast<float>(n) * c_ParameterGap);
-	}
+	space.name = name->text().trimmed().toStdString();
+	space.samples.emplace_back(m_Clips[static_cast<size_t>(firstPicked)].name, 0.0f);
+	space.samples.emplace_back(m_Clips[static_cast<size_t>(secondPicked)].name, c_ParameterGap);
 
 	m_SelectedSpace = QString::fromStdString(space.name);
 	m_BlendSet.spaces.push_back(std::move(space));
@@ -1041,16 +1107,11 @@ BlendSpaceEditorWindow::AddSample()
 
 	const editor::ClipInfo& clip = m_Clips[static_cast<size_t>(index)];
 
-	// The combo lists a one-shot disabled rather than hiding it, and a selection restored by name can
-	// come back on a clip that no longer loops, so the refusal is still owed here.
-	if (const std::string_view reason = editor::ClipRefusalReason(clip); !reason.empty())
+	// A selection restored by name can come back on a clip a space cannot hold, so the refusal is
+	// still owed here.
+	if (const QString refusal = RefusalOf(clip); !refusal.isEmpty())
 	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Add Sample"),
-			QStringLiteral("'%1' %2.")
-				.arg(QString::fromStdString(clip.name))
-				.arg(QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size()))));
+		QMessageBox::warning(window(), QStringLiteral("Add Sample"), refusal);
 		return;
 	}
 
@@ -1094,6 +1155,30 @@ BlendSpaceEditorWindow::RemoveSample()
 }
 
 void
+BlendSpaceEditorWindow::ReplaceSample()
+{
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	const int             row   = m_SampleList->currentRow();
+	const int             index = m_SampleClip->currentIndex();
+	if (space == nullptr || row < 0 || index < 0 || static_cast<size_t>(index) >= m_Clips.size())
+		return;
+
+	const editor::ClipInfo& clip = m_Clips[static_cast<size_t>(index)];
+
+	if (const QString refusal = RefusalOf(clip); !refusal.isEmpty())
+	{
+		QMessageBox::warning(window(), QStringLiteral("Replace Clip"), refusal);
+		return;
+	}
+
+	if (!editor::ReplaceSampleClip(space->samples, static_cast<size_t>(row), clip.name))
+		return;
+
+	m_PendingSampleRow = row;
+	CommitBlendSet();
+}
+
+void
 BlendSpaceEditorWindow::RetargetSample(const float parameter)
 {
 	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
@@ -1101,16 +1186,31 @@ BlendSpaceEditorWindow::RetargetSample(const float parameter)
 	if (space == nullptr || row < 0 || static_cast<size_t>(row) >= space->samples.size())
 		return;
 
-	// Held between its neighbours rather than reordered: a row that jumped position mid-drag would
-	// move the thing under the cursor.
-	const float held = editor::ClampedParameter(
+	const std::optional<size_t> moved = editor::MoveSample(
 		space->samples,
 		static_cast<size_t>(row),
 		parameter,
 		editor::c_ParameterStep);
 
-	space->samples[static_cast<size_t>(row)].parameter = held;
-	m_BlendSetDirty                                    = true;
+	// It would display as another sample. A step never crosses a neighbour for this reason; only a
+	// typed value does.
+	if (!moved.has_value())
+	{
+		m_SyncingUi = true;
+		m_SampleParameter->setValue(
+			static_cast<double>(space->samples[static_cast<size_t>(row)].parameter));
+		m_SyncingUi = false;
+		return;
+	}
+
+	m_BlendSetDirty = true;
+
+	if (*moved != static_cast<size_t>(row))
+	{
+		m_PendingSampleRow = static_cast<int>(*moved);
+		CommitBlendSet();
+		return;
+	}
 
 	if (LiveSpace(m_SpaceSelector->currentIndex()) != nullptr &&
 	    editor::ApplyParameters(m_BlendSet.spaces, m_Spaces))
@@ -1127,7 +1227,6 @@ BlendSpaceEditorWindow::RetargetSample(const float parameter)
 	m_SyncingUi = true;
 	if (QListWidgetItem* item = m_SampleList->item(row); item != nullptr)
 		item->setText(SampleText(space->samples[static_cast<size_t>(row)]));
-	m_SampleParameter->setValue(static_cast<double>(held));
 	m_SyncingUi = false;
 }
 

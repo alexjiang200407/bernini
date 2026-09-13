@@ -169,7 +169,7 @@ private:
 	void
 	CommitBlendSet();
 
-	// Adds a space seeded with the first two clips a space can sample, named by the author.
+	// Adds a space of two samples, asking for its name and both of its clips.
 	void
 	AddSpace();
 
@@ -186,11 +186,18 @@ private:
 	void
 	RemoveSample();
 
-	// Holds the selected sample's threshold between its neighbours and pushes it live.
+	// Points the selected sample at the combo's clip, keeping its threshold.
+	void
+	ReplaceSample();
+
+	/**
+	 * Moves the selected sample's threshold. Inside its neighbours it goes live; typed past one, the
+	 * run re-sorts and the mesh reloads, since every row it crossed now names another clip.
+	 */
 	void
 	RetargetSample(float parameter);
 
-	// The clips that may be sampled, non-looping ones listed and greyed with the reason.
+	// Every clip in the set, those a space cannot hold listed and greyed with the reason.
 	void
 	ShowSampleClips();
 
@@ -270,6 +277,7 @@ private:
 	QListWidget*    m_SampleList      = nullptr;
 	QComboBox*      m_SampleClip      = nullptr;
 	QPushButton*    m_AddSample       = nullptr;
+	QPushButton*    m_ReplaceSample   = nullptr;
 	QPushButton*    m_RemoveSample    = nullptr;
 	QDoubleSpinBox* m_SampleParameter = nullptr;
 	QPushButton*    m_FromSpeed       = nullptr;
@@ -311,7 +319,7 @@ private:
 	std::vector<editor::ClipInfo>     m_Clips;
 
 	// What the author was looking at, kept across the reload an edit causes: the space by name, and
-	// the row a just-added sample lands on, spent the first time it is read.
+	// the row an added, moved or replaced sample lands on, spent the first time it is read.
 	QString m_SelectedSpace;
 	int     m_PendingSampleRow = -1;
 	float   m_SpaceParameter   = 0.0f;
