@@ -24,13 +24,12 @@ class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
 class QTabWidget;
+class GroundControls;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
-class QGroupBox;
 class QLabel;
 class QListWidget;
-class Scrubber;
 class TransitionStrip;
 class QTimer;
 class QToolButton;
@@ -166,21 +165,6 @@ private:
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
-	/**
-	 * Pushes the ground group's state into the preview and shows or hides what it governs.
-	 *
-	 * *Plant feet* is the whole group: the floor, the solve against it, and the four sliders that
-	 * shape it. One switch rather than a floor and a solve separately, because neither half is worth
-	 * anything alone -- an empty floor shows nothing, and there is nothing to plant against without
-	 * one. Off, the group collapses to its title and the sliders keep their values, so turning it
-	 * back on restores what was set.
-	 *
-	 * The group holds the state and this is the one place that pushes it, construction included --
-	 * two defaults that could disagree is one that eventually does.
-	 */
-	void
-	UpdateGroundControls();
-
 	// One clock tick: advance by the wall time since the last, push into the preview and the UI.
 	void
 	Tick();
@@ -249,28 +233,8 @@ private:
 	// shared table.
 	QComboBox* m_TierSelector = nullptr;
 
-	// The switch is the title of the group it governs, and the body is everything it shows: the
-	// four sliders below, hidden with it rather than greyed, since the panel opens with planting
-	// off and a resting column would otherwise lead with controls that cannot act.
-	QGroupBox* m_PlantFeet  = nullptr;
-	QWidget*   m_GroundBody = nullptr;
-
-	// The ground's tilt, in whole degrees. Committed on release, not per tick: the ground is a
-	// rebind that moves the temporal epoch, and a drag committing every tick would keep the
-	// preview unaccumulated for the whole gesture.
-	Scrubber* m_SlopeSlider = nullptr;
-	QLabel*   m_SlopeLabel  = nullptr;
-
-	// Which way uphill points, in whole degrees about +Y from +X.
-	Scrubber* m_HeadingSlider = nullptr;
-	QLabel*   m_HeadingLabel  = nullptr;
-
-	// The instance's own IK weights, in percent: how far the ankle is carried onto the ground, and
-	// how far the sole turns onto it. Committed on release like the slope, as one write of both.
-	Scrubber* m_IKWeightSlider = nullptr;
-	QLabel*   m_IKWeightLabel  = nullptr;
-	Scrubber* m_SoleTurnSlider = nullptr;
-	QLabel*   m_SoleTurnLabel  = nullptr;
+	// Plant feet: the floor, the solve against it, and the sliders that shape it.
+	GroundControls* m_GroundControls = nullptr;
 
 	// Which `.bblend` is open. A set is the rig's rather than the panel's, so choosing one reloads
 	// the mesh.
