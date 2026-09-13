@@ -128,6 +128,54 @@ TEST_CASE("A blend set is shown on the meshes skinned to its clip set's rig", "[
 	}
 }
 
+TEST_CASE("A new blend set is offered for each clip set with none at its key", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteBanim(root, "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
+	editor::test::WriteBanim(root, "Derived/Animations/run.banim", "Derived/Skeletons/rig.bskel");
+	editor::test::WriteBanim(root, "Derived/Animations/idle.banim", "Derived/Skeletons/rig.bskel");
+
+	SECTION("every clip set, sorted, while none has a set")
+	{
+		CHECK(
+			editor::ClipSetsWithoutBlendSet(Graph(root)) ==
+			std::vector<std::string>({ "Derived/Animations/idle.banim",
+		                               "Derived/Animations/run.banim",
+		                               "Derived/Animations/walk.banim" }));
+	}
+
+	SECTION("a clip set with a set at its key is not offered again")
+	{
+		WriteSet(root, "Authored/Animations/run.bblend", "Derived/Animations/run.banim");
+
+		CHECK(
+			editor::ClipSetsWithoutBlendSet(Graph(root)) ==
+			std::vector<std::string>(
+				{ "Derived/Animations/idle.banim", "Derived/Animations/walk.banim" }));
+	}
+
+	SECTION("a set stored elsewhere does not take the key a new one is written at")
+	{
+		WriteSet(root, "Authored/Sets/run_by_hand.bblend", "Derived/Animations/run.banim");
+
+		CHECK(editor::ClipSetsWithoutBlendSet(Graph(root)).size() == 3);
+	}
+}
+
+TEST_CASE("A project with no clip sets has nothing to start a blend set on", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteMesh(root, "Derived/Meshes/rock.bmesh", "");
+
+	CHECK(editor::ClipSetsWithoutBlendSet(Graph(root)).empty());
+}
+
 TEST_CASE("The first blend set is written empty, beside its clip set", "[animation][blend]")
 {
 	QTemporaryDir dir;

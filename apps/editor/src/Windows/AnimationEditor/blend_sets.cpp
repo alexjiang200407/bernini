@@ -4,10 +4,12 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/blend.h>
+#include <assetlib/project_layout.h>
 #include <core/err/util.h>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace editor
@@ -50,6 +52,19 @@ namespace editor
 
 		std::ranges::sort(meshes);
 		return meshes;
+	}
+
+	std::vector<std::string>
+	ClipSetsWithoutBlendSet(const assetlib::AssetRefGraph& graph)
+	{
+		auto clipSets = std::vector<std::string>();
+
+		for (std::string& file : graph.GetFilesUnder(assetlib::c_AnimationsDirectoryName))
+			if (assetlib::assetTypeFromExtension(file) == assetlib::AssetType::kAnimation &&
+			    !graph.Contains(assetlib::blendSetKeyFor(file)))
+				clipSets.push_back(std::move(file));
+
+		return clipSets;
 	}
 
 	std::string
