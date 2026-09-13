@@ -1,22 +1,29 @@
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 
 #include "Windows/GpuTiming/PassGraphView.h"
+#include "util/held_open_assets.h"
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QHideEvent>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QString>
+#include <QStringList>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <Qt>
 #include <bgl/PassTiming.h>
 #include <bgl/pass_timing_csv.h>
+#include <qcontainerfwd.h>
 #include <qlogging.h>
 #include <qtmetamacros.h>
 #include <vector>
@@ -44,7 +51,8 @@ namespace editor
 
 		auto* save = new QPushButton("Export CSV…", this);
 		save->setObjectName("GpuTimingExport");
-		save->setToolTip("Write every frame the graph holds beside editor.log, as CSV.");
+		save->setToolTip(
+			"Write retained timings and current editor context beside editor.log, as CSV.");
 
 		auto* controls = new QHBoxLayout();
 		controls->addWidget(m_Status, 1);
@@ -119,7 +127,24 @@ namespace editor
 		if (!csv.open(QIODevice::WriteOnly | QIODevice::Text))
 			return {};
 
-		QTextStream(&csv) << QString::fromStdString(bgl::PassHistoryCsv(m_History));
+		QStringList assets = GetAssetsHeldOpen(parentWidget());
+		assets.removeDuplicates();
+		assets.sort();
+		const QJsonObject context{
+			{ "snapshot", "export_time" },
+			{ "exported_at_utc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs) },
+			{ "timing_tab", m_Source },
+			{ "recording_paused", m_Paused },
+			{ "editor_title", parentWidget() ? parentWidget()->windowTitle() : QString() },
+			{ "open_assets_scope", "all_editor_panels" },
+			{ "open_assets", QJsonArray::fromStringList(assets) }
+		};
+		QString metadata = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
+		metadata.replace('"', "\"\"");
+		QTextStream stream(&csv);
+		stream << "# export_context_json,\"" << metadata << "\"\n";
+		stream << QString::fromStdString(bgl::PassHistoryCsv(m_History));
+		stream.flush();
 		csv.close();
 
 		return file;

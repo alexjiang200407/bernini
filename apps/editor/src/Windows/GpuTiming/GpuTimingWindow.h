@@ -50,6 +50,7 @@ namespace editor
 		/**
 		 * Writes all retained samples, up to 3,600, into `directory` as `gpu_timings_<stamp>.csv`.
 		 * The graph displays only the latest 600 of these samples.
+		 * A context record precedes the timing table, describing the editor at export time.
 		 *
 		 * @return the file written, or an empty string when nothing was recorded or it could not be
 		 *         written.

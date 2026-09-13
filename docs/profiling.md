@@ -270,6 +270,14 @@ column per pass, a total, and an empty field where a pass did not run in that fr
 dialog — a predictable path is what makes the capture reachable by whoever, or whatever, reads the
 log next.
 
+The first CSV record is `# export_context_json` and a quoted JSON object. It identifies the
+timing tab, editor/project window title, UTC export time, recording pause state, and the mesh,
+animation, material and environment paths held open across all editor panels. Paths are deduplicated
+and sorted. This is explicitly an **export-time snapshot**, not the state of each recorded frame:
+assets can change while recording or while paused. It lists open assets, not the renderer's full
+resource inventory or a scene serialization. CSV readers should skip this first record before
+reading the `sample,frame,...,total` timing table; for example, `pandas.read_csv(path, skiprows=1)`.
+
 The `frame` column is an opaque identifier, not a consecutive viewport frame counter. Gaps do not
 measure lost frames, and the CSV contains no timestamp from which to calculate capture duration.
 
