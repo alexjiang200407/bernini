@@ -461,3 +461,40 @@ TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grou
 		CHECK_THROWS(DocumentText(twice));
 	}
 }
+
+TEST_CASE("an authored clip loop round-trips as a parameter", "[importdoc][cliploop]")
+{
+	ImportDocument document;
+	document.clipLoops = { { "Walk_InPlace", true }, { "Land", false } };
+
+	const ImportDocument read = DocumentFrom(DocumentText(document));
+
+	REQUIRE(read.clipLoops.size() == 2);
+	CHECK(read.clipLoops[0] == ClipLoop{ "Land", false });
+	CHECK(read.clipLoops[1] == ClipLoop{ "Walk_InPlace", true });
+
+	// A parameter, for the reason a floor is one: flipping it has to stale the clip set it was cooked
+	// into, or ticking the box changes nothing until something else re-cooks the rig.
+	ImportDocument edited    = read;
+	edited.clipLoops[1].loop = false;
+	CHECK(parametersHashOf(edited) != parametersHashOf(read));
+
+	SECTION("a document authoring none hashes as it did before the key existed")
+	{
+		const ImportDocument none;
+		CHECK(DocumentText(none).find("clipLoop") == std::string::npos);
+		CHECK(parametersHashOf(none) == parametersHashOf(DocumentFrom("{}")));
+	}
+
+	SECTION("two loops for one clip are refused")
+	{
+		ImportDocument twice;
+		twice.clipLoops = { { "Run", true }, { "Run", false } };
+		CHECK_THROWS(DocumentText(twice));
+	}
+
+	SECTION("a loop that is not true or false is refused")
+	{
+		CHECK_THROWS(DocumentFrom(R"({ "parameters": { "clipLoop": { "Run": 1 } } })"));
+	}
+}

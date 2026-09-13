@@ -831,6 +831,17 @@ namespace
 			root.Data() / assetlib::c_MeshSourcesDirectoryName / "unit.bimport",
 			assetlib::AssetCodec<assetlib::ImportDocument>::Serialize(document));
 	}
+
+	/** An import document beside the copied source, authoring one clip's loop. */
+	void
+	WriteAuthoredLoop(const TempRoot& root, std::string_view clip, const bool loop)
+	{
+		assetlib::ImportDocument document;
+		document.clipLoops = { { std::string(clip), loop } };
+		core::file::write_atomic(
+			root.Data() / assetlib::c_MeshSourcesDirectoryName / "unit.bimport",
+			assetlib::AssetCodec<assetlib::ImportDocument>::Serialize(document));
+	}
 }
 
 // The whole feature, through the writer that ships it: the animal pack is authored anywhere from
@@ -924,5 +935,60 @@ TEST_CASE("Re-importing a source keeps the floors its document authors", "[impor
 	// And the key that import recorded agrees with the file, so the entry it wrote does not read
 	// stale the moment it is written -- which is what would happen if only one of the two carried
 	// the authored floor.
+	CHECK(ref.parametersHash == parametersHashOf(rewritten));
+}
+
+// The override reaches the clip set through the writer every import goes through, not only through
+// the regeneration a stale key triggers.
+TEST_CASE("An import honours a loop its document authors", "[importedrig][cliploop]")
+{
+	using namespace assetlib;
+
+	const TempRoot root;
+	auto           imported = SkinnedImport();
+	BMesh          mesh     = MeshAt(2.0f);
+
+	imported.animations.clips[0].nameOffset = imported.animations.stringPool.add("walk");
+	const bool inferred                     = imported.animations.clips[0].loop != 0u;
+	WriteAuthoredLoop(root, "walk", !inferred);
+
+	SourceRef source;
+	source.key = std::format("{}/unit.glb", c_MeshSourcesDirectoryName);
+
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
+		mesh,
+		TempRoot::BskelKey(),
+		TempRoot::BanimKey(),
+		/*writeClips*/ true,
+		source);
+
+	const AnimationSet stored = LoadAt<AnimationSet>(root.Banim());
+	REQUIRE(stored.clips.size() == 1);
+	CHECK((stored.clips[0].loop != 0u) == !inferred);
+}
+
+// A re-import rewrites the document, and one that dropped the override would hand a rig back its
+// inferred one-shot while the recorded key still read as fresh.
+TEST_CASE("Re-importing a source keeps the loops its document authors", "[importedrig][cliploop]")
+{
+	using namespace assetlib;
+
+	const TempRoot     root;
+	const AssetStore   store = root.Store();
+	const ImportTarget target{ "Authored/Meshes/unit.glb", c_DefaultSampleRate, {} };
+
+	const fs::path source = root.Data() / "unit_source.glb";
+	core::file::write_atomic(source, std::span<const std::byte>());
+	WriteAuthoredLoop(root, "walk", true);
+
+	const SourceRef ref = store.CopyImportedSource(source, target);
+	store.WriteImportedDocument(target, nullptr);
+
+	const ImportDocument rewritten =
+		loadImportDocument(root.Data() / c_MeshSourcesDirectoryName / "unit.bimport");
+	REQUIRE(rewritten.clipLoops.size() == 1);
+	CHECK(rewritten.clipLoops[0] == ClipLoop{ "walk", true });
 	CHECK(ref.parametersHash == parametersHashOf(rewritten));
 }

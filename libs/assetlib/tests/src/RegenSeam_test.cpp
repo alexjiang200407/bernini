@@ -384,6 +384,32 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 	}
 }
 
+// The door an editor's checkbox goes through: it writes the document and loads again, and nothing
+// else has touched the clip set.
+TEST_CASE("a loop the document authors is applied when the clips regenerate", "[regen][cliploop]")
+{
+	const test::SkinnedGltf source("bernini_regen_loop_gltf");
+	const ImportedProject   sandbox("bernini_regen_loop", source.PackGlb());
+
+	const AnimationSet fresh =
+		LoadAt<AnimationSet>(sandbox.dataRoot / c_AnimationsDirectoryName / "unit.banim");
+	REQUIRE(fresh.clips.size() == 2);
+	const bool inferred = fresh.clips[0].loop != 0u;
+
+	auto document = loadImportDocument(
+		core::file::LooseFileSystem(sandbox.dataRoot),
+		"Authored/Meshes/unit.bimport");
+	document.clipLoops = { { std::string(fresh.stringPool.at(fresh.clips[0].nameOffset)),
+		                     !inferred } };
+	core::file::write_atomic(sandbox.documentPath, AssetCodec<ImportDocument>::Serialize(document));
+
+	// The parameter edit alone is the staleness: the token and the source still match.
+	const AnimationSet clips = sandbox.Store().LoadRegenAnimations("Derived/Animations/unit.banim");
+	REQUIRE(clips.clips.size() == 2);
+	CHECK((clips.clips[0].loop != 0u) == !inferred);
+	CHECK(clips.clips[1].loop == fresh.clips[1].loop);
+}
+
 TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc]")
 {
 	const ImportedProject sandbox("bernini_regen_reauthor", test::TexturedGltfPath());

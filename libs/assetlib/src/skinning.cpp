@@ -938,6 +938,15 @@ namespace assetlib
 		}
 	}
 
+	void
+	applyClipLoops(AnimationSet& animations, const std::span<const ClipLoop> authored) noexcept
+	{
+		for (const ClipLoop& authoredLoop : authored)
+			for (AnimationClip& clip : animations.clips)
+				if (animations.stringPool.at(clip.nameOffset) == authoredLoop.clip)
+					clip.loop = authoredLoop.loop ? 1u : 0u;
+	}
+
 	namespace
 	{
 		/**

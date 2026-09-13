@@ -125,6 +125,7 @@ namespace assetlib
 				const Skeleton rig   = store.Load<Skeleton>(document.skeleton);
 				clips.source         = group.ref;
 				clips.skeleton       = document.skeleton;
+				applyClipLoops(clips, document.clipLoops);
 
 				// Whichever writer produced these outputs is the one reproduced, because anything
 				// else makes a re-import distinguishable from an import. A source that produced a

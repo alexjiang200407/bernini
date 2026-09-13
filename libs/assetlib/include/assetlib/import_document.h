@@ -50,6 +50,10 @@ namespace assetlib
 		// rather than a binding: it changes the samples the importer writes, so it has to key.
 		std::vector<ClipFloor> clipFloors;
 
+		// Overrules the loop the cook infers for a named clip from its first and last poses; see
+		// assetlib::applyClipLoops. A parameter for the reason clipFloors is one.
+		std::vector<ClipLoop> clipLoops;
+
 		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
 		std::string skeleton;
 
