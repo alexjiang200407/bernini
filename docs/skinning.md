@@ -414,7 +414,7 @@ to keep in agreement beyond the one below.
   Opening a set is all this panel does with one; authoring its spaces is the Blend Space Editor's.
 
 * **A blend space is authored in the Blend Space Editor, a dock beside this panel.** It opens one
-  `.bblend`, dropped on it, and lists that document's spaces and the samples of the selected one,
+  `.bblend`, dropped on it or double-clicked in the Content Explorer, and lists that document's spaces and the samples of the selected one,
   clip by name and threshold. A set names its clip set and no mesh, so what it is shown on is a
   query over the reference graph: the clip set's `kClipSkeleton` edge names the rig, and every
   `.bmesh` whose `kMeshSkeleton` edge names that rig can show it (`editor::ResolveBlendSetMeshes`).

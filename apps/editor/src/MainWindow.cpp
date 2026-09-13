@@ -333,6 +333,17 @@ MainWindow::Build(const std::filesystem::path& configPath)
 				m_MaterialEditor,
 				&MaterialEditorWindow::RefreshMaterialState);
 
+	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::BlendSetOpenRequested,
+		m_BlendSpaceEditor,
+		[this](const QString& key) {
+			m_BlendSpaceEditorDock->show();
+			m_BlendSpaceEditorDock->raise();
+			m_BlendSpaceEditor->OpenBlendSet(key);
+		});
+
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
