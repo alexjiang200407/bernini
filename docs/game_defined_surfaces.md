@@ -115,6 +115,10 @@ What the reader gives is the same on both: the interpolants, the camera and the 
 fields. A surface cannot see the pose, the palette or the bone it was skinned by; by the time it
 runs, a skinned vertex is a world-space position like any other.
 
+`WorldNormal` is the normal of the face being shaded: on a double-sided material a back face reads
+the interpolated normal negated — the same flip the engine applies to its own lighting — so a
+view-dependent term is correct on both faces and a surface never sees a facing bit.
+
 ## Hashed alpha
 
 A hashed layer replaces the cutoff with stochastic coverage: a fragment survives with probability

@@ -12,6 +12,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/error.h>
@@ -600,4 +601,78 @@ TEST_CASE("A routed data slot draws what its composited map draws", "[surface][r
 	// MatchesGolden only deletes its `got` half; these were both gots.
 	std::filesystem::remove("assets/golden/surface_routed_whole.got.png");
 	std::filesystem::remove("assets/golden/surface_rewired_whole.got.png");
+}
+
+// The facing gate: on a double-sided material the reader's WorldNormal is the shaded face's
+// normal, so a view-dependent surface term shades a back face exactly as it shades the front.
+// The Rim fixture is that term -- through an unflipped interpolant a back face's
+// 1 - saturate(dot(n, v)) saturates to 1 and the whole face blazes at full rimColor, which is
+// how the defect looked on double-sided hair cards.
+TEST_CASE("A double-sided surface shades its back face as its front", "[surface][render]")
+{
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	// The mask layer, because it is one whose pipeline draws both sides and leaves the cull to
+	// the record -- the opaque row culls back faces in hardware, so a back face there is absent
+	// rather than shaded. Coverage is pinned at 1 so every fragment survives the cutoff and the
+	// two shots differ by shading alone. Rim well clear of the environment's own lighting, as the
+	// side-by-side case sets it.
+	auto material = scene->CreateSurfaceMaterial(
+		{
+			.surface     = "Rim",
+			.layerType   = LayerType::kMask,
+			.alphaCutoff = 0.5f,
+			.doubleSided = true,
+			.values      = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
+	                         { "rimPower", glm::vec4(2.0f) },
+	                         { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
+		});
+
+	auto       plane    = scene->AddPlaneGeom(4, 4, 10.0f, 7.0f, material);
+	const auto instance = view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = SphereCamera();
+	job.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	const auto shoot = [&](const char* path) {
+		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+	};
+
+	shoot("assets/golden/surface_facing_front.got.png");
+
+	// The same plane about-faced: the silhouette is its own mirror image and nothing is
+	// textured, so the frame may only change if facing does -- every pixel now shades through
+	// the back-face path.
+	view->SetInstanceTransform(
+		instance,
+		glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+	shoot("assets/golden/surface_facing_back.got.png");
+
+	const bool facingMatches = bgl::test::MatchesGolden(
+		"assets/golden/surface_facing_front.got.png",
+		"assets/golden/surface_facing_back.got.png");
+	CHECK(facingMatches);
+
+	// MatchesGolden only deletes its `got` half; the front shot was a got too. On a failure both
+	// stay on disk for inspection, as the matcher leaves its own got.
+	if (facingMatches)
+	{
+		std::filesystem::remove("assets/golden/surface_facing_front.got.png");
+	}
 }
