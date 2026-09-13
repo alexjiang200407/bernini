@@ -1,6 +1,8 @@
 #include "MainWindow.h"
 
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/AnimationEditor/GroundControls.h"
+#include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
@@ -28,6 +30,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
 #include <filesystem>
@@ -598,4 +601,40 @@ TEST_CASE(
 	auto* start = blend->findChild<QPushButton*>("NewBlendSet");
 	REQUIRE(start != nullptr);
 	CHECK(start->isEnabled());
+}
+
+TEST_CASE(
+	"Both rig previews carry the Plant feet group, off and collapsed",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+
+	for (QWidget* panel : { static_cast<QWidget*>(animation), static_cast<QWidget*>(blend) })
+	{
+		INFO("panel: " << panel->metaObject()->className());
+
+		auto* ground = panel->findChild<GroundControls*>();
+		REQUIRE(ground != nullptr);
+
+		const QList<Scrubber*> sliders = ground->findChildren<Scrubber*>();
+		CHECK(sliders.size() == 4);
+
+		// Off, so a panel just opened shows the clip as authored, and the sliders fold away with it.
+		CHECK_FALSE(ground->isChecked());
+		CHECK(std::ranges::none_of(sliders, [ground](const Scrubber* slider) {
+			return slider->isVisibleTo(ground);
+		}));
+
+		ground->setChecked(true);
+		CHECK(std::ranges::all_of(sliders, [ground](const Scrubber* slider) {
+			return slider->isVisibleTo(ground);
+		}));
+	}
 }

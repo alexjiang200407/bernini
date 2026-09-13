@@ -2,6 +2,7 @@
 
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/AnimationEditor/GroundControls.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/blend_edits.h"
@@ -222,6 +223,12 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	layout->addWidget(m_MeshCaption);
 	layout->addWidget(m_MeshSelector);
 
+	// Whether a space plants -- across the parameter, and at the wrap of a clip that does not close
+	// -- is a question about the space, so the ground it is judged on is here too.
+	layout->addSpacing(8);
+	m_GroundControls = new GroundControls(m_Preview, column);
+	layout->addWidget(m_GroundControls);
+
 	layout->addSpacing(8);
 
 	m_SpaceSelector = new QComboBox(column);
@@ -340,6 +347,9 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	scrollBox->setFrameShape(QFrame::NoFrame);
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
+
+	// After the width above is taken: collapsing the group takes its sliders out of the hint.
+	m_GroundControls->Apply();
 
 	// A native surface, beside a native viewport: see docs/known_issues.md, "Scrolling a panel's
 	// properties column smears the main tab bar".
