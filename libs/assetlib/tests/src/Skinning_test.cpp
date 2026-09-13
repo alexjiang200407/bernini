@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <array>
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/skinning.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
@@ -14,12 +16,15 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <optional>
+#include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 using namespace assetlib;
@@ -925,5 +930,443 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 		rebaked.posedBoxes.clear();
 		assetlib::bakePosedBounds(rebaked, rigid.mesh, skeleton);
 		CHECK(rebaked.posedBoxes.empty());
+	}
+}
+
+namespace
+{
+	/** A rig from `{name, parent}` pairs, each bone's inverse bind derived from the rest pose. */
+	Skeleton
+	RigFrom(const std::vector<std::pair<const char*, uint32_t>>& bones)
+	{
+		Skeleton skeleton;
+		for (const auto& [name, parent] : bones)
+		{
+			Bone bone{};
+			bone.bindPose   = { glm::vec3(0.0f, 1.0f, 0.0f),
+				                glm::angleAxis(glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+				                glm::vec3(1.0f) };
+			bone.parent     = parent;
+			bone.nameOffset = skeleton.stringPool.add(name);
+			skeleton.bones.push_back(bone);
+		}
+
+		const std::vector<glm::mat4> model = bindPoseModelTransforms(skeleton);
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			skeleton.bones[i].inverseBind = glm::inverse(model[i]);
+
+		return skeleton;
+	}
+
+	/** Whether any vertex of `mesh` carries weight on `bone` -- the premise a narrowing test rests on. */
+	bool
+	WeightedInMesh(const BMesh& mesh, const uint16_t bone)
+	{
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			const VertexAttribute* joints = findAttribute(submesh.layout, VertexSemantic::kJoints0);
+			const VertexAttribute* weights =
+				findAttribute(submesh.layout, VertexSemantic::kWeights0);
+			if (joints == nullptr || weights == nullptr)
+				continue;
+
+			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
+			{
+				const size_t base =
+					submesh.vertexByteOffset + static_cast<size_t>(v) * submesh.layout.stride;
+				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+				{
+					uint16_t joint  = 0;
+					uint16_t weight = 0;
+					std::memcpy(
+						&joint,
+						mesh.vertexData.data() + base + joints->offset + i * sizeof(uint16_t),
+						sizeof(joint));
+					std::memcpy(
+						&weight,
+						mesh.vertexData.data() + base + weights->offset + i * sizeof(uint16_t),
+						sizeof(weight));
+					if (joint == bone && weight != 0)
+						return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** One two-frame clip that swings every bone, so a wrong index shows up as a moved vertex. */
+	AnimationSet
+	ClipsFor(const Skeleton& skeleton)
+	{
+		AnimationSet animations;
+		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.skeletonBoneNames = skeletonBoneNames(skeleton);
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+
+		AnimationClip clip{};
+		clip.nameOffset  = animations.stringPool.add("swing");
+		clip.firstSample = 0;
+		clip.frameCount  = 2;
+		clip.sampleRate  = 30.0f;
+		clip.duration    = 1.0f / 30.0f;
+
+		for (uint32_t f = 0; f < clip.frameCount; ++f)
+			for (uint32_t b = 0; b < animations.boneCount; ++b)
+			{
+				Transform pose = skeleton.bones[b].bindPose;
+				pose.rotation  = glm::angleAxis(
+					glm::radians(15.0f * static_cast<float>(f + 1) * static_cast<float>(b + 1)),
+					glm::vec3(0.0f, 0.0f, 1.0f));
+				animations.samples.push_back(pose);
+			}
+
+		animations.clips = { clip };
+		return animations;
+	}
+}
+
+// The gate the whole feature rests on: an appended bone must change where nothing lands. If a
+// remapped pairing skins one vertex differently from the pairing it was cooked as, the remap has
+// silently mis-posed the rig -- which is the failure skeletonSignature exists to prevent.
+TEST_CASE("A remapped mesh and clip set skin exactly as the cooked pair did", "[skinning][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 1, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+	fixture.Add(
+		glm::vec3(-4.0f, 0.5f, 7.25f),
+		glm::vec3(1.0f, 0.0f, 0.0f),
+		{ { 2, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	fixture.mesh.submeshes         = { fixture.submesh };
+	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
+	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
+
+	auto clips = ClipsFor(cooked);
+
+	const auto before = skinSubmesh(
+		fixture.mesh,
+		fixture.mesh.submeshes[0],
+		skinningMatrices(cooked, poseModelTransforms(cooked, clips, 0, 1)));
+
+	// A socket on the spine: the depth-first walk places it before head, so head slides 2 -> 3.
+	const auto grown =
+		RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	REQUIRE_FALSE(meshMatchesSkeleton(fixture.mesh, grown));
+	REQUIRE(remapAnimations(clips, grown));
+	REQUIRE(remapMesh(fixture.mesh, grown));
+	CHECK(meshMatchesSkeleton(fixture.mesh, grown));
+
+	const auto after = skinSubmesh(
+		fixture.mesh,
+		fixture.mesh.submeshes[0],
+		skinningMatrices(grown, poseModelTransforms(grown, clips, 0, 1)));
+
+	REQUIRE(after.size() == before.size());
+	for (size_t v = 0; v < before.size(); ++v)
+	{
+		INFO("vertex " << v);
+		CHECK(after[v].position.x == Catch::Approx(before[v].position.x));
+		CHECK(after[v].position.y == Catch::Approx(before[v].position.y));
+		CHECK(after[v].position.z == Catch::Approx(before[v].position.z));
+		CHECK(after[v].blendedNormal.x == Catch::Approx(before[v].blendedNormal.x));
+		CHECK(after[v].blendedNormal.y == Catch::Approx(before[v].blendedNormal.y));
+	}
+}
+
+TEST_CASE(
+	"remapMesh refuses a weighted vertex naming a bone the rig never had",
+	"[skinning][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 7, 0, 0, 0 } },  // no such bone, and it carries all the weight
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	fixture.mesh.submeshes         = { fixture.submesh };
+	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
+	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
+
+	const auto grown =
+		RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	const std::vector<std::byte> untouched = fixture.mesh.vertexData;
+
+	CHECK_FALSE(remapMesh(fixture.mesh, grown));
+	CHECK(fixture.mesh.vertexData == untouched);
+	CHECK(fixture.mesh.skeletonSignature == skeletonSignature(cooked));
+}
+
+TEST_CASE("remapMesh zeroes an unweighted influence it cannot place", "[skinning][remap]")
+{
+	// decodeInfluences accepts an out-of-range joint whose weight is zero, so a mesh may carry one
+	// -- but SkinMatrix fetches all four palette matrices whatever their weights and
+	// AssertBoneIndices checks all four, so leaving it would read off the end of the palette and
+	// fail a GPU_DEBUG build.
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 2, 9, 0, 0 } },  // bone 2 carries everything; 9 does not exist and carries nothing
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	fixture.mesh.submeshes         = { fixture.submesh };
+	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
+	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
+
+	const auto grown =
+		RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	REQUIRE(remapMesh(fixture.mesh, grown));
+
+	// head moved 2 -> 3; the index that named nothing is now a bone that exists and weighs nothing.
+	uint16_t first  = 0;
+	uint16_t second = 0;
+	std::memcpy(&first, fixture.mesh.vertexData.data() + 24, sizeof(first));
+	std::memcpy(&second, fixture.mesh.vertexData.data() + 26, sizeof(second));
+	CHECK(first == 3);
+	CHECK(second == 0);
+
+	// And every index the mesh now carries is one the grown rig holds -- what the GPU asserts.
+	CHECK(first < grown.bones.size());
+	CHECK(second < grown.bones.size());
+}
+
+// ADR-5's gate. Both derived bakes are keyed on something an append used to move, so the load
+// succeeded and then re-measured -- 131 ms of posed bounds on the reference rig, plus plant
+// weights, on every load. Neither measurement changes: a bone with no weight sweeps no box and
+// moves no sole. These pin that the keys now say so, and that they still move for an edit that
+// does change what they key.
+TEST_CASE("An added bone does not move the posed-bounds key", "[skinning][perf][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 1, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+	fixture.Add(
+		glm::vec3(-4.0f, 0.5f, 7.25f),
+		glm::vec3(1.0f, 0.0f, 0.0f),
+		{ { 2, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	fixture.mesh.submeshes         = { fixture.submesh };
+	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
+	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
+
+	const uint64_t before = posedBoundsSignature(fixture.mesh, cooked);
+
+	SECTION("a socket added to the rig leaves it alone")
+	{
+		// The case the feature exists for: a clips-only group stranded against a rig that grew.
+		// Appended last and hung off `head`, so every index the mesh names still means the bone it
+		// was cooked against, and the socket sits at a depth no other bone has -- its inverse bind
+		// is distinct, so an equal key is evidence it was skipped rather than a collision.
+		const auto grown =
+			RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 }, { "grip", 2 } });
+
+		REQUIRE(grown.bones[3].inverseBind != grown.bones[2].inverseBind);
+		CHECK(posedBoundsSignature(fixture.mesh, grown) == before);
+	}
+
+	SECTION("remapping the mesh itself moves it, and narrowing cannot reach that")
+	{
+		// remapMesh rewrites kJoints0 *inside* vertexData, which this hashes wholesale, so the
+		// bytes genuinely differ. Such a pairing re-measures once per load until migrate bakes the
+		// remap down and the box with it.
+		const auto grown =
+			RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		auto remapped = fixture.mesh;
+		REQUIRE(remapMesh(remapped, grown));
+
+		CHECK(posedBoundsSignature(remapped, grown) != before);
+	}
+
+	SECTION("but re-authoring a weighted bone's rest pose moves it")
+	{
+		auto edited = cooked;
+		edited.bones[1].inverseBind =
+			glm::translate(edited.bones[1].inverseBind, glm::vec3(0.0f, 0.5f, 0.0f));
+
+		CHECK(posedBoundsSignature(fixture.mesh, edited) != before);
+	}
+
+	SECTION("and so does moving a vertex")
+	{
+		auto moved = fixture.mesh;
+		moved.vertexData[0] ^= std::byte{ 0x01 };
+
+		CHECK(posedBoundsSignature(moved, cooked) != before);
+	}
+}
+
+// This number is written into every baked PosedBox and compared byte-for-byte on the way back in,
+// so moving it strands every box already on disk -- silently, since a mismatch is a fallback and
+// not an error, and the .banim's own cache key knows nothing about it. Cooking the geometry half
+// did move it once, by hashing the cooked value instead of chaining on it. So the shape is pinned:
+// the geometry signature *is* the running hash, and the weighted bones chain onto it.
+TEST_CASE("The posed-bounds key chains onto the geometry signature", "[skinning][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 2, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+	fixture.mesh.submeshes = { fixture.submesh };
+
+	// Bones 0 and 2 carry weight, bone 1 does not -- so this also states which bones are chained.
+	uint64_t expected = geometrySignature(fixture.mesh);
+	expected          = core::hash_pod(cooked.bones[0].inverseBind, expected);
+	expected          = core::hash_pod(cooked.bones[2].inverseBind, expected);
+
+	CHECK(posedBoundsSignature(fixture.mesh, cooked) == expected);
+}
+
+// The cooked hash is an optimisation, so the one thing it must never do is answer differently
+// from the walk it replaces -- a mesh read off disk and the same mesh built in memory key the same.
+TEST_CASE("The cooked geometry hash and the walk agree", "[skinning][perf][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 1, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+
+	// Weighted to the last bone, so an insert ahead of it actually renumbers something -- a remap
+	// that moved no index would leave the blob alone and prove nothing below.
+	fixture.Add(
+		glm::vec3(-4.0f, 0.5f, 7.25f),
+		glm::vec3(1.0f, 0.0f, 0.0f),
+		{ { 2, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+	fixture.mesh.submeshes = { fixture.submesh };
+
+	REQUIRE(fixture.mesh.geometrySignature == 0);
+	const uint64_t walked = posedBoundsSignature(fixture.mesh, cooked);
+
+	SECTION("a mesh carrying the cook's answer keys identically")
+	{
+		auto carried              = fixture.mesh;
+		carried.geometrySignature = geometrySignature(carried);
+
+		CHECK(posedBoundsSignature(carried, cooked) == walked);
+	}
+
+	SECTION("remapMesh clears it, because the blob it described has been rewritten")
+	{
+		const auto grown =
+			RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		auto remapped              = fixture.mesh;
+		remapped.skeletonSignature = skeletonSignature(cooked);
+		remapped.skeletonBoneNames = skeletonBoneNames(cooked);
+		remapped.geometrySignature = geometrySignature(remapped);
+
+		REQUIRE(remapMesh(remapped, grown));
+		CHECK(remapped.geometrySignature == 0);
+
+		// And the cleared field is not merely tidy: the rewritten blob hashes to something else,
+		// so keeping the old one would have kept a box measured on the indices it replaced.
+		CHECK(geometrySignature(remapped) != geometrySignature(fixture.mesh));
+	}
+}
+
+TEST_CASE("An added bone does not move the plant-weights key", "[skinning][perf][remap]")
+{
+	const auto cooked =
+		RigFrom({ { "hips", c_InvalidIndex }, { "knee", 0 }, { "ankle", 1 }, { "toe", 2 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(0.0f, 0.0f, 0.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 3, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	fixture.mesh.submeshes         = { fixture.submesh };
+	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
+	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
+
+	auto avatar = ResolvedAvatar();
+	avatar.legs = { AvatarLegChain{ 0, 1, 2, 3 } };
+
+	const auto     meshes = std::span<const BMesh>(&fixture.mesh, 1);
+	const uint64_t before = plantWeightsSignature(meshes, cooked, avatar);
+
+	SECTION("a socket added beside the leg leaves it alone")
+	{
+		// Appended last, so the leg keeps its indices and only the rig's bone count moves --
+		// exactly what skeletonSignature used to catch and should not have.
+		const auto grown = RigFrom(
+			{ { "hips", c_InvalidIndex },
+		      { "knee", 0 },
+		      { "ankle", 1 },
+		      { "toe", 2 },
+		      { "grip", 0 } });
+
+		auto remapped = fixture.mesh;
+		REQUIRE(remapMesh(remapped, grown));
+
+		const auto grownMeshes = std::span<const BMesh>(&remapped, 1);
+		CHECK(plantWeightsSignature(grownMeshes, grown, avatar) == before);
+	}
+
+	SECTION("but re-authoring a leg bone's rest pose moves it")
+	{
+		auto edited = cooked;
+		edited.bones[2].bindPose.translation.y += 0.25f;
+
+		CHECK(plantWeightsSignature(meshes, edited, avatar) != before);
+	}
+
+	SECTION("and so does re-authoring the inverse bind of a leg bone nothing is weighted to")
+	{
+		// The ankle carries no mesh weight here -- only the toe does -- so posedBoundsSignature
+		// narrows it away and this key is the only thing left covering it. solePlanes carries
+		// every sole through `inverseBind[ankle]`, and glTF authors that separately from the
+		// local rest pose, so a rig that re-exported one and not the other must not match.
+		REQUIRE_FALSE(WeightedInMesh(fixture.mesh, 2));
+
+		auto edited = cooked;
+		edited.bones[2].inverseBind =
+			glm::translate(edited.bones[2].inverseBind, glm::vec3(0.0f, 0.0f, 0.125f));
+
+		CHECK(plantWeightsSignature(meshes, edited, avatar) != before);
+	}
+
+	SECTION("and renaming a leg bone moves it")
+	{
+		auto renamed                = cooked;
+		renamed.bones[2].nameOffset = renamed.stringPool.add("shin");
+
+		CHECK(plantWeightsSignature(meshes, renamed, avatar) != before);
 	}
 }

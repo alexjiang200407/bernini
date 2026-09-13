@@ -287,6 +287,10 @@ namespace assetlib
 		}
 
 		mesh.vertexData = std::move(rebuilt);
+
+		// The blob and the layouts addressing it have both changed, so a hash cooked against the
+		// old ones describes geometry this mesh no longer holds.
+		mesh.geometrySignature = 0;
 		return result;
 	}
 }

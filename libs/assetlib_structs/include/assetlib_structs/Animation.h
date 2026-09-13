@@ -106,6 +106,13 @@ namespace assetlib
 		uint64_t    skeletonSignature = 0;
 		uint32_t    boneCount         = 0;
 
+		/**
+		 * The cooked rig's bone names, in bone order -- what matches these samples to a rig that
+		 * has grown a bone since, rather than refusing it. Empty in a file written before the list
+		 * existed, which is a pairing only the signature can check.
+		 */
+		std::vector<std::string> skeletonBoneNames;
+
 		std::vector<AnimationClip> clips;
 		std::vector<Transform>     samples;
 		core::string_pool          stringPool;

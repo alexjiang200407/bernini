@@ -11,11 +11,13 @@
 #include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 using namespace assetlib;
 
@@ -62,6 +64,7 @@ namespace
 
 		mesh.skeleton          = "Derived/Skeletons/chain.bskel";
 		mesh.skeletonSignature = skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 		return mesh;
 	}
 
@@ -72,6 +75,7 @@ namespace
 		AnimationSet animations;
 		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
 		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.skeletonBoneNames = skeletonBoneNames(skeleton);
 		animations.skeleton          = "Derived/Animations/walk.bskel";
 
 		AnimationClip clip{};
@@ -172,6 +176,316 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 	}
 }
 
+TEST_CASE("skeletonBoneNames answers in bone order", "[skeleton]")
+{
+	const auto skeleton = MakeChain();
+	const auto names    = skeletonBoneNames(skeleton);
+
+	REQUIRE(names.size() == skeleton.bones.size());
+	for (size_t i = 0; i < names.size(); ++i)
+		CHECK(names[i] == skeleton.stringPool.at(skeleton.bones[i].nameOffset));
+}
+
+namespace
+{
+	/** A rig built from `{name, parent}` pairs, in the order given. */
+	Skeleton
+	MakeRig(const std::vector<std::pair<const char*, uint32_t>>& bones)
+	{
+		Skeleton skeleton;
+		for (const auto& [name, parent] : bones)
+		{
+			Bone bone{};
+			bone.bindPose   = IdentityTransform();
+			bone.parent     = parent;
+			bone.nameOffset = skeleton.stringPool.add(name);
+			skeleton.bones.push_back(bone);
+		}
+		return skeleton;
+	}
+}
+
+TEST_CASE("the factored signature is the one already on disk", "[skeleton][canary]")
+{
+	// Every .bskel, .banim and .bmesh stores a signature computed by the loop below. Factoring it
+	// into hashBones must not have moved the value by a bit: nothing compares a stored signature
+	// against a recomputed one in this suite -- both sides of every other check are computed fresh,
+	// so they would agree with each other while disagreeing with every file already written.
+	const auto skeleton = MakeChain();
+
+	uint64_t expected = core::hash_seed();
+	for (const Bone& bone : skeleton.bones)
+	{
+		expected = core::hash_string(skeleton.stringPool.at(bone.nameOffset), expected);
+		expected = core::hash_pod(bone.parent, expected);
+	}
+
+	CHECK(skeletonSignature(skeleton) == expected);
+}
+
+TEST_CASE("skeletonRemap accepts a rig that only grew", "[skeleton][remap]")
+{
+	const auto cooked    = MakeChain();  // hips -> spine -> head
+	const auto names     = skeletonBoneNames(cooked);
+	const auto signature = skeletonSignature(cooked);
+
+	SECTION("the same rig maps every bone to itself")
+	{
+		const auto remap = skeletonRemap(names, signature, cooked);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 2 });
+	}
+
+	SECTION("a bone appended at the end leaves the old indices alone")
+	{
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 }, { "prop", 0 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 2 });
+	}
+
+	SECTION("a bone inserted mid-hierarchy shifts them")
+	{
+		// What a socket added to the spine looks like once the depth-first walk has placed it.
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 3 });
+	}
+
+	SECTION("a corrective inserted *between* two bones is an append, not a reparent")
+	{
+		// head's parent is now `twist`, which the cooked rig never had -- so the test that matters
+		// is the nearest ancestor it did have, which is still spine.
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "twist", 1 }, { "head", 2 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 3 });
+	}
+
+	SECTION("a reorder is a bijection by name and maps through")
+	{
+		// Needs a branching rig: a chain has exactly one topological order, so there is nothing to
+		// permute. Bone order is seeded from `skin.joints` order, so an exporter version change
+		// swaps two siblings with no rig edit at all -- every parent is still the same bone by
+		// name, so the reconstruction holds and the clips are not stranded.
+		const auto forked = MakeRig({ { "hips", c_InvalidIndex }, { "armL", 0 }, { "armR", 0 } });
+		const auto forkedNames     = skeletonBoneNames(forked);
+		const auto forkedSignature = skeletonSignature(forked);
+
+		const auto swapped = MakeRig({ { "hips", c_InvalidIndex }, { "armR", 0 }, { "armL", 0 } });
+		REQUIRE(skeletonSignature(swapped) != forkedSignature);
+
+		const auto remap = skeletonRemap(forkedNames, forkedSignature, swapped);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 2, 1 });
+	}
+}
+
+TEST_CASE("skeletonRemap refuses what genuinely lost its target", "[skeleton][remap]")
+{
+	const auto cooked    = MakeChain();
+	const auto names     = skeletonBoneNames(cooked);
+	const auto signature = skeletonSignature(cooked);
+
+	SECTION("a rename has no bone to resolve to")
+	{
+		const auto renamed = MakeRig({ { "hips", c_InvalidIndex }, { "chest", 0 }, { "head", 1 } });
+		CHECK_FALSE(skeletonRemap(names, signature, renamed).has_value());
+	}
+
+	SECTION("a deletion likewise")
+	{
+		const auto deleted = MakeRig({ { "hips", c_InvalidIndex }, { "head", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, deleted).has_value());
+	}
+
+	SECTION("a reparent resolves every name and must still be refused")
+	{
+		// The case that pins ADR-4: head moved off spine and onto hips. Name resolution alone
+		// accepts this and poses the rig wrongly with nothing to show for it.
+		const auto reparented =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, reparented).has_value());
+	}
+
+	SECTION("two bones of one name leave 'which bone' unanswerable")
+	{
+		const auto ambiguous =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 }, { "spine", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, ambiguous).has_value());
+	}
+
+	SECTION("a container written before the name list existed carries nothing to resolve")
+	{
+		CHECK_FALSE(skeletonRemap({}, signature, cooked).has_value());
+	}
+}
+
+namespace
+{
+	/** MakeClipSet with a second clip behind it, so a nonzero `firstSample` is exercised. */
+	AnimationSet
+	MakeTwoClipSet(const Skeleton& skeleton, const uint32_t frames)
+	{
+		auto animations = MakeClipSet(skeleton, frames, 2.0f);
+
+		AnimationClip second{};
+		second.nameOffset  = animations.stringPool.add("idle");
+		second.firstSample = static_cast<uint32_t>(animations.samples.size());
+		second.frameCount  = frames;
+		second.sampleRate  = 30.0f;
+		second.duration    = static_cast<float>(frames - 1) / 30.0f;
+
+		for (uint32_t f = 0; f < frames; ++f)
+			for (uint32_t b = 0; b < animations.boneCount; ++b)
+			{
+				Transform pose = skeleton.bones[b].bindPose;
+				if (b == 0)
+					pose.translation.x = static_cast<float>(f);
+				animations.samples.push_back(pose);
+			}
+
+		animations.clips.push_back(second);
+		return animations;
+	}
+}
+
+TEST_CASE("remapAnimations poses a grown rig exactly as the cooked one posed", "[skeleton][remap]")
+{
+	const auto cooked = MakeChain();  // hips -> spine -> head
+	auto       clips  = MakeClipSet(cooked, 4, 2.0f);
+
+	// The rig with a socket hung off the spine, which the depth-first walk places before head --
+	// so head moves from index 2 to 3 and every clip's samples now name the wrong bones.
+	auto grown =
+		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+	grown.bones[2].bindPose.translation = glm::vec3(9.0f, 9.0f, 9.0f);
+
+	REQUIRE_FALSE(animationsMatchSkeleton(clips, grown));
+
+	// What the cooked pairing produced, before anything is touched.
+	auto before = std::vector<std::vector<glm::mat4>>();
+	for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+		before.push_back(poseModelTransforms(cooked, clips, 0, frame));
+
+	REQUIRE(remapAnimations(clips, grown));
+	CHECK(animationsMatchSkeleton(clips, grown));
+	CHECK(clips.boneCount == 4);
+
+	for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+	{
+		const auto after = poseModelTransforms(grown, clips, 0, frame);
+		REQUIRE(after.size() == 4);
+
+		// Every surviving bone lands where it did, at its new index.
+		CHECK(after[0] == before[frame][0]);  // hips
+		CHECK(after[1] == before[frame][1]);  // spine
+		CHECK(after[3] == before[frame][2]);  // head, moved 2 -> 3
+	}
+
+	SECTION("and the added bone holds its bind pose in every frame")
+	{
+		// Its *local* sample, not its model transform: a grip hung off the spine has to travel
+		// with the spine, so what stays at bind is the bone's own offset from its parent.
+		const Transform& bind = grown.bones[2].bindPose;
+		for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+		{
+			const Transform& sample = clips.samples[frame * clips.boneCount + 2];
+			CHECK(sample.translation == bind.translation);
+			CHECK(sample.rotation == bind.rotation);
+			CHECK(sample.scale == bind.scale);
+		}
+	}
+}
+
+TEST_CASE("remapAnimations keeps the frame each clip starts on", "[skeleton][remap]")
+{
+	// findPlantWeights reads a clip's start as `firstSample / boneCount`, so a re-stride that
+	// renumbered frames would leave every baked weight addressing the wrong pose. Two clips,
+	// because a lone clip starts at 0 and 0 survives any arithmetic -- including wrong arithmetic.
+	const auto cooked = MakeChain();
+	auto       clips  = MakeTwoClipSet(cooked, 4);
+
+	REQUIRE(clips.clips.size() == 2);
+	REQUIRE(clips.clips[1].firstSample > 0);
+
+	const uint32_t firstStart  = clips.clips[0].firstSample / clips.boneCount;
+	const uint32_t secondStart = clips.clips[1].firstSample / clips.boneCount;
+	REQUIRE(secondStart == 4);
+
+	auto before = std::vector<std::vector<glm::mat4>>();
+	for (uint32_t frame = 0; frame < clips.clips[1].frameCount; ++frame)
+		before.push_back(poseModelTransforms(cooked, clips, 1, frame));
+
+	const auto grown =
+		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	REQUIRE(remapAnimations(clips, grown));
+
+	CHECK(clips.clips[0].firstSample % clips.boneCount == 0);
+	CHECK(clips.clips[1].firstSample % clips.boneCount == 0);
+	CHECK(clips.clips[0].firstSample / clips.boneCount == firstStart);
+	CHECK(clips.clips[1].firstSample / clips.boneCount == secondStart);
+
+	// The offset itself moved, since the stride did -- what held is the frame it names.
+	CHECK(clips.clips[1].firstSample == secondStart * clips.boneCount);
+
+	// And the second clip still poses what it posed, at the bones' new indices.
+	for (uint32_t frame = 0; frame < clips.clips[1].frameCount; ++frame)
+	{
+		const auto after = poseModelTransforms(grown, clips, 1, frame);
+		CHECK(after[0] == before[frame][0]);
+		CHECK(after[1] == before[frame][1]);
+		CHECK(after[3] == before[frame][2]);
+	}
+}
+
+TEST_CASE("remapAnimations refuses a clip that does not start on a frame", "[skeleton][remap]")
+{
+	// The condition findPlantWeights already refuses a clip for. Rewriting one would divide the
+	// remainder away and land it in the middle of another clip's frames.
+	const auto cooked = MakeChain();
+	auto       clips  = MakeTwoClipSet(cooked, 4);
+	clips.clips[1].firstSample += 1;
+
+	const auto grown =
+		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	CHECK_FALSE(remapAnimations(clips, grown));
+	CHECK(clips.boneCount == cooked.bones.size());
+}
+
+TEST_CASE("remapAnimations leaves a clip set it cannot resolve alone", "[skeleton][remap]")
+{
+	const auto cooked   = MakeChain();
+	const auto original = MakeClipSet(cooked, 4, 2.0f);
+
+	const auto reparented = MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 0 } });
+
+	auto clips = original;
+	CHECK_FALSE(remapAnimations(clips, reparented));
+
+	// Not partially rewritten: a refusal that had already re-strided the pool would leave the
+	// caller a container that matches neither rig.
+	CHECK(clips.boneCount == original.boneCount);
+	REQUIRE(clips.samples.size() == original.samples.size());
+	for (size_t i = 0; i < clips.samples.size(); ++i)
+	{
+		CHECK(clips.samples[i].translation == original.samples[i].translation);
+		CHECK(clips.samples[i].rotation == original.samples[i].rotation);
+		CHECK(clips.samples[i].scale == original.samples[i].scale);
+	}
+	CHECK(clips.skeletonSignature == original.skeletonSignature);
+	CHECK(clips.clips[0].firstSample == original.clips[0].firstSample);
+}
+
 TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 {
 	const auto skeleton   = MakeChain();
@@ -182,6 +496,7 @@ TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 	CHECK(restored.skeleton == animations.skeleton);
 	CHECK(restored.skeletonSignature == animations.skeletonSignature);
 	CHECK(restored.boneCount == animations.boneCount);
+	CHECK(restored.skeletonBoneNames == animations.skeletonBoneNames);
 	CHECK(restored.stringPool == animations.stringPool);
 	REQUIRE(restored.clips.size() == 1);
 	REQUIRE(restored.samples.size() == animations.samples.size());

@@ -4,11 +4,14 @@
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
+#include <assetlib/skinning.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <core/glm.h>
 
 #include <cstddef>
 #include <filesystem>
@@ -314,4 +317,50 @@ TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
 	std::filesystem::remove(root.path / "Authored/Meshes/unit.glb");
 
 	CHECK_THROWS(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
+}
+
+// The half of the bake-down that has no second chance. A loose project can run `migrate` later; an
+// archive is read-only, so a pairing left mismatched here re-addresses on every load of the shipped
+// game, and its posed box re-measures with it, for as long as it ships.
+TEST_CASE("pack bakes down a grown rig's re-addressing", "[pak][remap]")
+{
+	const DataRoot          root("bernini_pack_remap");
+	const test::SkinnedGltf source("bernini_pack_remap_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	const auto store = AssetStore(root.path);
+
+	{
+		auto skeleton = store.Load<Skeleton>("Derived/Skeletons/unit.bskel");
+
+		auto grip       = Bone();
+		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
+			                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                glm::vec3(1.0f) };
+		grip.parent     = 0;
+		grip.nameOffset = skeleton.stringPool.add("grip");
+		skeleton.bones.push_back(grip);
+
+		const auto binds = bindPoseModelTransforms(skeleton);
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+
+		store.Save(skeleton, "Derived/Skeletons/unit.bskel");
+	}
+
+	// Mismatched on disk, and deliberately left that way: pack is what has to notice.
+	const Skeleton grown = store.Load<Skeleton>("Derived/Skeletons/unit.bskel");
+	REQUIRE_FALSE(meshMatchesSkeleton(store.Load<BMesh>("Derived/Meshes/unit.bmesh"), grown));
+
+	static_cast<void>(store.Pack(PackDesc{ root.path / "Data.bpak" }));
+
+	// Read back out of the archive, not off disk: the loose files are deliberately still stale.
+	const AssetStore shipped(root.path, std::make_shared<PakFile>(root.path / "Data.bpak"));
+
+	const auto archivedRig   = shipped.Load<Skeleton>("Derived/Skeletons/unit.bskel");
+	const auto archivedMesh  = shipped.Load<BMesh>("Derived/Meshes/unit.bmesh");
+	const auto archivedClips = shipped.Load<AnimationSet>("Derived/Animations/unit.banim");
+
+	CHECK(meshMatchesSkeleton(archivedMesh, archivedRig));
+	CHECK(animationsMatchSkeleton(archivedClips, archivedRig));
 }

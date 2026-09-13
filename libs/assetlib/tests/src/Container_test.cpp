@@ -1,5 +1,6 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib_structs/BMesh.h>
 
 #include "cache_io.h"
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -115,11 +117,102 @@ TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleto
 	auto mesh              = MakeSampleMesh();
 	mesh.skeleton          = "Derived/Skeletons/unit.bskel";
 	mesh.skeletonSignature = 0xfeedfacecafebeefull;
+	mesh.skeletonBoneNames = { "hip", "knee", "ankle" };
 
 	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
 
 	CHECK(restored.skeleton == mesh.skeleton);
 	CHECK(restored.skeletonSignature == mesh.skeletonSignature);
+	CHECK(restored.skeletonBoneNames == mesh.skeletonBoneNames);
+}
+
+// A file written before the list existed reads as no names at all, which is the one state the
+// remap has to tell apart from a rig that genuinely has none.
+TEST_CASE("a mesh with no stored bone names round-trips as empty", "[bmesh][io][skeleton]")
+{
+	auto mesh              = MakeSampleMesh();
+	mesh.skeleton          = "Derived/Skeletons/unit.bskel";
+	mesh.skeletonSignature = 0xfeedfacecafebeefull;
+
+	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+
+	CHECK(restored.skeletonBoneNames.empty());
+}
+
+// The field exists so a load does not walk the vertex blob to learn what the cook already knew.
+// These pin the two halves of that: the codec writes a true one, and a reader that finds none
+// computes the same answer rather than a different one.
+TEST_CASE("a mesh's geometry signature is written by the codec, not carried in", "[bmesh][io]")
+{
+	auto mesh = MakeSampleMesh();
+
+	SECTION("a cooked file carries the hash of its own geometry")
+	{
+		const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+
+		CHECK(restored.geometrySignature != 0);
+		CHECK(restored.geometrySignature == geometrySignature(mesh));
+	}
+
+	SECTION("a value carried in on the struct is ignored, not trusted")
+	{
+		// The whole reason the codec computes rather than copies: a producer that rewrote the blob
+		// and forgot the field must not be able to write a file that lies about its own geometry.
+		mesh.geometrySignature = 0xdeadbeefdeadbeefull;
+
+		const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+
+		CHECK(restored.geometrySignature != 0xdeadbeefdeadbeefull);
+		CHECK(restored.geometrySignature == geometrySignature(mesh));
+	}
+
+	SECTION("moving a vertex moves it")
+	{
+		const uint64_t before = geometrySignature(mesh);
+
+		auto moved = mesh;
+		moved.vertexData[0] ^= std::byte{ 0x01 };
+
+		CHECK(geometrySignature(moved) != before);
+	}
+
+	SECTION("regrouping the entries over identical bytes moves it")
+	{
+		const uint64_t before = geometrySignature(mesh);
+
+		auto regrouped = mesh;
+		REQUIRE(regrouped.submeshes[0].vertexCount > 1);
+		--regrouped.submeshes[0].vertexCount;
+
+		CHECK(geometrySignature(regrouped) != before);
+	}
+
+	SECTION("a mesh with no stored signature reads as zero, and means recompute")
+	{
+		// Zero is the one value geometrySignature never returns, so "not recorded" can never be
+		// confused with a geometry that happened to hash there.
+		auto bare              = MakeSampleMesh();
+		bare.geometrySignature = 0;
+
+		CHECK(geometrySignature(bare) != 0);
+	}
+}
+
+// residentBytes is what charges a cached container to its memory tag, and its own comment asks
+// that a field added later not be silently free -- so the bone names are charged like any other
+// vector it holds.
+TEST_CASE("a mesh's bone names are charged to its resident bytes", "[bmesh][memory]")
+{
+	const auto bare = MakeSampleMesh();
+
+	auto named              = bare;
+	named.skeletonBoneNames = { "hip", "knee", "ankle" };
+
+	const uint64_t names = std::string("hip").size() + std::string("knee").size() +
+	                       std::string("ankle").size() +
+	                       3 * sizeof(std::string);  // stringVectorBytes charges both
+
+	CHECK(residentBytes(named) == residentBytes(bare) + names);
 }
 
 TEST_CASE("deserialize rejects a corrupt magic", "[bmesh][io]")

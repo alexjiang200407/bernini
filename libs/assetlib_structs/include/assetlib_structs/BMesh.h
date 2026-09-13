@@ -41,6 +41,20 @@ namespace assetlib
 		/** The rig the joint indices were cooked against -- see assetlib::skeletonSignature. */
 		uint64_t skeletonSignature = 0;
 
+		/**
+		 * That rig's bone names, in bone order -- what matches these joint indices to a rig that
+		 * has grown a bone since, rather than refusing it. Empty in a file written before the list
+		 * existed, and for a static mesh, which addresses no bone.
+		 */
+		std::vector<std::string> skeletonBoneNames;
+
+		/**
+		 * The geometry this file holds, hashed at cook time by assetlib::geometrySignature. Zero
+		 * means "not recorded" -- an older file, or a blob rewritten in memory since it was read --
+		 * and a reader that finds zero computes it. Written by the codec, never by a producer.
+		 */
+		uint64_t geometrySignature = 0;
+
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

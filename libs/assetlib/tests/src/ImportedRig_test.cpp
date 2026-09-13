@@ -441,6 +441,44 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		CHECK(assetlib::AssetStore(root.Data()).FindMatchingSkeleton(other).empty());
 	}
 
+	// A rig that has grown a bone since a file was exported still addresses every bone that file
+	// has. Refusing it is what stranded a clip library behind an appended socket.
+	SECTION("a project rig that has since grown a bone is still the rig these clips attach to")
+	{
+		assetlib::Skeleton grown = imported.skeleton;
+
+		auto grip       = assetlib::Bone();
+		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
+			                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                glm::vec3(1.0f) };
+		grip.parent     = 0;
+		grip.nameOffset = grown.stringPool.add("grip");
+		grown.bones.push_back(grip);
+
+		const auto binds = assetlib::bindPoseModelTransforms(grown);
+		for (size_t i = 0; i < grown.bones.size(); ++i)
+			grown.bones[i].inverseBind = glm::inverse(binds[i]);
+
+		// The project now holds only the grown rig, which is what an editor append leaves behind.
+		SaveAt(grown, root.Bskel());
+
+		CHECK(
+			assetlib::AssetStore(root.Data()).FindMatchingSkeleton(imported.skeleton) ==
+			root.Bskel());
+
+		SECTION("and an exact match still wins over it")
+		{
+			// Both on disk: the rig as it was, and the rig as it grew. Binding to the grown one
+			// would re-address a file that needed no re-addressing.
+			const fs::path exact =
+				root.Data() / assetlib::c_SkeletonsDirectoryName / "coyote_exact.bskel";
+			SaveAt(imported.skeleton, exact);
+
+			CHECK(
+				assetlib::AssetStore(root.Data()).FindMatchingSkeleton(imported.skeleton) == exact);
+		}
+	}
+
 	// The signature covers names and parents and deliberately not the bind pose, which is what lets
 	// a per-animation export whose rest pose drifted still attach: a clip replaces the pose whole.
 	SECTION("a rig whose rest pose moved is still a match")

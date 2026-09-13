@@ -14,7 +14,9 @@
 #include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <assetlib_structs/magic.h>
+#include <concepts>
 #include <core/err/util.h>
+#include <mutex>
 
 #include "MountedFileReader.h"
 #include "cache_io.h"
@@ -279,6 +281,7 @@ namespace assetlib
 		{
 			current.mesh.skeleton          = group.document->skeleton;
 			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
+			current.mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
 			core::throw_runtime_error_if(
 				current.mesh.skeleton.empty(),
 				"'{}': its source carries a rig but the import document beside it names no "
@@ -370,5 +373,52 @@ namespace assetlib
 		bakePosedBounds(clips, mesh, skeleton);
 
 		return clips;
+	}
+
+	Skeleton
+	RigResolver::Resolve(const AssetStore& store, const std::string_view key)
+	{
+		{
+			const std::lock_guard lock(m_Mutex);
+			if (const auto it = m_Rigs.find(key); it != m_Rigs.end())
+				return it->second;
+		}
+
+		// Resolved outside the lock: a stale rig re-cooks from its source, and holding the lock
+		// across that parse would queue every other container behind it. Two threads racing one
+		// rig both resolve it and agree -- a parse spent, and nothing else.
+		Skeleton rig = store.LoadRegenSkeleton(key);
+
+		const std::lock_guard lock(m_Mutex);
+		return m_Rigs.try_emplace(std::string(key), std::move(rig)).first->second;
+	}
+
+	namespace
+	{
+		template <typename T, std::invocable<T&, const Skeleton&> Remap>
+		void
+		remapIfGrown(RigResolver& rigs, const AssetStore& store, T& container, Remap&& remap)
+		{
+			if (container.skeleton.empty())
+				return;
+
+			const Skeleton rig = rigs.Resolve(store, container.skeleton);
+			if (container.skeletonSignature == skeletonSignature(rig))
+				return;
+
+			(void)remap(container, rig);
+		}
+	}
+
+	void
+	remapToItsRig(RigResolver& rigs, const AssetStore& store, AnimationSet& clips)
+	{
+		remapIfGrown(rigs, store, clips, remapAnimations);
+	}
+
+	void
+	remapToItsRig(RigResolver& rigs, const AssetStore& store, BMesh& mesh)
+	{
+		remapIfGrown(rigs, store, mesh, remapMesh);
 	}
 }

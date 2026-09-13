@@ -48,6 +48,71 @@ namespace assetlib
 	skeletonSignature(const Skeleton& skeleton) noexcept;
 
 	/**
+	 * Every bone's name, in bone order -- what a derived container stores beside the signature so a
+	 * rig that has changed since can be matched to it by name.
+	 *
+	 * The signature is a hash and answers only "the same or not"; this answers "which bone", which
+	 * is what an append needs. Stored rather than read back off the `.bskel`, because the edit that
+	 * makes the question worth asking is the one that already rewrote the `.bskel`.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	skeletonBoneNames(const Skeleton& skeleton);
+
+	/**
+	 * Where each of a cooked container's bones sits in `skeleton` now: `[oldIndex] -> newIndex`, or
+	 * nullopt when the two are not the same rig grown.
+	 *
+	 * A signature mismatch says only "not the same rig", and for the routine skeleton edit -- a
+	 * bone added -- nothing was invalidated: every old bone is still there under its own name. So
+	 * every cooked name is resolved in `skeleton`, each bone's nearest ancestor that the cooked rig
+	 * also had is taken as what its parent must have been, and that reconstruction is hashed by
+	 * skeletonSignature's own rule and checked against `cookedSignature`. Equal means the
+	 * reconstruction held and the indices may be remapped; anything else is refused.
+	 *
+	 * Accepts an added bone, a reordered one, and a corrective inserted *between* two existing
+	 * bones -- the child's nearest surviving ancestor is unchanged. Refuses a rename, a deletion, a
+	 * bone moved to another chain, and a rig carrying two bones of one name, where "which bone" has
+	 * no answer.
+	 *
+	 * `cookedBoneNames` empty is refused rather than trusted: a container written before the list
+	 * existed carries no names to resolve, and its signature has already disagreed.
+	 */
+	[[nodiscard]] std::optional<std::vector<uint32_t>>
+	skeletonRemap(
+		std::span<const std::string> cookedBoneNames,
+		uint64_t                     cookedSignature,
+		const Skeleton&              skeleton);
+
+	/**
+	 * Re-address `animations` to `skeleton`, whose bones skeletonRemap says are the cooked rig's
+	 * grown. True when it did; false leaves `animations` exactly as it was.
+	 *
+	 * The samples are re-strided, not indirected, so nothing downstream stops addressing a pose
+	 * arithmetically. A bone the clips never carried holds its bind pose in every frame.
+	 *
+	 * Each clip keeps the frame it started on: the baked plant weights address by
+	 * `firstSample / boneCount`, so renumbering frames here plants the wrong feet.
+	 *
+	 * The posed boxes and plant weights are left stale; each is keyed by its own signature.
+	 */
+	[[nodiscard]] bool
+	remapAnimations(AnimationSet& animations, const Skeleton& skeleton);
+
+	/**
+	 * Re-address `mesh`'s joint indices to `skeleton`, the clip set's counterpart. True when it did;
+	 * false leaves `mesh` exactly as it was. A mesh carrying no joints addresses no bone and is
+	 * refused.
+	 *
+	 * An unweighted influence naming a bone the cooked rig never had is zeroed, not left: the GPU
+	 * fetches and range-asserts all four influences whatever their weights. A weighted one is a
+	 * corrupt mesh and is refused.
+	 *
+	 * @throws std::runtime_error for what resolveSkinLayout refuses -- a malformed submesh.
+	 */
+	[[nodiscard]] bool
+	remapMesh(BMesh& mesh, const Skeleton& skeleton);
+
+	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
 	 *         child), a parent index is out of range, or a name offset is past the string pool.
 	 */
@@ -219,10 +284,14 @@ namespace assetlib
 		const AnimationSet& animations);
 
 	/**
-	 * What a baked posed box was measured against: the mesh's vertex data, the entry and submesh
-	 * tables that address it, and the skeleton's inverse binds -- everything posedBounds reads
-	 * that does not live in the `.banim` itself. A re-imported mesh or a re-authored bind changes
-	 * it; renames, material swaps and clip edits do not.
+	 * What a baked posed box was measured against: the mesh's geometry (assetlib::geometrySignature,
+	 * taken from `BMesh::geometrySignature` where the cook recorded one) and the inverse binds of
+	 * the bones it has weight on -- everything posedBounds reads that does not live in the `.banim`
+	 * itself. A re-imported mesh or a re-authored bind changes it; renames, material swaps, clip
+	 * edits and a bone nothing is weighted to do not.
+	 *
+	 * A mesh whose vertex layout will not decode keys on every bone instead: a pairing that cannot
+	 * be read cannot be narrowed against, and this may not throw.
 	 */
 	[[nodiscard]] uint64_t
 	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept;
@@ -431,9 +500,15 @@ namespace assetlib
 	plantWeightsEmpty(const PlantWeights& weights) noexcept;
 
 	/**
-	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
-	 * and clip weights both -- and the geometry the soles were fitted to. A re-imported mesh, a
-	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.
+	 * What a baked plant weight was measured against: each leg walked to the root by name and by
+	 * both of its binds, the clip weights the avatar resolved, and the geometry the soles were
+	 * fitted to. A re-imported mesh, a re-authored bind along a leg, a renamed leg bone or an edited
+	 * avatar changes it; material swaps and a bone appended off the legs do not.
+	 *
+	 * By name and not by index, and the chain and not the rig: a sole sits in model space, so every
+	 * ancestor's rest offset is part of where it lands, while a bone added elsewhere renumbers the
+	 * chain without moving it. Both binds, because solePlanes carries every sole through the ankle's
+	 * `inverseBind` while the flat-plane fallback composes `bindPose` up the chain.
 	 *
 	 * The clips are deliberately absent: they live in the same file, so a clip edit rewrites the
 	 * weights beside it and a signature over them would only be a second way to say so.
