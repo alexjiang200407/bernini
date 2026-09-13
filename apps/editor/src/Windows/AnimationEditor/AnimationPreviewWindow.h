@@ -90,6 +90,17 @@ public:
 	}
 
 	/**
+	 * Whether a mesh dragged onto the viewport replaces what it shows. On unless a panel decides the
+	 * mesh some other way -- the Blend Space Editor's is the set's -- and then the drag is left to that
+	 * panel. A dropped `.benv` is taken either way.
+	 */
+	void
+	SetMeshDropsEnabled(bool enabled) noexcept
+	{
+		m_MeshDropsEnabled = enabled;
+	}
+
+	/**
 	 * Replaces the preview with the mesh at `absolutePath` (which must live under the data root),
 	 * played from `animationsRelPath` -- or from the first resolved candidate when empty. A rig
 	 * whose clips are stale re-bakes under the loading screen before anything is uploaded.
@@ -405,6 +416,8 @@ private:
 
 	game::AssetManager* m_Assets = nullptr;
 	bgl::PoseSource     m_Source = bgl::PoseSource::kPerInstance;
+
+	bool m_MeshDropsEnabled = true;
 
 	// What the live animated instances are playing. One record for every animated draw: they are
 	// entries of one file on one rig, and the panel drives them as a unit. On the crowd source only

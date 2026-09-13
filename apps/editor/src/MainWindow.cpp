@@ -18,6 +18,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
@@ -247,8 +248,21 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		if (auto exposure = animSettings["exposure"])
 			animDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
 
+		// A rig previewed exactly as the Animation panel previews one, so it reads that panel's section
+		// rather than a copy of it.
+		auto blendRt                   = RenderTargetWindowDesc();
+		blendRt.renderer               = m_Renderer.get();
+		blendRt.initialInstances       = animDesc.initialPreviewInstances;
+		blendRt.taaEnabled             = animDesc.taaEnabled;
+		blendRt.renderScale            = animDesc.renderScale;
+		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
+		blendRt.headless               = headless;
+		auto blendEnv                  = animDesc.previewEnv;
+
 		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
 		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
+		m_BlendSpaceEditor =
+			new BlendSpaceEditorWindow(this, std::move(blendRt), std::move(blendEnv));
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
@@ -268,14 +282,22 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
 
-	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
+	m_BlendSpaceEditorDock = new QDockWidget("Blend Space Editor", this);
+	m_BlendSpaceEditorDock->setObjectName("BlendSpaceEditorDock");
+	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
+	m_BlendSpaceEditorDock->setTitleBarWidget(new QWidget(m_BlendSpaceEditorDock));
+	addDockWidget(Qt::TopDockWidgetArea, m_BlendSpaceEditorDock);
 
-	// Neither movable nor floatable, so the two stay one tab group and exactly one viewport is
+	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
+	tabifyDockWidget(m_AnimationEditorDock, m_BlendSpaceEditorDock);
+
+	// Neither movable nor floatable, so the editors stay one tab group and exactly one viewport is
 	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
 	// dragged to another area, or out into a window of its own, would put a second viewport into the
 	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
 	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock : { m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock :
+	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
 		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
@@ -302,12 +324,14 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		&ContentExplorerWindow::MaterialBaked,
 		m_MaterialEditor,
 		&MaterialEditorWindow::RefreshMaterialState);
-	for (auto* preview : m_AnimationEditor->findChildren<AnimationPreviewWindow*>())
-		connect(
-			preview,
-			&AnimationPreviewWindow::MaterialBaked,
-			m_MaterialEditor,
-			&MaterialEditorWindow::RefreshMaterialState);
+	for (const QWidget* panel :
+	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
+		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
+			connect(
+				preview,
+				&AnimationPreviewWindow::MaterialBaked,
+				m_MaterialEditor,
+				&MaterialEditorWindow::RefreshMaterialState);
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
@@ -315,6 +339,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 
 	DriveViewportsFromTab(m_MaterialEditorDock);
 	DriveViewportsFromTab(m_AnimationEditorDock);
+	DriveViewportsFromTab(m_BlendSpaceEditorDock);
 
 	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
 	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
@@ -340,8 +365,18 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
 		}));
 
+	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
+	m_TabVisibility.push_back(connect(
+		m_BlendSpaceEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_BlendSpaceEditor,
+		[this](bool visible) {
+			m_BlendSpaceEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
+
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
+	m_Ui.windowMenu->addAction(m_BlendSpaceEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 	m_Ui.windowMenu->addSeparator();
 	SetUpGpuTimingEntry();
@@ -536,9 +571,11 @@ MainWindow::ReleaseRenderResources() noexcept
 		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
-	// Its acquisitions release through the manager, so they go before m_Assets does.
+	// Their acquisitions release through the manager, so they go before m_Assets does.
 	if (m_AnimationEditor != nullptr)
 		m_AnimationEditor->SetAssets(nullptr);
+	if (m_BlendSpaceEditor != nullptr)
+		m_BlendSpaceEditor->SetAssets(nullptr);
 
 	// After the thumbnails, which release their materials back through it, and before the viewports,
 	// so the instances it deletes leave views that are still standing.
@@ -549,6 +586,9 @@ MainWindow::ReleaseRenderResources() noexcept
 
 	delete m_AnimationEditor;
 	m_AnimationEditor = nullptr;
+
+	delete m_BlendSpaceEditor;
+	m_BlendSpaceEditor = nullptr;
 }
 
 void
@@ -921,6 +961,8 @@ MainWindow::SetActiveProject(assetlib::Project project)
 		m_Thumbnails->SetAssets(nullptr);
 	if (m_AnimationEditor)
 		m_AnimationEditor->SetAssets(nullptr);
+	if (m_BlendSpaceEditor)
+		m_BlendSpaceEditor->SetAssets(nullptr);
 
 	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
 	// thread like any other scene mutation -- the viewports are still drawing at this point.
@@ -951,6 +993,8 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	if (m_AnimationEditor)
 		m_AnimationEditor->SetAssets(m_Assets.get());
+	if (m_BlendSpaceEditor)
+		m_BlendSpaceEditor->SetAssets(m_Assets.get());
 
 	ShowProjectState();
 
@@ -1041,7 +1085,8 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock : { m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock :
+	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
 	{
 		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 		{
@@ -1114,6 +1159,7 @@ MainWindow::ShowEmptyState()
 
 	m_MaterialEditorDock->hide();
 	m_AnimationEditorDock->hide();
+	m_BlendSpaceEditorDock->hide();
 	m_ContentExplorerDock->hide();
 
 	m_Ui.save->setEnabled(false);
@@ -1138,6 +1184,7 @@ MainWindow::ShowProjectState()
 
 	m_MaterialEditorDock->show();
 	m_AnimationEditorDock->show();
+	m_BlendSpaceEditorDock->show();
 	m_ContentExplorerDock->show();
 	m_MaterialEditorDock->raise();
 
