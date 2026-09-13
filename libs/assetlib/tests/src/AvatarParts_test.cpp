@@ -244,7 +244,7 @@ TEST_CASE("Animal part examples survive an import that changes bone indices", "[
 			PartNames(after, newParts, limb) == std::vector<std::string>{ species + " L UpperArm",
 		                                                                  species + " L Forearm",
 		                                                                  species + " L Hand" });
-		const size_t expectedTailBones = species == "Bear" ? 1 : species == "Owl" ? 2 : 5;
+		const size_t expectedTailBones = species == "Bear" ? 1U : species == "Owl" ? 2U : 5U;
 		CHECK(newParts.parts.at("tail").size() == expectedTailBones);
 	}
 }
