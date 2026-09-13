@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 
+#include <QApplication>
 #include <QEvent>
 #include <QWidget>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
@@ -10,6 +11,16 @@ MaterialSinkNode::WatchEmbeddedWidget(QWidget* widget)
 {
 	m_WatchedWidget = widget;
 	widget->installEventFilter(this);
+}
+
+QWidget*
+MaterialSinkNode::DialogOwnerFor(QWidget* embedded)
+{
+	QWidget* owner = embedded != nullptr ? embedded->window() : nullptr;
+	if (owner == nullptr || owner->graphicsProxyWidget() != nullptr)
+		owner = QApplication::activeWindow();
+
+	return owner;
 }
 
 bool

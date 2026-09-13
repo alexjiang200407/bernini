@@ -71,6 +71,11 @@ namespace bgl
 
 		// What a material that does not name this value gets. Components past the type's are zero.
 		glm::vec4 defaultValue = glm::vec4(0.0f);
+
+		// The surface marked this value `[Color]`: an editor shows a swatch and a picker instead
+		// of bare numbers. Presentation only -- packing and shading ignore it. Only a kFloat3 or
+		// kFloat4 carries it; reflection refuses the attribute on anything narrower.
+		bool isColor = false;
 	};
 
 	/// One texture a material binds by name, sampled through the index the engine packs into it.

@@ -43,6 +43,16 @@ protected:
 	void
 	WatchEmbeddedWidget(QWidget* widget);
 
+	/**
+	 * The widget a sink's modal dialog is parented to. NOT `embedded` itself: an embedded widget
+	 * is reparented into a QGraphicsProxyWidget, and Qt embeds a proxied widget's child windows
+	 * into the graphics scene too -- the dialog's real window comes up blank while its contents
+	 * are painted onto the node canvas, and the scene is left with a stray proxy afterwards. The
+	 * embedded widget's top-level window carries modality and taskbar grouping instead.
+	 */
+	[[nodiscard]] static QWidget*
+	DialogOwnerFor(QWidget* embedded);
+
 	bool
 	eventFilter(QObject* watched, QEvent* event) override;
 

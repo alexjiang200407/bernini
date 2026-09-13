@@ -60,6 +60,15 @@ public struct DefaultAttribute
 };
 
 /**
+ * Marks a float3 or float4 value as a colour, so an editor shows a swatch and a picker instead of
+ * bare numbers. Presentation only: the record and the shader read the value the same either way.
+ * Registration refuses it on a value with fewer than three components.
+ */
+[__AttributeUsage(_AttributeTargets.Var)]
+public struct ColorAttribute
+{};
+
+/**
  * What the engine hands a surface: every dereference already done on the other side. A slot is
  * sampled by the index the engine wrote into it; the interpolants and the camera come from the
  * fragment being shaded.

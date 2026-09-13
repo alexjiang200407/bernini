@@ -6,12 +6,15 @@
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 
+#include <QColor>
+#include <QColorDialog>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QPushButton>
 #include <QSignalBlocker>
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
@@ -25,6 +28,7 @@
 #include <memory>
 #include <qlatin1stringview.h>
 #include <qlogging.h>
+#include <qnamespace.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
 #include <string>
@@ -237,6 +241,7 @@ SurfaceOutputNode::embeddedWidget()
 	form->setContentsMargins(4, 4, 4, 4);
 
 	m_Spins.resize(m_Surface.params.values.size());
+	m_Swatches.assign(m_Surface.params.values.size(), nullptr);
 	for (size_t i = 0; i < m_Surface.params.values.size(); ++i)
 	{
 		const bgl::SurfaceValue& value      = m_Surface.params.values[i];
@@ -245,6 +250,30 @@ SurfaceOutputNode::embeddedWidget()
 		auto* field = new QWidget(m_Widget);
 		auto* row   = new QHBoxLayout(field);
 		row->setContentsMargins(0, 0, 0, 0);
+
+		// A colour is the swatch alone -- numbers beside a picker are the same value said twice.
+		// A magnitude a picker cannot say rides a separate scalar by convention (rimIntensity),
+		// so the swatch stays a normalized chroma.
+		if (value.isColor)
+		{
+			auto* swatch = new QPushButton(field);
+			swatch->setToolTip(QStringLiteral("Pick the colour"));
+			row->addWidget(swatch);
+			m_Swatches[i] = swatch;
+			RefreshSwatch(i);
+
+			// Queued, as every sink's picker is: the click arrives while the proxy widget is
+			// dispatching the mouse event, and QColorDialog::getColor spins a nested event loop.
+			connect(
+				swatch,
+				&QPushButton::clicked,
+				this,
+				[this, i]() { PickColor(i); },
+				Qt::QueuedConnection);
+
+			form->addRow(QString::fromStdString(value.name), field);
+			continue;
+		}
 
 		for (uint32_t c = 0; c < components; ++c)
 		{
@@ -307,7 +336,73 @@ SurfaceOutputNode::SyncWidgets()
 			const QSignalBlocker blocker(m_Spins[i][c]);
 			m_Spins[i][c]->setValue(static_cast<double>(m_Values[i][static_cast<int>(c)]));
 		}
+		RefreshSwatch(i);
 	}
+}
+
+void
+SurfaceOutputNode::SetValue(size_t index, const glm::vec4& value)
+{
+	glm::vec4 next(0.0f);
+	for (uint32_t c = 0; c < bgl::SurfaceValueComponents(m_Surface.params.values[index].type); ++c)
+		next[static_cast<int>(c)] = value[static_cast<int>(c)];
+
+	if (m_Values[index] == next)
+		return;
+
+	m_Values[index] = next;
+	SyncWidgets();
+	Q_EMIT Changed();
+}
+
+void
+SurfaceOutputNode::PickColor(size_t index)
+{
+	const bgl::SurfaceValue& value    = m_Surface.params.values[index];
+	const bool               hasAlpha = value.type == bgl::SurfaceValueType::kFloat4;
+	const glm::vec4          current  = m_Values[index];
+
+	const QColor picked = QColorDialog::getColor(
+		QColor::fromRgbF(
+			std::clamp(current.r, 0.0f, 1.0f),
+			std::clamp(current.g, 0.0f, 1.0f),
+			std::clamp(current.b, 0.0f, 1.0f),
+			hasAlpha ? std::clamp(current.a, 0.0f, 1.0f) : 1.0f),
+		DialogOwnerFor(m_Widget),
+		QString::fromStdString(value.name),
+		hasAlpha ? QColorDialog::ShowAlphaChannel : QColorDialog::ColorDialogOptions());
+
+	if (!picked.isValid())
+		return;
+
+	SetValue(
+		index,
+		glm::vec4(
+			static_cast<float>(picked.redF()),
+			static_cast<float>(picked.greenF()),
+			static_cast<float>(picked.blueF()),
+			static_cast<float>(picked.alphaF())));
+}
+
+void
+SurfaceOutputNode::RefreshSwatch(size_t index)
+{
+	QPushButton* swatch = index < m_Swatches.size() ? m_Swatches[index] : nullptr;
+	if (swatch == nullptr)
+		return;
+
+	const glm::vec4 value = m_Values[index];
+	const QColor    color = QColor::fromRgbF(
+		std::clamp(value.r, 0.0f, 1.0f),
+		std::clamp(value.g, 0.0f, 1.0f),
+		std::clamp(value.b, 0.0f, 1.0f));
+
+	// The swatch is opaque; a float4's alpha is shown as text so a fully transparent colour is
+	// still readable, as the PBR sink shows its base colour factor.
+	swatch->setStyleSheet(
+		QStringLiteral("background-color: %1; border: 1px solid #202020;").arg(color.name()));
+	if (m_Surface.params.values[index].type == bgl::SurfaceValueType::kFloat4)
+		swatch->setText(QStringLiteral("A %1").arg(value.a, 0, 'f', 2));
 }
 
 QJsonObject
