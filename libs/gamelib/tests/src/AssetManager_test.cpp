@@ -746,6 +746,13 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	CHECK(
 		game::MaterialTextures(surface, false) ==
 		std::vector<std::string>{ "Textures/albedo.ktx2", "Derived/BakedTextures/slot_abc.ktx2" });
+
+	// A slot whose looseSlots bit is set draws each channel from its own source instead: it
+	// expands to its four route paths in place, empty where unrouted, so the order stays
+	// positional for the record that parallels it.
+	CHECK(
+		game::MaterialTextures(surface, false, 0b10) ==
+		std::vector<std::string>{ "Textures/albedo.ktx2", "Textures/ao.ktx2", "", "", "" });
 }
 
 TEST_CASE("A prefetched texture is uploaded without its file being read", "[gamelib][assets]")

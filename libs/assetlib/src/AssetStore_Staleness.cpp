@@ -4,6 +4,8 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/SourceStamp.h>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -34,6 +36,19 @@ namespace assetlib
 	AssetStore::SurfaceSlotBakeIsStale(const SurfaceTextureBinding& slot) const
 	{
 		return surfaceSlotBakeIsStale(slot, *m_Files);
+	}
+
+	uint32_t
+	AssetStore::LooseSurfaceSlots(const BMaterial& material) const
+	{
+		uint32_t slots = 0;
+		for (size_t i = 0; i < material.surface.textures.size() && i < 32; ++i)
+		{
+			const SurfaceTextureBinding& slot = material.surface.textures[i];
+			if (slotIsRouted(slot) && surfaceSlotBakeIsStale(slot, *m_Files))
+				slots |= 1u << i;
+		}
+		return slots;
 	}
 
 	bool

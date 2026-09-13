@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
@@ -10,6 +11,7 @@
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -567,4 +569,49 @@ TEST_CASE("The node carries no layer widgets", "[materialgraph][surfacesink]")
 	REQUIRE(widget != nullptr);
 	CHECK(widget->findChild<QComboBox*>() == nullptr);
 	CHECK(widget->findChild<QCheckBox*>() == nullptr);
+}
+
+TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][surfacesink]")
+{
+	// The wires are the routes and their uploads are the handles: nothing is composited for the
+	// preview, so a rewire costs the desc rebuild and the record write behind it, nothing more.
+	MaterialGraphModel model(Registry());
+
+	const NodeId       ao     = model.addNode(QStringLiteral("Texture"));
+	const NodeId       mr     = model.addNode(QStringLiteral("Texture"));
+	const NodeId       sinkId = model.addNode(QStringLiteral("SurfaceOutput:Rim"));
+	SurfaceOutputNode* sink   = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	if (auto* node = model.delegateModel<TextureNode>(ao))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
+	if (auto* node = model.delegateModel<TextureNode>(mr))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/mr.ktx2"));
+
+	constexpr auto c_TextureR = QtNodes::PortIndex(TextureNode::c_BundleCount);
+	const auto     ormR       = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
+	model.addConnection(ConnectionId{ ao, c_TextureR, sinkId, ormR });
+	model.addConnection(
+		ConnectionId{ mr, c_TextureR + 1, sinkId, QtNodes::PortIndex(sink->ChannelPortFor(2, 1)) });
+
+	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOfBoard(*sink);
+
+	// The routed slot rides as routes, not a binding; with no device the handles are null and
+	// the channels still say which component each wire feeds.
+	REQUIRE(desc.textures.size() == 1);
+	const bgl::SurfaceTextureBinding& orm = desc.textures[0];
+	CHECK(orm.name == "orm");
+	CHECK(orm.texture.textureSlot.is_null());
+	CHECK(orm.routes[0].channel == 0);
+	CHECK(orm.routes[1].channel == 1);
+	CHECK(orm.routes[2].texture.textureSlot.is_null());
+	CHECK(orm.routes[3].texture.textureSlot.is_null());
+
+	// A rewire moves the desc with it: the same component fed from another channel.
+	model.deleteConnection(ConnectionId{ ao, c_TextureR, sinkId, ormR });
+	model.addConnection(ConnectionId{ ao, c_TextureR + 2, sinkId, ormR });
+
+	const bgl::SurfaceMaterialDesc rewired = editor::SurfaceDescOfBoard(*sink);
+	REQUIRE(rewired.textures.size() == 1);
+	CHECK(rewired.textures[0].routes[0].channel == 2);
 }

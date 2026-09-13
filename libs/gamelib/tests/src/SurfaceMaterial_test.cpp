@@ -316,10 +316,10 @@ namespace
 	}
 }
 
-// ADR-8 of the surface-material-panel plan: a routed slot whose bake never ran is composited at
-// load and uploaded under its *resolved* baked name -- nothing is written to disk, and the
-// material renders the same as it would after a bake.
-TEST_CASE("A routed slot composites at load when its bake is absent", "[gamelib][surface]")
+// A routed slot whose bake never ran draws each channel from its own source: the routes ride
+// the material record and the shader gathers them, so nothing is composited, uploaded under a
+// baked name, or written to disk -- and the material renders the same as it would after a bake.
+TEST_CASE("A routed slot draws through its routes when its bake is absent", "[gamelib][surface]")
 {
 	ProjectRoot root("bernini_gamelib_surface_slotroutes");
 	std::filesystem::create_directories(root.path / "Textures");
@@ -354,24 +354,28 @@ TEST_CASE("A routed slot composites at load when its bake is absent", "[gamelib]
 	auto scene  = gfx->CreateScene(SurfaceSceneDesc());
 	auto assets = game::AssetManager(scene, root.path);
 
-	// The name the composed upload must answer to: what a bake would call the map.
+	// The name a bake would give the map, to prove no upload ever answers to it.
 	auto store    = assetlib::AssetStore(root.path);
 	auto resolved = material;
 	store.ResolveMaterialBake(resolved);
 	const std::string& baked = resolved.surface.textures[0].bakedPath;
 	REQUIRE_FALSE(baked.empty());
 	REQUIRE(store.BakeIsStale(material));
+	CHECK(store.LooseSurfaceSlots(material) == 0b1);
 
 	const bgl::MaterialHandle handle =
 		assets.AcquireMaterial("Authored/Materials/routed.bmaterial");
 	REQUIRE(handle.IsValid());
 	CHECK(handle.materialType == bgl::MaterialType::kGameStart);
 
-	// The composed map is live under the resolved name: an empty prefetch is authoritative for a
-	// path it lacks, so a valid handle here can only be the record the acquire already uploaded.
+	// The route sources themselves are live -- the record draws through them, so the acquire
+	// uploaded each one. An empty prefetch is authoritative for a path it lacks, so a valid
+	// handle here can only be a record the acquire already holds.
 	auto empty = game::TexturePrefetch();
-	CHECK(assets.AcquireTexture(baked, &empty).textureSlot);
+	CHECK(assets.AcquireTexture("Textures/ao.ktx2", &empty).textureSlot);
+	CHECK(assets.AcquireTexture("Textures/mr.ktx2", &empty).textureSlot);
 
-	// And composited in memory only -- the load writes nothing into the project.
+	// And nothing was composited: no upload under the baked name, nothing written to disk.
+	CHECK_FALSE(assets.AcquireTexture(baked, &empty).textureSlot);
 	CHECK_FALSE(std::filesystem::exists(root.path / baked));
 }
