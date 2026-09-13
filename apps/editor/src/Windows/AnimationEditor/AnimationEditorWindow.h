@@ -30,7 +30,6 @@ class QDoubleSpinBox;
 class QGroupBox;
 class QLabel;
 class QListWidget;
-class QPushButton;
 class Scrubber;
 class TransitionStrip;
 class QTimer;
@@ -164,15 +163,6 @@ private:
 	void
 	ShowSpaces(const std::vector<game::BlendSpaceInfo>& spaces);
 
-	// Creates the empty set for the live clip set and opens it.
-	void
-	CreateBlendSet();
-
-	// Where a set for the live clip set would be written, or empty when there is no clip set or the
-	// convention does not cover it. What decides whether creating one is offered at all.
-	[[nodiscard]] QString
-	CanonicalBlendSetKey() const;
-
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
@@ -282,10 +272,9 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
-	// Which `.bblend` is open, and the button that writes the first one. A set is the rig's rather
-	// than the panel's, so choosing one reloads the mesh.
-	QComboBox*   m_BlendSetSelector = nullptr;
-	QPushButton* m_CreateBlendSet   = nullptr;
+	// Which `.bblend` is open. A set is the rig's rather than the panel's, so choosing one reloads
+	// the mesh.
+	QComboBox* m_BlendSetSelector = nullptr;
 
 	QTabWidget* m_Surfaces = nullptr;
 

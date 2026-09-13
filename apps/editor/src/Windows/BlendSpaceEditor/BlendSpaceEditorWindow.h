@@ -120,6 +120,11 @@ private:
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
+	// Offers every clip set with no set at its conventional key, writes the empty set for the one
+	// chosen, and opens it.
+	void
+	NewBlendSet();
+
 	// Loads mesh `index` of the selector, playing the set's clip set with the set's spaces as nodes.
 	void
 	ShowMesh(int index);

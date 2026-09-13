@@ -132,9 +132,21 @@ BlendSpaceEditorWindow::BlendSpaceEditorWindow(
 	splitter->setStretchFactor(0, 0);
 	splitter->setStretchFactor(1, 1);
 
-	auto* prompt = new QLabel(QStringLiteral("Drop a blend set (.bblend) here"), this);
-	prompt->setAlignment(Qt::AlignCenter);
-	prompt->setEnabled(false);
+	auto* prompt       = new QWidget(this);
+	auto* promptLayout = new QVBoxLayout(prompt);
+	promptLayout->addStretch(1);
+
+	auto* promptText =
+		new QLabel(QStringLiteral("Drop a blend set (.bblend) here, or start a new one"), prompt);
+	promptText->setAlignment(Qt::AlignCenter);
+	promptText->setEnabled(false);
+	promptLayout->addWidget(promptText);
+
+	auto* promptNew = new QPushButton(QStringLiteral("New Blend Set..."), prompt);
+	promptNew->setObjectName(QStringLiteral("NewBlendSet"));
+	connect(promptNew, &QPushButton::clicked, this, &BlendSpaceEditorWindow::NewBlendSet);
+	promptLayout->addWidget(promptNew, /*stretch*/ 0, Qt::AlignHCenter);
+	promptLayout->addStretch(1);
 
 	m_Stage = new QStackedWidget(this);
 	m_Stage->addWidget(prompt);
@@ -185,9 +197,14 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
 	connect(closeButton, &QPushButton::clicked, this, &BlendSpaceEditorWindow::CloseBlendSet);
 
+	auto* newButton = new QPushButton(QStringLiteral("New..."), column);
+	newButton->setToolTip(QStringLiteral("Start a blend set on another clip set."));
+	connect(newButton, &QPushButton::clicked, this, &BlendSpaceEditorWindow::NewBlendSet);
+
 	auto* fileRow = new QHBoxLayout();
 	fileRow->setContentsMargins(0, 0, 0, 0);
 	fileRow->addWidget(m_SetLabel, /*stretch*/ 1);
+	fileRow->addWidget(newButton);
 	fileRow->addWidget(closeButton);
 	layout->addLayout(fileRow);
 
@@ -353,6 +370,71 @@ BlendSpaceEditorWindow::BuildTransportBar()
 	layout->addWidget(m_Speed);
 
 	return bar;
+}
+
+void
+BlendSpaceEditorWindow::NewBlendSet()
+{
+	if (m_DataRoot.isEmpty())
+		return;
+
+	const std::filesystem::path dataRoot = ToPath(m_DataRoot);
+
+	auto clipSets = QStringList();
+	try
+	{
+		for (const std::string& clipSet : editor::ClipSetsWithoutBlendSet(
+				 assetlib::AssetRefGraph::Scan(assetlib::AssetStore(dataRoot))))
+			clipSets << QString::fromStdString(clipSet);
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("New Blend Set"),
+			QStringLiteral("The project cannot be scanned for clip sets:\n\n%1")
+				.arg(QString::fromUtf8(e.what())));
+		return;
+	}
+
+	if (clipSets.isEmpty())
+	{
+		QMessageBox::information(
+			window(),
+			QStringLiteral("New Blend Set"),
+			QStringLiteral(
+				"Every clip set in this project already has a blend set, or there is "
+				"none yet. Import a rig with clips to start one."));
+		return;
+	}
+
+	bool          accepted = false;
+	const QString clipSet  = QInputDialog::getItem(
+		window(),
+		QStringLiteral("New Blend Set"),
+		QStringLiteral("Clip set"),
+		clipSets,
+		0,
+		/*editable*/ false,
+		&accepted);
+	if (!accepted || clipSet.isEmpty())
+		return;
+
+	auto key = std::string();
+	try
+	{
+		key = editor::CreateEmptyBlendSet(dataRoot, clipSet.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("New Blend Set"),
+			QString::fromUtf8(e.what()));
+		return;
+	}
+
+	OpenBlendSet(QString::fromStdString(key));
 }
 
 void
