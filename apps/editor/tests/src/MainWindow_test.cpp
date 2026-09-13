@@ -576,3 +576,26 @@ TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][b
 	CHECK(editor::test::WaitFor([blend] { return blend->GetBlendSetKey().isEmpty(); }));
 	CHECK(blend->GetHeldOpenPaths().isEmpty());
 }
+
+TEST_CASE(
+	"A blend set is started from the Blend Space Editor, not the Animation panel",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+
+	const QList<QPushButton*> animationButtons = animation->findChildren<QPushButton*>();
+	CHECK(std::ranges::none_of(animationButtons, [](const QPushButton* button) {
+		return button->text().contains(QStringLiteral("Blend Set"));
+	}));
+
+	auto* start = blend->findChild<QPushButton*>("NewBlendSet");
+	REQUIRE(start != nullptr);
+	CHECK(start->isEnabled());
+}

@@ -5,20 +5,16 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/TransitionStrip.h"
 #include "Windows/AnimationEditor/blend_edits.h"
-#include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "util/mesh_drop.h"
 #include <algorithm>
-#include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
-#include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
-#include <string_view>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -32,7 +28,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
-#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QScrollArea>
@@ -243,13 +238,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 			index == 0 ? QString() : m_BlendSetSelector->itemText(index));
 	});
 	layout->addWidget(m_BlendSetSelector);
-
-	m_CreateBlendSet = new QPushButton(QStringLiteral("Create Blend Set"), column);
-	m_CreateBlendSet->setEnabled(false);
-	m_CreateBlendSet->setToolTip(QStringLiteral(
-		"Writes the empty .bblend for this clip set, beside it under Authored, and opens it."));
-	connect(m_CreateBlendSet, &QPushButton::clicked, this, &AnimationEditorWindow::CreateBlendSet);
-	layout->addWidget(m_CreateBlendSet);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
@@ -748,36 +736,7 @@ AnimationEditorWindow::SetBlendSets(const QStringList& sets, const int activeInd
 	m_BlendSetSelector->setCurrentIndex(activeIndex < 0 ? 0 : activeIndex + 1);
 	m_BlendSetSelector->setEnabled(!m_MeshRelPath.isEmpty());
 	m_BlendRelPath = activeIndex < 0 ? QString() : sets.at(activeIndex);
-
-	// Nothing to create a set *for* until a clip set is playing, and nothing to create when the
-	// convention's key is already taken -- which is every set this panel wrote. The create itself
-	// refuses that too; this is what stops it being offered as a button that only ever warns.
-	m_CreateBlendSet->setEnabled(
-		!m_MeshRelPath.isEmpty() && m_SourceSelector->currentIndex() >= 0 &&
-		!sets.contains(CanonicalBlendSetKey()));
-	m_SyncingUi = false;
-}
-
-QString
-AnimationEditorWindow::CanonicalBlendSetKey() const
-{
-	if (m_SourceSelector->currentIndex() < 0)
-		return {};
-
-	const QByteArray animations = m_SourceSelector->currentText().toUtf8();
-
-	try
-	{
-		return QString::fromStdString(
-			assetlib::blendSetKeyFor(
-				std::string_view(animations.constData(), static_cast<size_t>(animations.size()))));
-	}
-	catch (const std::exception&)
-	{
-		// A clip set somewhere the convention does not cover. Nothing can be created for it, which
-		// is what an empty key says to the one caller.
-		return {};
-	}
+	m_SyncingUi    = false;
 }
 
 void
@@ -794,32 +753,6 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 	// is the panel disagreeing with itself. StampTransition is a no-op off the Blend tab and clears
 	// on an incomplete pair, so this restores a fade exactly when there was one to restore.
 	StampTransition();
-}
-
-void
-AnimationEditorWindow::CreateBlendSet()
-{
-	if (m_DataRoot.isEmpty() || m_SourceSelector->currentIndex() < 0)
-		return;
-
-	const QByteArray animations = m_SourceSelector->currentText().toUtf8();
-
-	try
-	{
-		const std::string key = editor::CreateEmptyBlendSet(
-			std::filesystem::path(m_DataRoot.toStdWString()),
-			std::string_view(animations.constData(), static_cast<size_t>(animations.size())));
-
-		// Opening it is a reload: a rig already uploaded refuses a set it was not built with.
-		LoadShownMesh(m_SourceSelector->currentText(), QString::fromStdString(key));
-	}
-	catch (const std::exception& e)
-	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Create Blend Set"),
-			QString::fromUtf8(e.what()));
-	}
 }
 
 void

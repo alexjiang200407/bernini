@@ -410,12 +410,6 @@ to keep in agreement beyond the one below.
   `.banim` drops the set with it: a set names one clip set, and carrying it across would name a
   file the rig no longer plays.
 
-  *Create Blend Set* writes the empty document at `assetlib::blendSetKeyFor`'s key and opens it.
-  The convention lives in assetlib beside `avatarKeyFor` rather than in the panel, since the layout
-  is the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it
-  was authored against and no spaces, which is what makes it findable by the scan the moment it
-  exists -- nothing else attaches a set to a clip set.
-
   Opening a set is all this panel does with one; authoring its spaces is the Blend Space Editor's.
 
 * **A blend space is authored in the Blend Space Editor, a dock beside this panel.** It opens one
@@ -427,6 +421,14 @@ to keep in agreement beyond the one below.
   saved. A set nothing is skinned to still lists and still edits, because the list is the
   document's rather than the rig's; a new space or sample, thresholds from speed and the cursor wait
   for a clip table, which only an acquired rig supplies.
+
+  *New Blend Set...* starts one, from the editor's empty page or beside *Close*. It lists every clip
+  set with nothing yet at `assetlib::blendSetKeyFor`'s key (`editor::ClipSetsWithoutBlendSet`),
+  writes the empty document there and opens it, so a set is never reached through a mesh. The
+  convention lives in assetlib beside `avatarKeyFor` rather than in the editor, since the layout is
+  the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it was
+  authored against and no spaces, which is what makes it findable by the scan the moment it exists --
+  nothing else attaches a set to a clip set.
 
   **Its clock never wraps and never runs backwards.** A space's phase is integrated from the `tRef`
   it was stamped at ([Animation Blending](anim_blend.md)), while this panel's clock is the
