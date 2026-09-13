@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "mounted_io.h"
@@ -46,18 +47,23 @@ namespace assetlib
 		{
 			uint64_t signature;
 			uint32_t legCount;
+			uint32_t pad;
 		};
-
-		static_assert(sizeof(PlantWeightsRef) == 16);
 
 		/** What the clips were cooked against, so a rig that has changed since is refused. */
 		struct SkeletonRef
 		{
 			uint64_t signature;
 			uint32_t boneCount;
+			uint32_t pad;
 		};
 
+		// A chunk is written as the object's bytes, so an unnamed tail would put whatever the stack
+		// held into the file and make two saves of one clip set differ.
+		static_assert(sizeof(PlantWeightsRef) == 16);
 		static_assert(sizeof(SkeletonRef) == 16);
+		static_assert(std::has_unique_object_representations_v<PlantWeightsRef>);
+		static_assert(std::has_unique_object_representations_v<SkeletonRef>);
 
 		std::vector<SkeletonRef>
 		packSkeletonRef(const AnimationSet& animations)
@@ -65,6 +71,15 @@ namespace assetlib
 			SkeletonRef ref{};
 			ref.signature = animations.skeletonSignature;
 			ref.boneCount = animations.boneCount;
+			return { ref };
+		}
+
+		std::vector<PlantWeightsRef>
+		packPlantWeightsRef(const AnimationSet& animations)
+		{
+			PlantWeightsRef ref{};
+			ref.signature = animations.plantWeights.signature;
+			ref.legCount  = animations.plantWeights.legCount;
 			return { ref };
 		}
 
@@ -127,10 +142,7 @@ namespace assetlib
 		// one without the other would read as a measurement nobody can index.
 		if (!plantWeightsEmpty(animations.plantWeights))
 		{
-			const auto ref = std::array<PlantWeightsRef, 1>{
-				{ { animations.plantWeights.signature, animations.plantWeights.legCount } }
-			};
-			writer.Add(ChunkId::kPlantWeightsRef, std::span<const PlantWeightsRef>(ref));
+			writer.Add(ChunkId::kPlantWeightsRef, packPlantWeightsRef(animations));
 			writer.Add(
 				ChunkId::kPlantWeights,
 				std::span<const uint8_t>(animations.plantWeights.weights));
