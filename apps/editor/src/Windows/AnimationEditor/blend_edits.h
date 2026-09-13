@@ -3,6 +3,7 @@
 #include <assetlib/blend.h>
 #include <cstddef>
 #include <gamelib/BlendSpaceInfo.h>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -64,23 +65,30 @@ namespace editor
 		float                                       precision) noexcept;
 
 	/**
-	 * `parameter` held where sample `index` may actually go: strictly between its neighbours, one
-	 * displayed step clear of each. The ends are open, so the first and last samples move freely
-	 * outward.
+	 * Moves sample `index` of `run` to `parameter` and re-sorts the run, so a threshold typed past a
+	 * neighbour takes that neighbour's place: a sample's order is its threshold, and there is no
+	 * second way to say it.
 	 *
-	 * Clamped rather than reordered. A run in a list is read top to bottom, and a row that jumped
-	 * position mid-drag would move the thing under the cursor; this is the same choice the ground
-	 * slope makes by committing on release rather than tracking.
-	 *
-	 * A non-finite `parameter` leaves the sample where it is. An `index` outside the run answers
-	 * `parameter` unchanged -- there is nothing to hold it between.
+	 * @return The moved sample's row in the re-sorted run, or nullopt -- `run` untouched -- when
+	 *         `index` is outside it, `parameter` is not finite, or it would display as another sample.
 	 */
-	[[nodiscard]] float
-	ClampedParameter(
-		std::span<const assetlib::BlendSpaceSample> run,
-		size_t                                      index,
-		float                                       parameter,
-		float                                       precision) noexcept;
+	[[nodiscard]] std::optional<size_t>
+	MoveSample(
+		std::vector<assetlib::BlendSpaceSample>& run,
+		size_t                                   index,
+		float                                    parameter,
+		float                                    precision);
+
+	/**
+	 * Points sample `index` of `run` at `clip`, keeping its threshold and so its row.
+	 *
+	 * @return False, with nothing written, when `index` is outside the run.
+	 */
+	[[nodiscard]] bool
+	ReplaceSampleClip(
+		std::span<assetlib::BlendSpaceSample> run,
+		size_t                                index,
+		std::string_view                      clip);
 
 	/**
 	 * Whether `run` can give one sample up and still be a blend space.

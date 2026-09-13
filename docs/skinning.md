@@ -440,14 +440,25 @@ to keep in agreement beyond the one below.
   four, and no strip and no frame step -- a space has no one period or frame to show.
 
   **An edit takes one of two paths, and which one is the shape of the change.** A threshold that
-  moved is written onto the rig already uploaded (`AssetManager::SetBlendParameters`), so the pose
-  keeps playing while the box is dragged -- live on `valueChanged`, saved on `editingFinished`,
-  because a file rewritten per keystroke is not the point and a pose that waits for the save is.
-  Anything that changes the rig's node table -- a sample or a space added or removed, a space
-  renamed -- saves and then **reloads the mesh**, which is the same reacquire choosing a set already
-  does. `editor::IsParameterMove` is the fork, and it compares the two *authored* sets rather than
-  the resolved ones: the resolved form holds clip indices, so a sample pointed at another clip would
-  read as no change there and reach a rig that refuses it.
+  moved within its neighbours is written onto the rig already uploaded
+  (`AssetManager::SetBlendParameters`), so the pose keeps playing -- live on `valueChanged`, saved on
+  `editingFinished`, because a file rewritten per keystroke is not the point and a pose that waits
+  for the save is. Anything that changes the rig's node table -- a sample or a space added or
+  removed, a space renamed, a sample's clip replaced -- saves and then **reloads the mesh**, which is
+  the same reacquire choosing a set already does. `editor::IsParameterMove` is the fork, and it
+  compares the two *authored* sets rather than the resolved ones: the resolved form holds clip
+  indices, so a sample pointed at another clip would read as no change there and reach a rig that
+  refuses it.
+
+  **A sample's order is its threshold.** A threshold typed past a neighbour re-sorts the run
+  (`editor::MoveSample`) and the moved row stays selected. There are no reorder buttons, which would
+  be a second way to say what the threshold already says; Unreal places a sample by value the same
+  way. A crossing reloads the mesh, since the rows it passed now name other clips; crossing a
+  sample of the same clip is still a parameter move and stays live. The box tracks
+  no keystrokes, so a value arrives on Enter, focus loss or a step and never mid-number; a step never
+  crosses a neighbour, because landing on its displayed value is a duplicate, which is refused and
+  puts the box back. *Replace* points the selected sample at the combo's clip and keeps its
+  threshold, so a space seeded with the wrong pair is corrected in place.
 
   **The editor edits the document, not what the acquire resolved.** `editor::LoadBlendSet` reads the
   `.bblend` back when a set opens, and that is what every gesture mutates and what is saved. Building
@@ -484,8 +495,9 @@ to keep in agreement beyond the one below.
 
   **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
   a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
-  there is no empty space to add and fill in afterwards. *New* seeds the first two clips a space can
-  sample at 0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip of
+  there is no empty space to add and fill in afterwards. *New* asks for the space's name and both of
+  its clips, placed at 0 and 1, and is disabled, with the reason, when the clip set has fewer than
+  two. A clip of
   a single frame is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
   the author is looking for that clip, and its absence would read as a bad clip set rather than as
   one a blend space cannot hold.

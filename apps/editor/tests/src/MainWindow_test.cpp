@@ -19,6 +19,7 @@
 #include <QAction>
 #include <QCoreApplication>
 #include <QDockWidget>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
@@ -30,6 +31,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
@@ -552,6 +554,55 @@ TEST_CASE(
 		assetlib::AssetStore(editor.DataRoot()).Load<assetlib::BlendSet>(key.toStdString());
 	CHECK(saved.spaces.empty());
 	CHECK(samples->count() == 0);
+}
+
+TEST_CASE(
+	"A threshold typed past its neighbour re-sorts the run, and is saved that way",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+	const QString        key = WriteUnshownSet(editor.DataRoot());
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(blend != nullptr);
+	blend->OpenBlendSet(key);
+
+	auto* samples   = blend->findChild<QListWidget*>("BlendSpaceSamples");
+	auto* threshold = blend->findChild<QDoubleSpinBox*>("BlendSampleThreshold");
+	REQUIRE(samples != nullptr);
+	REQUIRE(threshold != nullptr);
+	REQUIRE(samples->count() == 2);
+
+	samples->setCurrentRow(0);
+	REQUIRE(threshold->isEnabled());
+
+	SECTION("walk typed past run becomes the second row, and stays selected")
+	{
+		threshold->setValue(2.0);
+
+		CHECK(samples->currentRow() == 1);
+		CHECK(samples->item(0)->text().startsWith(QStringLiteral("run")));
+		CHECK(samples->item(1)->text().startsWith(QStringLiteral("walk")));
+		CHECK(threshold->value() == Catch::Approx(2.0));
+
+		const auto saved =
+			assetlib::AssetStore(editor.DataRoot()).Load<assetlib::BlendSet>(key.toStdString());
+		REQUIRE(saved.spaces.size() == 1);
+		REQUIRE(saved.spaces[0].samples.size() == 2);
+		CHECK(saved.spaces[0].samples[0].clip == "run");
+		CHECK(saved.spaces[0].samples[1].clip == "walk");
+	}
+
+	SECTION("typed onto run's threshold, the box goes back and nothing moves")
+	{
+		threshold->setValue(1.0);
+
+		CHECK(samples->currentRow() == 0);
+		CHECK(threshold->value() == Catch::Approx(0.0));
+		CHECK(samples->item(0)->text().startsWith(QStringLiteral("walk")));
+	}
 }
 
 TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][blendspace][render]")

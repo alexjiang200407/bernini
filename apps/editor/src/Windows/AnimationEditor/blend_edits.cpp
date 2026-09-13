@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <gamelib/BlendSpaceInfo.h>
-#include <limits>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -64,32 +64,44 @@ namespace editor
 		return at >= run.size() || step(run[at].parameter) != shown;
 	}
 
-	float
-	ClampedParameter(
-		std::span<const assetlib::BlendSpaceSample> run,
-		const size_t                                index,
-		const float                                 parameter,
-		const float                                 precision) noexcept
+	std::optional<size_t>
+	MoveSample(
+		std::vector<assetlib::BlendSpaceSample>& run,
+		const size_t                             index,
+		const float                              parameter,
+		const float                              precision)
 	{
 		if (index >= run.size())
-			return parameter;
+			return std::nullopt;
 
-		if (!std::isfinite(parameter))
-			return run[index].parameter;
+		// Taken out first so the sample is not its own neighbour: a nudge that still displays as its
+		// old value is a move, not a duplicate.
+		assetlib::BlendSpaceSample moved = std::move(run[index]);
+		run.erase(run.begin() + static_cast<ptrdiff_t>(index));
 
-		// Open at both ends: the run's own extent is what a person authors by dragging the first
-		// and last samples, so only the interior is fenced.
-		const float below = index > 0 ? run[index - 1].parameter + precision :
-		                                -std::numeric_limits<float>::infinity();
-		const float above = index + 1 < run.size() ? run[index + 1].parameter - precision :
-		                                             std::numeric_limits<float>::infinity();
+		if (!CanInsertAt(run, parameter, precision))
+		{
+			run.insert(run.begin() + static_cast<ptrdiff_t>(index), std::move(moved));
+			return std::nullopt;
+		}
 
-		// A run whose neighbours are already closer together than two steps has no room between
-		// them; holding the sample still beats moving it to a value that breaks the order.
-		if (above < below)
-			return run[index].parameter;
+		const size_t at = InsertionIndex(run, parameter);
+		moved.parameter = parameter;
+		run.insert(run.begin() + static_cast<ptrdiff_t>(at), std::move(moved));
+		return at;
+	}
 
-		return std::clamp(parameter, below, above);
+	bool
+	ReplaceSampleClip(
+		const std::span<assetlib::BlendSpaceSample> run,
+		const size_t                                index,
+		const std::string_view                      clip)
+	{
+		if (index >= run.size())
+			return false;
+
+		run[index].clip = clip;
+		return true;
 	}
 
 	bool
