@@ -63,6 +63,11 @@ public struct DefaultAttribute
  * What the engine hands a surface: every dereference already done on the other side. A slot is
  * sampled by the index the engine wrote into it; the interpolants and the camera come from the
  * fragment being shaded.
+ *
+ * WorldNormal is the normal of the face being shaded: on a double-sided material a back face
+ * reads the interpolated normal negated, the same flip the engine applies to its own lighting.
+ * A view-dependent term written against it is therefore correct on both faces without the
+ * surface ever seeing a facing bit.
  */
 public interface IMaterialReader
 {
