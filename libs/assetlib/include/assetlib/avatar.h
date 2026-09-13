@@ -2,12 +2,24 @@
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/IFileSystem.h>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace assetlib
 {
+	/** Inclusive ancestor chain; equal endpoints identify a single bone. */
+	struct AvatarPart
+	{
+		std::string startBoneName;
+		std::string endBoneName;
+		std::string extraJson = "{}";
+
+		bool
+		operator==(const AvatarPart&) const = default;
+	};
+
 	/**
 	 * One leg, as the four bone *names* the rig spells them with.
 	 *
@@ -62,7 +74,8 @@ namespace assetlib
 		 * saying: docs/skinning.md. */
 		std::vector<ClipPlantWeight> clipWeights;
 
-		std::string extraJson = "{}";
+		std::string                       extraJson = "{}";
+		std::map<std::string, AvatarPart> parts     = {};
 
 		bool
 		operator==(const Avatar&) const = default;
@@ -110,6 +123,8 @@ namespace assetlib
 	{
 		std::vector<AvatarLegChain>  legs;
 		std::vector<ClipPlantWeight> clipWeights;
+		/** Each part's inclusive chain in start-to-end order, never an index interval. */
+		std::map<std::string, std::vector<uint32_t>> parts = {};
 
 		bool
 		operator==(const ResolvedAvatar&) const = default;
@@ -124,6 +139,8 @@ namespace assetlib
 	 * what cannot walk an indirect one, and `IScene::AddRig` refuses it naming the bone.
 	 *
 	 * @throws std::runtime_error naming the leg and the bone if `skeleton` carries no such name.
+	 * Parts require a valid skeleton, unique endpoint names and an end descended from the start;
+	 * invalid parts throw with their authored name. Missing parts are allowed; overlapping parts are too.
 	 */
 	[[nodiscard]] ResolvedAvatar
 	resolveAvatar(const Avatar& avatar, const Skeleton& skeleton);
