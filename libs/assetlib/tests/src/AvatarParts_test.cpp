@@ -15,13 +15,14 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/LooseFileSystem.h>
 #include <core/glm.h>
+#include <core/platform/util.h>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -243,23 +244,21 @@ TEST_CASE("Animal part examples survive an import that changes bone indices", "[
 			PartNames(after, newParts, limb) == std::vector<std::string>{ species + " L UpperArm",
 		                                                                  species + " L Forearm",
 		                                                                  species + " L Hand" });
-		CHECK(
-			newParts.parts.at("tail").size() == (species == "Bear" ? 1 :
-		                                         species == "Owl"  ? 2 :
-		                                                             5));
+		const size_t expectedTailBones = species == "Bear" ? 1 : species == "Owl" ? 2 : 5;
+		CHECK(newParts.parts.at("tail").size() == expectedTailBones);
 	}
 }
 
 TEST_CASE("Animal part examples resolve against the original GLBs", "[.avatar-source][parts]")
 {
-	const char* sourceRoot = std::getenv("BERNINI_AVATAR_SOURCE_ROOT");
-	REQUIRE(sourceRoot != nullptr);
+	const auto sourceRoot = core::env_var("BERNINI_AVATAR_SOURCE_ROOT");
+	REQUIRE(sourceRoot.has_value());
 	const auto files = core::file::LooseFileSystem("assets/avatar_parts");
 	for (const std::string species : { "Bear", "Owl", "Cat" })
 	{
 		CAPTURE(species);
 		const auto imported = loadFromGltf(
-			std::filesystem::path(sourceRoot) / (species + ".glb"),
+			std::filesystem::path(*sourceRoot) / (species + ".glb"),
 			GltfLoadOptions{ .textures = GltfTextures::kSkip });
 		const auto avatar   = loadAvatar(files, species + ".bavatar");
 		const auto resolved = resolveAvatar(avatar, imported.skeleton);
