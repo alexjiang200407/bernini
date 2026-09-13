@@ -4,6 +4,7 @@
 #include "Windows/AnimationEditor/GroundControls.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
+#include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
@@ -18,12 +19,16 @@
 
 #include <QAction>
 #include <QCoreApplication>
+#include <QDir>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
+#include <QFileSystemModel>
 #include <QLabel>
+#include <QListView>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QModelIndex>
 #include <QPointer>
 #include <QPushButton>
 #include <QString>
@@ -41,6 +46,7 @@
 #include <qmainwindow.h>
 #include <qobject.h>
 #include <qstringliteral.h>
+#include <qtmetamacros.h>
 #include <string>
 #include <vector>
 
@@ -652,6 +658,63 @@ TEST_CASE(
 	auto* start = blend->findChild<QPushButton*>("NewBlendSet");
 	REQUIRE(start != nullptr);
 	CHECK(start->isEnabled());
+}
+
+TEST_CASE(
+	"A blend set double-clicked in the Content Explorer opens in the Blend Space Editor",
+	"[mainwindow][blendspace][render]")
+{
+	const HeadlessEditor editor;
+	const QString        key = WriteUnshownSet(editor.DataRoot());
+
+	MainWindow window(nullptr, editor.ConfigFile());
+	window.show();
+
+	auto* blendDock = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
+	auto* explorer  = window.findChild<ContentExplorerWindow*>();
+	REQUIRE(blendDock != nullptr);
+	REQUIRE(blend != nullptr);
+	REQUIRE(explorer != nullptr);
+
+	auto* files = explorer->findChild<QListView*>("CurrentDirectoryExplorer");
+	REQUIRE(files != nullptr);
+	auto* model = qobject_cast<QFileSystemModel*>(files->model());
+	REQUIRE(model != nullptr);
+
+	const QString path = QDir::fromNativeSeparators(
+		QDir(QString::fromStdString(editor.DataRoot().string())).absoluteFilePath(key));
+
+	QModelIndex tile;
+	REQUIRE(editor::test::WaitFor([&] {
+		tile = model->index(path);
+		return tile.isValid();
+	}));
+
+	// The editors' own tab bar, which QMainWindow parents to itself: a tabified dock is not hidden
+	// when another tab is current, so its visibility cannot say which one is on top.
+	const QList<QTabBar*> bars   = window.findChildren<QTabBar*>();
+	const auto            docked = std::ranges::find_if(bars, [&window](const QTabBar* bar) {
+		return bar->parentWidget() == &window;
+	});
+	REQUIRE(docked != bars.end());
+
+	const auto current  = [bar = *docked] { return bar->tabText(bar->currentIndex()); };
+	const auto blendTab = QStringLiteral("Blend Space Editor");
+
+	// A project opens on the Material Editor's tab, so the double-click is what brings this one up.
+	QCoreApplication::processEvents();
+	REQUIRE(current() != blendTab);
+
+	Q_EMIT files->doubleClicked(tile);
+
+	CHECK(editor::test::WaitFor([&] { return current() == blendTab; }));
+	CHECK(blendDock->isVisible());
+	CHECK(blend->GetBlendSetKey() == key);
+
+	// Still open once the tab switch has settled: raising the dock must not be what closes the set.
+	QCoreApplication::processEvents();
+	CHECK(blend->GetBlendSetKey() == key);
 }
 
 TEST_CASE(

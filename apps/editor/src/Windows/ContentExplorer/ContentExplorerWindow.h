@@ -71,6 +71,13 @@ Q_SIGNALS:
 	void
 	MaterialBaked(const QString& asset);
 
+	/**
+	 * A `.bblend` at `key` (data-root-relative) was double-clicked. The explorer opens nothing itself:
+	 * which panel authors a set is MainWindow's to say.
+	 */
+	void
+	BlendSetOpenRequested(const QString& key);
+
 protected:
 	// Keeps the empty-directory placeholder sized to the file table's viewport.
 	bool
