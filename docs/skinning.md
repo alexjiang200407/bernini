@@ -500,6 +500,63 @@ to keep in agreement beyond the one below.
   acquired the geom through one tier and created the instance through the other — is now unreachable
   rather than untested: there is one acquire and one geom, and the source is a field on the spawn.
 
+## Named body parts
+
+Keep each imported hierarchy intact. The optional `parts` object in its `.bavatar` assigns
+anatomical meaning to bone names; it changes neither skeleton compatibility nor animation playback.
+The contract lives in [avatar.h](libs/assetlib/include/assetlib/avatar.h). Author it by hand in
+`Authored/Skeletons/<rig>.bavatar`, paired with `Derived/Skeletons/<rig>.bskel` by `avatarKeyFor`.
+An existing avatar keeps its `legs` and `plant` fields when parts are added.
+
+```json
+{
+  "legs": [],
+  "parts": {
+    "pelvis": "Cat Pelvis",
+    "left_arm": { "start": "Cat L UpperArm", "end": "Cat L Hand" },
+    "tail": { "start": "Cat Tail", "end": "Cat Tail4" }
+  }
+}
+```
+
+Use these common role names consistently: `pelvis`, `spine`, `neck`, `head`, `left_arm`,
+`right_arm`, `left_leg`, `right_leg`, `left_wing`, `right_wing`, `tail`. They are case-sensitive
+conventions, not a closed enum or a required list. Omit absent anatomy; custom names such as
+`tongue` or `trunk` need no engine change. Names on the right are the exact names in the imported
+skeleton, including prefixes and spaces. The bird examples label their arm-named wing bones as
+`left_wing` and `right_wing`; naming a role does not infer its function from the source spelling.
+
+`resolveAvatar` expands each chain from start through end, inclusive, in parent-to-child order.
+Intermediate bones are included; sibling branches and descendants beyond the end are excluded.
+Parts may overlap, so they do not partition the skeleton. Equal endpoints identify a single bone
+and save as a string unless an object carries unknown fields. Unknown document and part-object
+fields survive a save. The codec emits sorted keys, tab indentation and a trailing newline.
+
+Names resolve afresh after reimport, even when joint indices change. Missing or ambiguous endpoint
+names, empty names and an end outside the start's descendants are errors. `resolveAvatar` throws;
+`assetlib_cli describe` reports each part independently, including the expanded chain or its error.
+The existing `avatarForRig` fallback still logs an invalid avatar and returns an empty one, so a
+broken mapping disables that avatar's parts and foot planting rather than blocking mesh loading.
+Fix the diagnostic instead of treating that fallback as a valid mapping.
+
+```mermaid
+flowchart LR
+    Source[Imported skeleton] --> Resolve[resolveAvatar]
+    Authored[Hand-edited bavatar] --> Resolve
+    Resolve --> Parts[Named bone chains]
+    Resolve --> Legs[Existing foot-plant joints]
+```
+
+Semantic leg parts do not configure the foot solver: a start/end chain does not identify its knee,
+ankle and toe. The existing `legs` contract below owns those decisions. Parts add no GPU data,
+retargeting, animation masks, hitboxes, automatic detection or editor controls.
+
+The [Bear](assets/avatar_parts/Bear.bavatar), [Owl](assets/avatar_parts/Owl.bavatar) and
+[Cat](assets/avatar_parts/Cat.bavatar) examples are complete, readable part maps for those source
+rigs. Their `legs` arrays are empty; merge `parts` into an existing avatar to preserve its planting
+settings. The accompanying [fixture notes](assets/avatar_parts/README.md) describe portable tests
+and validation against the original GLBs.
+
 ## Foot planting
 
 **Why it exists, measured.** `groundClips` fixes *where a rig stands* — one constant per clip on the

@@ -2,6 +2,8 @@
 #include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
 #include <cstddef>
@@ -13,6 +15,7 @@
 #include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -28,6 +31,72 @@ namespace assetlib
 	{
 		constexpr std::string_view c_LegsKey  = "legs";
 		constexpr std::string_view c_PlantKey = "plant";
+		constexpr std::string_view c_PartsKey = "parts";
+		constexpr std::string_view c_StartKey = "start";
+		constexpr std::string_view c_EndKey   = "end";
+
+		void
+		validatePart(std::string_view name, const AvatarPart& part)
+		{
+			core::throw_runtime_error_if(name.empty(), "avatar: a part has an empty name");
+			core::throw_runtime_error_if(
+				part.startBoneName.empty() || part.endBoneName.empty(),
+				"avatar: part '{}' requires nonempty start and end bone names",
+				name);
+		}
+
+		void
+		resolveParts(const Avatar& avatar, const Skeleton& skeleton, ResolvedAvatar& out)
+		{
+			if (avatar.parts.empty())
+				return;
+			validateSkeleton(skeleton);
+			std::unordered_map<std::string_view, uint32_t> indices;
+			indices.reserve(skeleton.bones.size());
+			for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			{
+				const auto [it, inserted] = indices.emplace(
+					skeleton.stringPool.at(skeleton.bones[i].nameOffset),
+					static_cast<uint32_t>(i));
+				if (!inserted)
+					it->second = c_InvalidIndex;
+			}
+
+			for (const auto& [name, part] : avatar.parts)
+			{
+				validatePart(name, part);
+				const auto indexOf = [&](std::string_view bone) {
+					const auto it = indices.find(bone);
+					core::throw_runtime_error_if(
+						it == indices.end(),
+						"avatar: part '{}' names bone '{}', which the skeleton does not carry",
+						name,
+						bone);
+					core::throw_runtime_error_if(
+						it->second == c_InvalidIndex,
+						"avatar: part '{}' names ambiguous bone '{}'",
+						name,
+						bone);
+					return it->second;
+				};
+				const uint32_t start = indexOf(part.startBoneName);
+				const uint32_t end   = indexOf(part.endBoneName);
+				auto&          chain = out.parts[name];
+				for (uint32_t bone = end;; bone = skeleton.bones[bone].parent)
+				{
+					core::throw_runtime_error_if(
+						bone == c_InvalidIndex,
+						"avatar: part '{}' end '{}' is not descended from start '{}'",
+						name,
+						part.endBoneName,
+						part.startBoneName);
+					chain.push_back(bone);
+					if (bone == start)
+						break;
+				}
+				std::ranges::reverse(chain);
+			}
+		}
 		// Read and never written: the list this key was before it became a weight, kept so a
 		// document from then still loads. A save rewrites it as `plant`.
 		constexpr std::string_view c_UnplantedKey = "unplanted";
@@ -122,6 +191,7 @@ namespace assetlib
 		}
 
 		out.clipWeights = avatar.clipWeights;
+		resolveParts(avatar, skeleton, out);
 		return out;
 	}
 
@@ -163,7 +233,8 @@ namespace assetlib
 		catch (const std::exception& e)
 		{
 			spdlog::warn(
-				"'{}' cannot be used against '{}', so the rig plants no feet: {}",
+				"'{}' cannot be used against '{}', so the rig has no avatar parts or foot "
+				"planting: {}",
 				key,
 				skeletonKey,
 				e.what());
@@ -180,6 +251,39 @@ namespace assetlib
 		auto json = doc::parseObject(text, "avatar: the document");
 
 		Avatar avatar;
+
+		if (auto it = json.find(c_PartsKey); it != json.end())
+		{
+			core::throw_runtime_error_if(!it->is_object(), "avatar: 'parts' is not an object");
+			for (const auto& [name, value] : it->items())
+			{
+				auto part = AvatarPart();
+				if (value.is_string())
+					part.startBoneName = part.endBoneName = value.get<std::string>();
+				else
+				{
+					core::throw_runtime_error_if(
+						!value.is_object(),
+						"avatar: part '{}' is not a bone name or start/end object",
+						name);
+					for (const auto key : { c_StartKey, c_EndKey })
+						core::throw_runtime_error_if(
+							!value.contains(key) || !value[key].is_string(),
+							"avatar: part '{}' requires a '{}' bone name",
+							name,
+							key);
+					part.startBoneName = value[c_StartKey].get<std::string>();
+					part.endBoneName   = value[c_EndKey].get<std::string>();
+					auto extra         = value;
+					extra.erase(c_StartKey);
+					extra.erase(c_EndKey);
+					part.extraJson = extra.dump();
+				}
+				validatePart(name, part);
+				avatar.parts.emplace(name, std::move(part));
+			}
+			json.erase(it);
+		}
 
 		if (auto it = json.find(c_LegsKey); it != json.end())
 		{
@@ -255,6 +359,28 @@ namespace assetlib
 	AssetCodec<Avatar>::Serialize(const Avatar& avatar)
 	{
 		auto json = doc::parseObject(avatar.extraJson, "avatar: extraJson");
+
+		json.erase(c_PartsKey);
+		if (!avatar.parts.empty())
+		{
+			auto parts = nlohmann::json::object();
+			for (const auto& [name, part] : avatar.parts)
+			{
+				validatePart(name, part);
+				auto value = doc::parseObject(part.extraJson, "avatar part: extraJson");
+				value.erase(c_StartKey);
+				value.erase(c_EndKey);
+				if (part.startBoneName == part.endBoneName && value.empty())
+					parts[name] = part.startBoneName;
+				else
+				{
+					value[c_StartKey] = part.startBoneName;
+					value[c_EndKey]   = part.endBoneName;
+					parts[name]       = std::move(value);
+				}
+			}
+			json[c_PartsKey] = std::move(parts);
+		}
 
 		auto legs = nlohmann::json::array();
 		for (const AvatarLeg& leg : avatar.legs)
