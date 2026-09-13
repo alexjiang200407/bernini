@@ -241,12 +241,8 @@ namespace game::test
 	}
 
 	/**
-	 * A clip set of two *looping* clips over WriteRig's one bone, which a blend space needs: its
-	 * samples share one normalized phase, and a clip that clamps rather than wraps has no cycle to
-	 * share. Different lengths, so the phase has something to keep in step.
-	 *
-	 * WriteClips leaves `loop` at its default, which `AddRig` refuses in a space -- hence a writer
-	 * of its own rather than a flag on that one.
+	 * A clip set of two looping clips of different lengths over WriteRig's one bone, so a blend
+	 * space's shared phase has something to keep in step.
 	 */
 	inline void
 	WriteLoopingClips(const fs::path& dataRoot, const fs::path& banimRel)

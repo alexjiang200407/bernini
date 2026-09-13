@@ -184,8 +184,8 @@ namespace editor
 	std::string_view
 	ClipRefusalReason(const ClipInfo& clip) noexcept
 	{
-		if (!clip.loop)
-			return "does not loop, so it cannot share a blend space's phase";
+		if (clip.frameCount < 2)
+			return "has a single frame, so it has no cycle for a blend space to share";
 
 		return {};
 	}

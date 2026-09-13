@@ -8,7 +8,7 @@ import lib.anim.clip_playback;
 // What a space owns is where the parameter comes from and which samples it lands between; none of
 // that is here.
 //
-// Samples are looping clips of different lengths, so "the same frame" means nothing between them.
+// Samples are clips of different lengths, so "the same frame" means nothing between them.
 // What is shared is a normalized phase `u`, and a sample's frame is `u * ClipCycle(clip)`. The rate
 // `u` advances at is the reciprocal of the weighted cycle length in seconds at the current
 // parameter, so a walk blended toward a run speeds up as the parameter moves and the feet do not
@@ -16,8 +16,9 @@ import lib.anim.clip_playback;
 
 // One sample's cycle, in seconds: the intervals it wraps over, at its authored rate.
 //
-// Never zero, which is what lets every divisor below stand: a looping clip has at least two frames,
-// and a space refuses a non-looping sample where it is resolved.
+// Never zero, which is what lets every divisor below stand: a space refuses a sample of fewer than
+// two frames where it is resolved. The clip's own loop flag is not read -- the phase wraps, so every
+// sample cycles with the space.
 public float SampleSeconds(Clip clip)
 {
     return ClipCycle(clip) / clip.sampleRate;

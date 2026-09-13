@@ -233,7 +233,7 @@ namespace game
 		 *         with a different one, the blend set names another `.banim` than this one, or a
 		 *         sample names a clip the set does not hold;
 		 *         bgl::SceneError for anything AddRig or AddSkinnedMeshGeom refuses -- a space of
-		 *         fewer than two samples, a sample that does not loop, parameters that do not
+		 *         fewer than two samples, a sample of a single frame, parameters that do not
 		 *         strictly increase. A failed acquire owns nothing.
 		 */
 		SkinnedMesh
