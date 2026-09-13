@@ -33,19 +33,22 @@ namespace game
 {
 	/**
 	 * The texture files `material` names, relative to the data root: the nine authoring routes when
-	 * `loose`, otherwise the baked triplet. Unrouted slots come back as empty strings, so the result
-	 * is positional.
+	 * `loose`, otherwise the baked triplet. A surface's slots list one path apiece -- the whole
+	 * binding, or a routed slot's baked map -- except a slot whose bit is set in `looseSlots`,
+	 * which expands to its four route sources in place. Unrouted slots and channels come back as
+	 * empty strings, so the result is positional.
 	 *
-	 * `loose` is `assetlib::drawsLoose` against the data root -- the caller passes the verdict in
-	 * rather than it being taken here, so one material is measured against the disk once and every
-	 * derived thing agrees with it.
+	 * `loose` is `AssetStore::DrawsLoose` and `looseSlots` is `AssetStore::LooseSurfaceSlots`,
+	 * each against the data root -- the caller passes the verdicts in rather than them being
+	 * taken here, so one material is measured against the disk once and every derived thing
+	 * agrees with it.
 	 *
 	 * Public because decoding a texture is expensive and pure CPU, while uploading it is neither --
 	 * it must happen on the render thread. A caller that wants the decode off that thread needs to
 	 * know what to decode before it acquires anything. See TexturePrefetch.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	MaterialTextures(const assetlib::BMaterial& material, bool loose);
+	MaterialTextures(const assetlib::BMaterial& material, bool loose, uint32_t looseSlots = 0);
 
 	/**
 	 * Textures decoded ahead of time, keyed by the data-root-relative path they will be asked for.
@@ -479,6 +482,11 @@ namespace game
 			// material was created. A scene material's type is fixed for the life of its handle, so
 			// re-measuring the disk later could not act on a different answer anyway.
 			bool loose = false;
+
+			// The surface twin, a bit per slot (AssetStore::LooseSurfaceSlots), decided at the
+			// same moment for the same reason. What keeps `textures`' positional order readable:
+			// a set bit's slot occupies four route entries instead of one.
+			uint32_t looseSlots = 0;
 
 			uint32_t refCount = 0;
 		};

@@ -109,8 +109,10 @@ namespace
 		const assetlib::AssetStore store(dataRoot);
 		const assetlib::BMaterial  material = store.Load<assetlib::BMaterial>(relPath);
 
-		for (const std::string& texture :
-		     game::MaterialTextures(material, store.DrawsLoose(material)))
+		for (const std::string& texture : game::MaterialTextures(
+				 material,
+				 store.DrawsLoose(material),
+				 store.LooseSurfaceSlots(material)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;

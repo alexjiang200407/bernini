@@ -701,19 +701,6 @@ namespace assetlib
 			{});
 	}
 
-	bool
-	AssetStore::CanComposeSurfaceSlots(const BMaterial& material) const
-	{
-		// The host, deliberately, because it is where the compositor reads (SourceCache above):
-		// on a packed mount the sources resolve through the archive but cannot be composited, and
-		// a routed material there should have been stripped anyway.
-		for (const SurfaceTextureBinding& slot : material.surface.textures)
-			for (const ChannelRoute& route : slot.routes)
-				if (!route.texture.empty() && stampOf(m_DataRoot / route.texture).size == 0)
-					return false;
-		return true;
-	}
-
 	ImageData
 	AssetStore::ComposeSurfaceSlot(const BMaterial& material, std::string_view slotName) const
 	{
