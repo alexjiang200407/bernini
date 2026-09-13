@@ -20,8 +20,7 @@ namespace editor
 	PassBandColor(std::size_t pass);
 
 	/**
-	 * Which sample the point `x` falls on, for a graph drawn over `rect` -- the inverse of the
-	 * mapping PaintPassGraph draws with, and here so that there is one of it.
+	 * The full-history sample index at `x` in the latest 600 samples drawn over `rect`.
 	 *
 	 * @return nullopt outside the plotted area, and when there is nothing recorded.
 	 */
@@ -29,7 +28,7 @@ namespace editor
 	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, int x);
 
 	/**
-	 * Draws `history` over `rect` as a stacked area, oldest sample at the left: one band per pass in
+	 * Draws the latest 600 samples of `history` over `rect`, oldest visible sample at the left: one band per pass in
 	 * execution order, so the top of the stack is what the frame cost on the GPU and a bulge names
 	 * the band that caused it. A legend down the right lists the passes with what each cost in the
 	 * sample marked, and the sample marked is where the graph is read.
@@ -38,7 +37,7 @@ namespace editor
 	 * rather than a second drawing of the same numbers. Every colour comes from `palette`, which is
 	 * why it is passed rather than taken from the widget: the export has no widget.
 	 *
-	 * @param selected The sample to mark and to list, or nullopt for the newest one. Out of range is
+	 * @param selected The full-history index to mark, or nullopt for the newest one. Outside the visible range is
 	 *                 treated as nullopt rather than clamped -- a stale selection describes a frame
 	 *                 that has scrolled away, and pointing at its neighbour would be a lie.
 	 */
