@@ -3,6 +3,7 @@
 #include <QString>
 #include <QWidget>
 #include <bgl/PassTiming.h>
+#include <cstddef>
 #include <qtmetamacros.h>
 #include <vector>
 
@@ -47,10 +48,9 @@ namespace editor
 		AddFrames(const std::vector<bgl::PassTimings>& frames);
 
 		/**
-		 * Writes the history into `directory` as `gpu_timings_<stamp>.csv`: every frame the graph
-		 * holds, for a spreadsheet or an agent. The picture is not exported -- it is on screen, and
-		 * a drawing of it that cannot be interrogated is worth nothing a reader does not already
-		 * have.
+		 * Writes all retained samples, up to 3,600, into `directory` as `gpu_timings_<stamp>.csv`.
+		 * The graph displays only the latest 600 of these samples.
+		 * A context record precedes the timing table, describing the editor at export time.
 		 *
 		 * @return the file written, or an empty string when nothing was recorded or it could not be
 		 *         written.
@@ -89,7 +89,9 @@ namespace editor
 		void
 		UpdateStatus();
 
-		bgl::PassHistory m_History;
+		static constexpr std::size_t c_CaptureCapacity = 3600;
+
+		bgl::PassHistory m_History{ c_CaptureCapacity };
 		PassGraphView*   m_Graph  = nullptr;
 		QLabel*          m_Status = nullptr;
 		QPushButton*     m_Pause  = nullptr;

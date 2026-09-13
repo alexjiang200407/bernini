@@ -252,6 +252,32 @@ drop it when the tab is left. Three of its assertions fail against the unfixed w
 that first; `dock->isHidden()` is not the discriminator to reach for instead, because a tab switch
 does not hide the unselected dock — Qt moves it off-screen, so it reads unhidden either way.
 
+## GPU Timing Graph makes animation playback stutter
+
+**Symptom.** On macOS, playback stutters while GPU Timing Graph is focused and recovers when
+focus returns to the animation editor. The graph remains open and GPU timing remains enabled.
+
+**Cause.** Painting each timing band as one large antialiased polygon is expensive for noisy
+histories. The graph paints on the GUI thread, which also advances the animation transport. A
+Qt 6.8.3 Cocoa probe measured full-history paints at 260–310 ms while the render thread kept
+roughly 16.7 ms frames: repeated rendered poses can look like a GPU slowdown even when rendering
+is steady. Batched timing arrivals and hover redraws both pay that painting cost. Timer precision
+and changing the graph to a tool window did not remove the stalls.
+
+**Fixed by** filling each pair of adjacent samples as a convex span in
+[pass_graph_paint.cpp](../apps/editor/src/Windows/GpuTiming/pass_graph_paint.cpp). Shared edges are
+not antialiased, which avoids seams between fills. This retains every sample and spike. The same
+probe measured full-history paints at 3–6 ms and about 62 animation ticks per second with either
+window focused.
+
+**Gates.** `just run editor_tests -- "[gputiming]"`: a dense history must draw without gaps and
+retain a one-frame spike. Its `[perf]` case compares equally sized noisy and flat histories;
+the original painter took about 136 ms versus 2.5 ms and fails the ratio check. Native focus and
+hover interaction still need a visual check.
+
+**If it comes back.** Compare graph-paint time and transport ticks with the renderer's frame
+stats. A healthy render rate does not establish that the GUI supplied a fresh animation time.
+
 ## Scrolling a panel's properties column smears the main tab bar
 
 **Symptom.** Scroll the Animation panel's left column and a second copy of the window's tab strip —
