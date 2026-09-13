@@ -42,23 +42,16 @@ namespace assetlib
 		uint64_t skeletonSignature = 0;
 
 		/**
-		 * That rig's bone names, in bone order -- what lets a rig that has grown a bone since be
-		 * matched to these joint indices by name rather than refused. Empty in a file written
-		 * before the list existed, and for a static mesh, which addresses no bone.
-		 *
-		 * Beside `joints0` and never instead of it: the vertex blob is what the GPU skins from, so
-		 * a name is resolved at load and the indices in it are remapped, never replaced.
+		 * That rig's bone names, in bone order -- what matches these joint indices to a rig that
+		 * has grown a bone since, rather than refusing it. Empty in a file written before the list
+		 * existed, and for a static mesh, which addresses no bone.
 		 */
 		std::vector<std::string> skeletonBoneNames;
 
 		/**
-		 * The geometry this file holds, hashed once at cook time -- the vertex blob and the entry
-		 * and submesh tables that address it (assetlib::geometrySignature). Zero means "not
-		 * recorded": a file written before the field existed, or a mesh whose blob has been
-		 * rewritten in memory since it was read, and a reader that finds zero computes it.
-		 *
-		 * Written by the codec from the bytes it is about to emit, never by a producer, so a
-		 * `.bmesh` on disk cannot carry one that disagrees with its own geometry.
+		 * The geometry this file holds, hashed at cook time by assetlib::geometrySignature. Zero
+		 * means "not recorded" -- an older file, or a blob rewritten in memory since it was read --
+		 * and a reader that finds zero computes it. Written by the codec, never by a producer.
 		 */
 		uint64_t geometrySignature = 0;
 

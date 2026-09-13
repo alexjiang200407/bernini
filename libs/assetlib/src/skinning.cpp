@@ -140,6 +140,20 @@ namespace assetlib
 			return out;
 		}
 
+		/** Where influence `i`'s joint index sits, for a vertex whose data starts at `base`. */
+		size_t
+		jointOffset(const SkinLayout& layout, size_t base, size_t i) noexcept
+		{
+			return base + *layout.joints + i * sizeof(uint16_t);
+		}
+
+		/** Where influence `i`'s weight sits, for a vertex whose data starts at `base`. */
+		size_t
+		weightOffset(const SkinLayout& layout, size_t base, size_t i) noexcept
+		{
+			return base + *layout.weights + i * sizeof(uint16_t);
+		}
+
 		/** A vertex's bind position and its influences, decoded out of the interleaved blob. */
 		struct SkinInfluences
 		{
@@ -176,12 +190,10 @@ namespace assetlib
 
 				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
 				{
-					const auto joint = readAt<uint16_t>(
-						mesh.vertexData,
-						base + *layout.joints + i * sizeof(uint16_t));
-					const auto quantized = readAt<uint16_t>(
-						mesh.vertexData,
-						base + *layout.weights + i * sizeof(uint16_t));
+					const auto joint =
+						readAt<uint16_t>(mesh.vertexData, jointOffset(layout, base, i));
+					const auto quantized =
+						readAt<uint16_t>(mesh.vertexData, weightOffset(layout, base, i));
 
 					if (quantized != 0 && joint >= boneCount)
 						throw_runtime_error(
@@ -711,12 +723,10 @@ namespace assetlib
 				const size_t base = layout.first + static_cast<size_t>(v) * layout.stride;
 				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
 				{
-					const auto joint = readAt<uint16_t>(
-						mesh.vertexData,
-						base + *layout.joints + i * sizeof(uint16_t));
-					const auto weight = readAt<uint16_t>(
-						mesh.vertexData,
-						base + *layout.weights + i * sizeof(uint16_t));
+					const auto joint =
+						readAt<uint16_t>(mesh.vertexData, jointOffset(layout, base, i));
+					const auto weight =
+						readAt<uint16_t>(mesh.vertexData, weightOffset(layout, base, i));
 
 					if (weight != 0 && joint >= oldBoneCount)
 						return false;
@@ -735,7 +745,7 @@ namespace assetlib
 				const size_t base = layout.first + static_cast<size_t>(v) * layout.stride;
 				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
 				{
-					const size_t at    = base + *layout.joints + i * sizeof(uint16_t);
+					const size_t at    = jointOffset(layout, base, i);
 					const auto   joint = readAt<uint16_t>(mesh.vertexData, at);
 
 					// An unweighted influence may name a bone that was never there, and there is no
