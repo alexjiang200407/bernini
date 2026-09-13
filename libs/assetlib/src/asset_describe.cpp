@@ -13,6 +13,7 @@
 #include <assetlib_structs/Skeleton.h>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <format>
 #include <optional>
 #include <string>
@@ -599,6 +600,34 @@ namespace assetlib
 
 		for (const ClipPlantWeight& entry : avatar.clipWeights)
 			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
+
+		out += std::format("  parts        {}\n", avatar.parts.size());
+		for (const auto& [name, part] : avatar.parts)
+		{
+			out += std::format(
+				"    '{}' start {} end {}\n",
+				name,
+				named(part.startBoneName),
+				named(part.endBoneName));
+			if (skeleton == nullptr)
+				continue;
+			try
+			{
+				auto single = Avatar();
+				single.parts.emplace(name, part);
+				const auto resolved = resolveAvatar(single, *skeleton);
+				out += "      chain";
+				for (const uint32_t bone : resolved.parts.at(name))
+					out += std::format(
+						" {}",
+						named(skeleton->stringPool.at(skeleton->bones[bone].nameOffset)));
+				out += '\n';
+			}
+			catch (const std::exception& error)
+			{
+				out += std::format("      INVALID: {}\n", error.what());
+			}
+		}
 
 		return out;
 	}

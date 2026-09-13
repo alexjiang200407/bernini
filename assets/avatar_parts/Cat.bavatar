@@ -1,0 +1,36 @@
+{
+	"legs": [],
+	"parts": {
+		"head": "Cat Head",
+		"left_arm": {
+			"end": "Cat L Hand",
+			"start": "Cat L UpperArm"
+		},
+		"left_leg": {
+			"end": "Cat L Foot",
+			"start": "Cat L Thigh"
+		},
+		"neck": "Cat Neck",
+		"pelvis": "Cat Pelvis",
+		"right_arm": {
+			"end": "Cat R Hand",
+			"start": "Cat R UpperArm"
+		},
+		"right_leg": {
+			"end": "Cat R Foot",
+			"start": "Cat R Thigh"
+		},
+		"spine": {
+			"end": "Cat Spine1",
+			"start": "Cat Spine"
+		},
+		"tail": {
+			"end": "Cat Tail4",
+			"start": "Cat Tail"
+		},
+		"tongue": {
+			"end": "Cat Tongue03",
+			"start": "Cat Tongue"
+		}
+	}
+}

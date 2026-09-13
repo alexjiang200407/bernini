@@ -1,0 +1,33 @@
+{
+	"legs": [],
+	"parts": {
+		"head": "Bear Head",
+		"left_arm": {
+			"end": "Bear L Hand",
+			"start": "Bear L UpperArm"
+		},
+		"left_leg": {
+			"end": "Bear L Foot",
+			"start": "Bear L Thigh"
+		},
+		"neck": "Bear Neck",
+		"pelvis": "Bear Pelvis",
+		"right_arm": {
+			"end": "Bear R Hand",
+			"start": "Bear R UpperArm"
+		},
+		"right_leg": {
+			"end": "Bear R Foot",
+			"start": "Bear R Thigh"
+		},
+		"spine": {
+			"end": "Bear Spine2",
+			"start": "Bear Spine"
+		},
+		"tail": "Bear Tail",
+		"tongue": {
+			"end": "Bear Tongue03",
+			"start": "Bear Tongue"
+		}
+	}
+}
