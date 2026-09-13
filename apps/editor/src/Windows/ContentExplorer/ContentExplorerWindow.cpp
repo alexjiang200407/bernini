@@ -31,9 +31,7 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
-#include <QtTypes>
 #include <algorithm>
-#include <assetlib/codecs.h>
 
 #include <memory>
 #include <qabstractitemmodel.h>
@@ -387,11 +385,7 @@ ContentExplorerWindow::AttachModels()
 			}
 
 			const QString asset = editor::AssetAt(*m_FileModel, index, m_RootPath);
-			const auto    blend = QString::fromUtf8(
-				assetlib::c_BlendExtension.data(),
-				static_cast<qsizetype>(assetlib::c_BlendExtension.size()));
-
-			if (asset.endsWith(blend, Qt::CaseInsensitive))
+			if (editor::IsBlendSetFile(asset))
 				Q_EMIT BlendSetOpenRequested(asset);
 		});
 

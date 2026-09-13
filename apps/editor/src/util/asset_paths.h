@@ -22,6 +22,10 @@ namespace editor
 	[[nodiscard]] bool
 	IsTextureFile(const QString& path);
 
+	/** Whether `path` names a blend set (`.bblend`, case-insensitively). */
+	[[nodiscard]] bool
+	IsBlendSetFile(const QString& path);
+
 	/**
 	 * Whether `path` names a file the Content Explorer's views do not list: a sidecar whose row is
 	 * the file beside it -- as Unity hides a `.meta` and Godot a `.import`.

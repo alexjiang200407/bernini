@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <assetlib/codecs.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qstringliteral.h>
@@ -22,6 +23,16 @@ namespace editor
 	IsTextureFile(const QString& path)
 	{
 		return path.endsWith(QStringLiteral(".ktx2"), Qt::CaseInsensitive);
+	}
+
+	bool
+	IsBlendSetFile(const QString& path)
+	{
+		const auto extension = QString::fromUtf8(
+			assetlib::c_BlendExtension.data(),
+			static_cast<qsizetype>(assetlib::c_BlendExtension.size()));
+
+		return path.endsWith(extension, Qt::CaseInsensitive);
 	}
 
 	namespace
