@@ -44,9 +44,9 @@ namespace editor
 	 * provenance. Rebuilding purely from the graph would throw the optimized textures away on every
 	 * Save. If the routes have since changed, the stamps no longer match and the bake reports stale.
 	 *
-	 * It keeps its shading model too, and a surface's parameters with it. The board is a PBR one
-	 * whatever the file is, so a material drawn by a game's surface would otherwise be rewritten as
-	 * an ordinary PBR one by a Save that was never about it.
+	 * The shading model is the sink's: a surface board writes a surface material and a PBR board a
+	 * PBR one, so the board decides -- which is why OpenMaterialInto never puts a surface document
+	 * behind a PBR board.
 	 */
 	[[nodiscard]] assetlib::BMaterial
 	BuildMaterial(

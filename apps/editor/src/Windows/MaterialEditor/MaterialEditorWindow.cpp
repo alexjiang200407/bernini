@@ -4,10 +4,13 @@
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,22 +31,26 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <bgl/IGraphics.h>
+#include <bgl/SurfaceType.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <qcontainerfwd.h>
-#include <qlatin1stringview.h>
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qstringview.h>
+#include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
@@ -56,6 +63,8 @@
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
@@ -100,6 +109,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_MaterialLabel      = ui.materialLabel;
 	m_BakedTexturesLabel = ui.bakedTextures;
 	m_TangentWarning     = ui.tangentWarning;
+	m_Ui                 = ui;
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -142,6 +152,26 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 			activated,  // activated, not currentIndexChanged: only a user's pick swaps the sink
 		this,
 		&MaterialEditorWindow::SetOutputType);
+
+	// The panel edits the surface sink's layer (ADR-9). activated, not currentIndexChanged, for
+	// the Output selector's reason: only a user's pick writes, so the sync can set the combo
+	// without echoing.
+	connect(m_Ui.layerSelector, &QComboBox::activated, this, [this](int index) {
+		SurfaceOutputNode* sink = CurrentSurfaceSink();
+		if (sink == nullptr || index < 0 || index > static_cast<int>(assetlib::AlphaMode::kHashed))
+			return;
+		sink->SetAlphaMode(static_cast<assetlib::AlphaMode>(index));
+	});
+
+	connect(m_Ui.alphaCutoff, &QDoubleSpinBox::valueChanged, this, [this](double edited) {
+		if (SurfaceOutputNode* sink = CurrentSurfaceSink())
+			sink->SetAlphaCutoff(static_cast<float>(edited));
+	});
+
+	connect(m_Ui.doubleSided, &QCheckBox::toggled, this, [this](bool checked) {
+		if (SurfaceOutputNode* sink = CurrentSurfaceSink())
+			sink->SetDoubleSided(checked);
+	});
 
 	connect(
 		m_GraphView,
@@ -188,7 +218,22 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_TexturePreviews = new TexturePreviewCache(this);
 
-	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews);
+	// The reflected surfaces, copied off the render thread once -- the set is fixed inside
+	// CreateGraphics, so this is all of them for the editor's lifetime.
+	auto surfaces = std::vector<bgl::SurfaceType>();
+	if (m_Desc.renderer != nullptr)
+	{
+		surfaces = m_Desc.renderer->Invoke([&] {
+			const std::span<const bgl::SurfaceType> types =
+				m_Desc.renderer->GetGraphics()->GetSurfaceTypes();
+			return std::vector<bgl::SurfaceType>(types.begin(), types.end());
+		});
+	}
+
+	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews, surfaces);
+
+	m_OutputTypes = editor::OutputTypesFor(surfaces);
+	for (const editor::OutputType& type : m_OutputTypes) m_OutputSelector->addItem(type.label);
 
 	splitter->addWidget(ui.leftPanel);
 	splitter->addWidget(rightPanel);
@@ -221,8 +266,26 @@ MaterialEditorWindow::~MaterialEditorWindow()
 		m_GraphView->setScene(nullptr);
 }
 
-MaterialOutputNode*
+MaterialSinkNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
+{
+	return RebuildGraph(graphIndex, [this, &graph](MaterialGraphModel& model) {
+		if (graph.isEmpty())
+		{
+			const QtNodes::NodeId outputId = model.addNode(m_OutputTypes.front().modelName);
+			model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
+		}
+		else
+		{
+			model.load(graph);
+		}
+	});
+}
+
+MaterialSinkNode*
+MaterialEditorWindow::RebuildGraph(
+	int                                             graphIndex,
+	const std::function<void(MaterialGraphModel&)>& build)
 {
 	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
@@ -234,25 +297,17 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	entry.model = std::make_unique<MaterialGraphModel>(m_Registry);
 	entry.scene = std::make_unique<MaterialGraphScene>(*entry.model);
 
-	if (graph.isEmpty())
-	{
-		const QtNodes::NodeId outputId =
-			entry.model->addNode(QLatin1String(editor::c_OutputTypes[0].modelName));
-		entry.model->setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
-	}
-	else
-	{
-		entry.model->load(graph);
-	}
+	build(*entry.model);
 
 	if (current)
 		m_GraphView->setScene(entry.scene.get());
 
-	MaterialOutputNode* output = WatchOutputNode(graphIndex);
+	MaterialSinkNode* output = WatchOutputNode(graphIndex);
 
 	if (current)
 	{
 		SyncOutputSelector();
+		SyncLayerSection();
 		FrameOnOutput();
 	}
 
@@ -281,16 +336,21 @@ MaterialEditorWindow::FrameOnOutput()
 	}
 }
 
-MaterialOutputNode*
+MaterialSinkNode*
 MaterialEditorWindow::WatchOutputNode(int graphIndex)
 {
 	// Recompile whenever anything the material depends on changes. The sink is the only one, and every
 	// upstream edit reaches it through setInData.
-	MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
+	MaterialSinkNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output != nullptr)
 	{
-		connect(output, &MaterialOutputNode::Changed, this, [this, graphIndex]() {
+		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
 			CompileGraph(graphIndex);
+
+			// A load or a seed changes the sink's layer without touching the panel; the panel
+			// follows only while this graph is the one on screen.
+			if (graphIndex == m_Graphs.Current())
+				SyncLayerSection();
 		});
 	}
 	return output;
@@ -302,18 +362,18 @@ MaterialEditorWindow::SetOutputType(int comboIndex)
 	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
-	if (comboIndex < 0 || comboIndex >= static_cast<int>(editor::c_OutputTypes.size()))
+	if (comboIndex < 0 || comboIndex >= static_cast<int>(m_OutputTypes.size()))
 		return;
 
 	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
-	const QString modelName =
-		QLatin1String(editor::c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
+	const QString& modelName = m_OutputTypes[static_cast<size_t>(comboIndex)].modelName;
 	if (!entry.model->SetOutputType(modelName))
 		return;
 
 	// The old sink took its Changed connection with it, and the new one starts unwatched.
 	WatchOutputNode(graphIndex);
+	SyncLayerSection();
 	CompileGraph(graphIndex);
 	RefreshActions();
 }
@@ -327,20 +387,38 @@ MaterialEditorWindow::SyncOutputSelector()
 	if (graphIndex < 0)
 		return;
 
-	const MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
+	const MaterialSinkNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output == nullptr)
 		return;
 
-	const auto it =
-		std::ranges::find_if(editor::c_OutputTypes, [&output](const editor::OutputType& type) {
-			return output->name() == QLatin1String(type.modelName);
-		});
-	if (it == editor::c_OutputTypes.end())
+	const auto it = std::ranges::find_if(m_OutputTypes, [&output](const editor::OutputType& type) {
+		return output->name() == type.modelName;
+	});
+	if (it == m_OutputTypes.end())
 		return;
 
 	const QSignalBlocker blocker(m_OutputSelector);
-	m_OutputSelector->setCurrentIndex(
-		static_cast<int>(std::distance(editor::c_OutputTypes.begin(), it)));
+	m_OutputSelector->setCurrentIndex(static_cast<int>(std::distance(m_OutputTypes.begin(), it)));
+}
+
+SurfaceOutputNode*
+MaterialEditorWindow::CurrentSurfaceSink() const
+{
+	const int graphIndex = m_Graphs.Current();
+	if (graphIndex < 0)
+		return nullptr;
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.model == nullptr)
+		return nullptr;
+
+	return qobject_cast<SurfaceOutputNode*>(entry.model->OutputNode());
+}
+
+void
+MaterialEditorWindow::SyncLayerSection()
+{
+	editor::FillLayerSection(CurrentSurfaceSink(), m_Ui);
 }
 
 void
@@ -410,7 +488,12 @@ MaterialEditorWindow::SelectSubmesh(int index)
 			valid ? std::optional(static_cast<uint32_t>(index)) : std::nullopt);
 
 	if (!valid)
+	{
+		// A cleared selector -- the mesh swapped out, or emptied -- must not leave the previous
+		// board's Layer section standing over no graph.
+		SyncLayerSection();
 		return;
+	}
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
@@ -420,6 +503,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	m_GraphView->setScene(graphIndex >= 0 ? m_Graphs.At(graphIndex).scene.get() : nullptr);
 
 	SyncOutputSelector();
+	SyncLayerSection();
 	FrameOnOutput();
 	RefreshActions();
 }
@@ -444,8 +528,8 @@ MaterialEditorWindow::RefreshTangentWarning()
 {
 	const int graphIndex = m_Graphs.Current();
 
-	const MaterialOutputNode* output =
-		graphIndex >= 0 ? m_Graphs.At(graphIndex).model->OutputNode() : nullptr;
+	const auto* output = qobject_cast<const MaterialOutputNode*>(
+		graphIndex >= 0 ? m_Graphs.At(graphIndex).model->OutputNode() : nullptr);
 
 	// Only where it is actionable: a mesh on disk to rewrite, a normal map that is being thrown
 	// away, and a submesh that has no tangent to throw it away with.
@@ -891,7 +975,59 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		}
 	}
 
-	MaterialOutputNode* output = ResetGraph(graphIndex, graph);
+	// A surface document never opens behind a PBR board: Save compiles the board, so the board is
+	// the surface's or nothing -- the fallback PBR seed would be compiled into a demotion.
+	if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+	{
+		const QString sinkName = SurfaceOutputNode::ModelNameFor(material.surface.name);
+		if (m_Registry->registeredModelCreators().count(sinkName) == 0)
+		{
+			// Surfaces are registered once, inside CreateGraphics, from the startup project's
+			// shader directory -- a second project's surface, or one added since launch, has no
+			// sink to show until the next launch.
+			qWarning(
+				"MaterialEditor: cannot open '%s': surface '%s' is not registered in this session",
+				qPrintable(path),
+				material.surface.name.c_str());
+			if (interactive)
+			{
+				QMessageBox::warning(
+					window(),
+					QStringLiteral("Open Material"),
+					QStringLiteral(
+						"'%1' is drawn by surface '%2', which this session has not "
+						"registered. Open the project that provides it and relaunch.")
+						.arg(path, QString::fromStdString(material.surface.name)));
+			}
+			return;
+		}
+
+		if (GraphHoldsNodeType(graph, sinkName))
+		{
+			ResetGraph(graphIndex, graph);
+		}
+		else
+		{
+			// A hand-authored document, or a board saved while surface boards could not be
+			// authored -- either way the document is what there is to show.
+			RebuildGraph(graphIndex, [this, &material](MaterialGraphModel& model) {
+				if (!BuildSurfaceMaterialGraph(model, material, m_DataRoot))
+				{
+					qWarning(
+						"MaterialEditor: could not build the surface board for '%s'",
+						material.name.c_str());
+				}
+			});
+		}
+
+		m_Graphs.At(graphIndex).materialPath = path;
+		CompileGraph(graphIndex);
+		RefreshActions();
+		return;
+	}
+
+	// The seed reads PBR factors, so it wants the PBR sink -- the one an empty ResetGraph builds.
+	auto* output = qobject_cast<MaterialOutputNode*>(ResetGraph(graphIndex, graph));
 
 	// Without a graph, the board is seeded from the material itself. Only the factors survive: the
 	// routes name textures but not how the artist arranged the nodes that produced them.
@@ -929,12 +1065,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
 
-	editor::CompilePreviewMaterial(
-		graph,
-		*m_Desc.renderer,
-		*m_Preview,
-		graph.onDisk.Get(m_DataRoot, graph.materialPath),
-		m_DataRoot);
+	editor::CompilePreviewMaterial(graph, *m_Desc.renderer, *m_Preview);
 }
 
 void

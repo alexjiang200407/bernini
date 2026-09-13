@@ -163,6 +163,21 @@ namespace bgl
 			}
 			return value;
 		}
+
+		bool
+		IsColorMarked(slang::VariableReflection* var)
+		{
+			if (var == nullptr)
+				return false;
+
+			for (unsigned i = 0; i < var->getUserAttributeCount(); ++i)
+			{
+				const char* name = var->getUserAttributeByIndex(i)->getName();
+				if (name != nullptr && std::string_view(name) == "Color")
+					return true;
+			}
+			return false;
+		}
 	}
 
 	std::optional<ReflectedSurface>
@@ -238,6 +253,16 @@ namespace bgl
 			value.type         = ValueTypeOf(type, surfaceName, spelling);
 			value.byteOffset   = byteOffset;
 			value.defaultValue = DefaultOf(field->getVariable(), value.type);
+			value.isColor      = IsColorMarked(field->getVariable());
+			if (value.isColor && SurfaceValueComponents(value.type) < 3)
+			{
+				core::throw_runtime_error(
+					"surface '{}': '{}' is [Color] but has {} component(s); a colour is a float3 "
+					"or a float4",
+					surfaceName,
+					spelling,
+					SurfaceValueComponents(value.type));
+			}
 			reflected.params.values.emplace_back(std::move(value));
 		}
 

@@ -9,9 +9,11 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
+#include <bgl/SurfaceType.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 
 class MaterialGraphModel;
 class TexturePreviewCache;
@@ -55,13 +57,21 @@ SortGraph(QJsonObject& graph);
  *
  * `renderer` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph
  * be built and compiled with no graphics device.
+ *
+ * `surfaces` registers one surface sink per entry, named `SurfaceOutput:<name>` -- what the engine
+ * reflected at startup, or hand-built types in a test. Each entry is copied into its creator, so
+ * the span need not outlive the call. Empty registers none, and a saved graph naming one then
+ * fails to restore that node -- the same as any unregistered model.
  */
 [[nodiscard]] std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
-MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews);
+MakeMaterialNodeRegistry(
+	Renderer*                         renderer,
+	TexturePreviewCache*              previews,
+	std::span<const bgl::SurfaceType> surfaces = {});
 
 /**
- * Compiles `model` into the material it authors: the factors and alpha mode of its sink, the nine
- * routes wired into it, and the graph itself as `editorGraph` so reopening restores the board. Texture
+ * Compiles `model` into the material it authors: what its sink writes (MaterialSinkNode::
+ * CompileInto), and the graph itself as `editorGraph` so reopening restores the board. Texture
  * paths are stored relative to `dataRoot`, like every asset reference.
  *
  * The routes are read back out of the graph rather than tracked beside it, so a material's routes and
@@ -95,6 +105,28 @@ struct ImportedMaterialMaps
 	// material that names none.
 	QString occlusion;
 };
+
+/** Whether a saved board holds a node of the registered node type `modelName` -- QtNodes' model
+ *  name, nothing to do with a shading model. */
+[[nodiscard]] bool
+GraphHoldsNodeType(const QJsonObject& graph, const QString& modelName);
+
+/**
+ * Lays out the board a surface material document describes in `model`, which must be empty: the
+ * surface's sink, loaded with the document's values and layer keys, and a Texture node wired into
+ * each slot the document binds -- one node per distinct file, exactly as an import lays one out.
+ * A binding naming a slot the surface does not declare is skipped with a warning; the same
+ * document is refused at CreateSurfaceMaterial, so the board simply cannot show it.
+ *
+ * @return false -- with `model` left holding no sink -- when the registry has no sink for the
+ *         document's surface: one the engine did not register this session. The caller must not
+ *         fall back to a PBR board, which a Save would compile into a demotion.
+ */
+[[nodiscard]] bool
+BuildSurfaceMaterialGraph(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot);
 
 /**
  * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per

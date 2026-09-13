@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
@@ -16,6 +17,7 @@
 #include <QSignalBlocker>
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
+#include <filesystem>
 #include <memory>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
@@ -68,6 +70,37 @@ MaterialOutputNode::MaterialOutputNode(unsigned int baseColorArity)
 void
 MaterialOutputNode::AddExtraRows(QWidget*, QFormLayout*)
 {}
+
+void
+MaterialOutputNode::CompileInto(
+	assetlib::BMaterial&         material,
+	const std::filesystem::path& dataRoot) const
+{
+	material.shadingModel = assetlib::ShadingModel::kPbr;
+
+	assetlib::PbrParams& pbr = material.pbr;
+
+	pbr.baseColorFactor = BaseColorFactor();
+	pbr.metallicFactor  = MetallicFactor();
+	pbr.roughnessFactor = RoughnessFactor();
+
+	material.layer.alphaMode   = GetAlphaMode();
+	material.layer.alphaCutoff = GetAlphaCutoff();
+	material.layer.doubleSided = GetDoubleSided();
+
+	pbr.transmissionFactor = GetTransmission();
+
+	pbr.specularColorFactor = GetSpecularColorFactor();
+	pbr.specularFactor      = GetSpecularFactor();
+
+	for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
+	{
+		const ChannelData::Route wired = Route(i);
+
+		pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
+		pbr.routes[i].channel = wired.channel;
+	}
+}
 
 unsigned int
 MaterialOutputNode::GroupChannelOffset(unsigned int group)
@@ -329,23 +362,14 @@ MaterialOutputNode::embeddedWidget()
 		m_ExpandBoxes[group] = box;
 	}
 
+	WatchEmbeddedWidget(m_Widget);
 	return m_Widget;
 }
 
 QWidget*
 MaterialOutputNode::DialogOwner() const
 {
-	// A dialog must NOT be parented to m_Widget. An embedded widget is reparented into a
-	// QGraphicsProxyWidget, and Qt embeds a proxied widget's child windows into the graphics scene
-	// too -- so the dialog's real window comes up blank while its contents are painted onto the node
-	// canvas, and the scene is left with a stray proxy afterwards. Parent it to the editor's actual
-	// top-level window instead; a null parent would also work but would lose modality and taskbar
-	// grouping.
-	QWidget* owner = m_Widget != nullptr ? m_Widget->window() : nullptr;
-	if (owner == nullptr || owner->graphicsProxyWidget() != nullptr)
-		owner = QApplication::activeWindow();
-
-	return owner;
+	return DialogOwnerFor(m_Widget);
 }
 
 void

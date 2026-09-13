@@ -235,16 +235,35 @@ namespace game
 	}
 
 	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
-	// them, the baked triplet, or the nine authoring routes. One order per case, in one place, so
-	// the record's texture references and the desc it rebuilds can never fall out of step.
+	// them (a loose slot expanding to its four route sources in place), the baked triplet, or the
+	// nine authoring routes. One order per case, in one place, so the record's texture references
+	// and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
-	MaterialTextures(const assetlib::BMaterial& material, const bool loose)
+	MaterialTextures(
+		const assetlib::BMaterial& material,
+		const bool                 loose,
+		const uint32_t             looseSlots)
 	{
 		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
 		{
-			auto paths = std::vector<std::string>(material.surface.textures.size());
-			for (size_t i = 0; i < paths.size(); ++i)
-				paths[i] = material.surface.textures[i].texture;
+			auto paths = std::vector<std::string>();
+			paths.reserve(material.surface.textures.size());
+			for (size_t i = 0; i < material.surface.textures.size(); ++i)
+			{
+				const assetlib::SurfaceTextureBinding& slot = material.surface.textures[i];
+
+				// A loose slot draws each channel from its own source; anything else samples one
+				// map -- a routed slot its baked composite (the routes win where a document
+				// carries both), a whole slot its binding.
+				if ((looseSlots >> i) & 1u)
+				{
+					for (const assetlib::ChannelRoute& route : slot.routes)
+						paths.push_back(route.texture);
+					continue;
+				}
+
+				paths.push_back(assetlib::slotIsRouted(slot) ? slot.bakedPath : slot.texturePath);
+			}
 			return paths;
 		}
 
@@ -459,21 +478,25 @@ namespace game
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
-		// are still there to fall back to. A surface has no triplet and no routes, so it is neither.
-		const bool loose = !surface && m_Store.DrawsLoose(material);
+		// are still there to fall back to. A surface answers per slot: one whose bake is stale or
+		// absent draws each channel from its own source through the record's routes, so nothing
+		// is composited at load and the material renders the same however it is loaded.
+		const bool     loose      = !surface && m_Store.DrawsLoose(material);
+		const uint32_t looseSlots = surface ? m_Store.LooseSurfaceSlots(material) : 0;
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = MaterialTextures(material, loose);
+		const std::vector<std::string> paths = MaterialTextures(material, loose, looseSlots);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
 		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
 
-		auto record     = MaterialRecord();
-		record.key      = key;
-		record.source   = material;
-		record.textures = std::move(textures);
-		record.loose    = loose;
-		record.refCount = 1;
+		auto record       = MaterialRecord();
+		record.key        = key;
+		record.source     = material;
+		record.textures   = std::move(textures);
+		record.loose      = loose;
+		record.looseSlots = looseSlots;
+		record.refCount   = 1;
 
 		if (surface)
 			record.handle = m_Scene->CreateSurfaceMaterial(SurfaceDesc(record));
@@ -1519,7 +1542,8 @@ namespace game
 	void
 	AssetManager::RebuildMaterial(MaterialRecord& record)
 	{
-		const std::vector<std::string> paths = MaterialTextures(record.source, record.loose);
+		const std::vector<std::string> paths =
+			MaterialTextures(record.source, record.loose, record.looseSlots);
 
 		// Acquire the new set before releasing the old: a texture that survives the swap -- the two
 		// maps the edit did not touch, or the same path reassigned -- must not be deleted and
@@ -1591,10 +1615,32 @@ namespace game
 			desc.values.push_back(std::move(binding));
 		}
 
-		// Parallel to MaterialTextures' surface case, which is what filled record.textures.
+		// Parallel to MaterialTextures' surface case, which is what filled record.textures: a
+		// loose slot occupies four route entries, everything else one whole binding.
 		desc.textures.reserve(surface.textures.size());
+		size_t cursor = 0;
 		for (size_t i = 0; i < surface.textures.size(); ++i)
-			desc.textures.emplace_back(surface.textures[i].name, record.textures[i]);
+		{
+			auto binding = bgl::SurfaceTextureBinding();
+			binding.name = surface.textures[i].name;
+
+			if ((record.looseSlots >> i) & 1u)
+			{
+				for (size_t c = 0; c < binding.routes.size(); ++c)
+				{
+					binding.routes[c].texture = record.textures[cursor + c];
+					binding.routes[c].channel = surface.textures[i].routes[c].channel;
+				}
+				cursor += binding.routes.size();
+			}
+			else
+			{
+				binding.texture = record.textures[cursor];
+				++cursor;
+			}
+
+			desc.textures.push_back(std::move(binding));
+		}
 
 		return desc;
 	}

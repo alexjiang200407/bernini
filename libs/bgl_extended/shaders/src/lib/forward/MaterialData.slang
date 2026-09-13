@@ -140,7 +140,7 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
 // Selects one component of `v`. Indexing a vector with a runtime value (`v[c]`) makes DXC spill it
 // to an indexable temp; an explicit switch lowers to a select chain instead, with no scratch memory.
-float SelectComponent(float4 v, uint c)
+public float SelectComponent(float4 v, uint c)
 {
     switch (c)
     {

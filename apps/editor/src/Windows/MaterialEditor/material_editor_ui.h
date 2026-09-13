@@ -1,30 +1,38 @@
 #pragma once
 
 #include <QString>
-#include <array>
+#include <bgl/SurfaceType.h>
+#include <span>
+#include <vector>
 
 class MaterialGraphView;
+class SurfaceOutputNode;
+class QCheckBox;
 class QComboBox;
+class QDoubleSpinBox;
+class QFormLayout;
 class QLabel;
 class QPushButton;
 class QWidget;
 
 namespace editor
 {
-	/** A sink a material graph can end in, and the alpha mode choosing it *is*. */
+	/** One Output selector entry: the label it shows, and the registered sink choosing it swaps
+	 *  in. */
 	struct OutputType
 	{
-		const char* label;
-		const char* modelName;
+		QString label;
+		QString modelName;
 	};
 
-	/** The sinks the Output selector offers, in the order it lists them. */
-	inline constexpr std::array<OutputType, 4> c_OutputTypes = { {
-		{ "Opaque", "MaterialOutput" },
-		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
-		{ "Alpha Blend", "BlendedMaterialOutput" },
-		{ "Hashed Alpha", "HashedAlphaMaterialOutput" },
-	} };
+	/**
+	 * The Output selector's entries, in the order it lists them: the four PBR sinks -- choosing
+	 * one *is* choosing the alpha mode -- then one entry per registered surface, labelled with
+	 * the surface's name. Built beside the registry from the same surface list, so an entry
+	 * always names a sink that exists.
+	 */
+	[[nodiscard]] std::vector<OutputType>
+	OutputTypesFor(std::span<const bgl::SurfaceType> surfaces);
 
 	/**
 	 * The widgets BuildMaterialEditorUi creates, so the window can connect and drive them.
@@ -49,7 +57,23 @@ namespace editor
 		QLabel*            materialLabel    = nullptr;
 		QLabel*            bakedTextures    = nullptr;
 		QLabel*            tangentWarning   = nullptr;
+
+		// The surface layer (ADR-9), edited here rather than on the node; FillLayerSection shows,
+		// hides and fills it.
+		QWidget*        layerSection  = nullptr;
+		QFormLayout*    layerForm     = nullptr;
+		QComboBox*      layerSelector = nullptr;
+		QDoubleSpinBox* alphaCutoff   = nullptr;
+		QCheckBox*      doubleSided   = nullptr;
 	};
+
+	/**
+	 * Shows the Layer section and fills it from `sink`, or hides it for null -- a PBR board,
+	 * whose layer is the Output selector's sink choice. The cutoff row shows on a mask layer
+	 * alone. Signal-blocked, so a fill never writes back through the window's connects.
+	 */
+	void
+	FillLayerSection(const SurfaceOutputNode* sink, const MaterialEditorWidgets& widgets);
 
 	/**
 	 * Builds the material editor's properties column and graph board under `parent`, in the state they

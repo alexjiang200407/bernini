@@ -249,12 +249,24 @@ namespace assetlib
 				out += "    (none bound; every slot samples the engine's default)\n";
 			for (const SurfaceTextureBinding& texture : surface.textures)
 			{
-				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texture));
+				if (slotIsRouted(texture))
+				{
+					// A routed slot samples its composited map (ADR-7); its own stamps say whether
+					// that bake still reflects the sources.
+					out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.bakedPath));
+					if (fileSystem != nullptr)
+						out += std::format(
+							"                    routed, bake {}\n",
+							surfaceSlotBakeIsStale(texture, *fileSystem) ? "STALE" : "up to date");
+					continue;
+				}
 
-				// A surface texture is bound rather than baked, so there is no stamp to compare --
-				// the one thing worth reporting is whether the file is still there.
-				if (fileSystem != nullptr && !texture.texture.empty() &&
-				    stampOf(*fileSystem, texture.texture) == SourceStamp{})
+				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texturePath));
+
+				// A whole binding has no stamp to compare -- the one thing worth reporting is
+				// whether the file is still there.
+				if (fileSystem != nullptr && !texture.texturePath.empty() &&
+				    stampOf(*fileSystem, texture.texturePath) == SourceStamp{})
 					out += "                    file is missing\n";
 			}
 		}
@@ -461,8 +473,7 @@ namespace assetlib
 			break;
 		}
 
-		// Both questions are the triplet's, and a surface has none: reporting a bake as up to date
-		// for a material no bake produces reads as a bake having run.
+		// Both questions are the triplet's; a surface material's bake is per slot, reported above.
 		if (fileSystem != nullptr && material.shadingModel == ShadingModel::kPbr)
 		{
 			out += std::format(

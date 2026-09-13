@@ -99,7 +99,8 @@ There are **two producers of textures**, and they compress differently:
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
-  editor's routed source textures into the triplet and writes each map into `<Data>/Derived/BakedTextures/`
+  editor's routed source textures into the triplet — or, for a surface material, into one packed map
+  per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
   transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
   `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA`).
@@ -109,7 +110,9 @@ There are **two producers of textures**, and they compress differently:
   routed into it *and that source's own size and content hash*. Two materials whose ORM channels route
   identically therefore name the same file and write it once, instead of emitting byte-identical copies
   under each material's name. (The Apples model is exactly this: two submeshes, two materials, one
-  shared ORM source.)
+  shared ORM source.) A routed *surface* slot bakes to the same rule under the shared `slot_<hash>`
+  prefix, its declared name folded into the hash rather than the file name, so pruning recognises the
+  family without a list of slot names.
 
   **The name is the whole up-to-date test.** A map found under it was composed from exactly these
   inputs, so a bake that finds one decodes nothing and re-encodes nothing -- which is what makes baking
@@ -441,13 +444,15 @@ in `docs/specs/`.
     old cooked textures. Content, not mtime: a `git pull` or `checkout` rewrites mtimes without changing
     a byte, and a stamp that noticed would re-bake every asset and dirty the containers in git. The read
     that costs is paid once — `stampOf` memoizes against size and mtime, so a source already hashed
-    re-stamps for a stat. **Baking is a PBR notion** — `bakeMaterial`
-    rejects any other model, and `bakeIsStale` reports one as never-stale, because it has no bake step to
-    have drifted from.
+    re-stamps for a stat. **Both material models bake** — the PBR triplet, and one packed map per
+    routed surface slot — and `bakeIsStale` reports each against its own routes; a surface material
+    binding everything whole has no bake step and is never stale.
   * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
-    `editorGraph`, leaving the triplet + factors + name. A shipping build carries no source-texture
-    references — and with no routes there is nothing for the triplet to be stale against, so a stripped
-    material always draws from it. It refuses to strip a material that was never baked, which would leave
+    `editorGraph` — a surface material's per-slot routes and stamps included — leaving the baked maps
+    + factors + name. A shipping build carries no source-texture
+    references — and with no routes there is nothing for the maps to be stale against, so a stripped
+    material always draws from them. It refuses to strip a material (or a routed slot) that was never
+    baked, which would leave
     nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.

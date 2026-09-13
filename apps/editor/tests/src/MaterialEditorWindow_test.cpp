@@ -1,22 +1,35 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
+#include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QTemporaryDir>
+#include <QWidget>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/LayerType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/SurfaceType.h>
+#include <bgl/glm.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 #include <string>
 #include <vector>
 
@@ -302,11 +315,12 @@ TEST_CASE("The default sphere holds nothing open", "[materialeditor]")
 	CHECK(held == QStringList{ "C:/Data/Materials/Leaf.bmaterial" });
 }
 
-// A Save from this panel compiles the board, and the board is a PBR one whatever the file on disk
-// is -- the editor authors no surfaces. So the material's own model and the three keys under it
-// have to come back off the file, the way the baked triplet already does, or opening a game
-// material here and pressing Save would quietly turn it into an ordinary PBR one.
-TEST_CASE("A save does not demote a surface material", "[materialeditor][surface]")
+// The save path takes the board's word for what the material is: a surface board writes a surface
+// material, edits included, where saving used to re-read the model and its parameters off disk --
+// which, now that a surface board is real, would clobber every edit made on it. What keeps a
+// surface document from being demoted is upstream: OpenMaterialInto never puts one behind a PBR
+// board.
+TEST_CASE("A surface board's save writes the board, not the disk", "[materialeditor][surface]")
 {
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
@@ -315,20 +329,33 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
 
 	{
-		auto material             = assetlib::BMaterial();
-		material.name             = "rim";
-		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name     = "Rim";
-		material.surface.values   = { { "rimPower", { 2.0f } } };
-		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+		auto material           = assetlib::BMaterial();
+		material.name           = "rim";
+		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name   = "Rim";
+		material.surface.values = { { "rimPower", { 2.0f } } };
+		material.extraJson      = R"({"studio":"keep"})";
 
 		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
 	}
 
-	// The board the panel would show for it: the default PBR one, since a surface material carries
-	// no editorGraph for the editor to restore.
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
-	model.addNode("MaterialOutput");
+	auto surface          = bgl::SurfaceType();
+	surface.name          = "Rim";
+	auto power            = bgl::SurfaceValue();
+	power.name            = "rimPower";
+	power.defaultValue    = glm::vec4(8.0f, 0.0f, 0.0f, 0.0f);
+	surface.params.values = { power };
+
+	// The board the panel now shows for it: the surface's own sink, seeded from the document.
+	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+
+	// An edit the disk knows nothing about.
+	auto* sink = qobject_cast<SurfaceOutputNode*>(model.OutputNode());
+	REQUIRE(sink != nullptr);
+	sink->load(QJsonObject{ { "parameters", QJsonObject{ { "rimPower", QJsonArray{ 5.5 } } } } });
 
 	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
 
@@ -336,81 +363,208 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 	CHECK(saved.surface.name == "Rim");
 	REQUIRE(saved.surface.values.size() == 1u);
 	CHECK(saved.surface.values[0].name == "rimPower");
-	REQUIRE(saved.surface.textures.size() == 1u);
-	CHECK(saved.surface.textures[0].texture == "Derived/BakedTextures/rim.ktx2");
+	REQUIRE(saved.surface.values[0].value.size() == 1u);
+	CHECK(saved.surface.values[0].value[0] == Catch::Approx(5.5f));
+
+	// A document key this build does not know still rides through.
+	CHECK(saved.extraJson.find("studio") != std::string::npos);
 }
 
-// A surface material's board is a graphless one seeded from PbrParams, so the preview compiled it
-// into a white loose PBR material and drew that instead of the surface. What the renderer gets has
-// to come from the document, and this is the translation that does it -- the whole of it bar the
-// texture upload, which the loader here stands in for.
-TEST_CASE("A surface material previews through its own surface", "[materialeditor][surface]")
+TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]")
 {
-	assetlib::BMaterial material;
-	material.name              = "Dog_Rim";
+	// The board authors the routes; the bake owns the stamps and the map. A save must carry the
+	// bake's state through by slot name, exactly as it carries the PBR triplet -- staleness is
+	// the bake machinery's question, not the save's.
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
+
+	{
+		auto material         = assetlib::BMaterial();
+		material.name         = "rim";
+		material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name = "Rim";
+
+		auto& orm          = material.surface.textures.emplace_back();
+		orm.name           = "orm";
+		orm.routes[0]      = { "Derived/SourceTextures/ao.ktx2", 0 };
+		orm.routeStamps[0] = { 123, 456 };
+		orm.bakedPath      = "Derived/BakedTextures/slot_abc.ktx2";
+		orm.bakeToken      = 42;
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
+	}
+
+	auto surface            = bgl::SurfaceType();
+	surface.name            = "Rim";
+	auto orm                = bgl::SurfaceTexture();
+	orm.name                = "orm";
+	orm.kind                = bgl::SurfaceTextureKind::kData;
+	surface.params.textures = { orm };
+
+	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+
+	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
+
+	REQUIRE(saved.surface.textures.size() == 1u);
+	const assetlib::SurfaceTextureBinding& slot = saved.surface.textures[0];
+	CHECK(slot.routes[0].texture == "Derived/SourceTextures/ao.ktx2");
+	CHECK(slot.routeStamps[0].size == 123u);
+	CHECK(slot.routeStamps[0].hash == 456u);
+	CHECK(slot.bakedPath == "Derived/BakedTextures/slot_abc.ktx2");
+	CHECK(slot.bakeToken == 42u);
+}
+
+// A surface material previews from its live board. What the renderer gets has to say what the
+// panel shows -- values as dialled in, layer as chosen, textures as wired -- and this is the
+// translation that does it, bar the texture upload the Texture nodes own.
+TEST_CASE("A surface board previews through its own surface", "[materialeditor][surface]")
+{
+	auto surface = bgl::SurfaceType();
+	surface.name = "Rim";
+
+	auto colour         = bgl::SurfaceValue();
+	colour.name         = "rimColor";
+	colour.type         = bgl::SurfaceValueType::kFloat3;
+	colour.defaultValue = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	auto power          = bgl::SurfaceValue();
+	power.name          = "rimPower";
+	power.defaultValue  = glm::vec4(8.0f, 0.0f, 0.0f, 0.0f);
+
+	auto base  = bgl::SurfaceTexture();
+	base.name  = "baseColor";
+	auto mask  = bgl::SurfaceTexture();
+	mask.name  = "mask";
+	mask.index = 1;
+
+	surface.params.values   = { colour, power };
+	surface.params.textures = { base, mask };
+
+	auto material              = assetlib::BMaterial();
 	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
 	material.layer.alphaMode   = assetlib::AlphaMode::kMask;
 	material.layer.alphaCutoff = 0.25f;
 	material.layer.doubleSided = false;
 	material.surface.name      = "Rim";
-	material.surface.values.emplace_back("rimColor", std::vector<float>{ 5.0f, 2.0f, 0.7f });
-	material.surface.values.emplace_back("rimPower", std::vector<float>{ 2.5f });
-	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/Dog/coat.ktx2");
+	material.surface.values    = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
+	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
 
-	auto asked = std::vector<std::string>();
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, std::filesystem::path("C:/proj/Data")));
 
-	const bgl::SurfaceMaterialDesc desc =
-		editor::SurfaceDescOf(material, [&](const std::string& key) {
-			asked.push_back(key);
-			return bgl::TextureAssetHandle();
-		});
+	const auto* sink = qobject_cast<const SurfaceOutputNode*>(model.OutputNode());
+	REQUIRE(sink != nullptr);
+
+	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOfBoard(*sink);
 
 	CHECK(desc.surface == "Rim");
 
-	// The layer keys are the document's. They decide the PSO row, so a preview that took the
-	// board's would draw the right colours through the wrong pipeline.
+	// The layer keys decide the PSO row, and they are the board's own widgets.
 	CHECK(desc.layerType == bgl::LayerType::kMask);
 	CHECK(desc.alphaCutoff == 0.25f);
 	CHECK_FALSE(desc.doubleSided);
 
-	// Every value the document sets, under the name the surface declared, widened to four.
+	// Every declared value at its current setting: the edited colour, the untouched default.
 	REQUIRE(desc.values.size() == 2);
 	CHECK(desc.values[0].name == "rimColor");
 	CHECK(desc.values[0].value.x == 5.0f);
 	CHECK(desc.values[0].value.y == 2.0f);
 	CHECK(desc.values[0].value.z == 0.7f);
 	CHECK(desc.values[1].name == "rimPower");
-	CHECK(desc.values[1].value.x == 2.5f);
+	CHECK(desc.values[1].value.x == 8.0f);
 
-	// The bound texture is asked for by its data-root-relative key, which is what the document
-	// stores and what a store resolves.
-	REQUIRE(desc.textures.size() == 1);
-	CHECK(desc.textures[0].name == "baseColor");
-	REQUIRE(asked.size() == 1);
-	CHECK(asked[0] == "Derived/SourceTextures/Dog/coat.ktx2");
-}
-
-// One that will not load is not worth the material: the surface samples its default for that slot
-// and the rest of the document still draws, which is a visible mistake rather than an invisible one.
-TEST_CASE("A surface texture that will not load leaves the rest", "[materialeditor][surface]")
-{
-	assetlib::BMaterial material;
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
-	material.surface.values.emplace_back("rimPower", std::vector<float>{ 3.0f });
-	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/gone.ktx2");
-
-	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOf(material, [](const std::string&) {
-		return bgl::TextureAssetHandle();
-	});
-
-	CHECK(desc.surface == "Rim");
-	REQUIRE(desc.values.size() == 1);
-	CHECK(desc.values[0].value.x == 3.0f);
-
-	// Still bound, and still null: the name is what the surface declared, so dropping the binding
-	// would be a different mistake from binding nothing.
+	// The wired slot is bound and -- with no device to upload through -- null: the surface
+	// samples its default for it, a visible mistake rather than a lost material. The unwired
+	// slot is simply absent.
 	REQUIRE(desc.textures.size() == 1);
 	CHECK(desc.textures[0].name == "baseColor");
 	CHECK(desc.textures[0].texture.textureSlot.is_null());
+}
+
+TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[materialeditor]")
+{
+	auto rim = bgl::SurfaceType();
+	rim.name = "Rim";
+	auto fur = bgl::SurfaceType();
+	fur.name = "Fur";
+
+	const bgl::SurfaceType surfaces[] = { rim, fur };
+
+	const std::vector<editor::OutputType> types = editor::OutputTypesFor(surfaces);
+
+	// The four static entries first, in the order the selector has always listed them -- an index
+	// into this list is an index into the combo.
+	REQUIRE(types.size() == 6u);
+	CHECK(types[0].modelName == QStringLiteral("MaterialOutput"));
+	CHECK(types[1].modelName == QStringLiteral("AlphaTestedMaterialOutput"));
+	CHECK(types[2].modelName == QStringLiteral("BlendedMaterialOutput"));
+	CHECK(types[3].modelName == QStringLiteral("HashedAlphaMaterialOutput"));
+
+	// A surface entry is labelled by the surface and names its registered sink.
+	CHECK(types[4].label == QStringLiteral("Rim"));
+	CHECK(types[4].modelName == QStringLiteral("SurfaceOutput:Rim"));
+	CHECK(types[5].label == QStringLiteral("Fur"));
+	CHECK(types[5].modelName == QStringLiteral("SurfaceOutput:Fur"));
+}
+
+TEST_CASE("The panel's Layer section starts hidden, with the four modes", "[materialeditor]")
+{
+	// ADR-9: the surface layer is authored here rather than on the node. Hidden until a surface
+	// board is on screen -- a PBR board's layer is the Output selector's sink choice -- and its
+	// combo indexes match assetlib::AlphaMode, which is what the window writes through.
+	QWidget parent;
+
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+
+	REQUIRE(ui.layerSection != nullptr);
+	REQUIRE(ui.layerSelector != nullptr);
+	CHECK(ui.layerSection->isHidden());
+
+	REQUIRE(ui.layerSelector->count() == 4);
+	CHECK(ui.layerSelector->itemText(0) == QStringLiteral("Opaque"));
+	CHECK(ui.layerSelector->itemText(1) == QStringLiteral("Alpha Tested"));
+	CHECK(ui.layerSelector->itemText(2) == QStringLiteral("Alpha Blend"));
+	CHECK(ui.layerSelector->itemText(3) == QStringLiteral("Hashed Alpha"));
+
+	CHECK(ui.alphaCutoff != nullptr);
+	CHECK(ui.doubleSided != nullptr);
+	CHECK(ui.layerForm != nullptr);
+}
+
+TEST_CASE(
+	"FillLayerSection shows a surface sink's layer and hides for a PBR board",
+	"[materialeditor]")
+{
+	QWidget parent;
+
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+
+	auto rim = bgl::SurfaceType();
+	rim.name = "Rim";
+	SurfaceOutputNode sink(rim);
+	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
+	sink.SetAlphaCutoff(0.25f);
+	sink.SetDoubleSided(false);
+
+	editor::FillLayerSection(&sink, ui);
+
+	CHECK_FALSE(ui.layerSection->isHidden());
+	CHECK(ui.layerSelector->currentIndex() == static_cast<int>(assetlib::AlphaMode::kMask));
+	CHECK(ui.alphaCutoff->value() == 0.25);
+	CHECK_FALSE(ui.doubleSided->isChecked());
+
+	// The cutoff row is a mask layer's alone.
+	CHECK(ui.layerForm->isRowVisible(ui.alphaCutoff));
+	sink.SetAlphaMode(assetlib::AlphaMode::kOpaque);
+	editor::FillLayerSection(&sink, ui);
+	CHECK_FALSE(ui.layerForm->isRowVisible(ui.alphaCutoff));
+
+	// A PBR board -- no surface sink -- hides the section; its layer is the Output selector's.
+	editor::FillLayerSection(nullptr, ui);
+	CHECK(ui.layerSection->isHidden());
 }

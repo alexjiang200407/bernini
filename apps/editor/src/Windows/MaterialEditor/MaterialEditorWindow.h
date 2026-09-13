@@ -8,13 +8,16 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <vector>
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
+#include "Windows/MaterialEditor/material_editor_ui.h"
 
 class TexturePreviewCache;
 
@@ -118,7 +121,19 @@ private:
 	void
 	SyncOutputSelector();
 
-	class MaterialOutputNode*
+	/**
+	 * Shows the panel's Layer section for a surface board and fills it from the sink, or hides it
+	 * for a PBR one, whose layer is the Output selector's sink choice (ADR-9). Also called on the
+	 * sink's Changed, so a loaded or seeded document reaches the panel.
+	 */
+	void
+	SyncLayerSection();
+
+	/** The current graph's sink as a surface sink, or null while the board is a PBR one. */
+	[[nodiscard]] class SurfaceOutputNode*
+	CurrentSurfaceSink() const;
+
+	class MaterialSinkNode*
 	WatchOutputNode(int graphIndex);
 
 	/** Frames the graph view on the current submesh's output node, at 1:1. The sink is what you author
@@ -186,8 +201,13 @@ private:
 	void
 	OpenMaterialInto(int graphIndex, const QString& path, bool interactive = true);
 
-	class MaterialOutputNode*
+	class MaterialSinkNode*
 	ResetGraph(int graphIndex, const QJsonObject& graph);
+
+	/** Replaces a submesh's model and scene, letting `build` populate the fresh model -- the core
+	 *  ResetGraph and the surface-document seed share. */
+	class MaterialSinkNode*
+	RebuildGraph(int graphIndex, const std::function<void(class MaterialGraphModel&)>& build);
 
 	void
 	RefreshActions();
@@ -202,19 +222,25 @@ private:
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
+	// The Output selector's entries, index-aligned with the combo.
+	std::vector<editor::OutputType> m_OutputTypes;
+
 	MaterialGraphSet m_Graphs;
 
-	QComboBox*         m_SubmeshSelector    = nullptr;
-	QComboBox*         m_OutputSelector     = nullptr;
-	MaterialGraphView* m_GraphView          = nullptr;
-	QPushButton*       m_OpenButton         = nullptr;
-	QPushButton*       m_SaveButton         = nullptr;
-	QPushButton*       m_SaveAsButton       = nullptr;
-	QPushButton*       m_SaveAllButton      = nullptr;
-	QPushButton*       m_BakeAllButton      = nullptr;
-	QPushButton*       m_SetDefaultButton   = nullptr;
-	QLabel*            m_MaterialLabel      = nullptr;
-	QLabel*            m_BakedTexturesLabel = nullptr;
-	QLabel*            m_TangentWarning     = nullptr;
-	QPushButton*       m_GenerateTangents   = nullptr;
+	QComboBox* m_SubmeshSelector = nullptr;
+	QComboBox* m_OutputSelector  = nullptr;
+
+	// The built widgets, kept whole for the free functions that take them (FillLayerSection).
+	editor::MaterialEditorWidgets m_Ui;
+	MaterialGraphView*            m_GraphView          = nullptr;
+	QPushButton*                  m_OpenButton         = nullptr;
+	QPushButton*                  m_SaveButton         = nullptr;
+	QPushButton*                  m_SaveAsButton       = nullptr;
+	QPushButton*                  m_SaveAllButton      = nullptr;
+	QPushButton*                  m_BakeAllButton      = nullptr;
+	QPushButton*                  m_SetDefaultButton   = nullptr;
+	QLabel*                       m_MaterialLabel      = nullptr;
+	QLabel*                       m_BakedTexturesLabel = nullptr;
+	QLabel*                       m_TangentWarning     = nullptr;
+	QPushButton*                  m_GenerateTangents   = nullptr;
 };

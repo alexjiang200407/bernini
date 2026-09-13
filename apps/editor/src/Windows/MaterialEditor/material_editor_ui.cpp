@@ -1,20 +1,93 @@
 #include "material_editor_ui.h"
 
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <assetlib_structs/BMaterial.h>
+#include <bgl/SurfaceType.h>
+#include <cstddef>
+#include <iterator>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
 #include <qsizepolicy.h>
+#include <qstring.h>
 #include <qstringliteral.h>
+#include <span>
+#include <vector>
+
+namespace
+{
+	// The Layer combo's entries, indexed by assetlib::AlphaMode -- what the window writes through.
+	constexpr const char* c_LayerLabels[] = { "Opaque",
+		                                      "Alpha Tested",
+		                                      "Alpha Blend",
+		                                      "Hashed Alpha" };
+
+	// A fifth AlphaMode must extend the table, or the new mode would be unpickable.
+	static_assert(
+		std::size(c_LayerLabels) == static_cast<size_t>(assetlib::AlphaMode::kHashed) + 1);
+}
 
 namespace editor
 {
+	std::vector<OutputType>
+	OutputTypesFor(std::span<const bgl::SurfaceType> surfaces)
+	{
+		auto types = std::vector<OutputType>{
+			{ QStringLiteral("Opaque"), QStringLiteral("MaterialOutput") },
+			{ QStringLiteral("Alpha Tested"), QStringLiteral("AlphaTestedMaterialOutput") },
+			{ QStringLiteral("Alpha Blend"), QStringLiteral("BlendedMaterialOutput") },
+			{ QStringLiteral("Hashed Alpha"), QStringLiteral("HashedAlphaMaterialOutput") },
+		};
+
+		types.reserve(types.size() + surfaces.size());
+		for (const bgl::SurfaceType& surface : surfaces)
+		{
+			types.emplace_back(
+				QString::fromStdString(surface.name),
+				SurfaceOutputNode::ModelNameFor(surface.name));
+		}
+
+		return types;
+	}
+
+	void
+	FillLayerSection(const SurfaceOutputNode* sink, const MaterialEditorWidgets& widgets)
+	{
+		widgets.layerSection->setVisible(sink != nullptr);
+		if (sink == nullptr)
+			return;
+
+		{
+			const QSignalBlocker blocker(widgets.layerSelector);
+			widgets.layerSelector->setCurrentIndex(static_cast<int>(sink->GetAlphaMode()));
+		}
+		{
+			const QSignalBlocker blocker(widgets.alphaCutoff);
+			widgets.alphaCutoff->setValue(static_cast<double>(sink->GetAlphaCutoff()));
+		}
+		{
+			const QSignalBlocker blocker(widgets.doubleSided);
+			widgets.doubleSided->setChecked(sink->GetDoubleSided());
+		}
+
+		// The cutoff is read on a mask layer alone -- hashed replaces it with stochastic
+		// coverage.
+		widgets.layerForm->setRowVisible(
+			widgets.alphaCutoff,
+			sink->GetAlphaMode() == assetlib::AlphaMode::kMask);
+	}
+
 	MaterialEditorWidgets
 	BuildMaterialEditorUi(QWidget* parent)
 	{
@@ -98,15 +171,47 @@ namespace editor
 		// The graph's sink, chosen rather than dragged in: a material has exactly one, and which one it is
 		// *is* the alpha mode. The context menu does not offer them (see MaterialGraphScene).
 		propertiesLayout->addWidget(new QLabel(QStringLiteral("Output"), propertiesPanel));
+		// Entries arrive from the window (OutputTypesFor): the surfaces half is known only once
+		// the registry is.
 		widgets.outputSelector = new QComboBox(propertiesPanel);
-		for (const OutputType& type : c_OutputTypes)
-			widgets.outputSelector->addItem(QLatin1String(type.label));
 		widgets.outputSelector->setEnabled(false);
 		widgets.outputSelector->setToolTip(QStringLiteral(
 			"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are "
 			"discarded. Alpha Blend uses that alpha to blend the surface, back-to-front, with no "
-			"cutoff."));
+			"cutoff. A surface entry hands the material to that game surface, whose parameters "
+			"appear on its output node."));
 		propertiesLayout->addWidget(widgets.outputSelector);
+
+		// The surface layer (ADR-9), filled by FillLayerSection below.
+		widgets.layerSection = new QWidget(propertiesPanel);
+		widgets.layerForm    = new QFormLayout(widgets.layerSection);
+		widgets.layerForm->setContentsMargins(0, 0, 0, 0);
+
+		widgets.layerSelector = new QComboBox(widgets.layerSection);
+		for (const char* label : c_LayerLabels)
+			widgets.layerSelector->addItem(QLatin1String(label));
+		widgets.layerSelector->setToolTip(QStringLiteral(
+			"How this surface material's alpha is read: discarded below a cutoff (Alpha Tested), "
+			"blended back-to-front (Alpha Blend), or stochastic coverage under temporal AA "
+			"(Hashed Alpha)."));
+		widgets.layerForm->addRow(QStringLiteral("Layer"), widgets.layerSelector);
+
+		widgets.alphaCutoff = new QDoubleSpinBox(widgets.layerSection);
+		widgets.alphaCutoff->setRange(0.0, 1.0);
+		widgets.alphaCutoff->setSingleStep(0.05);
+		widgets.alphaCutoff->setDecimals(3);
+
+		// Commit, not keystroke: per-keystroke writes reach the sink, whose Changed re-fills this
+		// very box and rewrites the text under the user's caret -- and recompile the preview once
+		// per digit besides.
+		widgets.alphaCutoff->setKeyboardTracking(false);
+		widgets.layerForm->addRow(QStringLiteral("Alpha Cutoff"), widgets.alphaCutoff);
+
+		widgets.doubleSided = new QCheckBox(widgets.layerSection);
+		widgets.layerForm->addRow(QStringLiteral("Double Sided"), widgets.doubleSided);
+
+		widgets.layerSection->hide();
+		propertiesLayout->addWidget(widgets.layerSection);
 
 		// The material's current baked textures, if any. Read-only: the graph authors the routes they are
 		// composited from, and Bake All above -- or the Content Explorer's Bake -- is what rewrites them.

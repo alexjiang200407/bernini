@@ -118,6 +118,79 @@ namespace assetlib
 		}
 
 		/**
+		 * Takes one route's known keys out of `route`, leaving anything preserved for the
+		 * round-trip. `label` names the route in errors -- "route 'ao'", or "texture 'orm'
+		 * route 'r'" -- so both halves report in their own vocabulary.
+		 */
+		void
+		takeRoute(
+			nlohmann::json&    route,
+			const std::string& label,
+			ChannelRoute&      out,
+			SourceStamp&       stamp)
+		{
+			doc::Taker(route, c_What).Take("texture", out.texture);
+
+			if (const auto channel = route.find("channel"); channel != route.end())
+			{
+				core::throw_runtime_error_if(
+					!channel->is_number_unsigned() || channel->get<uint64_t>() > 3,
+					"bmaterial: {} has an invalid channel",
+					label);
+				out.channel = static_cast<uint16_t>(channel->get<uint64_t>());
+				route.erase(channel);
+			}
+
+			for (const auto& [stampKey, field] :
+			     { std::pair<std::string_view, uint64_t*>{ "stampSize", &stamp.size },
+			       { "stampHash", &stamp.hash } })
+			{
+				if (const auto value = route.find(stampKey); value != route.end())
+				{
+					core::throw_runtime_error_if(
+						!value->is_number_unsigned(),
+						"bmaterial: {} has an invalid {}",
+						label,
+						stampKey);
+					*field = value->get<uint64_t>();
+					route.erase(value);
+				}
+			}
+		}
+
+		/**
+		 * Writes one route into `routes[key]`, merged over anything preserved there -- or, when
+		 * the struct says nothing for it, erases its known keys and keeps the rest.
+		 *
+		 * A stamp can outlive its route -- a bake's provenance is not dropped with a rerouted
+		 * channel -- so an entry is written whenever either half says something.
+		 */
+		void
+		writeRoute(
+			nlohmann::json&     routes,
+			const std::string&  key,
+			const ChannelRoute& route,
+			const SourceStamp&  stamp)
+		{
+			if (!route.texture.empty() || stamp != SourceStamp{})
+			{
+				auto& entry = routes[key];
+				if (!entry.is_object())
+					entry = nlohmann::json::object();
+				entry[c_RouteKeys[0]] = route.texture;
+				entry[c_RouteKeys[1]] = route.channel;
+				entry[c_RouteKeys[2]] = stamp.size;
+				entry[c_RouteKeys[3]] = stamp.hash;
+			}
+			else if (const auto found = routes.find(key); found != routes.end())
+			{
+				for (const std::string_view k : c_RouteKeys) found->erase(k);
+				if (found->empty())
+					routes.erase(found);
+			}
+		}
+
+		/**
 		 * Takes `parameters`, whose members are one to four numbers each, in the document's own
 		 * key order so a save writes the file back as it was read.
 		 */
@@ -156,7 +229,23 @@ namespace assetlib
 			json.erase(it);
 		}
 
-		/** Takes `textures`, whose members are each one mount key. */
+		// The slot channels a routed surface texture composites, in `routes` member order.
+		constexpr std::array<std::string_view, c_SurfaceSlotChannelCount> c_SlotChannelKeys = { {
+			"r",
+			"g",
+			"b",
+			"a",
+		} };
+
+		/**
+		 * Takes `textures`. A member is one mount key -- the whole binding -- or an object for a
+		 * slot composited from channel routes (ADR-7 in the surface-material-panel plan):
+		 * `{ "routes": { "r": { texture, channel, stampSize, stampHash }, ... },
+		 *    "baked": <map>, "token": <bake token>, "texture": <whole binding, when kept> }`.
+		 *
+		 * Known keys come out; anything else inside a slot or a route stays and rides `extraJson`
+		 * through the round-trip, exactly as the PBR `routes` do.
+		 */
 		void
 		takeSurfaceTextures(nlohmann::json& json, std::vector<SurfaceTextureBinding>& out)
 		{
@@ -169,16 +258,75 @@ namespace assetlib
 				"bmaterial: 'textures' is not an object");
 
 			out.reserve(out.size() + it->size());
-			for (const auto& [name, value] : it->items())
+			for (auto& [name, value] : it->items())
 			{
+				if (value.is_string())
+				{
+					out.emplace_back(name, value.get<std::string>());
+
+					// Fully taken; an empty object is what the sweep below removes.
+					value = nlohmann::json::object();
+					continue;
+				}
+
 				core::throw_runtime_error_if(
-					!value.is_string(),
-					"bmaterial: texture '{}' is not a path",
+					!value.is_object(),
+					"bmaterial: texture '{}' is not a path or a routed slot",
 					name);
-				out.emplace_back(name, value.get<std::string>());
+
+				auto& slot = out.emplace_back(name);
+
+				const doc::Taker taker(value, c_What);
+				taker.Take("texture", slot.texturePath);
+				taker.Take("baked", slot.bakedPath);
+
+				if (const auto token = value.find("token"); token != value.end())
+				{
+					core::throw_runtime_error_if(
+						!token->is_number_unsigned(),
+						"bmaterial: texture '{}' has an invalid bake token",
+						name);
+					slot.bakeToken = token->get<uint64_t>();
+					value.erase(token);
+				}
+
+				const auto routes = value.find("routes");
+				if (routes == value.end())
+					continue;
+
+				core::throw_runtime_error_if(
+					!routes->is_object(),
+					"bmaterial: texture '{}' routes are not an object",
+					name);
+				for (auto& [channelName, route] : routes->items())
+				{
+					const auto found = std::ranges::find(c_SlotChannelKeys, channelName);
+					core::throw_runtime_error_if(
+						found == c_SlotChannelKeys.end(),
+						"bmaterial: texture '{}' routes unknown channel '{}'",
+						name,
+						channelName);
+					core::throw_runtime_error_if(
+						!route.is_object(),
+						"bmaterial: texture '{}' route '{}' is not an object",
+						name,
+						channelName);
+
+					const size_t index = static_cast<size_t>(found - c_SlotChannelKeys.begin());
+					takeRoute(
+						route,
+						"texture '" + name + "' route '" + channelName + "'",
+						slot.routes[index],
+						slot.routeStamps[index]);
+				}
+				eraseEmptyMembers(*routes);
+				if (routes->empty())
+					value.erase(routes);
 			}
 
-			json.erase(it);
+			eraseEmptyMembers(*it);
+			if (it->empty())
+				json.erase(it);
 		}
 
 		/**
@@ -225,30 +373,11 @@ namespace assetlib
 			if (!routes.is_object())
 				routes = nlohmann::json::object();
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
-			{
-				const std::string channelName(c_ChannelNames[i]);
-
-				// A stamp can outlive its route -- a bake's provenance is not dropped with a rerouted
-				// channel -- so an entry is written whenever either half says something.
-				if (!pbr.routes[i].texture.empty() || pbr.routeStamps[i] != SourceStamp{})
-				{
-					auto& route = routes[channelName];
-					if (!route.is_object())
-						route = nlohmann::json::object();
-					route[c_RouteKeys[0]] = pbr.routes[i].texture;
-					route[c_RouteKeys[1]] = pbr.routes[i].channel;
-					route[c_RouteKeys[2]] = pbr.routeStamps[i].size;
-					route[c_RouteKeys[3]] = pbr.routeStamps[i].hash;
-				}
-				else if (const auto found = routes.find(channelName); found != routes.end())
-				{
-					// The struct says nothing for this channel any more; its known keys go, anything
-					// preserved stays.
-					for (const std::string_view key : c_RouteKeys) found->erase(key);
-					if (found->empty())
-						routes.erase(found);
-				}
-			}
+				writeRoute(
+					routes,
+					std::string(c_ChannelNames[i]),
+					pbr.routes[i],
+					pbr.routeStamps[i]);
 			if (routes.empty())
 				json.erase("routes");
 		}
@@ -256,9 +385,9 @@ namespace assetlib
 		/**
 		 * Writes the three keys, or erases them when the material is not drawn by a surface.
 		 *
-		 * Rebuilt rather than merged, unlike `baked` and `routes`: every member of `parameters` is
-		 * a parameter and every member of `textures` a texture, so the reader took all of them and
-		 * there is nothing preserved underneath to write back around.
+		 * `parameters` is rebuilt -- every member is a number the reader took whole -- while
+		 * `textures` is merged into what `extraJson` preserved, exactly as the PBR `baked` and
+		 * `routes` are: a slot's object form can nest a sibling branch's key, and it survives.
 		 *
 		 * The model decides, not the name: a document that stopped being a surface material still
 		 * carries the keys, and writing them back would leave a material claiming a surface it is
@@ -306,14 +435,56 @@ namespace assetlib
 			else
 				json["parameters"] = std::move(parameters);
 
-			auto textures = nlohmann::json::object();
-			for (const SurfaceTextureBinding& texture : surface.textures)
-				if (!texture.texture.empty())
-					textures[texture.name] = texture.texture;
+			auto& textures = json["textures"];
+			if (!textures.is_object())
+				textures = nlohmann::json::object();
+			for (const SurfaceTextureBinding& slot : surface.textures)
+			{
+				const bool routedState =
+					slot.bakeToken != 0 || !slot.bakedPath.empty() || slotIsRouted(slot) ||
+					std::ranges::any_of(slot.routeStamps, [](const SourceStamp& stamp) {
+						return stamp != SourceStamp{};
+					});
+
+				const auto preserved = textures.find(slot.name);
+				if (!routedState && (preserved == textures.end() || !preserved->is_object()))
+				{
+					// The whole binding, in the shorthand every pre-ADR-7 document used.
+					if (!slot.texturePath.empty())
+						textures[slot.name] = slot.texturePath;
+					else
+						textures.erase(slot.name);
+					continue;
+				}
+
+				// The object form, merged: a slot keeps it once anything beyond the whole binding
+				// -- route state, or a preserved key -- has to live inside it.
+				auto& entry = textures[slot.name];
+				if (!entry.is_object())
+					entry = nlohmann::json::object();
+				setOrErase(entry, "texture", slot.texturePath);
+				setOrErase(entry, "baked", slot.bakedPath);
+				if (slot.bakeToken != 0)
+					entry["token"] = slot.bakeToken;
+				else
+					entry.erase("token");
+
+				auto& routes = entry["routes"];
+				if (!routes.is_object())
+					routes = nlohmann::json::object();
+				for (size_t i = 0; i < c_SurfaceSlotChannelCount; ++i)
+					writeRoute(
+						routes,
+						std::string(c_SlotChannelKeys[i]),
+						slot.routes[i],
+						slot.routeStamps[i]);
+				if (routes.empty())
+					entry.erase("routes");
+				if (entry.empty())
+					textures.erase(slot.name);
+			}
 			if (textures.empty())
 				json.erase("textures");
-			else
-				json["textures"] = std::move(textures);
 		}
 
 		BMaterial
@@ -417,38 +588,11 @@ namespace assetlib
 						channelName);
 
 					const size_t index = static_cast<size_t>(found - c_ChannelNames.begin());
-					doc::Taker(route, c_What).Take("texture", pbr.routes[index].texture);
-
-					uint64_t channel = 0;
-					if (const auto channelValue = route.find("channel");
-					    channelValue != route.end())
-					{
-						core::throw_runtime_error_if(
-							!channelValue->is_number_unsigned() ||
-								channelValue->get<uint64_t>() > 3,
-							"bmaterial: route '{}' has an invalid channel",
-							channelName);
-						channel = channelValue->get<uint64_t>();
-						route.erase(channelValue);
-					}
-					pbr.routes[index].channel = static_cast<uint16_t>(channel);
-
-					for (const auto& [stampKey, field] :
-					     { std::pair<std::string_view, uint64_t*>{ "stampSize",
-					                                               &pbr.routeStamps[index].size },
-					       { "stampHash", &pbr.routeStamps[index].hash } })
-					{
-						if (const auto stampValue = route.find(stampKey); stampValue != route.end())
-						{
-							core::throw_runtime_error_if(
-								!stampValue->is_number_unsigned(),
-								"bmaterial: route '{}' has an invalid {}",
-								channelName,
-								stampKey);
-							*field = stampValue->get<uint64_t>();
-							route.erase(stampValue);
-						}
-					}
+					takeRoute(
+						route,
+						"route '" + channelName + "'",
+						pbr.routes[index],
+						pbr.routeStamps[index]);
 				}
 				eraseEmptyMembers(*it);
 				if (it->empty())
@@ -626,8 +770,42 @@ namespace assetlib
 	}
 
 	bool
+	surfaceSlotBakeIsStale(
+		const SurfaceTextureBinding&   slot,
+		const core::file::IFileSystem& fileSystem)
+	{
+		// An unrouted slot binds whole or not at all; there is no bake to have gone stale.
+		if (!slotIsRouted(slot))
+			return false;
+
+		for (size_t i = 0; i < c_SurfaceSlotChannelCount; ++i)
+		{
+			const ChannelRoute& route = slot.routes[i];
+			if (route.texture.empty())
+				continue;
+
+			// A zeroed stamp means this route was never baked; stampOf zeroes a missing file.
+			if (stampOf(fileSystem, route.texture) != slot.routeStamps[i])
+				return true;
+		}
+
+		if (slot.bakeToken != c_TextureBakeToken)
+			return true;
+
+		// Routed and every source matches -- but the map has to be there to sample.
+		return slot.bakedPath.empty() || stampOf(fileSystem, slot.bakedPath).size == 0;
+	}
+
+	bool
 	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
+		if (material.shadingModel == ShadingModel::kPbrSurface)
+			return std::ranges::any_of(
+				material.surface.textures,
+				[&](const SurfaceTextureBinding& slot) {
+					return surfaceSlotBakeIsStale(slot, fileSystem);
+				});
+
 		if (material.shadingModel != ShadingModel::kPbr)
 			return false;
 
@@ -670,8 +848,10 @@ namespace assetlib
 	bool
 	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
-		// bakeIsStale is false for every non-PBR model, so `pbr` is only read once it means something.
-		return bakeIsStale(material, fileSystem) && routesAreOnDisk(material.pbr, fileSystem);
+		// Loose is the renderer's per-channel PBR path; a stale *surface* slot recomposites at
+		// load instead (ADR-8), so the model is checked before `pbr` means anything.
+		return material.shadingModel == ShadingModel::kPbr && bakeIsStale(material, fileSystem) &&
+		       routesAreOnDisk(material.pbr, fileSystem);
 	}
 
 }

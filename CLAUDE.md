@@ -216,7 +216,8 @@ Overview of all the Frame Graph Passes
 A shading function the game writes and the engine draws through: the `ISurfaceSource` contract and
 the three rules a file keeps, where the `.slang` lives in a project and when it is read, the three
 document keys a `.bmaterial` adds, what is refused and at which of the two places, and the
-boundaries — static meshes, no hashed alpha, no bake, no editor panel.
+boundaries — a bake per routed data slot and nothing else, no hot reload, no scene inputs; the
+editor's panel is reflected, never authored twice.
 
 **[Slang Shaders](./docs/slang_shaders.md)**
 

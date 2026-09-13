@@ -829,7 +829,7 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 
 	REQUIRE(restored.surface.textures.size() == 1u);
 	CHECK(restored.surface.textures[0].name == "baseColor");
-	CHECK(restored.surface.textures[0].texture == "Derived/BakedTextures/rim_basecolor.ktx2");
+	CHECK(restored.surface.textures[0].texturePath == "Derived/BakedTextures/rim_basecolor.ktx2");
 
 	// Canonical, like every other document: one content, one byte sequence.
 	CHECK(AssetCodec<BMaterial>::Serialize(restored) == bytes);

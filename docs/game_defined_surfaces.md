@@ -63,7 +63,10 @@ Three rules the file has to keep, each of which the engine checks and names:
 * **A field is a value or a slot.** A `float`, `float2`, `float3` or `float4` is a value a material
   sets by name; a `ColorSlot`, `DataSlot`, `NormalSlot` or `CoverageSlot` is a texture a material
   binds by name. `[Default(...)]` on a value is what a material that says nothing about it gets;
-  an unbound slot samples white, or a flat normal for a `NormalSlot`.
+  an unbound slot samples white, or a flat normal for a `NormalSlot`. `[Color]` on a `float3` or
+  `float4` value marks it as a colour — presentation only: the editor shows a swatch and a picker
+  for it, and packing and shading read the value the same either way. Registration refuses it on
+  anything narrower.
 
 **A file that never imports the contract is not a surface**, and is skipped rather than refused.
 The directory is the game's whole module search path, not a list of surfaces, so a shared header or
@@ -115,6 +118,10 @@ What the reader gives is the same on both: the interpolants, the camera and the 
 fields. A surface cannot see the pose, the palette or the bone it was skinned by; by the time it
 runs, a skinned vertex is a world-space position like any other.
 
+`WorldNormal` is the normal of the face being shaded: on a double-sided material a back face reads
+the interpolated normal negated — the same flip the engine applies to its own lighting — so a
+view-dependent term is correct on both faces and a surface never sees a facing bit.
+
 ## Hashed alpha
 
 A hashed layer replaces the cutoff with stochastic coverage: a fragment survives with probability
@@ -161,9 +168,9 @@ A material drawn by a surface says so, names it, and sets what it wants by name
 
 The model is **`pbrSurface`**, not `surface`, and the name is the whole story: the lighting is the
 engine's PBR, and what a surface supplies is the material's half of it — a `PbrSurface`, which is
-the struct `Evaluate` returns. It is where the inputs come from rather than a second shading model,
-which is also why there is no route, no bake and no graph behind one. A game-defined *lighting*
-model would be a third value, and nothing in today's contract can write one.
+the struct `Evaluate` returns. It is where the inputs come from rather than a second shading
+model. A game-defined *lighting* model would be a third value, and nothing in today's contract can
+write one.
 
 ```json
 {
@@ -186,9 +193,18 @@ model would be a third value, and nothing in today's contract can write one.
 * **`parameters`** is one to four numbers per name, as many as the parameter was declared with. A
   scalar may be written as a number. A name the surface does not declare is an error, not a value
   dropped on the floor.
-* **`textures`** is one mount key per name. A surface texture is *bound*, not composited: there is
-  no channel routing behind one and no bake, so what the renderer samples is what the document
-  names.
+* **`textures`** is one mount key per name — the whole binding — or, for a slot composited from
+  channel routes, an object: `routes` maps `r`/`g`/`b`/`a` to `{texture, channel}` with the
+  source stamps beside them, and `baked`/`token` name the packed map the bake wrote. The two
+  forms are exclusive per slot, the routes winning where a document carries both. Routing is the
+  editor's offer on *data* slots only — a colour or a normal map is authored whole — and the bake
+  behind it is `AssetStore::BakeMaterial`, the same compositor the PBR triplet uses, writing one
+  linear BC7 map per routed slot under the shared `slot_` prefix. A routed slot whose bake is
+  stale or absent draws each channel from its own source instead: the routes ride the material's
+  record and the shader gathers them at draw (`AssetStore::LooseSurfaceSlots` decides per slot,
+  against the disk once at load), so the material renders the same either way and nothing is
+  composited outside the bake — which remains the shipping form, one BC7 map and a single fetch
+  where the loose form samples up to four sources.
 * **The layer keys are every model's** and sit beside `shadingModel`, not inside the parameters —
   `alphaMode`, `alphaCutoff`, `doubleSided`.
 * **Everything else is PBR's.** `baseColorFactor`, `routes`, `baked` and the rest belong to
@@ -215,12 +231,22 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 
 Deliberate, and each is a decision rather than an omission:
 
-* **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
-  reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
-  yet.
-* **No editor UI.** A surface material opens in the Material Editor as a graphless material and
-  draws in the viewport; there is no panel for its parameters, and the document is authored by
-  hand.
+* **A bake per routed data slot, and nothing else.** A colour, normal or coverage slot names a
+  `.ktx2` the project already holds; a data slot may instead be composited from channel routes
+  (`textures` above). Slot kinds are reflected and reported through
+  `IGraphics::GetSurfaceTypes()`, but beyond choosing which slots offer routing they drive no
+  format or colour-space rule yet.
+* **Editor UI is reflected, never authored twice.** A surface material opens in the Material
+  Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
+  per value — the layer keys are edited in the properties panel beside the board, and Save writes
+  the document from that board. The
+  Output selector lists every registered surface beside the four PBR sinks, which is how a
+  surface material is created from scratch: pick the surface, and its board replaces the PBR
+  one. The
+  `.slang` stays the only declaration of what a material may say; the panel edits the *material*.
+  A surface the session did not register has no board: the editor refuses to open its materials,
+  naming the surface, because the only board it could offer is a PBR one a Save would compile
+  into a demotion.
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
   Nothing of the frame — no depth, no history, no lights.

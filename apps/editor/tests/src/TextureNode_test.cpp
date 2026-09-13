@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 
@@ -30,9 +31,10 @@ TEST_CASE("A texture node is all outputs", "[texturenode]")
 {
 	const auto node = HeadlessNode();
 
-	// It is a source: three bundle ports and four scalar ones, and nothing flows in.
+	// It is a source: three bundle ports, four scalar ones and the whole-texture port, and nothing
+	// flows in.
 	REQUIRE(node->nPorts(PortType::Out) == TextureNode::c_PortCount);
-	REQUIRE(node->nPorts(PortType::Out) == 7u);
+	REQUIRE(node->nPorts(PortType::Out) == 8u);
 	REQUIRE(node->nPorts(PortType::In) == 0u);
 	REQUIRE(node->name() == QString("Texture"));
 }
@@ -64,6 +66,10 @@ TEST_CASE("A texture node's port types follow their arity", "[texturenode]")
 	REQUIRE(node->dataType(PortType::Out, 2).id == QString("channel2"));
 	REQUIRE(node->dataType(PortType::Out, 3).id == QString("channel1"));
 	REQUIRE(node->dataType(PortType::Out, 6).id == QString("channel1"));
+
+	// The whole-texture port is its own type, so no channel port can stand in for it -- and no
+	// surface slot can take a routed channel.
+	REQUIRE(node->dataType(PortType::Out, 7).id == QString("surfacetexture"));
 }
 
 TEST_CASE("A texture node's ports are captioned", "[texturenode]")
@@ -81,7 +87,8 @@ TEST_CASE("A texture node's ports are captioned", "[texturenode]")
 		Row{ 3, "R" },
 		Row{ 4, "G" },
 		Row{ 5, "B" },
-		Row{ 6, "A" });
+		Row{ 6, "A" },
+		Row{ 7, "Texture" });
 
 	INFO("port " << row.port);
 
@@ -140,7 +147,7 @@ TEST_CASE("A texture node routes its file even with no scene to load it into", "
 	// channel gets, so the material renders identically either way. What differs is what a *save*
 	// records, and gating this on the handle would quietly drop the route from the material the graph
 	// compiles to -- unwiring a channel because its texture could not be shown.
-	for (QtNodes::PortIndex port = 0; port < QtNodes::PortIndex(TextureNode::c_PortCount); ++port)
+	for (QtNodes::PortIndex port = 0; port < QtNodes::PortIndex(TextureNode::c_TexturePort); ++port)
 	{
 		INFO("port " << port);
 
@@ -149,4 +156,10 @@ TEST_CASE("A texture node routes its file even with no scene to load it into", "
 		REQUIRE(data->At(0).path == QString("Textures/albedo.ktx2"));
 		REQUIRE_FALSE(data->At(0).texture.textureSlot);
 	}
+
+	// The whole-texture port names the same file, as the whole texture rather than a channel of it.
+	const auto whole = std::dynamic_pointer_cast<SurfaceTextureData>(
+		node->outData(QtNodes::PortIndex(TextureNode::c_TexturePort)));
+	REQUIRE(whole != nullptr);
+	REQUIRE(whole->Path() == QString("Textures/albedo.ktx2"));
 }

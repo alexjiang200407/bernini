@@ -1,8 +1,13 @@
 #include "StoreAt.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include <array>
+#include <assetlib/AssetStore.h>
+#include <assetlib/image_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/Camera.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
@@ -17,6 +22,9 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gamelib/AssetManager.h>
@@ -43,6 +51,7 @@ struct RimParams
     float4 baseColorFactor;
 
     ColorSlot baseColor;
+    DataSlot orm;
 };
 
 struct RimSurface : ISurfaceSource
@@ -59,6 +68,7 @@ struct RimSurface : ISurfaceSource
         PbrSurface surface = PbrSurface();
         surface.baseColor =
             params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        surface.orm = reader.Sample(params.orm, reader.Uv()).rgb;
 
         let n = normalize(reader.WorldNormal());
         let v = normalize(reader.CameraPos() - reader.WorldPos());
@@ -283,4 +293,89 @@ TEST_CASE("A material whose surface was never registered is refused", "[gamelib]
 		assets.AcquireMaterial("Authored/Materials/warm.bmaterial"),
 		bgl::SceneError,
 		MessageMatches(ContainsSubstring("no surface named 'Rim' is registered")));
+}
+
+namespace
+{
+	// A `size` x `size` flat RGBA8 image, one subresource, no mips.
+	assetlib::ImageData
+	FlatImage(uint32_t size, std::array<uint8_t, 4> rgba)
+	{
+		const size_t bytes = static_cast<size_t>(size) * size * 4;
+
+		auto image     = assetlib::ImageData();
+		image.width    = size;
+		image.height   = size;
+		image.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+		image.pixels   = core::fixed_buffer<std::byte>(bytes);
+		for (size_t t = 0; t < static_cast<size_t>(size) * size; ++t)
+			for (size_t c = 0; c < 4; ++c)
+				image.pixels.data()[t * 4 + c] = static_cast<std::byte>(rgba[c]);
+		image.subresources.push_back({ 0, static_cast<uint64_t>(size) * 4, bytes });
+		return image;
+	}
+}
+
+// A routed slot whose bake never ran draws each channel from its own source: the routes ride
+// the material record and the shader gathers them, so nothing is composited, uploaded under a
+// baked name, or written to disk -- and the material renders the same as it would after a bake.
+TEST_CASE("A routed slot draws through its routes when its bake is absent", "[gamelib][surface]")
+{
+	ProjectRoot root("bernini_gamelib_surface_slotroutes");
+	std::filesystem::create_directories(root.path / "Textures");
+	assetlib::writeKTX2(
+		FlatImage(16, { { 200, 7, 9, 255 } }),
+		root.path / "Textures/ao.ktx2",
+		false,
+		assetlib::Ktx2Compression::kNone);
+	assetlib::writeKTX2(
+		FlatImage(8, { { 3, 60, 90, 255 } }),
+		root.path / "Textures/mr.ktx2",
+		false,
+		assetlib::Ktx2Compression::kNone);
+
+	// The angelica shape: AO in one map's R, roughness/metallic in another's G/B. Never baked.
+	auto material         = assetlib::BMaterial();
+	material.name         = "routed";
+	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name = "Rim";
+
+	auto& orm     = material.surface.textures.emplace_back();
+	orm.name      = "orm";
+	orm.routes[0] = { "Textures/ao.ktx2", 0 };
+	orm.routes[1] = { "Textures/mr.ktx2", 1 };
+	orm.routes[2] = { "Textures/mr.ktx2", 2 };
+
+	SaveAt(material, root.path / assetlib::c_MaterialsDirectoryName / "routed.bmaterial");
+
+	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(SurfaceSceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The name a bake would give the map, to prove no upload ever answers to it.
+	auto store    = assetlib::AssetStore(root.path);
+	auto resolved = material;
+	store.ResolveMaterialBake(resolved);
+	const std::string& baked = resolved.surface.textures[0].bakedPath;
+	REQUIRE_FALSE(baked.empty());
+	REQUIRE(store.BakeIsStale(material));
+	CHECK(store.LooseSurfaceSlots(material) == 0b1);
+
+	const bgl::MaterialHandle handle =
+		assets.AcquireMaterial("Authored/Materials/routed.bmaterial");
+	REQUIRE(handle.IsValid());
+	CHECK(handle.materialType == bgl::MaterialType::kGameStart);
+
+	// The route sources themselves are live -- the record draws through them, so the acquire
+	// uploaded each one. An empty prefetch is authoritative for a path it lacks, so a valid
+	// handle here can only be a record the acquire already holds.
+	auto empty = game::TexturePrefetch();
+	CHECK(assets.AcquireTexture("Textures/ao.ktx2", &empty).textureSlot);
+	CHECK(assets.AcquireTexture("Textures/mr.ktx2", &empty).textureSlot);
+
+	// And nothing was composited: no upload under the baked name, nothing written to disk.
+	CHECK_FALSE(assets.AcquireTexture(baked, &empty).textureSlot);
+	CHECK_FALSE(std::filesystem::exists(root.path / baked));
 }

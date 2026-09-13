@@ -109,8 +109,10 @@ namespace
 		const assetlib::AssetStore store(dataRoot);
 		const assetlib::BMaterial  material = store.Load<assetlib::BMaterial>(relPath);
 
-		for (const std::string& texture :
-		     game::MaterialTextures(material, store.DrawsLoose(material)))
+		for (const std::string& texture : game::MaterialTextures(
+				 material,
+				 store.DrawsLoose(material),
+				 store.LooseSurfaceSlots(material)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;
@@ -449,10 +451,16 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 
 	// The worker failed: no prefetch, and for a mesh no mesh or cook either. A failure on the
 	// file's content -- an unreadable container -- will fail the same way on every repaint, so it
-	// is remembered until the file changes, with its reason for the tile to show.
+	// is remembered until the file changes, with its reason for the tile to show. Logged too: the
+	// tile's tooltip is the only other place the reason goes, and a session's worth of silent
+	// warning triangles once cost a real hunt.
 	if (pending.prefetch == nullptr ||
 	    (type == ThumbnailType::kMesh && (pending.mesh == nullptr || pending.cooked == nullptr)))
 	{
+		qWarning(
+			"AssetThumbnail: cannot produce '%s': %s",
+			qPrintable(path),
+			qPrintable(pending.failure));
 		Reject(path, pending.stamp, pending.failure);
 		return;
 	}
