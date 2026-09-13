@@ -155,10 +155,10 @@ namespace editor
 	/**
 	 * Why `clip` cannot be a sample of a blend space, or empty when it can.
 	 *
-	 * A space sets one normalized phase shared by every sample, so a clip that clamps rather than
-	 * wraps would sit on its last frame while the others cycle -- which is why `AddRig` refuses one.
-	 * Offered here so the clip is greyed with the reason beside it (ADR-5) rather than accepted and
-	 * then refused by a rig that will not upload.
+	 * A space wraps every sample by its own phase, whatever the clip's loop flag says, so the only
+	 * clip it cannot hold is one of a single frame -- which has no cycle, and which `AddRig` refuses.
+	 * Offered here so the clip is greyed with the reason beside it rather than accepted and then
+	 * refused by a rig that will not upload.
 	 */
 	[[nodiscard]] std::string_view
 	ClipRefusalReason(const ClipInfo& clip) noexcept;

@@ -67,7 +67,8 @@ The reasoning that is not obvious from a signature. The headers linked below are
 ## Blend spaces
 
 A **1D blend space** is an ordered run of clips with the parameter each plays alone at — a walk at
-1.5 and a run at 5, say, blended by speed. Its samples are *looping* clips, refused otherwise.
+1.5 and a run at 5, say, blended by speed. Its samples loop with the space, whatever each clip's own
+`loop` flag says.
 
 * **The samples share one normalized phase.** They are clips of different lengths, so a frame number
   means nothing between them: what is shared is the fraction of a cycle, and each sample's frame is
@@ -170,8 +171,12 @@ span between two samples is what a weight divides by.
 * **A space needs at least two samples**, with strictly increasing parameters — two at one parameter
   have no defined weighting between them and the span between them is a divisor. Refused at both
   doors: the document's own validation, and `AddRig`.
-* **A sample that does not loop is refused.** One phase is shared across the samples, and a clip that
-  clamps would sit on its last frame while the others cycle.
+* **A sample loops with the space, and needs two frames.** The space's phase wraps, and each sample
+  plays at that fraction of its own cycle (`PoseSkinned.slang`), so a clip cooked as a one-shot
+  cycles here like any other: a pack's walk whose last pose misses its first by a little shows a
+  hitch at the wrap, not a frozen foot. A single frame has no cycle, and the weighted cycle is a
+  divisor, so that is refused. Single-clip playback still reads the flag -- a one-shot played alone
+  holds its last frame.
 * **`cMaxPoseClips` is twice `cBlendSlots`.** A space resolves to the two samples straddling its
   parameter, so four slots of spaces is eight clips. That struct is held per thread in the pose
   kernel; its register cost has not been measured.

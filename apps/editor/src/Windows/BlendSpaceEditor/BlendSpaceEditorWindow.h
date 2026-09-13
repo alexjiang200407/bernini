@@ -168,7 +168,7 @@ private:
 	void
 	CommitBlendSet();
 
-	// Adds a space seeded with the first two looping clips, named by the author.
+	// Adds a space seeded with the first two clips a space can sample, named by the author.
 	void
 	AddSpace();
 
@@ -224,11 +224,11 @@ private:
 	Tick();
 
 	[[nodiscard]] int
-	LoopingClipCount() const;
+	SampleableClipCount() const;
 
 	// The `n`th clip a space may sample, or -1 when there is no such clip.
 	[[nodiscard]] int
-	NthLoopingClip(int n) const;
+	NthSampleableClip(int n) const;
 
 	// The document's space `index`, or nullptr when there is none.
 	[[nodiscard]] assetlib::BlendSpace*
