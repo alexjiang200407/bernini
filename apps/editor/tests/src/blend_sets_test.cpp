@@ -1,4 +1,5 @@
 #include "Windows/AnimationEditor/blend_sets.h"
+#include "util/rig_containers.h"
 
 #include <QTemporaryDir>
 #include <assetlib/AssetStore.h>
@@ -66,6 +67,64 @@ TEST_CASE("A clip set's blend sets are the ones naming it", "[animation][blend]"
 	SECTION("no clip set at all resolves to nothing without a scan")
 	{
 		CHECK(editor::ResolveBlendSets(Graph(root), "").empty());
+	}
+}
+
+TEST_CASE("A blend set is shown on the meshes skinned to its clip set's rig", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteBanim(root, "Derived/Animations/loco.banim", "Derived/Skeletons/rig.bskel");
+	WriteSet(root, "Authored/Animations/loco.bblend", "Derived/Animations/loco.banim");
+
+	SECTION("every mesh on that rig comes back, sorted, and no other")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/wolf.bmesh", "Derived/Skeletons/rig.bskel");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+		editor::test::WriteMesh(root, "Derived/Meshes/cat.bmesh", "Derived/Skeletons/other.bskel");
+
+		const std::vector<std::string> meshes =
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loco.bblend");
+
+		REQUIRE(meshes.size() == 2);
+		CHECK(meshes[0] == "Derived/Meshes/dog.bmesh");
+		CHECK(meshes[1] == "Derived/Meshes/wolf.bmesh");
+	}
+
+	SECTION("a rig nothing is skinned to has nothing to show the set on")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/cat.bmesh", "Derived/Skeletons/other.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loco.bblend").empty());
+	}
+
+	SECTION("a clip set recording no rig leads nowhere")
+	{
+		editor::test::WriteBanim(root, "Derived/Animations/loose.banim", "");
+		WriteSet(root, "Authored/Animations/loose.bblend", "Derived/Animations/loose.banim");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loose.bblend").empty());
+	}
+
+	SECTION("a clip set that is not on disk leads nowhere")
+	{
+		WriteSet(root, "Authored/Animations/lost.bblend", "Derived/Animations/lost.banim");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/lost.bblend").empty());
+	}
+
+	SECTION("a clip set is not a blend set, even one a mesh can play")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(editor::ResolveBlendSetMeshes(Graph(root), "Derived/Animations/loco.banim").empty());
 	}
 }
 

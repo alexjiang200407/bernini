@@ -23,6 +23,17 @@ namespace editor
 	ResolveBlendSets(const assetlib::AssetRefGraph& graph, std::string_view animationsKey);
 
 	/**
+	 * Every `.bmesh` in `graph` that can show the set at `blendSetKey`, sorted: the meshes skinned to
+	 * the rig its clip set was resampled against.
+	 *
+	 * Two edges forward and one back -- `kBlendClips`, `kClipSkeleton`, then `kMeshSkeleton` -- because
+	 * a set names its clip set and no mesh, and nothing else records one. Empty for a key that is not
+	 * a set, a clip set that is not on disk or records no rig, and a rig nothing is skinned to.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	ResolveBlendSetMeshes(const assetlib::AssetRefGraph& graph, std::string_view blendSetKey);
+
+	/**
 	 * Writes the empty set -- no spaces -- for the clip set at `animationsKey`, at the key
 	 * `assetlib::blendSetKeyFor` names, through the project's store. Returns that key.
 	 *
