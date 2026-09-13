@@ -369,17 +369,7 @@ MaterialOutputNode::embeddedWidget()
 QWidget*
 MaterialOutputNode::DialogOwner() const
 {
-	// A dialog must NOT be parented to m_Widget. An embedded widget is reparented into a
-	// QGraphicsProxyWidget, and Qt embeds a proxied widget's child windows into the graphics scene
-	// too -- so the dialog's real window comes up blank while its contents are painted onto the node
-	// canvas, and the scene is left with a stray proxy afterwards. Parent it to the editor's actual
-	// top-level window instead; a null parent would also work but would lose modality and taskbar
-	// grouping.
-	QWidget* owner = m_Widget != nullptr ? m_Widget->window() : nullptr;
-	if (owner == nullptr || owner->graphicsProxyWidget() != nullptr)
-		owner = QApplication::activeWindow();
-
-	return owner;
+	return DialogOwnerFor(m_Widget);
 }
 
 void

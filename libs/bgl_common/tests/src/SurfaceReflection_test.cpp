@@ -86,6 +86,7 @@ import bgl.SurfaceSource;
     [Default(2.0)]
     float power;
 
+    [Color]
     [Default(0.2, 0.6, 1.0)]
     float3 tint;
 
@@ -181,10 +182,12 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.params.values[0].type == SurfaceValueType::kFloat);
 	CHECK(surface.params.values[0].byteOffset == at.power);
 	CHECK(surface.params.values[0].defaultValue.x == 2.0f);
+	CHECK_FALSE(surface.params.values[0].isColor);
 
 	CHECK(surface.params.values[1].name == "tint");
 	CHECK(surface.params.values[1].type == SurfaceValueType::kFloat3);
 	CHECK(surface.params.values[1].byteOffset == at.tint);
+	CHECK(surface.params.values[1].isColor);
 	CHECK(surface.params.values[1].defaultValue.x == 0.2f);
 	CHECK(surface.params.values[1].defaultValue.y == 0.6f);
 	CHECK(surface.params.values[1].defaultValue.z == 1.0f);
@@ -195,6 +198,7 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.params.values[2].type == SurfaceValueType::kFloat4);
 	CHECK(surface.params.values[2].byteOffset == at.quad);
 	CHECK(surface.params.values[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+	CHECK_FALSE(surface.params.values[2].isColor);
 
 	// No attribute is zero, which is also what a material that sets nothing writes.
 	CHECK(surface.params.values[3].name == "unset");
@@ -337,6 +341,28 @@ struct NineSurface : ISurfaceSource
 			std::runtime_error,
 			Catch::Matchers::MessageMatches(
 				ContainsSubstring("texture 'ninth' is past the 8 a record carries")));
+	}
+
+	SECTION("a colour narrower than a colour")
+	{
+		constexpr std::string_view c_Body = R"(struct NarrowParams
+{
+    [Color]
+    float2 pair;
+};
+
+struct NarrowSurface : ISurfaceSource
+{
+    typealias MaterialParams = NarrowParams;
+    static float Coverage<R : IMaterialReader>(R reader, NarrowParams params) { return 1.0; }
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, NarrowParams params) { return PbrSurface(); }
+};
+)";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Narrow", Module(c_Body)), "Narrow"),
+			std::runtime_error,
+			Catch::Matchers::MessageMatches(
+				ContainsSubstring("'pair' is [Color] but has 2 component(s)")));
 	}
 
 	SECTION("a parameter the engine cannot pack")

@@ -63,7 +63,10 @@ Three rules the file has to keep, each of which the engine checks and names:
 * **A field is a value or a slot.** A `float`, `float2`, `float3` or `float4` is a value a material
   sets by name; a `ColorSlot`, `DataSlot`, `NormalSlot` or `CoverageSlot` is a texture a material
   binds by name. `[Default(...)]` on a value is what a material that says nothing about it gets;
-  an unbound slot samples white, or a flat normal for a `NormalSlot`.
+  an unbound slot samples white, or a flat normal for a `NormalSlot`. `[Color]` on a `float3` or
+  `float4` value marks it as a colour — presentation only: the editor shows a swatch and a picker
+  for it, and packing and shading read the value the same either way. Registration refuses it on
+  anything narrower.
 
 **A file that never imports the contract is not a surface**, and is skipped rather than refused.
 The directory is the game's whole module search path, not a list of surfaces, so a shared header or

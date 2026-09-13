@@ -22,6 +22,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QPointF>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QWidget>
 #include <QtNodes/NodeDelegateModelRegistry>
@@ -61,6 +62,7 @@ namespace
 		colour.name         = "rimColor";
 		colour.type         = bgl::SurfaceValueType::kFloat3;
 		colour.defaultValue = glm::vec4(1.0f, 0.5f, 0.25f, 0.0f);
+		colour.isColor      = true;
 
 		auto base = bgl::SurfaceTexture();
 		base.name = "baseColor";
@@ -529,6 +531,54 @@ TEST_CASE("The node re-measures when its widget resizes", "[materialgraph][surfa
 	QSignalSpy remeasured(&sink, &QtNodes::NodeDelegateModel::requestNodeUpdate);
 	widget->resize(widget->width() + 40, widget->height() + 25);
 	CHECK(remeasured.count() == 1);
+}
+
+TEST_CASE("A colour value carries a swatch, and picking writes it", "[materialgraph][surfacesink]")
+{
+	// A [Color] float4 and an unmarked float3, so the swatch provably follows the flag rather
+	// than the width. The picker's own dialog is modal and cannot run headless; SetValue is the
+	// write it lands, so it is what the case drives.
+	auto surface = bgl::SurfaceType();
+	surface.name = "Swatch";
+
+	auto glow         = bgl::SurfaceValue();
+	glow.name         = "glowColor";
+	glow.type         = bgl::SurfaceValueType::kFloat4;
+	glow.defaultValue = glm::vec4(0.1f, 0.2f, 0.3f, 0.4f);
+	glow.isColor      = true;
+
+	auto offset         = bgl::SurfaceValue();
+	offset.name         = "offset";
+	offset.type         = bgl::SurfaceValueType::kFloat3;
+	offset.defaultValue = glm::vec4(0.0f);
+
+	surface.params.values = { glow, offset };
+
+	SurfaceOutputNode sink(surface);
+	QWidget*          widget = sink.embeddedWidget();
+	REQUIRE(widget != nullptr);
+
+	// One swatch: the marked value's row alone, an unmarked float3 keeps its spins alone.
+	const auto swatches = widget->findChildren<QPushButton*>();
+	REQUIRE(swatches.size() == 1);
+
+	// A float4's alpha rides the swatch as text; the swatch itself stays opaque.
+	CHECK(swatches[0]->text() == QStringLiteral("A 0.40"));
+
+	QSignalSpy changed(&sink, &MaterialSinkNode::Changed);
+
+	sink.SetValue(0, glm::vec4(0.5f, 0.6f, 0.7f, 0.8f));
+	CHECK(sink.Value(0) == glm::vec4(0.5f, 0.6f, 0.7f, 0.8f));
+	CHECK(changed.count() == 1);
+	CHECK(swatches[0]->text() == QStringLiteral("A 0.80"));
+
+	// Components past the type's are zeroed, so a float3 write cannot smuggle an alpha in --
+	// and a write that lands the value already held is not a change.
+	sink.SetValue(1, glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+	CHECK(sink.Value(1) == glm::vec4(1.0f, 2.0f, 3.0f, 0.0f));
+	CHECK(changed.count() == 2);
+	sink.SetValue(1, glm::vec4(1.0f, 2.0f, 3.0f, 9.0f));
+	CHECK(changed.count() == 2);
 }
 
 TEST_CASE(

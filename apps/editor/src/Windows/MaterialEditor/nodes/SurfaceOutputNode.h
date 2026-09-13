@@ -24,6 +24,7 @@
 #include <array>
 
 class QDoubleSpinBox;
+class QPushButton;
 class SurfaceTextureData;
 
 /**
@@ -107,6 +108,13 @@ public:
 	[[nodiscard]] glm::vec4
 	Value(size_t index) const;
 
+	/**
+	 * Writes `params.values[index]` -- what the colour picker lands. Components past the type's
+	 * are zeroed, the row's widgets follow, and Changed is emitted on an actual change.
+	 */
+	void
+	SetValue(size_t index, const glm::vec4& value);
+
 	/** How a port index maps onto the declared slots: every slot has a whole-texture port, and a
 	 *  data slot puts one channel port per component after its own. */
 	struct PortRef
@@ -185,6 +193,12 @@ private:
 	void
 	SyncWidgets();
 
+	void
+	PickColor(size_t index);
+
+	void
+	RefreshSwatch(size_t index);
+
 	bgl::SurfaceType m_Surface;
 
 	// One vec4 per declared value, seeded from the defaults; authoritative over the spin boxes,
@@ -205,4 +219,7 @@ private:
 
 	QWidget*                                  m_Widget = nullptr;
 	std::vector<std::vector<QDoubleSpinBox*>> m_Spins;
+
+	// Parallel to m_Values; null everywhere but a `[Color]` value's row.
+	std::vector<QPushButton*> m_Swatches;
 };

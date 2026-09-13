@@ -93,8 +93,10 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	CHECK(rim.values[0].name == "rimColor");
 	CHECK(rim.values[0].type == SurfaceValueType::kFloat3);
 	CHECK(rim.values[0].defaultValue == glm::vec4(1.0f, 3.0f, 6.0f, 0.0f));
+	CHECK(rim.values[0].isColor);
 	CHECK(rim.values[1].name == "rimPower");
 	CHECK(rim.values[1].defaultValue.x == 3.0f);
+	CHECK_FALSE(rim.values[1].isColor);
 	CHECK(rim.values[2].name == "baseColorFactor");
 	CHECK(rim.values[2].type == SurfaceValueType::kFloat4);
 	CHECK(rim.values[2].defaultValue == glm::vec4(0.05f, 0.05f, 0.06f, 0.55f));

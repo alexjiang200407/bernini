@@ -7,6 +7,7 @@ import bgl.SurfaceSource;
 // it imports the contract and nothing else, and names no handle, arena or bucket.
 struct RimParams
 {
+    [Color]
     [Default(1.0, 3.0, 6.0)]
     float3 rimColor;
 
