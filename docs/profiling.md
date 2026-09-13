@@ -254,6 +254,13 @@ Three things about it are decisions rather than detail:
   resolve, and on Metal an encoder ended at every pass boundary, so the toggle is off by default —
   and a window that opened empty behind a menu item nobody had found would read as broken.
 
+Graph painting shares the GUI thread with the animation transport clock. Each band is filled as
+convex spans between adjacent samples, without antialiasing their shared edges; one large jagged
+polygon can stall that clock for hundreds of milliseconds even while the render thread holds
+60 FPS. Every sample remains in the drawing, including one-frame spikes. The `[gputiming][perf]`
+case compares noisy and flat histories of equal size; `[gputiming]` also checks that dense spans
+meet without gaps and keep an isolated spike.
+
 **Export CSV…** writes `gpu_timings_<stamp>.csv` beside `editor.log`: one row per sampled frame, one
 column per pass, a total, and an empty field where a pass did not run in that frame. There is no file
 dialog — a predictable path is what makes the capture reachable by whoever, or whatever, reads the

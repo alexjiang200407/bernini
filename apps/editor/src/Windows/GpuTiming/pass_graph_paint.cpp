@@ -7,7 +7,6 @@
 #include <QPalette>
 #include <QPen>
 #include <QPointF>
-#include <QPolygonF>
 #include <QRect>
 #include <QRectF>
 #include <QString>
@@ -148,31 +147,31 @@ namespace editor
 			Qt::AlignRight | Qt::AlignBottom,
 			"ms");
 
-		// Each band is drawn on top of the running total of the bands below it, which is what makes
-		// the outline of the stack the frame's whole GPU cost.
+		// Antialiasing shared span edges leaves seams between adjacent fills.
+		painter.setRenderHint(QPainter::Antialiasing, false);
 		std::vector<double> below(samples, 0.0);
 		for (std::size_t pass = 0; pass < history.Passes().size(); ++pass)
 		{
-			QPolygonF band;
-			band.reserve(static_cast<int>(2 * samples));
-
-			for (std::size_t sample = 0; sample < samples; ++sample)
-			{
-				const double top = below[sample] + history.At(sample, pass).value_or(0.0);
-				band.append(QPointF(xOf(sample), yOf(top)));
-				below[sample] = top;
-			}
-			for (std::size_t sample = samples; sample-- > 0;)
-			{
-				band.append(QPointF(
-					xOf(sample),
-					yOf(below[sample] - history.At(sample, pass).value_or(0.0))));
-			}
-
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(PassBandColor(pass));
-			painter.drawPolygon(band);
+			double previousBottom = below[0];
+			below[0] += history.At(0, pass).value_or(0.0);
+			// Convex spans avoid the rasterizer's growing cost for a whole jagged history polygon.
+			for (std::size_t sample = 1; sample < samples; ++sample)
+			{
+				const double bottom = below[sample];
+				below[sample] += history.At(sample, pass).value_or(0.0);
+				const QPointF band[] = {
+					{ xOf(sample - 1), yOf(below[sample - 1]) },
+					{ xOf(sample), yOf(below[sample]) },
+					{ xOf(sample), yOf(bottom) },
+					{ xOf(sample - 1), yOf(previousBottom) },
+				};
+				painter.drawConvexPolygon(band, 4);
+				previousBottom = bottom;
+			}
 		}
+		painter.setRenderHint(QPainter::Antialiasing, true);
 
 		const std::size_t marked =
 			selected.has_value() && *selected < samples ? *selected : samples - 1;

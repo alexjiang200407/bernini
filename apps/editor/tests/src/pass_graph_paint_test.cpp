@@ -1,12 +1,16 @@
 #include "Windows/GpuTiming/pass_graph_paint.h"
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QPainter>
 #include <QPalette>
 #include <QRect>
+#include <algorithm>
+#include <array>
 #include <bgl/PassHistory.h>
 #include <bgl/PassTiming.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -14,7 +18,9 @@
 #include <optional>
 #include <qnamespace.h>
 #include <qrgb.h>
+#include <qtypes.h>
 #include <set>
+#include <string>
 
 // The chart is a picture, so what a case can pin is that it drew: the bands are there, they are
 // told apart, and the sample marked is the one asked for. The `.got.png` beside the goldens is what
@@ -130,4 +136,76 @@ TEST_CASE("The marked sample is the one the caller asked for", "[gputiming]")
 	// A selection that has scrolled out of the history falls back to the newest frame rather than
 	// marking whichever sample now sits at that index.
 	CHECK(Render(history, 999) == latest);
+}
+
+TEST_CASE("Dense timing bands join without gaps and retain a one-frame spike", "[gputiming]")
+{
+	bgl::PassHistory history;
+	for (uint64_t frame = 1; frame <= 600; ++frame)
+	{
+		history.Append(
+			{ .frame  = frame,
+		      .passes = { { .name = "Base", .milliseconds = 1.0 },
+		                  { .name = "Spike", .milliseconds = frame == 301 ? 1.0 : 0.0 } } });
+	}
+	const QImage image      = Render(history, std::nullopt);
+	const QRgb   base       = editor::PassBandColor(0).rgb();
+	const QRgb   spike      = editor::PassBandColor(1).rgb();
+	bool         foundSpike = false;
+	for (int x = 0; x < image.width(); ++x)
+	{
+		const auto sample = editor::PassGraphSampleAt(image.rect(), history, x);
+		if (!sample || *sample == 0 || *sample >= history.SampleCount() - 2)
+			continue;
+		CAPTURE(x);
+		CHECK(image.pixel(x, 300) == base);
+		if (image.pixel(x, 160) == spike)
+		{
+			CHECK(*sample >= 299);
+			CHECK(*sample <= 301);
+			foundSpike = true;
+		}
+	}
+	CHECK(foundSpike);
+}
+
+TEST_CASE("Noisy GPU timings stay affordable relative to flat timings", "[gputiming][perf]")
+{
+	const auto historyOf = [](bool noisy) {
+		bgl::PassHistory history;
+		for (uint64_t frame = 1; frame <= 600; ++frame)
+		{
+			bgl::PassTimings timings{ .frame = frame };
+			for (uint64_t pass = 0; pass < 24; ++pass)
+			{
+				const double cost =
+					noisy ? 0.1 + static_cast<double>((frame * 73 + pass * 19) % 101) / 100.0 : 0.6;
+				timings.passes.push_back({ .name = std::to_string(pass), .milliseconds = cost });
+			}
+			history.Append(timings);
+		}
+		return history;
+	};
+	const auto flat      = historyOf(false);
+	const auto noisy     = historyOf(true);
+	const auto paintTime = [](const bgl::PassHistory& history) {
+		std::array<qint64, 5> times;
+		for (qint64& elapsed : times)
+		{
+			QElapsedTimer clock;
+			clock.start();
+			const QImage image = Render(history, std::nullopt);
+			elapsed            = clock.nsecsElapsed();
+			REQUIRE_FALSE(image.isNull());
+		}
+		std::ranges::sort(times);
+		return times[times.size() / 2];
+	};
+	const QImage warmFlat  = Render(flat, std::nullopt);
+	const QImage warmNoisy = Render(noisy, std::nullopt);
+	const auto   flatNs    = paintTime(flat);
+	const auto   noisyNs   = paintTime(noisy);
+	INFO("Flat: " << flatNs << " ns; noisy: " << noisyNs << " ns");
+	// Equal samples and passes: spikes must not multiply the cost of inspecting a slow frame.
+	CHECK(noisyNs < 8 * flatNs);
 }
