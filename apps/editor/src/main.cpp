@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QMessageBox>
+#include <QProcess>
+#include <QString>
 
 #include <core/err/util.h>
 #include <core/log/log.h>
@@ -8,10 +10,15 @@
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <qbytearrayview.h>
+#include <qcontainerfwd.h>
 #include <qcoreapplication.h>
+#include <qlatin1stringview.h>
 #include <qlogging.h>
 #include <qobject.h>
+#include <qstringlist.h>
 #include <qstringliteral.h>
+#include <qtypes.h>
 #include <spdlog/common.h>
 #include <string_view>
 #include <tracy/Tracy.hpp>
@@ -36,6 +43,22 @@ namespace
 				return argv[i + 1];
 		}
 		return {};
+	}
+
+	// The project a restarted editor opens, outranking config.json's startupProject for that launch.
+	constexpr auto c_ProjectArgument = QLatin1StringView("--project");
+
+	// Read through QCoreApplication rather than argv, which on Windows is the ANSI code page and
+	// would mangle a path outside it.
+	std::filesystem::path
+	ProjectArgument()
+	{
+		const QStringList arguments = QCoreApplication::arguments();
+		const qsizetype   at        = arguments.indexOf(c_ProjectArgument);
+		if (at < 0 || at + 1 >= arguments.size())
+			return {};
+
+		return std::filesystem::path(arguments[at + 1].toStdWString());
 	}
 }
 
@@ -92,7 +115,7 @@ main(int argc, char* argv[])
 		// wall clock of a cold start is made of nests under this.
 		ZoneScopedN("editor startup");
 
-		window.emplace(nullptr, std::filesystem::path(), startup.Sink());
+		window.emplace(nullptr, std::filesystem::path(), startup.Sink(), ProjectArgument());
 	}
 	catch (const std::exception& e)
 	{
@@ -113,5 +136,20 @@ main(int argc, char* argv[])
 	window->show();
 	startup.hide();
 
-	return app.exec();
+	const int status = app.exec();
+
+	const std::filesystem::path relaunch = window->GetRelaunchProject();
+
+	// Before the new process starts, so it does not create a device while this one still holds its own.
+	window.reset();
+
+	const QString relaunchPath = QString::fromStdWString(relaunch.wstring());
+	if (!relaunch.empty() && !QProcess::startDetached(
+								 QCoreApplication::applicationFilePath(),
+								 { QString(c_ProjectArgument), relaunchPath }))
+	{
+		qCritical("Editor: could not restart into %s", qPrintable(relaunchPath));
+	}
+
+	return status;
 }

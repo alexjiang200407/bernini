@@ -68,11 +68,19 @@ before the window exists, so that building the window is inside what it measures
 side by side for an A/B comparison can be told apart where every other part of the title is
 identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.
 
+The editor never writes the file — `ws` seeds it and a person edits it. **`--project <path>`**
+outranks `startupProject` for one launch, and it is how the editor restarts itself: surfaces are
+registered once, as the renderer is built, so New or Open Project on a project whose shaders are not
+the ones this session registered asks to restart, and `main` starts the new process with the project
+once the window is gone. When that is needed is `editor::OpeningNeedsRelaunch`
+(`src/util/surface_relaunch.h`); see [docs/game_defined_surfaces.md](../../docs/game_defined_surfaces.md).
+
 **`MainWindow` reads the config it is given**, defaulting to the deployed one when handed nothing —
 which is what `main.cpp` does. `editor_tests` runs from the directory that file is deployed into, so
 a test that wrote `headless` into it would be writing the shipping editor's config; instead each
 case writes one in a temp directory and names it. That is also how a test opens a project at all:
-`startupProject` is the only route into `SetActiveProject` that raises no dialog.
+`startupProject`, and the `project` the constructor takes in its place, are the only routes into
+`SetActiveProject` that raise no dialog.
 
 ## editor_lib
 

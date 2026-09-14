@@ -97,8 +97,10 @@ follow from that and are worth stating plainly:
 * **Registration happens once, inside `CreateGraphics`.** The four reserved rows are bound to the
   surfaces found then and every pipeline is built against them. An edited surface is seen at the
   next launch.
-* **The editor passes the *startup* project's directory** and no other. Opening a second project in
-  the same session does not bring its shaders.
+* **The editor registers the project it started with**, and opens one with other shaders by
+  restarting into it. New or Open Project on a project whose `Authored/Shaders` is a different
+  directory asks first, then relaunches the editor with `--project`. Two projects with no shaders
+  at all share a session. ([`surface_relaunch.h`](../apps/editor/src/util/surface_relaunch.h))
 * **A `.bpak` holds no shaders.** `pack` skips a file whose extension names no container, and a
   packed game reads its shaders off the loose directory beside it.
 

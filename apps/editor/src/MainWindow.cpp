@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include <QCoreApplication>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QInputDialog>
@@ -28,6 +29,7 @@
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/panel_visibility.h"
+#include "util/surface_relaunch.h"
 #include "util/window_title.h"
 #include <array>
 #include <assetlib/Project.h>
@@ -79,11 +81,12 @@
 MainWindow::MainWindow(
 	QWidget*                 parent,
 	std::filesystem::path    configPath,
-	background::ProgressSink startup) : QMainWindow(parent), m_StartupProgress(std::move(startup))
+	background::ProgressSink startup,
+	std::filesystem::path    project) : QMainWindow(parent), m_StartupProgress(std::move(startup))
 {
 	try
 	{
-		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath);
+		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath, project);
 	}
 	catch (...)
 	{
@@ -97,7 +100,7 @@ MainWindow::MainWindow(
 }
 
 void
-MainWindow::Build(const std::filesystem::path& configPath)
+MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem::path& project)
 {
 	ZoneScopedN("editor build window");
 
@@ -108,11 +111,15 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	connect(m_Ui.cleanUnusedTextures, &QAction::triggered, this, &MainWindow::CleanUnusedTextures);
 	connect(m_Ui.exit, &QAction::triggered, this, &QWidget::close);
 
-	std::string startupProject;
+	std::filesystem::path startupProject = project;
 	{
 		core::Settings settings(configPath);
 
-		startupProject = settings["startupProject"].GetOrDefault(std::string());
+		if (startupProject.empty())
+		{
+			startupProject = std::filesystem::path(
+				core::expand_home(settings["startupProject"].GetOrDefault(std::string())));
+		}
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
 
@@ -141,14 +148,11 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			gfxOpts.shaderCacheDir = "shadercache";
 
 		// The startup project's alone. Surfaces are registered inside CreateGraphics and the
-		// reserved rows are bound to what was there then, so opening another project later does not
-		// bring its shaders -- see docs/game_defined_surfaces.md.
+		// reserved rows are bound to what was there then, so a project with other shaders is opened
+		// by restarting into it -- see RelaunchInsteadOfOpening.
 		if (!startupProject.empty())
-		{
-			gfxOpts.surfaceShaderDir =
-				assetlib::Project::DataDirectoryOf(core::expand_home(startupProject)) /
-				assetlib::c_ShadersDirectoryName;
-		}
+			gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(startupProject);
+		m_SurfaceShaderDir = gfxOpts.surfaceShaderDir;
 
 		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
@@ -183,6 +187,9 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			gfxOpts,
 			sceneDesc,
 			m_StartupProgress ? RendererWait::kPumpEventLoop : RendererWait::kBlock);
+
+		m_SurfaceCount =
+			m_Renderer->Invoke([&] { return m_Renderer->GetGraphics()->GetSurfaceTypes().size(); });
 
 		// The preview look, each knob overridable per viewport; absent keeps what `sky` came with.
 		const auto readSky = [](const auto& section, editor::SkyPresentation sky) {
@@ -399,7 +406,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	// config.json may name a project to open on launch, so working on one does not mean reopening
 	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
 	// absolute path in it reasonable.
-	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
+	if (startupProject.empty() || !OpenProjectAt(startupProject))
 		ShowEmptyState();
 
 	// Startup is over: a project opened from the menu from here on gets the modal screen, not the
@@ -616,9 +623,21 @@ MainWindow::NewProject()
 	const auto root        = std::filesystem::path(location.toStdWString()) / name.toStdString();
 	const auto projectFile = root / (name.toStdString() + assetlib::Project::c_FileExtension);
 
+	// Asked before Create, so declining writes nothing.
+	const ProjectOpening opening = AskHowToOpen("New Project", projectFile);
+	if (opening == ProjectOpening::kCancelled)
+		return;
+
 	try
 	{
-		SetActiveProject(assetlib::Project::Create(projectFile, name.toStdString()));
+		auto project = assetlib::Project::Create(projectFile, name.toStdString());
+		if (opening == ProjectOpening::kRestart)
+		{
+			RestartInto(projectFile);
+			return;
+		}
+
+		SetActiveProject(std::move(project));
 	}
 	catch (const std::exception& e)
 	{
@@ -635,7 +654,56 @@ MainWindow::OpenProject()
 	if (file.isEmpty())
 		return;
 
-	OpenProjectAt(std::filesystem::path(file.toStdWString()));
+	const auto path = std::filesystem::path(file.toStdWString());
+	switch (AskHowToOpen("Open Project", path))
+	{
+	case ProjectOpening::kHere:
+		OpenProjectAt(path);
+		break;
+	case ProjectOpening::kRestart:
+		RestartInto(path);
+		break;
+	case ProjectOpening::kCancelled:
+		break;
+	}
+}
+
+MainWindow::ProjectOpening
+MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& projectFile)
+{
+	if (!editor::OpeningNeedsRelaunch(
+			m_SurfaceShaderDir,
+			m_SurfaceCount,
+			editor::ShadersDirectoryOf(projectFile)))
+	{
+		return ProjectOpening::kHere;
+	}
+
+	const QMessageBox::StandardButton answer = QMessageBox::question(
+		this,
+		title,
+		QString(
+			"%1 has different shaders from the ones this editor loaded at startup. The editor "
+			"will restart to open it.")
+			.arg(QString::fromStdWString(projectFile.stem().wstring())),
+		QMessageBox::Ok | QMessageBox::Cancel,
+		QMessageBox::Ok);
+
+	return answer == QMessageBox::Ok ? ProjectOpening::kRestart : ProjectOpening::kCancelled;
+}
+
+void
+MainWindow::RestartInto(const std::filesystem::path& projectFile)
+{
+	m_RelaunchProject = projectFile;
+	if (!close())
+	{
+		m_RelaunchProject.clear();
+		return;
+	}
+
+	// An open GPU timing window is a window of its own and would keep the application running.
+	QCoreApplication::quit();
 }
 
 bool
