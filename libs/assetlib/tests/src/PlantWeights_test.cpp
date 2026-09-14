@@ -292,6 +292,25 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 	}
 }
 
+TEST_CASE("A contact plane supports a rounded pad from below", "[skinning][plant]")
+{
+	Leg leg;
+	leg.AddFoot(0.008f);
+	leg.AddVertex(glm::vec3(0.1f, 0.0f, 0.0f), 3);
+	leg.Finish();
+
+	const auto soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
+	REQUIRE(soles.size() == 1);
+	CHECK(soles[0].normal.y == Catch::Approx(1.0f).margin(1e-4));
+	CHECK(soles[0].point.y == Catch::Approx(-0.1f).margin(1e-5));
+
+	leg.AddClip();
+	leg.AddFrame(glm::vec3(0.0f));
+	const auto floors = measureClipFloors(leg.animations, leg.Meshes(), leg.skeleton, leg.Chains());
+	REQUIRE(floors.size() == 1);
+	CHECK(floors[0] == Catch::Approx(0.0f).margin(1e-5));
+}
+
 TEST_CASE("A foot on the floor and still is planted", "[skinning][plant]")
 {
 	Leg leg;
