@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
 #include <array>
@@ -37,6 +38,7 @@ namespace bgl
 			{
 				kernel.Reset();
 			}
+			m_BlobShadows.Release();
 		}
 
 		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
@@ -69,16 +71,10 @@ namespace bgl
 		void
 		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
-		/**
-		 * The blob-shadow phase: one workgroup per placement carrying a blob shadow, each emitting
-		 * a disc flattened onto the scene's ground plane. Drawn after the opaque buckets -- the
-		 * discs depth-test against them -- and before the transparents, which composite over the
-		 * ground they stand on, discs included.
-		 */
-		void
-		DrawBlobShadows(const DrawData& draw, const PassContext& resources);
-
 		std::array<MeshletKernel, idl::c_PsoCount> m_Kernels;
-		MeshletKernel                              m_BlobShadowKernel;
+
+		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
+		// is a phase of this pass rather than a pass of its own.
+		BlobShadowPhase m_BlobShadows;
 	};
 }

@@ -498,7 +498,10 @@ colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
 
-**Blob shadows draw between the two phases.** `DrawBlobShadows` dispatches one mesh-shader group
+**Blob shadows draw between the two phases.** `BlobShadowPhase`
+([passes/BlobShadowPhase.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPhase.cpp)) — a phase
+ForwardPass owns rather than a pass of its own, because a separate pass cannot interleave between
+two phases sharing one depth attachment — dispatches one mesh-shader group
 per placement carrying a blob shadow (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. Each group reads its placement's transform from
 the mesh buffer, flattens a quad onto the scene's ground plane directly beneath it, and the pixel

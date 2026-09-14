@@ -16,7 +16,6 @@
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
 #include "scene/Scene.h"
-#include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
 #include "types/Barrier.h"
 #include "types/BlendState.h"
@@ -29,7 +28,6 @@
 #include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl/types/GroundPlaneDesc.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/PsoType.h>
@@ -103,17 +101,6 @@ namespace bgl
 		constexpr auto c_LooseHashedPixelSrc = "programs.forward.PBR_Loose_HashedAlpha"sv;
 		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
 		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
-		constexpr auto c_BlobShadowSrc       = "programs.forward.BlobShadow"sv;
-
-		// Keyed on the Slang global's name as reflection reports it, so this must track the
-		// ConstantBuffer declaration in BlobShadow.slang.
-		constexpr auto c_BlobShadowCbuffer = "gBlobShadowData"sv;
-
-		// Every member DrawBlobShadows writes, kept beside the code that writes them so
-		// BinderNames catches a shader rename at startup.
-		constexpr std::array<std::string_view, 5> c_BlobShadowFields = {
-			"blobBuffer"sv, "meshBuffer"sv, "viewProj"sv, "groundPoint"sv, "groundNormal"sv,
-		};
 
 		// A program is a file with an entry point, so the reserved slots are one triple each.
 		struct GameSlotSrcs
@@ -319,47 +306,7 @@ namespace bgl
 			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
 		}
 
-		{
-			// The transparents' render state -- colour only, blended, depth read without write --
-			// but its own two-stage program: the discs are not instance-pipeline geometry.
-			auto pipelineDesc = MeshletPipelineDesc();
-
-			pipelineDesc.meshShader  = device->CreateShader(std::string(c_BlobShadowSrc), "MSMain");
-			pipelineDesc.pixelShader = device->CreateShader(std::string(c_BlobShadowSrc), "PSMain");
-
-			pipelineDesc.AddRtvFormat(c_SceneColorFormat);
-			pipelineDesc.SetDsvFormat(Format::D24S8);
-
-			auto raster = RasterState();
-			raster.SetFillMode(RasterFillMode::kSolid)
-				.SetCullMode(RasterCullMode::kNone)
-				.SetFrontCounterClockwise(true)
-				.SetDepthClipEnable(true);
-
-			auto depth = DepthStencilState{};
-			depth.SetDepthTestEnable(true)
-				.SetDepthWriteEnable(false)
-				.SetDepthFunc(ComparisonFunc::kLess)
-				.SetStencilEnable(false);
-
-			auto blend = BlendState{};
-			blend.SetRenderTarget(
-				0,
-				BlendState::RenderTarget{}
-					.EnableBlend()
-					.SetSrcBlend(BlendFactor::kOne)
-					.SetDestBlend(BlendFactor::kInvSrcAlpha)
-					.SetBlendOp(BlendOp::kAdd)
-					.SetSrcBlendAlpha(BlendFactor::kZero)
-					.SetDestBlendAlpha(BlendFactor::kZero)
-					.SetBlendOpAlpha(BlendOp::kAdd));
-
-			pipelineDesc.renderState =
-				RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
-					depth);
-
-			pipelines.Add(m_BlobShadowKernel, std::move(pipelineDesc));
-		}
+		m_BlobShadows.Init(device, pipelines);
 	}
 
 	void
@@ -374,8 +321,7 @@ namespace bgl
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 
-		BinderNames("ForwardPass"sv, { &m_BlobShadowKernel, 1 })
-			.Check(c_BlobShadowCbuffer, c_BlobShadowFields);
+		m_BlobShadows.CheckBindings();
 	}
 
 	void
@@ -410,11 +356,9 @@ namespace bgl
 			.AddBufferArg(
 				BufferArg{ std::string(c_TransparentDispatchArgsName),
 		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument })
-			.AddBufferArg(
-				BufferArg{ std::string(c_BlobShadowsName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kShaderResource });
+		                   BarrierAccessFlag::kIndirectArgument });
+
+		BlobShadowPhase::DeclareResources(desc);
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -544,55 +488,8 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
-		DrawBlobShadows(draw, resources);
+		m_BlobShadows.Draw(draw, resources);
 		DrawTransparent(draw, resources);
-	}
-
-	void
-	ForwardPass::DrawBlobShadows(const DrawData& draw, const PassContext& resources)
-	{
-		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "ForwardPass requires a bgl::SceneView");
-
-		const uint32_t blobs = view->GetBlobShadowCount();
-		if (blobs == 0)
-		{
-			return;
-		}
-
-		gassert(
-			m_BlobShadowKernel.pipeline.IsInitialized(),
-			"Blob shadow pipeline must be initialized");
-
-		if (auto found = m_BlobShadowKernel.FindUniforms(c_BlobShadowCbuffer))
-		{
-			auto& uniforms = *found;
-
-			uniforms["blobBuffer"] = resources.GetBuffer(c_BlobShadowsName);
-			uniforms["meshBuffer"] = resources.GetBuffer(c_MeshInstanceBufferName);
-			uniforms["viewProj"]   = draw.viewState.viewProj;
-
-			const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
-			uniforms["groundPoint"]       = ground.point;
-			uniforms["groundNormal"]      = ground.normal;
-		}
-		else
-		{
-			gfatal("Blob shadow shader is missing its '{}' constant buffer", c_BlobShadowCbuffer);
-		}
-
-		// Colour only, exactly as DrawTransparent binds: a blend PSO declares one rtvFormat, so
-		// the velocity buffer must not be attached.
-		auto gfxState = MeshletState();
-		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.targets.sceneColor)
-		                           .SetDepthAttachment(draw.targets.depth);
-		gfxState.kernel      = &m_BlobShadowKernel;
-
-		ICommandList* cmd = resources.GetCommandList();
-		cmd->SetMeshletState(gfxState);
-		cmd->DispatchMesh(blobs, 1, 1);
 	}
 
 	void
