@@ -2,9 +2,10 @@
 // against bgl alone, so a public header that reaches into libs/bgl_extended/src stops the build here
 // rather than when a second renderer is written.
 //
-// It proves the *include* closure and nothing else: bgl.h declares symbols only a renderer defines
-// (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this target must stay a
-// library. An executable would demand them at link time and there would be nothing to satisfy it.
+// It proves the *include* closure and nothing else: the public surface declares symbols only a
+// renderer defines (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this
+// target must stay a library. An executable would demand them at link time and there would be
+// nothing to satisfy it.
 #include <bgl/IGraphics.h>
 // Not reached from IGraphics.h: a client helper is included by whoever wants it, so this is the
 // only place the closure of one is checked.

@@ -9,7 +9,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
-#include <bgl/bgl.h>
+#include <core/glm.h>
 #include <cstdint>
 #include <format>
 #include <gamelib/AssetManager.h>

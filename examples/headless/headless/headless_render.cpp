@@ -3,7 +3,6 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
-#include <bgl/bgl.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <cstdint>
