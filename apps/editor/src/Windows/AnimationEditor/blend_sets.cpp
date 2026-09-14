@@ -4,10 +4,12 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/blend.h>
+#include <assetlib/project_layout.h>
 #include <core/err/util.h>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace editor
@@ -25,6 +27,44 @@ namespace editor
 
 		std::ranges::sort(sets);
 		return sets;
+	}
+
+	std::vector<std::string>
+	ResolveBlendSetMeshes(const assetlib::AssetRefGraph& graph, const std::string_view blendSetKey)
+	{
+		auto meshes = std::vector<std::string>();
+
+		for (const assetlib::AssetRef& clips : graph.ReferencesOf(blendSetKey))
+		{
+			if (clips.kind != assetlib::RefKind::kBlendClips)
+				continue;
+
+			for (const assetlib::AssetRef& rig : graph.ReferencesOf(clips.target))
+			{
+				if (rig.kind != assetlib::RefKind::kClipSkeleton)
+					continue;
+
+				for (const assetlib::AssetRef& mesh : graph.ReferrersOf(rig.target))
+					if (mesh.kind == assetlib::RefKind::kMeshSkeleton)
+						meshes.push_back(mesh.referrer);
+			}
+		}
+
+		std::ranges::sort(meshes);
+		return meshes;
+	}
+
+	std::vector<std::string>
+	ClipSetsWithoutBlendSet(const assetlib::AssetRefGraph& graph)
+	{
+		auto clipSets = std::vector<std::string>();
+
+		for (std::string& file : graph.GetFilesUnder(assetlib::c_AnimationsDirectoryName))
+			if (assetlib::assetTypeFromExtension(file) == assetlib::AssetType::kAnimation &&
+			    !graph.Contains(assetlib::blendSetKeyFor(file)))
+				clipSets.push_back(std::move(file));
+
+		return clipSets;
 	}
 
 	std::string

@@ -1,4 +1,5 @@
 #include "Windows/AnimationEditor/blend_sets.h"
+#include "util/rig_containers.h"
 
 #include <QTemporaryDir>
 #include <assetlib/AssetStore.h>
@@ -67,6 +68,112 @@ TEST_CASE("A clip set's blend sets are the ones naming it", "[animation][blend]"
 	{
 		CHECK(editor::ResolveBlendSets(Graph(root), "").empty());
 	}
+}
+
+TEST_CASE("A blend set is shown on the meshes skinned to its clip set's rig", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteBanim(root, "Derived/Animations/loco.banim", "Derived/Skeletons/rig.bskel");
+	WriteSet(root, "Authored/Animations/loco.bblend", "Derived/Animations/loco.banim");
+
+	SECTION("every mesh on that rig comes back, sorted, and no other")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/wolf.bmesh", "Derived/Skeletons/rig.bskel");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+		editor::test::WriteMesh(root, "Derived/Meshes/cat.bmesh", "Derived/Skeletons/other.bskel");
+
+		const std::vector<std::string> meshes =
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loco.bblend");
+
+		REQUIRE(meshes.size() == 2);
+		CHECK(meshes[0] == "Derived/Meshes/dog.bmesh");
+		CHECK(meshes[1] == "Derived/Meshes/wolf.bmesh");
+	}
+
+	SECTION("a rig nothing is skinned to has nothing to show the set on")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/cat.bmesh", "Derived/Skeletons/other.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loco.bblend").empty());
+	}
+
+	SECTION("a clip set recording no rig leads nowhere")
+	{
+		editor::test::WriteBanim(root, "Derived/Animations/loose.banim", "");
+		WriteSet(root, "Authored/Animations/loose.bblend", "Derived/Animations/loose.banim");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/loose.bblend").empty());
+	}
+
+	SECTION("a clip set that is not on disk leads nowhere")
+	{
+		WriteSet(root, "Authored/Animations/lost.bblend", "Derived/Animations/lost.banim");
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(
+			editor::ResolveBlendSetMeshes(Graph(root), "Authored/Animations/lost.bblend").empty());
+	}
+
+	SECTION("a clip set is not a blend set, even one a mesh can play")
+	{
+		editor::test::WriteMesh(root, "Derived/Meshes/dog.bmesh", "Derived/Skeletons/rig.bskel");
+
+		CHECK(editor::ResolveBlendSetMeshes(Graph(root), "Derived/Animations/loco.banim").empty());
+	}
+}
+
+TEST_CASE("A new blend set is offered for each clip set with none at its key", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteBanim(root, "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
+	editor::test::WriteBanim(root, "Derived/Animations/run.banim", "Derived/Skeletons/rig.bskel");
+	editor::test::WriteBanim(root, "Derived/Animations/idle.banim", "Derived/Skeletons/rig.bskel");
+
+	SECTION("every clip set, sorted, while none has a set")
+	{
+		CHECK(
+			editor::ClipSetsWithoutBlendSet(Graph(root)) ==
+			std::vector<std::string>({ "Derived/Animations/idle.banim",
+		                               "Derived/Animations/run.banim",
+		                               "Derived/Animations/walk.banim" }));
+	}
+
+	SECTION("a clip set with a set at its key is not offered again")
+	{
+		WriteSet(root, "Authored/Animations/run.bblend", "Derived/Animations/run.banim");
+
+		CHECK(
+			editor::ClipSetsWithoutBlendSet(Graph(root)) ==
+			std::vector<std::string>(
+				{ "Derived/Animations/idle.banim", "Derived/Animations/walk.banim" }));
+	}
+
+	SECTION("a set stored elsewhere does not take the key a new one is written at")
+	{
+		WriteSet(root, "Authored/Sets/run_by_hand.bblend", "Derived/Animations/run.banim");
+
+		CHECK(editor::ClipSetsWithoutBlendSet(Graph(root)).size() == 3);
+	}
+}
+
+TEST_CASE("A project with no clip sets has nothing to start a blend set on", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+
+	editor::test::WriteMesh(root, "Derived/Meshes/rock.bmesh", "");
+
+	CHECK(editor::ClipSetsWithoutBlendSet(Graph(root)).empty());
 }
 
 TEST_CASE("The first blend set is written empty, beside its clip set", "[animation][blend]")

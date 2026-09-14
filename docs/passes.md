@@ -399,9 +399,9 @@ Writes every skinned instance's bone palette: one workgroup per instance, one th
 authored blend spaces.
 
 A clip node contributes one clip at its phase advanced since `tRef`. A space node contributes the
-two samples straddling its parameter, at one shared normalized phase — its samples are looping clips
-of different lengths, so a frame number means nothing between them, and what is shared is the
-fraction of a cycle. That phase advances at the reciprocal of the weighted cycle length, which is
+two samples straddling its parameter, at one shared normalized phase — its samples are clips of
+different lengths, so a frame number means nothing between them, and what is shared is the fraction
+of a cycle. The phase wraps, so every sample cycles with the space whatever its clip's own `loop` says. That phase advances at the reciprocal of the weighted cycle length, which is
 itself moving while the parameter ramps, so it is an integral rather than a quotient and is
 evaluated in closed form ([blend_space.slang](libs/bgl_common/shaders/src/lib/anim/blend_space.slang))
 — exact mid-ramp, and needing no state, which is what keeps a pose a pure function of the clock. A

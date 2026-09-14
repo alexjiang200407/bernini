@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <gamelib/BlendSpaceInfo.h>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -105,67 +106,97 @@ TEST_CASE("A sample may not land on one already there", "[animation][blend]")
 	}
 }
 
-TEST_CASE("A threshold is held between its neighbours", "[animation][blend]")
+namespace
 {
-	const std::vector<assetlib::BlendSpaceSample> run = Run();
-
-	SECTION("inside the interval it moves freely")
+	std::vector<std::string>
+	ClipsOf(const std::vector<assetlib::BlendSpaceSample>& run)
 	{
-		CHECK(editor::ClampedParameter(run, 1, 4.0f, c_Step) == Catch::Approx(4.0f));
+		auto clips = std::vector<std::string>();
+		for (const assetlib::BlendSpaceSample& sample : run) clips.emplace_back(sample.clip);
+		return clips;
+	}
+}
+
+TEST_CASE("A sample's order is its threshold", "[animation][blend]")
+{
+	std::vector<assetlib::BlendSpaceSample> run = Run();
+
+	SECTION("inside its neighbours it keeps its row")
+	{
+		CHECK(editor::MoveSample(run, 1, 4.0f, c_Step) == std::optional<size_t>(1));
+		CHECK(run[1].parameter == Catch::Approx(4.0f));
+		CHECK(ClipsOf(run) == std::vector<std::string>({ "walk", "jog", "run" }));
 	}
 
-	SECTION("dragged onto a neighbour it stops a gap short")
+	SECTION("typed past a neighbour it takes that neighbour's place")
 	{
-		CHECK(editor::ClampedParameter(run, 1, 99.0f, c_Step) == Catch::Approx(6.0f - c_Step));
-		CHECK(editor::ClampedParameter(run, 1, -99.0f, c_Step) == Catch::Approx(1.5f + c_Step));
+		CHECK(editor::MoveSample(run, 1, 9.0f, c_Step) == std::optional<size_t>(2));
+		CHECK(ClipsOf(run) == std::vector<std::string>({ "walk", "run", "jog" }));
+		CHECK(run[2].parameter == Catch::Approx(9.0f));
 	}
 
-	SECTION("the ends are open, so the run's extent is authored by dragging them")
+	SECTION("the last sample can become the first")
 	{
-		CHECK(editor::ClampedParameter(run, 0, -50.0f, c_Step) == Catch::Approx(-50.0f));
-		CHECK(editor::ClampedParameter(run, 2, 50.0f, c_Step) == Catch::Approx(50.0f));
-
-		// ...but they still cannot cross inward past their one neighbour.
-		CHECK(editor::ClampedParameter(run, 0, 99.0f, c_Step) == Catch::Approx(3.2f - c_Step));
-		CHECK(editor::ClampedParameter(run, 2, -99.0f, c_Step) == Catch::Approx(3.2f + c_Step));
+		CHECK(editor::MoveSample(run, 2, 0.0f, c_Step) == std::optional<size_t>(0));
+		CHECK(ClipsOf(run) == std::vector<std::string>({ "run", "walk", "jog" }));
 	}
 
-	SECTION("every clamped result still strictly increases")
+	SECTION("a nudge that still displays as its own old value is a move, not a duplicate")
 	{
-		// The property the whole function exists for, swept rather than sampled: wherever the
-		// middle sample is dragged, the run it lands in is one AddRig would take.
-		for (int step = -200; step <= 200; ++step)
+		CHECK(editor::MoveSample(run, 1, 3.2004f, c_Step) == std::optional<size_t>(1));
+	}
+
+	SECTION("a threshold that would display as another sample is refused, and nothing moves")
+	{
+		CHECK_FALSE(editor::MoveSample(run, 0, 3.2004f, c_Step).has_value());
+		CHECK_FALSE(editor::MoveSample(run, 2, 1.5f, c_Step).has_value());
+
+		CHECK(ClipsOf(run) == ClipsOf(Run()));
+		CHECK(run[0].parameter == Catch::Approx(1.5f));
+		CHECK(run[2].parameter == Catch::Approx(6.0f));
+	}
+
+	SECTION("a parameter that is not a number, or a row past the run, is refused")
+	{
+		CHECK_FALSE(
+			editor::MoveSample(run, 1, std::numeric_limits<float>::quiet_NaN(), c_Step)
+				.has_value());
+		CHECK_FALSE(editor::MoveSample(run, 9, 4.0f, c_Step).has_value());
+		CHECK(ClipsOf(run) == ClipsOf(Run()));
+	}
+
+	SECTION("whatever is typed, the run that comes out still strictly increases")
+	{
+		// Swept rather than sampled: every accepted move is a run AddRig would take, and every
+		// refused one leaves the run as it was.
+		for (int step = -100; step <= 100; ++step)
 		{
-			const float wanted  = static_cast<float>(step) * 0.1f;
-			const float clamped = editor::ClampedParameter(run, 1, wanted, c_Step);
+			std::vector<assetlib::BlendSpaceSample> moved  = Run();
+			const float                             wanted = static_cast<float>(step) * 0.1f;
+			const std::optional<size_t> row = editor::MoveSample(moved, 1, wanted, c_Step);
 
-			INFO("dragged to " << wanted);
-			CHECK(clamped > run[0].parameter);
-			CHECK(clamped < run[2].parameter);
+			INFO("typed " << wanted);
+			REQUIRE(moved.size() == 3);
+			if (row.has_value())
+				CHECK(moved[*row].clip == "jog");
+
+			for (size_t i = 1; i < moved.size(); ++i)
+				CHECK(moved[i].parameter > moved[i - 1].parameter);
 		}
 	}
+}
 
-	SECTION("a parameter that is not a number leaves the sample where it is")
-	{
-		CHECK(
-			editor::ClampedParameter(run, 1, std::numeric_limits<float>::quiet_NaN(), c_Step) ==
-			Catch::Approx(3.2f));
-	}
+TEST_CASE("A sample's clip can be replaced where it stands", "[animation][blend]")
+{
+	std::vector<assetlib::BlendSpaceSample> run = Run();
 
-	SECTION("an index past the run is answered unchanged")
-	{
-		CHECK(editor::ClampedParameter(run, 9, 4.0f, c_Step) == Catch::Approx(4.0f));
-	}
+	REQUIRE(editor::ReplaceSampleClip(run, 1, "canter"));
 
-	SECTION("neighbours with no room between them hold the sample still")
-	{
-		// Authored by hand rather than reachable through this surface, but a run read off disk can
-		// be anything, and moving a sample to a value that breaks the order is worse than refusing.
-		const std::vector<assetlib::BlendSpaceSample> tight = { { "a", 1.0f },
-			                                                    { "b", 1.001f },
-			                                                    { "c", 1.002f } };
-		CHECK(editor::ClampedParameter(tight, 1, 5.0f, c_Step) == Catch::Approx(1.001f));
-	}
+	CHECK(ClipsOf(run) == std::vector<std::string>({ "walk", "canter", "run" }));
+	CHECK(run[1].parameter == Catch::Approx(3.2f));
+
+	CHECK_FALSE(editor::ReplaceSampleClip(run, 3, "sprint"));
+	CHECK(ClipsOf(run) == std::vector<std::string>({ "walk", "canter", "run" }));
 }
 
 TEST_CASE("A space keeps at least two samples", "[animation][blend]")
@@ -372,21 +403,29 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("A clip that does not loop cannot be a sample", "[animation][blend]")
+TEST_CASE("Any clip with a cycle can be a sample, looping or not", "[animation][blend]")
 {
-	auto clip = editor::ClipInfo();
-	clip.name = "walk";
+	auto clip       = editor::ClipInfo();
+	clip.name       = "walk";
+	clip.frameCount = 20;
 
-	SECTION("a one-shot is refused, and says why")
+	SECTION("a one-shot is a sample like any other: the space wraps it")
 	{
 		clip.loop = false;
-		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
+		CHECK(editor::ClipRefusalReason(clip).empty());
 	}
 
 	SECTION("a looping clip is not refused")
 	{
 		clip.loop = true;
 		CHECK(editor::ClipRefusalReason(clip).empty());
+	}
+
+	SECTION("a single frame has no cycle, and says why")
+	{
+		clip.loop       = true;
+		clip.frameCount = 1;
+		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
 	}
 }
 

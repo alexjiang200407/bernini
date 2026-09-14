@@ -39,6 +39,7 @@
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qobjectdefs.h>
+#include <qtmetamacros.h>
 #include <tracy/Tracy.hpp>
 #include <utility>
 
@@ -370,16 +371,22 @@ ContentExplorerWindow::AttachModels()
 			NavigateTo(m_HierarchyModel->filePath(folder));
 		});
 
-	// Double-clicking a folder on the right opens it.
+	// Double-clicking a folder on the right opens it, and a blend set is announced for its editor.
+	// Nothing else opens this way.
 	connect(
 		m_Ui.currentDirectory,
 		&QAbstractItemView::doubleClicked,
 		this,
 		[this](const QModelIndex& index) {
-			if (!m_FileModel->isDir(index))
+			if (m_FileModel->isDir(index))
+			{
+				NavigateTo(m_FileModel->filePath(index));
 				return;
+			}
 
-			NavigateTo(m_FileModel->filePath(index));
+			const QString asset = editor::AssetAt(*m_FileModel, index, m_RootPath);
+			if (editor::IsBlendSetFile(asset))
+				Q_EMIT BlendSetOpenRequested(asset);
 		});
 
 	// The model populates directories asynchronously and mutates as folders are added or

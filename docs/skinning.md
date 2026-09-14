@@ -321,9 +321,10 @@ to keep in agreement beyond the one below.
   shows the clip as its author left it and a greyed body would be the resting view of the column
   rather than an occasional one. The sliders keep their values, so turning it back on restores what
   was set. Off, the clip plays exactly as authored, which is the other half of judging what the
-  solve does, and like the slope it holds only while the panel is shown. The group holds that state
-  and one method pushes it, construction included — after the column's minimum width is measured,
-  since a collapsed body contributes no slider to the hint.
+  solve does, and like the slope it holds only while the panel is shown. The group is one widget,
+  `GroundControls`, which the Blend Space Editor hosts too; it holds that state and `Apply` pushes
+  it, construction included — after the host's column width is measured, since a collapsed body
+  contributes no slider to the hint.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline used before
@@ -403,34 +404,63 @@ to keep in agreement beyond the one below.
   instance and holds no slots, so `SetSkinnedPlayback` throws there; it still interpolates frames
   within that clip, which is a different thing from blending between two.
 
-* **A blend set is opened from the header, and its spaces listed in *Space*.** The sets authored
+* **A blend set is opened from the header, for *Blend* to fade onto.** The sets authored
   against the live clip set come from the same reference scan that found the `.banim` candidates,
   one `kBlendClips` edge over (`editor::ResolveBlendSets`), and choosing one **reloads the mesh** --
   a rig already uploaded refuses a set it was not built with, so this cannot be a rebind. Switching
   `.banim` drops the set with it: a set names one clip set, and carrying it across would name a
   file the rig no longer plays.
 
-  *Create Blend Set* writes the empty document at `assetlib::blendSetKeyFor`'s key and opens it.
-  The convention lives in assetlib beside `avatarKeyFor` rather than in the panel, since the layout
-  is the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it
-  was authored against and no spaces, which is what makes it findable by the scan the moment it
-  exists -- nothing else attaches a set to a clip set.
+  Opening a set is all this panel does with one; authoring its spaces is the Blend Space Editor's.
 
-  The *Space* tab lists the open set's spaces and the samples of the selected one, clip by name and
-  threshold, and is where both are authored. It stamps nothing into the playback record: only
-  *Blend* does, which is why entering either *Clip* or *Space* clears whatever fade was live.
+* **A blend space is authored in the Blend Space Editor, a dock beside this panel.** It opens one
+  `.bblend`, dropped on it or double-clicked in the Content Explorer, and lists that document's
+  spaces and the samples of the selected one, clip by name and threshold. A set names its clip set and no mesh, so what it is shown on is a
+  query over the reference graph: the clip set's `kClipSkeleton` edge names the rig, and every
+  `.bmesh` whose `kMeshSkeleton` edge names that rig can show it (`editor::ResolveBlendSetMeshes`).
+  The first by key is shown, a selector appears only when there are several, and the choice is not
+  saved. A set nothing is skinned to still lists and still edits, because the list is the
+  document's rather than the rig's; a new space or sample, thresholds from speed and the cursor wait
+  for a clip table, which only an acquired rig supplies. It carries the *Plant feet* group as well,
+  so whether a space plants — across its parameter, and at the wrap of a clip that does not close —
+  is judged where the space is authored.
+
+  *New Blend Set...* starts one, from the editor's empty page or beside *Close*. It lists every clip
+  set with nothing yet at `assetlib::blendSetKeyFor`'s key (`editor::ClipSetsWithoutBlendSet`),
+  writes the empty document there and opens it, so a set is never reached through a mesh. The
+  convention lives in assetlib beside `avatarKeyFor` rather than in the editor, since the layout is
+  the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it was
+  authored against and no spaces, which is what makes it findable by the scan the moment it exists --
+  nothing else attaches a set to a clip set.
+
+  **Its clock never wraps and never runs backwards.** A space's phase is integrated from the `tRef`
+  it was stamped at ([Animation Blending](anim_blend.md)), while this panel's clock is the
+  transport's clip time, which wraps on the selected clip's period: a space shown against it steps
+  behind its own reference at every loop. So the editor has play, pause and a speed from zero to
+  four, and no strip and no frame step -- a space has no one period or frame to show.
 
   **An edit takes one of two paths, and which one is the shape of the change.** A threshold that
-  moved is written onto the rig already uploaded (`AssetManager::SetBlendParameters`), so the pose
-  keeps playing while the box is dragged -- live on `valueChanged`, saved on `editingFinished`,
-  because a file rewritten per keystroke is not the point and a pose that waits for the save is.
-  Anything that changes the rig's node table -- a sample or a space added or removed, a space
-  renamed -- saves and then **reloads the mesh**, which is the same reacquire choosing a set already
-  does. `editor::IsParameterMove` is the fork, and it compares the two *authored* sets rather than
-  the resolved ones: the resolved form holds clip indices, so a sample pointed at another clip would
-  read as no change there and reach a rig that refuses it.
+  moved within its neighbours is written onto the rig already uploaded
+  (`AssetManager::SetBlendParameters`), so the pose keeps playing -- live on `valueChanged`, saved on
+  `editingFinished`, because a file rewritten per keystroke is not the point and a pose that waits
+  for the save is. Anything that changes the rig's node table -- a sample or a space added or
+  removed, a space renamed, a sample's clip replaced -- saves and then **reloads the mesh**, which is
+  the same reacquire choosing a set already does. `editor::IsParameterMove` is the fork, and it
+  compares the two *authored* sets rather than the resolved ones: the resolved form holds clip
+  indices, so a sample pointed at another clip would read as no change there and reach a rig that
+  refuses it.
 
-  **The panel edits the document, not what the acquire resolved.** `editor::LoadBlendSet` reads the
+  **A sample's order is its threshold.** A threshold typed past a neighbour re-sorts the run
+  (`editor::MoveSample`) and the moved row stays selected. There are no reorder buttons, which would
+  be a second way to say what the threshold already says; Unreal places a sample by value the same
+  way. A crossing reloads the mesh, since the rows it passed now name other clips; crossing a
+  sample of the same clip is still a parameter move and stays live. The box tracks
+  no keystrokes, so a value arrives on Enter, focus loss or a step and never mid-number; a step never
+  crosses a neighbour, because landing on its displayed value is a duplicate, which is refused and
+  puts the box back. *Replace* points the selected sample at the combo's clip and keeps its
+  threshold, so a space seeded with the wrong pair is corrected in place.
+
+  **The editor edits the document, not what the acquire resolved.** `editor::LoadBlendSet` reads the
   `.bblend` back when a set opens, and that is what every gesture mutates and what is saved. Building
   a save out of the resolved spaces instead would silently drop the set's `name` and the `extraJson`
   holding whatever keys a later tool wrote. The two forms correspond position for position --
@@ -446,10 +476,8 @@ to keep in agreement beyond the one below.
   integrating the new path from the old reference time would jump on the frame of the write. The slot
   is rebased onto now first, so the pose keeps the cycle it was already walking.
 
-  Entering the tab puts the preview on the selected space -- node `clipCount + spaceIndex`, which is
-  what the node ordering is for -- and leaving it returns to the selected clip. Each tab owns exactly
-  what it stamps into the playback record (ADR-8), and a space and a crossfade are two different
-  clocks.
+  Selecting a space puts the preview on it -- node `clipCount + spaceIndex`, which is what the node
+  ordering is for.
 
   **The weight readout comes from `BlendSpaceInfo::StraddleAt`, not from a second copy of the rule**
   (ADR-4). It is the CPU twin of what the pose pass computes, and nothing mechanically holds the two
@@ -467,9 +495,10 @@ to keep in agreement beyond the one below.
 
   **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
   a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
-  there is no empty space to add and fill in afterwards. *New* seeds the first two looping clips at
-  0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip that does
-  not loop is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
+  there is no empty space to add and fill in afterwards. *New* asks for the space's name and both of
+  its clips, placed at 0 and 1, and is disabled, with the reason, when the clip set has fewer than
+  two. A clip of
+  a single frame is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
   the author is looking for that clip, and its absence would read as a bad clip set rather than as
   one a blend space cannot hold.
 

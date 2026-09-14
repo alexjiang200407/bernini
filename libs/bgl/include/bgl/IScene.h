@@ -148,9 +148,9 @@ namespace bgl
 		 * containers resolves them.
 		 *
 		 * A blend space is further refused for holding fewer than two samples, naming a clip
-		 * outside the set, naming one that does not loop -- its samples share one normalized
-		 * phase, and a clip that clamps would sit on its last frame while the others cycle -- or
-		 * for parameters that do not strictly increase.
+		 * outside the set, naming one of a single frame -- the space plays every sample at a
+		 * fraction of its cycle, wrapping whatever the clip's own loop flag says, and one frame has
+		 * no cycle -- or for parameters that do not strictly increase.
 		 */
 		virtual RigHandle
 		AddRig(
