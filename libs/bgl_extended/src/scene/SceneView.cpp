@@ -23,8 +23,10 @@
 #include <bgl/RigHandle.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/MeshInstance.h>
@@ -213,6 +215,14 @@ namespace bgl
 			m_PosedInstances.Init(std::move(desc), m_ResourceManager);
 		}
 
+		{
+			auto desc         = UploadBufferDesc();
+			desc.initialCount = 1;
+			desc.debugName    = "Blob Shadows";
+
+			m_BlobShadows.Init(std::move(desc), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -277,6 +287,7 @@ namespace bgl
 		m_Palettes.Release();
 		m_FootIK.Release();
 		m_PosedInstances.Release();
+		m_BlobShadows.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -831,6 +842,66 @@ namespace bgl
 		return desc;
 	}
 
+	void
+	SceneView::SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to SetBlobShadow is invalid or already removed");
+		}
+		if (!std::isfinite(desc.radius) || desc.radius <= 0.0f)
+		{
+			throw SceneError("BlobShadowDesc::radius must be finite and positive");
+		}
+		if (!std::isfinite(desc.intensity) || desc.intensity < 0.0f || desc.intensity > 1.0f)
+		{
+			throw SceneError("BlobShadowDesc::intensity must be finite and in [0, 1]");
+		}
+		if (!std::isfinite(desc.fadeHeight) || desc.fadeHeight <= 0.0f)
+		{
+			throw SceneError("BlobShadowDesc::fadeHeight must be finite and positive");
+		}
+
+		m_MeshBuffer.MetaAt(instance.handle.index).blobShadow = desc;
+		m_BlobShadowsDirty                                    = true;
+
+		// A disc appearing (or changing size) is a rebind no motion vector describes.
+		++m_TemporalEpoch;
+	}
+
+	void
+	SceneView::ClearBlobShadow(MeshInstanceHandle instance)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to ClearBlobShadow is invalid or already removed");
+		}
+
+		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		if (!meta.blobShadow.has_value())
+		{
+			return;
+		}
+
+		meta.blobShadow.reset();
+		m_BlobShadowsDirty = true;
+		++m_TemporalEpoch;
+	}
+
+	std::optional<BlobShadowDesc>
+	SceneView::GetBlobShadow(MeshInstanceHandle instance) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to GetBlobShadow is invalid or already removed");
+		}
+
+		return m_MeshBuffer.MetaAt(instance.handle.index).blobShadow;
+	}
+
 	MeshInstanceHandle
 	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState)
 	{
@@ -951,6 +1022,11 @@ namespace bgl
 			}
 		}
 
+		if (meta.blobShadow.has_value())
+		{
+			m_BlobShadowsDirty = true;
+		}
+
 		m_MeshBuffer.EraseByIndex(meshIndex);
 		++m_TemporalEpoch;
 
@@ -1044,6 +1120,35 @@ namespace bgl
 
 		m_PosedInstances.Assign(list);
 		m_PosedDirty = false;
+	}
+
+	void
+	SceneView::RebuildBlobShadowList()
+	{
+		auto list = std::vector<idl::BlobShadow>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+			if (!meta.blobShadow.has_value())
+			{
+				continue;
+			}
+
+			auto& entry      = list.emplace_back();
+			entry.mesh       = meshIndex;
+			entry.radius     = meta.blobShadow->radius;
+			entry.intensity  = meta.blobShadow->intensity;
+			entry.fadeHeight = meta.blobShadow->fadeHeight;
+		}
+
+		m_BlobShadows.Assign(list);
+		m_BlobShadowsDirty = false;
 	}
 
 	void
@@ -1294,6 +1399,12 @@ namespace bgl
 		m_PosedInstances.Update(cmdList);
 		m_Palettes.Update(cmdList);
 
+		if (m_BlobShadowsDirty)
+		{
+			RebuildBlobShadowList();
+		}
+		m_BlobShadows.Update(cmdList);
+
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
 			buffer.Update(cmdList);
 		});
@@ -1373,6 +1484,19 @@ namespace bgl
 			auto palettes = std::string(c_BonePaletteName);
 			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());
 			resourceNames.push_back(std::move(palettes));
+		}
+
+		{
+			// Same order as the pose list above, and for the same reason: rebuilding can grow the
+			// buffer, and a growth mints a new handle.
+			if (m_BlobShadowsDirty)
+			{
+				RebuildBlobShadowList();
+			}
+
+			auto blobs = std::string(c_BlobShadowsName);
+			fg.ImportBuffer(blobs, m_BlobShadows.GetBufferHandle());
+			resourceNames.push_back(std::move(blobs));
 		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the
