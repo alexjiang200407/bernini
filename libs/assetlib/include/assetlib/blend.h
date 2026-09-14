@@ -80,8 +80,8 @@ namespace assetlib
 	 * Strictly increasing rather than merely sorted: two samples at one parameter have no defined
 	 * weighting between them, and a set that reached the GPU would divide by a zero span.
 	 *
-	 * What is *not* checked here is whether a named clip exists or loops. Neither is knowable
-	 * without the `.banim`, and both are checked where the two meet.
+	 * What is *not* checked here is whether a named clip exists or has the two frames a cycle needs.
+	 * Neither is knowable without the `.banim`, and both are checked where the two meet.
 	 */
 	void
 	validateBlendSet(const BlendSet& set);
