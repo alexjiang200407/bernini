@@ -3,7 +3,8 @@
 The tools bgl_extended gives you to find out *why* a frame is wrong: GPU-side assertions that
 report back through a debug buffer (`dbg_raise`), a spdlog file log, CPU-side asserts that
 crash on broken invariants, a post-mortem crash log with a stack trace, and the D3D12 debug
-/ GPU-validation layer. This document maps how they fit together and when to reach for each.
+/ GPU-validation layer — and, before any of those, a way to see the frame at all when there is no
+window to look at. This document maps how they fit together and when to reach for each.
 
 **This document is a map, not a mirror.** It captures design choices, data flow, and the
 non-obvious contracts — not full signatures. The header at each linked path is the source of
@@ -54,6 +55,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgl.log` |
 | Silent wrong output, want a timeline of what the engine did | **`bgl.log`** (raise `logLevel` to `kTrace`) |
 | Broken internal invariant should stop the process now | **`gassert`/`gfatal`** |
+| Need to *see* what a mesh, material or clip renders as, with no window | **`bgl_ai_viewer`** (§8) |
 | Process already crashed; need the stack | **`{exe}_crash_*.log`** (newest) |
 
 ---
@@ -341,6 +343,26 @@ prefix sum decides) and `scene.transparentSortEntries` (only transparent instanc
 | A readback or PIX/Xcode buffer view | `0x7FBADBAD`, `2143082413`, or `nan` |
 | Anything shaded with it | NaN propagation — black or missing pixels, not subtly wrong ones |
 | An index derived from it | far out of bounds, so a `dbg_assert` on the bound fires (§1) |
+
+---
+
+## 8. Seeing the frame headlessly — `bgl_ai_viewer`
+
+Every tool above says *why* a frame is wrong; none of them shows the frame. `bgl_ai_viewer` renders
+a `.bimport` to an offscreen target and writes a PNG at each frame named with `--screenshot`, playing
+a skinned mesh's `--clip` on a clock tied to the frame index — so frame N is the same image on every
+run, and a PNG taken before a fix compares with one taken after. It is how an agent, or a machine with
+no display, looks at a rendering change.
+
+```bash
+just run bgl_ai_viewer -- --project "$PWD/test-project/Data" --env-root "$PWD/assets/Data" \
+	--import Authored/Meshes/cha800_00.reduced.bimport --frames 60 --screenshot 0,30 \
+	--out-dir "<an absolute directory of your own>"
+```
+
+Check the run said `lit`: unlit is a black image, which reads as a rendering bug and is not one. The
+flags, the refusal when a derived container is not on disk, and why a screenshot carries no GPU time
+are in [AI Viewer](docs/ai_viewer.md).
 
 ---
 
