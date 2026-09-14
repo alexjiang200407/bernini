@@ -1,8 +1,10 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QString>
 
 #include <assetlib/Project.h>
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>
@@ -45,12 +47,25 @@ public:
 	 * @param startup Where building the window reports -- the pipelines bgl compiles, then the
 	 *                project's rebuild. Empty and startup is silent, which is what it was before
 	 *                there was a screen to report to and what the tests still do.
+	 * @param project The project to open and register surfaces from, outranking the config's
+	 *                `startupProject`. Empty defers to the config.
 	 */
 	explicit MainWindow(
 		QWidget*                 parent     = nullptr,
 		std::filesystem::path    configPath = {},
-		background::ProgressSink startup    = {});
+		background::ProgressSink startup    = {},
+		std::filesystem::path    project    = {});
 	~MainWindow();
+
+	/**
+	 * The project a new editor process should open once this one has exited, or empty. Set when the
+	 * user accepts restarting into a project whose surfaces this session cannot draw.
+	 */
+	[[nodiscard]] const std::filesystem::path&
+	GetRelaunchProject() const noexcept
+	{
+		return m_RelaunchProject;
+	}
 
 protected:
 	// Stops the viewports and drains the GPU while every window is still on screen. A present left
@@ -70,6 +85,25 @@ private:
 	// be opened, so a caller can fall back.
 	bool
 	OpenProjectAt(const std::filesystem::path& path);
+
+	enum class ProjectOpening
+	{
+		kHere,
+		kRestart,
+		kCancelled,
+	};
+
+	/**
+	 * Whether `projectFile` can open in this process, and if not, asks the user under `title` to
+	 * restart into it. Reads nothing but the project's shaders directory, so it may be asked before
+	 * the project exists.
+	 */
+	[[nodiscard]] ProjectOpening
+	AskHowToOpen(const QString& title, const std::filesystem::path& projectFile);
+
+	// Closes the window and quits, leaving `projectFile` for main to start the new process with.
+	void
+	RestartInto(const std::filesystem::path& projectFile);
 
 	void
 	CleanUnusedTextures();
@@ -124,7 +158,7 @@ private:
 
 	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
 	void
-	Build(const std::filesystem::path& configPath);
+	Build(const std::filesystem::path& configPath, const std::filesystem::path& project);
 
 	/**
 	 * Hands back everything that renders, in the order it has to go: the thumbnails and the assets
@@ -163,6 +197,12 @@ private:
 	background::ProgressSink m_StartupProgress;
 
 	QString m_InstanceName;
+
+	// What the renderer registered surfaces from, and how many it found. Fixed for the session.
+	std::filesystem::path m_SurfaceShaderDir;
+	std::size_t           m_SurfaceCount = 0;
+
+	std::filesystem::path m_RelaunchProject;
 
 	std::unique_ptr<assetlib::Project> m_Project;
 	ContentExplorerWindow*             m_ContentExplorer      = nullptr;

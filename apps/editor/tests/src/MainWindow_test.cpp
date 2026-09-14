@@ -16,8 +16,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
+#include <assetlib/project_layout.h>
 
 #include <QAction>
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QDockWidget>
@@ -184,8 +186,8 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 
 	const MainWindow window(nullptr, editor.ConfigFile());
 
-	// config.json's startupProject is the only route into SetActiveProject that opens no dialog,
-	// so the project is already open by the time the constructor returns.
+	// config.json's startupProject is a route into SetActiveProject that opens no dialog, so the
+	// project is already open by the time the constructor returns.
 	auto* materials = window.findChild<MaterialEditorWindow*>();
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 
@@ -194,6 +196,56 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 
 	CHECK(materials->GetDataRoot() == editor.DataRoot());
 	CHECK(animation->GetDataRoot().toStdString() == editor.DataRoot().string());
+}
+
+// How a restart reaches the project the user opened: the argument decides both the project and the
+// shaders the renderer registers, whatever config.json names.
+TEST_CASE(
+	"A project handed to the editor outranks the config's, surfaces included",
+	"[mainwindow][surfacerelaunch][render]")
+{
+	const HeadlessEditor editor;
+
+	const fs::path other = editor.temp.path().toStdString() / fs::path("Other") /
+	                       ("Other" + std::string(assetlib::Project::c_FileExtension));
+	assetlib::Project::Create(other, "Other");
+	core::file::write_atomic(
+		assetlib::Project::DataDirectoryOf(other) / assetlib::c_ShadersDirectoryName / "Tint.slang",
+		R"(import bgl.MaterialReader;
+import bgl.PbrSurface;
+import bgl.SurfaceSource;
+
+struct TintParams
+{
+    float4 tint;
+};
+
+struct TintSurface : ISurfaceSource
+{
+    typealias MaterialParams = TintParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, TintParams params) { return params.tint.a; }
+
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, TintParams params)
+    {
+        PbrSurface surface = PbrSurface();
+        surface.baseColor = params.tint;
+        return surface;
+    }
+};
+)");
+
+	const MainWindow window(nullptr, editor.ConfigFile(), {}, other);
+
+	auto* materials = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(materials != nullptr);
+
+	CHECK(materials->GetDataRoot() == assetlib::Project::DataDirectoryOf(other));
+
+	const QList<QComboBox*> combos = materials->findChildren<QComboBox*>();
+	CHECK(std::ranges::any_of(combos, [](const QComboBox* combo) {
+		return combo->findText(QStringLiteral("Tint")) >= 0;
+	}));
 }
 
 // The bug this closes: the panels cleared off QDockWidget::visibilityChanged, and Qt reports every
