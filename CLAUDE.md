@@ -295,6 +295,13 @@ split that keeps the renderer free of the UI library, `target://` for a live 3D 
 document, what document scripting is and is not, the RCSS traps a web author trips on, and what
 replacing RmlUi would actually cost.
 
+**[AI Viewer](./docs/ai_viewer.md)**
+
+How an agent sees what the renderer draws: `bgl_ai_viewer` renders a `.bimport` headlessly, writes
+PNGs at the frames you name, plays a skinned mesh's clip on a fixed clock, and prints per-pass GPU
+cost. Why frame N is the same pose every run, why a screenshot is not paired with a GPU time, and
+what to run when the mesh it names is not on disk.
+
 **[Known Issues](./docs/known_issues.md)**
 
 One entry per bug that cost somebody a day and could return: the symptom as it appears from the
@@ -345,6 +352,7 @@ one to match code that drifted, which is exactly what turns it into a second sou
 - Do not hardcode executable paths. The runtime output dir depends on the generator (`bin/<config>` for multi-config generators like VS/Xcode, `bin` for Ninja/Make) so it can't be read statically from CMakeLists. Use the commands below to resolve and run targets instead.
 - If a program crashes, a crashlog may exist. It will be at the location of the executable named `{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — stamped, so crashes accumulate rather than overwrite each other. Read the newest unless you are comparing runs.
 - Other logs may also exist. So scan for other `.log` files inside the failing executable directory.
+- To *look* at a mesh, a material or a clip as the renderer draws it, run `bgl_ai_viewer` and read the PNGs it writes — see [docs/ai_viewer.md](./docs/ai_viewer.md).
 
 # Scripts
 

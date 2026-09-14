@@ -34,7 +34,8 @@ be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
 [Frame Graph](docs/framegraph.md)), which the editor reads two ways once Render › GPU Pass Timing
 is on: Log GPU Pass Timings writes one frame's table to `editor.log`, and GPU Timing Graph
 (§ The frame-stats window below) graphs every frame. Away from the editor the same rows are taken by
-`bgl_pass_timings` (§ Capturing a run headlessly). `docs/gfx_debug.md` is where a *wrong* frame is
+`bgl_pass_timings` (§ Capturing a run headlessly), and by `bgl_ai_viewer`
+([AI Viewer](docs/ai_viewer.md)) beside the frames it screenshots. `docs/gfx_debug.md` is where a *wrong* frame is
 diagnosed rather than a slow one.
 
 ## Taking a capture
