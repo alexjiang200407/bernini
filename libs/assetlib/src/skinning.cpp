@@ -1183,6 +1183,12 @@ namespace assetlib
 			const glm::vec3 centre =
 				std::accumulate(sole.begin(), sole.end(), glm::vec3(0.0f)) / float(sole.size());
 			on = glm::vec3(centre.x, float(a * centre.x + b * centre.z + d), centre.z);
+
+			// A least-squares plane passes through the pad; contact must support it from below.
+			float support = 0.0f;
+			for (const glm::vec3& point : points)
+				support = std::min(support, glm::dot(point - on, normal));
+			on += support * normal;
 			return true;
 		}
 	}

@@ -479,6 +479,8 @@ namespace assetlib
 	 * sole in bind pose is within a few degrees of horizontal, so this parameterisation is well
 	 * conditioned and needs no eigen solve, and a foot that stood vertically would have no sole to
 	 * speak of.
+	 * The fitted plane is then shifted along its normal to support all foot vertices from below;
+	 * its least-squares height otherwise cuts through a rounded pad.
 	 *
 	 * A leg no mesh here has weight on gets the flat plane through the ankle -- the only answer that
 	 * does not invent one -- exactly as an unweighted clip measures a floor of 0.

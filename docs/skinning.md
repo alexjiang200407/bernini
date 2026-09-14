@@ -728,6 +728,11 @@ plane is steep, and four passes of dropping what sits above it shave a slanted h
 rather than settling on its floor — the Coyote's flat sole measured seventeen degrees that way.
 Keeping the lowest *fraction* of the foot's height fails the other way, on a foot with an instep.
 
+The fitted normal is retained, but the contact plane is shifted down along that normal until
+every foot vertex is on or above it. Least squares gives the pad's orientation, not its supporting
+height: a rounded pad's fitted centre can lie inside the mesh. Planting against that centre cuts
+the pad through the floor. The supporting offset is used by both grounding and runtime planting.
+
 **What a rigid plane cannot follow.** The sole is one plane pinned to the ankle, and a skinned foot
 is not rigid: its pad is blended between ankle and toe, so it flexes a few degrees relative to
 either bone between poses. Measured on the test project's rigs at frame 0 of every clip that plants
