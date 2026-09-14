@@ -422,6 +422,16 @@ flowchart TD
   `[0, 1]`, a non-finite field, or a ramp ending before it starts. `HasFootIK(instance)` is
   exactly when neither throws, for a caller that cannot tell a rig's legs from outside. See
   [Skinned Meshes](skinning.md) § Foot planting.
+* **`SetBlobShadow(instance, desc)` / `ClearBlobShadow(instance)` / `GetBlobShadow(instance)`** —
+  the placement's blob shadow: a soft radial-falloff disc on the scene's ground plane directly
+  beneath it, drawn by the forward pass between the opaque buckets and the transparents,
+  shrinking and fading with the placement's height above the plane (gone at
+  `BlobShadowDesc::fadeHeight`). A contact cue, not a lighting term. Any placement may carry one;
+  the expected consumers are skinned units. Setting or clearing one bumps the temporal epoch — a
+  disc appearing is a rebind, not motion — and `DeleteMeshInstance` takes the disc with the
+  placement. @throws on an invalid handle, a non-positive or non-finite `radius` or
+  `fadeHeight`, or an `intensity` outside `[0, 1]`; `Get` returns empty for a placement carrying
+  none.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.

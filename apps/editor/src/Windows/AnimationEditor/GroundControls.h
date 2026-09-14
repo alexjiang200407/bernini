@@ -4,14 +4,15 @@
 #include <qtmetamacros.h>
 
 class AnimationPreviewWindow;
+class QCheckBox;
 class QLabel;
 class QWidget;
 class Scrubber;
 
 /**
  * The *Plant feet* group: one switch that stands a preview's rig on a ground plane and solves each
- * leg onto it, titling the four sliders that shape the result -- slope, uphill heading, IK weight
- * and sole turn.
+ * leg onto it, titling the blob-shadow toggle and the four sliders that shape the result -- slope,
+ * uphill heading, IK weight and sole turn.
  *
  * One switch rather than a floor and a solve separately, because neither half is worth anything
  * alone -- an empty floor shows nothing, and there is nothing to plant against without one. Off, the
@@ -45,6 +46,10 @@ private:
 	// The four sliders sit in one body so the group collapses as a unit; hiding them one by one
 	// would leave the box's own height behind and whatever sits under it would not move up.
 	QWidget* m_Body = nullptr;
+
+	// The contact disc under the rig, drawn only while the group is on: without the floor there
+	// is nothing for a disc to land on.
+	QCheckBox* m_BlobShadowCheck = nullptr;
 
 	// The ground's tilt and which way uphill points, in whole degrees.
 	Scrubber* m_SlopeSlider   = nullptr;

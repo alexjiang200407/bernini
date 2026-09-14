@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
 #include <array>
@@ -37,6 +38,7 @@ namespace bgl
 			{
 				kernel.Reset();
 			}
+			m_BlobShadows.Release();
 		}
 
 		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
@@ -70,5 +72,9 @@ namespace bgl
 		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
 		std::array<MeshletKernel, idl::c_PsoCount> m_Kernels;
+
+		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
+		// is a phase of this pass rather than a pass of its own.
+		BlobShadowPhase m_BlobShadows;
 	};
 }

@@ -10,6 +10,7 @@
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/blend_sets.h"
+#include "Windows/AnimationEditor/blob_shadow.h"
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -178,6 +179,32 @@ AnimationPreviewWindow::ApplyFootIK(const bgl::MeshInstanceHandle instance)
 	bgl::ISceneView* view = GetPreviewView();
 	if (view->HasFootIK(instance))
 		view->SetFootIK(instance, m_FootIK);
+}
+
+void
+AnimationPreviewWindow::SetBlobShadow(const bool enabled)
+{
+	if (enabled == m_BlobShadow)
+		return;
+
+	m_BlobShadow = enabled;
+
+	if (m_AnimatedDraws.empty())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyBlobShadow(draw.instance);
+	});
+}
+
+void
+AnimationPreviewWindow::ApplyBlobShadow(const bgl::MeshInstanceHandle instance)
+{
+	bgl::ISceneView* view = GetPreviewView();
+	if (m_BlobShadow)
+		view->SetBlobShadow(instance, m_BlobDesc);
+	else
+		view->ClearBlobShadow(instance);
 }
 
 void
@@ -603,6 +630,16 @@ AnimationPreviewWindow::LoadMesh(
 
 					out.center = (aabbMin + aabbMax) * 0.5f;
 					out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+
+					// The bounds are only final here, after the acquire loop, so a disc a spawn in
+					// that loop put on still wears the previous load's size until this re-fit.
+					m_BlobDesc = editor::BlobShadowForBounds(aabbMin, aabbMax);
+					if (m_BlobShadow)
+					{
+						for (const AnimatedDraw& draw : m_AnimatedDraws)
+							ApplyBlobShadow(draw.instance);
+					}
+
 					return out;
 				});
 			},
@@ -809,6 +846,7 @@ AnimationPreviewWindow::SpawnAnimated(
 		world,
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
 	ApplyFootIK(instance);
+	ApplyBlobShadow(instance);
 	return instance;
 }
 

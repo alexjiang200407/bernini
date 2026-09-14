@@ -42,6 +42,9 @@ namespace bgl
 	// One FootIKLeg per leg of every hero placement in the view, reached through the pose list.
 	constexpr std::string_view c_FootIKBufferName = "scene.footIKBuffer"sv;
 
+	// One entry per placement carrying a blob shadow, dense and CPU-authored like the pose list.
+	constexpr std::string_view c_BlobShadowsName = "scene.blobShadows"sv;
+
 	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
 	constexpr std::string_view c_BonePaletteName    = "scene.bonePalettes"sv;

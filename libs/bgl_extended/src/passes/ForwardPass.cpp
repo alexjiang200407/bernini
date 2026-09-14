@@ -305,6 +305,8 @@ namespace bgl
 		{
 			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
 		}
+
+		m_BlobShadows.Init(device, pipelines);
 	}
 
 	void
@@ -318,6 +320,8 @@ namespace bgl
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
+
+		m_BlobShadows.CheckBindings();
 	}
 
 	void
@@ -353,6 +357,8 @@ namespace bgl
 				BufferArg{ std::string(c_TransparentDispatchArgsName),
 		                   BarrierSyncFlag::kIndirectArgument,
 		                   BarrierAccessFlag::kIndirectArgument });
+
+		BlobShadowPhase::DeclareResources(desc);
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -482,6 +488,7 @@ namespace bgl
 			cmd->DispatchMeshIndirect(pso);
 		}
 
+		m_BlobShadows.Draw(draw, resources);
 		DrawTransparent(draw, resources);
 	}
 

@@ -69,6 +69,7 @@ set(IDL_CPP_SOURCES
     Ramp.slang
     FootIKLeg.slang
     PosedInstance.slang
+    BlobShadow.slang
     Rig.slang
     BlendNodeKind.slang
     BlendSpaceSample.slang

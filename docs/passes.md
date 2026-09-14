@@ -498,6 +498,18 @@ colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
 
+**Blob shadows draw between the two phases.** `BlobShadowPhase`
+([passes/BlobShadowPhase.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPhase.cpp)) — a phase
+ForwardPass owns rather than a pass of its own, because a separate pass cannot interleave between
+two phases sharing one depth attachment — dispatches one mesh-shader group
+per placement carrying a blob shadow (`ISceneView::SetBlobShadow`), off the view's dense
+`scene.blobShadows` list — the pose list's shape. Each group reads its placement's transform from
+the mesh buffer, flattens a quad onto the scene's ground plane directly beneath it, and the pixel
+shader darkens by a radial falloff, shrinking and fading the disc with the placement's height
+above the plane (`programs.forward.BlobShadow`). The discs depth-test against the opaques and draw
+before the transparents so smoke over a unit composites over its shadow too. Same blend state and
+same colour-only framebuffer as the transparent phase; a zero blob count skips the phase entirely.
+
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent

@@ -5,11 +5,13 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/api.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <optional>
 
 namespace bgl
 {
@@ -170,6 +172,35 @@ namespace bgl
 		 */
 		[[nodiscard]] virtual bool
 		HasFootIK(MeshInstanceHandle instance) const noexcept = 0;
+
+		/**
+		 * Gives one placement a blob shadow: a soft radial-falloff disc on the scene's ground
+		 * plane directly beneath it, shrinking and fading as the placement rises -- see
+		 * BlobShadowDesc. Replaces any blob shadow the placement holds. Any placement may carry
+		 * one; the expected consumers are skinned units, which nothing enforces.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
+		 *         `desc.fadeHeight` is not finite and positive, or `desc.intensity` is not
+		 *         finite in [0, 1].
+		 */
+		virtual void
+		SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc) = 0;
+
+		/**
+		 * Removes the placement's blob shadow. A no-op on a placement that carries none.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		ClearBlobShadow(MeshInstanceHandle instance) = 0;
+
+		/**
+		 * The record SetBlobShadow last wrote, or empty if the placement carries none.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		[[nodiscard]] virtual std::optional<BlobShadowDesc>
+		GetBlobShadow(MeshInstanceHandle instance) const = 0;
 
 		/**
 		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and

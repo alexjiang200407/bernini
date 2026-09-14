@@ -22,9 +22,11 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PlaybackType.h>
@@ -88,6 +90,10 @@ namespace bgl
 		// kSkinnedMesh only: how many nodes the record's slots may name, which is what a rewrite is
 		// checked against. Fixed for the instance's life -- a rig's tables never change under it.
 		uint32_t nodeCount = 0;
+
+		// The blob shadow SetBlobShadow last wrote, or empty. The dense list the forward pass
+		// draws is rebuilt from these, exactly as the pose list is from the palettes.
+		std::optional<BlobShadowDesc> blobShadow;
 	};
 
 	/**
@@ -158,6 +164,15 @@ namespace bgl
 		HasFootIK(MeshInstanceHandle instance) const noexcept override;
 
 		void
+		SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc) override;
+
+		void
+		ClearBlobShadow(MeshInstanceHandle instance) override;
+
+		[[nodiscard]] std::optional<BlobShadowDesc>
+		GetBlobShadow(MeshInstanceHandle instance) const override;
+
+		void
 		SetSubmeshMaterialOverride(
 			MeshInstanceHandle instance,
 			uint32_t           submeshIndex,
@@ -221,6 +236,16 @@ namespace bgl
 		GetPosedInstanceCount() const noexcept
 		{
 			return m_PosedInstances.Size();
+		}
+
+		/**
+		 * How many workgroups the forward pass's blob phase dispatches: one per placement carrying
+		 * a blob shadow. Zero means the phase has nothing to draw.
+		 */
+		[[nodiscard]] uint32_t
+		GetBlobShadowCount() const noexcept
+		{
+			return m_BlobShadows.Size();
 		}
 
 		[[nodiscard]] uint32_t
@@ -390,6 +415,11 @@ namespace bgl
 		void
 		RebuildPosedList();
 
+		// Re-derives m_BlobShadows from the live placements. O(placements), and only after a blob
+		// shadow was set or cleared, or a placement carrying one was destroyed.
+		void
+		RebuildBlobShadowList();
+
 		/**
 		 * Writes the records a placement is made of -- the MeshInstance, with `animState` routed
 		 * naming the record the geom's type reads, and one resolved SubmeshInstance per submesh.
@@ -509,6 +539,10 @@ namespace bgl
 		// which own no palette.
 		UploadBuffer<idl::PosedInstance> m_PosedInstances;
 
+		// The placements carrying a blob shadow, one disc each -- the forward pass's blob phase
+		// dispatches over it. Dense and CPU-authored for the pose list's reason.
+		UploadBuffer<idl::BlobShadow> m_BlobShadows;
+
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;
 
@@ -524,6 +558,10 @@ namespace bgl
 		// Set when a skinned placement is created or destroyed; RebuildPosedList clears it. Same
 		// bargain as m_SelectionDirty: authoring-time work, never per frame.
 		bool m_PosedDirty = false;
+
+		// Set when a blob shadow is written, cleared, or its placement destroyed;
+		// RebuildBlobShadowList clears it. The same authoring-time bargain as m_PosedDirty.
+		bool m_BlobShadowsDirty = false;
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
