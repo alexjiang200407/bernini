@@ -4,6 +4,7 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
 
+#include <QCheckBox>
 #include <QGroupBox>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -38,6 +39,18 @@ GroundControls::GroundControls(AnimationPreviewWindow* preview, QWidget* parent)
 	// Connected once the body it hides exists, so no future setChecked above can fire into a
 	// half-built group.
 	connect(this, &QGroupBox::toggled, this, [this] { Apply(); });
+
+	// On by default: the disc is the cheap read of whether a foot is grounded, which is most of
+	// why the floor is on at all. In the body, so no floor means no orphaned disc to offer.
+	m_BlobShadowCheck = new QCheckBox(QStringLiteral("Blob shadow"), m_Body);
+	m_BlobShadowCheck->setChecked(true);
+	m_BlobShadowCheck->setToolTip(QStringLiteral(
+		"Draws a soft contact disc on the ground under the rig, shrinking and fading as it "
+		"rises. Off when judging the pose's own silhouette."));
+	connect(m_BlobShadowCheck, &QCheckBox::toggled, this, [this](bool on) {
+		m_Preview->SetBlobShadow(isChecked() && on);
+	});
+	ground->addWidget(m_BlobShadowCheck);
 
 	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0°"), m_Body);
 	ground->addWidget(m_SlopeLabel);
@@ -125,4 +138,5 @@ GroundControls::Apply()
 
 	m_Preview->SetFloorVisible(planting);
 	m_Preview->SetFootPlanting(planting);
+	m_Preview->SetBlobShadow(planting && m_BlobShadowCheck->isChecked());
 }

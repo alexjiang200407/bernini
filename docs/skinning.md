@@ -336,7 +336,14 @@ to keep in agreement beyond the one below.
   is shown; a placement does not move, so a slope change deletes and re-places it. The scene is
   shared with the Material Editor's preview, and its ground with it, so the slope stands only while
   the panel is on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
-  brings the slope back. Nothing else in the scene should stand on a slope this panel set while
+  brings the slope back. Inside the group, a **Blob shadow** checkbox (on by default) puts the
+  engine's contact disc (`ISceneView::SetBlobShadow`) on every animated instance — the cheap read
+  of whether a foot is grounded, sized from the loaded bounds by `editor::BlobShadowForBounds` —
+  the narrower horizontal extent, because the bounds are the clip union and their long axis is
+  stride reach, not body (free of the window, pinned by `[blobshadow]`). It lives in the group's body rather than beside
+  it because the disc lands on the floor the group draws: without the floor there is nothing in
+  the picture to receive it. Per instance like the IK record, so unlike the slope it needs no
+  undoing on hide. Nothing else in the scene should stand on a slope this panel set while
   nobody is looking at it.
 
 * **Two more sliders in the group, *IK Weight* and *Sole Turn*, are the instance's own weights**

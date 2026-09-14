@@ -11,6 +11,7 @@
 #include <bgl/InstanceDesc.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <cstdint>
 #include <filesystem>
@@ -282,6 +283,18 @@ public:
 	void
 	SetFootIK(const bgl::FootIKDesc& desc);
 
+	/**
+	 * Whether the rig wears a blob shadow: the contact disc on the ground under it, sized from the
+	 * loaded bounds (editor::BlobShadowForBounds), the cheap read of whether a foot is grounded.
+	 * Per instance like the IK record, so it needs no undoing on hide -- but only worth turning on
+	 * with the floor in the picture, which is the caller's pairing to keep.
+	 *
+	 * A rebind: setting or clearing a disc moves the temporal epoch, so this commits on a click,
+	 * never per tick.
+	 */
+	void
+	SetBlobShadow(bool enabled);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -393,6 +406,10 @@ private:
 	void
 	ApplyFootIK(bgl::MeshInstanceHandle instance);
 
+	// Puts the disc on one instance, or takes it off, per m_BlobShadow. Render thread only.
+	void
+	ApplyBlobShadow(bgl::MeshInstanceHandle instance);
+
 	/**
 	 * Sets the scene's ground to the current slope and stands the floor under the rig at the same
 	 * tilt. Render thread only. The floor is a placement, and a placement does not move: it is
@@ -453,6 +470,11 @@ private:
 
 	// Weight one on every leg, which is the record a spawn already holds.
 	bgl::FootIKDesc m_FootIK;
+
+	// The disc the animated instances wear when m_BlobShadow is on; sized by LoadMesh from the
+	// loaded bounds, and the default until the first load.
+	bool                m_BlobShadow = false;
+	bgl::BlobShadowDesc m_BlobDesc;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;
