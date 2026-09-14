@@ -16,6 +16,7 @@ namespace bgl
 	constexpr std::string_view c_MotionVectorsName = "motionVectors"sv;
 	constexpr std::string_view c_SceneColorName    = "sceneColor"sv;
 	constexpr std::string_view c_DepthName         = "depth"sv;
+	constexpr std::string_view c_StaticDepthName   = "staticDepth"sv;
 
 	constexpr std::string_view c_HistoryName     = "taaHistory"sv;
 	constexpr std::string_view c_OutlineMaskName = "outlineMask"sv;
