@@ -13,7 +13,6 @@
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgl/Viewport.h>
-#include <bgl/bgl.h>
 #include <bgl/glm.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>

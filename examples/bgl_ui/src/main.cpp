@@ -10,8 +10,8 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
-#include <bgl/bgl.h>
 #include <cmath>
+#include <core/glm.h>
 #include <cstdint>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ui/UiRenderer.h>

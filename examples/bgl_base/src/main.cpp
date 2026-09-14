@@ -23,7 +23,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/bgl.h>
+#include <core/glm.h>
 #include <format>
 #include <gamelib/AssetManager.h>
 #include <stdexcept>

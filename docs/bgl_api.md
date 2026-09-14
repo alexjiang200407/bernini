@@ -195,8 +195,6 @@ disagrees, trust the header, then fix this doc.
 | `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
 | `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |
 
-[bgl.h](libs/bgl/include/bgl/bgl.h) is the umbrella header; including it reaches all of the above.
-
 ---
 
 ## Topology
