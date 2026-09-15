@@ -214,10 +214,8 @@ RenderTargetWindow::SetTime(const float seconds)
 void
 RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 {
-	// Present is vsync-locked, so a healthy frame lands on one refresh (~16.7ms). Treat anything
-	// past ~1.2 refreshes as having missed a vblank.
-	constexpr double c_MissedFrameMs = 20.0;
-	constexpr double c_NsToMs        = 1.0e-6;
+	constexpr double c_SlowFrameMs = 20.0;
+	constexpr double c_NsToMs      = 1.0e-6;
 
 	if (m_LastFrameStartNs >= 0)
 	{
@@ -225,8 +223,8 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 
 		m_FrameTimes.Push(deltaMs);
 
-		if (deltaMs > c_MissedFrameMs)
-			++m_MissedFrames;
+		if (deltaMs > c_SlowFrameMs)
+			++m_SlowFrames;
 
 		SamplePassTimings();
 
@@ -237,7 +235,7 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 			Q_EMIT FrameStatsUpdated(
 				m_FrameTimes.Mean(),
 				m_FrameTimes.Max(),
-				static_cast<int>(m_MissedFrames),
+				static_cast<int>(m_SlowFrames),
 				m_GpuFrames);
 
 			m_GpuFrames.clear();
@@ -422,7 +420,7 @@ RenderTargetWindow::UpdateViewport()
 	// averaging in whatever it was doing before it was put away.
 	m_LastFrameStartNs = -1;
 	m_FrameTimes.Reset();
-	m_MissedFrames    = 0;
+	m_SlowFrames      = 0;
 	m_FramesSinceEmit = 0;
 	m_LastGpuFrame    = 0;
 	m_GpuFrames.clear();

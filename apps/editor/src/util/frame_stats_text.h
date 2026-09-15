@@ -10,9 +10,9 @@ namespace editor
 	/** One viewport's frame timings, as the status bar shows them. */
 	struct FrameStats
 	{
-		double meanMs = 0.0;
-		double maxMs  = 0.0;
-		int    missed = 0;
+		double meanMs     = 0.0;
+		double maxMs      = 0.0;
+		int    slowFrames = 0;
 	};
 
 	/**

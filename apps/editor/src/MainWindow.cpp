@@ -1154,7 +1154,8 @@ MainWindow::SetUpFrameStats()
 	// loop, so none of them reaches back to a previous time the tab was up.
 	m_FrameStats->setToolTip(
 		"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
-		"many frames have overrun a vblank since the tab was selected.");
+		"many frame-start intervals exceeded 20 ms since the tab was selected. "
+		"This measures render-loop timing, not missed display refreshes.");
 
 	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
 	// texture-cleanup messages cannot overwrite the readout.
@@ -1202,7 +1203,7 @@ MainWindow::SetUpFrameStats()
 				[this, view, name](
 					double                               meanMs,
 					double                               maxMs,
-					int                                  missed,
+					int                                  slowFrames,
 					const std::vector<bgl::PassTimings>& gpuFrames) {
 					if (m_FrameStatsSource != view)
 						return;
@@ -1210,9 +1211,9 @@ MainWindow::SetUpFrameStats()
 					m_FrameStats->setText(
 						editor::FrameStatsText(
 							name,
-							editor::FrameStats{ .meanMs = meanMs,
-				                                .maxMs  = maxMs,
-				                                .missed = missed }));
+							editor::FrameStats{ .meanMs     = meanMs,
+				                                .maxMs      = maxMs,
+				                                .slowFrames = slowFrames }));
 
 					m_GpuTiming->AddFrames(gpuFrames);
 

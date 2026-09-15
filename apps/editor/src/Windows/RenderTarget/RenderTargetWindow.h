@@ -199,7 +199,7 @@ Q_SIGNALS:
 	 *
 	 * @param meanMs   Mean frame time over the window.
 	 * @param maxMs    Worst frame time in the window -- the number a stall shows up in.
-	 * @param missed   Frames in the window that overran a vblank.
+	 * @param slowFrames Frame-start intervals exceeding 20 ms since this viewport became active.
 	 * @param gpuFrames Every timed frame whose rows have landed since the last emission, oldest
 	 *                  first -- empty unless SetGpuTimingEnabled is on. Rows rather than a formatted
 	 *                  table: a graph needs the numbers, and formatting them here would leave the
@@ -209,7 +209,7 @@ Q_SIGNALS:
 	FrameStatsUpdated(
 		double                               meanMs,
 		double                               maxMs,
-		int                                  missed,
+		int                                  slowFrames,
 		const std::vector<bgl::PassTimings>& gpuFrames);
 
 private:
@@ -291,6 +291,6 @@ private:
 
 	// Render thread only, like the timings above.
 	core::RollingWindow<c_FrameStatsWindow> m_FrameTimes;
-	uint32_t                                m_MissedFrames    = 0;
+	uint32_t                                m_SlowFrames      = 0;
 	uint64_t                                m_FramesSinceEmit = 0;
 };
