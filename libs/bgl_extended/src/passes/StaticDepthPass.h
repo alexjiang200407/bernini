@@ -41,7 +41,8 @@ namespace bgl
 		void
 		Release()
 		{
-			m_Kernel.Reset();
+			m_HardwareCullKernel.Reset();
+			m_MaterialCullKernel.Reset();
 			for (MeshletKernel& kernel : m_CoverageKernels)
 			{
 				kernel.Reset();
@@ -65,12 +66,16 @@ namespace bgl
 		void
 		Execute(const DrawData& draw, const PassContext& resources);
 
-		// One pipeline serves every opaque static bucket; the coverage buckets each pair the same
-		// geometry stage with their own discard-only pixel stage, one kernel per static cutout and
-		// hashed row (engine PBR and loose, then each game slot's pair).
+		// The opaque buckets need no pixel stage beyond depth, so they share two pipelines split by
+		// how ForwardPass::PsoCullMode culls each row: in hardware (the rows with no material flag),
+		// or not at all, leaving back faces to the mesh stage and the material's doubleSided. The
+		// coverage buckets each pair the same geometry stage with their own discard-only pixel
+		// stage, one kernel per static cutout and hashed row (engine PBR and loose, then each game
+		// slot's pair).
 		static constexpr uint32_t c_CoverageKernelCount = 4 + 2 * cGameSlots;
 
-		MeshletKernel                                    m_Kernel;
+		MeshletKernel                                    m_HardwareCullKernel;
+		MeshletKernel                                    m_MaterialCullKernel;
 		std::array<MeshletKernel, c_CoverageKernelCount> m_CoverageKernels;
 	};
 }

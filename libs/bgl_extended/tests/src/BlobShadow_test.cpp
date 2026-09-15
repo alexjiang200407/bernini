@@ -49,6 +49,14 @@ namespace
 	{
 		return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, y, 0.0f)) * c_Flat;
 	}
+
+	// Laid flat the other way up: its front faces the ground, so a camera above sees only its back.
+	glm::mat4
+	UpsideDown(float y)
+	{
+		return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, y, 0.0f)) *
+		       glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	}
 }
 
 TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][render]")
@@ -419,6 +427,52 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		view->SetBlobShadow(caster, shortFade);
 		const float shadowed = sample("bernini_blob_hashed_shadowed", boxX, boxY, 14);
 		CHECK(shadowed < base * 0.97f);
+	}
+
+	SECTION("a double-sided receiver seen from its back catches the shadow")
+	{
+		// The platform's material is double-sided, so the colour pass draws the back the camera
+		// sees; the receiver must hold that face too, or the decal reconstructs the ground beneath
+		// and is depth-tested away behind the platform.
+		view->SetInstanceTransform(platform, UpsideDown(c_PlatformY));
+
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_backface_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		view->SetBlobShadow(caster, desc);
+		const float shadowed = sample("bernini_blob_backface_shadowed", boxX, boxY, 14);
+		CHECK(shadowed < base * 0.9f);
+	}
+
+	SECTION("a single-sided receiver seen from its back is no receiver at all")
+	{
+		// Culled in the colour pass, so it must be culled from the receiver too: a receiver that kept
+		// it would hang a shadow in mid-air where nothing is drawn. The ground beneath is past
+		// fadeHeight, so nothing in the box may darken.
+		view->DeleteMeshInstance(platform);
+
+		auto oneSided        = whiteDesc;
+		oneSided.layerType   = bgl::LayerType::kMask;
+		oneSided.doubleSided = false;
+		const auto oneSidedGeom =
+			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(oneSided));
+		(void)view->CreateStaticMeshInstance(oneSidedGeom, UpsideDown(c_PlatformY));
+
+		auto shortFade       = desc;
+		shortFade.fadeHeight = 1.5f;
+
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_culled_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		view->SetBlobShadow(caster, shortFade);
+		const float unshadowed = sample("bernini_blob_culled", boxX, boxY, 14);
+		CHECK(unshadowed > base * 0.95f);
 	}
 
 	SECTION("a wall beside the caster catches nothing")
