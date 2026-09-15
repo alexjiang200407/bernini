@@ -1,6 +1,7 @@
 import Entry;
 import Geom;
 import IPlayback;
+import MeshInstanceFlag;
 import RawEntry;
 
 // One placement of a geom: its world transform, the geom it was placed from, and its playback
@@ -26,6 +27,10 @@ public struct MeshInstance
     // which tier it is, so the one stage that draws more than one tier can ask rather than mirror
     // the PSO table.
     public RawEntry<IPlayback> playback;
+
+    // MeshInstanceFlag bits; zero is the default behaviour. Read by every GPU stage that reaches the
+    // placement, so a bit takes effect in all of them at once.
+    public uint flags;
 
     // The placement as one affine matrix, the implied fourth row filled in.
     public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
@@ -55,3 +60,9 @@ public struct MeshInstance
         return float3(dot(transform[0].xyz, d), dot(transform[1].xyz, d), dot(transform[2].xyz, d));
     }
 };
+
+// Whether `flag`'s bit is set in the placement's flags word. The C++ twin is bgl::HasMeshInstanceFlag.
+public bool HasMeshInstanceFlag(MeshInstance mesh, MeshInstanceFlag flag)
+{
+    return (mesh.flags & uint(flag)) != 0u;
+}

@@ -339,8 +339,9 @@ It adds **four sub-passes**:
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
    bounding sphere (the placement's transform × the submesh's local sphere) and writes a per-instance
    **visibility word** to `scene.instanceVisibility`; the histogram, compaction, and transparent
-   depth-key passes all gate on it, so a culled instance reaches no draw. Skipped when the instance
-   count is 0.
+   depth-key passes all gate on it, so a culled instance reaches no draw. A placement whose
+   `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
+   counted neither tested nor culled. Skipped when the instance count is 0.
 3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per PSO into
    `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into exclusive prefix
    sums. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
