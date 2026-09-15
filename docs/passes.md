@@ -533,7 +533,10 @@ normal), and the pixel shader reconstructs the static surface under each pixel f
 [Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
-than falling through to the ground plane. The fragment re-emits the receiver's depth as
+than falling through to the ground plane. A receiver must also face up: the fragment reads the
+surface's normal off the reconstruction's screen-space derivatives and ramps the shadow out past
+~70° of tilt, so a wall beside the caster keeps its face while a walkable slope still catches at
+full strength. The fragment re-emits the receiver's depth as
 `SV_Depth` under a `kLessOrEqual` test, which is what still occludes the decal behind the full
 scene depth, units included. The decals draw
 before the transparents so smoke over a unit composites over its shadow too. Same blend state and

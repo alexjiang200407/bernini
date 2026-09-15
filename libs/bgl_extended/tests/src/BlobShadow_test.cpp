@@ -335,6 +335,28 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		CHECK(cleared > base * 0.95f);
 	}
 
+	SECTION("a wall beside the caster catches nothing")
+	{
+		// The platform stood vertical: plane geoms are authored in XY, so an unrotated placement
+		// is a wall facing the camera, beside the caster and well inside the disc radius.
+		view->SetInstanceTransform(
+			platform,
+			glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 1.0f, 0.0f)));
+
+		// Mid-face of the wall, clear of the caster and of the ground line at its base.
+		const int boxX = 450;
+		const int boxY = 271;
+
+		const float base = sample("bernini_blob_wall_base", boxX, boxY, 12);
+		REQUIRE(base > 0.05f);
+
+		// A blob shadow lands on what faces up: the wall's face points at the camera, so it must
+		// keep its brightness while the ground at its base still catches the disc.
+		view->SetBlobShadow(caster, desc);
+		const float wall = sample("bernini_blob_wall", boxX, boxY, 12);
+		CHECK(wall > base * 0.95f);
+	}
+
 	SECTION("a receiver above the caster catches nothing")
 	{
 		view->SetInstanceTransform(platform, Lifted(3.0f));

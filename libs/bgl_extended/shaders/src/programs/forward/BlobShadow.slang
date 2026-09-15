@@ -42,6 +42,10 @@ static const float cLiftShrink = 0.5;
 // caster's height sits inside the covered volume instead of on its boundary.
 static const float cTopSlack = 0.02;
 
+// The receiver facing (its normal against up) at which the shadow reaches full strength: below,
+// it ramps out, so a surface tilted past ~70 degrees -- a wall -- receives nothing.
+static const float cFacingRamp = 0.35;
+
 struct VSOut
 {
     float4 position : SV_Position;
@@ -153,6 +157,16 @@ PSOut PSMain(VSOut input)
     let pixel = uint2(input.position.xy);
     let depth = gBlobShadowData.staticDepth.Load(pixel).r;
 
+    let rect = gBlobShadowData.viewportRect;
+    let ndc = float2((input.position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (input.position.y - rect.y) * rect.w * 2.0);
+
+    let world4 = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
+    let world = world4.xyz / world4.w;
+
+    // Derivatives ahead of any discard: a lane that has discarded no longer feeds its quad.
+    let dpdx = ddx(world);
+    let dpdy = ddy(world);
+
     // A cleared texel has no static receiver under it.
     if (depth >= 1.0)
     {
@@ -161,12 +175,6 @@ PSOut PSMain(VSOut input)
 
     PSOut output;
     output.depth = depth;
-
-    let rect = gBlobShadowData.viewportRect;
-    let ndc = float2((input.position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (input.position.y - rect.y) * rect.w * 2.0);
-
-    let world4 = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
-    let world = world4.xyz / world4.w;
 
     let blob = gBlobShadowData.blobBuffer[input.blob];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
@@ -191,12 +199,22 @@ PSOut PSMain(VSOut input)
         discard;
     }
 
+    // A shadow also lands only on what faces up: without this a wall beside the caster catches a
+    // vertical smear. The receiver's facing comes from how the reconstruction slides across the
+    // pixel quad, and the ramp keeps walkable slopes at full strength.
+    let normal = normalize(cross(dpdy, dpdx));
+    let facing = smoothstep(0.0, cFacingRamp, dot(normal, n));
+    if (facing <= 0.0)
+    {
+        discard;
+    }
+
     let radius = blob.radius * scale * lerp(cLiftShrink, 1.0, fade);
     let lateral = delta - n * height;
     let falloff = saturate(1.0 - dot(lateral, lateral) / (radius * radius));
 
     // Premultiplied black: the One/InvSrcAlpha blend scales the scene by 1 - alpha, so the decal
     // only darkens. Squared for a soft shoulder at the rim.
-    output.color = float4(0.0, 0.0, 0.0, blob.intensity * fade * falloff * falloff);
+    output.color = float4(0.0, 0.0, 0.0, blob.intensity * fade * falloff * falloff * facing);
     return output;
 }
