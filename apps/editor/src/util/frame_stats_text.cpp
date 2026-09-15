@@ -15,10 +15,10 @@ namespace editor
 			return viewport + " — measuring…";
 
 		return viewport + QString::asprintf(
-							  " — frame %.1f ms avg  %.1f ms max  %d missed",
+							  " — frame %.1f ms avg  %.1f ms max  %d over 20 ms",
 							  stats->meanMs,
 							  stats->maxMs,
-							  stats->missed);
+							  stats->slowFrames);
 	}
 
 	QString

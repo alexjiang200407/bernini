@@ -13,7 +13,6 @@
 #include "types/Barrier.h"
 #include "types/Format.h"
 #include <CoreFoundation/CFCGTypes.h>
-#include <CoreFoundation/CFDate.h>
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <cstdint>
@@ -34,10 +33,6 @@ namespace bgl
 		constexpr Format c_SceneColorFormat = Format::RGBA16_FLOAT;
 
 		constexpr Format c_OutlineMaskFormat = Format::R8_UNORM;
-
-		// Holds a presented frame on screen for at least this long, which is what caps the loop at
-		// 60Hz: a plain present rides every refresh, and on a ProMotion panel that is 120.
-		constexpr CFTimeInterval c_MinPresentInterval = 1.0 / 60.0;
 	}
 
 	RenderTarget::RenderTarget(
@@ -371,7 +366,7 @@ namespace bgl
 		blit->copyFromTexture(from, to);
 		blit->endEncoding();
 
-		cmd->presentDrawableAfterMinimumDuration(drawable, c_MinPresentInterval);
+		cmd->presentDrawable(drawable);
 		cmd->commit();
 	}
 
