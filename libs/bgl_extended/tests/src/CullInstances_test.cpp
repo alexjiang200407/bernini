@@ -22,7 +22,7 @@
 #include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
-#include <bgl/InstanceFlag.h>
+#include <bgl/MeshInstanceFlag.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
@@ -158,7 +158,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	{
 		auto mesh  = bgl::idl::MeshInstance();
 		mesh.geom  = geomHandle;
-		mesh.flags = p.hidden ? static_cast<uint32_t>(bgl::InstanceFlag::kHidden) : 0u;
+		mesh.flags = p.hidden ? static_cast<uint32_t>(bgl::MeshInstanceFlag::kHidden) : 0u;
 		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);

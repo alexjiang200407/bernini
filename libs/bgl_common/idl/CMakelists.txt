@@ -93,7 +93,7 @@ set(IDL_CPP_SOURCES
 # pipeline permutations, which is not vocabulary a public interface should carry.
 set(IDL_PUBLIC_CPP_SOURCES
     MaterialType.slang
-    InstanceFlag.slang
+    MeshInstanceFlag.slang
 )
 
 # The C++ mirror follows the backend's own rules; see IDL_CPP_OUT_DIR above.

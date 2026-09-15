@@ -6,12 +6,12 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceFlag.h>
+#include <bgl/MeshInstanceFlag.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <bgl/types/BlobShadowDesc.h>
-#include <bgl/types/InstanceFlags.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
@@ -50,7 +50,7 @@ namespace
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 }
 
-TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags][render]")
+TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstanceflags][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
 	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -129,7 +129,7 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags]
 		return box.Luma();
 	};
 
-	const auto hidden = bgl::InstanceFlags(bgl::InstanceFlag::kHidden);
+	const auto hidden = bgl::MeshInstanceFlags(bgl::MeshInstanceFlag::kHidden);
 
 	SECTION("hiding takes the placement off screen and unhiding puts it back")
 	{
@@ -141,7 +141,7 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags]
 		// The black face gives way to the lit white ground behind it.
 		CHECK(gone > shown + 0.3f);
 
-		view->SetInstanceFlags(cube, bgl::InstanceFlags());
+		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
 		const float back = sample("bernini_flags_unhidden", c_CubeX, c_CubeY);
 		CHECK(std::abs(back - shown) < 0.02f);
 	}
@@ -169,7 +169,7 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags]
 		const float cleared = sample("bernini_flags_blob_hidden", c_GroundX, c_GroundY);
 		CHECK(cleared > base * 0.98f);
 
-		view->SetInstanceFlags(cube, bgl::InstanceFlags());
+		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
 		const float returned = sample("bernini_flags_blob_unhidden", c_GroundX, c_GroundY);
 		CHECK(returned < base * 0.92f);
 	}
@@ -189,7 +189,7 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags]
 		// The selection itself survives the hide.
 		CHECK(view->IsSubmeshSelected(cube, 0));
 
-		view->SetInstanceFlags(cube, bgl::InstanceFlags());
+		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
 		CHECK(sceneView->GetSelectedInstances().size() == 1);
 	}
 
@@ -200,7 +200,7 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[instanceflags]
 		view->SetInstanceFlags(cube, hidden);
 		CHECK(view->GetInstanceFlags(cube) == hidden);
 
-		view->SetInstanceFlags(cube, bgl::InstanceFlags());
+		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
 		CHECK(view->GetInstanceFlags(cube).empty());
 
 		CHECK_THROWS_AS(view->SetInstanceFlags(bgl::MeshInstanceHandle(), hidden), bgl::SceneError);

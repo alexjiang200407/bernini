@@ -3,9 +3,9 @@
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/InstanceFlag.h>
 #include <bgl/MaterialType.h>
-#include <bgl/types/InstanceFlags.h>
+#include <bgl/MeshInstanceFlag.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 
@@ -127,7 +127,7 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 		Consume(view);
 
-		const auto hidden = bgl::InstanceFlags(bgl::InstanceFlag::kHidden);
+		const auto hidden = bgl::MeshInstanceFlags(bgl::MeshInstanceFlag::kHidden);
 
 		view->SetInstanceFlags(instance, hidden);
 		CHECK(view->AdvanceTemporalEpoch());
@@ -135,7 +135,7 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 		view->SetInstanceFlags(instance, hidden);
 		CHECK_FALSE(view->AdvanceTemporalEpoch());
 
-		view->SetInstanceFlags(instance, bgl::InstanceFlags());
+		view->SetInstanceFlags(instance, bgl::MeshInstanceFlags());
 		CHECK(view->AdvanceTemporalEpoch());
 	}
 }

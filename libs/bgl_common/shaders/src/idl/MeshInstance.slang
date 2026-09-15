@@ -1,6 +1,7 @@
 import Entry;
 import Geom;
 import IPlayback;
+import MeshInstanceFlag;
 import RawEntry;
 
 // One placement of a geom: its world transform, the geom it was placed from, and its playback
@@ -27,7 +28,7 @@ public struct MeshInstance
     // the PSO table.
     public RawEntry<IPlayback> playback;
 
-    // InstanceFlag bits; zero is the default behaviour. Read by every GPU stage that reaches the
+    // MeshInstanceFlag bits; zero is the default behaviour. Read by every GPU stage that reaches the
     // placement, so a bit takes effect in all of them at once.
     public uint flags;
 
@@ -59,3 +60,9 @@ public struct MeshInstance
         return float3(dot(transform[0].xyz, d), dot(transform[1].xyz, d), dot(transform[2].xyz, d));
     }
 };
+
+// Whether `flag`'s bit is set in the placement's flags word. The C++ twin is bgl::HasMeshInstanceFlag.
+public bool HasMeshInstanceFlag(MeshInstance mesh, MeshInstanceFlag flag)
+{
+    return (mesh.flags & uint(flag)) != 0u;
+}

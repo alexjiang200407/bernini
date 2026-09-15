@@ -155,9 +155,9 @@ namespace bgl
 		GetInstanceTransform(MeshInstanceHandle instance) const override;
 
 		void
-		SetInstanceFlags(MeshInstanceHandle instance, InstanceFlags flags) override;
+		SetInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags) override;
 
-		[[nodiscard]] InstanceFlags
+		[[nodiscard]] MeshInstanceFlags
 		GetInstanceFlags(MeshInstanceHandle instance) const override;
 
 		void

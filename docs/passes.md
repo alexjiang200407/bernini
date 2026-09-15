@@ -341,7 +341,7 @@ It adds **four sub-passes**:
    bounding sphere (the placement's transform × the submesh's local sphere) and writes a per-instance
    **visibility word** to `scene.instanceVisibility`; the histogram, compaction, and transparent
    depth-key passes all gate on it, so a culled instance reaches no draw. A placement whose
-   `MeshInstance.flags` carries `InstanceFlag::kHidden` is written 0 before any frustum test and
+   `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
 3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per PSO into
    `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into exclusive prefix

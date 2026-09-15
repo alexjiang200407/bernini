@@ -2,7 +2,7 @@ import idl.Constants;
 import idl.CullStats;
 import idl.CullView;
 import idl.Geom;
-import idl.InstanceFlag;
+import idl.MeshInstanceFlag;
 import idl.InstanceVisibility;
 import idl.MeshInstance;
 import idl.Submesh;
@@ -52,7 +52,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     // A hidden placement is live but drawn by nothing: never visible, and not counted as tested or
     // frustum-culled, since no frustum decided it.
-    if ((mesh.flags & uint(InstanceFlag.kHidden)) != 0u)
+    if (HasMeshInstanceFlag(mesh, MeshInstanceFlag.kHidden))
     {
         gUniforms.visibility[globalIdx].visible = 0u;
         return;

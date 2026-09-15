@@ -8,7 +8,7 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
-#include <bgl/types/InstanceFlags.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -145,7 +145,7 @@ namespace bgl
 
 		/**
 		 * Replaces the placement's whole flags word, effective on the next frame this view is drawn --
-		 * see InstanceFlag for what each bit does. A placement is created with none set.
+		 * see MeshInstanceFlag for what each bit does. A placement is created with none set.
 		 *
 		 * A change that alters what is drawn moves the temporal epoch, as a deletion does: a surface
 		 * that appears or vanishes has no motion vector to describe it.
@@ -153,14 +153,14 @@ namespace bgl
 		 * @throws SceneError if the handle is invalid or already removed.
 		 */
 		virtual void
-		SetInstanceFlags(MeshInstanceHandle instance, InstanceFlags flags) = 0;
+		SetInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags) = 0;
 
 		/**
 		 * The word SetInstanceFlags last wrote, or empty.
 		 *
 		 * @throws SceneError if the handle is invalid or already removed.
 		 */
-		[[nodiscard]] virtual InstanceFlags
+		[[nodiscard]] virtual MeshInstanceFlags
 		GetInstanceFlags(MeshInstanceHandle instance) const = 0;
 
 		/**

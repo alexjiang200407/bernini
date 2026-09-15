@@ -18,15 +18,15 @@
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
-#include <bgl/InstanceFlag.h>
 #include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceFlag.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/RigHandle.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
-#include <bgl/types/InstanceFlags.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
@@ -402,7 +402,7 @@ namespace bgl
 	}
 
 	void
-	SceneView::SetInstanceFlags(MeshInstanceHandle instance, InstanceFlags flags)
+	SceneView::SetInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags)
 	{
 		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
 		{
@@ -411,7 +411,7 @@ namespace bgl
 		}
 
 		auto       mesh     = m_MeshBuffer.AtIndex(instance.handle.index);
-		const auto previous = InstanceFlags(mesh.flags);
+		const auto previous = MeshInstanceFlags(mesh.flags);
 		if (previous == flags)
 		{
 			return;
@@ -420,7 +420,7 @@ namespace bgl
 		mesh.flags = flags.underlying();
 		m_MeshBuffer.Set(instance.handle, mesh);
 
-		if ((previous ^ flags).any(InstanceFlag::kHidden))
+		if ((previous ^ flags).any(MeshInstanceFlag::kHidden))
 		{
 			// The CPU-built lists skip a hidden placement, so a toggle stales the ones it is in.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
@@ -437,7 +437,7 @@ namespace bgl
 		}
 	}
 
-	InstanceFlags
+	MeshInstanceFlags
 	SceneView::GetInstanceFlags(MeshInstanceHandle instance) const
 	{
 		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
@@ -446,7 +446,7 @@ namespace bgl
 				"MeshInstanceHandle passed to GetInstanceFlags is invalid or already removed");
 		}
 
-		return InstanceFlags(m_MeshBuffer.AtIndex(instance.handle.index).flags);
+		return MeshInstanceFlags(m_MeshBuffer.AtIndex(instance.handle.index).flags);
 	}
 
 	bool
@@ -1186,7 +1186,7 @@ namespace bgl
 
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (!meta.blobShadow.has_value() ||
-			    InstanceFlags(m_MeshBuffer.AtIndex(meshIndex).flags).any(InstanceFlag::kHidden))
+			    HasMeshInstanceFlag(m_MeshBuffer.AtIndex(meshIndex), MeshInstanceFlag::kHidden))
 			{
 				continue;
 			}
@@ -1214,7 +1214,7 @@ namespace bgl
 				continue;
 			}
 
-			if (InstanceFlags(m_MeshBuffer.AtIndex(meshIndex).flags).any(InstanceFlag::kHidden))
+			if (HasMeshInstanceFlag(m_MeshBuffer.AtIndex(meshIndex), MeshInstanceFlag::kHidden))
 			{
 				continue;
 			}
