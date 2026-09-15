@@ -6,6 +6,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/MeshInstance.h>
@@ -289,6 +290,12 @@ namespace bgl
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
+	}
+
+	bool
+	HasMeshInstanceFlag(const idl::MeshInstance& instance, const MeshInstanceFlag flag) noexcept
+	{
+		return (instance.flags & static_cast<uint32_t>(flag)) != 0u;
 	}
 
 	void
