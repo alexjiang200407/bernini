@@ -110,6 +110,9 @@ main(int argc, char** argv)
 		std::string project;
 		std::string importKey;
 		std::string clipName;
+		std::string staticKey;
+		std::string staticProject;
+		float       hoverOverride = 0.0f;
 
 		{
 			auto app = CLI::App{ "A hovering caster whose blob shadow drapes over static crates" };
@@ -132,6 +135,19 @@ main(int argc, char** argv)
 				"--clip",
 				clipName,
 				"The clip a skinned caster plays; defaults to the first");
+			app.add_option(
+				"--static",
+				staticKey,
+				"A .bimport placed as a static receiver at the origin, in the caster's path -- a "
+				"cutout or hashed one shows the shadow dappling through its coverage");
+			app.add_option(
+				"--static-project",
+				staticProject,
+				"Data directory --static is keyed against; defaults to --project");
+			app.add_option(
+				"--hover",
+				hoverOverride,
+				"Height the caster hovers at; 0 picks a default per caster kind");
 			app.add_flag("!--no-taa", taaEnabled, "Draw without temporal antialiasing");
 			app.add_flag("--headless", headless, "Render offscreen for --frames and exit");
 			app.add_option("--frames", frames, "Frames to render in --headless mode")
@@ -143,6 +159,9 @@ main(int argc, char** argv)
 		core::throw_runtime_error_if(
 			!importKey.empty() && project.empty(),
 			"--import needs --project to key it against");
+		core::throw_runtime_error_if(
+			!staticKey.empty() && staticProject.empty() && project.empty(),
+			"--static needs --static-project (or --project) to key it against");
 
 		// Headless renders offscreen, so the example is runnable unattended -- which is how anything
 		// but a person can tell it still starts.
@@ -233,6 +252,47 @@ main(int argc, char** argv)
 		(void)view->CreateStaticMeshInstance(
 			crate,
 			Box(glm::vec3(-2.5f, 0.3f, 0.0f), glm::vec3(1.0f, 0.3f, 1.0f)));
+
+		// An optional static receiver from a project, at the origin in the caster's path: a
+		// cutout or hashed mesh shows the shadow dappling through its coverage rather than
+		// falling through it or blanketing it.
+		std::optional<game::AssetManager> staticAssets;
+		if (!staticKey.empty())
+		{
+			const auto staticRoot =
+				std::filesystem::path(staticProject.empty() ? project : staticProject);
+			const auto staticStore = assetlib::AssetStore(staticRoot);
+
+			core::throw_runtime_error_if(
+				!staticStore.Exists(staticKey),
+				"{} is not in {}",
+				staticKey,
+				std::filesystem::absolute(staticRoot).string());
+
+			const assetlib::ImportDocument staticDoc =
+				assetlib::loadImportDocument(staticStore.GetFiles(), staticKey);
+
+			const std::string staticMeshKey = staticDoc.GetMeshOutput();
+			core::throw_runtime_error_if(
+				staticMeshKey.empty() || !staticStore.Exists(staticMeshKey),
+				"{}'s .bmesh is not on disk; `assetlib_cli migrate` writes it back",
+				staticKey);
+
+			const auto staticModel = staticStore.Load<assetlib::BMesh>(staticMeshKey);
+			staticAssets.emplace(scene, staticRoot);
+
+			for (uint32_t n = 0; n < staticModel.nodes.size(); ++n)
+			{
+				const uint32_t meshIndex = staticModel.nodes[n].mesh;
+				if (meshIndex == assetlib::c_InvalidIndex)
+					continue;
+
+				(void)staticAssets->CreateInstance(
+					view,
+					staticAssets->AcquireMesh(staticMeshKey, meshIndex),
+					headless::InstanceTransform(staticModel, n));
+			}
+		}
 
 		// The caster: a skinned mesh from --project when one is named, else a hovering ball. A
 		// skinned caster is what units are, so it never enters the static receiver and cannot
@@ -370,6 +430,13 @@ main(int argc, char** argv)
 					ball,
 					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_Hover, 0.0f))),
 				glm::mat4(1.0f));
+		}
+
+		// A clip whose feet are planted holds them to the ground however the placement floats --
+		// pick an airborne clip (Fall, Jump_Up) to see a skinned caster actually hover.
+		if (hoverOverride > 0.0f)
+		{
+			hover = hoverOverride;
 		}
 
 		view->SetBlobShadow(

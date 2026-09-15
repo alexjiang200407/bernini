@@ -335,6 +335,92 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		CHECK(cleared > base * 0.95f);
 	}
 
+	SECTION("a covered cutout receiver catches the shadow")
+	{
+		// The platform again, but drawn through the cutout bucket with every texel surviving its
+		// cutoff. fadeHeight stops short of the ground 1.7 below the caster, so before the cutout
+		// rows rendered into the receiver these pixels could not darken at all.
+		view->DeleteMeshInstance(platform);
+
+		auto cutoutDesc      = whiteDesc;
+		cutoutDesc.layerType = bgl::LayerType::kMask;
+		const auto cutoutGeom =
+			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(cutoutDesc));
+		(void)view->CreateStaticMeshInstance(cutoutGeom, Lifted(c_PlatformY));
+
+		auto shortFade       = desc;
+		shortFade.fadeHeight = 1.5f;
+
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_cutout_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		view->SetBlobShadow(caster, shortFade);
+		const float shadowed = sample("bernini_blob_cutout_shadowed", boxX, boxY, 14);
+		CHECK(shadowed < base * 0.9f);
+	}
+
+	SECTION("a fully cut-out receiver lets the shadow fall through")
+	{
+		// The same cutout platform with every texel below the cutoff: invisible in the colour
+		// pass, so it must be invisible to the receiver too -- and the ground beneath is past
+		// fadeHeight, so nothing in the box may darken.
+		view->DeleteMeshInstance(platform);
+
+		auto cutoutDesc            = whiteDesc;
+		cutoutDesc.layerType       = bgl::LayerType::kMask;
+		cutoutDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 0.1f);
+		const auto cutoutGeom =
+			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(cutoutDesc));
+		(void)view->CreateStaticMeshInstance(cutoutGeom, Lifted(c_PlatformY));
+
+		auto shortFade       = desc;
+		shortFade.fadeHeight = 1.5f;
+
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_cutout_holes_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		view->SetBlobShadow(caster, shortFade);
+		const float through = sample("bernini_blob_cutout_holes", boxX, boxY, 14);
+		CHECK(through > base * 0.95f);
+	}
+
+	SECTION("a hashed receiver catches the shadow only where its coverage survives")
+	{
+		// Stochastic coverage at 0.6: without temporal AA the seed is 0, so the surviving texel
+		// pattern is the same in both captures. The box mixes darkened platform texels with holes
+		// showing the ground, which fadeHeight keeps clear -- the mean drops by the covered share.
+		view->DeleteMeshInstance(platform);
+
+		auto hashedDesc            = whiteDesc;
+		hashedDesc.layerType       = bgl::LayerType::kHashed;
+		hashedDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 0.6f);
+		const auto hashedGeom =
+			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(hashedDesc));
+		(void)view->CreateStaticMeshInstance(hashedGeom, Lifted(c_PlatformY));
+
+		auto shortFade       = desc;
+		shortFade.fadeHeight = 1.5f;
+
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_hashed_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		// The drop is diluted twice -- by the uncovered share and by the display transform -- but
+		// the discriminator is binary: before coverage rendered into the receiver, these pixels
+		// could not darken at all, and without TAA both captures are deterministic.
+		view->SetBlobShadow(caster, shortFade);
+		const float shadowed = sample("bernini_blob_hashed_shadowed", boxX, boxY, 14);
+		CHECK(shadowed < base * 0.97f);
+	}
+
 	SECTION("a wall beside the caster catches nothing")
 	{
 		// The platform stood vertical: plane geoms are authored in XY, so an unrotated placement
