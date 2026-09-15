@@ -334,7 +334,11 @@ main(int argc, char** argv)
 					casterAssets->AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
 				skinnedPlacements.emplace_back(acquired.geom, local);
 				clips = std::move(acquired.clips);
-				headless::GrowBounds(bounds, local, posed);
+
+				// The disc is sized below from these bounds: the bind pose, not the posed box --
+				// that one is the union over every clip, and a rig with a roll or a run sweep in
+				// its set would cast a disc several times its standing footprint.
+				headless::GrowBounds(bounds, local, headless::MeshEntryBounds(model, meshIndex));
 			}
 
 			const uint32_t clip = skinnedPlacements.empty() ? 0 : FindClip(clips, clipName);
@@ -354,7 +358,7 @@ main(int argc, char** argv)
 			core::throw_runtime_error_if(casterParts.empty(), "{} placed no meshes", importKey);
 
 			// A rigged placement's origin is at its feet, so it hovers by the gap under them; size
-			// the disc to its posed footprint.
+			// the disc to its standing footprint.
 			const glm::vec3 size = bounds.max - bounds.min;
 			discRadius           = std::max(0.5f * std::max(size.x, size.z), 0.4f);
 			hover                = 1.4f;
@@ -368,16 +372,21 @@ main(int argc, char** argv)
 				glm::mat4(1.0f));
 		}
 
-		const auto shadow = bgl::BlobShadowDesc{ .radius     = discRadius,
-			                                     .intensity  = c_Intensity,
-			                                     .fadeHeight = fadeHeight };
-		view->SetBlobShadow(casterParts.front().instance, shadow);
+		view->SetBlobShadow(
+			casterParts.front().instance,
+			bgl::BlobShadowDesc{ .radius     = discRadius,
+		                         .intensity  = c_Intensity,
+		                         .fadeHeight = fadeHeight });
 
 		// A grounded twin for contrast: its disc is at full strength and never moves.
 		const bgl::MeshInstanceHandle rester = view->CreateStaticMeshInstance(
 			ball,
 			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_CasterRadius, 2.5f)));
-		view->SetBlobShadow(rester, shadow);
+		view->SetBlobShadow(
+			rester,
+			bgl::BlobShadowDesc{ .radius     = c_DiscRadius,
+		                         .intensity  = c_Intensity,
+		                         .fadeHeight = fadeHeight });
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 
