@@ -786,11 +786,10 @@ second time — two copies of that rule is how a preview and a file come to disa
 Ten rules, each of which is a way to get this wrong:
 
 * **`doubleSided` is read, and its absence means one side.** That is glTF's default, and the
-  renderer honours the flag on every cut-out, hashed and blended material
-  ([Passes § Two-sided surfaces](docs/passes.md)); an opaque material is front-only whatever it
-  says. A `.bmaterial` written before the key existed reads as two-sided, since that is how every
-  such material drew until then — so a file imported now says one thing, and an old one says the
-  other, on purpose.
+  renderer honours the flag on every material, opaque included
+  ([Passes § Two-sided surfaces](docs/passes.md)). A `.bmaterial` written before the key existed
+  reads as two-sided, since that is how every such material drew until then — so a file imported
+  now says one thing, and an old one says the other, on purpose.
 
 * **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
   roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file

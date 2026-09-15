@@ -49,7 +49,7 @@ public struct GameSurfaceRecord
 
     public uint routeChannels[cGameSurfaceTextureSlots * cGameSurfaceRouteChannels];
 
-    // Non-zero draws a non-opaque surface's back faces; the mesh stage culls them otherwise.
+    // Non-zero draws the surface's back faces; the mesh stage culls them otherwise.
     public uint doubleSided;
 
     // Only read by the alpha-test PSOs, against the surface's Coverage.

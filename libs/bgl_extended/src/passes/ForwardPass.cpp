@@ -144,9 +144,9 @@ namespace bgl
 				// kOpaque_StaticMesh_Null
 				{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
 				// kOpaque_StaticMesh_PBR
-				{ c_PbrPixelSrc, RasterCullMode::kBack, true, false },
+				{ c_PbrPixelSrc, RasterCullMode::kNone, true, false },
 				// kOpaque_StaticMesh_LoosePbr
-				{ c_LoosePixelSrc, RasterCullMode::kBack, true, false },
+				{ c_LoosePixelSrc, RasterCullMode::kNone, true, false },
 				// kAlphaTest_StaticMesh_PBR
 				{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
 				// kAlphaTest_StaticMesh_LoosePbr
@@ -174,7 +174,7 @@ namespace bgl
 				{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
 				// kOpaque_SkinnedMesh_PBR
 				{ c_PbrPixelSrc,
-				  RasterCullMode::kBack,
+				  RasterCullMode::kNone,
 				  true,
 				  false,
 				  ComparisonFunc::kLess,
@@ -214,7 +214,7 @@ namespace bgl
 					const uint32_t row = GameSlotRowBase(slot) + tier * idl::cGameSlotTierRows;
 					const std::string_view geom = tier == 0 ? c_GeomSrc : c_SkinnedGeomSrc;
 
-					psos[row]     = { srcs.opaque, RasterCullMode::kBack, true,
+					psos[row]     = { srcs.opaque, RasterCullMode::kNone, true,
 						              false,       ComparisonFunc::kLess, geom };
 					psos[row + 1] = { srcs.cutout, RasterCullMode::kNone, true,
 						              false,       ComparisonFunc::kLess, geom };

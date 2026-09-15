@@ -298,21 +298,17 @@ MaterialOutputNode::embeddedWidget()
 
 	AddExtraRows(m_Widget, form);
 
-	// An opaque surface is drawn front-only by its pipeline, so the choice exists on the other sinks.
-	if (GetAlphaMode() != assetlib::AlphaMode::kOpaque)
-	{
-		m_DoubleSidedBox = new QCheckBox(m_Widget);
-		m_DoubleSidedBox->setChecked(m_DoubleSided);
-		m_DoubleSidedBox->setToolTip(QStringLiteral(
-			"Draw the back of each face too. Off, a card seen from behind is culled before it "
-			"reaches the rasterizer, which is most of what a dense hair costs at close range."));
-		form->addRow(QStringLiteral("Double Sided"), m_DoubleSidedBox);
+	m_DoubleSidedBox = new QCheckBox(m_Widget);
+	m_DoubleSidedBox->setChecked(m_DoubleSided);
+	m_DoubleSidedBox->setToolTip(QStringLiteral(
+		"Draw the back of each face too. Off, a face seen from behind is culled before it reaches "
+		"the rasterizer, which is most of what a dense hair costs at close range."));
+	form->addRow(QStringLiteral("Double Sided"), m_DoubleSidedBox);
 
-		connect(m_DoubleSidedBox, &QCheckBox::toggled, this, [this](bool checked) {
-			m_DoubleSided = checked;
-			Q_EMIT Changed();
-		});
-	}
+	connect(m_DoubleSidedBox, &QCheckBox::toggled, this, [this](bool checked) {
+		m_DoubleSided = checked;
+		Q_EMIT Changed();
+	});
 
 	// Queued, not called directly: the click arrives while the proxy widget is dispatching the mouse
 	// event, and QColorDialog::getColor spins a nested event loop. Opening it once the proxy has
