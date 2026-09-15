@@ -62,6 +62,17 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
+	// The material arena, for every pass whose pixel stages read records and textures out of it:
+	// Forward's shading, and the static-depth receiver's coverage stages. The typed view is bound
+	// off the draw rather than through the graph -- a view is not a resource -- but the arena is
+	// still declared so its barriers are placed.
+	constexpr std::array<SceneBuffer, 1> c_MaterialBuffers = {
+		{ { c_MaterialArenaBufferName,
+		    "materials",
+		    BarrierAccessFlag::kShaderResource,
+		    BarrierSyncFlag::kPixelShader } }
+	};
+
 	// The rig tables the skinned vertex evaluation reads, whichever pose source a placement draws
 	// from. They live here beside the geometry tables because every pass built on the tier-branching
 	// geometry stage declares and binds both sets.

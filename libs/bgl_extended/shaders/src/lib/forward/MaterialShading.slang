@@ -69,31 +69,22 @@ public extension MaterialData
         return ShadeSurfaceBlended(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
     }
 
-    public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
+    // The one cutout coverage decision, taking the sampled base colour as SurfaceOf does: the
+    // tested shading path reuses its single sample, and the receiver's depth-only stage samples
+    // for itself and shades nothing -- either way its depth agrees with the colour pass texel for
+    // texel.
+    public void DiscardUncoveredAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(M material, float4 baseColor)
     {
-        M material = M.Load(input.materialOffset);
-
-        let baseColor = material.GetBaseColor(input.uv);
-
         if (baseColor.a < material.GetAlphaCutoff())
         {
             discard;
         }
-
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 1.0);
     }
 
-    // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
-    // alpha, and writes real depth like any opaque surface. One frame of it is noise; the ensemble over
-    // pixels and frames is the blend, which is why this pairs with temporal AA and not without it.
-    //
-    // The material's alphaCutoff is deliberately unused. A cutoff is the thing being replaced, and
-    // applying both would put back the binary silhouette that costs the surface its layers.
-    public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
+    // The one hashed coverage decision; see ShadeHashedAlpha for what the scheme is.
+    public void DiscardUncoveredHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input)
     {
         M material = M.Load(input.materialOffset);
-
-        let baseColor = material.GetBaseColor(input.uv);
 
         // At minification the sampled alpha is many strands averaged, and coverage that honestly
         // matches it is a haze the backdrop swallows. The alpha driving the hash is read one level
@@ -111,7 +102,30 @@ public extension MaterialData
         {
             discard;
         }
+    }
 
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 0.0);
+    public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
+    {
+        M material = M.Load(input.materialOffset);
+
+        let baseColor = material.GetBaseColor(input.uv);
+        DiscardUncoveredAlphaTested(material, baseColor);
+
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 1.0);
+    }
+
+    // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
+    // alpha, and writes real depth like any opaque surface. One frame of it is noise; the ensemble over
+    // pixels and frames is the blend, which is why this pairs with temporal AA and not without it.
+    //
+    // The material's alphaCutoff is deliberately unused. A cutoff is the thing being replaced, and
+    // applying both would put back the binary silhouette that costs the surface its layers.
+    public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
+    {
+        DiscardUncoveredHashedAlpha<M>(input);
+
+        M material = M.Load(input.materialOffset);
+
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace), 0.0);
     }
 }
