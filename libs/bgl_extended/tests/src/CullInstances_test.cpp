@@ -22,6 +22,7 @@
 #include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/InstanceFlag.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
@@ -50,6 +51,7 @@ namespace
 	{
 		glm::vec3 position;
 		bool      visible;
+		bool      hidden = false;
 	};
 }
 
@@ -88,20 +90,25 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	const bgl::idl::CullView cullViewData = bgl::BuildCullView(viewProj);
 
 	const Placement placements[] = {
-		{ glm::vec3(0.0f, 0.0f, -10.0f), true },     // straight ahead
-		{ glm::vec3(0.0f, 0.0f, -50.0f), true },     // deeper
-		{ glm::vec3(5.0f, 0.0f, -20.0f), true },     // off-axis but inside
-		{ glm::vec3(0.0f, 0.0f, 10.0f), false },     // behind the eye
-		{ glm::vec3(0.0f, 0.0f, -200.0f), false },   // beyond the far plane
-		{ glm::vec3(200.0f, 0.0f, -10.0f), false },  // past the right plane
+		{ glm::vec3(0.0f, 0.0f, -10.0f), true },         // straight ahead
+		{ glm::vec3(0.0f, 0.0f, -50.0f), true },         // deeper
+		{ glm::vec3(5.0f, 0.0f, -20.0f), true },         // off-axis but inside
+		{ glm::vec3(0.0f, 0.0f, 10.0f), false },         // behind the eye
+		{ glm::vec3(0.0f, 0.0f, -200.0f), false },       // beyond the far plane
+		{ glm::vec3(200.0f, 0.0f, -10.0f), false },      // past the right plane
+		{ glm::vec3(0.0f, 0.0f, -15.0f), false, true },  // dead ahead, but hidden
 	};
 	constexpr uint32_t c_LiveCount = static_cast<uint32_t>(std::size(placements));
 	const uint32_t     padded      = core::round_up(c_LiveCount, bgl::idl::cHistogramGroupSize);
 
+	// A hidden placement is decided by its flag, not a frustum: never visible, and neither tested
+	// nor counted culled.
 	uint32_t expectedCulled = 0;
+	uint32_t hiddenCount    = 0;
 	for (const Placement& p : placements)
 	{
-		expectedCulled += p.visible ? 0u : 1u;
+		hiddenCount += p.hidden ? 1u : 0u;
+		expectedCulled += (p.visible || p.hidden) ? 0u : 1u;
 	}
 
 	// One submesh, a unit sphere at its own origin, shared by every mesh. Each instance's world
@@ -149,8 +156,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	for (const Placement& p : placements)
 	{
-		auto mesh = bgl::idl::MeshInstance();
-		mesh.geom = geomHandle;
+		auto mesh  = bgl::idl::MeshInstance();
+		mesh.geom  = geomHandle;
+		mesh.flags = p.hidden ? static_cast<uint32_t>(bgl::InstanceFlag::kHidden) : 0u;
 		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);
@@ -335,7 +343,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		CHECK((visibilityOut[i].visible != 0u) == placements[i].visible);
 		visibleCount += visibilityOut[i].visible != 0u ? 1u : 0u;
 	}
-	CHECK(visibleCount == c_LiveCount - expectedCulled);
+	CHECK(visibleCount == c_LiveCount - expectedCulled - hiddenCount);
 
 	// Padding slots name no mesh, so the cull writes them 0.
 	for (uint32_t i = c_LiveCount; i < padded; ++i)
@@ -349,7 +357,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	const auto* statsOut =
 		static_cast<const bgl::idl::CullStats*>(resourceManager->MapReadback(rbStats));
 	REQUIRE(statsOut != nullptr);
-	CHECK(statsOut->tested == c_LiveCount);            // every live instance is tested
+	CHECK(statsOut->tested == c_LiveCount - hiddenCount);  // every unhidden live instance is tested
 	CHECK(statsOut->frustumCulled == expectedCulled);  // and the outside ones are counted culled
 	resourceManager->UnmapReadback(rbStats);
 #endif

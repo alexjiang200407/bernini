@@ -27,6 +27,10 @@ public struct MeshInstance
     // the PSO table.
     public RawEntry<IPlayback> playback;
 
+    // InstanceFlag bits; zero is the default behaviour. Read by every GPU stage that reaches the
+    // placement, so a bit takes effect in all of them at once.
+    public uint flags;
+
     // The placement as one affine matrix, the implied fourth row filled in.
     public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
 

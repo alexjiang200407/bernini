@@ -403,6 +403,13 @@ flowchart TD
   twice in a frame reports the same velocity as writing once, and an instance not written this
   frame reports exactly zero. A per-instance CPU write, so it is not the path for moving a crowd
   every frame: each scattered write uploads a block.
+* **`SetInstanceFlags(instance, flags)` / `GetInstanceFlags(instance)`** — the placement's whole
+  `InstanceFlags` word (`core::enum_set<InstanceFlag, uint32_t>`, `<bgl/types/InstanceFlags.h>`),
+  written into the placement's GPU record so every stage that reaches it reads the same bits. Zero
+  is the default behaviour, so each `InstanceFlag` names an exception. `kHidden` draws the
+  placement in no pass — the cull drops it before the counting sort, and the blob-shadow and
+  selection lists skip it — while it is still posed, so unhiding shows the pose it is in. A change
+  to what is drawn moves the temporal epoch, as `DeleteMeshInstance` does.
 * **`SetSubmeshMaterialOverride(instance, submeshIndex, material)`** — overrides one submesh of *one*
   instance, outranking the geom default; a later `Scene::SetSubmeshMaterial` does not disturb it. Same
   raw-slot hazard as `DeleteMaterial`: clear the override before deleting the material it names. The

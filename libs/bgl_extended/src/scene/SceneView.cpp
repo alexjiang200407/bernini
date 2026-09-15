@@ -18,6 +18,7 @@
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/InstanceFlag.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/RigHandle.h>
@@ -25,6 +26,7 @@
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl/types/InstanceFlags.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
@@ -397,6 +399,54 @@ namespace bgl
 		}
 
 		return ReadInstanceTransform(m_MeshBuffer.AtIndex(instance.handle.index));
+	}
+
+	void
+	SceneView::SetInstanceFlags(MeshInstanceHandle instance, InstanceFlags flags)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to SetInstanceFlags is invalid or already removed");
+		}
+
+		auto       mesh     = m_MeshBuffer.AtIndex(instance.handle.index);
+		const auto previous = InstanceFlags(mesh.flags);
+		if (previous == flags)
+		{
+			return;
+		}
+
+		mesh.flags = flags.underlying();
+		m_MeshBuffer.Set(instance.handle, mesh);
+
+		if ((previous ^ flags).any(InstanceFlag::kHidden))
+		{
+			// The CPU-built lists skip a hidden placement, so a toggle stales the ones it is in.
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+			if (meta.blobShadow.has_value())
+			{
+				m_BlobShadowsDirty = true;
+			}
+			if (std::ranges::any_of(meta.selected, [](const uint8_t s) { return s != 0; }))
+			{
+				m_SelectionDirty = true;
+			}
+
+			++m_TemporalEpoch;
+		}
+	}
+
+	InstanceFlags
+	SceneView::GetInstanceFlags(MeshInstanceHandle instance) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to GetInstanceFlags is invalid or already removed");
+		}
+
+		return InstanceFlags(m_MeshBuffer.AtIndex(instance.handle.index).flags);
 	}
 
 	bool
@@ -1135,7 +1185,8 @@ namespace bgl
 			}
 
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
-			if (!meta.blobShadow.has_value())
+			if (!meta.blobShadow.has_value() ||
+			    InstanceFlags(m_MeshBuffer.AtIndex(meshIndex).flags).any(InstanceFlag::kHidden))
 			{
 				continue;
 			}
@@ -1159,6 +1210,11 @@ namespace bgl
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
 			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			if (InstanceFlags(m_MeshBuffer.AtIndex(meshIndex).flags).any(InstanceFlag::kHidden))
 			{
 				continue;
 			}

@@ -155,6 +155,12 @@ namespace bgl
 		GetInstanceTransform(MeshInstanceHandle instance) const override;
 
 		void
+		SetInstanceFlags(MeshInstanceHandle instance, InstanceFlags flags) override;
+
+		[[nodiscard]] InstanceFlags
+		GetInstanceFlags(MeshInstanceHandle instance) const override;
+
+		void
 		SetFootIK(MeshInstanceHandle instance, const FootIKDesc& desc) override;
 
 		[[nodiscard]] FootIKDesc
