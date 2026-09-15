@@ -31,7 +31,7 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth + static depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
@@ -39,7 +39,8 @@ flowchart TD
         RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
-        CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
+        CI --> SD["Static Depth (static opaque buckets, depth only)"]
+        SD --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
         FWD --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
@@ -69,10 +70,12 @@ recorded under the frustum's scope and reach the view's own buffers by the outwa
 `DrawData` ([passes/DrawData.h](libs/bgl_extended/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
 state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
-view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour, motion-vector
-and depth handles), `lighting` (environment map, exposure, optional skybox) and `samplers`. The graph
+view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour,
+motion-vector, depth and static-depth handles), `lighting` (environment map, exposure, optional
+skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
-`c_SceneColorName` / `c_DepthName` in [constants/constants.h](libs/bgl_extended/src/constants/constants.h) are
+`c_SceneColorName` / `c_DepthName` / `c_StaticDepthName` in
+[constants/constants.h](libs/bgl_extended/src/constants/constants.h) are
 what both the importer and the passes name them by.
 
 ---
@@ -458,6 +461,27 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
   a table is written once and a discarded one would otherwise stay discarded.
 
+### Static Depth — [passes/StaticDepthPass.{h,cpp}](libs/bgl_extended/src/passes/StaticDepthPass.cpp)
+
+Renders the static geometry's depth into the target's own receiver texture (`staticDepth`, the
+scene depth's format and grid), ahead of `Forward`: what the blob-shadow decal reconstructs the
+surface under each pixel from. One depth-only pipeline — the `StaticMesh` geometry stage over
+`programs.forward.DepthOnly`, a pixel stage with no outputs, since a pipeline with no pixel shader
+at all is reflection-only on Metal — dispatched indirect once per opaque static bucket
+(`kOpaque_StaticMesh_*`, `kAssert_StaticMesh`, and each game slot's static opaque row) off the same
+`compactDispatchArgs` the Forward pass draws from, so it sees exactly the instances the cull kept.
+Statics only, deliberately: units are absent, so a blob shadow never lands on another unit passing
+beneath its caster — and statics are therefore drawn twice per frame, a cost the HZB milestone
+repays when this is promoted into the shared depth prepass the roadmap already assumes. The cutout
+and hashed static buckets do not render into it yet; until their coverage is evaluated here with
+the colour pass's seed, a shadow falls through foliage.
+
+* **In:** `compactDispatchArgs` as indirect args; the `c_ForwardDataBuffers` scene buffers and the
+  two `c_ExpansionBuffers`.
+* **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
+  `BlobShadowPhase`).
+* **Skipped** when the view's instance count is 0.
+
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
@@ -503,12 +527,24 @@ colour/velocity/depth framebuffer), and calls
 ForwardPass owns rather than a pass of its own, because a separate pass cannot interleave between
 two phases sharing one depth attachment — dispatches one mesh-shader group
 per placement carrying a blob shadow (`ISceneView::SetBlobShadow`), off the view's dense
-`scene.blobShadows` list — the pose list's shape. Each group reads its placement's transform from
-the mesh buffer, flattens a quad onto the scene's ground plane directly beneath it, and the pixel
-shader darkens by a radial falloff, shrinking and fading the disc with the placement's height
-above the plane (`programs.forward.BlobShadow`). The discs depth-test against the opaques and draw
+`scene.blobShadows` list — the pose list's shape. Each group emits a screen-space quad over the
+projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
+normal), and the pixel shader reconstructs the static surface under each pixel from the
+[Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
+radial falloff around the caster's axis and fading with the caster's per-pixel height above that
+surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
+than falling through to the ground plane. A receiver must also face up: the fragment reads the
+surface's normal off the reconstruction's screen-space derivatives and ramps the shadow out past
+~70° of tilt, so a wall beside the caster keeps its face while a walkable slope still catches at
+full strength. The fragment re-emits the receiver's depth as
+`SV_Depth` under a `kLessOrEqual` test, which is what still occludes the decal behind the full
+scene depth, units included. The decals draw
 before the transparents so smoke over a unit composites over its shadow too. Same blend state and
 same colour-only framebuffer as the transparent phase; a zero blob count skips the phase entirely.
+Receivers are static by construction — units are absent from the receiver texture, so a shadow
+never smears across another animal passing beneath. The cost of a static caster is that it is its
+own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
+remains is any upward-facing surface of the caster below its own origin.
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
@@ -537,7 +573,8 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
   buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`,
-  `sortedTransparentInstances`, and the one `c_MaterialBuffers` (the material arena; its typed view
+  `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
+  one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.

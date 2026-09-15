@@ -211,3 +211,168 @@ TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][
 
 	(void)groundInstance;
 }
+
+/**
+ * The decal drapes over what is actually there, not the ground plane.
+ *
+ * The same scene with a raised platform (a 2x2 plane) between the caster and the ground: the
+ * shadow must land on the platform's top, measured by the caster's height above *it* -- under the
+ * old one-plane projection these pixels read the plane behind the platform and the disc was
+ * depth-tested away entirely.
+ *
+ * Screen positions, camera at (0, 8, 14) looking at the origin, 800x600: the platform at y=1.2
+ * spans roughly y 251..281 on screen at centre x; the caster at y=1.7 sits at y 246..253; the
+ * sample box below the caster reads the platform top. With the platform lifted to y=3.0 it spans
+ * roughly y 196..220, clear of everything else.
+ */
+TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+
+	auto target = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 128;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 100000;
+	sceneDesc.initialIndices              = 4000;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	scene->SetGround(bgl::GroundPlaneDesc());
+
+	auto whiteDesc            = bgl::PbrMaterialDesc();
+	whiteDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	whiteDesc.metallicFactor  = 0.0f;
+	whiteDesc.roughnessFactor = 1.0f;
+
+	const auto white = scene->CreatePbrMaterial(whiteDesc);
+
+	const auto groundGeom   = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
+	const auto platformGeom = scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, white);
+	const auto casterGeom   = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
+
+	constexpr float c_PlatformY = 1.2f;
+	constexpr float c_CasterY   = 1.7f;
+
+	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
+	const auto platform       = view->CreateStaticMeshInstance(platformGeom, Lifted(c_PlatformY));
+	const auto caster         = view->CreateStaticMeshInstance(casterGeom, Lifted(c_CasterY));
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 8.0f, 14.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	const auto sample = [&](const char* name, int x, int y, int size) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+
+		const bgl::test::Rgba box =
+			bgl::test::MeanColor(path, x - size / 2, y - size / 2, size, size);
+
+		std::filesystem::remove(path);
+		return box.Luma();
+	};
+
+	auto desc       = bgl::BlobShadowDesc();
+	desc.radius     = c_Radius;
+	desc.intensity  = c_Intensity;
+	desc.fadeHeight = c_FadeHeight;
+
+	SECTION("the shadow lands on the platform top and fades against it")
+	{
+		// In the platform's dark core, below the caster's own pixels.
+		const int boxX = 400;
+		const int boxY = 270;
+
+		const float base = sample("bernini_blob_platform_base", boxX, boxY, 14);
+		REQUIRE(base > 0.05f);
+
+		// The caster hovers 0.5 above the platform top: measured against the *platform* the gap
+		// is a quarter of the fade height and the shadow lands strong. Under the superseded
+		// one-plane projection these pixels showed no shadow at all -- the disc lay on the ground
+		// behind the platform and was depth-tested away -- so any solid darkening here is the
+		// decal draping.
+		view->SetBlobShadow(caster, desc);
+		const float shadowed = sample("bernini_blob_platform_shadowed", boxX, boxY, 14);
+		CHECK(shadowed < base * 0.9f);
+
+		// More than fadeHeight above the platform top clears it.
+		view->SetInstanceTransform(caster, Lifted(c_PlatformY + c_FadeHeight * 1.25f));
+		const float cleared = sample("bernini_blob_platform_cleared", boxX, boxY, 14);
+		CHECK(cleared > base * 0.95f);
+	}
+
+	SECTION("a wall beside the caster catches nothing")
+	{
+		// The platform stood vertical: plane geoms are authored in XY, so an unrotated placement
+		// is a wall facing the camera, beside the caster and well inside the disc radius.
+		view->SetInstanceTransform(
+			platform,
+			glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 1.0f, 0.0f)));
+
+		// Mid-face of the wall, clear of the caster and of the ground line at its base.
+		const int boxX = 450;
+		const int boxY = 271;
+
+		const float base = sample("bernini_blob_wall_base", boxX, boxY, 12);
+		REQUIRE(base > 0.05f);
+
+		// A blob shadow lands on what faces up: the wall's face points at the camera, so it must
+		// keep its brightness while the ground at its base still catches the disc.
+		view->SetBlobShadow(caster, desc);
+		const float wall = sample("bernini_blob_wall", boxX, boxY, 12);
+		CHECK(wall > base * 0.95f);
+	}
+
+	SECTION("a receiver above the caster catches nothing")
+	{
+		view->SetInstanceTransform(platform, Lifted(3.0f));
+
+		// On the lifted platform's top, which now hangs over the caster.
+		const int boxX = 400;
+		const int boxY = 208;
+
+		const float base = sample("bernini_blob_overhead_base", boxX, boxY, 12);
+		REQUIRE(base > 0.05f);
+
+		// A shadow falls down: the overhead platform sits above its caster and must not darken.
+		view->SetBlobShadow(caster, desc);
+		const float overhead = sample("bernini_blob_overhead", boxX, boxY, 12);
+		CHECK(overhead > base * 0.95f);
+	}
+
+	(void)groundInstance;
+}

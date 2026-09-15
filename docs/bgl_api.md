@@ -423,15 +423,18 @@ flowchart TD
   exactly when neither throws, for a caller that cannot tell a rig's legs from outside. See
   [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetBlobShadow(instance, desc)` / `ClearBlobShadow(instance)` / `GetBlobShadow(instance)`** —
-  the placement's blob shadow: a soft radial-falloff disc on the scene's ground plane directly
-  beneath it, drawn by the forward pass between the opaque buckets and the transparents,
-  shrinking and fading with the placement's height above the plane (gone at
-  `BlobShadowDesc::fadeHeight`). A contact cue, not a lighting term. Any placement may carry one;
-  the expected consumers are skinned units. Setting or clearing one bumps the temporal epoch — a
-  disc appearing is a rebind, not motion — and `DeleteMeshInstance` takes the disc with the
-  placement. @throws on an invalid handle, a non-positive or non-finite `radius` or
-  `fadeHeight`, or an `intensity` outside `[0, 1]`; `Get` returns empty for a placement carrying
-  none.
+  the placement's blob shadow: a soft radial-falloff decal draped over whatever static surface
+  lies directly beneath it — a crate top, a bush, the ground — drawn by the forward pass between
+  the opaque buckets and the transparents, shrinking and fading per pixel with the placement's
+  height above the surface it lands on (gone at `BlobShadowDesc::fadeHeight`). Receivers are
+  static geometry only — a shadow never lands on another unit — and a placement with no static
+  surface beneath it casts nothing. A contact cue, not a lighting term. Any placement may carry
+  one; the expected consumers are skinned units, and a *static* caster is its own nearest
+  receiver, darkening the surface it sits on at full strength. Setting or clearing one bumps the
+  temporal epoch — a decal appearing is a rebind, not motion — and `DeleteMeshInstance` takes the
+  shadow with the placement. @throws on an invalid handle, a non-positive or non-finite `radius`
+  or `fadeHeight`, or an `intensity` outside `[0, 1]`; `Get` returns empty for a placement
+  carrying none.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
