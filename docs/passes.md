@@ -543,7 +543,8 @@ before the transparents so smoke over a unit composites over its shadow too. Sam
 same colour-only framebuffer as the transparent phase; a zero blob count skips the phase entirely.
 Receivers are static by construction — units are absent from the receiver texture, so a shadow
 never smears across another animal passing beneath. The cost of a static caster is that it is its
-own receiver: the surface directly under it sits at zero gap and darkens fully.
+own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
+remains is any upward-facing surface of the caster below its own origin.
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
