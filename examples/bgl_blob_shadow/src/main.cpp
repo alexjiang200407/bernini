@@ -30,8 +30,8 @@
 namespace
 {
 	constexpr float c_CasterRadius = 0.35f;
-	constexpr float c_Hover        = 1.9f;
-	constexpr float c_Bob          = 0.35f;
+	constexpr float c_Hover        = 1.75f;
+	constexpr float c_Bob          = 0.2f;
 	constexpr float c_DiscRadius   = 0.9f;
 	constexpr float c_Intensity    = 0.85f;
 
@@ -142,7 +142,10 @@ main(int argc, char** argv)
 		const bgl::GeomHandle crate  = scene->AddCubeGeom(crateMaterial);
 		const bgl::GeomHandle ball   = scene->AddSphereGeom(32, 24, c_CasterRadius, casterMaterial);
 
-		(void)view->CreateStaticMeshInstance(ground, glm::mat4(1.0f));
+		// Plane geoms are authored in XY; this lays the ground flat with its normal up.
+		const glm::mat4 flat =
+			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		(void)view->CreateStaticMeshInstance(ground, flat);
 
 		// Two receivers of different heights across the caster's path: the disc should climb onto
 		// each top and drape over its edges rather than vanish beneath it. The cube geom spans
