@@ -174,10 +174,12 @@ namespace bgl
 		HasFootIK(MeshInstanceHandle instance) const noexcept = 0;
 
 		/**
-		 * Gives one placement a blob shadow: a soft radial-falloff disc on the scene's ground
-		 * plane directly beneath it, shrinking and fading as the placement rises -- see
-		 * BlobShadowDesc. Replaces any blob shadow the placement holds. Any placement may carry
-		 * one; the expected consumers are skinned units, which nothing enforces.
+		 * Gives one placement a blob shadow: a soft radial-falloff disc draped over the static
+		 * geometry directly beneath it, fading per pixel as the gap between the placement and the
+		 * surface grows -- see BlobShadowDesc. Only static, upward-facing surfaces receive it: a
+		 * unit never catches a neighbour's shadow, and a wall beside the placement keeps its face.
+		 * Replaces any blob shadow the placement holds. Any placement may carry one; the expected
+		 * consumers are skinned units, which nothing enforces.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
 		 *         `desc.fadeHeight` is not finite and positive, or `desc.intensity` is not

@@ -14,7 +14,8 @@ namespace bgl
 
 	/**
 	 * The blob-shadow phase of the Forward pass: one workgroup per placement carrying a blob
-	 * shadow, each emitting a disc flattened onto the scene's ground plane.
+	 * shadow, each emitting a screen-space decal that drapes over whatever static surface the
+	 * StaticDepth pass recorded beneath the caster.
 	 *
 	 * A phase and not a frame-graph pass of its own, because it must draw between the opaque
 	 * buckets and the transparent phase -- discs depth-test against the opaques, and smoke over a
