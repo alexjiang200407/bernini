@@ -6,6 +6,7 @@
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include <bgl/TextureAssetHandle.h>
 
+#include <QCheckBox>
 #include <QFormLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -370,4 +371,37 @@ TEST_CASE("A missing cutoff loads as the default", "[materialoutput]")
 	node.load(QJsonObject{});
 
 	REQUIRE(node.GetAlphaCutoff() == 0.5f);
+}
+
+// The renderer honours `doubleSided` on an opaque surface as on any other, so no sink hides the
+// choice: an opaque wall with nothing inside worth drawing is exactly where turning it off pays.
+TEST_CASE("Every material output offers Double Sided, opaque included", "[materialoutput]")
+{
+	const auto offersDoubleSided = [](auto& node) {
+		auto* form = node.embeddedWidget()->template findChild<QFormLayout*>();
+		REQUIRE(form != nullptr);
+
+		QCheckBox* box = nullptr;
+		for (int row = 0; row < form->rowCount(); ++row)
+		{
+			QLayoutItem* label = form->itemAt(row, QFormLayout::LabelRole);
+			QLayoutItem* field = form->itemAt(row, QFormLayout::FieldRole);
+			auto*        text = label != nullptr ? qobject_cast<QLabel*>(label->widget()) : nullptr;
+			if (text != nullptr && text->text() == QString("Double Sided") && field != nullptr)
+			{
+				box = qobject_cast<QCheckBox*>(field->widget());
+			}
+		}
+		REQUIRE(box != nullptr);
+
+		REQUIRE(node.GetDoubleSided());
+		box->setChecked(false);
+		CHECK_FALSE(node.GetDoubleSided());
+	};
+
+	MaterialOutputNode opaque;
+	offersDoubleSided(opaque);
+
+	AlphaTestedMaterialOutputNode cutout;
+	offersDoubleSided(cutout);
 }

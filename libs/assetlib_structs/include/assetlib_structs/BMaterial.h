@@ -84,8 +84,8 @@ namespace assetlib
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 
-		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
-		// default, since every such material drew both sides before the key existed.
+		// Whether back faces draw. True by default, since every non-opaque material drew both sides
+		// before the key existed.
 		bool doubleSided = true;
 	};
 

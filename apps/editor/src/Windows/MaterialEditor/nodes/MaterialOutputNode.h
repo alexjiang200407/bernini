@@ -127,8 +127,7 @@ public:
 		return 0.0f;
 	}
 
-	// Whether a non-opaque surface draws its back faces; glTF's doubleSided. Every sink but the
-	// opaque one offers it, and an opaque material draws front faces only whatever it holds.
+	// Whether the surface draws its back faces; glTF's doubleSided.
 	[[nodiscard]] bool
 	GetDoubleSided() const noexcept
 	{

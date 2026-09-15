@@ -11,7 +11,7 @@ public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness
  * The shading normal, with the normal map applied in the surface's tangent frame.
  *
  * `isFrontFace` is the rasterizer's own answer, from SV_IsFrontFace. A two-sided pipeline
- * (RasterCullMode::kNone -- every cutout, blend and hashed bucket) rasterizes the back of a surface
+ * (RasterCullMode::kNone -- every bucket that draws a material) rasterizes the back of a surface
  * with the interpolated normal still pointing away from the camera, which sends the view angle, the
  * irradiance lookup and the reflection vector all to the wrong hemisphere.
  *
