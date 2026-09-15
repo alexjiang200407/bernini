@@ -1,0 +1,36 @@
+{
+	"legs": [],
+	"parts": {
+		"head": "Owl Head",
+		"left_leg": {
+			"end": "Owl L Foot",
+			"start": "Owl L Thigh"
+		},
+		"left_wing": {
+			"end": "Owl L Hand",
+			"start": "Owl L UpperArm"
+		},
+		"neck": "Owl Neck",
+		"pelvis": "Owl Pelvis",
+		"right_leg": {
+			"end": "Owl R Foot",
+			"start": "Owl R Thigh"
+		},
+		"right_wing": {
+			"end": "Owl R Hand",
+			"start": "Owl R UpperArm"
+		},
+		"spine": {
+			"end": "Owl Spine1",
+			"start": "Owl Spine"
+		},
+		"tail": {
+			"end": "Owl Tail1",
+			"start": "Owl Tail"
+		},
+		"tongue": {
+			"end": "Owl Tongue03",
+			"start": "Owl Tongue"
+		}
+	}
+}
