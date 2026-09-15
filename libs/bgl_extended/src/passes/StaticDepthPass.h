@@ -1,5 +1,7 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
+#include <array>
+#include <bgl/MaterialType.h>
 #include <spdlog/spdlog.h>
 
 namespace bgl
@@ -40,6 +42,10 @@ namespace bgl
 		Release()
 		{
 			m_Kernel.Reset();
+			for (MeshletKernel& kernel : m_CoverageKernels)
+			{
+				kernel.Reset();
+			}
 		}
 
 		void
@@ -53,9 +59,18 @@ namespace bgl
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
 
 	private:
+		static void
+		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
+
 		void
 		Execute(const DrawData& draw, const PassContext& resources);
 
-		MeshletKernel m_Kernel;
+		// One pipeline serves every opaque static bucket; the coverage buckets each pair the same
+		// geometry stage with their own discard-only pixel stage, one kernel per static cutout and
+		// hashed row (engine PBR and loose, then each game slot's pair).
+		static constexpr uint32_t c_CoverageKernelCount = 4 + 2 * cGameSlots;
+
+		MeshletKernel                                    m_Kernel;
+		std::array<MeshletKernel, c_CoverageKernelCount> m_CoverageKernels;
 	};
 }
