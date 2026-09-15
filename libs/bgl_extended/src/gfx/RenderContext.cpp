@@ -202,6 +202,7 @@ namespace bgl
 		m_RigFrames.Init(m_Device.Get(), pipelines);
 		m_SkinnedPose.Init(m_Device.Get(), pipelines);
 		m_TransparentSort.Init(m_Device.Get(), pipelines);
+		m_StaticDepth.Init(m_Device.Get(), pipelines);
 		m_Forward.Init(m_Device.Get(), pipelines);
 		m_Skybox.Init(m_Device.Get(), pipelines);
 		m_PostProcess.Init(m_Device.Get(), pipelines);
@@ -212,6 +213,7 @@ namespace bgl
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
+		m_StaticDepth.CheckBindings();
 		m_Forward.CheckBindings();
 		m_Skybox.CheckBindings();
 		m_PostProcess.CheckBindings();
@@ -264,6 +266,7 @@ namespace bgl
 				m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
 			}
 		}
+		m_StaticDepth.Release();
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
@@ -565,6 +568,7 @@ namespace bgl
 		m_FrameGraph.ImportTexture(c_MotionVectorsName, rt.GetMotionVectorTexture());
 		m_FrameGraph.ImportTexture(c_SceneColorName, rt.GetSceneColorTexture());
 		m_FrameGraph.ImportTexture(c_DepthName, rt.GetDepthTexture());
+		m_FrameGraph.ImportTexture(c_StaticDepthName, rt.GetStaticDepthTexture());
 		m_FrameGraph.ImportTexture(c_OutlineMaskName, rt.GetOutlineMaskTexture());
 
 		if (rt.IsTaaEnabled())
@@ -587,12 +591,12 @@ namespace bgl
 			    rt.GetOutlineMaskRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
-		ClearPass().AttachToFrameGraph(
-			m_FrameGraph,
-			m_ResourceManager.Get(),
-			colorTargets,
-			std::string(c_DepthName),
-			rt.GetDepthDsv());
+		const std::array<ClearPass::DepthTarget, 2> depthTargets{
+			{ { std::string(c_DepthName), rt.GetDepthDsv() },
+			  { std::string(c_StaticDepthName), rt.GetStaticDepthDsv() } }
+		};
+		ClearPass()
+			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, depthTargets);
 
 		m_FrameActive = true;
 	}
@@ -705,6 +709,8 @@ namespace bgl
 		draw.targets.depth                = m_ActiveTarget->GetDepthDsv();
 		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
+		draw.targets.staticDepth          = m_ActiveTarget->GetStaticDepthDsv();
+		draw.targets.staticDepthSrv       = m_ActiveTarget->GetStaticDepthSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -761,6 +767,7 @@ namespace bgl
 		// sort, which reads it.
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
+		m_StaticDepth.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 
 		if (const auto selected = view->GetSelectedInstances();

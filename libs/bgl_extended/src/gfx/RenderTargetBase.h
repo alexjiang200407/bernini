@@ -244,6 +244,21 @@ namespace bgl
 		GetDepthSrv() const noexcept = 0;
 
 		/**
+		 * The static receivers' depth, written by the StaticDepth pass ahead of the geometry and
+		 * read back by the blob-shadow decal. Its own texture rather than a prefilled scene depth,
+		 * so the Forward pass's depth test is untouched; sized with the render grid like the
+		 * attachment it mirrors.
+		 */
+		[[nodiscard]] virtual DsvHandle
+		GetStaticDepthDsv() const noexcept = 0;
+
+		[[nodiscard]] virtual TextureHandle
+		GetStaticDepthTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual SrvHandle
+		GetStaticDepthSrv() const noexcept = 0;
+
+		/**
 		 * The screen-space velocity buffer the forward pass writes alongside colour: for each pixel,
 		 * the UV displacement from where its surface was last frame to where it is now, so history is
 		 * sampled at `uv - motion`. Cleared to zero, so a pixel nothing drew reads as static.
