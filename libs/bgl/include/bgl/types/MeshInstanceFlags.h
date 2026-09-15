@@ -6,6 +6,6 @@
 
 namespace bgl
 {
-	/** A placement's flags word, as ISceneView::SetInstanceFlags takes it. Empty is the default. */
+	/** A placement's flags word, as ISceneView::SetMeshInstanceFlags takes it. Empty is the default. */
 	using MeshInstanceFlags = core::enum_set<MeshInstanceFlag, uint32_t>;
 }

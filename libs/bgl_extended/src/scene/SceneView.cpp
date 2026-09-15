@@ -402,12 +402,12 @@ namespace bgl
 	}
 
 	void
-	SceneView::SetInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags)
+	SceneView::SetMeshInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags)
 	{
 		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
 		{
 			throw SceneError(
-				"MeshInstanceHandle passed to SetInstanceFlags is invalid or already removed");
+				"MeshInstanceHandle passed to SetMeshInstanceFlags is invalid or already removed");
 		}
 
 		auto       mesh     = m_MeshBuffer.AtIndex(instance.handle.index);
@@ -438,12 +438,12 @@ namespace bgl
 	}
 
 	MeshInstanceFlags
-	SceneView::GetInstanceFlags(MeshInstanceHandle instance) const
+	SceneView::GetMeshInstanceFlags(MeshInstanceHandle instance) const
 	{
 		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
 		{
 			throw SceneError(
-				"MeshInstanceHandle passed to GetInstanceFlags is invalid or already removed");
+				"MeshInstanceHandle passed to GetMeshInstanceFlags is invalid or already removed");
 		}
 
 		return MeshInstanceFlags(m_MeshBuffer.AtIndex(instance.handle.index).flags);

@@ -135,13 +135,13 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstancefl
 	{
 		const float shown = sample("bernini_flags_shown", c_CubeX, c_CubeY);
 
-		view->SetInstanceFlags(cube, hidden);
+		view->SetMeshInstanceFlags(cube, hidden);
 		const float gone = sample("bernini_flags_hidden", c_CubeX, c_CubeY);
 
 		// The black face gives way to the lit white ground behind it.
 		CHECK(gone > shown + 0.3f);
 
-		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
+		view->SetMeshInstanceFlags(cube, bgl::MeshInstanceFlags());
 		const float back = sample("bernini_flags_unhidden", c_CubeX, c_CubeY);
 		CHECK(std::abs(back - shown) < 0.02f);
 	}
@@ -165,11 +165,11 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstancefl
 
 		// Without TAA both captures are deterministic, so the shadow's absence reads as the base
 		// itself rather than as merely lighter.
-		view->SetInstanceFlags(cube, hidden);
+		view->SetMeshInstanceFlags(cube, hidden);
 		const float cleared = sample("bernini_flags_blob_hidden", c_GroundX, c_GroundY);
 		CHECK(cleared > base * 0.98f);
 
-		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
+		view->SetMeshInstanceFlags(cube, bgl::MeshInstanceFlags());
 		const float returned = sample("bernini_flags_blob_unhidden", c_GroundX, c_GroundY);
 		CHECK(returned < base * 0.92f);
 	}
@@ -183,32 +183,34 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstancefl
 		CHECK(sceneView->GetSelectedInstances().size() == 1);
 
 		// The outline is drawn off this list, so a hidden selected placement draws no contour.
-		view->SetInstanceFlags(cube, hidden);
+		view->SetMeshInstanceFlags(cube, hidden);
 		CHECK(sceneView->GetSelectedInstances().empty());
 
 		// The selection itself survives the hide.
 		CHECK(view->IsSubmeshSelected(cube, 0));
 
-		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
+		view->SetMeshInstanceFlags(cube, bgl::MeshInstanceFlags());
 		CHECK(sceneView->GetSelectedInstances().size() == 1);
 	}
 
 	SECTION("the word round-trips and refuses a dead handle")
 	{
-		CHECK(view->GetInstanceFlags(cube).empty());
+		CHECK(view->GetMeshInstanceFlags(cube).empty());
 
-		view->SetInstanceFlags(cube, hidden);
-		CHECK(view->GetInstanceFlags(cube) == hidden);
+		view->SetMeshInstanceFlags(cube, hidden);
+		CHECK(view->GetMeshInstanceFlags(cube) == hidden);
 
-		view->SetInstanceFlags(cube, bgl::MeshInstanceFlags());
-		CHECK(view->GetInstanceFlags(cube).empty());
+		view->SetMeshInstanceFlags(cube, bgl::MeshInstanceFlags());
+		CHECK(view->GetMeshInstanceFlags(cube).empty());
 
-		CHECK_THROWS_AS(view->SetInstanceFlags(bgl::MeshInstanceHandle(), hidden), bgl::SceneError);
-		CHECK_THROWS_AS(view->GetInstanceFlags(bgl::MeshInstanceHandle()), bgl::SceneError);
+		CHECK_THROWS_AS(
+			view->SetMeshInstanceFlags(bgl::MeshInstanceHandle(), hidden),
+			bgl::SceneError);
+		CHECK_THROWS_AS(view->GetMeshInstanceFlags(bgl::MeshInstanceHandle()), bgl::SceneError);
 
 		view->DeleteMeshInstance(cube);
-		CHECK_THROWS_AS(view->SetInstanceFlags(cube, hidden), bgl::SceneError);
-		CHECK_THROWS_AS(view->GetInstanceFlags(cube), bgl::SceneError);
+		CHECK_THROWS_AS(view->SetMeshInstanceFlags(cube, hidden), bgl::SceneError);
+		CHECK_THROWS_AS(view->GetMeshInstanceFlags(cube), bgl::SceneError);
 	}
 
 	(void)groundInstance;

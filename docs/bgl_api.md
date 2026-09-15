@@ -403,7 +403,7 @@ flowchart TD
   twice in a frame reports the same velocity as writing once, and an instance not written this
   frame reports exactly zero. A per-instance CPU write, so it is not the path for moving a crowd
   every frame: each scattered write uploads a block.
-* **`SetInstanceFlags(instance, flags)` / `GetInstanceFlags(instance)`** — the placement's whole
+* **`SetMeshInstanceFlags(instance, flags)` / `GetMeshInstanceFlags(instance)`** — the placement's whole
   `MeshInstanceFlags` word (`core::enum_set<MeshInstanceFlag, uint32_t>`, `<bgl/types/MeshInstanceFlags.h>`),
   written into the placement's GPU record so every stage that reaches it reads the same bits. Zero
   is the default behaviour, so each `MeshInstanceFlag` names an exception. `kHidden` draws the

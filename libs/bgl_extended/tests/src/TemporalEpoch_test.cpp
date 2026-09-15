@@ -129,13 +129,13 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 
 		const auto hidden = bgl::MeshInstanceFlags(bgl::MeshInstanceFlag::kHidden);
 
-		view->SetInstanceFlags(instance, hidden);
+		view->SetMeshInstanceFlags(instance, hidden);
 		CHECK(view->AdvanceTemporalEpoch());
 
-		view->SetInstanceFlags(instance, hidden);
+		view->SetMeshInstanceFlags(instance, hidden);
 		CHECK_FALSE(view->AdvanceTemporalEpoch());
 
-		view->SetInstanceFlags(instance, bgl::MeshInstanceFlags());
+		view->SetMeshInstanceFlags(instance, bgl::MeshInstanceFlags());
 		CHECK(view->AdvanceTemporalEpoch());
 	}
 }

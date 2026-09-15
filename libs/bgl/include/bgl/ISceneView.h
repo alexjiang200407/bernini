@@ -153,15 +153,15 @@ namespace bgl
 		 * @throws SceneError if the handle is invalid or already removed.
 		 */
 		virtual void
-		SetInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags) = 0;
+		SetMeshInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags) = 0;
 
 		/**
-		 * The word SetInstanceFlags last wrote, or empty.
+		 * The word SetMeshInstanceFlags last wrote, or empty.
 		 *
 		 * @throws SceneError if the handle is invalid or already removed.
 		 */
 		[[nodiscard]] virtual MeshInstanceFlags
-		GetInstanceFlags(MeshInstanceHandle instance) const = 0;
+		GetMeshInstanceFlags(MeshInstanceHandle instance) const = 0;
 
 		/**
 		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
