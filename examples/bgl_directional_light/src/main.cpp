@@ -24,6 +24,7 @@
 #include <exception>
 #include <format>
 #include <gamelib/AssetManager.h>
+#include <headless/headless_render.h>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -45,18 +46,6 @@ namespace
 	constexpr float    c_GroundSize   = 60.0f;
 	constexpr float    c_OrbitSeconds = 24.0f;
 
-	/** Where the sun sits on the sky dome, as the direction its light travels -- so, downward. */
-	[[nodiscard]] glm::vec3
-	SunDirection(float azimuth, float elevation) noexcept
-	{
-		const auto toSun = glm::vec3(
-			std::cos(elevation) * std::sin(azimuth),
-			std::sin(elevation),
-			std::cos(elevation) * std::cos(azimuth));
-
-		return -toSun;
-	}
-
 	struct Sun
 	{
 		float     azimuth   = glm::radians(35.0f);
@@ -69,7 +58,7 @@ namespace
 		[[nodiscard]] bgl::DirectionalLightDesc
 		Desc() const noexcept
 		{
-			return { .direction = SunDirection(azimuth, elevation),
+			return { .direction = headless::SunDirection(azimuth, elevation),
 				     .color     = color,
 				     .intensity = on ? intensity : 0.0f };
 		}

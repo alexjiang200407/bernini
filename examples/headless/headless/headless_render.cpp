@@ -82,4 +82,15 @@ namespace headless
 			return false;
 		}
 	}
+
+	glm::vec3
+	SunDirection(float azimuth, float elevation) noexcept
+	{
+		const auto toSun = glm::vec3(
+			std::cos(elevation) * std::sin(azimuth),
+			std::sin(elevation),
+			std::cos(elevation) * std::cos(azimuth));
+
+		return -toSun;
+	}
 }
