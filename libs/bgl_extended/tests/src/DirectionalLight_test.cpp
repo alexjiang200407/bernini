@@ -9,10 +9,12 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/Viewport.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -48,6 +50,15 @@ namespace
 	constexpr int c_BoxX    = 192;
 	constexpr int c_BoxY    = 142;
 
+	// Two boxes the same size, equally far either side of the centre on the same plane. With a
+	// head-on sun the diffuse term is identical at all three -- a plane's normal does not vary -- so
+	// every difference between them is the specular lobe. The pair is what says the lobe is
+	// *centred* rather than merely present: one box brighter than another only says the frame is not
+	// uniform, and a lobe sitting anywhere else would break their symmetry.
+	constexpr int c_TailY      = 142;
+	constexpr int c_LeftTailX  = 60;
+	constexpr int c_RightTailX = 324;
+
 	constexpr float c_Albedo    = 0.5f;
 	constexpr float c_Intensity = 0.6f;
 
@@ -57,10 +68,18 @@ namespace
 
 	struct Probe
 	{
-		bgl::GraphicsRef     gfx;
-		bgl::RenderTargetRef target;
-		bgl::SceneRef        scene;
-		bgl::SceneViewRef    view;
+		bgl::GraphicsRef        gfx;
+		bgl::RenderTargetRef    target;
+		bgl::SceneRef           scene;
+		bgl::SceneViewRef       view;
+		bgl::MeshInstanceHandle plane;
+
+		/// Repaints the plane, so one device can sweep a material parameter across several shots.
+		void
+		Repaint(const bgl::PbrMaterialDesc& desc)
+		{
+			view->SetSubmeshMaterialOverride(plane, 0, scene->CreatePbrMaterial(desc));
+		}
 	};
 
 	/**
@@ -133,14 +152,14 @@ namespace
 
 		// Normal +Z, facing the camera, and wider than the frustum at this distance.
 		const auto plane = probe.scene->AddPlaneGeom(1, 1, 40.0f, 40.0f, matte);
-		(void)probe.view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+		probe.plane      = probe.view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		return probe;
 	}
 
-	/** Renders the probe and returns the mean colour of the sample box. */
-	bgl::test::Rgba
-	Shoot(Probe& probe, const std::string& name)
+	/** Renders the probe and returns the path of the PNG it wrote. */
+	std::string
+	ShootFrame(Probe& probe, const std::string& name)
 	{
 		auto camera = bgl::Camera();
 		camera.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
@@ -163,7 +182,21 @@ namespace
 		const auto shot = "assets/golden/directional_light_" + name + ".got.png";
 		probe.gfx->ScreenshotPng(probe.target, shot);
 
-		return bgl::test::MeanColor(shot, c_BoxX, c_BoxY, c_BoxSize, c_BoxSize);
+		return shot;
+	}
+
+	/** The mean colour of the `c_BoxSize` box at (`x`, `y`) of an already-rendered frame. */
+	bgl::test::Rgba
+	Box(const std::string& shot, int x, int y)
+	{
+		return bgl::test::MeanColor(shot, x, y, c_BoxSize, c_BoxSize);
+	}
+
+	/** The centre box, which is where a head-on sun's specular peak lands on this plane. */
+	bgl::test::Rgba
+	Shoot(Probe& probe, const std::string& name)
+	{
+		return Box(ShootFrame(probe, name), c_BoxX, c_BoxY);
 	}
 
 	/** Where a scene-linear grey lands on screen, as the shipped tone map puts it. */
@@ -306,4 +339,105 @@ TEST_CASE("SetDirectionalLight refuses a light that cannot be shaded", "[light]"
 		probe.view->SetDirectionalLight(
 			{ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = c_Nan }),
 		bgl::SceneError);
+}
+
+// A plane's normal does not vary, so a head-on sun lights every point of it with the same diffuse
+// term. Any difference between the centre of the frame and a box well off to the side is therefore
+// the specular lobe and nothing else -- no absolute level has to be known, and no second render has
+// to be subtracted. The peak sits at the centre because that is the one point whose view direction
+// mirrors the sun about the normal.
+TEST_CASE(
+	"A directional light's specular lobe peaks where the half vector does",
+	"[pbr][light][render]")
+{
+	auto probe = MakeProbe(true);
+
+	probe.view->SetDirectionalLight(
+		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
+	      .color     = glm::vec3(1.0f),
+	      .intensity = c_Intensity });
+
+	probe.Repaint(
+		{ .baseColorFactor = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f),
+	      .metallicFactor  = 0.0f,
+	      .roughnessFactor = 0.12f,
+	      .specularFactor  = 1.0f });
+
+	const auto sharp      = ShootFrame(probe, "spec_sharp");
+	const auto sharpPeak  = Box(sharp, c_BoxX, c_BoxY);
+	const auto sharpLeft  = Box(sharp, c_LeftTailX, c_TailY);
+	const auto sharpRight = Box(sharp, c_RightTailX, c_TailY);
+
+	INFO(
+		"sharp peak " << sharpPeak.Luma() << " left " << sharpLeft.Luma() << " right "
+					  << sharpRight.Luma());
+	CHECK(sharpPeak.Luma() > sharpLeft.Luma() + 0.05f);
+	CHECK(sharpPeak.Luma() > sharpRight.Luma() + 0.05f);
+
+	// Equally far either side, so a lobe centred anywhere but the predicted point separates them.
+	CHECK(std::abs(sharpLeft.Luma() - sharpRight.Luma()) < c_LevelMargin);
+
+	// Roughness widens the lobe and lowers its peak, so the same two boxes converge. Asserted as a
+	// ratio between them rather than on either alone: that is the shape of the lobe, and it holds
+	// whatever the tone map does to the level.
+	probe.Repaint(
+		{ .baseColorFactor = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f),
+	      .metallicFactor  = 0.0f,
+	      .roughnessFactor = 0.85f,
+	      .specularFactor  = 1.0f });
+
+	const auto rough     = ShootFrame(probe, "spec_rough");
+	const auto roughPeak = Box(rough, c_BoxX, c_BoxY);
+	const auto roughTail = Box(rough, c_LeftTailX, c_TailY);
+
+	INFO("rough peak " << roughPeak.Luma() << " tail " << roughTail.Luma());
+	CHECK(roughPeak.Luma() - roughTail.Luma() < sharpPeak.Luma() - sharpLeft.Luma());
+	CHECK(roughPeak.Luma() < sharpPeak.Luma());
+
+	// A dielectric with its specular switched off has no lobe to find: the plane goes flat again,
+	// which is what says the variation above came from the specular term and not from the geometry
+	// or the tone map.
+	probe.Repaint(
+		{ .baseColorFactor = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f),
+	      .metallicFactor  = 0.0f,
+	      .roughnessFactor = 0.12f,
+	      .specularFactor  = 0.0f });
+
+	const auto flat     = ShootFrame(probe, "spec_off");
+	const auto flatPeak = Box(flat, c_BoxX, c_BoxY);
+	const auto flatTail = Box(flat, c_LeftTailX, c_TailY);
+
+	INFO("specular off, peak " << flatPeak.Luma() << " tail " << flatTail.Luma());
+	CHECK(std::abs(flatPeak.Luma() - flatTail.Luma()) < c_LevelMargin);
+}
+
+// The gap task 1 left. A metal's kD is zero, so with a diffuse term alone a metal under a sun and
+// no environment is exactly black -- which is what this rendered before the specular lobe landed.
+TEST_CASE("A metal is lit by a directional light", "[pbr][light][render]")
+{
+	auto probe = MakeProbe(true);
+
+	// Rough enough that the highlight is not a mirror of the sun: a sharp metal saturates the frame
+	// and then any assertion about its level is an assertion about the clamp.
+	probe.Repaint(
+		{ .baseColorFactor = glm::vec4(0.95f, 0.93f, 0.88f, 1.0f),
+	      .metallicFactor  = 1.0f,
+	      .roughnessFactor = 0.55f,
+	      .specularFactor  = 1.0f });
+
+	probe.view->SetDirectionalLight(bgl::DirectionalLightDesc());
+	const auto unlit = Shoot(probe, "metal_unlit");
+
+	probe.view->SetDirectionalLight(
+		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
+	      .color     = glm::vec3(1.0f),
+	      .intensity = c_Intensity });
+	const auto lit = Shoot(probe, "metal_lit");
+
+	INFO("metal unlit " << unlit.Luma() << " lit " << lit.Luma());
+	CHECK(unlit.Luma() < 0.02f);
+	CHECK(lit.Luma() > 0.2f);
+
+	// Not clipped, so the number above is the lobe's level and not the top of the range.
+	CHECK(lit.Luma() < 0.99f);
 }
