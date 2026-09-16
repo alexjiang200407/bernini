@@ -912,6 +912,10 @@ namespace bgl
 		{
 			throw SceneError("BlobShadowDesc::fadeHeight must be finite and positive");
 		}
+		if (!std::isfinite(desc.casterLift) || desc.casterLift < 0.0f)
+		{
+			throw SceneError("BlobShadowDesc::casterLift must be finite and non-negative");
+		}
 
 		m_MeshBuffer.MetaAt(instance.handle.index).blobShadow = desc;
 		m_BlobShadowsDirty                                    = true;
@@ -1196,6 +1200,7 @@ namespace bgl
 			entry.radius     = meta.blobShadow->radius;
 			entry.intensity  = meta.blobShadow->intensity;
 			entry.fadeHeight = meta.blobShadow->fadeHeight;
+			entry.casterLift = meta.blobShadow->casterLift;
 		}
 
 		m_BlobShadows.Assign(list);

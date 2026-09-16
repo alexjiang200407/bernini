@@ -550,10 +550,13 @@ normal), and the pixel shader reconstructs the static surface under each pixel f
 [Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
-than falling through to the ground plane. A receiver must also face up: the fragment reads the
-surface's normal off the reconstruction's screen-space derivatives and ramps the shadow out past
-~70° of tilt, so a wall beside the caster keeps its face while a walkable slope still catches at
-full strength. The fragment re-emits the receiver's depth as
+than falling through to the ground plane. The cast point is the instance's origin raised by
+`BlobShadowDesc::casterLift`, which is how a ground-standing caster — a tree — casts from above the
+foliage around its root instead of from under it. A receiver must also face up: the fragment
+reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
+is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
+under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
+its face while a walkable slope still catches at full strength. The fragment re-emits the receiver's depth as
 `SV_Depth` under a `kLessOrEqual` test, which is what still occludes the decal behind the full
 scene depth, units included. The decals draw
 before the transparents so smoke over a unit composites over its shadow too. Same blend state and

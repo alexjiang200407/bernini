@@ -438,7 +438,10 @@ flowchart TD
   static geometry only — a shadow never lands on another unit — and a placement with no static
   surface beneath it casts nothing. A contact cue, not a lighting term. Any placement may carry
   one; the expected consumers are skinned units, and a *static* caster is its own nearest
-  receiver, darkening the surface it sits on at full strength. Setting or clearing one bumps the
+  receiver, darkening the surface it sits on at full strength. A caster whose origin sits on the
+  ground casts from ground level, so everything growing around it is above the cast point and takes
+  nothing; `BlobShadowDesc::casterLift` raises that point above the clutter, and the disc fades
+  over it instead of cutting on and off at every silhouette. Setting or clearing one bumps the
   temporal epoch — a decal appearing is a rebind, not motion — and `DeleteMeshInstance` takes the
   shadow with the placement. @throws on an invalid handle, a non-positive or non-finite `radius`
   or `fadeHeight`, or an `intensity` outside `[0, 1]`; `Get` returns empty for a placement

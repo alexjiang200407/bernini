@@ -200,6 +200,10 @@ TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][
 		bad.fadeHeight = 0.0f;
 		CHECK_THROWS_AS(view->SetBlobShadow(caster, bad), bgl::SceneError);
 
+		bad            = desc;
+		bad.casterLift = -1.0f;
+		CHECK_THROWS_AS(view->SetBlobShadow(caster, bad), bgl::SceneError);
+
 		// A refused write leaves the stored record untouched.
 		CHECK(view->GetBlobShadow(caster)->radius == c_Radius);
 
@@ -512,6 +516,27 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		view->SetBlobShadow(caster, desc);
 		const float overhead = sample("bernini_blob_overhead", boxX, boxY, 12);
 		CHECK(overhead > base * 0.95f);
+	}
+
+	SECTION("the caster lift raises where the disc is cast from")
+	{
+		view->SetInstanceTransform(platform, Lifted(3.0f));
+
+		// The overhead section's platform and sample box: above the placement's origin, so from
+		// there it catches nothing.
+		const int boxX = 400;
+		const int boxY = 208;
+
+		const float base = sample("bernini_blob_lift_base", boxX, boxY, 12);
+		REQUIRE(base > 0.05f);
+
+		// Cast from 2 above the origin the same platform is half a fade height below the cast
+		// point, and the disc lands on it.
+		auto lifted       = desc;
+		lifted.casterLift = 2.0f;
+		view->SetBlobShadow(caster, lifted);
+		const float shadowed = sample("bernini_blob_lift", boxX, boxY, 12);
+		CHECK(shadowed < base * 0.9f);
 	}
 
 	(void)groundInstance;
