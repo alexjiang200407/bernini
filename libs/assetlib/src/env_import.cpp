@@ -1,6 +1,7 @@
 
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 
 #include <assetlib/image_io.h>
@@ -11,6 +12,7 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
@@ -19,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "env_parts.h"
 #include "fs_util.h"
 #include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
@@ -187,30 +190,32 @@ namespace assetlib
 
 		throwIfCancelled(cancel);
 
-		// Projected at the skybox's size, which is the largest of the three: the prefilter and the
-		// irradiance convolve it down anyway, so starting them from the finer cube costs only the
-		// projection.
-		const auto faceSize =
-			(std::max)(desc.parameters.skyFaceSize, desc.parameters.prefilterFaceSize);
-		ImageData source = isHdr(desc.source) ?
-		                       equirectToCube(loadRadianceHdr(desc.source), faceSize) :
-		                       loadKTX2(desc.source);
+		// Read once; each part projects its own cube from it, so each part's pixels follow from its
+		// own parameters alone. A cube source is already a cube and serves both as it stands.
+		const bool equirect = isHdr(desc.source);
+		ImageData  input    = equirect ? loadRadianceHdr(desc.source) : loadKTX2(desc.source);
 
 		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
 		// gone. Re-convolving one costs a generation of quantization, so it is a recovery path and
 		// not the one to reach for when the source is still there.
-		if (source.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
+		if (input.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
 		{
 			spdlog::warn(
 				"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes twice "
 				"-- prefer the source it was baked from",
 				desc.source.string());
-			source = unpackRgb9e5(source);
+			input = unpackRgb9e5(input);
 		}
+
+		const EnvironmentImportParameters& parameters = desc.parameters;
+		auto                               skyCube    = std::optional<ImageData>();
 
 		if (desc.sky)
 		{
 			throwIfCancelled(cancel);
+			if (equirect)
+				skyCube = equirectToCube(input, parameters.skyFaceSize);
+			const ImageData& source = equirect ? *skyCube : input;
 
 			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
 			// belongs on the `.benv` document where a viewer can change it. The lighting still
@@ -244,6 +249,14 @@ namespace assetlib
 		if (desc.lighting)
 		{
 			throwIfCancelled(cancel);
+
+			// Shared with the sky whenever the two sizes agree, which they do at the defaults.
+			const uint32_t projection = lightingProjectionSize(parameters);
+			auto           ownCube    = std::optional<ImageData>();
+			if (equirect && !(skyCube && parameters.skyFaceSize == projection))
+				ownCube = equirectToCube(input, projection);
+			const ImageData& source = !equirect ? input : ownCube ? *ownCube : *skyCube;
+
 			const ImageData irradiance = irradianceSh(source, desc.parameters.irradianceFaceSize);
 
 			auto prefilterDesc      = PrefilterDesc();

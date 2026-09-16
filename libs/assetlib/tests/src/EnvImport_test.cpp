@@ -1,5 +1,6 @@
 
 #include <algorithm>
+#include <array>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
@@ -8,12 +9,17 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <ios>
 #include <stdexcept>
 #include <stop_token>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "MountAt.h"
@@ -114,7 +120,42 @@ namespace
 		{
 			return fs::exists(DataRoot() / relative);
 		}
+
+		std::vector<std::byte>
+		Bytes(const std::string& relative) const
+		{
+			return core::file::read_file_bytes((DataRoot() / relative).string());
+		}
 	};
+
+	/**
+	 * A 16x8 equirectangular Radiance file with a horizontal gradient, written flat rather than
+	 * run-length encoded -- which the reader accepts -- so the fixture needs no encoder. The
+	 * gradient is what makes a projection's size visible in the cube it produces.
+	 */
+	fs::path
+	WriteGradientHdr(const fs::path& path)
+	{
+		constexpr int c_Width  = 16;
+		constexpr int c_Height = 8;
+
+		std::ofstream out(path, std::ios::binary);
+		out << "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y " << c_Height << " +X " << c_Width << "\n";
+		for (int y = 0; y < c_Height; ++y)
+			for (int x = 0; x < c_Width; ++x)
+			{
+				// Never 2 in the first byte, which would read as the start of an encoded line.
+				const auto mantissa                     = static_cast<unsigned char>(40 + x * 12);
+				const std::array<unsigned char, 4> rgbe = {
+					{ mantissa, static_cast<unsigned char>(30 + y * 20), mantissa, 129 }
+				};
+				out.write(
+					reinterpret_cast<const char*>(rgbe.data()),
+					static_cast<std::streamsize>(rgbe.size()));
+			}
+		return path;
+	}
+
 }
 
 // The whole point of the seam: the editor's import is this call, so what the dialog will produce is
@@ -425,4 +466,25 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
 		CHECK(names(targets, "Derived/Sky/outdoor/forest.bsky"));
 	}
+}
+
+// The lighting used to be convolved from a cube sized by the sky, so its pixels moved with a parameter
+// that is not its own -- and a sky re-authored at another size silently changed a lighting nobody touched.
+TEST_CASE("The lighting's pixels do not depend on the sky's face size", "[envimport]")
+{
+	const auto importWithSky = [](const char* name, uint32_t skyFaceSize) {
+		const Sandbox sandbox(name);
+		auto          desc          = sandbox.Desc();
+		desc.source                 = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
+		desc.parameters.skyFaceSize = skyFaceSize;
+		static_cast<void>(sandbox.Store().ImportEnvironment(desc));
+		return std::pair{ sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2"),
+			              sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2") };
+	};
+
+	// 16 is the lighting's own projection size at a prefilter of 8, so the first shares the sky's
+	// cube and the second projects its own: both have to be the same cube.
+	CHECK(
+		importWithSky("bernini_envimport_shared", 16) ==
+		importWithSky("bernini_envimport_apart", 8));
 }

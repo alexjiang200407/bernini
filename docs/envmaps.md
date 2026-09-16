@@ -132,6 +132,9 @@ flowchart TD
   disk was overwritten rather than made, and taking it would destroy whatever wrote it first.
 * **Baked maps are deliberately not rolled back.** Content-addressed and shared, so the map this
   import wrote may be the one another environment already names. An orphan is the prune's business.
+* **Each part projects its own cube.** The sky at `skyFaceSize`, the lighting at twice
+  `prefilterFaceSize` (`lightingProjectionSize`), shared when the two agree — as they do at the
+  defaults. So a part's pixels follow from its own parameters and never from the other's.
 * Requires an `.hdr` or a **float** cube. A baked `RGB9E5` map is not a valid source — the bake reads
   `R32G32B32A32_SFLOAT` and refuses anything else.
 
