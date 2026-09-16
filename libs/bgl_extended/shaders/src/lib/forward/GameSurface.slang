@@ -199,7 +199,9 @@ public extension MaterialData
         return float4(ShadeSurface(input, record.Evaluate(input, isFrontFace), isFrontFace), 1.0);
     }
 
-    public float4 ShadeGameAlphaTested<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    // The one cutout coverage decision for a surface; the receiver pass runs it with no shading
+    // behind it, as MaterialShading's DiscardUncoveredAlphaTested for a PBR record.
+    public void DiscardUncoveredGameAlphaTested<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
 
@@ -207,17 +209,10 @@ public extension MaterialData
         {
             discard;
         }
-
-        return float4(ShadeSurface(input, record.Evaluate(input, isFrontFace), isFrontFace), 1.0);
     }
 
-    // Stochastic coverage in place of a cutoff, as ShadeHashedAlpha does it for a PBR record: the
-    // fragment survives with probability equal to its coverage and writes real depth, so this is the
-    // blend only as the ensemble over pixels and frames, and only with temporal AA running.
-    //
-    // The surface's cutoff is deliberately unused, for the reason the PBR path leaves it alone: a
-    // cutoff is the thing being replaced.
-    public float4 ShadeGameHashedAlpha<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    // The one hashed coverage decision for a surface; see ShadeGameHashedAlpha for the scheme.
+    public void DiscardUncoveredGameHashedAlpha<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
 
@@ -236,6 +231,28 @@ public extension MaterialData
         {
             discard;
         }
+    }
+
+    public float4 ShadeGameAlphaTested<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        DiscardUncoveredGameAlphaTested<G>(input, isFrontFace);
+
+        let record = GameRecord<G>.Load(input.materialOffset);
+
+        return float4(ShadeSurface(input, record.Evaluate(input, isFrontFace), isFrontFace), 1.0);
+    }
+
+    // Stochastic coverage in place of a cutoff, as ShadeHashedAlpha does it for a PBR record: the
+    // fragment survives with probability equal to its coverage and writes real depth, so this is the
+    // blend only as the ensemble over pixels and frames, and only with temporal AA running.
+    //
+    // The surface's cutoff is deliberately unused, for the reason the PBR path leaves it alone: a
+    // cutoff is the thing being replaced.
+    public float4 ShadeGameHashedAlpha<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        DiscardUncoveredGameHashedAlpha<G>(input, isFrontFace);
+
+        let record = GameRecord<G>.Load(input.materialOffset);
 
         return float4(ShadeSurface(input, record.Evaluate(input, isFrontFace), isFrontFace), 0.0);
     }

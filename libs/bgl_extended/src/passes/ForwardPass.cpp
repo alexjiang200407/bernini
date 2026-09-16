@@ -41,23 +41,6 @@ namespace bgl
 {
 	namespace
 	{
-		struct MaterialBuffer
-		{
-			std::string_view graphName;
-			std::string_view uniformKey;
-			BarrierAccess    access;
-			BarrierSync      sync;
-		};
-
-		static constexpr std::array<MaterialBuffer, 1> c_MaterialBuffers = { {
-			{
-				c_MaterialArenaBufferName,
-				"materials",
-				BarrierAccessFlag::kShaderResource,
-				BarrierSyncFlag::kPixelShader,
-			},
-		} };
-
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
 		// the code that writes them so BinderNames catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
@@ -490,6 +473,13 @@ namespace bgl
 
 		m_BlobShadows.Draw(draw, resources);
 		DrawTransparent(draw, resources);
+	}
+
+	RasterCullMode
+	ForwardPass::PsoCullMode(const uint16_t pso) noexcept
+	{
+		gassert(pso < idl::c_PsoCount, "PsoCullMode: pso out of range");
+		return c_Psos[pso].cull;
 	}
 
 	void

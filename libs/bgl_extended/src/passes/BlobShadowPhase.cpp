@@ -20,8 +20,10 @@
 #include "types/RenderState.h"
 #include <array>
 #include <bgl/ISceneView.h>
+#include <bgl/Viewport.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl_common/gassert.h>
+#include <core/glm.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -39,8 +41,9 @@ namespace bgl
 
 		// Every member Draw writes, kept beside the code that writes them so BinderNames catches
 		// a shader rename at startup.
-		constexpr std::array<std::string_view, 5> c_Fields = {
-			"blobBuffer"sv, "meshBuffer"sv, "viewProj"sv, "groundPoint"sv, "groundNormal"sv,
+		constexpr std::array<std::string_view, 7> c_Fields = {
+			"blobBuffer"sv,  "meshBuffer"sv,   "staticDepth"sv,  "viewProj"sv,
+			"invViewProj"sv, "groundNormal"sv, "viewportRect"sv,
 		};
 	}
 
@@ -65,10 +68,12 @@ namespace bgl
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
+		// kLessOrEqual, not kLess: the pixel stage re-emits the receiver's sampled depth as
+		// SV_Depth, and where the receiver itself is what the scene shows, the two are equal.
 		auto depth = DepthStencilState{};
 		depth.SetDepthTestEnable(true)
 			.SetDepthWriteEnable(false)
-			.SetDepthFunc(ComparisonFunc::kLess)
+			.SetDepthFunc(ComparisonFunc::kLessOrEqual)
 			.SetStencilEnable(false);
 
 		auto blend = BlendState{};
@@ -102,6 +107,12 @@ namespace bgl
 			BufferArg{ std::string(c_BlobShadowsName),
 		               BarrierSyncFlag::kVertexShader,
 		               BarrierAccessFlag::kShaderResource });
+
+		desc.AddTextureArg(
+			TextureArg{ std::string(c_StaticDepthName),
+		                BarrierSyncFlag::kPixelShader,
+		                BarrierAccessFlag::kShaderResource,
+		                BarrierLayout::kShaderResource });
 	}
 
 	void
@@ -124,11 +135,19 @@ namespace bgl
 
 			uniforms["blobBuffer"] = resources.GetBuffer(c_BlobShadowsName);
 			uniforms["meshBuffer"] = resources.GetBuffer(c_MeshInstanceBufferName);
-			uniforms["viewProj"]   = draw.viewState.viewProj;
+			uniforms["staticDepth"].SetIfValid(draw.targets.staticDepthSrv);
+			uniforms["viewProj"]    = draw.viewState.viewProj;
+			uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);
 
 			const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
-			uniforms["groundPoint"]       = ground.point;
 			uniforms["groundNormal"]      = ground.normal;
+
+			const Viewport& viewport = draw.viewState.viewport;
+			uniforms["viewportRect"] = glm::vec4(
+				viewport.minX,
+				viewport.minY,
+				1.0f / (viewport.maxX - viewport.minX),
+				1.0f / (viewport.maxY - viewport.minY));
 		}
 		else
 		{

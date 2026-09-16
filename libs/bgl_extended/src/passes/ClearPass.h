@@ -14,8 +14,8 @@
 
 namespace bgl
 {
-	// Clears a set of render targets (and an optional depth target). Each target
-	// is declared to the graph by name so the graph derives its transition to
+	// Clears a set of render targets and depth targets. Each target is declared
+	// to the graph by name so the graph derives its transition to
 	// render-target / depth-write; the pass only records the clears, never barriers.
 	class ClearPass
 	{
@@ -27,13 +27,18 @@ namespace bgl
 			std::array<float, 4> clearColor;
 		};
 
+		struct DepthTarget
+		{
+			std::string name;  // graph resource name of the target
+			DsvHandle   dsv;
+		};
+
 		void
 		AttachToFrameGraph(
 			FrameGraph&                  fg,
 			IResourceManager*            resourceManager,
 			std::span<const ColorTarget> colors,
-			std::string                  depthName,
-			DsvHandle                    depth)
+			std::span<const DepthTarget> depths)
 		{
 			PassDesc desc;
 			desc.SetName("Clear");
@@ -47,21 +52,28 @@ namespace bgl
 				                BarrierLayout::kRenderTarget });
 			}
 
-			if (!depth.IsNull())
+			for (const DepthTarget& depth : depths)
 			{
-				desc.AddTextureArg(
-					TextureArg{ std::move(depthName),
-				                BarrierSyncFlag::kDepthStencil,
-				                BarrierAccessFlag::kDepthWrite,
-				                BarrierLayout::kDepthWrite });
+				if (!depth.dsv.IsNull())
+				{
+					desc.AddTextureArg(
+						TextureArg{ depth.name,
+					                BarrierSyncFlag::kDepthStencil,
+					                BarrierAccessFlag::kDepthWrite,
+					                BarrierLayout::kDepthWrite });
+				}
 			}
 
 			std::vector<ColorTarget> targets(colors.begin(), colors.end());
-			desc.SetExec([resourceManager, targets, depth](const PassContext& resources) {
+			std::vector<DepthTarget> depthTargets(depths.begin(), depths.end());
+			desc.SetExec([resourceManager, targets, depthTargets](const PassContext& resources) {
 				ICommandList* cmd = resources.GetCommandList();
-				if (!depth.IsNull())
+				for (const DepthTarget& depth : depthTargets)
 				{
-					resourceManager->ClearDsv(cmd, depth, 1.0f, 0);
+					if (!depth.dsv.IsNull())
+					{
+						resourceManager->ClearDsv(cmd, depth.dsv, 1.0f, 0);
+					}
 				}
 				for (const ColorTarget& color : targets)
 				{

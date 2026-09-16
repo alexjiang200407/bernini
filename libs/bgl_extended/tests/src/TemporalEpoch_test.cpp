@@ -4,6 +4,8 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceFlag.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 
@@ -116,6 +118,25 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 		view->SetSubmeshSelected(instance, 0, true);
 
 		CHECK_FALSE(view->AdvanceTemporalEpoch());
+	}
+
+	// A surface appearing or vanishing has no motion vector, exactly as a placement or a deletion
+	// has none -- but rewriting the word it already holds changes no pixel.
+	SECTION("Hiding and unhiding are breaks; rewriting the same flags is not")
+	{
+		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		Consume(view);
+
+		const auto hidden = bgl::MeshInstanceFlags(bgl::MeshInstanceFlag::kHidden);
+
+		view->SetMeshInstanceFlags(instance, hidden);
+		CHECK(view->AdvanceTemporalEpoch());
+
+		view->SetMeshInstanceFlags(instance, hidden);
+		CHECK_FALSE(view->AdvanceTemporalEpoch());
+
+		view->SetMeshInstanceFlags(instance, bgl::MeshInstanceFlags());
+		CHECK(view->AdvanceTemporalEpoch());
 	}
 }
 

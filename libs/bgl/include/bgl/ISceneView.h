@@ -8,6 +8,7 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/MeshInstanceFlags.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -143,6 +144,26 @@ namespace bgl
 		GetInstanceTransform(MeshInstanceHandle instance) const = 0;
 
 		/**
+		 * Replaces the placement's whole flags word, effective on the next frame this view is drawn --
+		 * see MeshInstanceFlag for what each bit does. A placement is created with none set.
+		 *
+		 * A change that alters what is drawn moves the temporal epoch, as a deletion does: a surface
+		 * that appears or vanishes has no motion vector to describe it.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		SetMeshInstanceFlags(MeshInstanceHandle instance, MeshInstanceFlags flags) = 0;
+
+		/**
+		 * The word SetMeshInstanceFlags last wrote, or empty.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		[[nodiscard]] virtual MeshInstanceFlags
+		GetMeshInstanceFlags(MeshInstanceHandle instance) const = 0;
+
+		/**
 		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
 		 * see FootIKDesc. Written on an event and evaluated from RenderJob::time, so the pose at
 		 * any clock is a function of the record: a write whose ramps all start at or after now
@@ -174,10 +195,12 @@ namespace bgl
 		HasFootIK(MeshInstanceHandle instance) const noexcept = 0;
 
 		/**
-		 * Gives one placement a blob shadow: a soft radial-falloff disc on the scene's ground
-		 * plane directly beneath it, shrinking and fading as the placement rises -- see
-		 * BlobShadowDesc. Replaces any blob shadow the placement holds. Any placement may carry
-		 * one; the expected consumers are skinned units, which nothing enforces.
+		 * Gives one placement a blob shadow: a soft radial-falloff disc draped over the static
+		 * geometry directly beneath it, fading per pixel as the gap between the placement and the
+		 * surface grows -- see BlobShadowDesc. Only static, upward-facing surfaces receive it: a
+		 * unit never catches a neighbour's shadow, and a wall beside the placement keeps its face.
+		 * Replaces any blob shadow the placement holds. Any placement may carry one; the expected
+		 * consumers are skinned units, which nothing enforces.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
 		 *         `desc.fadeHeight` is not finite and positive, or `desc.intensity` is not

@@ -5,6 +5,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
 #include <bgl_common/idl/MeshInstance.h>
@@ -112,6 +113,10 @@ namespace bgl
 	 */
 	void
 	WriteInstanceTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept;
+
+	/** Whether `flag`'s bit is set in the placement's flags word; the shaders' twin is in MeshInstance.slang. */
+	[[nodiscard]] bool
+	HasMeshInstanceFlag(const idl::MeshInstance& instance, MeshInstanceFlag flag) noexcept;
 
 	/**
 	 * Fills a placement's previous-frame transform, in the same packing WriteInstanceTransform uses.

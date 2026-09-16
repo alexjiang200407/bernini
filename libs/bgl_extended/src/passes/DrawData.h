@@ -4,6 +4,7 @@
 #include "resource/FrameBuffer.h"
 #include "resource/Rtv.h"
 #include "resource/Sampler.h"
+#include "resource/Srv.h"
 #include "types/EnvironmentMap.h"
 #include "types/Viewport.h"
 #include <bgl/SkyboxDesc.h>
@@ -66,6 +67,11 @@ namespace bgl
 		RtvHandle motionVector;
 		DsvHandle depth;
 		RtvHandle outlineMask;
+
+		// The static receivers' depth: written by the StaticDepth pass, read back by the
+		// blob-shadow decal, so both ends travel with the draw.
+		DsvHandle staticDepth;
+		SrvHandle staticDepthSrv;
 	};
 
 	/** What a draw shades against: the image-based environment, and the sky behind it. */

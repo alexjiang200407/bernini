@@ -128,6 +128,24 @@ namespace bgl
 			return m_DepthSrv;
 		}
 
+		[[nodiscard]] DsvHandle
+		GetStaticDepthDsv() const noexcept override
+		{
+			return m_StaticDepthDsv;
+		}
+
+		[[nodiscard]] TextureHandle
+		GetStaticDepthTexture() const noexcept override
+		{
+			return m_StaticDepthTexture;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetStaticDepthSrv() const noexcept override
+		{
+			return m_StaticDepthSrv;
+		}
+
 		[[nodiscard]] TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
@@ -329,6 +347,9 @@ namespace bgl
 		TextureHandle m_DepthTexture;
 		DsvHandle     m_DepthDsv;
 		SrvHandle     m_DepthSrv;
+		TextureHandle m_StaticDepthTexture;
+		DsvHandle     m_StaticDepthDsv;
+		SrvHandle     m_StaticDepthSrv;
 		TextureHandle m_MotionTexture;
 		RtvHandle     m_MotionRtv;
 		TextureHandle m_SceneColorTexture;

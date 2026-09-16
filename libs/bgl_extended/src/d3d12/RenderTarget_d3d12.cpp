@@ -222,6 +222,40 @@ namespace bgl
 		}
 
 		{
+			// The static receivers' depth, sized and shaped exactly as the scene depth: the
+			// blob-shadow decal re-emits sampled values as SV_Depth for a kLessOrEqual test
+			// against it, and only an identically quantized format keeps a visible receiver's
+			// re-emitted depth equal to its rasterized one.
+			auto staticDepthDesc      = TextureDesc();
+			staticDepthDesc.format    = Format::D24S8;
+			staticDepthDesc.width     = GetRenderWidth();
+			staticDepthDesc.height    = GetRenderHeight();
+			staticDepthDesc.dimension = TextureDimension::kTexture2D;
+			staticDepthDesc.debugName = "Static Depth";
+			staticDepthDesc.usage =
+				TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
+			staticDepthDesc.initialLayout = BarrierLayout::kDepthWrite;
+
+			staticDepthDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_StaticDepth.textureHandle = m_ResourceManager->CreateTexture(staticDepthDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Static Depth DSV";
+
+			m_StaticDepth.dsvHandle =
+				m_ResourceManager->CreateDsv(m_StaticDepth.textureHandle, dsvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = Format::D24S8;
+			srvDesc.debugName = "Static Depth SRV";
+
+			m_StaticDepth.srvHandle =
+				m_ResourceManager->CreateSrv(m_StaticDepth.textureHandle, srvDesc);
+		}
+
+		{
 			// kSRV as well as kRenderTarget: the buffer exists to be resampled by a later pass.
 			auto motionTextureDesc      = TextureDesc();
 			motionTextureDesc.format    = c_MotionVectorFormat;
@@ -510,6 +544,20 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
 		}
 		m_DepthBuffer = {};
+
+		if (!m_StaticDepth.srvHandle.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_StaticDepth.srvHandle, false);
+		}
+		if (!m_StaticDepth.dsvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyDsv(m_StaticDepth.dsvHandle, false);
+		}
+		if (!m_StaticDepth.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_StaticDepth.textureHandle, false);
+		}
+		m_StaticDepth = {};
 
 		if (!m_MotionVectors.rtvHandle.IsNull())
 		{
