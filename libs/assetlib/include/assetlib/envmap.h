@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/ImageData.h>
 #include <cstdint>
@@ -284,19 +285,11 @@ namespace assetlib
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair
 		bool environment = true;  // write the `.benv` composing whichever of the two were written
 
-		uint32_t skyFaceSize = 512;
+		EnvironmentImportParameters parameters;
 
-		// Levels in the sky's defocus chain -- see skyChain. The backdrop is always baked sharp at
-		// mip 0; how defocused it is drawn is `skyMipLevel`, which a viewer may overrule.
-		uint32_t skyMips = 6;
-
-		// Which level the written `.benv` document presents. 0 is the sharp projection.
+		// Which level the written `.benv` document presents. 0 is the sharp projection; the sky is
+		// always baked sharp at mip 0 whatever this says.
 		uint32_t skyMipLevel = 0;
-
-		uint32_t prefilterFaceSize  = 256;
-		uint32_t prefilterMips      = 7;  // must match the shader's MAX_REFLECTION_LOD + 1
-		uint32_t prefilterSamples   = 128;
-		uint32_t irradianceFaceSize = 128;
 
 		uint32_t threads = 0;  // 0 means hardware concurrency
 	};
