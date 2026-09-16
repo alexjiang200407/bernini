@@ -207,8 +207,53 @@ TEST_CASE("a malformed import document is refused with its reason", "[importdoc]
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
 {
 	CHECK(importDocumentKeyFor("Authored/Meshes/kirk.glb") == "Authored/Meshes/kirk.bimport");
-	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport") == "Authored/Meshes/kirk.glb");
 	CHECK_THROWS(importDocumentKeyFor("Authored/Meshes/no_extension"));
+}
+
+TEST_CASE("the document names the source it describes", "[importdoc]")
+{
+	ImportDocument document;
+	document.source = "Authored/Meshes/kirk.glb";
+	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) == document.source);
+
+	// The name is recorded rather than derived, so a source whose extension the swap could never
+	// have guessed is still reachable. This is what a second source kind rests on.
+	document.source = "Authored/EnvSources/forest.hdr";
+	CHECK(
+		importedSourceKeyFor("Authored/EnvSources/forest.bimport", document) ==
+		"Authored/EnvSources/forest.hdr");
+}
+
+// A document written before the field is every document in every project that predates it, so the
+// swap that was the only answer then has to stay the answer for one.
+TEST_CASE("a document with no recorded source falls back to the .glb beside it", "[importdoc]")
+{
+	const ImportDocument document = DocumentFrom("{}");
+	REQUIRE(document.source.empty());
+	CHECK(
+		importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) ==
+		"Authored/Meshes/kirk.glb");
+}
+
+// The source is outside `parameters`: naming the file says nothing about what the importer computes
+// from it, and a document that started keying on its own name would stale every container beside
+// every source anybody ever moved.
+TEST_CASE("naming the source does not move the parameter hash", "[importdoc]")
+{
+	ImportDocument document;
+	const uint64_t unnamed = parametersHashOf(document);
+
+	document.source = "Authored/Meshes/kirk.glb";
+	CHECK(parametersHashOf(document) == unnamed);
+}
+
+// Every `.bimport` on disk today has no `source`, and re-saving one must not rewrite it: a
+// serialized form that changed under a project would show up as a diff in every checkout at once.
+TEST_CASE("a document with no source round-trips byte-identically", "[importdoc]")
+{
+	const std::string before = DocumentText(ImportDocument());
+	CHECK(before.find("\"source\"") == std::string::npos);
+	CHECK(DocumentText(DocumentFrom(before)) == before);
 }
 
 TEST_CASE(
@@ -346,9 +391,8 @@ TEST_CASE("a source placed outside its category is refused", "[importdoc]")
 		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
 }
 
-// The extension is what `importDocumentKeyFor` swaps to reach the document, and what
-// `importedSourceKeyFor` swaps back to reach the source from it -- so a source under another one
-// has a document nothing can pair with it.
+// A mesh import takes one source kind, and `importDocumentKeyFor` swaps that extension to reach the
+// document -- so a source under another one has a document nothing can pair with it.
 TEST_CASE("a source key that is not a .glb is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_extension");

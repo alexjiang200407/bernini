@@ -97,9 +97,15 @@ payload, which is what keeps a whole-project staleness survey off the disk's thr
 
 ### What an import document records about its outputs
 
-A `.bimport` names two things nothing else can derive
+A `.bimport` names three things, two of which nothing else can derive
 ([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
 
+* **`source`** -- the copied file this document describes. Recorded rather than read off the
+  document's own name: the swap that reaches `kirk.glb` from `kirk.bimport` answers only for a
+  source kind with a single extension, so it is derivable for a mesh and for nothing that follows.
+  A document written before the field has none, and `importedSourceKeyFor` falls back to that swap
+  for one; `migrate` backfills it. Being stored, it is a reference a rename rewrites -- the one
+  thing that separates it from the `.bavatar`'s derived edge beside it.
 * **`skeleton`** -- the `.bskel` this source's joint indices address. Authored rather than inferred,
   which is what lets one rig serve several sources: a second `.glb` skinned to a rig already in the
   project binds it instead of forking a signature-matching duplicate. A skinned source whose
@@ -107,7 +113,7 @@ A `.bimport` names two things nothing else can derive
 * **`outputs`** -- every container this source produced, as mount keys, sorted. A *produced* rig is
   listed; a *bound* one is not, so deleting a source never takes another source's rig with it.
 
-Both sit outside `parameters`, with `bindings`: neither changes what the importer computes.
+All three sit outside `parameters`, with `bindings`: none of them changes what the importer computes.
 `outputs` is what makes the derived set answerable from the authored side, which is the only way to
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.
@@ -235,7 +241,9 @@ being reported twice when `migrate` runs both.
 ## Rewriting a whole project
 
 `assetlib_cli migrate -p <project>` backfills any import document written before it recorded its
-rig and outputs, produces whatever those documents name that is absent, re-extracts the textures of
+source, its rig and its outputs -- the source from the document's own key, so that one is backfilled
+whether or not the file is there to be read --
+produces whatever those documents name that is absent, re-extracts the textures of
 every source that has moved since its import, then reads every container and re-saves whatever is not byte-identical to the current
 form — geometry through the regeneration seam
 (meshes before rigs before clips, so a regenerated `.banim` measures its posed boxes against

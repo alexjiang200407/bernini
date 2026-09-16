@@ -260,8 +260,9 @@ namespace assetlib
 		{
 			if (extensionOf(documentKey) != c_ImportDocumentExtension)
 				continue;
-			pending.push_back(
-				{ importedSourceKeyFor(documentKey), loadImportDocument(GetFiles(), documentKey) });
+
+			ImportDocument document = loadImportDocument(GetFiles(), documentKey);
+			pending.push_back({ importedSourceKeyFor(documentKey, document), std::move(document) });
 		}
 		std::ranges::sort(pending, {}, &PendingSource::key);
 

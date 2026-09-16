@@ -126,7 +126,11 @@ namespace assetlib
 			const std::string&             referrer)
 		{
 			const ImportDocument document = loadImportDocument(files, referrer);
-			addEdge(edges, referrer, importedSourceKeyFor(referrer), RefKind::kImportedSource);
+			addEdge(
+				edges,
+				referrer,
+				importedSourceKeyFor(referrer, document),
+				RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
 				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
 

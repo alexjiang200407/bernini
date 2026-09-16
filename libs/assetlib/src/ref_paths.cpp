@@ -41,6 +41,14 @@ namespace assetlib
 	}
 
 	std::string
+	swapExtension(std::string_view key, std::string_view extension)
+	{
+		const std::string ext = extensionOf(key);
+		core::throw_runtime_error_if(ext.empty(), "assetlib: '{}' has no extension", key);
+		return std::string(key.substr(0, key.size() - ext.size())).append(extension);
+	}
+
+	std::string
 	extensionOf(std::string_view key)
 	{
 		const size_t slash = key.find_last_of('/');
