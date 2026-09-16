@@ -42,6 +42,8 @@ namespace assetlib
 		constexpr std::string_view c_EnvStampSizeKey     = "envSourceStampSize";
 		constexpr std::string_view c_EnvStampHashKey     = "envSourceStampHash";
 		constexpr std::string_view c_EnvBakeTokenKey     = "envSourceBakeToken";
+		constexpr std::string_view c_EnvSkyHashKey       = "envSkyParametersHash";
+		constexpr std::string_view c_EnvLightingHashKey  = "envLightingParametersHash";
 
 		struct EnvironmentField
 		{
@@ -222,7 +224,9 @@ namespace assetlib
 		       { c_TextureBakeTokenKey, &document.textureBakeToken },
 		       { c_EnvStampSizeKey, &document.envSourceStamp.size },
 		       { c_EnvStampHashKey, &document.envSourceStamp.hash },
-		       { c_EnvBakeTokenKey, &document.envSourceBakeToken } })
+		       { c_EnvBakeTokenKey, &document.envSourceBakeToken },
+		       { c_EnvSkyHashKey, &document.envSkyParametersHash },
+		       { c_EnvLightingHashKey, &document.envLightingParametersHash } })
 		{
 			if (const auto it = json.find(stampKey); it != json.end())
 			{
@@ -313,8 +317,13 @@ namespace assetlib
 			json[c_EnvStampSizeKey] = document.envSourceStamp.size;
 			json[c_EnvStampHashKey] = document.envSourceStamp.hash;
 		}
-		if (document.envSourceBakeToken != 0)
-			json[c_EnvBakeTokenKey] = document.envSourceBakeToken;
+		for (const auto& [key, value] :
+		     { std::pair<std::string_view, uint64_t>{ c_EnvBakeTokenKey,
+		                                              document.envSourceBakeToken },
+		       { c_EnvSkyHashKey, document.envSkyParametersHash },
+		       { c_EnvLightingHashKey, document.envLightingParametersHash } })
+			if (value != 0)
+				json[key] = value;
 
 		// Omitted rather than written empty, for the same reason textureDir is: a document for a
 		// source that produced neither stays byte-identical to one written before these existed.

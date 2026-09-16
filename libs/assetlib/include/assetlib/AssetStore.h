@@ -750,6 +750,13 @@ namespace assetlib
 		 * them, writing the float intermediates into `Derived/SourceTextures/` as the routed
 		 * sources and baking each into `Derived/BakedTextures/`.
 		 *
+		 * The source is copied under `Authored/EnvSources/` and read from the copy, and a
+		 * `.bimport` beside it records the parameters, the copy's stamp and every derived file
+		 * written -- which is what lets `Reimport` produce the family again. Importing only one
+		 * part over an existing document keeps the other part's claim and parameters; that is
+		 * refused when the incoming file is not the one the document was stamped from, since the
+		 * part kept would then describe a different image.
+		 *
 		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
 		 * half-written environment is never left behind. It removes only what it *created*: a file
 		 * that was already there is one this import overwrote rather than made.
@@ -759,9 +766,11 @@ namespace assetlib
 		 * orphan left by a failed import is what FindUnusedBakedTextures sweeps.
 		 *
 		 * @param cancel Polled between the projection, each convolution and each bake.
-		 * @throws std::runtime_error if nothing is selected, if the source cannot be read, or if any
-		 *         directory `desc` names is the wrong half for what would land in it -- checked
-		 *         before the projection, so a misplaced one costs no bake.
+		 * @throws std::runtime_error if nothing is selected, if the source cannot be read or is
+		 *         neither a `.hdr` nor a `.ktx2`, if any directory `desc` names is the wrong half for
+		 *         what would land in it or `importedSourceDir` is outside `Authored/EnvSources`, or
+		 *         on the partial re-import above -- all checked before the projection, so none of
+		 *         them costs a bake.
 		 * @throws Cancelled if `cancel` is signalled.
 		 */
 		[[nodiscard]] EnvImportResult
