@@ -1,9 +1,11 @@
 #pragma once
+#include <assetlib/env_import_parameters.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <core/file/IFileSystem.h>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -29,8 +31,8 @@ namespace assetlib
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
 	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `skeleton`,
-	 * `outputs`, `textureDir`, `textureStamp` and `textureBakeToken` never key -- none of them
-	 * changes what the importer computes. Keys a reader
+	 * `outputs`, `textureDir` and the two stamp-and-token pairs never key -- none of them changes
+	 * what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
 	 * parameter still reaches the key through a reader that has never heard of it.
@@ -61,6 +63,18 @@ namespace assetlib
 		// Overrules what the cook measures for a named clip; see assetlib::groundClips. A parameter
 		// rather than a binding: it changes the samples the importer writes, so it has to key.
 		std::vector<ClipFloor> clipFloors;
+
+		/**
+		 * Set for an environment source, and then the whole of its parameters: such a document
+		 * writes no `sampleRate`, which nothing reads for it and which would otherwise key every
+		 * environment on a mesh default.
+		 */
+		std::optional<EnvironmentImportParameters> environment;
+
+		// The float sources' key, as textureStamp and textureBakeToken are the extracted textures':
+		// the source as it stood when they were written, and c_EnvSourceBakeToken then.
+		SourceStamp envSourceStamp;
+		uint64_t    envSourceBakeToken = 0;
 
 		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
 		std::string skeleton;

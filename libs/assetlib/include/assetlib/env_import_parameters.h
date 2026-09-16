@@ -29,4 +29,17 @@ namespace assetlib
 		bool
 		operator==(const EnvironmentImportParameters&) const = default;
 	};
+
+	/**
+	 * The revision of the float sources an environment import writes: `equirectToCube`, `skyChain`,
+	 * `prefilterRadiance` and `irradianceSh` as they stand. A `.ktx2` has nowhere to carry a token,
+	 * so the import document records this beside the source's stamp, as a mesh import records
+	 * `c_TextureBakeToken`; one written under another revision is stale whatever the stamp says.
+	 *
+	 * Moves on any change to the pixels those four produce, to a fresh random value, never a
+	 * counter. Unlike `c_TextureBakeToken` it has no `TokenCanary_test` pin: the four run through
+	 * libm's trigonometry, whose last bits differ between platforms, so a pinned hash would fail on
+	 * the other one for a reason that is not a change. Remembering the bump is the author's.
+	 */
+	inline constexpr uint64_t c_EnvSourceBakeToken = 0x0f5c965369abe169ull;
 }

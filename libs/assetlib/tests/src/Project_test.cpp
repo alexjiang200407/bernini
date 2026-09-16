@@ -260,6 +260,7 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 	CHECK(Project::IsRequiredDirectory(c_SourceTexturesDirectoryName));
 	CHECK(Project::IsRequiredDirectory(c_MaterialsDirectoryName));
 	CHECK(Project::IsRequiredDirectory(c_LevelsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_EnvSourcesDirectoryName));
 
 	// One per environment container: a `.benv` names a `.bsky` and a `.benvl`, and each lives in its
 	// own category so the reference is a path the project layout guarantees.
