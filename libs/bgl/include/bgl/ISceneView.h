@@ -310,6 +310,9 @@ namespace bgl
 		 * A view that never calls this is lit by its environment alone, exactly as before this
 		 * existed: the default intensity is 0.
 		 *
+		 * `desc.direction` need not be normalized; only a zero-length one is refused, since a sun
+		 * pointing nowhere has no direction to fall back on.
+		 *
 		 * @throws SceneError if any component is not finite, if `intensity` is negative, or if
 		 *         `direction` has zero length.
 		 */
