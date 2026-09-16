@@ -1,5 +1,6 @@
 #include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
+#include "util/SyntheticCube.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
@@ -8,6 +9,7 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -48,12 +50,13 @@ namespace
 	constexpr int c_BoxSize = 16;
 
 	// The sphere's limbs, and two backdrop corners, at the pixels blender_probe.py reads.
-	constexpr int c_SphereLeftX  = 141;
-	constexpr int c_SphereRightX = 243;
-	constexpr int c_SphereY      = 142;
-	constexpr int c_SkyLeftX     = 10;
-	constexpr int c_SkyRightX    = 374;
-	constexpr int c_SkyY         = 20;
+	constexpr int c_SphereCentreX = 192;
+	constexpr int c_SphereLeftX   = 141;
+	constexpr int c_SphereRightX  = 243;
+	constexpr int c_SphereY       = 142;
+	constexpr int c_SkyLeftX      = 10;
+	constexpr int c_SkyRightX     = 374;
+	constexpr int c_SkyY          = 20;
 
 	// Irradiance of the source at the normal under each limb box, (+-0.632, 0, 0.775): the cosine
 	// integral of forest.exr in the map's 1/pi convention, as blender_probe.py prints it under
@@ -159,4 +162,163 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 
 	CHECK(std::abs(sphereLeft.Luma() - expectedLeft) < c_LevelMargin);
 	CHECK(std::abs(sphereRight.Luma() - expectedRight) < c_LevelMargin);
+}
+
+// The sun's own level, against the same renderer and through the same instrument as the case above.
+//
+// This is the one measurement in the feature that is not Bernini checked against Bernini's own
+// algebra. Tasks 1 and 2 assert the shader against arithmetic written beside it, and a pi dropped in
+// both the shader and the test passes them both; Cycles is an independent integrator that knows
+// nothing about either.
+//
+// What it pins is the unit conversion. Blender's Sun strength is irradiance in W/m^2 on a surface
+// facing it. Bernini's intensity is what its irradiance map would hold, and that map carries E/pi.
+// So blender_probe.py sets a strength of pi times the number handed to SetDirectionalLight, and both
+// renderers should then put `albedo * intensity * NdotL` on screen. Either side losing the factor
+// moves this by a stop and nothing else in the suite would notice.
+//
+// The environment is black, so the sun is the only light in the frame and the split-sum path -- the
+// one place the two renderers genuinely differ -- contributes nothing.
+//
+// What Blender 5.2.1 measured, display luma over the sphere's limb boxes (blender_probe.py,
+// `--engine CYCLES --samples 64 --sun 0.6 --sun-azimuth 0 --sun-elevation 0 --no-world
+// --albedo 0.5`):
+//
+//   Cycles, Lambert     left 0.5128   right 0.5129   sun irradiance 0.465 at both normals
+//
+// Equal at both limbs because a sun head on to the camera makes the same angle with each, which the
+// environment case never does -- so it is also a check that nothing has put a gradient in the frame.
+TEST_CASE(
+	"A matte sphere under a sun alone sits at Blender's level",
+	"[pbr][light][parity][render]")
+{
+	constexpr float c_SunAlbedo    = 0.5f;
+	constexpr float c_SunIntensity = 0.6f;
+
+	// intensity * NdotL at (+-0.632, 0, 0.775) against a sun along +Z, as the probe prints it.
+	constexpr float c_SunIrradiance = 0.465f;
+
+	constexpr float c_BlenderSunLeft  = 0.5128f;
+	constexpr float c_BlenderSunRight = 0.5129f;
+
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 512;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 400000;
+	sceneDesc.initialIndices              = 20000;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyBlackEnvironment(scene.Get(), view.Get());
+
+	// Along +Z toward the camera, which is azimuth 0 elevation 0 in the probe's convention.
+	view->SetDirectionalLight(
+		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
+	      .color     = glm::vec3(1.0f),
+	      .intensity = c_SunIntensity });
+
+	const auto matte = scene->CreatePbrMaterial(
+		{ .baseColorFactor = glm::vec4(c_SunAlbedo, c_SunAlbedo, c_SunAlbedo, 1.0f),
+	      .metallicFactor  = 0.0f,
+	      .roughnessFactor = 1.0f,
+	      .specularFactor  = 0.0f });
+
+	const auto sphere   = scene->AddSphereGeom(64, 32, 5.0f, matte);
+	const auto instance = view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+
+	auto camera = bgl::Camera();
+	camera.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+
+	const std::string shot = "assets/golden/blender_parity_sun.got.png";
+	gfx->ScreenshotPng(target, shot);
+
+	const auto left  = bgl::test::MeanColor(shot, c_SphereLeftX, c_SphereY, c_BoxSize, c_BoxSize);
+	const auto right = bgl::test::MeanColor(shot, c_SphereRightX, c_SphereY, c_BoxSize, c_BoxSize);
+
+	const float expected =
+		bgl::test::EncodeSrgb(bgl::test::RunAgX(*gfx, c_SunAlbedo * c_SunIrradiance).r);
+
+	INFO(
+		"sun L/R " << left.Luma() << "/" << right.Luma() << " expected " << expected
+				   << ", Blender's L/R " << c_BlenderSunLeft << "/" << c_BlenderSunRight);
+
+	CHECK(std::abs(left.Luma() - c_BlenderSunLeft) < c_LevelMargin);
+	CHECK(std::abs(right.Luma() - c_BlenderSunRight) < c_LevelMargin);
+
+	CHECK(std::abs(left.Luma() - expected) < c_LevelMargin);
+	CHECK(std::abs(right.Luma() - expected) < c_LevelMargin);
+
+	// The specular lobe's own level, measured where the half vector meets the normal -- the sphere's
+	// centre, since the limb boxes sit far enough down the lobe to measure almost none of it.
+	//
+	// Held to a slightly looser margin than the diffuse above, for a real difference between the two
+	// renderers rather than for noise. Blender's Principled BSDF is layered: turning its specular up
+	// takes that energy out of the diffuse underneath. Bernini's direct diffuse is split by
+	// `1 - metallic` alone (ADR-10 of the plan) and the specular is added on top, so a dielectric
+	// here keeps a diffuse Blender has already spent.
+	//
+	// That divergence lands where the diffuse dominates, not here. At the limbs Cycles drops from
+	// 0.5128 to 0.4988 when the specular is switched on and Bernini does not move at all -- about
+	// 0.014 of display luma, which is the price ADR-10 names. At the peak the lobe is most of the
+	// answer and the two agree to 0.003, so the margin is for the model difference this case does
+	// *not* sit in the middle of, and it is not doing any work at these settings.
+	//
+	// What Blender 5.2.1 measured (`--samples 256 --sun 0.6 --no-world --albedo 0.5 --roughness 0.3
+	// --specular 0.5`, whose Specular IOR Level 0.5 is F0 = 0.04, the same dielectric Bernini's
+	// specularFactor 1.0 gives):
+	//
+	//   Cycles     centre 0.672   left 0.4988   right 0.4989
+	constexpr float c_BlenderSpecCentre = 0.672f;
+	constexpr float c_SpecMargin        = 0.02f;
+
+	// The same sphere repainted, not a second one: two coincident spheres z-fight and the test would
+	// be measuring whichever won.
+	view->SetSubmeshMaterialOverride(
+		instance,
+		0,
+		scene->CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(c_SunAlbedo, c_SunAlbedo, c_SunAlbedo, 1.0f),
+	          .metallicFactor  = 0.0f,
+	          .roughnessFactor = 0.3f,
+	          .specularFactor  = 1.0f }));
+
+	for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+
+	const std::string specShot = "assets/golden/blender_parity_sun_specular.got.png";
+	gfx->ScreenshotPng(target, specShot);
+
+	const auto centre =
+		bgl::test::MeanColor(specShot, c_SphereCentreX, c_SphereY, c_BoxSize, c_BoxSize);
+
+	INFO("specular centre " << centre.Luma() << " against Blender's " << c_BlenderSpecCentre);
+	CHECK(std::abs(centre.Luma() - c_BlenderSpecCentre) < c_SpecMargin);
 }

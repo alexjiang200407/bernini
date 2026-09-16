@@ -1,6 +1,8 @@
 #pragma once
 
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
 #include <cstdint>
 
 namespace bgl::test
@@ -17,4 +19,15 @@ namespace bgl::test
 	 */
 	[[nodiscard]] assetlib::ImageData
 	MakeBlackFloatCube(uint32_t faceSize);
+
+	/**
+	 * Binds an environment that emits nothing, at exposure 1.
+	 *
+	 * PBR does not render without an environment -- there is no default -- so this is how a case
+	 * measures a light that is not the environment. The cubes are convolved from a black source by
+	 * the real bake rather than fabricated, because a hand-built mip chain is one more thing to get
+	 * wrong in a test whose whole job is to be the thing that is right.
+	 */
+	void
+	ApplyBlackEnvironment(bgl::IScene* scene, bgl::ISceneView* view);
 }

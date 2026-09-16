@@ -24,10 +24,18 @@ sphere box, in Bernini's longitude convention and the 1/pi convention of its irr
 is what the test's level is asserted against -- Cycles renders that integral to a percent, and the
 float cube the bake convolved is not shipped.
 
-What is measured is exposure and image-based lighting alone. Eevee's shadows and the sun it
-extracts from the world above a threshold are switched off: with them on, the sphere carries a
+By default what is measured is exposure and image-based lighting alone. Eevee's shadows and the sun
+it extracts from the world above a threshold are switched off: with them on, the sphere carries a
 shadow term Bernini has no pass for, and that gap is a lighting feature rather than an asset fix.
 Everything else is factory: AgX, look None, exposure 0, the world at strength 1.0.
+
+`--sun` adds an analytic sun of its own, which is a different measurement: Bernini has that term now
+and not the shadow one, so the sun a probe *places* is comparable where the sun Eevee *extracts*
+still is not. Pair it with `--no-world` to take the environment out and leave the sun alone in the
+frame. The strength it sets is pi times the number handed to `ISceneView::SetDirectionalLight` --
+Blender's Sun strength is irradiance in W/m^2, Bernini's intensity is what its irradiance map would
+hold, and that map carries E/pi. Losing the factor on either side moves the result by a stop, and
+this is the only thing that checks it.
 
 The camera sits where the test's does -- Bernini's (0, 0, 20) looking at the origin with +Y up,
 which in Blender's Z-up frame is its front view: -Y looking along +Y with +Z up. Bernini reads an
@@ -42,6 +50,7 @@ import os
 import sys
 
 import bpy
+import mathutils
 import numpy as np
 
 WIDTH, HEIGHT = 400, 300
@@ -52,6 +61,9 @@ BOX = 16
 BOXES = {
     "sphereLeft": (141, 142),
     "sphereRight": (243, 142),
+    # The sphere's centre, where a head-on sun's half vector meets the normal: the limbs sit far
+    # down the specular lobe and measure a level the lobe barely reaches.
+    "sphereCentre": (192, 142),
     "skyLeft": (10, 20),
     "skyRight": (374, 20),
 }
@@ -62,6 +74,7 @@ BOXES = {
 NORMALS = {
     "sphereLeft": (-0.632, 0.0, 0.775),
     "sphereRight": (0.632, 0.0, 0.775),
+    "sphereCentre": (0.0, 0.0, 1.0),
 }
 
 
@@ -98,7 +111,64 @@ def forest_exr():
     )
 
 
-def build_scene(hdr, samples, engine):
+def sun_directions(azimuth_deg, elevation_deg):
+    """The sun as Bernini states it and as Blender needs it.
+
+    Returns `(toSun, travel)` in Bernini axes and `travel_blender` in Blender's. Bernini is Y-up and
+    Blender is Z-up, and the probe's camera fixes the rest of the mapping: Bernini (x, y, z) is
+    Blender (x, -z, y).
+    """
+    az = math.radians(azimuth_deg)
+    el = math.radians(elevation_deg)
+    to_sun = (math.cos(el) * math.sin(az), math.sin(el), math.cos(el) * math.cos(az))
+    travel = tuple(-c for c in to_sun)
+    return to_sun, travel, (travel[0], -travel[2], travel[1])
+
+
+def add_sun(intensity, azimuth_deg, elevation_deg):
+    """A directional light of `intensity` in Bernini's units, placed on Blender's sky.
+
+    **The unit conversion is the point of this whole comparison.** Blender's Sun strength is
+    irradiance in W/m^2 on a surface facing it; Bernini's intensity is what its irradiance map would
+    hold, and that map carries E/pi. So the strength here is pi times the number the engine is given,
+    and a lambertian surface then reflects `albedo * intensity * NdotL` on both sides. Drop the pi on
+    either side and this probe is what says so.
+
+    The angular diameter is zeroed: Blender's default sun is the real one at 0.526 degrees, which
+    softens a terminator and widens a highlight, and Bernini's is a pure direction.
+    """
+    _, _, travel_blender = sun_directions(azimuth_deg, elevation_deg)
+
+    data = bpy.data.lights.new("sun", type="SUN")
+    data.energy = intensity * math.pi
+    data.angle = 0.0
+    data.use_shadow = False
+
+    obj = bpy.data.objects.new("sun", data)
+    # A Blender sun emits along its own -Z; this is the turn from there to where it should travel.
+    obj.rotation_euler = (
+        mathutils.Vector((0.0, 0.0, -1.0))
+        .rotation_difference(mathutils.Vector(travel_blender).normalized())
+        .to_euler()
+    )
+    bpy.context.scene.collection.objects.link(obj)
+
+
+def sun_irradiance(intensity, azimuth_deg, elevation_deg):
+    """`intensity * NdotL` under each sphere box, in the same 1/pi units `irradiance` reports.
+
+    So a Lambertian surface reflects `albedo * sunIrradiance`, exactly as it reflects
+    `albedo * irradiance` from the environment, and the two are directly comparable.
+    """
+    to_sun, _, _ = sun_directions(azimuth_deg, elevation_deg)
+    out = {}
+    for name, n in NORMALS.items():
+        ndotl = max(sum(a * b for a, b in zip(n, to_sun)), 0.0)
+        out[name] = round(intensity * ndotl, 4)
+    return out
+
+
+def build_scene(hdr, samples, engine, material=None):
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE" if engine == "EEVEE" else "CYCLES"
     scene.cycles.device = "CPU"
@@ -130,7 +200,7 @@ def build_scene(hdr, samples, engine):
     env = nodes.new("ShaderNodeTexEnvironment")
     env.image = bpy.data.images.load(hdr)
     background = nodes.new("ShaderNodeBackground")
-    background.inputs["Strength"].default_value = 1.0
+    background.inputs["Strength"].default_value = 0.0 if (material or {}).get("noWorld") else 1.0
     out = nodes.new("ShaderNodeOutputWorld")
     links.new(env.outputs["Color"], background.inputs["Color"])
     links.new(background.outputs["Background"], out.inputs["Surface"])
@@ -141,10 +211,14 @@ def build_scene(hdr, samples, engine):
     mat = bpy.data.materials.new("probe")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (0.18, 0.18, 0.18, 1.0)
-    bsdf.inputs["Metallic"].default_value = 0.0
-    bsdf.inputs["Roughness"].default_value = 1.0
-    bsdf.inputs["Specular IOR Level"].default_value = 0.0  # Lambertian: the two split-sum models differ by construction
+    m = material or {}
+    albedo = m.get("albedo", 0.18)
+    bsdf.inputs["Base Color"].default_value = (albedo, albedo, albedo, 1.0)
+    bsdf.inputs["Metallic"].default_value = m.get("metallic", 0.0)
+    bsdf.inputs["Roughness"].default_value = m.get("roughness", 1.0)
+    # Lambertian by default: the two split-sum models differ by construction, so the environment
+    # case compares a diffuse level and nothing else. A sun case may ask for the lobe back.
+    bsdf.inputs["Specular IOR Level"].default_value = m.get("specular", 0.0)
     sphere.data.materials.append(mat)
 
     cam_data = bpy.data.cameras.new("probe")
@@ -221,9 +295,27 @@ def main():
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--engine", choices=("EEVEE", "CYCLES"), default="EEVEE")
     parser.add_argument("--sweep", action="store_true", help="Grey emissions through the tone map instead")
+    parser.add_argument("--sun", type=float, default=0.0, help="Sun intensity in Bernini's units; 0 adds no sun")
+    parser.add_argument("--sun-azimuth", type=float, default=0.0, help="Degrees, Bernini's convention")
+    parser.add_argument("--sun-elevation", type=float, default=0.0, help="Degrees above the horizon")
+    parser.add_argument("--no-world", action="store_true", help="Black background, so the sun is the only light")
+    parser.add_argument("--albedo", type=float, default=0.18)
+    parser.add_argument("--roughness", type=float, default=1.0)
+    parser.add_argument("--metallic", type=float, default=0.0)
+    parser.add_argument("--specular", type=float, default=0.0, help="Principled Specular IOR Level")
     args = parser.parse_args(argv)
 
-    build_scene(args.hdr, args.samples, args.engine)
+    material = {
+        "albedo": args.albedo,
+        "roughness": args.roughness,
+        "metallic": args.metallic,
+        "specular": args.specular,
+        "noWorld": args.no_world,
+    }
+
+    build_scene(args.hdr, args.samples, args.engine, material)
+    if args.sun > 0.0:
+        add_sun(args.sun, args.sun_azimuth, args.sun_elevation)
     if args.sweep:
         print(json.dumps({"blender": bpy.app.version_string, "sweep": sweep(args.out)}, indent=2))
         return
@@ -235,6 +327,8 @@ def main():
                 "engine": args.engine,
                 "boxes": box_means(args.out),
                 "irradiance": irradiance(args.hdr),
+                "sunIrradiance": sun_irradiance(args.sun, args.sun_azimuth, args.sun_elevation),
+                "material": material,
             },
             indent=2,
         )
