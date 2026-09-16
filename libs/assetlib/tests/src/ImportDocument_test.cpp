@@ -1,4 +1,5 @@
 #include <assetlib/codecs.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 
@@ -9,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
+#include <assetlib_structs/SourceStamp.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -504,4 +506,130 @@ TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grou
 		twice.clipFloors = { { "Run", 0.0f }, { "Run", 1.0f } };
 		CHECK_THROWS(DocumentText(twice));
 	}
+}
+
+namespace
+{
+	EnvironmentImportParameters
+	DistinctEnvironment()
+	{
+		// Every field distinct, so a key written under the wrong name reads back as a mismatch.
+		return { .skyFaceSize        = 64,
+			     .skyMips            = 5,
+			     .prefilterFaceSize  = 32,
+			     .prefilterMips      = 4,
+			     .prefilterSamples   = 16,
+			     .irradianceFaceSize = 8 };
+	}
+}
+
+TEST_CASE("an environment document round-trips its parameters, canonically", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.source             = "Authored/EnvSources/forest.hdr";
+	document.environment        = DistinctEnvironment();
+	document.envSourceStamp     = SourceStamp{ 21, 22 };
+	document.envSourceBakeToken = 23;
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	CHECK(read == document);
+	CHECK(DocumentText(read) == text);
+}
+
+// The one parameter a mesh import has is meaningless for an environment, and keying on it would make
+// a change to the mesh default re-convolve every environment in every project.
+TEST_CASE("an environment document writes no sample rate", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	CHECK(DocumentText(document).find("sampleRate") == std::string::npos);
+
+	const uint64_t before = parametersHashOf(document);
+	document.sampleRate   = 60.0f;
+	CHECK(parametersHashOf(document) == before);
+}
+
+TEST_CASE("every environment parameter reaches the hash", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	const uint64_t base  = parametersHashOf(document);
+
+	for (uint32_t EnvironmentImportParameters::* field :
+	     { &EnvironmentImportParameters::skyFaceSize,
+	       &EnvironmentImportParameters::skyMips,
+	       &EnvironmentImportParameters::prefilterFaceSize,
+	       &EnvironmentImportParameters::prefilterMips,
+	       &EnvironmentImportParameters::prefilterSamples,
+	       &EnvironmentImportParameters::irradianceFaceSize })
+	{
+		ImportDocument changed = document;
+		++((*changed.environment).*field);
+		CHECK(parametersHashOf(changed) != base);
+	}
+}
+
+// The stamp and the token are the float sources' key, not the importer's input: a re-projection
+// under a new token must not also re-key every container beside it.
+TEST_CASE("the environment source's stamp and token stay out of the hash", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	const uint64_t base  = parametersHashOf(document);
+
+	document.envSourceStamp     = SourceStamp{ 1, 2 };
+	document.envSourceBakeToken = 3;
+	CHECK(parametersHashOf(document) == base);
+}
+
+// Every `.bimport` in every project today is a mesh's, and none of them may re-key or re-save
+// differently because a second kind learned to exist.
+TEST_CASE("a mesh document carries none of the environment keys", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.sampleRate = 24.0f;
+
+	const std::string text = DocumentText(document);
+	for (const std::string_view key :
+	     { "environment", "envSourceStampSize", "envSourceStampHash", "envSourceBakeToken" })
+		CHECK(text.find(key) == std::string::npos);
+
+	CHECK_FALSE(DocumentFrom(text).environment.has_value());
+}
+
+TEST_CASE("an environment key a reader does not know survives, and keys", "[importdoc][env]")
+{
+	const std::string_view text = R"({
+	"parameters": { "environment": { "skyFaceSize": 64, "denoise": "oidn" } }
+})";
+
+	const ImportDocument document = DocumentFrom(text);
+	REQUIRE(document.environment.has_value());
+	CHECK(document.environment->skyFaceSize == 64);
+	CHECK(document.environment->skyMips == EnvironmentImportParameters().skyMips);
+
+	const std::string rewritten = DocumentText(document);
+	CHECK(rewritten.find("\"denoise\"") != std::string::npos);
+	CHECK(DocumentFrom(rewritten) == document);
+
+	ImportDocument unknowing      = document;
+	unknowing.extraParametersJson = "{}";
+	CHECK(parametersHashOf(unknowing) != parametersHashOf(document));
+}
+
+TEST_CASE("a malformed environment is refused with its reason", "[importdoc][env]")
+{
+	CHECK_THROWS(DocumentFrom(R"({ "parameters": { "environment": 7 } })"));
+	for (const std::string_view value : { "0", "-1", "\"big\"", "1.5", "4294967296" })
+	{
+		INFO(value);
+		CHECK_THROWS_WITH(
+			DocumentFrom(
+				std::string(R"({ "parameters": { "environment": { "skyMips": )") +
+				std::string(value) + " } } }"),
+			Catch::Matchers::ContainsSubstring("skyMips"));
+	}
+	CHECK_THROWS(DocumentFrom(R"({ "envSourceBakeToken": -1 })"));
 }

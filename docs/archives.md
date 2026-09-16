@@ -173,7 +173,7 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that sit the explicit exclusions: any key under `Authored/Meshes/` or
+top of that sit the explicit exclusions: any key under `Authored/Meshes/`, `Authored/EnvSources/` or
 `Derived/SourceTextures/` — matched as a prefix, since `Meshes` names a directory in each half —
 and the `.bimport` import document by its *type* — it is a registered extension, so without its own
 rule it would ride into the archive it must never reach.
@@ -182,6 +182,7 @@ rule it would ride into the archive it must never reach.
 |---|---|
 | `Derived/SourceTextures/` | excluded — authoring source; the bake reads it, the runtime never does |
 | `Authored/Meshes/` | excluded — the imported `.glb` sources and their `.bimport` documents |
+| `Authored/EnvSources/` | excluded — the imported environment sources (`.hdr`, float `.ktx2` cubes) and their `.bimport` documents; the runtime reads the `.bsky` / `.benvl` bakes, never these |
 | `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings. Deliberate, so silent (never in `skippedByExtension`) |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.bproj` file | excluded — editor metadata |

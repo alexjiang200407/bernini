@@ -639,17 +639,17 @@ main(int argc, char** argv)
 		{
 			const assetlib::Project project = assetlib::Project::Open(projectFile);
 
-			auto importDesc               = assetlib::EnvImportDesc();
-			importDesc.source             = envInput;
-			importDesc.name               = envName;
-			importDesc.skyFaceSize        = envSkyboxSize;
-			importDesc.skyMips            = envSkyboxMips;
-			importDesc.skyMipLevel        = envSkyboxMip;
-			importDesc.prefilterFaceSize  = envSize;
-			importDesc.prefilterMips      = envMips;
-			importDesc.prefilterSamples   = envSamples;
-			importDesc.irradianceFaceSize = envIemSize;
-			importDesc.threads            = envThreads;
+			auto importDesc                          = assetlib::EnvImportDesc();
+			importDesc.source                        = envInput;
+			importDesc.name                          = envName;
+			importDesc.parameters.skyFaceSize        = envSkyboxSize;
+			importDesc.parameters.skyMips            = envSkyboxMips;
+			importDesc.skyMipLevel                   = envSkyboxMip;
+			importDesc.parameters.prefilterFaceSize  = envSize;
+			importDesc.parameters.prefilterMips      = envMips;
+			importDesc.parameters.prefilterSamples   = envSamples;
+			importDesc.parameters.irradianceFaceSize = envIemSize;
+			importDesc.threads                       = envThreads;
 
 			const assetlib::EnvImportResult imported =
 				project.GetStore().ImportEnvironment(importDesc);

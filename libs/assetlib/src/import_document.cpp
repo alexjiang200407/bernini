@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <array>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 
 #include <core/err/util.h>
@@ -9,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <string>
@@ -35,6 +38,25 @@ namespace assetlib
 		constexpr std::string_view c_SkeletonKey         = "skeleton";
 		constexpr std::string_view c_OutputsKey          = "outputs";
 		constexpr std::string_view c_SourceKey           = "source";
+		constexpr std::string_view c_EnvironmentKey      = "environment";
+		constexpr std::string_view c_EnvStampSizeKey     = "envSourceStampSize";
+		constexpr std::string_view c_EnvStampHashKey     = "envSourceStampHash";
+		constexpr std::string_view c_EnvBakeTokenKey     = "envSourceBakeToken";
+
+		struct EnvironmentField
+		{
+			std::string_view key;
+			uint32_t EnvironmentImportParameters::* field;
+		};
+
+		constexpr std::array<EnvironmentField, 6> c_EnvironmentFields = { {
+			{ "skyFaceSize", &EnvironmentImportParameters::skyFaceSize },
+			{ "skyMips", &EnvironmentImportParameters::skyMips },
+			{ "prefilterFaceSize", &EnvironmentImportParameters::prefilterFaceSize },
+			{ "prefilterMips", &EnvironmentImportParameters::prefilterMips },
+			{ "prefilterSamples", &EnvironmentImportParameters::prefilterSamples },
+			{ "irradianceFaceSize", &EnvironmentImportParameters::irradianceFaceSize },
+		} };
 
 		/**
 		 * The document's parameter subtree, built once: this is both what Serialize writes and what
@@ -50,7 +72,21 @@ namespace assetlib
 			auto parameters = doc::parseObject(
 				document.extraParametersJson,
 				"import document: extraParametersJson");
-			parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
+
+			// Written into whatever the reader kept of the object, so a key a newer branch nested
+			// here survives and still reaches the hash.
+			if (document.environment)
+			{
+				auto& environment = parameters[c_EnvironmentKey];
+				if (!environment.is_object())
+					environment = nlohmann::json::object();
+				for (const auto& [key, field] : c_EnvironmentFields)
+					environment[key] = (*document.environment).*field;
+			}
+			else
+			{
+				parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
+			}
 
 			if (!document.clipFloors.empty())
 			{
@@ -137,6 +173,34 @@ namespace assetlib
 				}
 				it->erase(grounds);
 			}
+			if (auto environment = it->find(c_EnvironmentKey); environment != it->end())
+			{
+				core::throw_runtime_error_if(
+					!environment->is_object(),
+					"import document: '{}' is not an object",
+					c_EnvironmentKey);
+
+				auto parameters = EnvironmentImportParameters();
+				for (const auto& [key, field] : c_EnvironmentFields)
+				{
+					const auto value = environment->find(key);
+					if (value == environment->end())
+						continue;
+
+					core::throw_runtime_error_if(
+						!value->is_number_unsigned() || value->get<uint64_t>() == 0 ||
+							value->get<uint64_t>() > std::numeric_limits<uint32_t>::max(),
+						"import document: environment '{}' is not a positive 32-bit count",
+						key);
+					parameters.*field = value->get<uint32_t>();
+					environment->erase(value);
+				}
+				document.environment = parameters;
+
+				if (environment->empty())
+					it->erase(environment);
+			}
+
 			document.extraParametersJson = it->dump();
 			json.erase(it);
 		}
@@ -155,7 +219,10 @@ namespace assetlib
 		     { std::pair<std::string_view, uint64_t*>{ c_TextureStampSizeKey,
 		                                               &document.textureStamp.size },
 		       { c_TextureStampHashKey, &document.textureStamp.hash },
-		       { c_TextureBakeTokenKey, &document.textureBakeToken } })
+		       { c_TextureBakeTokenKey, &document.textureBakeToken },
+		       { c_EnvStampSizeKey, &document.envSourceStamp.size },
+		       { c_EnvStampHashKey, &document.envSourceStamp.hash },
+		       { c_EnvBakeTokenKey, &document.envSourceBakeToken } })
 		{
 			if (const auto it = json.find(stampKey); it != json.end())
 			{
@@ -240,6 +307,14 @@ namespace assetlib
 		}
 		if (document.textureBakeToken != 0)
 			json[c_TextureBakeTokenKey] = document.textureBakeToken;
+
+		if (document.envSourceStamp != SourceStamp())
+		{
+			json[c_EnvStampSizeKey] = document.envSourceStamp.size;
+			json[c_EnvStampHashKey] = document.envSourceStamp.hash;
+		}
+		if (document.envSourceBakeToken != 0)
+			json[c_EnvBakeTokenKey] = document.envSourceBakeToken;
 
 		// Omitted rather than written empty, for the same reason textureDir is: a document for a
 		// source that produced neither stays byte-identical to one written before these existed.

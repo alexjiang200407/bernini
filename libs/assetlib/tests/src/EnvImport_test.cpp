@@ -97,15 +97,15 @@ namespace
 		EnvImportDesc
 		Desc() const
 		{
-			auto desc               = EnvImportDesc();
-			desc.source             = Source();
-			desc.name               = "forest";
-			desc.skyFaceSize        = 8;
-			desc.prefilterFaceSize  = 8;
-			desc.prefilterMips      = 2;
-			desc.prefilterSamples   = 4;
-			desc.irradianceFaceSize = 8;
-			desc.threads            = 1;
+			auto desc                          = EnvImportDesc();
+			desc.source                        = Source();
+			desc.name                          = "forest";
+			desc.parameters.skyFaceSize        = 8;
+			desc.parameters.prefilterFaceSize  = 8;
+			desc.parameters.prefilterMips      = 2;
+			desc.parameters.prefilterSamples   = 4;
+			desc.parameters.irradianceFaceSize = 8;
+			desc.threads                       = 1;
 			return desc;
 		}
 
@@ -240,8 +240,8 @@ namespace
 	EnvImportDesc
 	FailsAfterSky(const Sandbox& sandbox)
 	{
-		auto desc               = sandbox.Desc();
-		desc.irradianceFaceSize = 0;
+		auto desc                          = sandbox.Desc();
+		desc.parameters.irradianceFaceSize = 0;
 		return desc;
 	}
 }
