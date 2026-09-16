@@ -227,6 +227,7 @@ namespace assetlib
 
 		ImportDocument document =
 			importParameters(ImportDocumentPath(target.source), target.sampleRate);
+		document.source     = target.source;
 		document.textureDir = target.textureDir;
 		document.skeleton   = target.skeleton;
 		document.outputs    = target.outputs;
@@ -350,12 +351,17 @@ namespace assetlib
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_ImportDocumentExtension)
 				continue;
 
-			const std::string key       = mountKeyFor(GetDataRoot(), entry.path());
-			const std::string sourceKey = importedSourceKeyFor(key);
+			const std::string key = mountKeyFor(GetDataRoot(), entry.path());
 
 			ReauthoredDocument result{ key, ReauthoredDocument::Outcome::kUnchanged, {} };
 			try
 			{
+				const std::vector<std::byte> bytes =
+					core::file::read_file_bytes(entry.path().string());
+				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
+
+				const std::string sourceKey = importedSourceKeyFor(key, document);
+
 				const auto   claimed   = claims.find(sourceKey);
 				const size_t claimants = claimed == claims.end() ? 0 : claimed->second.size();
 				core::throw_runtime_error_if(
@@ -376,10 +382,6 @@ namespace assetlib
 						sourceKey,
 						unreadable.front());
 				}
-
-				const std::vector<std::byte> bytes =
-					core::file::read_file_bytes(entry.path().string());
-				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 
 				document.bindings =
 					claimants == 0 ?

@@ -288,17 +288,21 @@ namespace assetlib
 			MigratedFile file{ documentPath, MigratedFile::Outcome::kUnchanged, {} };
 			try
 			{
-				const auto found = facts.find(importedSourceKeyFor(documentKey));
-				if (found == facts.end())
-					continue;
-
 				ImportDocument       document = loadImportDocument(GetFiles(), documentKey);
 				const ImportDocument before   = document;
 
-				if (document.skeleton.empty())
-					document.skeleton = found->second.skeleton;
-				if (document.outputs.empty())
-					document.outputs = found->second.outputs;
+				// Derivable from the document's own key, unlike the two below, so it is backfilled
+				// whether or not the source is on disk to be read.
+				if (document.source.empty())
+					document.source = importedSourceKeyFor(documentKey, document);
+
+				if (const auto found = facts.find(document.source); found != facts.end())
+				{
+					if (document.skeleton.empty())
+						document.skeleton = found->second.skeleton;
+					if (document.outputs.empty())
+						document.outputs = found->second.outputs;
+				}
 
 				// A source with no rig has no skeleton to record, so "still empty" is settled
 				// rather than pending; only a real change may report one.

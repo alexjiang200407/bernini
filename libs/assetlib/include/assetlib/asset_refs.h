@@ -57,7 +57,7 @@ namespace assetlib
 		kEnvSource,         // a .bsky or .benvl names the radiance its bake read
 		kMeshSkeleton,      // a .bmesh's joint indices address a .bskel
 		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
-		kImportedSource,    // a .bimport names the .glb it was imported from
+		kImportedSource,    // a .bimport names the source it was imported from, and stores it
 		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
 		kDocumentOutput,    // a .bimport names a container its source produced
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
@@ -68,15 +68,19 @@ namespace assetlib
 	 * Whether an edge of this kind is a path *stored inside* the referrer, and so something a
 	 * rename has to rewrite there.
 	 *
-	 * False for the two the scan derives from the referrer's own key: a `.bimport` sits beside its
-	 * `.glb` and a `.bavatar` at the swapped key of its `.bskel`. Those follow a rename by the file
-	 * moving, and there is nothing in either document to edit -- an avatar in particular holds bone
-	 * names and no path at all, so a rename that tried to rewrite one would have nothing to write.
+	 * False only for the one the scan derives from the referrer's own key: a `.bavatar` sits at the
+	 * swapped key of its `.bskel` and holds bone names and no path at all, so a rename that tried
+	 * to rewrite one would have nothing to write. It follows a rename by the file moving.
+	 *
+	 * A `.bimport` sits beside its source and *also* records it, because the swap that finds one
+	 * cannot answer for a source kind with more than one extension. So its edge is stored like any
+	 * other: a document whose source moved without it rewritten names a file that is gone, and
+	 * names it confidently enough that the fallback is never reached.
 	 */
 	[[nodiscard]] constexpr bool
 	isStoredRef(const RefKind kind) noexcept
 	{
-		return kind != RefKind::kImportedSource && kind != RefKind::kAvatarSkeleton;
+		return kind != RefKind::kAvatarSkeleton;
 	}
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
