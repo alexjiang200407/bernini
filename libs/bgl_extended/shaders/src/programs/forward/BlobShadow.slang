@@ -46,6 +46,10 @@ static const float cTopSlack = 0.02;
 // it ramps out, so a surface tilted past ~70 degrees -- a wall -- receives nothing.
 static const float cFacingRamp = 0.35;
 
+// The corners of the shadow volume: a box, so the two footprint axes and the sweep give 2^3. The
+// loop below reads i's bits as those three signs, which is why this is not free to change.
+static const uint cVolumeCorners = 8;
+
 struct VSOut
 {
     float4 position : SV_Position;
@@ -54,7 +58,7 @@ struct VSOut
 
 // The volume a blob's shadow can land in: the caster's footprint swept from just above the caster
 // down to fadeHeight below it.
-void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[8])
+void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolumeCorners])
 {
     let n = gBlobShadowData.groundNormal;
 
@@ -70,7 +74,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[8])
     let bottom = position - n * blob.fadeHeight;
 
     [unroll]
-    for (uint i = 0; i < 8; ++i)
+    for (uint i = 0; i < cVolumeCorners; ++i)
     {
         let sx = (i & 1) != 0 ? 1.0 : -1.0;
         let sy = (i & 2) != 0 ? 1.0 : -1.0;
@@ -92,7 +96,7 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
     // reconstruction anyway. A corner at or behind the near plane makes the projected bounds
     // meaningless, so that quad covers the whole viewport instead.
-    float3 corners[8];
+    float3 corners[cVolumeCorners];
     VolumeCorners(blob, mesh, corners);
 
     var lo = float2(1.0, 1.0);
@@ -100,7 +104,7 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     var behind = false;
 
     [unroll]
-    for (uint i = 0; i < 8; ++i)
+    for (uint i = 0; i < cVolumeCorners; ++i)
     {
         let clip = mul(gBlobShadowData.viewProj, float4(corners[i], 1.0));
         if (clip.w <= 0.0)
