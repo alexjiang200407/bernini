@@ -1,8 +1,11 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 
+#include "Windows/AnimationEditor/transition_spans.h"
+
 #include <bgl/InstanceDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #include <gamelib/anim_blend.h>
 
 // The two rules behind the Animation panel's clip switch: which pose source takes a record rewrite
@@ -122,4 +125,51 @@ TEST_CASE("A cut is one sample interval, and never zero", "[animation]")
 	// A rate a clip could not really have still yields something drawable.
 	CHECK(editor::CutSeconds(0.0f) > 0.0f);
 	CHECK(editor::CutSeconds(-5.0f) > 0.0f);
+}
+
+TEST_CASE("A previewed transition plays its outgoing end from the window's start", "[animation]")
+{
+	// A 0.7 s one-shot faded into a loop, as the Blend tab stamps it: the clock is absolute and sits
+	// near c_Now, so an outgoing end anchored at zero would already have clamped to its last frame
+	// and shown a still pose through the whole run-up.
+	constexpr uint32_t c_Roll       = 0;
+	constexpr uint32_t c_Run        = 1;
+	constexpr float    c_SampleRate = 30.0f;
+
+	const auto layout = editor::WindowFor(c_Now, 0.25f, 0.6f, 0.9f);
+	const auto desc   = editor::TransitionPlayback(c_Roll, c_Run, 0.0f, 0.0f, layout);
+
+	const bgl::PlaybackSlot& from = desc.slot[0];
+	REQUIRE(from.nodeIndex == c_Roll);
+	CHECK(from.tRef == Catch::Approx(layout.windowStart));
+
+	// InstanceDesc.h's frame: phase advanced by (t - tRef) * rate * sampleRate.
+	const auto frameAt = [&](const float t) {
+		return from.phase + (t - from.tRef) * from.rate * c_SampleRate;
+	};
+	CHECK(frameAt(layout.windowStart) == Catch::Approx(0.0f));
+	CHECK(frameAt(layout.start) == Catch::Approx(0.6f * c_SampleRate));
+
+	// The outgoing end is still the pose when the window opens, and the incoming one takes over.
+	CHECK(DominantNode(desc, layout.windowStart) == c_Roll);
+	CHECK(DominantNode(desc, layout.windowEnd) == c_Run);
+}
+
+TEST_CASE("A previewed transition carries each end's blend-space parameter", "[animation]")
+{
+	const auto layout = editor::WindowFor(c_Now, 0.5f, 0.6f, 0.9f);
+	const auto desc   = editor::TransitionPlayback(4, 5, 0.25f, 0.75f, layout);
+
+	CHECK(desc.slot[0].param0 == Catch::Approx(0.25f));
+	CHECK(desc.slot[0].param1 == Catch::Approx(0.25f));
+
+	const bool incomingAtThreeQuarters = [&] {
+		for (const bgl::PlaybackSlot& slot : desc.slot)
+		{
+			if (slot.nodeIndex == 5 && slot.param1 == Catch::Approx(0.75f))
+				return true;
+		}
+		return false;
+	}();
+	CHECK(incomingAtThreeQuarters);
 }

@@ -727,8 +727,7 @@ AnimationEditorWindow::StampTransition()
 		static_cast<uint32_t>(to),
 		/*fromParameter*/ 0.0f,
 		parameter,
-		layout.start,
-		layout.duration);
+		layout);
 
 	m_TransitionLayout = layout;
 	m_Strip->SetLayout(layout);
