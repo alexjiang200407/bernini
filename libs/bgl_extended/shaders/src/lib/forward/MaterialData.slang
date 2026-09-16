@@ -8,6 +8,7 @@ import idl.MaterialType;
 import idl.PbrMaterial;
 import idl.RawEntry;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 import lib.math.PbrShading;
 import lib.types.SurfaceEnv;
 import lib.types.RawHandleArena;
@@ -61,9 +62,9 @@ public struct MaterialData
         return env;
     }
 
-    public SurfaceParams GetSurfaceParams()
+    public ShadingParams GetShadingParams()
     {
-        SurfaceParams params;
+        ShadingParams params;
         params.cameraPos = cameraPos;
         params.exposure = exposure;
         params.envRotation = float3x3(envRotation);

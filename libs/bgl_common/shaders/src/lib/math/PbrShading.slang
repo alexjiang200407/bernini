@@ -1,5 +1,6 @@
 import bgl.PbrSurface;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
@@ -135,7 +136,7 @@ public float4 BlendedSurface(SurfaceLobes lobes, float alpha, float transmission
 
 public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     E env,
-    SurfaceParams params,
+    ShadingParams params,
     float3 worldPos,
     float3 worldNormal,
     float4 worldTangent,

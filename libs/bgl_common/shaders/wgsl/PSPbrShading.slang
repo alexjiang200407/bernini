@@ -3,6 +3,7 @@
 // ISurfaceEnv with no bindless handle.
 import bgl.PbrSurface;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 import lib.math.PbrShading;
 
 TextureCube gIrradiance;
@@ -28,7 +29,7 @@ struct BoundEnv : ISurfaceEnv
 float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TANGENT) : SV_Target
 {
     BoundEnv env;
-    SurfaceParams params = {
+    ShadingParams params = {
         float3(0.0, 1.0, 0.0), 1.0, float3x3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), float3(0.0, -1.0, 0.0), float3(1.0, 1.0, 1.0)
     };
     PbrSurface surface;
