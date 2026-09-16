@@ -6,6 +6,7 @@
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/api.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl/types/MeshInstanceFlags.h>
@@ -296,6 +297,24 @@ namespace bgl
 		 */
 		virtual void
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) = 0;
+
+		/**
+		 * Sets this view's one analytic light: a sun, casting no shadow. Replaces any previously set
+		 * light. Per-view for the same reason the environment is -- two views of one Scene are lit
+		 * independently.
+		 *
+		 * It *adds* to the environment map rather than replacing it, and the environment already
+		 * carries whatever sun its source HDR held, so the two double-count a sun that is in both.
+		 * Which one to turn down is the caller's decision; nothing here can tell.
+		 *
+		 * A view that never calls this is lit by its environment alone, exactly as before this
+		 * existed: the default intensity is 0.
+		 *
+		 * @throws SceneError if any component is not finite, if `intensity` is negative, or if
+		 *         `direction` has zero length.
+		 */
+		virtual void
+		SetDirectionalLight(const DirectionalLightDesc& desc) = 0;
 
 		/**
 		 * Binds a cubemap as this view's skybox background, drawn behind the scene.

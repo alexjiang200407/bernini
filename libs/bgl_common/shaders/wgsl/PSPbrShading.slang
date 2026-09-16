@@ -28,7 +28,9 @@ struct BoundEnv : ISurfaceEnv
 float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TANGENT) : SV_Target
 {
     BoundEnv env;
-    SurfaceParams params = { float3(0.0, 1.0, 0.0), 1.0, float3x3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0) };
+    SurfaceParams params = {
+        float3(0.0, 1.0, 0.0), 1.0, float3x3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0), float3(0.0, -1.0, 0.0), float3(1.0, 1.0, 1.0)
+    };
     PbrSurface surface;
     surface.baseColor = float4(0.5, 0.5, 0.5, 1.0);
     surface.orm = float3(1.0, 0.5, 0.0);
