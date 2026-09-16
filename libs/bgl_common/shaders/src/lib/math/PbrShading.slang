@@ -1,10 +1,48 @@
 import bgl.PbrSurface;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Schlick as written, for a light with a direction: the angle is the view against the half vector,
+// where the roughness-adjusted form above answers for a whole environment at the view angle.
+public float3 FresnelSchlick(float cosTheta, float3 F0)
+{
+    return F0 + (float3(1.0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+/**
+ * The GGX/Trowbridge-Reitz normal distribution: what fraction of the surface's microfacets face
+ * `H`. `alpha` is the squared perceptual roughness, which is the remapping the rest of this file
+ * assumes -- the LOD comment below states it as `a = roughness^2`.
+ */
+public float DistributionGGX(float NdotH, float alpha)
+{
+    let a2 = alpha * alpha;
+    let d = NdotH * NdotH * (a2 - 1.0) + 1.0;
+
+    return a2 / max(3.14159265 * d * d, 1e-8);
+}
+
+/**
+ * Smith's height-correlated masking-shadowing, as the *visibility* term -- `G` with the BRDF's
+ * `1 / (4 NdotL NdotV)` already folded in.
+ *
+ * Folded rather than left separate because that denominator and `G` both go to zero at grazing
+ * angles, and dividing one by the other there is where a specular lobe produces the white rim
+ * nobody can source. Heitz's derivation; the pairing is what Frostbite and Filament ship.
+ */
+public float VisibilitySmithGGXCorrelated(float NdotV, float NdotL, float alpha)
+{
+    let a2 = alpha * alpha;
+    let v = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);
+    let l = NdotV * sqrt(NdotL * NdotL * (1.0 - a2) + a2);
+
+    return 0.5 / max(v + l, 1e-8);
 }
 
 /**
@@ -98,7 +136,7 @@ public float4 BlendedSurface(SurfaceLobes lobes, float alpha, float transmission
 
 public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     E env,
-    SurfaceParams params,
+    ShadingParams params,
     float3 worldPos,
     float3 worldNormal,
     float4 worldTangent,
@@ -178,12 +216,48 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     let prefilteredColor = env.Prefiltered(ToEnvSpace(R, params.envRotation), lod);
     float2 envBRDF = env.BrdfLut(cosTheta, roughness);
 
+    // The sun. Its radiance is in the irradiance map's 1/pi convention, so it lands in the diffuse
+    // lobe on exactly the terms the map's own value does and the two are directly comparable.
+    //
+    // Not scaled by `ao`: that is a visibility estimate for light arriving from every direction, and
+    // this light arrives from one. What occludes a directional light is a shadow, which nothing here
+    // casts -- so a surface facing the sun is lit whatever stands in front of it.
+    //
+    // The dielectric/metal split is `1 - metallic` rather than the `kD` above, because `kD` comes
+    // from FresnelSchlickRoughness at the *view* angle, which is the split-sum's approximation for
+    // an environment and not the energy a single direction hands to the diffuse lobe.
+    float3 L = -params.sunDirection;
+    float sunNdotL = max(dot(N, L), 0.0);
+    float3 sunDiffuse = albedo * params.sunRadiance * sunNdotL * (1.0 - metallic);
+
+    // The sun's specular lobe, Cook-Torrance against the same F0 and dielectric weight the
+    // environment's half uses -- one statement of what the surface reflects, two lights asking it.
+    //
+    // The pi is the 1/pi convention arriving from the other side. `sunRadiance` is what the
+    // irradiance map would hold, and that map carries E/pi, so the true irradiance this lobe
+    // integrates against is pi times it. The diffuse term above never sees the factor because
+    // Lambert's own 1/pi cancels it; here there is nothing to cancel against, and dropping it is
+    // the easiest mistake in this file to make and the hardest to see.
+    float3 H = normalize(V + L);
+    float sunNdotV = max(cosTheta, 1e-4);
+    float alpha = roughness * roughness;
+
+    float3 sunF = FresnelSchlick(max(dot(V, H), 0.0), F0) * specularWeight;
+    float sunD = DistributionGGX(max(dot(N, H), 0.0), alpha);
+    float sunVis = VisibilitySmithGGXCorrelated(sunNdotV, sunNdotL, alpha);
+
+    float3 sunSpecular = sunF * (sunD * sunVis * 3.14159265 * sunNdotL) * params.sunRadiance;
+
     SurfaceLobes lobes;
     // envBRDF.y is the split-sum's F90 term, which the weight scales as much as F0 -- it is already
     // in F. Left unweighted, a surface with the specular switched off keeps a grazing rim of it.
     lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
-    lobes.diffuse = kD * diffuse * ao * params.exposure;
-    lobes.specular = prefilteredColor * lobes.reflectance * params.exposure;
+    lobes.diffuse = (kD * diffuse * ao + sunDiffuse) * params.exposure;
+    // `reflectance` stays the environment's own ratio and the sun is added past it: it is what a
+    // blended surface raises its coverage by, and a sun's radiance is not a fraction of anything.
+    // The highlight still reaches a transmissive surface -- the lobe is summed either way, and the
+    // transparent PSOs add premultiplied colour (docs/passes.md#blended-surfaces).
+    lobes.specular = (prefilteredColor * lobes.reflectance + sunSpecular) * params.exposure;
     lobes.emissive = surface.emissive * params.exposure;
 
     return lobes;

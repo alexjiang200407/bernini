@@ -71,7 +71,7 @@ recorded under the frustum's scope and reach the view's own buffers by the outwa
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
 state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
 view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour,
-motion-vector, depth and static-depth handles), `lighting` (environment map, exposure, optional
+motion-vector, depth and static-depth handles), `lighting` (environment map, exposure, the sun, optional
 skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
 `c_SceneColorName` / `c_DepthName` / `c_StaticDepthName` in
@@ -188,6 +188,15 @@ blend cannot. `PbrMaterial::transmissionFactor` says which:
   Fresnel reflectance instead, because a reflection replaces the backdrop it sits on: at a grazing
   angle, where Fresnel returns nearly everything, the surface has to hide what is behind it or the
   environment would be added to a backdrop still showing through in full.
+
+**Each lobe carries two lights.** `EvaluateSurface` sums the environment's split-sum answer and the
+sun's analytic one into the same `diffuse` and `specular`, so nothing downstream knows there are two:
+the diffuse takes a Lambert term and the specular a Cook-Torrance GGX one, both against the `F0` and
+the dielectric weight the environment's half already computed. `reflectance` stays the environment's
+own ratio — a blended surface raises its coverage by it, and a sun's radiance is not a fraction of
+anything. The sun is scaled by neither the material's ambient occlusion nor a shadow, because there
+is no shadow pass; what it is scaled by, and in which units, is
+[bgl_api.md](bgl_api.md)'s `SetDirectionalLight`.
 
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `PbrSurface` — the
 material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
@@ -525,7 +534,7 @@ empty row but not a misordering.
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
 derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
-(samplers, IBL maps, camera position, exposure) — binds the meshlet state (viewport +
+(samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.

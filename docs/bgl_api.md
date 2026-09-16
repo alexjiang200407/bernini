@@ -182,6 +182,7 @@ disagrees, trust the header, then fix this doc.
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
 | `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
+| `DirectionalLightDesc` | [libs/bgl/include/bgl/types/DirectionalLightDesc.h](libs/bgl/include/bgl/types/DirectionalLightDesc.h) | The sun: the direction it **travels** (a midday sun is `(0, -1, 0)`), a colour, and an intensity in the irradiance map's units — so a sun and an environment at the same number light a facing surface equally. Casts no shadow. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
 | `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport, time}`. Holds a **copy** of the camera. |
@@ -445,6 +446,12 @@ flowchart TD
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
+* **`SetDirectionalLight(desc)`** — @pre every component finite, `intensity` non-negative,
+  `direction` non-zero (it is normalized here). The engine's one analytic light. It **adds** to the
+  environment map rather than replacing it, and the environment already integrates whatever sun its
+  source HDR held, so a scene that sets both double-counts one; which to turn down is the caller's
+  call, and nothing in bgl can tell. `intensity` defaults to 0, so a view that never calls this is
+  lit by its environment alone.
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
 

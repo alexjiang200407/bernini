@@ -8,6 +8,7 @@ import idl.MaterialType;
 import idl.PbrMaterial;
 import idl.RawEntry;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 import lib.math.PbrShading;
 import lib.types.SurfaceEnv;
 import lib.types.RawHandleArena;
@@ -35,6 +36,11 @@ public struct MaterialData
     // the matrix the uniform mirror writes; only its 3x3 is read. See PbrShading::ToEnvSpace.
     public float4x4 envRotation;
 
+    // The sun, already resolved by the draw: the direction it travels, and its colour scaled by its
+    // intensity. Additive on the environment above, which integrates whatever sun its source held.
+    public float3 sunDirection;
+    public float3 sunRadiance;
+
     public SamplerState.Handle anisoLinearWrapSampler;
     public SamplerState.Handle linearClampSampler;
 
@@ -56,12 +62,14 @@ public struct MaterialData
         return env;
     }
 
-    public SurfaceParams GetSurfaceParams()
+    public ShadingParams GetShadingParams()
     {
-        SurfaceParams params;
+        ShadingParams params;
         params.cameraPos = cameraPos;
         params.exposure = exposure;
         params.envRotation = float3x3(envRotation);
+        params.sunDirection = sunDirection;
+        params.sunRadiance = sunRadiance;
         return params;
     }
 };

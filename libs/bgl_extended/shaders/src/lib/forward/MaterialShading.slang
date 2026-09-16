@@ -26,7 +26,7 @@ public extension MaterialData
 
     SurfaceLobes EvaluateLobes(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
     {
-        return EvaluateSurface(GetSurfaceEnv(), GetSurfaceParams(), input.worldPos, input.normal, input.tangent, surface, isFrontFace);
+        return EvaluateSurface(GetSurfaceEnv(), GetShadingParams(), input.worldPos, input.normal, input.tangent, surface, isFrontFace);
     }
 
     /**

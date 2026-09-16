@@ -8,12 +8,3 @@ public interface ISurfaceEnv
     uint PrefilterFaceTexels();
     float2 BrdfLut(float cosTheta, float roughness);
 };
-
-// The plain half of the same environment, which needs no lookup and so no interface.
-public struct SurfaceParams
-{
-    public float3 cameraPos;
-    public float exposure;
-    /// World to environment space, the rotation the cubes are looked up through.
-    public float3x3 envRotation;
-};
