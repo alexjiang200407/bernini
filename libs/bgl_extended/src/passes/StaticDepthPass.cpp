@@ -6,6 +6,7 @@
 #include "fg/PassDesc.h"
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
+#include "passes/ForwardPass.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
@@ -57,7 +58,7 @@ namespace bgl
 		};
 
 		// The buckets whose depth is a receiver's and needs no coverage: every static row that
-		// writes depth unconditionally, drawn through the one depth-only pipeline.
+		// writes depth unconditionally.
 		std::array<uint16_t, 4 + cGameSlots>
 		StaticOpaquePsos() noexcept
 		{
@@ -123,6 +124,14 @@ namespace bgl
 
 			return buckets;
 		}
+
+		// The mesh stage's half of ForwardPass's culling: a row the hardware does not cull hands
+		// back faces to the material's doubleSided, exactly as ForwardPass::Execute binds it.
+		[[nodiscard]] uint32_t
+		MeshStageCullsBackfaces(const uint16_t pso) noexcept
+		{
+			return ForwardPass::PsoCullMode(pso) == RasterCullMode::kNone ? 1u : 0u;
+		}
 	}
 
 	void
@@ -157,31 +166,35 @@ namespace bgl
 			return pipelineDesc;
 		};
 
-		// The forward static geometry stage over a depth-only pixel stage, with no colour
-		// attachment: one pipeline serves every opaque static bucket, since opaque depth does not
-		// depend on the material.
-		pipelines.Add(m_Kernel, makeDesc(c_PixelSrc, RasterCullMode::kBack));
+		// Opaque depth does not depend on the material, so the opaque rows share a depth-only pixel
+		// stage and differ only in where back faces are culled.
+		pipelines.Add(m_HardwareCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kBack));
+		pipelines.Add(m_MaterialCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kNone));
 
-		// The coverage buckets pair the same geometry stage with each row's discard-only pixel
-		// stage, unculled exactly as their colour pipelines are -- a back face the colour pass
-		// draws must be a receiver too.
 		const auto buckets = StaticCoverageBuckets();
 		for (size_t i = 0; i < buckets.size(); ++i)
 		{
 			pipelines.Add(
 				m_CoverageKernels[i],
-				makeDesc(buckets[i].pixelSrc, RasterCullMode::kNone));
+				makeDesc(buckets[i].pixelSrc, ForwardPass::PsoCullMode(buckets[i].pso)));
 		}
 	}
 
 	void
 	StaticDepthPass::CheckBindings() const
 	{
-		BinderNames("StaticDepthPass"sv, { &m_Kernel, 1 })
-			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
-			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
-			.Check("expansionData"sv, c_ExpansionDataFields)
-			.Check("viewData"sv, c_ViewDataFields);
+		// The opaque kernels read the material arena for doubleSided alone.
+		const std::array<const MeshletKernel*, 2> opaque = { &m_HardwareCullKernel,
+			                                                 &m_MaterialCullKernel };
+		for (const MeshletKernel* kernel : opaque)
+		{
+			BinderNames("StaticDepthPass"sv, { kernel, 1 })
+				.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+				.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
+				.Check("expansionData"sv, c_ExpansionDataFields)
+				.Check("viewData"sv, c_ViewDataFields)
+				.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers));
+		}
 
 		BinderNames("StaticDepthPass"sv, { m_CoverageKernels.data(), m_CoverageKernels.size() })
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
@@ -218,8 +231,9 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
-		// The material arena, for the coverage stages' records and textures. Declared so its
-		// barriers are placed; the typed view itself is bound off the draw (see ForwardPass).
+		// The material arena, for doubleSided and the coverage stages' records and textures.
+		// Declared so its barriers are placed; the typed view itself is bound off the draw (see
+		// ForwardPass).
 		for (const auto& binding : c_MaterialBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -255,8 +269,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-			(*foundExpansion)["baseTable"]     = idl::BaseTable::kPsoBucketed;
-			(*foundExpansion)["cullBackfaces"] = 0u;
+			(*foundExpansion)["baseTable"] = idl::BaseTable::kPsoBucketed;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -274,7 +287,10 @@ namespace bgl
 		ICommandList* cmd = resources.GetCommandList();
 
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "Static depth pipeline must be initialized");
+		gassert(
+			m_HardwareCullKernel.pipeline.IsInitialized() &&
+				m_MaterialCullKernel.pipeline.IsInitialized(),
+			"Static depth pipelines must be initialized");
 
 		if (draw.view->GetInstanceCount() == 0)
 		{
@@ -286,37 +302,40 @@ namespace bgl
 		gfxState.frameBuffer  = FrameBuffer().SetDepthAttachment(draw.targets.staticDepth);
 		gfxState.indirectArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
-		// One pipeline per bucket kind, one bucket per dispatch: the cbuffer is re-uploaded on
-		// every dispatch, so rewriting psoIndex between them is sound (docs/uniforms.md).
-		BindKernel(m_Kernel, draw, resources);
-		gfxState.kernel = &m_Kernel;
-
-		auto opaqueExpansion = m_Kernel.FindUniforms("expansionData");
-		for (const uint16_t pso : StaticOpaquePsos())
-		{
-			if (opaqueExpansion)
+		// One bucket per dispatch: the cbuffer is re-uploaded on every dispatch, so rewriting
+		// psoIndex and cullBackfaces between them is sound (docs/uniforms.md).
+		const auto dispatch = [&](MeshletKernel& kernel, const uint16_t pso) {
+			if (auto expansion = kernel.FindUniforms("expansionData"))
 			{
-				(*opaqueExpansion)["psoIndex"] = static_cast<uint32_t>(pso);
+				(*expansion)["psoIndex"]      = static_cast<uint32_t>(pso);
+				(*expansion)["cullBackfaces"] = MeshStageCullsBackfaces(pso);
 			}
 
+			gfxState.kernel = &kernel;
 			cmd->SetMeshletState(gfxState);
 			cmd->DispatchMeshIndirect(pso);
+		};
+
+		BindKernel(m_HardwareCullKernel, draw, resources);
+		BindKernel(m_MaterialCullKernel, draw, resources);
+
+		for (const uint16_t pso : StaticOpaquePsos())
+		{
+			const RasterCullMode cull = ForwardPass::PsoCullMode(pso);
+			gassert(
+				cull == RasterCullMode::kBack || cull == RasterCullMode::kNone,
+				"StaticDepthPass mirrors back-face or no hardware culling only");
+
+			dispatch(
+				cull == RasterCullMode::kNone ? m_MaterialCullKernel : m_HardwareCullKernel,
+				pso);
 		}
 
 		const auto buckets = StaticCoverageBuckets();
 		for (size_t i = 0; i < buckets.size(); ++i)
 		{
-			MeshletKernel& kernel = m_CoverageKernels[i];
-			BindKernel(kernel, draw, resources);
-
-			if (auto expansion = kernel.FindUniforms("expansionData"))
-			{
-				(*expansion)["psoIndex"] = static_cast<uint32_t>(buckets[i].pso);
-			}
-
-			gfxState.kernel = &kernel;
-			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(buckets[i].pso);
+			BindKernel(m_CoverageKernels[i], draw, resources);
+			dispatch(m_CoverageKernels[i], buckets[i].pso);
 		}
 	}
 }

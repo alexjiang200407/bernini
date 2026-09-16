@@ -475,6 +475,13 @@ namespace bgl
 		DrawTransparent(draw, resources);
 	}
 
+	RasterCullMode
+	ForwardPass::PsoCullMode(const uint16_t pso) noexcept
+	{
+		gassert(pso < idl::c_PsoCount, "PsoCullMode: pso out of range");
+		return c_Psos[pso].cull;
+	}
+
 	void
 	ForwardPass::DrawTransparent(const DrawData& draw, const PassContext& resources)
 	{

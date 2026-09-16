@@ -2,6 +2,7 @@
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
+#include "types/RasterState.h"
 #include <array>
 #include <bgl_common/idl/PsoType.h>
 #include <spdlog/spdlog.h>
@@ -54,6 +55,16 @@ namespace bgl
 
 		void
 		Execute(const DrawData& draw, const PassContext& resources);
+
+		/**
+		 * How `pso`'s pipeline culls in hardware. A row that culls nothing leaves back faces to the
+		 * mesh stage, which reads each material's doubleSided flag. A pass that draws the same buckets
+		 * must mirror this, or its depth holds faces the colour pass never drew.
+		 *
+		 * @pre pso < idl::c_PsoCount.
+		 */
+		[[nodiscard]] static RasterCullMode
+		PsoCullMode(uint16_t pso) noexcept;
 
 	private:
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
