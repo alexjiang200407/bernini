@@ -18,5 +18,13 @@ namespace bgl
 
 		// Height above the receiving surface at which the disc has fully faded out. World units.
 		float fadeHeight = 2.0f;
+
+		// How far above the placement's origin the disc is cast from, in world units. A placement
+		// whose origin sits on the ground -- a tree, a rock -- casts from ground level, and since a
+		// shadow only falls down, everything growing around that origin sits above the caster and
+		// takes nothing while the ground between takes it in full; every such edge then flickers
+		// under the temporal jitter. Lifting the cast point above the surrounding clutter puts all
+		// of it below the caster, where the disc fades over it instead of cutting on and off.
+		float casterLift = 0.0f;
 	};
 }

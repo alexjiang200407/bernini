@@ -7,4 +7,5 @@ public struct BlobShadow
     public float radius;
     public float intensity;
     public float fadeHeight;
+    public float casterLift;
 };

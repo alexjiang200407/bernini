@@ -62,7 +62,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
 {
     let n = gBlobShadowData.groundNormal;
 
-    let position = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w);
+    let position = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + gBlobShadowData.groundNormal * blob.casterLift;
     let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
     let radius = blob.radius * scale;
 
@@ -145,6 +145,16 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     }
 }
 
+// The static receiver under a raster position: its depth texel unprojected through the same
+// jittered matrix the receiver pass rasterized with.
+float3 ReceiverWorld(float2 position, float depth)
+{
+    let rect = gBlobShadowData.viewportRect;
+    let ndc = float2((position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (position.y - rect.y) * rect.w * 2.0);
+    let world = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
+    return world.xyz / world.w;
+}
+
 struct PSOut
 {
     float4 color : SV_Target;
@@ -161,21 +171,13 @@ PSOut PSMain(VSOut input)
     let pixel = uint2(input.position.xy);
     let depth = gBlobShadowData.staticDepth.Load(pixel).r;
 
-    let rect = gBlobShadowData.viewportRect;
-    let ndc = float2((input.position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (input.position.y - rect.y) * rect.w * 2.0);
-
-    let world4 = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
-    let world = world4.xyz / world4.w;
-
-    // Derivatives ahead of any discard: a lane that has discarded no longer feeds its quad.
-    let dpdx = ddx(world);
-    let dpdy = ddy(world);
-
     // A cleared texel has no static receiver under it.
     if (depth >= 1.0)
     {
         discard;
     }
+
+    let world = ReceiverWorld(input.position.xy, depth);
 
     PSOut output;
     output.depth = depth;
@@ -184,7 +186,7 @@ PSOut PSMain(VSOut input)
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
     let n = gBlobShadowData.groundNormal;
 
-    let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w);
+    let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + n * blob.casterLift;
     let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
 
     // A shadow falls down: a surface above its caster receives nothing, one below fades with the
@@ -204,9 +206,29 @@ PSOut PSMain(VSOut input)
     }
 
     // A shadow also lands only on what faces up: without this a wall beside the caster catches a
-    // vertical smear. The receiver's facing comes from how the reconstruction slides across the
-    // pixel quad, and the ramp keeps walkable slopes at full strength.
-    let normal = normalize(cross(dpdy, dpdx));
+    // vertical smear, and the ramp keeps walkable slopes at full strength. The facing cannot come
+    // from the raster quad's own derivatives, though: a quad spanning a silhouette -- a grass
+    // blade against the street behind it -- differences two different surfaces, and the cross of
+    // those vectors is the gap between them, not a normal; under the sub-pixel jitter those edge
+    // quads land differently every frame, so a decal draped over foliage flickered along every
+    // blade. Per axis, the neighbour nearer in depth is the one on this pixel's own surface, and
+    // the normal is built one-sided from those two. A neighbour off the viewport reads as a
+    // cleared texel, which the selection then avoids like any other far side of an edge.
+    let zxp = gBlobShadowData.staticDepth.Load(pixel + uint2(1, 0)).r;
+    let zxm = gBlobShadowData.staticDepth.Load(pixel - uint2(1, 0)).r;
+    let zyp = gBlobShadowData.staticDepth.Load(pixel + uint2(0, 1)).r;
+    let zym = gBlobShadowData.staticDepth.Load(pixel - uint2(0, 1)).r;
+
+    let xPlus = abs(zxp - depth) <= abs(zxm - depth);
+    let yPlus = abs(zyp - depth) <= abs(zym - depth);
+    let sideX = ReceiverWorld(input.position.xy + float2(xPlus ? 1.0 : -1.0, 0.0), xPlus ? zxp : zxm);
+    let sideY = ReceiverWorld(input.position.xy + float2(0.0, yPlus ? 1.0 : -1.0), yPlus ? zyp : zym);
+
+    // Signed so the one-sided differences keep the two-sided winding whichever side was nearer.
+    let dx = xPlus ? sideX - world : world - sideX;
+    let dy = yPlus ? sideY - world : world - sideY;
+
+    let normal = normalize(cross(dy, dx));
     let facing = smoothstep(0.0, cFacingRamp, dot(normal, n));
     if (facing <= 0.0)
     {

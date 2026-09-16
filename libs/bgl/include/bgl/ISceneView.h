@@ -204,8 +204,8 @@ namespace bgl
 		 * consumers are skinned units, which nothing enforces.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
-		 *         `desc.fadeHeight` is not finite and positive, or `desc.intensity` is not
-		 *         finite in [0, 1].
+		 *         `desc.fadeHeight` is not finite and positive, `desc.intensity` is not
+		 *         finite in [0, 1], or `desc.casterLift` is not finite and non-negative.
 		 */
 		virtual void
 		SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc) = 0;
