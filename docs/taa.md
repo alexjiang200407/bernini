@@ -159,7 +159,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   frame per edit; the alternative is a ghost lasting tens.
 
   It counts **discrete rebinds only** — a material's contents, a submesh's binding, a texture's
-  release, an environment map, the scene's ground plane, a blob shadow set or cleared. Anything a caller moves every frame (the
+  release, an environment map, the scene's ground plane, a blob shadow set or cleared, a placement
+  hidden or unhidden. Anything a caller moves every frame (the
   camera, a transform, the exposure) stays out of it: reprojection already follows that, and an epoch that moved with it
   would leave a moving scene permanently unaccumulated. A rewrite that lands on the bytes already
   there still counts, since the entries are GPU-layout mirrors whose padding no comparison can
@@ -175,7 +176,9 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   reach this through destroy + respawn and need no call of their own. `SetInstanceTransform` is
   not such a change and deliberately does not count: a placement carries the transform the
   previous frame drew it with, so where it moved to is a value reprojection follows rather than a
-  rebind it cannot. Scrubbing the timeline does
+  rebind it cannot. `SetMeshInstanceFlags` counts only when the `kHidden` bit changes, which takes
+  the surface off screen or puts it back exactly as a deletion or a placement does; rewriting the
+  word a placement already holds draws the same frame and reports nothing. Scrubbing the timeline does
   not: no instance churns, the pose moves within one clip, and the vector written across the jump
   is the one reprojection wants. This is the boundary that keeps the rule affordable — a caller
   that spawned or despawned every frame would never accumulate, and would need a batched-placement
