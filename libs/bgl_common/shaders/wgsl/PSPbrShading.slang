@@ -3,6 +3,7 @@
 // ISurfaceEnv with no bindless handle.
 import bgl.PbrSurface;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 import lib.math.PbrShading;
 
 TextureCube gIrradiance;

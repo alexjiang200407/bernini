@@ -1,5 +1,6 @@
 import bgl.PbrSurface;
 import idl.ISurfaceEnv;
+import idl.ShadingParams;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
