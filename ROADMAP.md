@@ -327,7 +327,9 @@ and portability.
   - [ ] Test motion vectors across LODs, both pose sources, corpses, mounts, and both transitions.
 - [ ] Light and Shadow
   - [ ] Async Compute
-  - [ ] Directional Lighting
+  - [x] Directional Lighting — one sun per view, additive on the image-based light. It casts no
+    shadow; that is the three lines below, and until they land a lit surface is lit through whatever
+    stands in front of it.
   - [ ] Point Light
   - [ ] Ambient / Sky Light
   - [ ] Cascaded Shadow Maps
