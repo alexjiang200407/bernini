@@ -986,8 +986,9 @@ goes with it, and the count they are warned with has to say so.
 Which directories the *project* cannot spare is not a question the reference graph answers — it plans
 a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
 `assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
-— the eleven rows of `project_layout.h`'s `c_RequiredDirectories`, `Authored/Meshes` (the imported `.glb`
-sources and their `.bimport` documents) among them. `Project::Open` puts a missing one
+— the rows of `project_layout.h`'s `c_RequiredDirectories`, `Authored/Meshes` (the imported `.glb`
+sources and their `.bimport` documents) and `Authored/EnvSources` (the imported `.hdr` and float-cube
+sources and theirs) among them. `Project::Open` puts a missing one
 straight back, so deleting one would not even stick. A folder made *inside* a
 category, like `Derived/SourceTextures/kirk`, is the user's.
 

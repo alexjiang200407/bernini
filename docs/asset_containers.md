@@ -113,7 +113,18 @@ A `.bimport` names three things, two of which nothing else can derive
 * **`outputs`** -- every container this source produced, as mount keys, sorted. A *produced* rig is
   listed; a *bound* one is not, so deleting a source never takes another source's rig with it.
 
-All three sit outside `parameters`, with `bindings`: none of them changes what the importer computes.
+An environment source's document differs in what `parameters` holds and in the key recorded beside
+it. Its `parameters` hold an `environment` object naming the six numbers that decide its float
+sources' pixels (`EnvironmentImportParameters`, in
+[env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h)), and no `sampleRate`, which nothing reads for it
+and which would otherwise re-key every environment whenever the mesh default moved. The float
+sources are keyed the way a mesh's extracted textures are, below: `envSourceStampSize` /
+`envSourceStampHash` and `envSourceBakeToken`, outside `parameters`. Unlike `c_TextureBakeToken`,
+`c_EnvSourceBakeToken` has no canary pin — the stages it covers run through libm trigonometry, whose
+last bits differ by platform — so its bump is the author's to remember.
+
+`source`, `skeleton` and `outputs` sit outside `parameters`, with `bindings`: none of them changes
+what the importer computes.
 `outputs` is what makes the derived set answerable from the authored side, which is the only way to
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.

@@ -190,10 +190,11 @@ namespace assetlib
 		// Projected at the skybox's size, which is the largest of the three: the prefilter and the
 		// irradiance convolve it down anyway, so starting them from the finer cube costs only the
 		// projection.
-		const auto faceSize = (std::max)(desc.skyFaceSize, desc.prefilterFaceSize);
-		ImageData  source   = isHdr(desc.source) ?
-		                          equirectToCube(loadRadianceHdr(desc.source), faceSize) :
-		                          loadKTX2(desc.source);
+		const auto faceSize =
+			(std::max)(desc.parameters.skyFaceSize, desc.parameters.prefilterFaceSize);
+		ImageData source = isHdr(desc.source) ?
+		                       equirectToCube(loadRadianceHdr(desc.source), faceSize) :
+		                       loadKTX2(desc.source);
 
 		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
 		// gone. Re-convolving one costs a generation of quantization, so it is a recovery path and
@@ -219,10 +220,11 @@ namespace assetlib
 			// not a bad request, and the levels it can carry are still the ones a viewer would ask
 			// for.
 			const auto maxMips =
-				static_cast<uint32_t>(std::bit_width(std::max(desc.skyFaceSize, 1u)));
-			const uint32_t skyMips = std::clamp(desc.skyMips, 1u, maxMips);
+				static_cast<uint32_t>(std::bit_width(std::max(desc.parameters.skyFaceSize, 1u)));
+			const uint32_t skyMips = std::clamp(desc.parameters.skyMips, 1u, maxMips);
 
-			const ImageData chain = skyChain(source, desc.skyFaceSize, skyMips, 256, desc.threads);
+			const ImageData chain =
+				skyChain(source, desc.parameters.skyFaceSize, skyMips, 256, desc.threads);
 
 			const std::string ref = assetRef(desc.sourceDir, desc.name, "_sky.ktx2");
 			writeSource(GetDataRoot(), created, ref, chain);
@@ -242,12 +244,12 @@ namespace assetlib
 		if (desc.lighting)
 		{
 			throwIfCancelled(cancel);
-			const ImageData irradiance = irradianceSh(source, desc.irradianceFaceSize);
+			const ImageData irradiance = irradianceSh(source, desc.parameters.irradianceFaceSize);
 
 			auto prefilterDesc      = PrefilterDesc();
-			prefilterDesc.faceSize  = desc.prefilterFaceSize;
-			prefilterDesc.mipLevels = desc.prefilterMips;
-			prefilterDesc.samples   = desc.prefilterSamples;
+			prefilterDesc.faceSize  = desc.parameters.prefilterFaceSize;
+			prefilterDesc.mipLevels = desc.parameters.prefilterMips;
+			prefilterDesc.samples   = desc.parameters.prefilterSamples;
 			prefilterDesc.threads   = desc.threads;
 
 			throwIfCancelled(cancel);

@@ -42,6 +42,7 @@ namespace assetlib
 			const std::string key = relative.generic_string();
 
 			return isUnder(key, c_MeshSourcesDirectoryName) ||
+			       isUnder(key, c_EnvSourcesDirectoryName) ||
 			       isUnder(key, c_SourceTexturesDirectoryName);
 		}
 
