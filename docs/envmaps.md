@@ -1,5 +1,17 @@
 # Environment Maps — authoring, baking and consuming an environment
 
+**An analytic sun double-counts the one already in here.** `ISceneView::SetDirectionalLight` adds a
+directional light on top of whatever these maps hold, and the convolutions below integrate the
+source HDR whole -- including its sun. Set both to a sun that is in both and the scene is lit twice
+by it. Nothing detects this: the renderer cannot read a `.benv` (it links `assetlib_structs`, never
+`assetlib`), and the cubes are radiance with no note of where it came from. Which one to turn down
+is an authoring decision -- a sky captured with a visible sun wants a dim analytic one or none, and a
+sky without one wants the analytic sun to carry the key. The engine's default intensity is 0, so a
+project that never asks for a sun is lit by these maps alone. Extracting the sun from the source at
+bake time and convolving the residual, which is what Eevee does above a threshold, would remove the
+choice; it is not done here, and `scripts/blender_probe.py` switches Eevee's extraction off for
+exactly that reason when it measures these maps.
+
 An environment is a sky and the image-based lighting derived from it. On disk it is **three
 containers**, not one file: a `.bsky`, a `.benvl`, and a `.benv` that names the pair. This document
 covers how they relate, how a source becomes them, and the authoring rules that still bite when a cube
