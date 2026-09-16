@@ -465,10 +465,15 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 
 Renders the static geometry's depth into the target's own receiver texture (`staticDepth`, the
 scene depth's format and grid), ahead of `Forward`: what the blob-shadow decal reconstructs the
-surface under each pixel from. One depth-only pipeline — the `StaticMesh` geometry stage over
-`programs.forward.DepthOnly`, a pixel stage with no outputs, since a pipeline with no pixel shader
-at all is reflection-only on Metal — serves every opaque static bucket (`kOpaque_StaticMesh_*`,
-`kAssert_StaticMesh`, and each game slot's static opaque row). The cutout and hashed static rows
+surface under each pixel from. The opaque static buckets (`kOpaque_StaticMesh_*`,
+`kAssert_StaticMesh`, and each game slot's static opaque row) share a depth-only pixel stage —
+`programs.forward.DepthOnly`, with no outputs, since a pipeline with no pixel shader at all is
+reflection-only on Metal — over the `StaticMesh` geometry stage, in two pipelines split by where
+back faces are culled. Every pipeline and every dispatch here takes its culling from
+`ForwardPass::PsoCullMode`, the one table: hardware culling where the Forward row culls, and
+otherwise `cullBackfaces` hands back faces to the mesh stage and the material's `doubleSided`,
+exactly as `Forward` binds it — so the receiver holds precisely the faces the colour pass drew, a
+double-sided surface's back included and a single-sided one's excluded. The cutout and hashed static rows
 render too, each through its own `programs.forward.DepthOnly_*` twin: the identical coverage
 discard with nothing shaded — same records, same samplers, and the colour pass's own
 `alphaHashSeed` — so a shadow lands on a bush's leaves and falls through its gaps, texel for texel
@@ -479,7 +484,8 @@ beneath its caster — and statics are therefore drawn twice per frame, a cost t
 repays when this is promoted into the shared depth prepass the roadmap already assumes.
 
 * **In:** `compactDispatchArgs` as indirect args; the `c_ForwardDataBuffers` scene buffers, the
-  two `c_ExpansionBuffers`, and the material arena (`c_MaterialBuffers`) for the coverage stages.
+  two `c_ExpansionBuffers`, and the material arena (`c_MaterialBuffers`) for `doubleSided` and the
+  coverage stages.
 * **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
   `BlobShadowPhase`).
 * **Skipped** when the view's instance count is 0.
