@@ -32,6 +32,9 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--fps` | 30 | frame `i` renders at clip time `i / fps` |
 | `--warmup` | 8 | frames rendered first, held at time 0 |
 | `--env`, `--env-root` | `forest.benv`, `--project` | the environment it is lit by, and the root that is keyed under |
+| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held |
+| `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
+| `--sun-color` | `1 1 1` | its colour, as three floats |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |
 
@@ -61,6 +64,16 @@ the CSV's path. It exits non-zero only when it could not render.
   binary by the path `just exes --target assetlib_cli` prints.
 - **Know whether it was lit.** The test project has no environment of its own; without
   `--env-root "$PWD/assets/Data"` it renders unlit, which is a black image, and says `unlit`.
+- **The sun is off unless asked for, and it does not replace the environment.** `bgl`'s own default
+  intensity is 0, so every render this tool made before there was a sun is the render it still
+  makes. Switched on with `--sun`, it *adds* to `--env`, whose cubes already integrate whatever sun
+  the source HDR held — so a model lit by both is lit by two suns, and which to turn down is yours
+  to decide ([Environment Maps](envmaps.md)). It casts no shadow.
+- **A sun near the camera flattens the model; one across from it rakes the form.** The fixed view
+  below sits at roughly azimuth 22, elevation 18, so those angles light the model straight down the
+  lens and show the least shape. The defaults sit off that on purpose, and a sun a quarter turn
+  away is what makes a silhouette read. Far enough round and the model is backlit, where the sun
+  reaches nothing the camera can see — an image indistinguishable from `--sun 0`.
 - **The camera is not a choice.** The model is framed on its bounding sphere from one fixed
   three-quarter view — a skinned mesh on the box its clip set's poses fill, so the character stays
   in frame through every clip.

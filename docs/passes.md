@@ -525,7 +525,7 @@ empty row but not a misordering.
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
 derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
-(samplers, IBL maps, camera position, exposure) — binds the meshlet state (viewport +
+(samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.

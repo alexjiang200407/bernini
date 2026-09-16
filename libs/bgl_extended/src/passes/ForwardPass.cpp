@@ -49,7 +49,7 @@ namespace bgl
 		};
 
 		// clang-format off
-		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
+		constexpr std::array<std::string_view, 11> c_MaterialDataFields = {
 			"anisoLinearWrapSampler"sv,
 			"linearClampSampler"sv,
 			"irradianceMap"sv,
@@ -59,6 +59,8 @@ namespace bgl
 			"exposure"sv,
 			"envRotation"sv,
 			"alphaHashSeed"sv,
+			"sunDirection"sv,
+			"sunRadiance"sv,
 		};
 		// clang-format on
 
@@ -418,6 +420,8 @@ namespace bgl
 			matData["exposure"].SetIfValid(draw.lighting.exposure);
 			matData["envRotation"].SetIfValid(draw.lighting.envRotation);
 			matData["alphaHashSeed"].SetIfValid(draw.viewState.alphaHashSeed);
+			matData["sunDirection"].SetIfValid(draw.lighting.sunDirection);
+			matData["sunRadiance"].SetIfValid(draw.lighting.sunRadiance);
 		}
 	}
 
