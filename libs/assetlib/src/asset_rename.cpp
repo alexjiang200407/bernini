@@ -121,8 +121,14 @@ namespace assetlib
 		void
 		planImportGroup(const std::filesystem::path& dataRoot, RenamePlan& plan)
 		{
-			const auto source = RenameMove{ importedSourceKeyFor(plan.subject.from),
-				                            importedSourceKeyFor(plan.subject.to) };
+			const ImportDocument document = loadImportDocument(dataRoot / plan.subject.from);
+
+			// The source lands where the document lands, keeping its own extension: the two find
+			// each other by sitting in one directory under one stem, so a move that kept the
+			// source where it was would break the pair rather than move it.
+			const std::string from = importedSourceKeyFor(plan.subject.from, document);
+			const auto        source =
+				RenameMove{ from, swapExtension(plan.subject.to, extensionOf(from)) };
 
 			core::throw_runtime_error_if(
 				!std::filesystem::exists(dataRoot / source.from),
@@ -135,7 +141,6 @@ namespace assetlib
 			const std::string_view was = stemOf(plan.subject.from);
 			const std::string_view now = stemOf(plan.subject.to);
 
-			const ImportDocument document = loadImportDocument(dataRoot / plan.subject.from);
 			for (const std::string& output : document.outputs)
 			{
 				const std::string key = normalizeRef(output);
@@ -230,6 +235,7 @@ namespace assetlib
 				for (MaterialBinding& binding : document.bindings)
 					binding.material = mapTarget(plan, binding.material);
 
+				document.source   = mapTarget(plan, document.source);
 				document.skeleton = mapTarget(plan, document.skeleton);
 				for (std::string& output : document.outputs) output = mapTarget(plan, output);
 				return AssetCodec<ImportDocument>::Serialize(document);

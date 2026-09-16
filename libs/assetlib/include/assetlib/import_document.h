@@ -28,15 +28,27 @@ namespace assetlib
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
-	 * so its serialized subtree is what the cache key hashes; `bindings`, `skeleton`, `outputs`,
-	 * `textureDir`, `textureStamp` and `textureBakeToken` never key -- none of them changes what
-	 * the importer computes. Keys a reader
+	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `skeleton`,
+	 * `outputs`, `textureDir`, `textureStamp` and `textureBakeToken` never key -- none of them
+	 * changes what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
 	 * parameter still reaches the key through a reader that has never heard of it.
 	 */
 	struct ImportDocument
 	{
+		/**
+		 * The copied source this document describes, as a mount key. Recorded rather than derived
+		 * from the document's own name: a source kind may have more than one extension, and the
+		 * swap that reaches `kirk.glb` from `kirk.bimport` has no answer for one that does.
+		 *
+		 * Empty in a document written before the field, where the swap was the only answer there
+		 * was; `importedSourceKeyFor` is what knows that, and `AssetStore::Migrate` backfills it as
+		 * it backfills `outputs`. Outside `parameters`, with `outputs`: naming the source does not
+		 * change what the importer computes from it.
+		 */
+		std::string source;
+
 		float sampleRate = c_DefaultSampleRate;
 
 		// The extracted textures' whole cache key, since a `.ktx2` carries none of its own: where
@@ -80,11 +92,14 @@ namespace assetlib
 	importDocumentKeyFor(std::string_view sourceKey);
 
 	/**
-	 * `Authored/Meshes/kirk.bimport` -> `Authored/Meshes/kirk.glb` -- the only source kind is a
-	 * `.glb`.
+	 * The source `document` describes -- its `source`, or, for a document written before that field
+	 * existed, `Authored/Meshes/kirk.bimport` -> `Authored/Meshes/kirk.glb`, which was the only
+	 * answer there was while a `.glb` was the only source kind.
+	 *
+	 * @param documentKey Read only to answer the second case.
 	 */
 	[[nodiscard]] std::string
-	importedSourceKeyFor(std::string_view documentKey);
+	importedSourceKeyFor(std::string_view documentKey, const ImportDocument& document);
 
 	/** @throws what `IFileSystem::Read` and `AssetCodec<ImportDocument>::Deserialize` throw. */
 	[[nodiscard]] ImportDocument

@@ -34,6 +34,7 @@ namespace assetlib
 		constexpr std::string_view c_TextureBakeTokenKey = "textureBakeToken";
 		constexpr std::string_view c_SkeletonKey         = "skeleton";
 		constexpr std::string_view c_OutputsKey          = "outputs";
+		constexpr std::string_view c_SourceKey           = "source";
 
 		/**
 		 * The document's parameter subtree, built once: this is both what Serialize writes and what
@@ -68,17 +69,6 @@ namespace assetlib
 			return parameters;
 		}
 
-		std::string
-		swapExtension(std::string_view key, std::string_view extension)
-		{
-			const std::string ext = extensionOf(key);
-			core::throw_runtime_error_if(
-				ext.empty(),
-				"import document: '{}' has no extension",
-				key);
-			return std::string(key.substr(0, key.size() - ext.size())).append(extension);
-		}
-
 	}
 
 	std::string
@@ -98,8 +88,11 @@ namespace assetlib
 	}
 
 	std::string
-	importedSourceKeyFor(std::string_view documentKey)
+	importedSourceKeyFor(std::string_view documentKey, const ImportDocument& document)
 	{
+		if (!document.source.empty())
+			return document.source;
+
 		return swapExtension(documentKey, c_ImportedSourceExtension);
 	}
 
@@ -175,14 +168,19 @@ namespace assetlib
 			}
 		}
 
-		if (auto it = json.find(c_SkeletonKey); it != json.end())
+		for (const auto& [stringKey, field] :
+		     { std::pair<std::string_view, std::string*>{ c_SkeletonKey, &document.skeleton },
+		       { c_SourceKey, &document.source } })
 		{
-			core::throw_runtime_error_if(
-				!it->is_string(),
-				"import document: '{}' is not a string",
-				c_SkeletonKey);
-			document.skeleton = it->get<std::string>();
-			json.erase(it);
+			if (const auto it = json.find(stringKey); it != json.end())
+			{
+				core::throw_runtime_error_if(
+					!it->is_string(),
+					"import document: '{}' is not a string",
+					stringKey);
+				*field = it->get<std::string>();
+				json.erase(it);
+			}
 		}
 
 		if (auto it = json.find(c_OutputsKey); it != json.end())
@@ -247,6 +245,9 @@ namespace assetlib
 		// source that produced neither stays byte-identical to one written before these existed.
 		if (!document.skeleton.empty())
 			json[c_SkeletonKey] = document.skeleton;
+
+		if (!document.source.empty())
+			json[c_SourceKey] = document.source;
 
 		if (!document.outputs.empty())
 		{

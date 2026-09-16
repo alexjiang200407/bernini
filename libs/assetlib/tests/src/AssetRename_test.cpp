@@ -86,6 +86,7 @@ namespace
 		out.animations = rigged ? "Derived/Animations/" + stem + ".banim" : std::string();
 
 		auto document    = ImportDocument();
+		document.source  = out.source;
 		document.outputs = { out.mesh };
 
 		if (rigged)
@@ -417,9 +418,8 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	const DataRoot root("bernini_rename_dir");
 
 	// Two referrers of different kinds, both outside: the plan collects an edge by where its
-	// *target* sits, so one directory rename has to re-point every kind that reached into it.
-	// Nothing can referred from inside -- every reference crosses a category, so a referrer and its
-	// target never share a directory a user can rename.
+	// *target* sits, so one directory rename has to re-point every kind that reached into it. The
+	// case below covers a referrer that is itself inside.
 	WriteSource(
 		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
 		{ { 200, 0, 0, 255 } });
@@ -451,6 +451,34 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	CHECK(
 		StoreAt(root.path).Load<BSky>(KeyIn(c_SkyDirectoryName, "dusk.bsky")).sky.source ==
 		"Derived/SourceTextures/spock/tex1.ktx2");
+
+	CHECK(root.Scan().broken.empty());
+}
+
+// A `.bimport` and the source it names sit in one directory under one stem, so they are the first
+// pair where a referrer and its target both move in a directory rename -- the referrer rewritten and
+// the file relocated by the same plan. Every other stored edge crosses a category.
+TEST_CASE("Renaming a directory of sources re-points the documents inside it", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_dir_sources");
+
+	auto document   = ImportDocument();
+	document.source = "Authored/Meshes/crew/kirk.glb";
+	fs::create_directories(root.path / "Authored/Meshes/crew");
+	std::ofstream(root.path / "Authored/Meshes/crew/kirk.glb") << "source";
+	core::file::write_atomic(
+		root.path / "Authored/Meshes/crew/kirk.bimport",
+		AssetCodec<ImportDocument>::Serialize(document));
+
+	const RenamePlan plan =
+		planRename(root.Scan(), "Authored/Meshes/crew", "Authored/Meshes/bridge");
+	REQUIRE(plan.IsDirectory());
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
+
+	CHECK(fs::exists(root.path / "Authored/Meshes/bridge/kirk.glb"));
+	CHECK(
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/bridge/kirk.bimport")
+			.source == "Authored/Meshes/bridge/kirk.glb");
 
 	CHECK(root.Scan().broken.empty());
 }
@@ -738,6 +766,10 @@ TEST_CASE("Renaming an imported source moves everything it produced", "[assetren
 		document.outputs ==
 		std::vector<std::string>{ after.animations, after.mesh, after.skeleton });
 
+	// The source is stored, not derived, so a rename that left it alone would leave the document
+	// naming a file that is gone -- and naming it confidently enough that nothing falls back.
+	CHECK(document.source == after.source);
+
 	CHECK(loadMeshRefs(root.path / after.mesh).skeleton == after.skeleton);
 	CHECK(loadAnimationSkeletonPath(root.path / after.animations) == after.skeleton);
 }
@@ -812,6 +844,30 @@ TEST_CASE("An import document names the same move its source does", "[assetrenam
 	CHECK(fs::exists(root.path / "Authored/Meshes/hero.glb"));
 	CHECK(fs::exists(root.path / "Authored/Meshes/hero.bimport"));
 	CHECK_FALSE(fs::exists(root.path / before.source));
+}
+
+// The document is pulled into the referrers by its own edges, and `outputs` is where most of those
+// live -- so a document claiming none is the case that would silently keep a dead source. It is not
+// hypothetical: it is a clips-only import, and every document written before `outputs` existed.
+TEST_CASE("A document claiming no outputs still has its source rewritten", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_import_nooutputs");
+
+	auto document   = ImportDocument();
+	document.source = "Authored/Meshes/kirk.glb";
+	fs::create_directories(root.path / "Authored/Meshes");
+	std::ofstream(root.path / "Authored/Meshes/kirk.glb") << "source";
+	core::file::write_atomic(
+		root.path / "Authored/Meshes/kirk.bimport",
+		AssetCodec<ImportDocument>::Serialize(document));
+
+	REQUIRE(
+		Rename(root, "Authored/Meshes/kirk.glb", "Authored/Meshes/hero.glb").status ==
+		RenameStatus::kRenamed);
+
+	CHECK(
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/hero.bimport").source ==
+		"Authored/Meshes/hero.glb");
 }
 
 TEST_CASE("An output taken off its source's stem stays where it is", "[assetrename]")
