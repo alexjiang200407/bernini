@@ -225,10 +225,12 @@ main(int argc, char** argv)
 			{
 				const float seconds = static_cast<float>(frame) * c_Step;
 
-				if (sun.orbiting)
+				// Advanced from wherever --azimuth put it, rather than reset to the default each
+				// frame: overwriting here made that flag do nothing in a headless capture, which is
+				// the one mode with no key to turn the sun with.
+				if (sun.orbiting && frame > 0)
 				{
-					sun.azimuth =
-						glm::radians(35.0f) + glm::two_pi<float>() * seconds / c_OrbitSeconds;
+					sun.azimuth += glm::two_pi<float>() * c_Step / c_OrbitSeconds;
 					view->SetDirectionalLight(sun.Desc());
 				}
 
