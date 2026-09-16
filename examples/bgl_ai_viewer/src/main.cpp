@@ -14,6 +14,7 @@
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/PassHistory.h>
 #include <bgl/PassTiming.h>
@@ -21,6 +22,7 @@
 #include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <bgl/pass_timing_csv.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
@@ -63,6 +65,13 @@ namespace
 		uint32_t warmup = 8;
 		float    fps    = 30.0f;
 		bool     taa    = true;
+
+		// The sun is off unless asked for, as bgl's own default is: every render this tool made
+		// before there was one stays the render it made.
+		float              sunAzimuth   = 35.0f;
+		float              sunElevation = 38.0f;
+		float              sunIntensity = 0.0f;
+		std::vector<float> sunColor{ 1.0f, 1.0f, 1.0f };
 	};
 
 	// Timed frames drawn past the last one, held at its time, to collect rows that trail their frame.
@@ -214,6 +223,17 @@ try
 		app.add_option("-w,--width", opts.width, "Render width")->check(CLI::PositiveNumber);
 		app.add_option("-h,--height", opts.height, "Render height")->check(CLI::PositiveNumber);
 		app.add_option("--taa", opts.taa, "Render with temporal antialiasing, as a viewport does");
+		app.add_option(
+			   "--sun",
+			   opts.sunIntensity,
+			   "Sun intensity, in the irradiance map's units. 0 leaves it off")
+			->check(CLI::NonNegativeNumber);
+		app.add_option(
+			"--sun-azimuth",
+			opts.sunAzimuth,
+			"Sun azimuth in degrees about the up axis");
+		app.add_option("--sun-elevation", opts.sunElevation, "Sun elevation in degrees");
+		app.add_option("--sun-color", opts.sunColor, "Sun colour as three floats")->expected(3);
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -276,7 +296,21 @@ try
 		scene,
 		opts.envRoot.empty() ? dataRoot : std::filesystem::path(opts.envRoot));
 
-	const bool lit = headless::LightView(view, envAssets, opts.env);
+	const bool envLit = headless::LightView(view, envAssets, opts.env);
+
+	// Additive on the environment above, which already integrates whatever sun its source HDR held
+	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
+	if (opts.sunIntensity > 0.0f)
+	{
+		view->SetDirectionalLight(
+			{ .direction = headless::SunDirection(
+				  glm::radians(opts.sunAzimuth),
+				  glm::radians(opts.sunElevation)),
+		      .color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
+		      .intensity = opts.sunIntensity });
+	}
+
+	const bool lit = envLit || opts.sunIntensity > 0.0f;
 
 	struct SkinnedPlacement
 	{
@@ -337,7 +371,9 @@ try
 		opts.fps,
 		opts.width,
 		opts.height,
-		lit ? "lit" : "unlit",
+		opts.sunIntensity > 0.0f ?
+			std::format("{}, sun {:.2f}", envLit ? "lit" : "unlit by env", opts.sunIntensity) :
+			std::string(lit ? "lit" : "unlit"),
 		opts.taa ? "on" : "off",
 		opts.warmup);
 

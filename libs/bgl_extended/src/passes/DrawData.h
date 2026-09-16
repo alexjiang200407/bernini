@@ -74,11 +74,17 @@ namespace bgl
 		SrvHandle staticDepthSrv;
 	};
 
-	/** What a draw shades against: the image-based environment, and the sky behind it. */
+	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */
 	struct DrawLighting
 	{
 		EnvironmentMap env;
 		float          exposure = 1.0f;
+
+		// The sun, resolved: the direction it travels (normalized) and its colour already scaled by
+		// its intensity, which is the only form the shading wants. A zero radiance is a view with no
+		// sun set, and costs the shader an NdotL it multiplies by nothing.
+		glm::vec3 sunDirection{ 0.0f, -1.0f, 0.0f };
+		glm::vec3 sunRadiance{ 0.0f };
 
 		// World to environment space: the authored yaw, and the camera's rotation when the sky
 		// follows the view. The IBL cubes and the backdrop are both looked up through it, or a

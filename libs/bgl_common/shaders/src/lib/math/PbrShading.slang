@@ -178,11 +178,25 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     let prefilteredColor = env.Prefiltered(ToEnvSpace(R, params.envRotation), lod);
     float2 envBRDF = env.BrdfLut(cosTheta, roughness);
 
+    // The sun. Its radiance is in the irradiance map's 1/pi convention, so it lands in the diffuse
+    // lobe on exactly the terms the map's own value does and the two are directly comparable.
+    //
+    // Not scaled by `ao`: that is a visibility estimate for light arriving from every direction, and
+    // this light arrives from one. What occludes a directional light is a shadow, which nothing here
+    // casts -- so a surface facing the sun is lit whatever stands in front of it.
+    //
+    // The dielectric/metal split is `1 - metallic` rather than the `kD` above, because `kD` comes
+    // from FresnelSchlickRoughness at the *view* angle, which is the split-sum's approximation for
+    // an environment and not the energy a single direction hands to the diffuse lobe.
+    float3 L = -params.sunDirection;
+    float sunNdotL = max(dot(N, L), 0.0);
+    float3 sunDiffuse = albedo * params.sunRadiance * sunNdotL * (1.0 - metallic);
+
     SurfaceLobes lobes;
     // envBRDF.y is the split-sum's F90 term, which the weight scales as much as F0 -- it is already
     // in F. Left unweighted, a surface with the specular switched off keeps a grazing rim of it.
     lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
-    lobes.diffuse = kD * diffuse * ao * params.exposure;
+    lobes.diffuse = (kD * diffuse * ao + sunDiffuse) * params.exposure;
     lobes.specular = prefilteredColor * lobes.reflectance * params.exposure;
     lobes.emissive = surface.emissive * params.exposure;
 

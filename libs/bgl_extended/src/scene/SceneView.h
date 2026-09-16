@@ -23,6 +23,7 @@
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl_common/gassert.h>
@@ -201,6 +202,9 @@ namespace bgl
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
 
 		void
+		SetDirectionalLight(const DirectionalLightDesc& desc) override;
+
+		void
 		SetSkyBox(SkyboxDesc desc) override;
 
 		void
@@ -210,6 +214,13 @@ namespace bgl
 		GetEnvironmentMap() const noexcept
 		{
 			return m_EnvironmentMap;
+		}
+
+		/// The sun as SetDirectionalLight left it, with `direction` already normalized.
+		[[nodiscard]] const DirectionalLightDesc&
+		GetDirectionalLight() const noexcept
+		{
+			return m_DirectionalLight;
 		}
 
 		[[nodiscard]] float
@@ -571,6 +582,7 @@ namespace bgl
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
+		DirectionalLightDesc      m_DirectionalLight;
 		float                     m_Exposure = 1.0f;
 
 		// The placements carrying a velocity: those SetInstanceTransform has written and whose

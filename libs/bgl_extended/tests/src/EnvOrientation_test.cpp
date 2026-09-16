@@ -1,9 +1,9 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
+#include "util/SyntheticCube.h"
 #include "util/TestOptions.h"
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
-#include <assetlib_structs/VkFormat.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
@@ -14,7 +14,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <core/containers/fixed_buffer.h>
 #include <cstddef>
 #include <cstdint>
 
@@ -71,35 +70,11 @@ namespace
 		}
 	}
 
-	/** A float cube map, one mip, every texel black. */
-	assetlib::ImageData
-	MakeCube(uint32_t faceSize)
-	{
-		auto out      = assetlib::ImageData();
-		out.width     = faceSize;
-		out.height    = faceSize;
-		out.mipLevels = 1;
-		out.arraySize = 6;
-		out.isCubemap = true;
-		out.vkFormat  = assetlib::VkFormat::R32G32B32A32_SFLOAT;
-		out.pixels    = core::fixed_buffer<std::byte>(
-			static_cast<size_t>(faceSize) * faceSize * 6 * sizeof(float) * 4);
-
-		const auto pitch = static_cast<uint64_t>(faceSize) * sizeof(float) * 4;
-		for (uint32_t face = 0; face < 6; ++face)
-		{
-			out.subresources.push_back(
-				{ static_cast<size_t>(pitch) * faceSize * face, pitch, pitch * faceSize });
-		}
-
-		return out;
-	}
-
 	/** Radiance 1 where `dot(dir, axis) > 0`, 0 elsewhere. */
 	assetlib::ImageData
 	HalfLitCube(glm::vec3 axis, uint32_t faceSize)
 	{
-		auto out = MakeCube(faceSize);
+		auto out = bgl::test::MakeBlackFloatCube(faceSize);
 
 		for (uint32_t face = 0; face < 6; ++face)
 		{

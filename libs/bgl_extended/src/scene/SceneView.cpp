@@ -1320,6 +1320,35 @@ namespace bgl
 	}
 
 	void
+	SceneView::SetDirectionalLight(const DirectionalLightDesc& desc)
+	{
+		if (!core::is_finite(desc.direction) || !core::is_finite(desc.color) ||
+		    !std::isfinite(desc.intensity))
+		{
+			throw SceneError("SetDirectionalLight: direction, colour and intensity must be finite");
+		}
+
+		if (desc.intensity < 0.0f)
+		{
+			throw SceneError(
+				std::format(
+					"SetDirectionalLight: intensity must be non-negative, got {}",
+					desc.intensity));
+		}
+
+		// Normalizing a zero-length direction yields NaN, and there is no direction to fall back on
+		// -- a sun pointing nowhere is the caller forgetting to set one, not a sun that is off.
+		const auto lengthSq = glm::dot(desc.direction, desc.direction);
+		if (lengthSq <= 0.0f)
+		{
+			throw SceneError("SetDirectionalLight: direction must have non-zero length");
+		}
+
+		m_DirectionalLight           = desc;
+		m_DirectionalLight.direction = desc.direction * glm::inversesqrt(lengthSq);
+	}
+
+	void
 	SceneView::SetExposure(float exposure)
 	{
 		// reject NaN and negative exposure values, which would propagate through the

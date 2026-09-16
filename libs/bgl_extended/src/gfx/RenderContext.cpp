@@ -722,6 +722,10 @@ namespace bgl
 		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
 		draw.lighting.exposure    = view->GetExposure();
 
+		const auto& sun            = view->GetDirectionalLight();
+		draw.lighting.sunDirection = sun.direction;
+		draw.lighting.sunRadiance  = sun.color * sun.intensity;
+
 		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
 		constexpr uint64_t c_AlphaHashPeriod = 1024;
