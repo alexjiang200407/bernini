@@ -280,17 +280,18 @@ TEST_CASE(
 	// The specular lobe's own level, measured where the half vector meets the normal -- the sphere's
 	// centre, since the limb boxes sit far enough down the lobe to measure almost none of it.
 	//
-	// Held to a slightly looser margin than the diffuse above, for a real difference between the two
-	// renderers rather than for noise. Blender's Principled BSDF is layered: turning its specular up
-	// takes that energy out of the diffuse underneath. Bernini's direct diffuse is split by
-	// `1 - metallic` alone (ADR-10 of the plan) and the specular is added on top, so a dielectric
-	// here keeps a diffuse Blender has already spent.
+	// The same margin as the diffuse case, because the same margin is what the measurement asks for:
+	// the two agree to 0.003 here.
 	//
-	// That divergence lands where the diffuse dominates, not here. At the limbs Cycles drops from
-	// 0.5128 to 0.4988 when the specular is switched on and Bernini does not move at all -- about
-	// 0.014 of display luma, which is the price ADR-10 names. At the peak the lobe is most of the
-	// answer and the two agree to 0.003, so the margin is for the model difference this case does
-	// *not* sit in the middle of, and it is not doing any work at these settings.
+	// The two renderers do genuinely differ, and it is worth knowing where. Blender's Principled BSDF
+	// is layered, so turning its specular up takes that energy out of the diffuse underneath;
+	// Bernini's direct diffuse is split by `1 - metallic` alone (ADR-10 of the plan) and the lobe is
+	// added on top, so a dielectric keeps a diffuse Blender has already spent. That lands where the
+	// diffuse dominates -- at the limbs Cycles drops 0.5128 to 0.4988 with the specular on and
+	// Bernini does not move at all, about 0.014 of display luma. It does not land at the peak, which
+	// is what this box measures and where the lobe is most of the answer. A case placed in the middle
+	// of that divergence would need a margin sized for it; this one does not, and widening this one
+	// on its behalf would only hide a regression here.
 	//
 	// What Blender 5.2.1 measured (`--samples 256 --sun 0.6 --no-world --albedo 0.5 --roughness 0.3
 	// --specular 0.5`, whose Specular IOR Level 0.5 is F0 = 0.04, the same dielectric Bernini's
@@ -298,7 +299,6 @@ TEST_CASE(
 	//
 	//   Cycles     centre 0.672   left 0.4988   right 0.4989
 	constexpr float c_BlenderSpecCentre = 0.672f;
-	constexpr float c_SpecMargin        = 0.02f;
 
 	// The same sphere repainted, not a second one: two coincident spheres z-fight and the test would
 	// be measuring whichever won.
@@ -320,5 +320,5 @@ TEST_CASE(
 		bgl::test::MeanColor(specShot, c_SphereCentreX, c_SphereY, c_BoxSize, c_BoxSize);
 
 	INFO("specular centre " << centre.Luma() << " against Blender's " << c_BlenderSpecCentre);
-	CHECK(std::abs(centre.Luma() - c_BlenderSpecCentre) < c_SpecMargin);
+	CHECK(std::abs(centre.Luma() - c_BlenderSpecCentre) < c_LevelMargin);
 }

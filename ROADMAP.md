@@ -328,8 +328,8 @@ and portability.
 - [ ] Light and Shadow
   - [ ] Async Compute
   - [x] Directional Lighting — one sun per view, additive on the image-based light. It casts no
-    shadow; that is the three lines below, and until they land a lit surface is lit through whatever
-    stands in front of it.
+    shadow; that is the shadow lines further down this section, and until they land a lit surface is
+    lit through whatever stands in front of it.
   - [ ] Point Light
   - [ ] Ambient / Sky Light
   - [ ] Cascaded Shadow Maps
