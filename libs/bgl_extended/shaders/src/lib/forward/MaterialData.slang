@@ -61,9 +61,9 @@ public struct MaterialData
         return env;
     }
 
-    public SurfaceParams GetSurfaceParams()
+    public ShadingParams GetShadingParams()
     {
-        SurfaceParams params;
+        ShadingParams params;
         params.cameraPos = cameraPos;
         params.exposure = exposure;
         params.envRotation = float3x3(envRotation);

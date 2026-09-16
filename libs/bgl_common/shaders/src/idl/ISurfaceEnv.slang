@@ -9,10 +9,11 @@ public interface ISurfaceEnv
     float2 BrdfLut(float cosTheta, float roughness);
 };
 
-// The plain half of the same environment, which needs no lookup and so no interface. The sun is
-// here rather than behind ISurfaceEnv for exactly that reason: it is data, not a texture, so a
-// renderer with no bindless cubes still supplies it the same way.
-public struct SurfaceParams
+// What is shining on the surface, as plain data: the two lights, and the camera the BRDF measures
+// them against. Nothing here is a property of the surface -- that is PbrSurface, which the material
+// fills -- and nothing here needs a lookup, which is what keeps it out of ISurfaceEnv above and lets
+// a renderer with no bindless cubes supply it unchanged.
+public struct ShadingParams
 {
     public float3 cameraPos;
     public float exposure;

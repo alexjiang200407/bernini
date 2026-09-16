@@ -135,7 +135,7 @@ public float4 BlendedSurface(SurfaceLobes lobes, float alpha, float transmission
 
 public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     E env,
-    SurfaceParams params,
+    ShadingParams params,
     float3 worldPos,
     float3 worldNormal,
     float4 worldTangent,
