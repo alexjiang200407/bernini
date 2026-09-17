@@ -286,12 +286,23 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
-		{
-			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
-		}
+		AddRowKernels(device, pipelines, PsoRowMask().set());
 
 		m_BlobShadows.Init(device, pipelines);
+	}
+
+	void
+	ForwardPass::AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows)
+	{
+		gassert(device != nullptr, "Device must be initialized");
+
+		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		{
+			if (rows.test(pso) && !m_Kernels[pso].pipeline.IsInitialized())
+			{
+				pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
+			}
+		}
 	}
 
 	void

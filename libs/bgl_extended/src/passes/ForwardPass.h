@@ -3,6 +3,7 @@
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
 #include "types/RasterState.h"
+#include "types/pso_row_mask.h"
 #include <array>
 #include <bgl_common/idl/PsoType.h>
 #include <spdlog/spdlog.h>
@@ -45,6 +46,13 @@ namespace bgl
 		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
 		void
 		Init(IDevice* device, PipelineBatch& pipelines);
+
+		/**
+		 * Requests the kernels for the rows set in `rows` that are not already built; they are
+		 * live once `pipelines` is built. A row already built is left alone.
+		 */
+		void
+		AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows);
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
 		void

@@ -134,12 +134,14 @@ namespace bgl
 		}
 	}
 
-	void
-	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines)
+	namespace
 	{
-		gassert(device != nullptr, "Device must be initialized");
-
-		const auto makeDesc = [device](const std::string_view pixelSrc, const RasterCullMode cull) {
+		MeshletPipelineDesc
+		DepthPipelineDesc(
+			IDevice*               device,
+			const std::string_view pixelSrc,
+			const RasterCullMode   cull)
+		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
 			pipelineDesc.ampShader   = device->CreateShader(std::string(c_GeomSrc), "ASMain");
@@ -164,19 +166,46 @@ namespace bgl
 				RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 			return pipelineDesc;
-		};
+		}
+	}
+
+	void
+	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines)
+	{
+		gassert(device != nullptr, "Device must be initialized");
 
 		// Opaque depth does not depend on the material, so the opaque rows share a depth-only pixel
 		// stage and differ only in where back faces are culled.
-		pipelines.Add(m_HardwareCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kBack));
-		pipelines.Add(m_MaterialCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kNone));
+		pipelines.Add(
+			m_HardwareCullKernel,
+			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kBack));
+		pipelines.Add(
+			m_MaterialCullKernel,
+			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kNone));
+
+		AddRowKernels(device, pipelines, PsoRowMask().set());
+	}
+
+	void
+	StaticDepthPass::AddRowKernels(
+		IDevice*          device,
+		PipelineBatch&    pipelines,
+		const PsoRowMask& rows)
+	{
+		gassert(device != nullptr, "Device must be initialized");
 
 		const auto buckets = StaticCoverageBuckets();
 		for (size_t i = 0; i < buckets.size(); ++i)
 		{
-			pipelines.Add(
-				m_CoverageKernels[i],
-				makeDesc(buckets[i].pixelSrc, ForwardPass::PsoCullMode(buckets[i].pso)));
+			if (rows.test(buckets[i].pso) && !m_CoverageKernels[i].pipeline.IsInitialized())
+			{
+				pipelines.Add(
+					m_CoverageKernels[i],
+					DepthPipelineDesc(
+						device,
+						buckets[i].pixelSrc,
+						ForwardPass::PsoCullMode(buckets[i].pso)));
+			}
 		}
 	}
 
