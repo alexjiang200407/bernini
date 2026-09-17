@@ -33,7 +33,8 @@ old shape to parse — a token mismatch is a cache miss. For geometry, `AssetSto
 methods are the seam that acts on one: a stale entry regenerates in memory from its `Authored/Meshes/`
 source at the parameters its `.bimport` records, with the document's bindings applied over the
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
-the re-bake is deliberate (`pack`, the editor) rather than at load. The textures an
+the re-bake is deliberate (`pack`, `migrate`, the editor) rather than at load, and `migrate`
+re-cooks a part whose `.bimport` has moved on: a float cube has no header, so its key lives there. The textures an
 import extracted are the third case: keyed by the `textureDir`, `textureStamp` and
 `textureBakeToken` their `.bimport` carries, because a `.ktx2` has no header of its own, and refreshed by
 `AssetStore::RefreshImportedTextures` rather than at load — `LoadRegen*` runs on every mesh load and

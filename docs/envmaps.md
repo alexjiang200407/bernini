@@ -37,7 +37,9 @@ disagrees, trust the header, then fix this doc.
   purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
   key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
   fails loudly on one it cannot, and `Reimport` produces an absent one — float cubes included —
-  from the source and the `.bimport` the import left under `Authored/EnvSources/`.
+  from the source and the `.bimport` the import left under `Authored/EnvSources/`. `migrate`
+  re-cooks a part whose document has moved on — a re-exported `.hdr`, an edited parameter — and
+  never a load, which would put minutes of convolution inside it.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.

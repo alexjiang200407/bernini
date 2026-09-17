@@ -326,6 +326,38 @@ namespace assetlib
 				report.files.push_back(std::move(file));
 		}
 
+		// Before Reimport: a part both absent and stale is re-cooked whole here, where Reimport
+		// would first convolve its missing files only for this to convolve them again. And before
+		// the walk, so it reads each container as re-cooked.
+		const std::vector<std::string> staleEnvironments = GetStaleEnvironmentSources();
+		for (size_t i = 0; i < staleEnvironments.size(); ++i)
+		{
+			const std::string&          source       = staleEnvironments[i];
+			const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(source);
+
+			reportStep(sink, ProgressPhase::kRegenerating, source, i, staleEnvironments.size());
+
+			MigratedFile file{ documentPath, MigratedFile::Outcome::kRewritten, {} };
+			if (dryRun)
+			{
+				report.files.push_back(std::move(file));
+				continue;
+			}
+
+			try
+			{
+				for (const std::string& written : RefreshEnvironmentSource(source))
+					report.files.push_back(
+						{ GetDataRoot() / written, MigratedFile::Outcome::kRewritten, {} });
+			}
+			catch (const std::exception& error)
+			{
+				file.outcome = MigratedFile::Outcome::kFailed;
+				file.message = error.what();
+			}
+			report.files.push_back(std::move(file));
+		}
+
 		// Then, before the walk: what the sources say should stand but does not. The walk below
 		// re-saves files it finds; only this puts an absent one back.
 		for (const ReimportedSource& source : Reimport(dryRun, onProgress).sources)

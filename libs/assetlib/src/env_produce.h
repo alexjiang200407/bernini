@@ -10,10 +10,12 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace assetlib
 {
 	class AssetStore;
+	struct ImportDocument;
 
 	/**
 	 * One environment source, decoded once and projected at each face size a part asks for. A cube
@@ -70,7 +72,8 @@ namespace assetlib
 	using EnvironmentFileSink = std::function<void(const std::string& key)>;
 
 	/**
-	 * Writes the sky's targets that are marked for writing. The one writer `ImportEnvironment` and
+	 * Writes the sky's targets that are marked for writing, telling `beforeWrite` and then
+	 * `afterWrite` each file's key around its write; either may be empty. The one writer `ImportEnvironment` and
 	 * `Reimport` share, so a file either produces is byte for byte the file the other would.
 	 *
 	 * @pre `targets.source.key` names the float chain whether or not this run writes it: the
@@ -85,6 +88,7 @@ namespace assetlib
 		std::string_view                   name,
 		const SkyTargets&                  targets,
 		const EnvironmentFileSink&         beforeWrite,
+		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel);
 
 	/**
@@ -101,5 +105,26 @@ namespace assetlib
 		std::string_view                   name,
 		const LightingTargets&             targets,
 		const EnvironmentFileSink&         beforeWrite,
+		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel);
+
+	/**
+	 * Writes the files `wanted` names out of one environment source's import document, each part
+	 * re-run for only those: a `.bsky` lost beside its float chain is a bake, not a convolution.
+	 * What `Reimport` produces an absent file with and what a refresh re-cooks a stale part with.
+	 *
+	 * @param onWritten Told each file as soon as it is on disk, so one written before a later step
+	 *        throws is still told.
+	 * @throws std::runtime_error if the document names no parameters, claims a file no environment
+	 *         import writes, or claims a container without the cubes it bakes from.
+	 */
+	void
+	produceEnvironmentOutputs(
+		const AssetStore&               store,
+		const std::string&              sourceKey,
+		const ImportDocument&           document,
+		const std::vector<std::string>& wanted,
+		const EnvironmentFileSink&      beforeWrite,
+		const EnvironmentFileSink&      onWritten,
+		const CancelToken&              cancel);
 }
