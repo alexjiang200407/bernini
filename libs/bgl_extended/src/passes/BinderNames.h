@@ -33,11 +33,13 @@ namespace bgl
 	}
 
 	/**
-	 * One pass's binder, checked against the PSO family it binds into.
+	 * One pass's binder, checked against the built kernels of the PSO family it binds into.
 	 *
 	 * A variant omitting a member is ordinary and stays silent; a name *no* variant declares is a
 	 * typo or a shader rename, which binding cannot report because `IsValid()` reads the same either
-	 * way. @pre construct one in the pass's `CheckBindings`, once its batch is built, and check every
+	 * way. The family is demand-built, so an unbuilt kernel is not a variant, and a cbuffer no built
+	 * variant carries is checked only once one is -- re-run the check after every build.
+	 * @pre construct one in the pass's `CheckBindings`, once a batch is built, and check every
 	 * cbuffer it writes there, never per draw.
 	 */
 	class BinderNames final

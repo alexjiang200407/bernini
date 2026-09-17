@@ -11,6 +11,7 @@
 #include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
 #include "types/EnvironmentMap.h"
+#include "types/PsoRowMask.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include <algorithm>
@@ -407,6 +408,17 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList);
 
+		/**
+		 * Every pso row an instance of this view has ever resolved to. Never cleared: a row once
+		 * demanded stays demanded, which is what lets the renderer build its pipelines once and
+		 * trust them built for as long as the view lives.
+		 */
+		[[nodiscard]] const PsoRowMask&
+		DemandedPsoRows() const noexcept
+		{
+			return m_DemandedRows;
+		}
+
 	private:
 		/**
 		 * Fills `instance`'s material + PSO: `override` if it is valid, else the Scene's default for
@@ -421,7 +433,7 @@ namespace bgl
 			SubmeshInstance& instance,
 			uint32_t         submeshRoot,
 			MaterialHandle   materialOverride,
-			GeomType         geomType) const;
+			GeomType         geomType);
 
 		/** Re-resolves one submesh instance of `meshIndex` and uploads it if it moved. */
 		void
@@ -535,6 +547,8 @@ namespace bgl
 		// A sum, so either half moving moves it. See AdvanceTemporalEpoch.
 		uint64_t m_TemporalEpoch      = 0;
 		uint64_t m_DrawnTemporalEpoch = 0;
+
+		PsoRowMask m_DemandedRows;
 
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;

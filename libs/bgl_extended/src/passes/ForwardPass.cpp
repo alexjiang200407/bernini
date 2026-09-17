@@ -286,8 +286,6 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		AddRowKernels(device, pipelines, PsoRowMask().set());
-
 		m_BlobShadows.Init(device, pipelines);
 	}
 
@@ -308,6 +306,18 @@ namespace bgl
 	void
 	ForwardPass::CheckBindings() const
 	{
+		// Always-on kernels first: the row guard below must not gate them.
+		m_BlobShadows.CheckBindings();
+
+		// The rows are demand-built, so nothing reads their names off until a first one is built;
+		// EnsureRowPipelines re-checks after every build.
+		if (std::ranges::none_of(m_Kernels, [](const MeshletKernel& kernel) {
+				return kernel.pipeline.IsInitialized();
+			}))
+		{
+			return;
+		}
+
 		BinderNames("ForwardPass"sv, m_Kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
@@ -316,8 +326,6 @@ namespace bgl
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
-
-		m_BlobShadows.CheckBindings();
 	}
 
 	void
@@ -467,8 +475,12 @@ namespace bgl
 				continue;
 			}
 
+			// A row never demanded has no kernel -- and, by the same fact, no instances to draw.
 			MeshletKernel& kernel = m_Kernels[pso];
-			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+			if (!kernel.pipeline.IsInitialized())
+			{
+				continue;
+			}
 
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
@@ -515,9 +527,13 @@ namespace bgl
 		                             .AddColorAttachment(draw.targets.sceneColor)
 		                             .SetDepthAttachment(draw.targets.depth);
 
+		// Built whenever any transparent row is demanded; absent, the sorted list is empty too.
 		MeshletKernel& kernel =
 			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
-		gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+		if (!kernel.pipeline.IsInitialized())
+		{
+			return;
+		}
 
 		BindKernel(kernel, draw, resources);
 		if (auto expansionData = kernel.FindUniforms("expansionData"))

@@ -8,10 +8,11 @@ that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
-lands in, and `RenderContext` builds every pass's requests at once across threads (see
-[RHI](docs/rhi.md) § Design Choices). Anything in a pass that reads a built kernel — the
-`BinderNames` check of the cbuffer names it binds — lives in `CheckBindings`, which `RenderContext`
-calls once the batch is built.
+lands in, and `RenderContext` builds each batch's requests at once across threads (see
+[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-row meshlet
+kernels in the first `Draw` whose view demands each row. Anything in a pass that reads a built
+kernel — the `BinderNames` check of the cbuffer names it binds — lives in `CheckBindings`, which
+`RenderContext` calls after every batch.
 
 **This document is a map, not a mirror.** It captures each pass's role, the resources it reads and
 writes, and the non-obvious contracts — not full signatures. The header at each linked path is the
@@ -505,8 +506,10 @@ repays when this is promoted into the shared depth prepass the roadmap already a
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
-`MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state + mesh-shader source).
+`MeshletKernel` slots, one per `PsoType`, configured from the `c_Psos` table (pixel-shader module
++ raster/depth/blend state + mesh-shader source) — each built by the first `Draw` whose view
+demands the row (`RenderContext::EnsureRowPipelines`), and skipped while unbuilt, which by
+construction is only while no instance can be in it.
 
 Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,
 which blends the bind-pose vertex bytes by a pose — the bone palette `Pose Skinned` wrote this

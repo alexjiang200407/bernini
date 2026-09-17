@@ -38,7 +38,7 @@ namespace bgl
 
 		/** Drops every thread's Slang session; see SlangSessions::ReleaseAll for the contract. */
 		void
-		ReleaseSlangSession() noexcept;
+		ReleaseSlangSession() noexcept override;
 
 		void
 		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;

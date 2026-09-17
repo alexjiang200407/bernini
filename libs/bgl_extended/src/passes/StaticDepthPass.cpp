@@ -21,6 +21,7 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include "util/util.h"
+#include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialType.h>
@@ -182,8 +183,6 @@ namespace bgl
 		pipelines.Add(
 			m_MaterialCullKernel,
 			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kNone));
-
-		AddRowKernels(device, pipelines, PsoRowMask().set());
 	}
 
 	void
@@ -223,6 +222,15 @@ namespace bgl
 				.Check("expansionData"sv, c_ExpansionDataFields)
 				.Check("viewData"sv, c_ViewDataFields)
 				.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers));
+		}
+
+		// The coverage family is demand-built; nothing to read names off until a first row is,
+		// and EnsureRowPipelines re-checks after every build.
+		if (std::ranges::none_of(m_CoverageKernels, [](const MeshletKernel& kernel) {
+				return kernel.pipeline.IsInitialized();
+			}))
+		{
+			return;
 		}
 
 		BinderNames("StaticDepthPass"sv, { m_CoverageKernels.data(), m_CoverageKernels.size() })
@@ -363,6 +371,12 @@ namespace bgl
 		const auto buckets = StaticCoverageBuckets();
 		for (size_t i = 0; i < buckets.size(); ++i)
 		{
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances.
+			if (!m_CoverageKernels[i].pipeline.IsInitialized())
+			{
+				continue;
+			}
+
 			BindKernel(m_CoverageKernels[i], draw, resources);
 			dispatch(m_CoverageKernels[i], buckets[i].pso);
 		}

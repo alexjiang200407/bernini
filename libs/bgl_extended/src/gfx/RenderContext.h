@@ -28,6 +28,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
 #include "types/Format.h"
+#include "types/PsoRowMask.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
@@ -128,10 +129,30 @@ namespace bgl
 		void
 		DiscardPendingGpuAssertions() noexcept;
 
+		/**
+		 * The pso rows whose kernels exist. Grown by Draw, which builds what its view demands and
+		 * nothing else -- with one substitution: any transparent demand builds (and marks) the one
+		 * shared blend row instead of the demanded transparent rows, since no pass binds any other.
+		 */
+		[[nodiscard]] const PsoRowMask&
+		BuiltPsoRows() const noexcept
+		{
+			return m_BuiltRows;
+		}
+
 		[[nodiscard]] PassTimings
 		GetPassTimings(const RenderTargetRef& target);
 
 	private:
+		/**
+		 * Builds the row kernels `demanded` names that do not exist yet, in one parallel batch,
+		 * and drops the Slang sessions a cold-cache build stood up. The whole depth-sorted
+		 * transparent list draws through the one shared blend kernel, so any transparent demand
+		 * also demands that row.
+		 */
+		void
+		EnsureRowPipelines(PsoRowMask demanded);
+
 		// Passes a frame may time; a frame past it lists the rest unsampled. Every target owns this
 		// many pairs per frame in flight, so the heap is sized from it.
 		static constexpr uint32_t c_MaxTimedPasses      = 128;
@@ -233,6 +254,8 @@ namespace bgl
 
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;
+
+		PsoRowMask m_BuiltRows;
 
 		BrdfLutGenPass       m_BrdfLut;
 		TonemapLut           m_TonemapLut;

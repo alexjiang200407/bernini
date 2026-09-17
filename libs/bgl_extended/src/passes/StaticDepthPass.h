@@ -1,6 +1,6 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
-#include "types/pso_row_mask.h"
+#include "types/PsoRowMask.h"
 #include <array>
 #include <bgl/MaterialType.h>
 #include <spdlog/spdlog.h>

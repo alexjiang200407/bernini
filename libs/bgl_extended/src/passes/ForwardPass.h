@@ -2,8 +2,8 @@
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
+#include "types/PsoRowMask.h"
 #include "types/RasterState.h"
-#include "types/pso_row_mask.h"
 #include <array>
 #include <bgl_common/idl/PsoType.h>
 #include <spdlog/spdlog.h>
@@ -43,7 +43,7 @@ namespace bgl
 			m_BlobShadows.Release();
 		}
 
-		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
+		/** Requests the always-on blob-shadow kernels; row kernels arrive by AddRowKernels. */
 		void
 		Init(IDevice* device, PipelineBatch& pipelines);
 
@@ -53,6 +53,13 @@ namespace bgl
 		 */
 		void
 		AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows);
+
+		/** @pre pso < idl::c_PsoCount. */
+		[[nodiscard]] bool
+		RowBuilt(uint16_t pso) const noexcept
+		{
+			return m_Kernels[pso].pipeline.IsInitialized();
+		}
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
 		void

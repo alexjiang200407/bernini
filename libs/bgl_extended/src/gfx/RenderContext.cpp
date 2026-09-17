@@ -36,6 +36,7 @@
 #include <bgl_common/Frustum.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>
+#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/jitter.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
@@ -195,8 +196,9 @@ namespace bgl
 		m_CommandList =
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
-		// Every pipeline the renderer draws with, requested here and built at once: on a cold shader
-		// cache the build is most of a start-up, and the links are independent.
+		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
+		// built at once. The per-row meshlet kernels are not among them: EnsureRowPipelines builds
+		// each row the first Draw that demands it, so a scene pays only for the rows it uses.
 		auto pipelines = PipelineBatch(m_Device.Get());
 		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
 		m_RigFrames.Init(m_Device.Get(), pipelines);
@@ -602,6 +604,61 @@ namespace bgl
 	}
 
 	void
+	RenderContext::EnsureRowPipelines(PsoRowMask demanded)
+	{
+		// The one shared blend kernel draws the whole depth-sorted list (ForwardPass), so any
+		// transparent demand is a demand for that row.
+		static const PsoRowMask c_TransparentRows = [] {
+			PsoRowMask rows;
+			for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+			{
+				if (IsTransparentPso(pso))
+				{
+					rows.set(pso);
+				}
+			}
+			return rows;
+		}();
+
+		if ((demanded & c_TransparentRows).any())
+		{
+			// The shared kernel replaces the demanded transparent rows rather than joining them:
+			// no pass ever binds any other transparent row's kernel, so building one is waste.
+			demanded &= ~c_TransparentRows;
+			demanded.set(static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR));
+		}
+
+		const PsoRowMask missing = demanded & ~m_BuiltRows;
+		if (missing.none())
+		{
+			return;
+		}
+
+		auto pipelines = PipelineBatch(m_Device.Get());
+		m_Forward.AddRowKernels(m_Device.Get(), pipelines, missing);
+		m_StaticDepth.AddRowKernels(m_Device.Get(), pipelines, missing);
+		pipelines.Build();
+
+		// A cold-cache build stands per-thread Slang sessions up, a few hundred megabytes each;
+		// warm builds never reach Slang and this drops nothing.
+		m_Device->ReleaseSlangSession();
+
+		m_Forward.CheckBindings();
+		m_StaticDepth.CheckBindings();
+
+		m_BuiltRows |= missing;
+
+		// The draw-time miss the demand contract turns into a bug: a row this view demands whose
+		// kernel still does not exist after the build that was meant to make it.
+		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		{
+			gassert(
+				!missing.test(pso) || m_Forward.RowBuilt(pso),
+				"EnsureRowPipelines left a demanded row unbuilt");
+		}
+	}
+
+	void
 	RenderContext::Draw(const RenderJob& job)
 	{
 		if (!m_FrameActive)
@@ -616,6 +673,8 @@ namespace bgl
 
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
+
+		EnsureRowPipelines(view->DemandedPsoRows());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
