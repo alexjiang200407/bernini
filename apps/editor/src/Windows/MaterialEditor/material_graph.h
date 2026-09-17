@@ -129,6 +129,17 @@ BuildSurfaceMaterialGraph(
 	const std::filesystem::path& dataRoot);
 
 /**
+ * Lays out the board of a PBR material document that saved none, as an import would have: the
+ * glTF builder below, fed the file each of the document's route groups reads. A routing no import
+ * produces -- channels out of order -- comes back as the import's shape, not as the document's.
+ */
+void
+BuildPbrMaterialGraph(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot);
+
+/**
  * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per
  * distinct map it names, wired into the ports of a sink of the alpha mode the material declares.
  * A map feeds its group's one wide port, except where an occlusion map of its own forces the ORM
