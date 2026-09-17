@@ -154,6 +154,9 @@ namespace bgl
 		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
 
 		void
+		DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept override;
+
+		void
 		SetMeshletState(const MeshletState& gfxState) noexcept override;
 
 		void
