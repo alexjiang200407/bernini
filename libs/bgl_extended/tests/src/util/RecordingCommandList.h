@@ -142,6 +142,9 @@ namespace bgl::test
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{}
 		void
+		DispatchMeshIndirectCount(uint32_t, uint32_t) noexcept override
+		{}
+		void
 		SetComputeState(const ComputeState&) noexcept override
 		{}
 		void
