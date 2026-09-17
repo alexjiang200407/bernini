@@ -5,6 +5,7 @@
 #include <assetlib/env_import_parameters.h>
 #include <core/hash.h>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -12,14 +13,45 @@
 
 namespace assetlib
 {
-	EnvironmentPart
-	environmentPartOf(std::string_view outputKey)
+	std::optional<EnvironmentOutput>
+	environmentOutputOf(std::string_view outputKey)
 	{
 		const std::string extension = extensionOf(outputKey);
-		if (extension == c_SkyExtension || outputKey.ends_with(c_SkySourceSuffix))
-			return EnvironmentPart::kSky;
+		if (extension == c_SkyExtension)
+			return EnvironmentOutput::kSky;
+		if (extension == c_EnvLightingExtension)
+			return EnvironmentOutput::kLighting;
+		if (outputKey.ends_with(c_SkySourceSuffix))
+			return EnvironmentOutput::kSkySource;
+		if (outputKey.ends_with(c_PrefilterSourceSuffix))
+			return EnvironmentOutput::kPrefilterSource;
+		if (outputKey.ends_with(c_IrradianceSourceSuffix))
+			return EnvironmentOutput::kIrradianceSource;
 
+		return std::nullopt;
+	}
+
+	EnvironmentPart
+	partOf(EnvironmentOutput output) noexcept
+	{
+		switch (output)
+		{
+		case EnvironmentOutput::kSkySource:
+		case EnvironmentOutput::kSky:
+			return EnvironmentPart::kSky;
+		case EnvironmentOutput::kPrefilterSource:
+		case EnvironmentOutput::kIrradianceSource:
+		case EnvironmentOutput::kLighting:
+			return EnvironmentPart::kLighting;
+		}
 		return EnvironmentPart::kLighting;
+	}
+
+	bool
+	isPartOutput(std::string_view outputKey, EnvironmentPart part)
+	{
+		const std::optional<EnvironmentOutput> output = environmentOutputOf(outputKey);
+		return output && partOf(*output) == part;
 	}
 
 	uint64_t

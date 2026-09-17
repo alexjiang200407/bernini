@@ -6,11 +6,8 @@
 #include <assetlib/envmap.h>
 #include <assetlib/import_document.h>
 
-#include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
-#include <assetlib_structs/ImageData.h>
 
-#include <bit>
 #include <cctype>
 #include <core/err/util.h>
 #include <cstdint>
@@ -18,7 +15,6 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
-#include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -27,12 +23,12 @@
 #include <vector>
 
 #include "env_parts.h"
+#include "env_produce.h"
 #include "fs_util.h"
 #include "ref_paths.h"
 #include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/SourceStamp.h>
-#include <assetlib_structs/VkFormat.h>
 
 namespace assetlib
 {
@@ -104,35 +100,14 @@ namespace assetlib
 			return (dir / (name + suffix)).generic_string();
 		}
 
-		/** Writes `image` as an uncompressed float `.ktx2`, recording it if it is a new file. */
-		void
-		writeSource(
-			const std::filesystem::path& dataRoot,
-			CreatedFiles&                created,
-			const std::string&           relative,
-			const ImageData&             image)
-		{
-			created.WillWrite(relative);
-			writeKTX2(image, dataRoot / relative, false, Ktx2Compression::kNone);
-		}
-
-		// The suffix decides how the source is read, case-insensitively: what a file is named has
-		// nothing to do with the case someone typed it in.
-		std::string
-		lowerExtension(const std::filesystem::path& path)
-		{
-			std::string ext = path.extension().string();
-			std::ranges::transform(ext, ext.begin(), [](unsigned char c) {
-				return static_cast<char>(std::tolower(c));
-			});
-			return ext;
-		}
-
 		/** `<importedSourceDir>/<name><the source's own extension>`. */
 		std::string
 		importedSourceKey(const EnvImportDesc& desc)
 		{
-			return assetRef(desc.importedSourceDir, desc.name, lowerExtension(desc.source).c_str());
+			return assetRef(
+				desc.importedSourceDir,
+				desc.name,
+				extensionOf(desc.source.generic_string()).c_str());
 		}
 
 		/** The files one part writes, in the order it writes them. */
@@ -158,7 +133,7 @@ namespace assetlib
 		claims(const ImportDocument& document, EnvironmentPart part)
 		{
 			return std::ranges::any_of(document.outputs, [part](const std::string& output) {
-				return environmentPartOf(output) == part;
+				return isPartOutput(output, part);
 			});
 		}
 
@@ -219,9 +194,7 @@ namespace assetlib
 				std::ranges::copy_if(
 					existing->outputs,
 					std::back_inserter(document.outputs),
-					[part](const std::string& output) {
-						return environmentPartOf(output) == part;
-					});
+					[part](const std::string& output) { return isPartOutput(output, part); });
 			}
 
 			std::ranges::sort(document.outputs);
@@ -292,7 +265,7 @@ namespace assetlib
 		if (desc.name.empty())
 			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
-		const std::string extension = lowerExtension(desc.source);
+		const std::string extension = extensionOf(desc.source.generic_string());
 		core::throw_runtime_error_if(
 			extension != c_HdrExtension && extension != c_KtxExtension,
 			"AssetStore::ImportEnvironment: '{}' is neither an equirectangular '{}' nor a cube "
@@ -360,104 +333,39 @@ namespace assetlib
 		copySource(desc.source, copied);
 		result.source = sourceKey;
 
-		// Read once; each part projects its own cube from it, so each part's pixels follow from its
-		// own parameters alone. A cube source is already a cube and serves both as it stands.
-		const bool equirect = extension == c_HdrExtension;
-		ImageData  input    = equirect ? loadRadianceHdr(copied) : loadKTX2(copied);
-
-		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
-		// gone. Re-convolving one costs a generation of quantization, so it is a recovery path and
-		// not the one to reach for when the source is still there.
-		if (input.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
-		{
-			spdlog::warn(
-				"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes twice "
-				"-- prefer the source it was baked from",
-				desc.source.string());
-			input = unpackRgb9e5(input);
-		}
-
-		auto       skyCube = std::optional<ImageData>();
-		const auto cubeAt  = [&](uint32_t faceSize) -> ImageData {
-			return equirectToCube(input, faceSize);
-		};
-
-		const EnvironmentImportParameters& parameters = desc.parameters;
+		auto       input       = EnvironmentInput(copied);
+		const auto beforeWrite = [&created](const std::string& key) { created.WillWrite(key); };
 
 		if (desc.sky)
 		{
-			throwIfCancelled(cancel);
-			if (equirect)
-				skyCube = cubeAt(parameters.skyFaceSize);
-			const ImageData& source = equirect ? *skyCube : input;
-
-			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
-			// belongs on the `.benv` document where a viewer can change it.
-			//
-			// Clamped rather than refused: a sky too small for the requested chain is a small sky,
-			// not a bad request, and the levels it can carry are still the ones a viewer would ask
-			// for.
-			const auto maxMips =
-				static_cast<uint32_t>(std::bit_width(std::max(parameters.skyFaceSize, 1u)));
-			const uint32_t skyMips = std::clamp(parameters.skyMips, 1u, maxMips);
-
-			const ImageData chain =
-				skyChain(source, parameters.skyFaceSize, skyMips, 256, desc.threads);
-
-			const std::vector<std::string> outputs = partOutputs(desc, EnvironmentPart::kSky);
-			writeSource(GetDataRoot(), created, outputs[0], chain);
-
-			auto bsky       = BSky();
-			bsky.name       = desc.name;
-			bsky.sky.source = outputs[0];
-
-			throwIfCancelled(cancel);
-			BakeSky(bsky);
-
-			result.sky = outputs[1];
-			created.WillWrite(result.sky);
-			Save(bsky, result.sky);
+			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kSky);
+			produceSky(
+				*this,
+				input,
+				desc.parameters,
+				desc.threads,
+				desc.name,
+				SkyTargets{ .source = { keys[0] }, .container = { keys[1] } },
+				beforeWrite,
+				cancel);
+			result.sky = keys[1];
 		}
 
 		if (desc.lighting)
 		{
-			throwIfCancelled(cancel);
-
-			// Shared with the sky whenever the two sizes agree, which they do at the defaults.
-			const uint32_t projection = lightingProjectionSize(parameters);
-			auto           ownCube    = std::optional<ImageData>();
-			if (equirect && !(skyCube && parameters.skyFaceSize == projection))
-				ownCube = cubeAt(projection);
-			const ImageData& source = !equirect ? input : ownCube ? *ownCube : *skyCube;
-
-			const ImageData irradiance = irradianceSh(source, parameters.irradianceFaceSize);
-
-			auto prefilterDesc      = PrefilterDesc();
-			prefilterDesc.faceSize  = parameters.prefilterFaceSize;
-			prefilterDesc.mipLevels = parameters.prefilterMips;
-			prefilterDesc.samples   = parameters.prefilterSamples;
-			prefilterDesc.threads   = desc.threads;
-
-			throwIfCancelled(cancel);
-			const ImageData prefilter = prefilterRadiance(source, prefilterDesc);
-
-			const std::vector<std::string> outputs = partOutputs(desc, EnvironmentPart::kLighting);
-			writeSource(GetDataRoot(), created, outputs[0], prefilter);
-			writeSource(GetDataRoot(), created, outputs[1], irradiance);
-
-			auto lighting              = BEnvLighting();
-			lighting.name              = desc.name;
-			lighting.prefilter.source  = outputs[0];
-			lighting.irradiance.source = outputs[1];
-
-			throwIfCancelled(cancel);
-			BakeEnvLighting(lighting);
-
-			result.lighting = outputs[2];
-			created.WillWrite(result.lighting);
-			Save(lighting, result.lighting);
-
-			result.exposure = lighting.exposure;
+			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kLighting);
+			result.exposure                     = *produceLighting(
+				*this,
+				input,
+				desc.parameters,
+				desc.threads,
+				desc.name,
+				LightingTargets{ .prefilter  = { keys[0] },
+			                     .irradiance = { keys[1] },
+			                     .container  = { keys[2] } },
+				beforeWrite,
+				cancel);
+			result.lighting = keys[2];
 		}
 
 		if (desc.environment)
