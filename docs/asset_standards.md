@@ -422,7 +422,8 @@ in `docs/specs/`.
     stale and drawn from its triplet, and only the editor's stale marker should care.
   * `editorGraph` — the node graph, as an opaque JSON blob. Nothing outside the editor reads it and it
     never affects rendering; it exists so reopening a material restores the board that produced the
-    routes, node positions and unwired nodes included.
+    routes, node positions and unwired nodes included. A PBR document written without one opens as
+    the board an import would have laid out from the files its routes read (`BuildPbrMaterialGraph`).
 
   **`MaterialLayer` — the layer, which every model has and none owns**: `alphaMode`, `alphaCutoff`
   and `doubleSided`, top-level keys beside `shadingModel`. `gamelib` derives the renderer's `LayerType`

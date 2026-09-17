@@ -14,10 +14,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qstringview.h>
+#include <string>
 
 namespace
 {
@@ -574,4 +576,32 @@ TEST_CASE(
 	CHECK(asShown(material.pbr.roughnessFactor) == material.pbr.roughnessFactor);
 	CHECK(asShown(material.pbr.metallicFactor) == material.pbr.metallicFactor);
 	CHECK(asShown(material.layer.alphaCutoff) == material.layer.alphaCutoff);
+}
+
+TEST_CASE("A PBR material saved with no graph opens with its textures wired", "[materialimport]")
+{
+	// TownPlatformA: a material written outside the editor, routing one atlas into base colour. Seeded
+	// from its factors alone, the board wired nothing and the preview drew the factor over white.
+	auto document                = assetlib::BMaterial();
+	document.layer.alphaMode     = assetlib::AlphaMode::kOpaque;
+	document.pbr.roughnessFactor = 0.6f;
+	const std::string atlas      = "Derived/SourceTextures/hydrant/tex0.ktx2";
+	for (size_t c = 0; c < 4; ++c) document.pbr.routes[c] = { atlas, static_cast<uint16_t>(c) };
+
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	BuildPbrMaterialGraph(model, document, c_DataRoot);
+	CHECK(model.allNodeIds().size() == 2);
+
+	const assetlib::BMaterial reopened =
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
+
+	for (const PbrChannel channel :
+	     { PbrChannel::kBaseColorR, PbrChannel::kBaseColorG, PbrChannel::kBaseColorB })
+	{
+		CHECK(Route(reopened, channel).texture == atlas);
+		CHECK(Route(reopened, channel).channel == Route(document, channel).channel);
+	}
+	// The opaque sink has no alpha port, exactly as an import leaves it.
+	CHECK(Route(reopened, PbrChannel::kBaseColorA).texture.empty());
+	CHECK(reopened.pbr.roughnessFactor == Catch::Approx(0.6f));
 }
