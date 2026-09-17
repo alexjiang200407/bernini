@@ -43,6 +43,13 @@ namespace assetlib
 	[[nodiscard]] EnvironmentPart
 	partOf(EnvironmentOutput output) noexcept;
 
+	/**
+	 * What `output`'s file name adds to the source's stem: `_sky` for the sky's cube, nothing for a
+	 * container. A rename keeps it, because it is how a cube's part is told.
+	 */
+	[[nodiscard]] std::string_view
+	outputStemSuffix(EnvironmentOutput output) noexcept;
+
 	/** Whether `outputKey` is a file `part` writes. */
 	[[nodiscard]] bool
 	isPartOutput(std::string_view outputKey, EnvironmentPart part);

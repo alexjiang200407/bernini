@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <assetlib/asset_import.h>  // IWYU pragma: keep -- completes MigrateReport's MovedTexture
+#include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
@@ -34,6 +35,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
+#include "env_parts.h"
 #include "mounted_io.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
@@ -1037,4 +1039,233 @@ TEST_CASE("A cube written before its part throws is still reported", "[envimport
 		entry->written ==
 		std::vector<std::string>{ "Derived/SourceTextures/forest_irradiance.ktx2" });
 	CHECK(sandbox.Has("Derived/SourceTextures/forest_irradiance.ktx2"));
+}
+
+namespace
+{
+	RenameResult
+	RenameIn(const Sandbox& sandbox, std::string_view from, std::string_view to)
+	{
+		const AssetStore store = sandbox.Store();
+		return store.RenameAsset(planRename(AssetRefGraph::Scan(store), from, to));
+	}
+
+	DeletionResult
+	DeleteIn(const Sandbox& sandbox, std::string_view target)
+	{
+		const AssetStore store = sandbox.Store();
+		return store.DeleteAsset(planCascadeDeletion(AssetRefGraph::Scan(store), target));
+	}
+
+	/** The family `ImportGradient` writes, under another name. */
+	std::vector<std::string>
+	RenamedOutputs(std::string_view name)
+	{
+		auto out = std::vector<std::string>();
+		for (const std::string& output : GradientOutputs())
+		{
+			std::string renamed = output;
+			renamed.replace(renamed.find("forest"), 6, name);
+			out.push_back(renamed);
+		}
+		std::ranges::sort(out);
+		return out;
+	}
+
+	void
+	CheckRenamedToDusk(const Sandbox& sandbox)
+	{
+		for (const std::string& gone : GradientOutputs()) CHECK_FALSE(sandbox.Has(gone));
+		for (const std::string& now : RenamedOutputs("dusk")) CHECK(sandbox.Has(now));
+		CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
+
+		const ImportDocument document =
+			loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport");
+		CHECK(document.outputs == RenamedOutputs("dusk"));
+
+		// The part suffix is how a cube's part is told; a rename that dropped it would turn the sky's
+		// cube into a lighting output.
+		CHECK(
+			environmentOutputOf("Derived/SourceTextures/dusk_sky.ktx2") ==
+			EnvironmentOutput::kSkySource);
+
+		// Everything that names the family follows it: the authored `.benv`, and the containers'
+		// routes into their cubes.
+		const BEnv env =
+			StoreAt(sandbox.DataRoot()).Load<BEnv>("Authored/Environments/forest.benv");
+		CHECK(env.sky == "Derived/Sky/dusk.bsky");
+		CHECK(env.lighting == "Derived/EnvLighting/dusk.benvl");
+		CHECK(
+			StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/dusk.bsky").sky.source ==
+			"Derived/SourceTextures/dusk_sky.ktx2");
+
+		const AssetStore store = sandbox.Store();
+		CHECK(AssetRefGraph::Scan(store).broken.empty());
+		CHECK(store.GetStaleEnvironmentSources().empty());
+	}
+}
+
+TEST_CASE("Renaming an environment source moves the whole environment", "[envimport][assetrename]")
+{
+	const Sandbox sandbox("bernini_envrename_source");
+	static_cast<void>(ImportGradient(sandbox));
+
+	REQUIRE(
+		RenameIn(sandbox, "Authored/EnvSources/forest.hdr", "Authored/EnvSources/dusk.hdr")
+			.status == RenameStatus::kRenamed);
+	CHECK(sandbox.Has("Authored/EnvSources/dusk.hdr"));
+	CHECK(
+		loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport").source ==
+		"Authored/EnvSources/dusk.hdr");
+	CheckRenamedToDusk(sandbox);
+
+	SECTION("and the renamed document still produces what it claims")
+	{
+		fs::remove_all(sandbox.DataRoot() / "Derived");
+		const ReimportReport report = sandbox.Store().Reimport(false);
+		const auto*          entry  = Find(report, "Authored/EnvSources/dusk.hdr");
+		REQUIRE(entry != nullptr);
+		CHECK(entry->message.empty());
+		CHECK(entry->written == RenamedOutputs("dusk"));
+	}
+}
+
+TEST_CASE("Renaming an environment's document plans the same move", "[envimport][assetrename]")
+{
+	const Sandbox sandbox("bernini_envrename_document");
+	static_cast<void>(ImportGradient(sandbox));
+
+	REQUIRE(
+		RenameIn(sandbox, "Authored/EnvSources/forest.bimport", "Authored/EnvSources/dusk.bimport")
+			.status == RenameStatus::kRenamed);
+	CHECK(sandbox.Has("Authored/EnvSources/dusk.hdr"));
+	CheckRenamedToDusk(sandbox);
+}
+
+// A `.ktx2` is otherwise a texture, and renaming one as a texture would move the source out from under
+// its document. What makes it a source is the document naming it.
+TEST_CASE("A cube source renames as a source, not as a texture", "[envimport][assetrename]")
+{
+	const Sandbox sandbox("bernini_envrename_cube");
+	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
+
+	REQUIRE(
+		RenameIn(sandbox, "Authored/EnvSources/forest.ktx2", "Authored/EnvSources/dusk.ktx2")
+			.status == RenameStatus::kRenamed);
+	CHECK(sandbox.Has("Authored/EnvSources/dusk.bimport"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
+	CheckRenamedToDusk(sandbox);
+}
+
+// The old rule derived a source's document from its path and could not disagree with itself; a
+// search can, and moving whichever document sorted first would move the wrong import.
+TEST_CASE("A source two documents claim is refused a rename", "[envimport][assetrename]")
+{
+	const Sandbox sandbox("bernini_envrename_ambiguous");
+	static_cast<void>(ImportGradient(sandbox));
+
+	ImportDocument impostor = sandbox.Document();
+	impostor.outputs.clear();
+	StoreAt(sandbox.DataRoot()).Save(impostor, "Authored/EnvSources/impostor.bimport");
+
+	CHECK_THROWS_WITH(
+		planRename(
+			AssetRefGraph::Scan(sandbox.Store()),
+			"Authored/EnvSources/forest.hdr",
+			"Authored/EnvSources/dusk.hdr"),
+		Catch::Matchers::ContainsSubstring("both record"));
+}
+
+TEST_CASE(
+	"An environment source is refused a rename that would lose it",
+	"[envimport][assetrename]")
+{
+	const Sandbox sandbox("bernini_envrename_refused");
+	static_cast<void>(ImportGradient(sandbox));
+	const AssetRefGraph graph = AssetRefGraph::Scan(sandbox.Store());
+
+	SECTION("into another kind")
+	{
+		CHECK_THROWS_WITH(
+			planRename(graph, "Authored/EnvSources/forest.hdr", "Authored/EnvSources/forest.ktx2"),
+			Catch::Matchers::ContainsSubstring("kind of asset"));
+	}
+
+	// `Reimport` enumerates the category, so a source moved out of it is one nothing can produce the
+	// environment from again.
+	SECTION("out of its category, by the source, the document or the folder")
+	{
+		CHECK_THROWS_WITH(
+			planRename(graph, "Authored/EnvSources/forest.hdr", "Authored/Environments/forest.hdr"),
+			Catch::Matchers::ContainsSubstring("Authored/EnvSources"));
+		CHECK_THROWS_WITH(
+			planRename(
+				graph,
+				"Authored/EnvSources/forest.bimport",
+				"Authored/Meshes/forest.bimport"),
+			Catch::Matchers::ContainsSubstring("Authored/EnvSources"));
+
+		auto desc              = sandbox.Desc();
+		desc.name              = "valley";
+		desc.importedSourceDir = "Authored/EnvSources/outdoor";
+		static_cast<void>(sandbox.Store().ImportEnvironment(desc));
+		const AssetRefGraph withFolder = AssetRefGraph::Scan(sandbox.Store());
+		CHECK_THROWS_WITH(
+			planRename(withFolder, "Authored/EnvSources/outdoor", "Authored/Levels/outdoor"),
+			Catch::Matchers::ContainsSubstring("Authored/EnvSources"));
+		CHECK_NOTHROW(
+			planRename(withFolder, "Authored/EnvSources/outdoor", "Authored/EnvSources/valleys"));
+	}
+}
+
+// The mesh rule, unchanged: the document goes and takes the source it alone names; the containers it
+// produced stay, because a document's claim is not a reference.
+TEST_CASE(
+	"Deleting an environment's document takes its source and leaves the rest",
+	"[envimport][cascade]")
+{
+	const Sandbox sandbox("bernini_envdelete_document");
+	static_cast<void>(ImportGradient(sandbox));
+
+	REQUIRE(
+		DeleteIn(sandbox, "Authored/EnvSources/forest.bimport").status == DeletionStatus::kDeleted);
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.hdr"));
+	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
+}
+
+TEST_CASE("An environment's source and parts are held by what names them", "[envimport][cascade]")
+{
+	const Sandbox sandbox("bernini_envdelete_held");
+	static_cast<void>(ImportGradient(sandbox));
+
+	CHECK_THROWS(DeleteIn(sandbox, "Authored/EnvSources/forest.hdr"));
+
+	// A cube source is a texture by extension, so it reaches the plan -- and the document naming it
+	// is what refuses it there.
+	auto cube = sandbox.Desc();
+	cube.name = "valley";
+	static_cast<void>(sandbox.Store().ImportEnvironment(cube));
+	CHECK(DeleteIn(sandbox, "Authored/EnvSources/valley.ktx2").status == DeletionStatus::kRefused);
+	CHECK(sandbox.Has("Authored/EnvSources/valley.ktx2"));
+	CHECK(DeleteIn(sandbox, "Derived/Sky/forest.bsky").status == DeletionStatus::kRefused);
+	CHECK(
+		DeleteIn(sandbox, "Derived/SourceTextures/forest_sky.ktx2").status ==
+		DeletionStatus::kRefused);
+	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
+}
+
+// Deleting the environment a person authored frees what only it named. Each freed file's claim goes
+// with it, or `Reimport` would read the claim as absent and put the file straight back.
+TEST_CASE("Deleting the environment frees its parts and their claims", "[envimport][cascade]")
+{
+	const Sandbox sandbox("bernini_envdelete_benv");
+	static_cast<void>(ImportGradient(sandbox));
+
+	REQUIRE(
+		DeleteIn(sandbox, "Authored/Environments/forest.benv").status == DeletionStatus::kDeleted);
+	for (const std::string& output : GradientOutputs()) CHECK_FALSE(sandbox.Has(output));
+
+	CHECK(sandbox.Document().outputs.empty());
+	CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }

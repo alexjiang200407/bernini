@@ -240,13 +240,16 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   the files last, because a move is the step most likely to be refused. A failure writes the
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
-* **`planRename` on an imported source** — a `.glb` and its `.bimport` are one asset under two
-  names, so either spelling plans the same move and `subject` reads back as the document's. What
-  travels with it splits by the same rule the whole data root does. `RenamePlan::source` is the
-  `.glb`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
+* **`planRename` on an imported source** — a source and its `.bimport` are one asset under two
+  names, so either spelling plans the same move and `subject` reads back as the document's. A file
+  is a source when a document records it as one (`RefKind::kImportedSource`), whatever its extension,
+  and it keeps that extension; a rename that would move the document out of `Authored/Meshes` or
+  `Authored/EnvSources` is refused. What travels with it splits by the same rule the whole data root
+  does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
   that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
   containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An output a
+  since the document names the new path either way and `Reimport` writes it there. An environment's
+  float cubes keep their part suffix across the move. An output a
   rename of its own has since taken off the source's stem is left where it is — its name no longer
   says it came from this source — and the document's reference to it is rewritten like any other.
 

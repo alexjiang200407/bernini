@@ -169,6 +169,16 @@ flowchart TD
   `RGB9E5` cube is accepted and unpacked with a warning — a recovery path, since re-convolving it
   quantizes twice.
 
+### Renaming and deleting an imported environment
+
+* **The source, its `.bimport`, the `.bsky`, the `.benvl` and the float cubes move as one.** Name
+  either the source or the document; the cubes keep their part suffix, and the `.benv` and the
+  containers' routes are rewritten to follow. The `.benv` itself is authored, not an output, and
+  stays where it is.
+* **Deleting the `.bimport` takes the source it alone names and leaves the derived files**, as for a
+  mesh. Deleting the `.benv` frees the `.bsky`, `.benvl` and cubes only it named, and drops their
+  claims from the document so `Reimport` does not put them back.
+
 ### `assetlib::resolveEnvironment`
 
 * Loads whichever map each route draws — `envMapToDraw`, below. **@throws** only when a route has
