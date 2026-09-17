@@ -69,16 +69,6 @@ namespace assetlib
 			return stored;
 		}
 
-		/** `key`'s file name without its extension. */
-		std::string_view
-		stemOf(std::string_view key)
-		{
-			const size_t           slash = key.find_last_of('/');
-			const std::string_view name =
-				slash == std::string_view::npos ? key : key.substr(slash + 1);
-			return name.substr(0, name.size() - extensionOf(name).size());
-		}
-
 		/** `key` in the same directory and with the same extension, under `stem`. */
 		std::string
 		reStem(std::string_view key, std::string_view stem)

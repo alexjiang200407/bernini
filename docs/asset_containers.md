@@ -203,9 +203,9 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, and a source's extracted `.ktx2` from the texture re-extract. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an absent environment `.bsky`, `.benvl` or float cube from `Reimport` too. A *present* float cube is not yet checked against its document, so one left behind by a changed `.bimport` stays as it is. |
 | **Ignorable, but by hand** | the baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
-| **Derived, and committed anyway** | `Derived/Sky/` and `Derived/EnvLighting/`, and the maps under `Derived/SourceTextures/` an environment import wrote. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. The carve-out goes the day an env source lives in the project beside the meshes'. |
+| **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky`, `.benvl` or float cubes back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
 tree that `bgl_extended_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
@@ -230,12 +230,21 @@ clip set's posed boxes exactly as the writer that produced it did: a source that
 swept that mesh, a clips-only source swept the project's. Re-measuring those across the project is
 `bakebounds`, deliberately its own operation.
 
-It runs its sources **across threads within a stage** — rigs, then meshes, then clips — and takes an
+It runs its sources **across threads within a stage** — rigs, then meshes, then clips, then the
+extracted textures, then environments — and takes an
 optional [`ProgressSink`](libs/assetlib/include/assetlib/progress.h) that names each container
 before it is produced. The stage boundary is not an implementation detail: a mesh names the rig it
 binds, and a clip set sweeps its boxes through the meshes standing *on disk*, so a fully parallel
 run would measure a clip against a mesh that is not written yet. The whole work list is decided
 before any of it runs, which is what makes the count the sink is stepped through fixed.
+
+**Environments come last and one at a time.** Each is decoded once and each *part* re-run for
+only the files it is missing, so a `.bsky` lost beside its float chain is a bake from that chain in
+seconds, and only a lost cube costs a convolution. Every convolution already spreads across all the
+cores there are, so running two environments at once would only divide them. The producing code is
+the one the import runs (`src/env_produce.h`), which is what makes the result byte for byte a fresh
+import's. None of it depends on the thread count; the suite checks that by importing on one thread
+and re-producing on all of them.
 
 A source's extracted textures are covered too, but asked differently: a `.ktx2` carries no header,
 so no `outputs` entry can name one and the only signal available is the texture folder being absent

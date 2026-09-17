@@ -23,6 +23,10 @@ namespace assetlib
 	[[nodiscard]] std::string
 	extensionOf(std::string_view key);
 
+	/** `key`'s file name without its extension, as a view into `key`. */
+	[[nodiscard]] std::string_view
+	stemOf(std::string_view key);
+
 	/**
 	 * `key` with `extension` in place of its own, directory and stem untouched -- how a file finds
 	 * the one authored beside it, `kirk.glb` -> `kirk.bimport` and back.

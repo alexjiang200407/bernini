@@ -6,6 +6,8 @@
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
+#include <assetlib/progress.h>
+#include <assetlib/reimport.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
@@ -648,4 +650,167 @@ TEST_CASE("The lighting's pixels do not depend on the sky's face size", "[envimp
 	CHECK(
 		importWithSky("bernini_envimport_shared", 16) ==
 		importWithSky("bernini_envimport_apart", 8));
+}
+
+namespace
+{
+	/** An environment imported from the gradient `.hdr`, so both parts project and convolve. */
+	EnvImportResult
+	ImportGradient(const Sandbox& sandbox)
+	{
+		auto desc   = sandbox.Desc();
+		desc.source = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
+		return sandbox.Store().ImportEnvironment(desc);
+	}
+
+	std::vector<std::string>
+	GradientOutputs()
+	{
+		return FamilyOutputs();
+	}
+
+	const ReimportedSource*
+	Find(const ReimportReport& report, std::string_view source)
+	{
+		const auto it = std::ranges::find(report.sources, source, &ReimportedSource::source);
+		return it == report.sources.end() ? nullptr : &*it;
+	}
+
+	/** A file's modification time in ticks -- a number, so a failing check can print it. */
+	auto
+	WrittenAt(const Sandbox& sandbox, const std::string& relative)
+	{
+		return fs::last_write_time(sandbox.DataRoot() / relative).time_since_epoch().count();
+	}
+}
+
+// The feature's acceptance: a checkout that ignores `Derived/` gets its environment back from the
+// source and the document alone, and gets exactly the files a fresh import would have written.
+TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_full");
+	static_cast<void>(ImportGradient(sandbox));
+
+	auto before = std::vector<std::vector<std::byte>>();
+	for (const std::string& output : GradientOutputs()) before.push_back(sandbox.Bytes(output));
+	const std::vector<std::byte> document    = sandbox.Bytes("Authored/EnvSources/forest.bimport");
+	const std::vector<std::byte> environment = sandbox.Bytes("Authored/Environments/forest.benv");
+
+	fs::remove_all(sandbox.DataRoot() / "Derived");
+
+	size_t      steps  = 0;
+	const auto  report = sandbox.Store().Reimport(false, [&](const ProgressEvent&) { ++steps; });
+	const auto* entry  = Find(report, "Authored/EnvSources/forest.hdr");
+	REQUIRE(entry != nullptr);
+	CHECK(entry->message.empty());
+	CHECK(entry->written == GradientOutputs());
+	CHECK(steps == GradientOutputs().size());
+
+	for (size_t i = 0; i < before.size(); ++i)
+	{
+		INFO(GradientOutputs()[i]);
+		CHECK(sandbox.Bytes(GradientOutputs()[i]) == before[i]);
+	}
+
+	// What a person authored is neither an output nor rewritten.
+	CHECK(sandbox.Bytes("Authored/EnvSources/forest.bimport") == document);
+	CHECK(sandbox.Bytes("Authored/Environments/forest.benv") == environment);
+
+	// And the maps the containers name were baked on the way.
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	CHECK(sandbox.Has(sky.sky.baked));
+
+	SECTION("a second run finds nothing to do")
+	{
+		CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);
+	}
+}
+
+// Producing only what is missing is the point of splitting a part's files: a lost container beside
+// its float chain is a bake from that chain, where re-running the part is minutes of convolution.
+TEST_CASE("A lost container is baked from the cube still on disk", "[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_container");
+	static_cast<void>(ImportGradient(sandbox));
+
+	const auto chainAt               = WrittenAt(sandbox, "Derived/SourceTextures/forest_sky.ktx2");
+	const std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
+	fs::remove(sandbox.DataRoot() / "Derived/Sky/forest.bsky");
+
+	const ReimportReport report = sandbox.Store().Reimport(false);
+	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+	REQUIRE(entry != nullptr);
+	CHECK(entry->written == std::vector<std::string>{ "Derived/Sky/forest.bsky" });
+
+	CHECK(sandbox.Bytes("Derived/Sky/forest.bsky") == sky);
+	CHECK(WrittenAt(sandbox, "Derived/SourceTextures/forest_sky.ktx2") == chainAt);
+}
+
+TEST_CASE("A lost cube is produced alone, beside the part's others", "[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_cube");
+	static_cast<void>(ImportGradient(sandbox));
+
+	const auto prefilterAt = WrittenAt(sandbox, "Derived/SourceTextures/forest_prefilter.ktx2");
+	const auto lightingAt  = WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl");
+	const std::vector<std::byte> irradiance =
+		sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2");
+	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_irradiance.ktx2");
+
+	const ReimportReport report = sandbox.Store().Reimport(false);
+	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+	REQUIRE(entry != nullptr);
+	CHECK(
+		entry->written ==
+		std::vector<std::string>{ "Derived/SourceTextures/forest_irradiance.ktx2" });
+
+	CHECK(sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2") == irradiance);
+	CHECK(WrittenAt(sandbox, "Derived/SourceTextures/forest_prefilter.ktx2") == prefilterAt);
+	CHECK(WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl") == lightingAt);
+}
+
+TEST_CASE("A dry run names an absent environment's files and writes none", "[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_dry");
+	static_cast<void>(ImportGradient(sandbox));
+	fs::remove_all(sandbox.DataRoot() / "Derived");
+
+	const ReimportReport report = sandbox.Store().Reimport(true);
+	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+	REQUIRE(entry != nullptr);
+	CHECK(entry->written == GradientOutputs());
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+}
+
+TEST_CASE(
+	"An environment Reimport cannot produce is reported, not guessed",
+	"[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_broken");
+	static_cast<void>(ImportGradient(sandbox));
+	fs::remove_all(sandbox.DataRoot() / "Derived");
+
+	SECTION("its source is gone")
+	{
+		fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr");
+
+		const ReimportReport report = sandbox.Store().Reimport(false);
+		const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+		REQUIRE(entry != nullptr);
+		CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("not in the project"));
+		CHECK(entry->written.empty());
+	}
+
+	SECTION("its document claims a file no environment import writes")
+	{
+		ImportDocument document = sandbox.Document();
+		document.outputs.push_back("Derived/SourceTextures/forest_extra.ktx2");
+		StoreAt(sandbox.DataRoot()).Save(document, "Authored/EnvSources/forest.bimport");
+
+		const ReimportReport report = sandbox.Store().Reimport(false);
+		const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+		REQUIRE(entry != nullptr);
+		CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("forest_extra.ktx2"));
+		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	}
 }

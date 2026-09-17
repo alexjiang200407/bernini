@@ -40,6 +40,14 @@ namespace assetlib
 		return relative.generic_string();
 	}
 
+	std::string_view
+	stemOf(std::string_view key)
+	{
+		const size_t           slash = key.find_last_of('/');
+		const std::string_view name = slash == std::string_view::npos ? key : key.substr(slash + 1);
+		return name.substr(0, name.size() - extensionOf(name).size());
+	}
+
 	std::string
 	swapExtension(std::string_view key, std::string_view extension)
 	{
