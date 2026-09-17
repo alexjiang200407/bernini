@@ -19,16 +19,16 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gGroupCount[kPsoCount];
-groupshared uint gGroupBase[kPsoCount];
+groupshared Atomic<uint> gGroupCount[cMaxPsoBuckets];
+groupshared uint gGroupBase[cMaxPsoBuckets];
 
 [shader("compute")]
 [numthreads(cCompactGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    if (localIdx < kPsoCount)
+    for (uint i = localIdx; i < cMaxPsoBuckets; i += cCompactGroupSize)
     {
-        gGroupCount[localIdx].store(0u);
+        gGroupCount[i].store(0u);
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -50,10 +50,10 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     // One reservation per bucket per group, and none at all for a bucket this group did not fill.
     // Reserving per instance instead makes threadCountX a single contended address -- a scene drawn
     // from one pso serializes its every instance on it.
-    if (localIdx < kPsoCount)
+    for (uint i = localIdx; i < cMaxPsoBuckets; i += cCompactGroupSize)
     {
-        let count = gGroupCount[localIdx].load();
-        gGroupBase[localIdx] = (count != 0u) ? gUniforms.dispatchArgs[localIdx].threadCountX.add(count) : 0u;
+        let count = gGroupCount[i].load();
+        gGroupBase[i] = (count != 0u) ? gUniforms.dispatchArgs[i].threadCountX.add(count) : 0u;
     }
     GroupMemoryBarrierWithGroupSync();
 

@@ -38,7 +38,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::c_PsoCount)
+				.SetInitialCount(idl::cMaxPsoBuckets)
 				.SetDebugName("Pso Prefix Sum");
 
 			m_PsoPrefixSum.Init(std::move(desc), resourceManager);
@@ -47,7 +47,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::c_PsoCount)
+				.SetInitialCount(idl::cMaxPsoBuckets)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);

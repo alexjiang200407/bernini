@@ -17,15 +17,15 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gLocalHistogram[kPsoCount];
+groupshared Atomic<uint> gLocalHistogram[cMaxPsoBuckets];
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    if (localIdx < kPsoCount)
+    for (uint i = localIdx; i < cMaxPsoBuckets; i += cHistogramGroupSize)
     {
-        gLocalHistogram[localIdx].store(0u);
+        gLocalHistogram[i].store(0u);
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -45,8 +45,14 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     GroupMemoryBarrierWithGroupSync();
 
-    if (localIdx < kPsoCount)
+    // Skip the empty rows: every group flushing zero adds to the same 1 KB region is the
+    // worst-contention case, not a free one.
+    for (uint i = localIdx; i < cMaxPsoBuckets; i += cHistogramGroupSize)
     {
-        gUniforms.outBuffer[localIdx].add(gLocalHistogram[localIdx].load());
+        let count = gLocalHistogram[i].load();
+        if (count != 0u)
+        {
+            gUniforms.outBuffer[i].add(count);
+        }
     }
 }

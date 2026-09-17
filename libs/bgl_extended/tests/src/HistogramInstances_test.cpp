@@ -116,11 +116,13 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		expectedPrefixSum[i] = running;  // inclusive scan
 	}
 
+	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxPsoBuckets threads and
+	// touches every element.
 	auto outBuffer = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::idl::c_PsoCount;
+		desc.initialCount = bgl::idl::cMaxPsoBuckets;
 		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
@@ -159,7 +161,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto makeReadback = [&](const char* name) {
 		auto desc      = bgl::ReadbackBufferDesc();
-		desc.byteSize  = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
+		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
 	};
@@ -260,6 +262,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	{
 		CHECK(histogram[i] == expectedHistogram[i]);
 	}
+	// The ceiling rows past the enum: no instance can land there, so the flush must leave them
+	// untouched.
+	for (uint32_t i = bgl::idl::c_PsoCount; i < bgl::idl::cMaxPsoBuckets; ++i)
+	{
+		CHECK(histogram[i] == 0u);
+	}
 	resourceManager->UnmapReadback(rbHistogram);
 
 	const auto* prefixSum = static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
@@ -267,6 +275,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
 	{
 		CHECK(prefixSum[i] == expectedPrefixSum[i]);
+	}
+	// The scan is inclusive over the whole ceiling, so every row past the enum accumulates the
+	// full total -- which is what lets any reader take the last row as "everything visible".
+	for (uint32_t i = bgl::idl::c_PsoCount; i < bgl::idl::cMaxPsoBuckets; ++i)
+	{
+		CHECK(prefixSum[i] == c_ActiveCount);
 	}
 	resourceManager->UnmapReadback(rbPrefixSum);
 
