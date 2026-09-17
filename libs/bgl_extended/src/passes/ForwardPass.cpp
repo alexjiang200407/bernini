@@ -6,7 +6,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletKernel.h"
@@ -42,7 +42,7 @@ namespace bgl
 	namespace
 	{
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
-		// the code that writes them so BinderNames catches a shader rename at startup: a
+		// the code that writes them so BindingNameCheck catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
 		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
@@ -319,7 +319,7 @@ namespace bgl
 			return;
 		}
 
-		BinderNames("ForwardPass"sv, m_Kernels)
+		BindingNameCheck("ForwardPass"sv, m_Kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)

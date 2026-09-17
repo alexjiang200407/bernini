@@ -4,7 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPass.h"
 #include "passes/SceneBindings.h"
@@ -215,7 +215,7 @@ namespace bgl
 			                                                 &m_MaterialCullKernel };
 		for (const MeshletKernel* kernel : opaque)
 		{
-			BinderNames("StaticDepthPass"sv, { kernel, 1 })
+			BindingNameCheck("StaticDepthPass"sv, { kernel, 1 })
 				.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 				.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 				.Check("expansionData"sv, c_ExpansionDataFields)
@@ -230,7 +230,9 @@ namespace bgl
 			return;
 		}
 
-		BinderNames("StaticDepthPass"sv, { m_CoverageKernels.data(), m_CoverageKernels.size() })
+		BindingNameCheck(
+			"StaticDepthPass"sv,
+			{ m_CoverageKernels.data(), m_CoverageKernels.size() })
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)

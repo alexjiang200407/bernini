@@ -42,16 +42,16 @@ namespace bgl
 	 * @pre construct one in the pass's `CheckBindings`, once a batch is built, and check every
 	 * cbuffer it writes there, never per draw.
 	 */
-	class BinderNames final
+	class BindingNameCheck final
 	{
 	public:
 		/** @pre `kernels` outlives every `Check`; it is not copied. */
-		BinderNames(std::string_view binder, std::span<const MeshletKernel> kernels) noexcept :
+		BindingNameCheck(std::string_view binder, std::span<const MeshletKernel> kernels) noexcept :
 			m_Binder(binder), m_Kernels(kernels)
 		{}
 
 		/** @post Fatal when a name in `names` resolves in no variant's `cbuffer`. */
-		BinderNames&
+		BindingNameCheck&
 		Check(std::string_view cbuffer, std::span<const std::string_view> names);
 
 	private:

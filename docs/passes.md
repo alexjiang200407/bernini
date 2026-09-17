@@ -9,9 +9,9 @@ that machinery. This page is the catalog of the passes `bgl_extended` ships.
 A pass's `Init` does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
 lands in, and `RenderContext` builds each batch's requests at once across threads (see
-[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-row meshlet
-kernels in the first `Draw` whose view demands each row. Anything in a pass that reads a built
-kernel — the `BinderNames` check of the cbuffer names it binds — lives in `CheckBindings`, which
+[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-bucket meshlet
+kernels in the first `Draw` whose view demands each bucket. Anything in a pass that reads a built
+kernel — the `BindingNameCheck` of the cbuffer names it binds — lives in `CheckBindings`, which
 `RenderContext` calls after every batch.
 
 **This document is a map, not a mirror.** It captures each pass's role, the resources it reads and

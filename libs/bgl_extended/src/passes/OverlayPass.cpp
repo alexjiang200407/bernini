@@ -5,7 +5,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "overlay/Overlay.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
@@ -89,7 +89,7 @@ namespace bgl
 	void
 	OverlayPass::CheckBindings() const
 	{
-		BinderNames("OverlayPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("OverlayPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void

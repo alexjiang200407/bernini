@@ -1,4 +1,4 @@
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "pipeline/MeshletKernel.h"
 #include "uniforms/Uniforms.h"
 #include <algorithm>
@@ -11,8 +11,8 @@
 
 namespace bgl
 {
-	BinderNames&
-	BinderNames::Check(std::string_view cbuffer, std::span<const std::string_view> names)
+	BindingNameCheck&
+	BindingNameCheck::Check(std::string_view cbuffer, std::span<const std::string_view> names)
 	{
 		std::vector<const Uniforms*> variants;
 		variants.reserve(m_Kernels.size());
@@ -30,7 +30,7 @@ namespace bgl
 		}
 
 		// Under demand building the built subset may hold no variant with this cbuffer at all --
-		// every skinned row unbuilt leaves 'skinnedData' nowhere -- and that is absence, not a
+		// every skinned bucket unbuilt leaves 'skinnedData' nowhere -- and that is absence, not a
 		// typo. The member check resumes with the first build that carries the cbuffer.
 		if (std::ranges::none_of(variants, [](const Uniforms* uniforms) {
 				return uniforms != nullptr;
