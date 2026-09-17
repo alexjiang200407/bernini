@@ -6,16 +6,21 @@
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <bit>
+#include <core/err/util.h>
 #include <cstdint>
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 #include "env_parts.h"
 #include "fs_util.h"
@@ -167,5 +172,102 @@ namespace assetlib
 		beforeWrite(targets.container.key);
 		store.Save(lighting, targets.container.key);
 		return lighting.exposure;
+	}
+
+	/**
+	 * Produces the files `wanted` names out of one environment source's document: each part
+	 * re-run for only the files it is missing, so a lost `.bsky` beside its float chain is a
+	 * bake and not a convolution.
+	 *
+	 * @param onWritten Told each file once it is on disk.
+	 * @throws std::runtime_error if the document names no parameters, or claims a file no
+	 *         environment import writes.
+	 */
+	void
+	produceEnvironmentOutputs(
+		const AssetStore&               store,
+		const std::string&              sourceKey,
+		const ImportDocument&           document,
+		const std::vector<std::string>& wanted,
+		const EnvironmentFileSink&      beforeWrite,
+		const EnvironmentFileSink&      onWritten,
+		const CancelToken&              cancel)
+	{
+		core::throw_runtime_error_if(
+			!document.environment,
+			"'{}': its import document records no environment parameters",
+			sourceKey);
+
+		auto keys = std::unordered_map<EnvironmentOutput, std::string>();
+		for (const std::string& output : document.outputs)
+		{
+			const std::optional<EnvironmentOutput> role = environmentOutputOf(output);
+			core::throw_runtime_error_if(
+				!role,
+				"'{}': its import document claims '{}', which no environment import writes",
+				sourceKey,
+				output);
+			keys[*role] = output;
+		}
+
+		const auto target = [&](EnvironmentOutput role) -> EnvironmentTarget {
+			const std::string& key = keys[role];
+			return { key, std::ranges::find(wanted, key) != wanted.end() };
+		};
+
+		// A container bakes from the float cubes it routes, so it cannot be produced without
+		// knowing their names.
+		const auto requireFeeds = [&](EnvironmentOutput                        container,
+		                              std::initializer_list<EnvironmentOutput> feeds) {
+			if (keys[container].empty())
+				return;
+			for (const EnvironmentOutput feed : feeds)
+				core::throw_runtime_error_if(
+					keys[feed].empty(),
+					"'{}': its import document claims '{}' but not the float cube it bakes "
+					"from",
+					sourceKey,
+					keys[container]);
+		};
+		requireFeeds(EnvironmentOutput::kSky, { EnvironmentOutput::kSkySource });
+		requireFeeds(
+			EnvironmentOutput::kLighting,
+			{ EnvironmentOutput::kPrefilterSource, EnvironmentOutput::kIrradianceSource });
+
+		// The previous file reports written only once the next one starts, so a write that
+		// throws is never counted.
+		auto       last  = std::optional<std::string>();
+		const auto track = [&](const std::string& key) {
+			if (last)
+				onWritten(*last);
+			last = key;
+			beforeWrite(key);
+		};
+
+		auto input = EnvironmentInput(store.ResolveWritePath(sourceKey));
+		const EnvironmentImportParameters& parameters = *document.environment;
+
+		const SkyTargets sky = { .source    = target(EnvironmentOutput::kSkySource),
+			                     .container = target(EnvironmentOutput::kSky) };
+		if (sky.source.write || sky.container.write)
+			produceSky(store, input, parameters, 0, stemOf(sky.container.key), sky, track, cancel);
+
+		const LightingTargets lighting = { .prefilter = target(EnvironmentOutput::kPrefilterSource),
+			                               .irradiance =
+			                                   target(EnvironmentOutput::kIrradianceSource),
+			                               .container = target(EnvironmentOutput::kLighting) };
+		if (lighting.prefilter.write || lighting.irradiance.write || lighting.container.write)
+			static_cast<void>(produceLighting(
+				store,
+				input,
+				parameters,
+				0,
+				stemOf(lighting.container.key),
+				lighting,
+				track,
+				cancel));
+
+		if (last)
+			onWritten(*last);
 	}
 }

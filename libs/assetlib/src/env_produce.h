@@ -10,10 +10,12 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace assetlib
 {
 	class AssetStore;
+	struct ImportDocument;
 
 	/**
 	 * One environment source, decoded once and projected at each face size a part asks for. A cube
@@ -102,4 +104,23 @@ namespace assetlib
 		const LightingTargets&             targets,
 		const EnvironmentFileSink&         beforeWrite,
 		const CancelToken&                 cancel);
+
+	/**
+	 * Writes the files `wanted` names out of one environment source's import document, each part
+	 * re-run for only those: a `.bsky` lost beside its float chain is a bake, not a convolution.
+	 * What `Reimport` produces an absent file with and what a refresh re-cooks a stale part with.
+	 *
+	 * @param onWritten Told each file once it is on disk -- never one whose write threw.
+	 * @throws std::runtime_error if the document names no parameters, claims a file no environment
+	 *         import writes, or claims a container without the cubes it bakes from.
+	 */
+	void
+	produceEnvironmentOutputs(
+		const AssetStore&               store,
+		const std::string&              sourceKey,
+		const ImportDocument&           document,
+		const std::vector<std::string>& wanted,
+		const EnvironmentFileSink&      beforeWrite,
+		const EnvironmentFileSink&      onWritten,
+		const CancelToken&              cancel);
 }

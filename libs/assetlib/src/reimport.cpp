@@ -7,7 +7,6 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
-#include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
@@ -17,7 +16,6 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "cook_threads.h"
-#include "env_parts.h"
 #include "env_produce.h"
 #include "import_bounds.h"
 #include "plant_bake.h"
@@ -35,14 +33,11 @@
 #include <exception>
 #include <filesystem>
 #include <functional>
-#include <initializer_list>
 #include <mutex>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -186,103 +181,6 @@ namespace assetlib
 				break;
 			}
 			core::throw_runtime_error("'{}' is not a container an import produces", key);
-		}
-
-		/**
-		 * Produces the files `wanted` names out of one environment source's document: each part
-		 * re-run for only the files it is missing, so a lost `.bsky` beside its float chain is a
-		 * bake and not a convolution.
-		 *
-		 * @param onWritten Told each file once it is on disk.
-		 * @throws std::runtime_error if the document names no parameters, or claims a file no
-		 *         environment import writes.
-		 */
-		void
-		produceEnvironment(
-			const AssetStore&               store,
-			const std::string&              sourceKey,
-			const ImportDocument&           document,
-			const std::vector<std::string>& wanted,
-			const EnvironmentFileSink&      beforeWrite,
-			const EnvironmentFileSink&      onWritten)
-		{
-			core::throw_runtime_error_if(
-				!document.environment,
-				"'{}': its import document records no environment parameters",
-				sourceKey);
-
-			auto keys = std::unordered_map<EnvironmentOutput, std::string>();
-			for (const std::string& output : document.outputs)
-			{
-				const std::optional<EnvironmentOutput> role = environmentOutputOf(output);
-				core::throw_runtime_error_if(
-					!role,
-					"'{}': its import document claims '{}', which no environment import writes",
-					sourceKey,
-					output);
-				keys[*role] = output;
-			}
-
-			const auto target = [&](EnvironmentOutput role) -> EnvironmentTarget {
-				const std::string& key = keys[role];
-				return { key, std::ranges::find(wanted, key) != wanted.end() };
-			};
-
-			// A container bakes from the float cubes it routes, so it cannot be produced without
-			// knowing their names.
-			const auto requireFeeds = [&](EnvironmentOutput                        container,
-			                              std::initializer_list<EnvironmentOutput> feeds) {
-				if (keys[container].empty())
-					return;
-				for (const EnvironmentOutput feed : feeds)
-					core::throw_runtime_error_if(
-						keys[feed].empty(),
-						"'{}': its import document claims '{}' but not the float cube it bakes "
-						"from",
-						sourceKey,
-						keys[container]);
-			};
-			requireFeeds(EnvironmentOutput::kSky, { EnvironmentOutput::kSkySource });
-			requireFeeds(
-				EnvironmentOutput::kLighting,
-				{ EnvironmentOutput::kPrefilterSource, EnvironmentOutput::kIrradianceSource });
-
-			// The previous file reports written only once the next one starts, so a write that
-			// throws is never counted.
-			auto       last  = std::optional<std::string>();
-			const auto track = [&](const std::string& key) {
-				if (last)
-					onWritten(*last);
-				last = key;
-				beforeWrite(key);
-			};
-
-			auto input = EnvironmentInput(store.ResolveWritePath(sourceKey));
-			const EnvironmentImportParameters& parameters = *document.environment;
-
-			const SkyTargets sky = { .source    = target(EnvironmentOutput::kSkySource),
-				                     .container = target(EnvironmentOutput::kSky) };
-			if (sky.source.write || sky.container.write)
-				produceSky(store, input, parameters, 0, stemOf(sky.container.key), sky, track, {});
-
-			const LightingTargets lighting = { .prefilter =
-				                                   target(EnvironmentOutput::kPrefilterSource),
-				                               .irradiance =
-				                                   target(EnvironmentOutput::kIrradianceSource),
-				                               .container = target(EnvironmentOutput::kLighting) };
-			if (lighting.prefilter.write || lighting.irradiance.write || lighting.container.write)
-				static_cast<void>(produceLighting(
-					store,
-					input,
-					parameters,
-					0,
-					stemOf(lighting.container.key),
-					lighting,
-					track,
-					{}));
-
-			if (last)
-				onWritten(*last);
 		}
 
 		/**
@@ -577,7 +475,7 @@ namespace assetlib
 						"'{}' is not in the project, so nothing can be produced from it",
 						source.key);
 
-					produceEnvironment(
+					produceEnvironmentOutputs(
 						*this,
 						source.key,
 						source.document,
@@ -590,7 +488,8 @@ namespace assetlib
 								done.fetch_add(1),
 								total);
 						},
-						[&](const std::string& key) { written[source.key].push_back(key); });
+						[&](const std::string& key) { written[source.key].push_back(key); },
+						{});
 				}
 				catch (const std::exception& error)
 				{
