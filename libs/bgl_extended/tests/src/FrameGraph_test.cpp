@@ -176,6 +176,9 @@ namespace
 		DispatchMeshIndirect(uint32_t) noexcept override
 		{}
 		void
+		DispatchMeshIndirectCount(uint32_t, uint32_t) noexcept override
+		{}
+		void
 		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
 		{}
 		bool

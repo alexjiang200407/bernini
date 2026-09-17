@@ -13,5 +13,6 @@ namespace bgl
 		ViewportState        viewportState;
 		FrameBuffer          frameBuffer;
 		BufferHandle         indirectArgs;
+		BufferHandle         commandCounts;
 	};
 }

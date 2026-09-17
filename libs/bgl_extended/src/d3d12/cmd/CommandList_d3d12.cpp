@@ -667,6 +667,36 @@ namespace bgl
 			!m_CurrentMeshletState->indirectArgs.IsNull(),
 			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
 
+		ExecuteMeshDispatch(argIdx, nullptr, 0);
+	}
+
+	void
+	CommandList::DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept
+	{
+		ApplyMeshletState();
+
+		gassert(
+			!m_CurrentMeshletState->indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirectCount");
+		gassert(
+			!m_CurrentMeshletState->commandCounts.IsNull(),
+			"MeshletState.commandCounts must be set for DispatchMeshIndirectCount");
+
+		const auto& countBuffer =
+			m_ResourceManager->GetBuffer(m_CurrentMeshletState->commandCounts);
+
+		ExecuteMeshDispatch(
+			argIdx,
+			countBuffer.GetD3D12Resource(),
+			static_cast<UINT64>(countIdx) * sizeof(uint32_t));
+	}
+
+	void
+	CommandList::ExecuteMeshDispatch(
+		uint32_t        argIdx,
+		ID3D12Resource* countBuffer,
+		UINT64          countOffset) noexcept
+	{
 		const auto& argsBuffer = m_ResourceManager->GetBuffer(m_CurrentMeshletState->indirectArgs);
 
 		m_CommandList->ExecuteIndirect(
@@ -674,8 +704,8 @@ namespace bgl
 			1,
 			argsBuffer.GetD3D12Resource(),
 			static_cast<UINT64>(argIdx) * sizeof(D3D12_DISPATCH_MESH_ARGUMENTS),
-			nullptr,
-			0);
+			countBuffer,
+			countOffset);
 	}
 
 	void

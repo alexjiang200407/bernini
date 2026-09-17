@@ -713,6 +713,20 @@ namespace bgl
 			draw.pipeline->GetThreadsPerMeshThreadgroup());
 	}
 
+	void
+	CommandList::DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept
+	{
+		gassert(
+			!m_MeshletState.commandCounts.IsNull(),
+			"MeshletState.commandCounts must be set for DispatchMeshIndirectCount");
+
+		// drawMeshThreadgroups has no count-buffer form, so the count goes unread and the
+		// dispatch is unconditional -- the verb's zero-count-means-zero-grid precondition is
+		// what keeps the output identical to a backend that skips.
+		(void)countIdx;
+		DispatchMeshIndirect(argIdx);
+	}
+
 	MTL::Buffer*
 	CommandList::ActiveDebugBuffer(uint64_t& outAddress) const noexcept
 	{
