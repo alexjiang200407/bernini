@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <gamelib/anim_blend.h>
+#include <optional>
 
 namespace editor
 {
@@ -66,5 +67,13 @@ namespace editor
 			0.0f,
 			1.0f,
 			toParameter);
+	}
+
+	std::optional<int>
+	SoloFromClip(const int fromNode, const int toNode) noexcept
+	{
+		if (fromNode < 0 || (toNode >= 0 && toNode != fromNode))
+			return std::nullopt;
+		return fromNode;
 	}
 }

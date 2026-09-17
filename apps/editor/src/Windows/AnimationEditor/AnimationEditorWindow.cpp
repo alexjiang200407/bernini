@@ -696,9 +696,19 @@ AnimationEditorWindow::StampTransition()
 				  m_ToEnd->currentIndex();
 	const float parameter = toSpace ? static_cast<float>(m_SpaceEndParameter->value()) : 0.0f;
 
-	if (from < 0 || to < 0 || from == to)
+	if (from < 0)
 	{
 		ClearTransition();
+		return;
+	}
+
+	// With no fade to show, From is the one clip playing -- the Clip list's selection, which is the
+	// same choice seen from the other tab.
+	if (const std::optional<int> solo = editor::SoloFromClip(from, to))
+	{
+		ClearTransition();
+		if (*solo != m_SelectedClip)
+			m_ClipList->setCurrentRow(*solo);
 		return;
 	}
 
@@ -1019,6 +1029,7 @@ AnimationEditorWindow::SelectClip(const int index)
 	m_Transport.SelectClip(static_cast<uint32_t>(index));
 	m_Preview->SetActiveClip(static_cast<uint32_t>(index), m_Transport.GetTimeSeconds());
 	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	m_FromEnd->setCurrentIndex(index);
 	UpdateTransitionControls();
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();

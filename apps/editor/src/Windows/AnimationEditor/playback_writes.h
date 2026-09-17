@@ -4,6 +4,7 @@
 
 #include <bgl/InstanceDesc.h>
 #include <cstdint>
+#include <optional>
 
 namespace editor
 {
@@ -68,4 +69,12 @@ namespace editor
 		float                   fromParameter,
 		float                   toParameter,
 		const TransitionLayout& layout);
+
+	/**
+	 * The clip the Blend tab plays alone for its ends `fromNode` and `toNode`, each -1 when unset:
+	 * From, whenever the two do not name a fade -- To unset, or naming From itself -- and nothing
+	 * when From is unset or the pair is a fade.
+	 */
+	[[nodiscard]] std::optional<int>
+	SoloFromClip(int fromNode, int toNode) noexcept;
 }
