@@ -2,6 +2,7 @@
 
 #include "Mesh/mesh_load.h"
 #include "Windows/AnimationEditor/playback_writes.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
@@ -852,12 +853,11 @@ AnimationPreviewWindow::SpawnAnimated(
 
 void
 AnimationPreviewWindow::StampTransition(
-	const uint32_t fromNode,
-	const uint32_t toNode,
-	const float    fromParameter,
-	const float    toParameter,
-	const float    startSeconds,
-	const float    duration)
+	const uint32_t                  fromNode,
+	const uint32_t                  toNode,
+	const float                     fromParameter,
+	const float                     toParameter,
+	const editor::TransitionLayout& layout)
 {
 	if (m_Assets == nullptr || m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
 		return;
@@ -873,13 +873,7 @@ AnimationPreviewWindow::StampTransition(
 		return;
 	}
 
-	// FromClip seeds a slot's phase and rate but has no parameter, so a space at the outgoing end
-	// is written here; CrossfadeTo carries the incoming one.
-	auto from           = bgl::SkinnedPlaybackDesc::FromClip(fromNode);
-	from.slot[0].param0 = fromParameter;
-	from.slot[0].param1 = fromParameter;
-
-	m_Playback = game::CrossfadeTo(from, toNode, startSeconds, duration, 0.0f, 1.0f, toParameter);
+	m_Playback = editor::TransitionPlayback(fromNode, toNode, fromParameter, toParameter, layout);
 
 	GetRenderer()->Invoke([&] {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)

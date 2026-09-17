@@ -3,6 +3,7 @@
 #include "Render/OrbitCamera.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/held_open_assets.h"
 
@@ -180,9 +181,9 @@ public:
 	RetargetSpace(uint32_t spaceIndex, float parameter, float nowSeconds, float duration);
 
 	/**
-	 * Stamps a fade from `fromNode` onto `toNode`, beginning at `startSeconds` and taking
-	 * `duration`, and writes it to every animated instance. Nothing happens on the crowd source,
-	 * whose shared table holds one clip and no slots to write.
+	 * Stamps a fade from `fromNode` onto `toNode` across `layout` (editor::TransitionPlayback) and
+	 * writes it to every animated instance. Nothing happens on the crowd source, whose shared table
+	 * holds one clip and no slots to write.
 	 *
 	 * Either node may be a blend space -- the rig's node table is its clips and then its spaces --
 	 * and `fromParameter` and `toParameter` are where each end sits on its axis. A clip end reads
@@ -198,12 +199,11 @@ public:
 	 */
 	void
 	StampTransition(
-		uint32_t fromNode,
-		uint32_t toNode,
-		float    fromParameter,
-		float    toParameter,
-		float    startSeconds,
-		float    duration);
+		uint32_t                        fromNode,
+		uint32_t                        toNode,
+		float                           fromParameter,
+		float                           toParameter,
+		const editor::TransitionLayout& layout);
 
 	/**
 	 * Where the preview's instances read their pose, as of `nowSeconds`. Switching respawns them on

@@ -512,8 +512,11 @@ to keep in agreement beyond the one below.
 * **One timeline serves both tabs.** `TransitionStrip` draws two clip bars on a shared window with
   the fade between them, and a single clip is the same widget with its second end at the far edge —
   one bar, no overlap. Every span is read off what `CrossfadeTo` writes rather than chosen to look
-  right: the outgoing bar ends where its ramp reaches zero, the incoming one starts where its slot
-  is given `tRef`, and the overlap *is* the duration. A picture that disagreed with the record would
+  right: the outgoing bar ends where its ramp reaches zero, each bar starts where its slot is given
+  `tRef`, and the overlap *is* the duration. The outgoing end's `tRef` is the window's start
+  (`editor::TransitionPlayback`): the clock is absolute and parked well past zero, so a one-shot
+  anchored at zero would have clamped to its last frame before the window opened and would
+  preview as a still pose. A picture that disagreed with the record would
   be worse than none. Hand-painted for `Scrubber`'s reason, and its geometry is a free function
   (`editor::SpansForTransition`) the tests drive.
 
