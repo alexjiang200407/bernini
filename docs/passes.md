@@ -333,7 +333,8 @@ under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInst
 in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `psoPrefixSumBuffer` and
-`compactDispatchArgs` (sized `c_PsoCount`) and `cull.view` (one `CullView`: view-proj + frustum
+`compactDispatchArgs` (sized `cMaxPsoBuckets`, the ceiling every count-sized structure is built
+to) and `cull.view` (one `CullView`: view-proj + frustum
 planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
 under that frustum's scope. The pass reaches them through `DrawData::cullState` and names them by
 the same graph names as before, so N frustums of one view carry identical names without aliasing.
@@ -352,8 +353,10 @@ It adds **four sub-passes**:
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
 3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per PSO into
-   `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into exclusive prefix
-   sums. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
+   `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
+   sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
+   zero. The scan is one thread group of `cMaxPsoBuckets` threads, which is why that constant is a
+   hard ceiling. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
    no barrier between them; the pass issues the one intra-pass UAV barrier itself — the sanctioned
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
@@ -587,8 +590,8 @@ than blending: stochastic coverage writes real depth, so it self-occludes in the
 pre-pass. That replaced an `occlude` flag which drew a blend material twice — a depth-only pre-pass,
 then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
-The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` indexed by `psoIndex`.
-`baseTable` picks between the two.
+The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` indexed by
+`psoIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene

@@ -26,6 +26,11 @@ public enum PsoType : uint32_t
 
 public static const uint32_t c_PsoCount = uint32_t(PsoType::kCount);
 
+// The capacity every count-sized structure is built to, so a grown row set changes no sizes: the
+// cull chain's buffers and groupshared arrays, and the prefix scan's single thread group -- which
+// is the hard ceiling (util.cpp pins this under a thread group's 1024).
+public static const uint32_t cMaxPsoBuckets = 256;
+
 // A slot's rows, in PsoType order.
 public static const uint32_t cGameSlotRows = 7;
 

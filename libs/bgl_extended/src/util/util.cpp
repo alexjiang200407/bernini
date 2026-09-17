@@ -119,6 +119,10 @@ namespace bgl
 		static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + cGameSlots * idl::cGameSlotRows ==
 		static_cast<uint32_t>(idl::PsoType::kCount));
 
+	static_assert(idl::c_PsoCount <= idl::cMaxPsoBuckets);
+	// 1024 is a compute thread group's maximum; PrefixSumInstances.slang is one group.
+	static_assert(idl::cMaxPsoBuckets <= 1024);
+
 	// A slot's block is each tier's own layers, then the one row both tiers share -- which is what
 	// makes the blend row last and the skinned block start cGameSlotTierRows along.
 	static_assert(idl::cGameSlotTiers * idl::cGameSlotTierRows + 1 == idl::cGameSlotRows);

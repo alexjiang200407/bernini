@@ -197,7 +197,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
+		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(uint32_t);
 		rbDesc.debugName     = "Prefix-Sum Readback";
 		rbPrefixSum[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 	}
