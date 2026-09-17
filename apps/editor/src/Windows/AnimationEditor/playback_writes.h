@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Windows/AnimationEditor/transition_spans.h"
+
 #include <bgl/InstanceDesc.h>
 #include <cstdint>
+#include <optional>
 
 namespace editor
 {
@@ -48,4 +51,30 @@ namespace editor
 	 */
 	[[nodiscard]] float
 	CutSeconds(float sampleRate) noexcept;
+
+	/**
+	 * The record that previews a fade from `fromNode` onto `toNode` across `layout`: the outgoing end
+	 * alone from the window's start, then `game::CrossfadeTo` the incoming one at `layout.start`
+	 * over `layout.duration`. `fromParameter` and `toParameter` are where a blend-space end sits.
+	 *
+	 * The outgoing end plays from its first frame at `layout.windowStart`, since the preview clock is
+	 * absolute and a one-shot anchored anywhere earlier has already clamped to its last frame.
+	 *
+	 * @throws std::runtime_error as `game::CrossfadeTo` does, on a negative or non-finite duration.
+	 */
+	[[nodiscard]] bgl::SkinnedPlaybackDesc
+	TransitionPlayback(
+		uint32_t                fromNode,
+		uint32_t                toNode,
+		float                   fromParameter,
+		float                   toParameter,
+		const TransitionLayout& layout);
+
+	/**
+	 * The clip the Blend tab plays alone for its ends `fromNode` and `toNode`, each -1 when unset:
+	 * From, whenever the two do not name a fade -- To unset, or naming From itself -- and nothing
+	 * when From is unset or the pair is a fade.
+	 */
+	[[nodiscard]] std::optional<int>
+	SoloFromClip(int fromNode, int toNode) noexcept;
 }

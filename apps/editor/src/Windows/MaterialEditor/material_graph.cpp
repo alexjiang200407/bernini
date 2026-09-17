@@ -35,6 +35,7 @@
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
+#include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 
@@ -428,6 +429,38 @@ BuildImportedMaterialGraph(
 	}
 
 	PlaceTextureWires(model, outputId, wires);
+}
+
+void
+BuildPbrMaterialGraph(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot)
+{
+	const assetlib::PbrParams& pbr    = material.pbr;
+	const auto                 fileOf = [&](const assetlib::PbrChannel channel) {
+		const std::string& texture = pbr.routes[assetlib::channelIndex(channel)].texture;
+		return Rebase(QString::fromStdString(texture), dataRoot, false);
+	};
+
+	auto imported                = assetlib::imp::BMaterialImport();
+	imported.baseColorFactor     = pbr.baseColorFactor;
+	imported.metallicFactor      = pbr.metallicFactor;
+	imported.roughnessFactor     = pbr.roughnessFactor;
+	imported.alphaMode           = material.layer.alphaMode;
+	imported.alphaCutoff         = material.layer.alphaCutoff;
+	imported.doubleSided         = material.layer.doubleSided;
+	imported.transmissionFactor  = pbr.transmissionFactor;
+	imported.specularColorFactor = pbr.specularColorFactor;
+	imported.specularFactor      = pbr.specularFactor;
+
+	BuildImportedMaterialGraph(
+		model,
+		imported,
+		ImportedMaterialMaps{ fileOf(assetlib::PbrChannel::kBaseColorR),
+	                          fileOf(assetlib::PbrChannel::kNormalX),
+	                          fileOf(assetlib::PbrChannel::kRoughness),
+	                          fileOf(assetlib::PbrChannel::kAo) });
 }
 
 std::optional<QPointF>

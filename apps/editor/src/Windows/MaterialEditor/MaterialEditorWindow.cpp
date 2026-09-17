@@ -952,8 +952,8 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	const std::filesystem::path& dir = m_DataRoot;
 
 	// The stored graph is authoritative for the editor: it reproduces the exact board that produced
-	// these routes. A material with no graph was not authored here (imported from glTF, or exported
-	// and stripped), so its texture references are rebuilt below instead.
+	// these routes. A material with no graph was written outside the editor, so its board is rebuilt
+	// from the document below instead.
 	auto graph = QJsonObject();
 	if (!material.editorGraph.empty())
 	{
@@ -1026,27 +1026,15 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		return;
 	}
 
-	// The seed reads PBR factors, so it wants the PBR sink -- the one an empty ResetGraph builds.
-	auto* output = qobject_cast<MaterialOutputNode*>(ResetGraph(graphIndex, graph));
-
-	// Without a graph, the board is seeded from the material itself. Only the factors survive: the
-	// routes name textures but not how the artist arranged the nodes that produced them.
-	if (graph.isEmpty() && output != nullptr)
+	if (graph.isEmpty())
 	{
-		auto seed            = QJsonObject();
-		seed["baseColorR"]   = material.pbr.baseColorFactor.r;
-		seed["baseColorG"]   = material.pbr.baseColorFactor.g;
-		seed["baseColorB"]   = material.pbr.baseColorFactor.b;
-		seed["baseColorA"]   = material.pbr.baseColorFactor.a;
-		seed["metallic"]     = material.pbr.metallicFactor;
-		seed["roughness"]    = material.pbr.roughnessFactor;
-		seed["transmission"] = material.pbr.transmissionFactor;
-		seed["doubleSided"]  = material.layer.doubleSided;
-		seed["specularR"]    = material.pbr.specularColorFactor.r;
-		seed["specularG"]    = material.pbr.specularColorFactor.g;
-		seed["specularB"]    = material.pbr.specularColorFactor.b;
-		seed["specular"]     = material.pbr.specularFactor;
-		output->load(seed);
+		RebuildGraph(graphIndex, [this, &material](MaterialGraphModel& model) {
+			BuildPbrMaterialGraph(model, material, m_DataRoot);
+		});
+	}
+	else
+	{
+		ResetGraph(graphIndex, graph);
 	}
 
 	m_Graphs.At(graphIndex).materialPath = path;

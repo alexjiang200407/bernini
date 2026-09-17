@@ -686,19 +686,24 @@ AnimationEditorWindow::StampTransition()
 		return;
 	}
 
-	const int from = m_FromEnd->currentIndex();
-
-	// The destination is the space row when it is on, and the To combo otherwise -- never both. A
-	// space is node `clipCount + its row`, which is the rig's node table.
-	const bool toSpace = SpaceIsDestination();
-	const int  to =
-		toSpace ? static_cast<int>(m_Transport.GetClips().size()) + m_SpaceEnd->currentIndex() :
-				  m_ToEnd->currentIndex();
+	const int   from      = m_FromEnd->currentIndex();
+	const int   to        = TransitionDestination();
+	const bool  toSpace   = SpaceIsDestination();
 	const float parameter = toSpace ? static_cast<float>(m_SpaceEndParameter->value()) : 0.0f;
 
-	if (from < 0 || to < 0 || from == to)
+	if (from < 0)
 	{
 		ClearTransition();
+		return;
+	}
+
+	// With no fade to show, From is the one clip playing -- the Clip list's selection, which is the
+	// same choice seen from the other tab.
+	if (const std::optional<int> solo = editor::SoloFromClip(from, to))
+	{
+		ClearTransition();
+		if (*solo != m_SelectedClip)
+			m_ClipList->setCurrentRow(*solo);
 		return;
 	}
 
@@ -727,8 +732,7 @@ AnimationEditorWindow::StampTransition()
 		static_cast<uint32_t>(to),
 		/*fromParameter*/ 0.0f,
 		parameter,
-		layout.start,
-		layout.duration);
+		layout);
 
 	m_TransitionLayout = layout;
 	m_Strip->SetLayout(layout);
@@ -738,6 +742,15 @@ AnimationEditorWindow::StampTransition()
 
 	UpdateTransitionControls();
 	SyncTransportUi();
+}
+
+int
+AnimationEditorWindow::TransitionDestination() const
+{
+	// Never both. A space is node `clipCount + its row`, which is the rig's node table.
+	return SpaceIsDestination() ?
+	           static_cast<int>(m_Transport.GetClips().size()) + m_SpaceEnd->currentIndex() :
+	           m_ToEnd->currentIndex();
 }
 
 bool
@@ -1020,6 +1033,13 @@ AnimationEditorWindow::SelectClip(const int index)
 	m_Transport.SelectClip(static_cast<uint32_t>(index));
 	m_Preview->SetActiveClip(static_cast<uint32_t>(index), m_Transport.GetTimeSeconds());
 	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	// Only while no fade is named: a reload re-selects the list's row, and a fade's From is the
+	// author's own choice, not the list's.
+	if (const int from = m_FromEnd->currentIndex();
+	    from < 0 || editor::SoloFromClip(from, TransitionDestination()))
+	{
+		m_FromEnd->setCurrentIndex(index);
+	}
 	UpdateTransitionControls();
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();
