@@ -1,20 +1,32 @@
 
 #include <algorithm>
+#include <array>
+#include <assetlib/container_info.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <ios>
 #include <stdexcept>
 #include <stop_token>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
+
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
 #include "mounted_io.h"
@@ -114,7 +126,57 @@ namespace
 		{
 			return fs::exists(DataRoot() / relative);
 		}
+
+		ImportDocument
+		Document() const
+		{
+			return loadImportDocument(DataRoot() / "Authored/EnvSources/forest.bimport");
+		}
+
+		std::vector<std::byte>
+		Bytes(const std::string& relative) const
+		{
+			return core::file::read_file_bytes((DataRoot() / relative).string());
+		}
 	};
+
+	/**
+	 * A 16x8 equirectangular Radiance file with a horizontal gradient, written flat rather than
+	 * run-length encoded -- which the reader accepts -- so the fixture needs no encoder. The
+	 * gradient is what makes a projection's size visible in the cube it produces.
+	 */
+	fs::path
+	WriteGradientHdr(const fs::path& path)
+	{
+		constexpr int c_Width  = 16;
+		constexpr int c_Height = 8;
+
+		std::ofstream out(path, std::ios::binary);
+		out << "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y " << c_Height << " +X " << c_Width << "\n";
+		for (int y = 0; y < c_Height; ++y)
+			for (int x = 0; x < c_Width; ++x)
+			{
+				// Never 2 in the first byte, which would read as the start of an encoded line.
+				const auto mantissa                     = static_cast<unsigned char>(40 + x * 12);
+				const std::array<unsigned char, 4> rgbe = {
+					{ mantissa, static_cast<unsigned char>(30 + y * 20), mantissa, 129 }
+				};
+				out.write(
+					reinterpret_cast<const char*>(rgbe.data()),
+					static_cast<std::streamsize>(rgbe.size()));
+			}
+		return path;
+	}
+
+	std::vector<std::string>
+	FamilyOutputs()
+	{
+		return { "Derived/EnvLighting/forest.benvl",
+			     "Derived/Sky/forest.bsky",
+			     "Derived/SourceTextures/forest_irradiance.ktx2",
+			     "Derived/SourceTextures/forest_prefilter.ktx2",
+			     "Derived/SourceTextures/forest_sky.ktx2" };
+	}
 }
 
 // The whole point of the seam: the editor's import is this call, so what the dialog will produce is
@@ -228,6 +290,7 @@ TEST_CASE("A cancelled import is refused before it writes anything", "[envimport
 
 	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
 	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
 }
 
 namespace
@@ -258,6 +321,11 @@ TEST_CASE("A failure part-way rolls back what it had written", "[envimport]")
 	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
 	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 	CHECK_FALSE(sandbox.Has("Authored/Environments/forest.benv"));
+
+	// The copy went in first and the document goes in last; a failure between them takes the first
+	// and never writes the second.
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
 }
 
 // The rollback removes what the import *made*, not what it found. Re-importing over a name and failing
@@ -425,4 +493,159 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
 		CHECK(names(targets, "Derived/Sky/outdoor/forest.bsky"));
 	}
+}
+
+// What makes the family producible: the file it came from is in the project, and a document beside it
+// says how the family was made from it and which files that made.
+TEST_CASE("An import copies its source and writes the document beside it", "[envimport][importdoc]")
+{
+	const Sandbox sandbox("bernini_envimport_document");
+	const auto    desc = sandbox.Desc();
+
+	const EnvImportResult result = sandbox.Store().ImportEnvironment(desc);
+
+	REQUIRE(result.source == "Authored/EnvSources/forest.ktx2");
+	REQUIRE(result.document == "Authored/EnvSources/forest.bimport");
+	CHECK(sandbox.Bytes(result.source) == core::file::read_file_bytes(desc.source.string()));
+
+	const ImportDocument document = sandbox.Document();
+	CHECK(document.source == result.source);
+	CHECK(document.environment == desc.parameters);
+	CHECK(document.outputs == FamilyOutputs());
+	CHECK(document.envSourceStamp == stampOf(sandbox.DataRoot() / result.source));
+	CHECK(document.envSourceBakeToken == c_EnvSourceBakeToken);
+	CHECK(document.envSkyParametersHash != 0);
+	CHECK(document.envLightingParametersHash != 0);
+
+	// Authored, and so never something a re-import would put back over a person's edits.
+	CHECK(std::ranges::find(document.outputs, result.environment) == document.outputs.end());
+
+	CHECK(std::ranges::find(result.written, result.source) != result.written.end());
+	CHECK(std::ranges::find(result.written, result.document) != result.written.end());
+}
+
+TEST_CASE("The import's targets name the copy and the document", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_targets");
+
+	const std::vector<std::string> targets =
+		sandbox.Store().EnvironmentImportTargets(sandbox.Desc());
+	CHECK(std::ranges::find(targets, "Authored/EnvSources/forest.ktx2") != targets.end());
+	CHECK(std::ranges::find(targets, "Authored/EnvSources/forest.bimport") != targets.end());
+}
+
+// `Reimport` finds environments by walking `Authored/EnvSources`, so a source anywhere else is one a
+// fresh checkout can never produce a family from.
+TEST_CASE("A source copied outside its category is refused before anything runs", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_misplaced");
+
+	auto desc              = sandbox.Desc();
+	desc.importedSourceDir = "Authored/Environments";
+	CHECK_THROWS_WITH(
+		sandbox.Store().ImportEnvironment(desc),
+		Catch::Matchers::ContainsSubstring("Authored/EnvSources"));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+
+	desc                   = sandbox.Desc();
+	desc.importedSourceDir = "Authored/EnvSources/outdoor";
+	CHECK_NOTHROW(sandbox.Store().ImportEnvironment(desc));
+	CHECK(sandbox.Has("Authored/EnvSources/outdoor/forest.bimport"));
+}
+
+TEST_CASE("A source that is neither .hdr nor .ktx2 is refused", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_extension");
+
+	fs::copy_file(sandbox.Source(), sandbox.path / "incoming" / "forest.exr");
+	auto desc   = sandbox.Desc();
+	desc.source = sandbox.path / "incoming" / "forest.exr";
+
+	CHECK_THROWS_WITH(
+		sandbox.Store().ImportEnvironment(desc),
+		Catch::Matchers::ContainsSubstring(".hdr"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.exr"));
+}
+
+// The recovery an environment without its derived files is given: import again from the copy the
+// project already holds. Copying a file onto itself would truncate it first.
+TEST_CASE("Re-importing from the copy in the project leaves the copy intact", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_fromcopy");
+	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
+	const std::vector<std::byte> before = sandbox.Bytes("Authored/EnvSources/forest.ktx2");
+
+	auto desc   = sandbox.Desc();
+	desc.source = sandbox.DataRoot() / "Authored/EnvSources/forest.ktx2";
+	CHECK_NOTHROW(sandbox.Store().ImportEnvironment(desc));
+
+	CHECK(sandbox.Bytes("Authored/EnvSources/forest.ktx2") == before);
+	CHECK(sandbox.Document().outputs == FamilyOutputs());
+}
+
+// The split exists so a sky is re-authored without paying for the lighting. A document forgetting
+// the lighting there would leave a `.benvl` nothing can re-produce.
+TEST_CASE("A sky-only re-import keeps the lighting's claim and parameters", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_skyonly");
+	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
+	const ImportDocument first = sandbox.Document();
+
+	auto desc                     = sandbox.Desc();
+	desc.lighting                 = false;
+	desc.parameters.skyMips       = 2;
+	desc.parameters.prefilterMips = 5;  // not what the lighting on disk was made with
+	static_cast<void>(sandbox.Store().ImportEnvironment(desc));
+
+	const ImportDocument second = sandbox.Document();
+	CHECK(second.outputs == FamilyOutputs());
+	REQUIRE(second.environment.has_value());
+	CHECK(second.environment->skyMips == 2);
+	CHECK(second.environment->prefilterMips == first.environment->prefilterMips);
+	CHECK(second.envLightingParametersHash == first.envLightingParametersHash);
+	CHECK(second.envSkyParametersHash != first.envSkyParametersHash);
+}
+
+TEST_CASE("A part-only re-import from a different file is refused", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_otherfile");
+	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
+	const std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
+
+	const fs::path other = sandbox.path / "incoming" / "dusk.ktx2";
+	writeKTX2(ConstantCube(16, 2.0f), other, false, Ktx2Compression::kNone);
+
+	auto desc     = sandbox.Desc();
+	desc.source   = other;
+	desc.lighting = false;
+	CHECK_THROWS_WITH(
+		sandbox.Store().ImportEnvironment(desc),
+		Catch::Matchers::ContainsSubstring("lighting"));
+
+	CHECK(sandbox.Bytes("Derived/Sky/forest.bsky") == sky);
+
+	// Both parts from the new file describe one image again, so that is not refused.
+	desc.lighting = true;
+	CHECK_NOTHROW(sandbox.Store().ImportEnvironment(desc));
+}
+
+// A document records each part's parameters apart, which only means something if each part's pixels
+// follow from its own parameters. The lighting used to be convolved from a cube sized by the sky.
+TEST_CASE("The lighting's pixels do not depend on the sky's face size", "[envimport]")
+{
+	const auto importWithSky = [](const char* name, uint32_t skyFaceSize) {
+		const Sandbox sandbox(name);
+		auto          desc          = sandbox.Desc();
+		desc.source                 = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
+		desc.parameters.skyFaceSize = skyFaceSize;
+		static_cast<void>(sandbox.Store().ImportEnvironment(desc));
+		return std::pair{ sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2"),
+			              sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2") };
+	};
+
+	// 16 is the lighting's own projection size at a prefilter of 8, so the first shares the sky's
+	// cube and the second projects its own: both have to be the same cube.
+	CHECK(
+		importWithSky("bernini_envimport_shared", 16) ==
+		importWithSky("bernini_envimport_apart", 8));
 }

@@ -281,6 +281,11 @@ namespace assetlib
 		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
 		std::filesystem::path sourceDir      = c_SourceTexturesDirectoryName;
 
+		// Where `source` itself is copied, with the `.bimport` describing it beside it -- not
+		// `sourceDir`, which holds the float cubes computed *from* it. Must sit under
+		// `Authored/EnvSources`, the environment sources' category; anywhere else is refused.
+		std::filesystem::path importedSourceDir = c_EnvSourcesDirectoryName;
+
 		bool sky         = true;  // write the `.bsky`
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair
 		bool environment = true;  // write the `.benv` composing whichever of the two were written
@@ -300,6 +305,9 @@ namespace assetlib
 		std::string sky;  // empty when that output was not requested
 		std::string lighting;
 		std::string environment;
+
+		std::string source;    // the copy of `EnvImportDesc::source` inside the project
+		std::string document;  // the `.bimport` beside it
 
 		/**
 		 * Every file this call brought into being, data-root relative -- not the ones it overwrote,

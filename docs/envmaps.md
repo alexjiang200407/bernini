@@ -79,6 +79,7 @@ disagrees, trust the header, then fix this doc.
 | Header | Role |
 |---|---|
 | [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
+| [env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h) | `EnvironmentImportParameters`, the six numbers an import's pixels follow from, and `c_EnvSourceBakeToken` — apart from `envmap.h` because an import document holds them by value |
 | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
@@ -87,7 +88,8 @@ disagrees, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    HDR[".hdr or float cube"] -- "ImportEnvironment" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
+    HDR[".hdr or float cube"] -- "ImportEnvironment (copied)" --> COPY["Authored/EnvSources/*.hdr + .bimport"]
+    COPY -- "projected, convolved" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
     SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (RGB9E5, content-addressed)"]
 
     SRC -- "routed by" --> BSKY[".bsky"]
@@ -128,12 +130,29 @@ flowchart TD
 
 ### `AssetStore::ImportEnvironment`
 
-* **@post rolls back on failure and on cancel**, removing only files it *created* — one already on
-  disk was overwritten rather than made, and taking it would destroy whatever wrote it first.
+* **@post the source is in the project.** It is copied to `importedSourceDir` — under
+  `Authored/EnvSources/`, and refused anywhere else — and read from the copy, never from where the
+  caller found it. Importing from that copy again is the recovery path, and copies nothing onto
+  itself.
+* **@post a `.bimport` stands beside the copy**, written last and stamped from the copy: the
+  parameters, the source's stamp and `c_EnvSourceBakeToken`, a hash of each part's parameters as it
+  was written, and every derived file the import produced — the float cubes, the `.bsky`, the
+  `.benvl` — in `outputs`. Not the `.benv`, which is authored. See
+  [Asset Containers](asset_containers.md).
+* **A part-only import keeps the other part.** Re-authoring the sky over an existing document keeps
+  the lighting's claim, parameters and hash as they were, which is what makes the split worth having.
+  It is **refused** when the incoming file is not the one the document was stamped from, since the
+  kept part would then describe a different image.
+* **Each part projects its own cube.** The sky at `skyFaceSize`, the lighting at twice
+  `prefilterFaceSize` (`lightingProjectionSize`), shared when the two agree — as they do at the
+  defaults. So a part's pixels follow from its own parameters and never from the other's.
+* **@post rolls back on failure and on cancel**, removing only files it *created* — the copy and the
+  document included — and never one already on disk, which it overwrote rather than made.
 * **Baked maps are deliberately not rolled back.** Content-addressed and shared, so the map this
   import wrote may be the one another environment already names. An orphan is the prune's business.
-* Requires an `.hdr` or a **float** cube. A baked `RGB9E5` map is not a valid source — the bake reads
-  `R32G32B32A32_SFLOAT` and refuses anything else.
+* Requires an `.hdr` or a `.ktx2` cube, refused otherwise before anything is written. A baked
+  `RGB9E5` cube is accepted and unpacked with a warning — a recovery path, since re-convolving it
+  quantizes twice.
 
 ### `assetlib::resolveEnvironment`
 

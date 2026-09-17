@@ -110,8 +110,11 @@ A `.bimport` names three things, two of which nothing else can derive
   which is what lets one rig serve several sources: a second `.glb` skinned to a rig already in the
   project binds it instead of forking a signature-matching duplicate. A skinned source whose
   document names none refuses at regeneration and says to run `migrate`.
-* **`outputs`** -- every container this source produced, as mount keys, sorted. A *produced* rig is
-  listed; a *bound* one is not, so deleting a source never takes another source's rig with it.
+* **`outputs`** -- every derived file this source produced that a re-import can put back, as mount
+  keys, sorted. For a mesh that is its containers: a *produced* rig is listed, a *bound* one is not,
+  so deleting a source never takes another source's rig with it. For an environment it is the `.bsky`,
+  the `.benvl` *and* their float cubes -- names an import fixes in advance, where a mesh's extracted
+  textures are named after images it has not read yet and so are keyed by folder instead.
 
 An environment source's document differs in what `parameters` holds and in the key recorded beside
 it. Its `parameters` hold an `environment` object naming the six numbers that decide its float
