@@ -66,8 +66,8 @@ namespace assetlib
 		EnvironmentTarget container;   // the `.benvl` baked from the two
 	};
 
-	/** Told each file's key immediately before it is written. */
-	using BeforeEnvironmentWrite = std::function<void(const std::string& key)>;
+	/** Told one environment file's mount key; when, is each parameter's name to say. */
+	using EnvironmentFileSink = std::function<void(const std::string& key)>;
 
 	/**
 	 * Writes the sky's targets that are marked for writing. The one writer `ImportEnvironment` and
@@ -84,7 +84,7 @@ namespace assetlib
 		uint32_t                           threads,
 		std::string_view                   name,
 		const SkyTargets&                  targets,
-		const BeforeEnvironmentWrite&      beforeWrite,
+		const EnvironmentFileSink&         beforeWrite,
 		const CancelToken&                 cancel);
 
 	/**
@@ -100,6 +100,6 @@ namespace assetlib
 		uint32_t                           threads,
 		std::string_view                   name,
 		const LightingTargets&             targets,
-		const BeforeEnvironmentWrite&      beforeWrite,
+		const EnvironmentFileSink&         beforeWrite,
 		const CancelToken&                 cancel);
 }

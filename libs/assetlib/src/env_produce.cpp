@@ -76,7 +76,7 @@ namespace assetlib
 		uint32_t                           threads,
 		std::string_view                   name,
 		const SkyTargets&                  targets,
-		const BeforeEnvironmentWrite&      beforeWrite,
+		const EnvironmentFileSink&         beforeWrite,
 		const CancelToken&                 cancel)
 	{
 		if (targets.source.write)
@@ -123,7 +123,7 @@ namespace assetlib
 		uint32_t                           threads,
 		std::string_view                   name,
 		const LightingTargets&             targets,
-		const BeforeEnvironmentWrite&      beforeWrite,
+		const EnvironmentFileSink&         beforeWrite,
 		const CancelToken&                 cancel)
 	{
 		if (targets.irradiance.write)

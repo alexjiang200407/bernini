@@ -199,12 +199,12 @@ namespace assetlib
 		 */
 		void
 		produceEnvironment(
-			const AssetStore&                              store,
-			const std::string&                             sourceKey,
-			const ImportDocument&                          document,
-			const std::vector<std::string>&                wanted,
-			const std::function<void(const std::string&)>& beforeWrite,
-			const std::function<void(const std::string&)>& onWritten)
+			const AssetStore&               store,
+			const std::string&              sourceKey,
+			const ImportDocument&           document,
+			const std::vector<std::string>& wanted,
+			const EnvironmentFileSink&      beforeWrite,
+			const EnvironmentFileSink&      onWritten)
 		{
 			core::throw_runtime_error_if(
 				!document.environment,
