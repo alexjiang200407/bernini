@@ -31,8 +31,8 @@ namespace assetlib
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
 	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `skeleton`,
-	 * `outputs`, `textureDir` and the two stamp-and-token pairs never key -- none of them changes
-	 * what the importer computes. Keys a reader
+	 * `outputs`, `textureDir`, the two stamp-and-token pairs and the per-part hashes an environment
+	 * was written with never key -- none of them changes what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
 	 * parameter still reaches the key through a reader that has never heard of it.
@@ -75,6 +75,13 @@ namespace assetlib
 		// the source as it stood when they were written, and c_EnvSourceBakeToken then.
 		SourceStamp envSourceStamp;
 		uint64_t    envSourceBakeToken = 0;
+
+		// And the parameters each part was written with, hashed per part. A `.bmesh` keeps this in
+		// its own header; a float cube has none, and `environment` is what the parameters are *now*,
+		// so without these an edited document would describe pixels nothing re-cooks. Zero for a
+		// part this source never produced.
+		uint64_t envSkyParametersHash      = 0;
+		uint64_t envLightingParametersHash = 0;
 
 		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
 		std::string skeleton;
