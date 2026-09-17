@@ -8,8 +8,9 @@ visible to a caller.
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is
-`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`.
-An API without those cannot implement this interface.
+`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`
+— `DispatchMeshIndirectCount` is the same dispatch with a GPU count an API may ignore (see
+§ ICommandList). An API without the three cannot implement this interface.
 
 This is the layer bgl_extended is built *on*. For the surface an application links against — `IGraphics`,
 `IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
@@ -348,6 +349,14 @@ Everything else is self-explanatory from the header.
   render-target/depth layout.
 * **`DispatchMeshIndirect(argIdx)`** — reads its grid from the bound state's `indirectArgs`
   buffer, which must be valid and in indirect-argument state.
+* **`DispatchMeshIndirectCount(argIdx, countIdx)`** — the same dispatch gated by a GPU-written
+  command count: element `countIdx` of the bound state's `commandCounts` buffer (a `uint32`
+  clamped to one command), in indirect-argument state like `indirectArgs`. D3D12 passes it to
+  `ExecuteIndirect` and skips the dispatch when it is zero; Metal has no count-buffer form of
+  `drawMeshThreadgroups`, never reads the count, and dispatches unconditionally. The contract
+  that keeps the backends identical is the caller's: **a zero count element must be paired with a
+  zero grid** in `indirectArgs` — then a skipped dispatch and a zero-grid dispatch draw the same
+  nothing, and the count is purely how one backend skips earlier.
 * **`Barrier(...)`** — **do not call from pass code.** The FrameGraph owns transitions. Batched
   overloads require `handles.size() == barriers.size()`.
 * **`BeginEvent` / `EndEvent`** must be balanced.
