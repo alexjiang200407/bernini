@@ -290,13 +290,16 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows)
+	ForwardPass::AddBucketKernels(
+		IDevice*          device,
+		PipelineBatch&    pipelines,
+		const BucketMask& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
 		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
-			if (rows.test(pso) && !m_Kernels[pso].pipeline.IsInitialized())
+			if (buckets.test(pso) && !m_Kernels[pso].pipeline.IsInitialized())
 			{
 				pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
 			}
@@ -309,11 +312,9 @@ namespace bgl
 		// Always-on kernels first: the row guard below must not gate them.
 		m_BlobShadows.CheckBindings();
 
-		// The rows are demand-built, so nothing reads their names off until a first one is built;
-		// EnsureRowPipelines re-checks after every build.
-		if (std::ranges::none_of(m_Kernels, [](const MeshletKernel& kernel) {
-				return kernel.pipeline.IsInitialized();
-			}))
+		// The buckets are demand-built, so nothing reads their names off until a first one is;
+		// EnsureBucketPipelines re-checks after every build.
+		if (!AnyInitialized(m_Kernels))
 		{
 			return;
 		}

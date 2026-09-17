@@ -1408,7 +1408,7 @@ namespace bgl
 
 		if (instance.pso < idl::c_PsoCount)
 		{
-			m_DemandedRows.set(instance.pso);
+			m_DemandedBuckets.set(instance.pso);
 		}
 	}
 

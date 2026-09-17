@@ -1,8 +1,8 @@
 #pragma once
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
+#include "types/BucketMask.h"
 #include "types/MeshletState.h"
-#include "types/PsoRowMask.h"
 #include "types/RasterState.h"
 #include <array>
 #include <bgl_common/idl/PsoType.h>
@@ -43,20 +43,20 @@ namespace bgl
 			m_BlobShadows.Release();
 		}
 
-		/** Requests the always-on blob-shadow kernels; row kernels arrive by AddRowKernels. */
+		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddBucketKernels. */
 		void
 		Init(IDevice* device, PipelineBatch& pipelines);
 
 		/**
-		 * Requests the kernels for the rows set in `rows` that are not already built; they are
-		 * live once `pipelines` is built. A row already built is left alone.
+		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
+		 * they are live once `pipelines` is built. A bucket already initialized is left alone.
 		 */
 		void
-		AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows);
+		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
 
 		/** @pre pso < idl::c_PsoCount. */
 		[[nodiscard]] bool
-		RowBuilt(uint16_t pso) const noexcept
+		BucketInitialized(uint16_t pso) const noexcept
 		{
 			return m_Kernels[pso].pipeline.IsInitialized();
 		}

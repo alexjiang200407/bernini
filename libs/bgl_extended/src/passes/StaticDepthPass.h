@@ -1,6 +1,6 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
-#include "types/PsoRowMask.h"
+#include "types/BucketMask.h"
 #include <array>
 #include <bgl/MaterialType.h>
 #include <spdlog/spdlog.h>
@@ -54,11 +54,12 @@ namespace bgl
 		Init(IDevice* device, PipelineBatch& pipelines);
 
 		/**
-		 * Requests the coverage kernels for the rows set in `rows` that are not already built;
-		 * they are live once `pipelines` is built. Rows with no coverage bucket are ignored.
+		 * Requests the coverage kernels for the buckets set in `buckets` that are not already
+		 * initialized; they are live once `pipelines` is built. Buckets with no coverage kernel
+		 * are ignored.
 		 */
 		void
-		AddRowKernels(IDevice* device, PipelineBatch& pipelines, const PsoRowMask& rows);
+		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void

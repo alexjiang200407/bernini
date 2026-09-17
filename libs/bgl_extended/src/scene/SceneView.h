@@ -10,8 +10,8 @@
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
+#include "types/BucketMask.h"
 #include "types/EnvironmentMap.h"
-#include "types/PsoRowMask.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include <algorithm>
@@ -409,14 +409,14 @@ namespace bgl
 		Update(ICommandList* cmdList);
 
 		/**
-		 * Every pso row an instance of this view has ever resolved to. Never cleared: a row once
+		 * Every bucket an instance of this view has ever resolved to. Never cleared: a bucket once
 		 * demanded stays demanded, which is what lets the renderer build its pipelines once and
 		 * trust them built for as long as the view lives.
 		 */
-		[[nodiscard]] const PsoRowMask&
-		DemandedPsoRows() const noexcept
+		[[nodiscard]] const BucketMask&
+		DemandedBuckets() const noexcept
 		{
-			return m_DemandedRows;
+			return m_DemandedBuckets;
 		}
 
 	private:
@@ -548,7 +548,7 @@ namespace bgl
 		uint64_t m_TemporalEpoch      = 0;
 		uint64_t m_DrawnTemporalEpoch = 0;
 
-		PsoRowMask m_DemandedRows;
+		BucketMask m_DemandedBuckets;
 
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;

@@ -4,7 +4,7 @@
 #include "passes/StaticDepthPass.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
-#include "types/PsoRowMask.h"
+#include "types/BucketMask.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
@@ -18,12 +18,12 @@
 #include <core/glm.h>
 #include <cstdint>
 
-// Row pipelines are built by the first Draw that demands them, and never for a row nothing
-// demands. The built set is read back from the RenderContext and compared against the view's own
-// demand -- equality is the assertion, so an over-build (the old build-everything) and an
-// under-build (a demanded row skipped) both fail. Equality holds for the rows the passes bind
-// directly, which is everything this scene demands; a transparent demand is substituted with the
-// one shared blend row and would not compare equal.
+// Bucket pipelines are built by the first Draw that demands them, and never for a bucket nothing
+// demands. The initialized set is read back from the RenderContext and compared against the view's
+// own demand -- equality is the assertion, so an over-build (the old build-everything) and an
+// under-build (a demanded bucket skipped) both fail. Equality holds for the buckets the passes
+// bind directly, which is everything this scene demands; a transparent demand is substituted with
+// the one shared blend bucket and would not compare equal.
 
 namespace
 {
@@ -31,7 +31,7 @@ namespace
 	constexpr uint32_t c_Height = 240;
 }
 
-TEST_CASE("Row pipelines are built on demand, and only on demand", "[pipeline][demand][render]")
+TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline][demand][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
 	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -46,8 +46,8 @@ TEST_CASE("Row pipelines are built on demand, and only on demand", "[pipeline][d
 	const bgl::RenderContext* context = gfxBase->GetRenderContext();
 	REQUIRE(context != nullptr);
 
-	// Creation builds no row kernel: the always-on set carries no per-row pipeline.
-	CHECK(context->BuiltPsoRows().none());
+	// Creation builds no bucket kernel: the always-on set carries no per-bucket pipeline.
+	CHECK(context->InitializedBuckets().none());
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
@@ -92,7 +92,7 @@ TEST_CASE("Row pipelines are built on demand, and only on demand", "[pipeline][d
 
 	// An empty view demands nothing, so a frame builds nothing.
 	gfx->DrawFrame(target, job);
-	CHECK(context->BuiltPsoRows().none());
+	CHECK(context->InitializedBuckets().none());
 
 	auto opaqueDesc            = bgl::PbrMaterialDesc();
 	opaqueDesc.baseColorFactor = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
@@ -106,13 +106,13 @@ TEST_CASE("Row pipelines are built on demand, and only on demand", "[pipeline][d
 
 	gfx->DrawFrame(target, job);
 
-	const bgl::PsoRowMask afterOpaque = context->BuiltPsoRows();
-	CHECK(afterOpaque == sceneView->DemandedPsoRows());
+	const bgl::BucketMask afterOpaque = context->InitializedBuckets();
+	CHECK(afterOpaque == sceneView->DemandedBuckets());
 	CHECK(afterOpaque.test(static_cast<size_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR)));
 	CHECK(afterOpaque.count() == 1);
 
-	// A row demanded after frames have drawn is built by the next Draw -- the late-demand path
-	// the old build-everything start-up never had.
+	// A bucket demanded after frames have drawn is built by the next Draw -- the late-demand
+	// path the old build-everything start-up never had.
 	auto cutoutDesc            = bgl::PbrMaterialDesc();
 	cutoutDesc.baseColorFactor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 	cutoutDesc.metallicFactor  = 0.0f;
@@ -125,17 +125,17 @@ TEST_CASE("Row pipelines are built on demand, and only on demand", "[pipeline][d
 
 	gfx->DrawFrame(target, job);
 
-	const bgl::PsoRowMask afterCutout = context->BuiltPsoRows();
-	CHECK(afterCutout == sceneView->DemandedPsoRows());
+	const bgl::BucketMask afterCutout = context->InitializedBuckets();
+	CHECK(afterCutout == sceneView->DemandedBuckets());
 	CHECK(afterCutout.test(static_cast<size_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR)));
 	CHECK(afterCutout.count() == 2);
 }
 
-// Demand building means an ordinary run checks only the rows its content uses, so a renamed
+// Demand building means an ordinary run checks only the buckets its content uses, so a renamed
 // member in a skinned or game-slot shader could pass every suite whose scenes are static. This
-// is the case that keeps the binder-name check's old full coverage: build every row the way
-// EnsureRowPipelines would, then run the checks over the complete family.
-TEST_CASE("Every row's binder names survive a full build", "[pipeline][demand][bindings]")
+// is the case that keeps the binder-name check's old full coverage: build every bucket the way
+// EnsureBucketPipelines would, then run the checks over the complete family.
+TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand][bindings]")
 {
 	auto opts             = bgl::GraphicsOptions();
 	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -155,16 +155,16 @@ TEST_CASE("Every row's binder names survive a full build", "[pipeline][demand][b
 	auto pipelines = bgl::PipelineBatch(device);
 	forward.Init(device, pipelines);
 	depth.Init(device, pipelines);
-	forward.AddRowKernels(device, pipelines, bgl::PsoRowMask().set());
-	depth.AddRowKernels(device, pipelines, bgl::PsoRowMask().set());
+	forward.AddBucketKernels(device, pipelines, bgl::BucketMask().set());
+	depth.AddBucketKernels(device, pipelines, bgl::BucketMask().set());
 	pipelines.Build();
 
 	for (uint16_t pso = 0; pso < bgl::idl::c_PsoCount; ++pso)
 	{
-		CHECK(forward.RowBuilt(pso));
+		CHECK(forward.BucketInitialized(pso));
 	}
 
-	// gfatal on a binder name no built variant declares, which with every row built is the
+	// gfatal on a binder name no built variant declares, which with every bucket built is the
 	// original full check.
 	forward.CheckBindings();
 	depth.CheckBindings();

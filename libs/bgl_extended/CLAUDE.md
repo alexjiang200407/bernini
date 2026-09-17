@@ -114,18 +114,18 @@ and is a target of its own; nothing here is part of it.
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
 - The renderer's PSOs are built together, in parallel: a pass's `Init` requests its always-on
   kernels from the `PipelineBatch` it is handed (`src/pipeline/PipelineBatch.h`) and
-  `RenderContext` builds the set on `core::parallel_for` before any pass reads one. The per-row
-  meshlet kernels are the exception: `RenderContext::EnsureRowPipelines` builds each row in the
-  first `Draw` whose view demands it (`SceneView::DemandedPsoRows`), so a scene pays only for the
-  rows it uses and an unbuilt row's kernel is skipped by `Execute` as having nothing to draw. A
-  new pass follows the `Init` shape — request in `Init`, read kernels only from `CheckBindings`
+  `RenderContext` builds the set on `core::parallel_for` before any pass reads one. The per-bucket
+  meshlet kernels are the exception: `RenderContext::EnsureBucketPipelines` builds each bucket in
+  the first `Draw` whose view demands it (`SceneView::DemandedBuckets`), so a scene pays only for
+  the buckets it uses and an unbuilt bucket's kernel is skipped by `Execute` as having nothing to
+  draw. A new pass follows the `Init` shape — request in `Init`, read kernels only from `CheckBindings`
   or later — and pipeline creation stays safe from any thread.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
 - Slang sessions are per thread (`src/slang/SlangSessions.h`): a thread's first compile creates
   its own global session and session, and they are dropped after every pipeline batch — the
-  start-up build's in `CreateGraphics`, a demand build's in `EnsureRowPipelines` — because each
+  start-up build's in `CreateGraphics`, a demand build's in `EnsureBucketPipelines` — because each
   global session's core module is a few hundred megabytes resident. Nothing
   may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
   module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a

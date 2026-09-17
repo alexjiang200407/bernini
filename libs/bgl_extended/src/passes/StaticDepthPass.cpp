@@ -21,7 +21,6 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include "util/util.h"
-#include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialType.h>
@@ -186,24 +185,24 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::AddRowKernels(
+	StaticDepthPass::AddBucketKernels(
 		IDevice*          device,
 		PipelineBatch&    pipelines,
-		const PsoRowMask& rows)
+		const BucketMask& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const auto buckets = StaticCoverageBuckets();
-		for (size_t i = 0; i < buckets.size(); ++i)
+		const auto coverage = StaticCoverageBuckets();
+		for (size_t i = 0; i < coverage.size(); ++i)
 		{
-			if (rows.test(buckets[i].pso) && !m_CoverageKernels[i].pipeline.IsInitialized())
+			if (buckets.test(coverage[i].pso) && !m_CoverageKernels[i].pipeline.IsInitialized())
 			{
 				pipelines.Add(
 					m_CoverageKernels[i],
 					DepthPipelineDesc(
 						device,
-						buckets[i].pixelSrc,
-						ForwardPass::PsoCullMode(buckets[i].pso)));
+						coverage[i].pixelSrc,
+						ForwardPass::PsoCullMode(coverage[i].pso)));
 			}
 		}
 	}
@@ -224,11 +223,9 @@ namespace bgl
 				.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers));
 		}
 
-		// The coverage family is demand-built; nothing to read names off until a first row is,
-		// and EnsureRowPipelines re-checks after every build.
-		if (std::ranges::none_of(m_CoverageKernels, [](const MeshletKernel& kernel) {
-				return kernel.pipeline.IsInitialized();
-			}))
+		// The coverage family is demand-built; nothing to read names off until a first bucket is,
+		// and EnsureBucketPipelines re-checks after every build.
+		if (!AnyInitialized(m_CoverageKernels))
 		{
 			return;
 		}

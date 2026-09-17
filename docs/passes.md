@@ -508,7 +508,7 @@ repays when this is promoted into the shared depth prepass the roadmap already a
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel` slots, one per `PsoType`, configured from the `c_Psos` table (pixel-shader module
 + raster/depth/blend state + mesh-shader source) — each built by the first `Draw` whose view
-demands the row (`RenderContext::EnsureRowPipelines`), and skipped while unbuilt, which by
+demands the bucket (`RenderContext::EnsureBucketPipelines`), and skipped while unbuilt, which by
 construction is only while no instance can be in it.
 
 Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,

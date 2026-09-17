@@ -197,8 +197,8 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
-		// built at once. The per-row meshlet kernels are not among them: EnsureRowPipelines builds
-		// each row the first Draw that demands it, so a scene pays only for the rows it uses.
+		// built at once. The per-bucket meshlet kernels are not among them: EnsureBucketPipelines
+		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
 		auto pipelines = PipelineBatch(m_Device.Get());
 		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
 		m_RigFrames.Init(m_Device.Get(), pipelines);
@@ -604,39 +604,39 @@ namespace bgl
 	}
 
 	void
-	RenderContext::EnsureRowPipelines(PsoRowMask demanded)
+	RenderContext::EnsureBucketPipelines(BucketMask demanded)
 	{
 		// The one shared blend kernel draws the whole depth-sorted list (ForwardPass), so any
-		// transparent demand is a demand for that row.
-		static const PsoRowMask c_TransparentRows = [] {
-			PsoRowMask rows;
+		// transparent demand is a demand for that bucket.
+		static const BucketMask c_TransparentBuckets = [] {
+			BucketMask buckets;
 			for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 			{
 				if (IsTransparentPso(pso))
 				{
-					rows.set(pso);
+					buckets.set(pso);
 				}
 			}
-			return rows;
+			return buckets;
 		}();
 
-		if ((demanded & c_TransparentRows).any())
+		if ((demanded & c_TransparentBuckets).any())
 		{
-			// The shared kernel replaces the demanded transparent rows rather than joining them:
-			// no pass ever binds any other transparent row's kernel, so building one is waste.
-			demanded &= ~c_TransparentRows;
+			// The shared kernel replaces the demanded transparent buckets rather than joining them:
+			// no pass ever binds any other transparent bucket's kernel, so building one is waste.
+			demanded &= ~c_TransparentBuckets;
 			demanded.set(static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR));
 		}
 
-		const PsoRowMask missing = demanded & ~m_BuiltRows;
+		const BucketMask missing = demanded & ~m_InitializedBuckets;
 		if (missing.none())
 		{
 			return;
 		}
 
 		auto pipelines = PipelineBatch(m_Device.Get());
-		m_Forward.AddRowKernels(m_Device.Get(), pipelines, missing);
-		m_StaticDepth.AddRowKernels(m_Device.Get(), pipelines, missing);
+		m_Forward.AddBucketKernels(m_Device.Get(), pipelines, missing);
+		m_StaticDepth.AddBucketKernels(m_Device.Get(), pipelines, missing);
 		pipelines.Build();
 
 		// A cold-cache build stands per-thread Slang sessions up, a few hundred megabytes each;
@@ -646,15 +646,15 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_StaticDepth.CheckBindings();
 
-		m_BuiltRows |= missing;
+		m_InitializedBuckets |= missing;
 
-		// The draw-time miss the demand contract turns into a bug: a row this view demands whose
-		// kernel still does not exist after the build that was meant to make it.
+		// The draw-time miss the demand contract turns into a bug: a bucket this view demands
+		// whose kernel still does not exist after the build that was meant to make it.
 		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
 			gassert(
-				!missing.test(pso) || m_Forward.RowBuilt(pso),
-				"EnsureRowPipelines left a demanded row unbuilt");
+				!missing.test(pso) || m_Forward.BucketInitialized(pso),
+				"EnsureBucketPipelines left a demanded bucket uninitialized");
 		}
 	}
 
@@ -674,7 +674,7 @@ namespace bgl
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
 
-		EnsureRowPipelines(view->DemandedPsoRows());
+		EnsureBucketPipelines(view->DemandedBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
