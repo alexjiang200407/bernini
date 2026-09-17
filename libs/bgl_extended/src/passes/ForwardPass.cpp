@@ -309,7 +309,7 @@ namespace bgl
 	void
 	ForwardPass::CheckBindings() const
 	{
-		// Always-on kernels first: the row guard below must not gate them.
+		// Always-on kernels first: the bucket guard below must not gate them.
 		m_BlobShadows.CheckBindings();
 
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
@@ -476,7 +476,7 @@ namespace bgl
 				continue;
 			}
 
-			// A row never demanded has no kernel -- and, by the same fact, no instances to draw.
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
 			MeshletKernel& kernel = m_Kernels[pso];
 			if (!kernel.pipeline.IsInitialized())
 			{
@@ -528,7 +528,7 @@ namespace bgl
 		                             .AddColorAttachment(draw.targets.sceneColor)
 		                             .SetDepthAttachment(draw.targets.depth);
 
-		// Built whenever any transparent row is demanded; absent, the sorted list is empty too.
+		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
 		MeshletKernel& kernel =
 			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
 		if (!kernel.pipeline.IsInitialized())

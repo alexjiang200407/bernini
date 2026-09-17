@@ -192,17 +192,18 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const auto coverage = StaticCoverageBuckets();
-		for (size_t i = 0; i < coverage.size(); ++i)
+		const auto coverageBuckets = StaticCoverageBuckets();
+		for (size_t i = 0; i < coverageBuckets.size(); ++i)
 		{
-			if (buckets.test(coverage[i].pso) && !m_CoverageKernels[i].pipeline.IsInitialized())
+			if (buckets.test(coverageBuckets[i].pso) &&
+			    !m_CoverageKernels[i].pipeline.IsInitialized())
 			{
 				pipelines.Add(
 					m_CoverageKernels[i],
 					DepthPipelineDesc(
 						device,
-						coverage[i].pixelSrc,
-						ForwardPass::PsoCullMode(coverage[i].pso)));
+						coverageBuckets[i].pixelSrc,
+						ForwardPass::PsoCullMode(coverageBuckets[i].pso)));
 			}
 		}
 	}

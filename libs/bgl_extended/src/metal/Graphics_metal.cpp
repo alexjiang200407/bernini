@@ -174,7 +174,7 @@ namespace bgl
 			m_Context =
 				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
 
-			// The always-on set is built by the RenderContext above; the per-row kernels are built
+			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
 			// by the first Draw that demands each, and that path drops the sessions again after
 			// every batch. This release covers the start-up build.
 			device->ReleaseSlangSession();
