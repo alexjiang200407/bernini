@@ -599,8 +599,9 @@ namespace assetlib
 		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
 		 * from. One with only some of them is a reference that has broken, and is reported.
 		 *
-		 * Runs in phases -- the documents, then what the sources say is absent, then the changed
-		 * textures, then the re-save walk -- and each reports its own count, so `onProgress` must
+		 * Runs in phases -- the documents, then the stale environments, then what the sources say
+		 * is absent, then the changed textures, then the re-save walk -- and each reports its own
+		 * count, so `onProgress` must
 		 * take the total from the event rather than the first one it sees. Within a phase the
 		 * files are independent and are cooked across threads; a `.banim` still never re-measures
 		 * against a mesh a later phase would rewrite.
@@ -786,6 +787,41 @@ namespace assetlib
 		 */
 		[[nodiscard]] std::vector<std::string>
 		EnvironmentImportTargets(const EnvImportDesc& desc) const;
+
+		/**
+		 * Every environment source whose derived files no longer match its import document, as
+		 * mount keys, sorted: the copy re-stamped, `c_EnvSourceBakeToken` moved, or a part's
+		 * parameters edited since that part was written. A stat, a hash and a document read apiece
+		 * -- no convolution -- so it is a question a project can afford to ask as it opens.
+		 *
+		 * An absent source stales nothing. Always empty on a read-only store.
+		 *
+		 * @throws std::runtime_error if an import document under `Authored/EnvSources` will not
+		 *         read, since "nothing to do" would then be a silent wrong answer.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		GetStaleEnvironmentSources() const;
+
+		/**
+		 * Re-cooks the stale parts of `sourceKey`'s environment -- the float cubes and the
+		 * containers baked from them -- and then records, in its import document, the source's
+		 * stamp, the current `c_EnvSourceBakeToken` and each refreshed part's parameters. A part
+		 * that is current is left as it is.
+		 *
+		 * Deliberately not on a load path: a part is minutes of convolution.
+		 *
+		 * @return The files written, sorted; empty when nothing was stale.
+		 * @throws std::runtime_error on a read-only store, a `sourceKey` not in the project, or a
+		 *         document that is absent or will not read -- and what `Reimport` throws for one
+		 *         that names no parameters or claims a file no environment import writes.
+		 * @throws Cancelled if `cancel` is signalled; the document is written last, so a cancelled
+		 *         refresh is still reported stale.
+		 */
+		std::vector<std::string>
+		RefreshEnvironmentSource(
+			std::string_view    sourceKey,
+			const ProgressSink& onProgress = {},
+			const CancelToken&  cancel     = {}) const;
 
 		// --- Describe --------------------------------------------------------------------------
 

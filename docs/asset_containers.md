@@ -203,7 +203,7 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an absent environment `.bsky`, `.benvl` or float cube from `Reimport` too. A *present* float cube is not yet checked against its document, so one left behind by a changed `.bimport` stays as it is. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky`, `.benvl` and float cubes from `Reimport` when absent and from `migrate` when stale. |
 | **Ignorable, but by hand** | the baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
 | **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky`, `.benvl` or float cubes back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
@@ -238,6 +238,14 @@ binds, and a clip set sweeps its boxes through the meshes standing *on disk*, so
 run would measure a clip against a mesh that is not written yet. The whole work list is decided
 before any of it runs, which is what makes the count the sink is stepped through fixed.
 
+**A present environment file can be stale, and that is `migrate`'s.** A float cube has no header, so
+its key lives in the `.bimport`: the copied source's stamp and `c_EnvSourceBakeToken` for the whole
+document, and a hash of the parameters each part was written with. A source re-exported in place or a
+moved token stales every part the document claims; a hand-edited parameter stales only its own part,
+so re-shaping the sky never re-convolves the lighting. The refresh re-cooks the stale parts whole —
+cubes and the containers baked from them — and writes the document last, so a refresh that fails
+part-way is still reported stale.
+
 **Environments come last and one at a time.** Each is decoded once and each *part* re-run for
 only the files it is missing, so a `.bsky` lost beside its float chain is a bake from that chain in
 seconds, and only a lost cube costs a convolution. Every convolution already spreads across all the
@@ -266,8 +274,12 @@ being reported twice when `migrate` runs both.
 `assetlib_cli migrate -p <project>` backfills any import document written before it recorded its
 source, its rig and its outputs -- the source from the document's own key, so that one is backfilled
 whether or not the file is there to be read --
+re-cooks the parts of every environment whose document no longer matches them
+(`GetStaleEnvironmentSources` / `RefreshEnvironmentSource`; first, so a part both absent and stale
+is convolved once rather than by `Reimport` and then again),
 produces whatever those documents name that is absent, re-extracts the textures of
-every source that has moved since its import, then reads every container and re-saves whatever is not byte-identical to the current
+every source that has moved since its import, then reads every
+container and re-saves whatever is not byte-identical to the current
 form — geometry through the regeneration seam
 (meshes before rigs before clips, so a regenerated `.banim` measures its posed boxes against
 current meshes), everything else as read. A second run rewrites nothing; a file it cannot read is

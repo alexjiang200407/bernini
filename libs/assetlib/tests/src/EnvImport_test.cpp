@@ -1,11 +1,13 @@
 
 #include <algorithm>
 #include <array>
+#include <assetlib/asset_import.h>  // IWYU pragma: keep -- completes MigrateReport's MovedTexture
 #include <assetlib/container_info.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
+#include <assetlib/migrate.h>
 #include <assetlib/progress.h>
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BEnv.h>
@@ -19,6 +21,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <ios>
 #include <stdexcept>
 #include <stop_token>
@@ -148,7 +151,7 @@ namespace
 	 * gradient is what makes a projection's size visible in the cube it produces.
 	 */
 	fs::path
-	WriteGradientHdr(const fs::path& path)
+	WriteGradientHdr(const fs::path& path, unsigned char exponent = 129)
 	{
 		constexpr int c_Width  = 16;
 		constexpr int c_Height = 8;
@@ -161,7 +164,7 @@ namespace
 				// Never 2 in the first byte, which would read as the start of an encoded line.
 				const auto mantissa                     = static_cast<unsigned char>(40 + x * 12);
 				const std::array<unsigned char, 4> rgbe = {
-					{ mantissa, static_cast<unsigned char>(30 + y * 20), mantissa, 129 }
+					{ mantissa, static_cast<unsigned char>(30 + y * 20), mantissa, exponent }
 				};
 				out.write(
 					reinterpret_cast<const char*>(rgbe.data()),
@@ -813,4 +816,200 @@ TEST_CASE(
 		CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("forest_extra.ktx2"));
 		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
 	}
+}
+
+namespace
+{
+	void
+	EditDocument(const Sandbox& sandbox, const std::function<void(ImportDocument&)>& edit)
+	{
+		ImportDocument document = sandbox.Document();
+		edit(document);
+		StoreAt(sandbox.DataRoot()).Save(document, "Authored/EnvSources/forest.bimport");
+	}
+
+	const std::vector<std::string> c_SkyOutputs      = { "Derived/Sky/forest.bsky",
+		                                                 "Derived/SourceTextures/forest_sky.ktx2" };
+	const std::vector<std::string> c_LightingOutputs = {
+		"Derived/EnvLighting/forest.benvl",
+		"Derived/SourceTextures/forest_irradiance.ktx2",
+		"Derived/SourceTextures/forest_prefilter.ktx2"
+	};
+
+	std::vector<decltype(WrittenAt(std::declval<const Sandbox&>(), ""))>
+	WrittenAll(const Sandbox& sandbox, const std::vector<std::string>& files)
+	{
+		auto out = std::vector<decltype(WrittenAt(sandbox, ""))>();
+		for (const std::string& file : files) out.push_back(WrittenAt(sandbox, file));
+		return out;
+	}
+
+	const std::vector<std::string> c_Stale = { "Authored/EnvSources/forest.hdr" };
+}
+
+TEST_CASE("A freshly imported environment is current", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_fresh");
+	static_cast<void>(ImportGradient(sandbox));
+
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+	CHECK(sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr").empty());
+}
+
+// The split exists so the sky can be re-shaped without paying for the lighting, and that has to hold
+// for an edited document as much as for a re-import.
+TEST_CASE("An edited sky parameter re-cooks the sky alone", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_sky");
+	static_cast<void>(ImportGradient(sandbox));
+	const ImportDocument before     = sandbox.Document();
+	const auto           lightingAt = WrittenAll(sandbox, c_LightingOutputs);
+
+	EditDocument(sandbox, [](ImportDocument& document) { document.environment->skyMips = 2; });
+	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	CHECK(
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") == c_SkyOutputs);
+	CHECK(loadKTX2(sandbox.DataRoot() / "Derived/SourceTextures/forest_sky.ktx2").mipLevels == 2);
+	CHECK(WrittenAll(sandbox, c_LightingOutputs) == lightingAt);
+
+	const ImportDocument after = sandbox.Document();
+	CHECK(after.envSkyParametersHash != before.envSkyParametersHash);
+	CHECK(after.envLightingParametersHash == before.envLightingParametersHash);
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+
+	// The container was re-baked from the new chain, so it is current against it.
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
+}
+
+TEST_CASE("An edited lighting parameter re-cooks the lighting alone", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_lighting");
+	static_cast<void>(ImportGradient(sandbox));
+	const auto skyAt = WrittenAll(sandbox, c_SkyOutputs);
+
+	EditDocument(sandbox, [](ImportDocument& document) {
+		document.environment->prefilterSamples = 8;
+	});
+	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	CHECK(
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
+		c_LightingOutputs);
+	CHECK(WrittenAll(sandbox, c_SkyOutputs) == skyAt);
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
+// The source is what every part was cooked from, so a new file under the same name stales them all.
+TEST_CASE("A source re-exported in place re-cooks every part", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_source");
+	static_cast<void>(ImportGradient(sandbox));
+	const std::vector<std::byte> prefilter =
+		sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2");
+
+	WriteGradientHdr(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr", 131);
+	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	CHECK(
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
+		GradientOutputs());
+	CHECK(sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2") != prefilter);
+	CHECK(
+		sandbox.Document().envSourceStamp ==
+		stampOf(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr"));
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
+// A float cube carries no header, so the revision of the code that wrote it lives in the document.
+TEST_CASE("A moved revision re-cooks every part", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_token");
+	static_cast<void>(ImportGradient(sandbox));
+
+	EditDocument(sandbox, [](ImportDocument& document) { document.envSourceBakeToken = 1; });
+	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	CHECK(
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
+		GradientOutputs());
+	CHECK(sandbox.Document().envSourceBakeToken == c_EnvSourceBakeToken);
+}
+
+TEST_CASE("An environment whose source is gone is not stale", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_nosource");
+	static_cast<void>(ImportGradient(sandbox));
+
+	EditDocument(sandbox, [](ImportDocument& document) { document.environment->skyMips = 2; });
+	fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr");
+
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
+// A part the document does not claim was never produced, so no parameter of it can stale anything.
+TEST_CASE("An unclaimed part's parameters stale nothing", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_unclaimed");
+	auto          desc = sandbox.Desc();
+	desc.source        = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
+	desc.lighting      = false;
+	static_cast<void>(sandbox.Store().ImportEnvironment(desc));
+
+	EditDocument(sandbox, [](ImportDocument& document) {
+		document.environment->prefilterSamples = 8;
+	});
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
+TEST_CASE("Migrate re-cooks a stale environment; a dry run only names it", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_migrate");
+	static_cast<void>(ImportGradient(sandbox));
+	EditDocument(sandbox, [](ImportDocument& document) { document.environment->skyMips = 2; });
+
+	const auto skyAt   = WrittenAll(sandbox, c_SkyOutputs);
+	const auto hasPath = [&](const MigrateReport& report, const std::string& relative) {
+		return std::ranges::any_of(report.files, [&](const MigratedFile& file) {
+			return file.path == sandbox.DataRoot() / relative &&
+			       file.outcome == MigratedFile::Outcome::kRewritten;
+		});
+	};
+
+	const MigrateReport dry = sandbox.Store().Migrate(true);
+	CHECK(hasPath(dry, "Authored/EnvSources/forest.bimport"));
+	CHECK(WrittenAll(sandbox, c_SkyOutputs) == skyAt);
+	CHECK(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	const MigrateReport wet = sandbox.Store().Migrate(false);
+	CHECK(wet.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(hasPath(wet, "Derived/Sky/forest.bsky"));
+	CHECK(hasPath(wet, "Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
+// Reimport would convolve a missing part at the edited parameters, and the refresh would then convolve
+// it whole again: minutes, twice. The refresh runs first, so `Reimport` finds nothing left to write.
+TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_absentstale");
+	static_cast<void>(ImportGradient(sandbox));
+	EditDocument(sandbox, [](ImportDocument& document) {
+		document.environment->prefilterSamples = 8;
+	});
+	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_prefilter.ktx2");
+
+	const MigrateReport report = sandbox.Store().Migrate(false);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+	for (const std::string& output : c_LightingOutputs)
+	{
+		INFO(output);
+		// The walk reports every container it reads; only a rewrite is a cook.
+		CHECK(std::ranges::count_if(report.files, [&](const MigratedFile& file) {
+				  return file.path == sandbox.DataRoot() / output &&
+			             file.outcome == MigratedFile::Outcome::kRewritten;
+			  }) == 1);
+	}
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
