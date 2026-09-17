@@ -653,6 +653,13 @@ namespace assetlib
 	std::vector<std::byte>
 	AssetCodec<BMaterial>::Serialize(const BMaterial& material)
 	{
+		requireNodeGraph(material);
+		return serializeDocument(material);
+	}
+
+	void
+	requireNodeGraph(const BMaterial& material)
+	{
 		core::throw_runtime_error_if(
 			material.editorGraph.empty(),
 			"bmaterial: refusing to write '{}' without a node graph -- every material the editor "
@@ -660,7 +667,6 @@ namespace assetlib
 			"assetlib writes carries one. Open it in the Material Editor and save it there; a "
 			"shipping copy is `assetlib_cli strip`",
 			material.name);
-		return serializeDocument(material);
 	}
 
 	std::vector<std::byte>

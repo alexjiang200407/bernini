@@ -130,8 +130,9 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 `assetlib_cli strip --out` and the editor opening a mesh from outside any data root.
 
 **A `.bmaterial` is never written without its node graph.** `AssetCodec<BMaterial>::Serialize`
-throws when `editorGraph` is empty, so `Save`, `migrate` and a rename's rewrite all refuse such a
-material and name it. assetlib only checks that a graph is there and never reads it: the graph is
+throws when `editorGraph` is empty (`requireNodeGraph`, [bmaterial.h](libs/assetlib/include/assetlib/bmaterial.h)).
+`Save` refuses the one write; `migrate` reports that file as failed and carries on; a rename that
+would have to rewrite such a material fails as a whole, names the file, and writes nothing. assetlib only checks that a graph is there and never reads it: the graph is
 the editor's. The one write without a graph is `serializeStripped`
 ([material_bake.h](libs/assetlib/include/assetlib/material_bake.h)), the shipping form `strip`
 emits. Reading stays permissive, so a game still draws a material written without one, and the

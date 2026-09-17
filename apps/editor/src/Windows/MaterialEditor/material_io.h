@@ -108,9 +108,11 @@ namespace editor
 	 * Composites each of `materials` -- data-root-relative, as every asset reference is -- down to its
 	 * baked triplet and rewrites it, reporting through `progress`.
 	 *
-	 * Reads each off disk, so what it bakes is the routes last saved. Throws out of the first failure
-	 * or cancellation rather than carrying on: every map is named by the hash of its inputs, so a
-	 * half-finished run leaves only correct, reusable files behind.
+	 * Reads each off disk, so what it bakes is the routes last saved. A material with no node graph,
+	 * which no save may write, fails the whole run before anything is baked, and the error names
+	 * every such file. Otherwise throws out of the first failure or cancellation rather than carrying
+	 * on: every map is named by the hash of its inputs, so a half-finished run leaves only correct,
+	 * reusable files behind.
 	 */
 	void
 	BakeMaterials(

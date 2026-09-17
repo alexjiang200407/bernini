@@ -38,4 +38,14 @@ namespace assetlib
 				return true;
 		return false;
 	}
+
+	/**
+	 * Refuses a material that carries no node graph: every `.bmaterial` the editor or assetlib
+	 * writes has one, so a write without it is a mistake to name rather than a document to store.
+	 * Only presence is checked -- the graph is the editor's, and nothing here reads it.
+	 *
+	 * @throws std::runtime_error naming `material` when its `editorGraph` is empty.
+	 */
+	void
+	requireNodeGraph(const BMaterial& material);
 }

@@ -5,6 +5,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <algorithm>
+#include <assetlib/bmaterial.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -16,6 +17,8 @@
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
+#include <core/err/util.h>
+#include <cstddef>
 #include <exception>
 #include <filesystem>
 #include <qcontainerfwd.h>
@@ -24,7 +27,9 @@
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qstringliteral.h>
+#include <qtypes.h>
 #include <system_error>
+#include <vector>
 
 namespace editor
 {
@@ -231,19 +236,43 @@ namespace editor
 	{
 		const assetlib::AssetStore store(dataRoot);
 
-		int done = 0;
+		// Every one is checked before any is baked: a material the save will refuse would otherwise
+		// stop the run after its maps were written, with the rest of the batch never reached.
+		auto loaded   = std::vector<assetlib::BMaterial>();
+		auto refusals = QStringList();
+		loaded.reserve(static_cast<size_t>(materials.size()));
 		for (const QString& relative : materials)
 		{
+			const assetlib::BMaterial& material =
+				loaded.emplace_back(store.Load<assetlib::BMaterial>(relative.toStdString()));
+			try
+			{
+				assetlib::requireNodeGraph(material);
+			}
+			catch (const std::exception&)
+			{
+				refusals << relative;
+			}
+		}
+
+		core::throw_runtime_error_if(
+			!refusals.isEmpty(),
+			"nothing was baked: these materials have no node graph, and are written only with one. "
+			"Open each in the Material Editor and save it first:\n{}",
+			refusals.join(QLatin1Char('\n')).toStdString());
+
+		int done = 0;
+		for (qsizetype i = 0; i < materials.size(); ++i)
+		{
+			const QString& relative = materials[i];
 			progress.Report(
 				done,
 				static_cast<int>(materials.size()),
 				QStringLiteral("Baking %1...").arg(QFileInfo(relative).fileName()));
 
-			const std::string key = relative.toStdString();
-
-			assetlib::BMaterial material = store.Load<assetlib::BMaterial>(key);
+			assetlib::BMaterial& material = loaded[static_cast<size_t>(i)];
 			store.BakeMaterial(material, progress.Cancellation());
-			store.Save(material, key);
+			store.Save(material, relative.toStdString());
 
 			++done;
 		}

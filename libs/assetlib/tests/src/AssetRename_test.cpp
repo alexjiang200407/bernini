@@ -13,6 +13,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -561,6 +562,40 @@ TEST_CASE("A referrer that stopped parsing fails the rename, and is not touched"
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "new.ktx2"));
+}
+
+TEST_CASE(
+	"A referrer with no node graph fails the rename by name, and is not touched",
+	"[assetrename][graph]")
+{
+	// A material written by hand carries no graph, and no write may produce one without it -- so
+	// a rename that would have to rewrite it refuses as a whole rather than half-renaming.
+	const DataRoot root("bernini_rename_graphless");
+
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
+
+	const fs::path materialPath = root.path / "Authored/Materials" / "mat.bmaterial";
+	const auto     textOf       = [&materialPath] {
+		const std::vector<std::byte> bytes = core::file::read_file_bytes(materialPath);
+		return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	};
+	std::string  text     = textOf();
+	const size_t graphKey = text.find("\t\"editorGraph\"");
+	REQUIRE(graphKey != std::string::npos);
+	text.erase(graphKey, text.find('\n', graphKey) - graphKey + 1);
+	core::file::write_atomic(materialPath, text);
+
+	const RenamePlan plan =
+		planRename(root.Scan(), "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/new.ktx2");
+	const RenameResult result = root.Source().RenameAsset(plan);
+
+	CHECK(result.status == RenameStatus::kFailed);
+	CHECK(result.error.find("Authored/Materials/mat.bmaterial") != std::string::npos);
+	CHECK(result.error.find("node graph") != std::string::npos);
+	CHECK(textOf() == text);
 	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "new.ktx2"));
 }

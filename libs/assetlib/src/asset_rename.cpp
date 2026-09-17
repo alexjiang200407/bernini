@@ -502,7 +502,7 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				return { RenameStatus::kFailed, e.what() };
+				return { RenameStatus::kFailed, "'" + referrer + "': " + e.what() };
 			}
 
 			files.push_back(std::move(file));
