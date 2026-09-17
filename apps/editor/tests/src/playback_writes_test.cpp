@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <gamelib/anim_blend.h>
+#include <optional>
 
 // The two rules behind the Animation panel's clip switch: which pose source takes a record rewrite
 // at all, and -- for the one that does not -- which single clip a respawn lands on so the switch
@@ -172,4 +173,21 @@ TEST_CASE("A previewed transition carries each end's blend-space parameter", "[a
 		return false;
 	}();
 	CHECK(incomingAtThreeQuarters);
+}
+
+TEST_CASE("The Blend tab plays From alone until a fade is named", "[animation]")
+{
+	using editor::SoloFromClip;
+
+	// To unset: changing From must change what plays.
+	CHECK(SoloFromClip(2, -1) == std::optional<int>(2));
+	CHECK(SoloFromClip(5, -1) == std::optional<int>(5));
+
+	// To naming From is no fade either.
+	CHECK(SoloFromClip(3, 3) == std::optional<int>(3));
+
+	// A fade, or no From at all, plays nothing on its own.
+	CHECK_FALSE(SoloFromClip(2, 4).has_value());
+	CHECK_FALSE(SoloFromClip(-1, -1).has_value());
+	CHECK_FALSE(SoloFromClip(-1, 4).has_value());
 }

@@ -219,6 +219,10 @@ private:
 	[[nodiscard]] bool
 	SpaceIsDestination() const;
 
+	// The node the fade lands on, or -1 when none is chosen.
+	[[nodiscard]] int
+	TransitionDestination() const;
+
 	// The space `node` names, or null when it names a clip or nothing.
 	[[nodiscard]] const game::BlendSpaceInfo*
 	SpaceForNode(int node) const;
