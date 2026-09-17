@@ -36,6 +36,13 @@ namespace assetlib
 		constexpr uint32_t c_SkyChainSamples = 256;
 
 		void
+		notify(const EnvironmentFileSink& sink, const std::string& key)
+		{
+			if (sink)
+				sink(key);
+		}
+
+		void
 		writeFloatCube(const AssetStore& store, const std::string& key, const ImageData& image)
 		{
 			const std::filesystem::path path = store.ResolveWritePath(key);
@@ -82,6 +89,7 @@ namespace assetlib
 		std::string_view                   name,
 		const SkyTargets&                  targets,
 		const EnvironmentFileSink&         beforeWrite,
+		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel)
 	{
 		if (targets.source.write)
@@ -102,8 +110,9 @@ namespace assetlib
 				c_SkyChainSamples,
 				threads);
 
-			beforeWrite(targets.source.key);
+			notify(beforeWrite, targets.source.key);
 			writeFloatCube(store, targets.source.key, chain);
+			notify(afterWrite, targets.source.key);
 		}
 
 		if (targets.container.write)
@@ -115,8 +124,9 @@ namespace assetlib
 			throwIfCancelled(cancel);
 			store.BakeSky(bsky, cancel);
 
-			beforeWrite(targets.container.key);
+			notify(beforeWrite, targets.container.key);
 			store.Save(bsky, targets.container.key);
+			notify(afterWrite, targets.container.key);
 		}
 	}
 
@@ -129,6 +139,7 @@ namespace assetlib
 		std::string_view                   name,
 		const LightingTargets&             targets,
 		const EnvironmentFileSink&         beforeWrite,
+		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel)
 	{
 		if (targets.irradiance.write)
@@ -138,8 +149,9 @@ namespace assetlib
 				input.CubeAt(lightingProjectionSize(parameters)),
 				parameters.irradianceFaceSize);
 
-			beforeWrite(targets.irradiance.key);
+			notify(beforeWrite, targets.irradiance.key);
 			writeFloatCube(store, targets.irradiance.key, irradiance);
+			notify(afterWrite, targets.irradiance.key);
 		}
 
 		if (targets.prefilter.write)
@@ -154,8 +166,9 @@ namespace assetlib
 			const ImageData prefilter =
 				prefilterRadiance(input.CubeAt(lightingProjectionSize(parameters)), prefilterDesc);
 
-			beforeWrite(targets.prefilter.key);
+			notify(beforeWrite, targets.prefilter.key);
 			writeFloatCube(store, targets.prefilter.key, prefilter);
+			notify(afterWrite, targets.prefilter.key);
 		}
 
 		if (!targets.container.write)
@@ -169,20 +182,12 @@ namespace assetlib
 		throwIfCancelled(cancel);
 		store.BakeEnvLighting(lighting, cancel);
 
-		beforeWrite(targets.container.key);
+		notify(beforeWrite, targets.container.key);
 		store.Save(lighting, targets.container.key);
+		notify(afterWrite, targets.container.key);
 		return lighting.exposure;
 	}
 
-	/**
-	 * Produces the files `wanted` names out of one environment source's document: each part
-	 * re-run for only the files it is missing, so a lost `.bsky` beside its float chain is a
-	 * bake and not a convolution.
-	 *
-	 * @param onWritten Told each file once it is on disk.
-	 * @throws std::runtime_error if the document names no parameters, or claims a file no
-	 *         environment import writes.
-	 */
 	void
 	produceEnvironmentOutputs(
 		const AssetStore&               store,
@@ -234,23 +239,22 @@ namespace assetlib
 			EnvironmentOutput::kLighting,
 			{ EnvironmentOutput::kPrefilterSource, EnvironmentOutput::kIrradianceSource });
 
-		// The previous file reports written only once the next one starts, so a write that
-		// throws is never counted.
-		auto       last  = std::optional<std::string>();
-		const auto track = [&](const std::string& key) {
-			if (last)
-				onWritten(*last);
-			last = key;
-			beforeWrite(key);
-		};
-
 		auto input = EnvironmentInput(store.ResolveWritePath(sourceKey));
 		const EnvironmentImportParameters& parameters = *document.environment;
 
 		const SkyTargets sky = { .source    = target(EnvironmentOutput::kSkySource),
 			                     .container = target(EnvironmentOutput::kSky) };
 		if (sky.source.write || sky.container.write)
-			produceSky(store, input, parameters, 0, stemOf(sky.container.key), sky, track, cancel);
+			produceSky(
+				store,
+				input,
+				parameters,
+				0,
+				stemOf(sky.container.key),
+				sky,
+				beforeWrite,
+				onWritten,
+				cancel);
 
 		const LightingTargets lighting = { .prefilter = target(EnvironmentOutput::kPrefilterSource),
 			                               .irradiance =
@@ -264,10 +268,8 @@ namespace assetlib
 				0,
 				stemOf(lighting.container.key),
 				lighting,
-				track,
+				beforeWrite,
+				onWritten,
 				cancel));
-
-		if (last)
-			onWritten(*last);
 	}
 }

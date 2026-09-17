@@ -1013,3 +1013,28 @@ TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]
 	}
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
+
+// `ReimportedSource::written` promises every file that landed before a failure. A part that writes one
+// cube and then throws on the next is the case that promise is for.
+TEST_CASE("A cube written before its part throws is still reported", "[envimport][reimport]")
+{
+	const Sandbox sandbox("bernini_envreimport_partial");
+	static_cast<void>(ImportGradient(sandbox));
+
+	// Eight texels a side cannot carry five mips, so the prefilter refuses after the irradiance is
+	// already on disk.
+	EditDocument(sandbox, [](ImportDocument& document) {
+		document.environment->prefilterMips = 5;
+	});
+	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_irradiance.ktx2");
+	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_prefilter.ktx2");
+
+	const ReimportReport report = sandbox.Store().Reimport(false);
+	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
+	REQUIRE(entry != nullptr);
+	CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("mips"));
+	CHECK(
+		entry->written ==
+		std::vector<std::string>{ "Derived/SourceTextures/forest_irradiance.ktx2" });
+	CHECK(sandbox.Has("Derived/SourceTextures/forest_irradiance.ktx2"));
+}

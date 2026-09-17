@@ -333,6 +333,10 @@ namespace assetlib
 		copySource(desc.source, copied);
 		result.source = sourceKey;
 
+		// Stamped before the cook reads it, so a copy rewritten while the parts convolve reads as
+		// stale afterwards rather than as the file those pixels came from.
+		const SourceStamp copiedStamp = stampOf(copied);
+
 		auto       input       = EnvironmentInput(copied);
 		const auto beforeWrite = [&created](const std::string& key) { created.WillWrite(key); };
 
@@ -347,6 +351,7 @@ namespace assetlib
 				desc.name,
 				SkyTargets{ .source = { keys[0] }, .container = { keys[1] } },
 				beforeWrite,
+				{},
 				cancel);
 			result.sky = keys[1];
 		}
@@ -364,6 +369,7 @@ namespace assetlib
 			                     .irradiance = { keys[1] },
 			                     .container  = { keys[2] } },
 				beforeWrite,
+				{},
 				cancel);
 			result.lighting = keys[2];
 		}
@@ -385,10 +391,9 @@ namespace assetlib
 			Save(env, result.environment);
 		}
 
-		// Last, and stamped from the copy: the document then cannot claim a file that was not
-		// written, nor describe a source other than the one standing beside it.
+		// Last: the document then cannot claim a file that was not written.
 		ImportDocument document = importedDocument(desc, existing, sourceKey);
-		document.envSourceStamp = stampOf(copied);
+		document.envSourceStamp = copiedStamp;
 		result.document         = documentKey;
 		created.WillWrite(documentKey);
 		Save(document, documentKey);
