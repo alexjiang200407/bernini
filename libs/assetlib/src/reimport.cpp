@@ -36,13 +36,13 @@
 #include <filesystem>
 #include <functional>
 #include <initializer_list>
-#include <map>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -211,7 +211,7 @@ namespace assetlib
 				"'{}': its import document records no environment parameters",
 				sourceKey);
 
-			auto keys = std::map<EnvironmentOutput, std::string>();
+			auto keys = std::unordered_map<EnvironmentOutput, std::string>();
 			for (const std::string& output : document.outputs)
 			{
 				const std::optional<EnvironmentOutput> role = environmentOutputOf(output);

@@ -6,10 +6,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace assetlib
 {
@@ -41,9 +41,9 @@ namespace assetlib
 		CubeAt(uint32_t faceSize);
 
 	private:
-		ImageData                     m_Input;
-		bool                          m_Equirect = false;
-		std::map<uint32_t, ImageData> m_Cubes;
+		ImageData                               m_Input;
+		bool                                    m_Equirect = false;
+		std::unordered_map<uint32_t, ImageData> m_Cubes;
 	};
 
 	/** One file a part may write: its mount key, and whether this run writes it. */
