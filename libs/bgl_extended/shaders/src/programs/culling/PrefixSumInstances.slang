@@ -1,9 +1,6 @@
 import idl.PsoType;
 import lib.types.ComputeBuffer;
 
-// Must be less than 1024
-static const uint kPsoCount = uint(PsoType::kCount);
-
 struct Uniforms
 {
     ComputeBuffer<uint> inOutBuffer;
@@ -11,16 +8,17 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared uint gScan[kPsoCount];
+groupshared uint gScan[cMaxPsoBuckets];
 
+// One thread group, one thread per bucket: cMaxPsoBuckets is this scan's hard ceiling.
 [shader("compute")]
-[numthreads(kPsoCount, 1, 1)]
+[numthreads(cMaxPsoBuckets, 1, 1)]
 void main(uint idx: SV_GroupThreadID)
 {
     gScan[idx] = gUniforms.inOutBuffer[idx];
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint offset = 1u; offset < kPsoCount; offset <<= 1u)
+    for (uint offset = 1u; offset < cMaxPsoBuckets; offset <<= 1u)
     {
         uint addend = (idx >= offset) ? gScan[idx - offset] : 0u;
         GroupMemoryBarrierWithGroupSync();

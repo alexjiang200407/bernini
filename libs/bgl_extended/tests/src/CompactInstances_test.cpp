@@ -130,9 +130,9 @@ TEST_CASE(
 		return buffer;
 	};
 
-	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::idl::c_PsoCount, "Pso Prefix Sum");
+	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::idl::cMaxPsoBuckets, "Pso Prefix Sum");
 	auto dispatchArgs =
-		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::c_PsoCount, "Compacted Dispatch Args");
+		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxPsoBuckets, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
 
 	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
@@ -199,7 +199,7 @@ TEST_CASE(
 					allVisible.data(),
 					allVisible.size() * sizeof(uint32_t));
 
-				std::array<bgl::idl::DispatchArgs, bgl::idl::c_PsoCount> seed{};
+				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxPsoBuckets> seed{};
 				for (bgl::idl::DispatchArgs& args : seed)
 				{
 					args = { 0u, 1u, 1u };
@@ -312,9 +312,14 @@ TEST_CASE(
 	rbDesc.debugName = "Compacted Readback";
 	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
+	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(uint32_t);
 	rbDesc.debugName = "Prefix-Sum Readback";
 	auto rbPrefixSum = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	rbDesc.byteSize =
+		static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(bgl::idl::DispatchArgs);
+	rbDesc.debugName = "Dispatch Args Readback";
+	auto rbArgs      = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
@@ -342,6 +347,13 @@ TEST_CASE(
 			bgl::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->CopyBufferToReadback(rbPrefixSum, psoPrefixSum.GetBufferHandle());
 
+	cmdList->Barrier(
+		dispatchArgs.GetBufferHandle(),
+		toCopySource(
+			bgl::BarrierSyncFlag::kComputeShader,
+			bgl::BarrierAccessFlag::kUnorderedAccess));
+	cmdList->CopyBufferToReadback(rbArgs, dispatchArgs.GetBufferHandle());
+
 	cmdList->Close();
 
 	auto fence = cmdQueue->ExecuteCommandList(cmdList);
@@ -355,7 +367,25 @@ TEST_CASE(
 		const uint32_t exclusive = (p == 0) ? 0u : prefixSumOut[p - 1];
 		CHECK(exclusive == expectedBase[p]);
 	}
+	// The inclusive scan carries the full total into every ceiling row past the enum.
+	for (uint32_t p = bgl::idl::c_PsoCount; p < bgl::idl::cMaxPsoBuckets; ++p)
+	{
+		CHECK(prefixSumOut[p] == c_ActiveCount);
+	}
 	resourceManager->UnmapReadback(rbPrefixSum);
+
+	// The reservation loop strides the whole ceiling (two laps of a 128-thread group), but only a
+	// bucket something filled may touch its args -- the rows past the enum must still hold the
+	// { 0, 1, 1 } seed.
+	const auto* argsOut = static_cast<const uint32_t*>(resourceManager->MapReadback(rbArgs));
+	REQUIRE(argsOut != nullptr);
+	for (uint32_t p = bgl::idl::c_PsoCount; p < bgl::idl::cMaxPsoBuckets; ++p)
+	{
+		CHECK(argsOut[p * 3 + 0] == 0u);
+		CHECK(argsOut[p * 3 + 1] == 1u);
+		CHECK(argsOut[p * 3 + 2] == 1u);
+	}
+	resourceManager->UnmapReadback(rbArgs);
 
 	const auto* compactedOut =
 		static_cast<const uint32_t*>(resourceManager->MapReadback(rbCompacted));
@@ -414,4 +444,5 @@ TEST_CASE(
 	visibility.Release(false);
 	resourceManager->DestroyReadbackBuffer(rbCompacted, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
+	resourceManager->DestroyReadbackBuffer(rbArgs, false);
 }
