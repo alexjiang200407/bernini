@@ -630,7 +630,9 @@ namespace assetlib
 		 * texture folder being absent or empty.
 		 *
 		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
-		 * meshes on disk, and a mesh names the rig it binds.
+		 * meshes on disk, and a mesh names the rig it binds. Environments, from
+		 * `Authored/EnvSources`, come last and one at a time, each part re-run for only the files it
+		 * is missing: every convolution already uses all the cores there are.
 		 *
 		 * A source that cannot be re-imported is reported and skipped; the rest still run.
 		 *

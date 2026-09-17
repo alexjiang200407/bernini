@@ -8,7 +8,8 @@ namespace assetlib
 	/** What Reimport did for one copied source. */
 	struct ReimportedSource
 	{
-		// The copied source itself -- `Authored/Meshes/<name>.glb`, not the `.bimport` beside it.
+		// The copied source itself -- `Authored/Meshes/<name>.glb` or
+		// `Authored/EnvSources/<name>.hdr`, not the `.bimport` beside it.
 		std::string source;
 
 		// The entries of the document's `outputs` this run put back, sorted. Empty when every one of

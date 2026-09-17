@@ -24,9 +24,10 @@ namespace assetlib
 	 * split `CacheEntryCodecFor` draws over the codecs, projected onto the disk -- so a project's
 	 * commit rule is a directory rather than a list of extensions.
 	 *
-	 * `Derived/Sky` and `Derived/EnvLighting` are the exception a project's `.gitignore` has to
-	 * carry: they are cache entries whose bake reads a `.hdr` no project copies in, so nothing puts
-	 * an absent one back. See [Asset Containers](docs/asset_containers.md).
+	 * One exception remains, and it only shrinks: an environment imported before environment
+	 * sources were copied in has no `.bimport`, so nothing puts its `Derived/Sky`,
+	 * `Derived/EnvLighting` or float cubes back until it is re-imported. See
+	 * [Asset Containers](docs/asset_containers.md).
 	 */
 	inline constexpr auto c_AuthoredDirectoryName = "Authored";
 	inline constexpr auto c_DerivedDirectoryName  = "Derived";
