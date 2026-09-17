@@ -449,7 +449,8 @@ in `docs/specs/`.
     binding everything whole has no bake step and is never stale.
   * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
     `editorGraph` — a surface material's per-slot routes and stamps included — leaving the baked maps
-    + factors + name. A shipping build carries no source-texture
+    + factors + name. `serializeStripped` is the only way to encode that form, since the codec's
+    own `Serialize` refuses a material without a graph. A shipping build carries no source-texture
     references — and with no routes there is nothing for the maps to be stale against, so a stripped
     material always draws from them. It refuses to strip a material (or a routed slot) that was never
     baked, which would leave

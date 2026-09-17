@@ -17,6 +17,7 @@
 
 #include "MountAt.h"
 #include "bmesh_texture.h"
+#include "test_editor_graph.h"
 
 using namespace assetlib;
 
@@ -57,6 +58,7 @@ namespace
 	BakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
+		material.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);
@@ -288,6 +290,7 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 	// A bake always writes the layout's directory now, so the map the scan is meant to find is
 	// copied into the custom one: what a project carries after its prune directory moved.
 	BMaterial material;
+	material.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 	material.pbr.routes[0] = { "a.ktx2", 0 };
 	store.BakeMaterial(material);
 

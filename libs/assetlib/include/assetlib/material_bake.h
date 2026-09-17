@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <string_view>
+#include <vector>
+
 namespace assetlib
 {
 	struct BMaterial;
@@ -18,4 +21,14 @@ namespace assetlib
 	 */
 	void
 	stripAuthoringData(BMaterial& material);
+
+	/**
+	 * `material`'s shippable form, encoded: stripAuthoringData, then the document. The one write
+	 * of a `.bmaterial` without a node graph -- `AssetCodec<BMaterial>::Serialize` refuses that,
+	 * since an authored material always carries its graph.
+	 *
+	 * @throws std::runtime_error as stripAuthoringData.
+	 */
+	[[nodiscard]] std::vector<std::byte>
+	serializeStripped(BMaterial material);
 }

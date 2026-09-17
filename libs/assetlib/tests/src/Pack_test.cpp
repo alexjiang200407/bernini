@@ -25,6 +25,7 @@
 #include "RefsSandbox.h"
 #include "SkinnedGltf.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 #include <assetlib_structs/Node.h>
 
 using namespace assetlib;
@@ -262,6 +263,7 @@ TEST_CASE("a material that draws loose is named, because the archive drops its s
 
 	// Routed, never baked: it draws from the authoring source that packing excludes.
 	BMaterial unbaked;
+	unbaked.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 	unbaked.pbr.routes[0] = { "Derived/SourceTextures/skin.ktx2", 0 };
 	StoreAt(root.path).Save(unbaked, "Authored/Materials/unbaked.bmaterial");
 

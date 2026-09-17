@@ -34,8 +34,8 @@ when this doc disagrees, trust the header, then fix this doc.
   A caller that genuinely addresses the *host* still uses a path, and now looks different so it
   cannot be mistaken for the other thing: it encodes with the codec and moves the bytes itself.
   `assetlib_cli strip --out` writes a shipping tree and the editor opens a mesh from outside any
-  data root — both are `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read
-  equivalent.
+  data root — both encode the bytes themselves (`serializeStripped` for the one, the codec's
+  `Deserialize` for the other) and move them with `core::file::write_atomic` or its read equivalent.
 
 * **A codec per container, and the type picks it.** `AssetCodec<T>` declares a container's
   extension, its magic, how it serializes, and — for a cache entry — the bake revision it is
@@ -128,6 +128,14 @@ in the container's own `.cpp`, which is where the format lives.
 Reading and writing a project's copy is `store.Load<T>(key)` / `store.Save(value, key)` — the codec
 is what a caller reaches for only when it holds bytes no store addresses, which is
 `assetlib_cli strip --out` and the editor opening a mesh from outside any data root.
+
+**A `.bmaterial` is never written without its node graph.** `AssetCodec<BMaterial>::Serialize`
+throws when `editorGraph` is empty, so `Save`, `migrate` and a rename's rewrite all refuse such a
+material and name it. assetlib only checks that a graph is there and never reads it: the graph is
+the editor's. The one write without a graph is `serializeStripped`
+([material_bake.h](libs/assetlib/include/assetlib/material_bake.h)), the shipping form `strip`
+emits. Reading stays permissive, so a game still draws a material written without one, and the
+editor opens it with a warning.
 
 | Container | Holds |
 |---|---|

@@ -20,6 +20,7 @@
 #include <string_view>
 
 #include "RefsSandbox.h"
+#include "test_editor_graph.h"
 #include <assetlib/AssetCodec.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/project_layout.h>
@@ -75,7 +76,8 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 	SECTION("bmaterial")
 	{
 		BMaterial material;
-		material.name = "brick";
+		material.name        = "brick";
+		material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 		CheckStoreWritesCodecBytes(material, "a.bmaterial");
 	}
 
@@ -204,7 +206,8 @@ TEST_CASE("Save creates the directories its key names", "[codec]")
 	const AssetStore         store(root.path);
 
 	BMaterial material;
-	material.name = "brick";
+	material.name        = "brick";
+	material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 
 	// A key is a location in the data root, not a location that exists: an import aimed at a
 	// subfolder writes two levels of it that nothing scaffolded. Without this the write fails

@@ -1,5 +1,6 @@
 #pragma once
 #include "StoreAt.h"
+#include "test_editor_graph.h"
 
 #include <array>
 #include <assetlib/AssetStore.h>
@@ -12,6 +13,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
+#include <string>
 #include <tuple>
 
 // A rig on disk, as an importer would leave one: the .bmesh with its skin binding, the .bskel it
@@ -63,7 +65,8 @@ namespace game::test
 	inline void
 	WriteMaterial(const fs::path& path, bool loose)
 	{
-		auto material = assetlib::BMaterial();
+		auto material        = assetlib::BMaterial();
+		material.editorGraph = std::string(c_TestEditorGraph);
 
 		if (loose)
 			material.pbr.routes[0].texture = "Textures/white.ktx2";

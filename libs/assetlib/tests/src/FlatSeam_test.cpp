@@ -19,6 +19,7 @@
 #include "MountAt.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 #include <assetlib_structs/VkFormat.h>
 #include <core/file/IFileSystem.h>
 
@@ -47,6 +48,7 @@ namespace
 	{
 		BMaterial material;
 		material.name                 = "brushed_metal";
+		material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 		material.pbr.baseColorTexture = "Derived/BakedTextures/albedo.ktx2";
 		material.pbr.ormTexture       = "Derived/BakedTextures/orm.ktx2";
 		material.pbr.baseColorFactor  = glm::vec4(0.1f, 0.2f, 0.3f, 1.0f);

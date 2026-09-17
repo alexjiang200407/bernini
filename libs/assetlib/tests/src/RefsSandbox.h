@@ -17,6 +17,7 @@
 
 #include "MountAt.h"
 #include "bmesh_texture.h"
+#include "test_editor_graph.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
@@ -79,6 +80,7 @@ namespace assetlib::test
 	BakeAndSave(const DataRoot& root, const char* name, const char* source)
 	{
 		BMaterial material;
+		material.editorGraph   = std::string(c_TestEditorGraph);
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);

@@ -10,6 +10,7 @@
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -286,6 +287,7 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BakeDir dir("bernini_bake_alpha_io");
 
 	BMaterial material;
+	material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	material.layer.alphaMode      = AlphaMode::kBlend;
 	material.layer.alphaCutoff    = 0.25f;
 	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
@@ -306,6 +308,7 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 	const BakeDir dir("bernini_bake_hashed_io");
 
 	BMaterial material;
+	material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	material.layer.alphaMode      = AlphaMode::kHashed;
 	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
@@ -327,6 +330,7 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	// alternative to a version check is not "it still works", it is reading v4's bytes with v5's
 	// layout and getting a material made of garbage.
 	BMaterial material;
+	material.editorGraph       = std::string(assetlib::test::c_TestEditorGraph);
 	material.layer.alphaMode   = AlphaMode::kMask;
 	material.layer.alphaCutoff = 0.25f;
 

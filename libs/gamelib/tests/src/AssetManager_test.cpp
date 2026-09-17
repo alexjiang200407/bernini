@@ -1,4 +1,5 @@
 #include "StoreAt.h"
+#include "util/test_editor_graph.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
@@ -99,6 +100,7 @@ namespace
 		assetlib::AlphaMode          alphaMode = assetlib::AlphaMode::kOpaque)
 	{
 		auto material                 = assetlib::BMaterial();
+		material.editorGraph          = std::string(game::test::c_TestEditorGraph);
 		material.pbr.baseColorTexture = baseColor;
 		material.layer.alphaMode      = alphaMode;
 

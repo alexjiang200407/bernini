@@ -6,6 +6,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -22,6 +23,7 @@
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Node.h>
@@ -46,6 +48,7 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name                 = "brushed_metal";
+	mat.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.baseColorTexture = "albedo.ktx2";
 	mat.pbr.normalTexture    = "";  // absent
 	mat.pbr.ormTexture       = "orm.ktx2";
@@ -73,6 +76,7 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 {
 	BMaterial mat;
 	mat.name                   = "lens";
+	mat.editorGraph            = std::string(assetlib::test::c_TestEditorGraph);
 	mat.layer.alphaMode        = AlphaMode::kBlend;
 	mat.pbr.transmissionFactor = 0.85f;
 
@@ -84,6 +88,7 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 	// The default is what every material baked before the factor re-bakes to, and it is the reading
 	// blend has always had.
 	BMaterial coverage;
+	coverage.editorGraph     = std::string(assetlib::test::c_TestEditorGraph);
 	coverage.layer.alphaMode = AlphaMode::kBlend;
 	CHECK(
 		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(coverage))
@@ -99,6 +104,7 @@ TEST_CASE(
 {
 	BMaterial mat;
 	mat.name              = "leaf";
+	mat.editorGraph       = std::string(assetlib::test::c_TestEditorGraph);
 	mat.layer.alphaMode   = AlphaMode::kMask;
 	mat.layer.doubleSided = false;
 
@@ -115,6 +121,7 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 {
 	BMaterial mat;
 	mat.name                    = "fur";
+	mat.editorGraph             = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.specularFactor      = 0.0f;
 	mat.pbr.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
 
@@ -126,7 +133,8 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 	CHECK(restored.pbr.specularColorFactor.g == Catch::Approx(0.77f));
 	CHECK(restored.pbr.specularColorFactor.b == Catch::Approx(0.34f));
 
-	BMaterial  plain;
+	BMaterial plain;
+	plain.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 	const auto defaulted =
 		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(plain));
 	CHECK(defaulted.pbr.specularFactor == 1.0f);
@@ -137,6 +145,7 @@ TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name                = "packed";
+	mat.editorGraph         = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.metallicFactor  = 0.5f;
 	mat.pbr.roughnessFactor = 0.4f;
 	mat.pbr.routes[0]       = { "albedo.ktx2", 0 };  // base color R
@@ -174,11 +183,12 @@ TEST_CASE("a BMaterial round-trips its editor graph", "[bmaterial][io]")
 
 TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmaterial][io]")
 {
-	// The exported/baked form: the authoring graph has been stripped.
+	// The exported/baked form: the authoring graph has been stripped, so this is
+	// serializeStripped's write rather than the codec's -- the one write of a graph-less document.
 	BMaterial mat;
 	mat.pbr.baseColorTexture = "baked_basecolor.ktx2";
 
-	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(serializeStripped(mat));
 
 	REQUIRE(restored.editorGraph.empty());
 	REQUIRE(restored.pbr.baseColorTexture == "baked_basecolor.ktx2");
@@ -187,6 +197,7 @@ TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmateri
 TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 {
 	BMaterial mat;
+	mat.editorGraph        = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.routes[0]      = { "albedo.ktx2", 0 };
 	mat.pbr.routeStamps[0] = { 4096, 0x0123456789abcdefull };
 	// The hash uses the whole 64-bit range: one with the top bit set must not be sign-mangled on
@@ -206,6 +217,7 @@ TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 	SECTION("an unbaked material writes no revision, and one from before it reads zero")
 	{
 		BMaterial unbaked;
+		unbaked.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 		unbaked.pbr.routes[0] = { "albedo.ktx2", 0 };
 		const auto bytes      = AssetCodec<BMaterial>::Serialize(unbaked);
 		const auto text =
@@ -220,6 +232,7 @@ TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmater
 	// The coexistence the format exists for: the bake fills the triplet without discarding the
 	// routes that produced it, so the material can still be reopened and re-baked.
 	BMaterial mat;
+	mat.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.ormTexture       = "mat_orm.ktx2";
 	mat.pbr.routes[0]        = { "src/albedo.ktx2", 0 };
@@ -529,6 +542,7 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 {
 	BMaterial mat;
 	mat.name                 = "leaf";
+	mat.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.baseColorTexture = "tex0.ktx2";
 	mat.pbr.baseColorFactor  = glm::vec4(1.0f, 0.5f, 0.25f, 1.0f);
 	mat.pbr.metallicFactor   = 0.0f;
@@ -650,6 +664,7 @@ TEST_CASE("a material document is canonical text", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name                 = "canon";
+	mat.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	mat.pbr.baseColorTexture = "Derived/BakedTextures/canon_basecolor.ktx2";
 
 	const auto once  = AssetCodec<BMaterial>::Serialize(mat);
@@ -668,7 +683,8 @@ TEST_CASE("a material document preserves the keys this build does not know", "[b
 	const std::string_view text = R"({
 	"name": "future",
 	"sheenFactor": 0.25,
-	"shadingModel": "pbr"
+	"shadingModel": "pbr",
+	"editorGraph": "{\"connections\":[],\"nodes\":[]}"
 }
 )";
 
@@ -689,6 +705,7 @@ TEST_CASE("the layer's keys are the document's own, beside shadingModel", "[bmat
 {
 	BMaterial mat;
 	mat.name              = "leaf";
+	mat.editorGraph       = std::string(assetlib::test::c_TestEditorGraph);
 	mat.layer.alphaMode   = AlphaMode::kMask;
 	mat.layer.alphaCutoff = 0.25f;
 	mat.layer.doubleSided = false;
@@ -735,7 +752,8 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 	const std::string_view text = R"({
 	"baked": { "baseColor": "Derived/BakedTextures/b.ktx2", "sheenMap": "Derived/BakedTextures/s.ktx2" },
 	"routes": { "ao": { "texture": "Derived/SourceTextures/ao.png", "blurRadius": 2 } },
-	"shadingModel": "pbr"
+	"shadingModel": "pbr",
+	"editorGraph": "{\"connections\":[],\"nodes\":[]}"
 }
 )";
 
@@ -758,7 +776,8 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 TEST_CASE("a corrupt extraJson refuses the save rather than writing half a file", "[bmaterial][io]")
 {
 	BMaterial material;
-	material.extraJson = "not json";
+	material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
+	material.extraJson   = "not json";
 	CHECK_THROWS_WITH(
 		AssetCodec<BMaterial>::Serialize(material),
 		Catch::Matchers::ContainsSubstring("extraJson"));
@@ -770,7 +789,8 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 	// the one branch of the merge where an edit could lose data without a test noticing.
 	const std::string_view text = R"({
 	"routes": { "ao": { "blurRadius": 2 } },
-	"shadingModel": "pbr"
+	"shadingModel": "pbr",
+	"editorGraph": "{\"connections\":[],\"nodes\":[]}"
 }
 )";
 
@@ -791,6 +811,7 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 {
 	BMaterial mat;
 	mat.name         = "rimmed";
+	mat.editorGraph  = std::string(assetlib::test::c_TestEditorGraph);
 	mat.shadingModel = ShadingModel::kPbrSurface;
 	mat.surface.name = "Rim";
 
@@ -872,7 +893,8 @@ TEST_CASE("a pbr material strips the surface keys", "[bmaterial][io][surface]")
 	"surface": "Rim",
 	"textures": {
 		"baseColor": "Derived/BakedTextures/rim_basecolor.ktx2"
-	}
+	},
+	"editorGraph": "{\"connections\":[],\"nodes\":[]}"
 }
 )";
 

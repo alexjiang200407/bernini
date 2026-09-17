@@ -24,6 +24,7 @@
 #include <gamelib/AssetManager.h>
 
 #include "StoreAt.h"
+#include "test_editor_graph.h"
 #include <catch2/catch_test_macros.hpp>
 #include <ios>
 #include <optional>
@@ -156,6 +157,7 @@ namespace
 	{
 		auto material                = assetlib::BMaterial();
 		material.name                = name;
+		material.editorGraph         = std::string(editor::test::c_TestEditorGraph);
 		material.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, alpha);
 		material.pbr.metallicFactor  = 0.0f;
 		material.pbr.roughnessFactor = 0.6f;

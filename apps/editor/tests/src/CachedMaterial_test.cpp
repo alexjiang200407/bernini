@@ -1,12 +1,15 @@
 #include "Windows/MaterialEditor/CachedMaterial.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "test_editor_graph.h"
 #include <assetlib_structs/BMaterial.h>
 
 #include <QTemporaryDir>
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/material_bake.h>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
+#include <core/file/file.h>
 #include <filesystem>
 #include <qobject.h>
 #include <string>
@@ -42,6 +45,7 @@ namespace
 		{
 			auto material         = assetlib::BMaterial();
 			material.name         = name;
+			material.editorGraph  = std::string(editor::test::c_TestEditorGraph);
 			material.shadingModel = assetlib::ShadingModel::kPbr;
 
 			assetlib::AssetStore(Root()).Save(material, "Authored/Materials/rust.bmaterial");
@@ -128,6 +132,7 @@ TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
 
 	auto other           = assetlib::BMaterial();
 	other.name           = "other";
+	other.editorGraph    = std::string(editor::test::c_TestEditorGraph);
 	const auto otherPath = std::filesystem::path(
 		sandbox.temp.filePath("Authored/Materials/other.bmaterial").toStdWString());
 	assetlib::AssetStore(sandbox.Root()).Save(other, "Authored/Materials/other.bmaterial");
@@ -174,7 +179,12 @@ TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surfa
 		material.surface.values   = { { "rimPower", { 2.0f } } };
 		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
 
-		assetlib::AssetStore(sandbox.Root()).Save(material, "Authored/Materials/rust.bmaterial");
+		// A document on disk with no graph, as a hand-written one is. No store write produces that,
+		// so the bytes come from the one encode that does: the shipping form.
+		std::filesystem::create_directories(sandbox.Root() / "Authored/Materials");
+		core::file::write_atomic(
+			sandbox.Root() / "Authored/Materials/rust.bmaterial",
+			assetlib::serializeStripped(material));
 	}
 
 	CachedMaterial             cached;

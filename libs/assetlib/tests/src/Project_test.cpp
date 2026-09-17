@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include "RefsSandbox.h"
+#include "test_editor_graph.h"
 #include <assetlib/project_layout.h>
 
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -310,6 +311,7 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 
 	auto material                 = assetlib::BMaterial();
 	material.name                 = "skin";
+	material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	material.pbr.baseColorTexture = "Derived/BakedTextures/skin.ktx2";
 	created.GetStore().Save(material, "Authored/Materials/skin.bmaterial");
 

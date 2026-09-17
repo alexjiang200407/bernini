@@ -88,9 +88,11 @@ Concretely, before adding to `include/assetlib/`:
   writes straight to the host is the exception and looks different — `writeKTX2` and `copy_file`
   make no directory, so those callers still make their own.
 - **A caller that genuinely addresses the host encodes and moves bytes itself**, so it cannot be
-  mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
-  is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from
-  outside any data root. Both are real; neither is a reason to bring the old family back.
+  mistaken for a project write: an encode plus `core::file::write_atomic`. That is
+  `assetlib_cli strip --out` writing a shipping tree through `serializeStripped` -- the one encode
+  of a `.bmaterial` without its node graph, which the codec's `Serialize` refuses -- and the editor
+  opening a mesh from outside any data root. Both are real; neither is a reason to bring the old
+  family back.
 - **Do not re-carry a data root.** `AssetStore`'s two constructors are the only *declarations* in
   `include/assetlib` that take one; the word appears elsewhere only in prose, saying what a path is
   relative to. `MaterialBakeDesc`, `EnvBakeDesc`, `ImportTarget` and `EnvImportDesc` all carried one

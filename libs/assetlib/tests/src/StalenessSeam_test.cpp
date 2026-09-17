@@ -11,6 +11,7 @@
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 
 using namespace assetlib;
 
@@ -46,6 +47,7 @@ namespace
 	{
 		BMaterial material;
 		material.name                 = "skin";
+		material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 		material.pbr.routes[0]        = { "Derived/SourceTextures/skin.ktx2", 0 };
 		material.pbr.routeStamps[0]   = stampOf(root / "Derived/SourceTextures/skin.ktx2");
 		material.pbr.baseColorTexture = "Derived/BakedTextures/skin_baked.ktx2";
@@ -133,6 +135,7 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 
 		BMaterial material;
 		material.name          = "skin";
+		material.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 		material.pbr.routes[0] = { "Derived/SourceTextures/skin.ktx2", 0 };  // stamp left zeroed
 		StoreAt(scratch.path).Save(material, "Authored/Materials/skin.bmaterial");
 		Pack(scratch.path);

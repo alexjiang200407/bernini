@@ -17,6 +17,7 @@
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
 #include "bmesh_texture.h"
+#include "test_editor_graph.h"
 #include <assetlib/progress.h>
 
 #include <catch2/catch_message.hpp>
@@ -76,7 +77,8 @@ namespace
 	MaterialBytes(std::string_view name)
 	{
 		BMaterial material;
-		material.name = std::string(name);
+		material.name        = std::string(name);
+		material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 		return AssetCodec<BMaterial>::Serialize(material);
 	}
 
@@ -84,8 +86,9 @@ namespace
 	std::vector<std::byte>
 	Older()
 	{
-		constexpr std::string_view c_Older = R"({"shadingModel": "pbr", "name": "older"})";
-		const auto                 data = std::as_bytes(std::span(c_Older.data(), c_Older.size()));
+		constexpr std::string_view c_Older =
+			R"({"shadingModel": "pbr", "name": "older", "editorGraph": "{\"connections\":[],\"nodes\":[]}"})";
+		const auto data = std::as_bytes(std::span(c_Older.data(), c_Older.size()));
 		return { data.begin(), data.end() };
 	}
 }
@@ -287,6 +290,7 @@ TEST_CASE("migrate brings a material's bake current", "[migrate][bake]")
 	writeSource({ { 200, 100, 50, 255 } });
 
 	BMaterial material;
+	material.editorGraph   = std::string(assetlib::test::c_TestEditorGraph);
 	material.pbr.routes[0] = { "Derived/SourceTextures/a.ktx2", 0 };
 	StoreAt(project.root).BakeMaterial(material);
 	project.Write("Authored/Materials/m.bmaterial", AssetCodec<BMaterial>::Serialize(material));
@@ -344,6 +348,7 @@ TEST_CASE("migrate tells a delivered material from a broken one", "[migrate][bak
 	const Project project;
 
 	BMaterial material;
+	material.editorGraph          = std::string(assetlib::test::c_TestEditorGraph);
 	material.pbr.routes[0]        = { "Derived/SourceTextures/gone.ktx2", 0 };
 	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_0123456789abcdef.ktx2";
 	project.Write("Authored/Materials/m.bmaterial", AssetCodec<BMaterial>::Serialize(material));

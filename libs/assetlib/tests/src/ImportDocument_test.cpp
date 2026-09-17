@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "RefsSandbox.h"
+#include "test_editor_graph.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Mesh.h>
 
@@ -218,7 +219,8 @@ TEST_CASE(
 	const DataRoot root("bernini_importdoc_scan");
 
 	BMaterial material;
-	material.name = "skin";
+	material.name        = "skin";
+	material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 	core::file::write_atomic(
 		root.path / "Authored/Materials" / "skin.bmaterial",
 		AssetCodec<BMaterial>::Serialize(material));

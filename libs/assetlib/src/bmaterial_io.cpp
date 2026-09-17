@@ -4,6 +4,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 
@@ -610,39 +611,63 @@ namespace assetlib
 
 	}
 
+	namespace
+	{
+		std::vector<std::byte>
+		serializeDocument(const BMaterial& material)
+		{
+			auto json = doc::parseObject(material.extraJson, "bmaterial: extraJson");
+
+			// No default, so a new model cannot be added without the compiler pointing here.
+			switch (material.shadingModel)
+			{
+			case ShadingModel::kPbr:
+			case ShadingModel::kPbrSurface:
+				json["shadingModel"] =
+					c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
+				break;
+			case ShadingModel::kCount:
+				throw std::runtime_error("bmaterial: unwritable shading model");
+			}
+
+			json["name"] = material.name;
+
+			// A string, not an embedded object -- see materialFromDocument.
+			if (!material.editorGraph.empty())
+				json["editorGraph"] = material.editorGraph;
+			else
+				json.erase("editorGraph");
+
+			const MaterialLayer& layer = material.layer;
+			json["alphaMode"]          = alphaModeName(layer.alphaMode);
+			json["alphaCutoff"]        = doc::plainFloat(layer.alphaCutoff);
+			json["doubleSided"]        = layer.doubleSided;
+
+			writePbr(json, material);
+			writePbrSurface(json, material);
+
+			return doc::toBytes(json);
+		}
+	}
+
 	std::vector<std::byte>
 	AssetCodec<BMaterial>::Serialize(const BMaterial& material)
 	{
-		auto json = doc::parseObject(material.extraJson, "bmaterial: extraJson");
+		core::throw_runtime_error_if(
+			material.editorGraph.empty(),
+			"bmaterial: refusing to write '{}' without a node graph -- every material the editor "
+			"or "
+			"assetlib writes carries one. Open it in the Material Editor and save it there; a "
+			"shipping copy is `assetlib_cli strip`",
+			material.name);
+		return serializeDocument(material);
+	}
 
-		// No default, so a new model cannot be added without the compiler pointing here.
-		switch (material.shadingModel)
-		{
-		case ShadingModel::kPbr:
-		case ShadingModel::kPbrSurface:
-			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
-			break;
-		case ShadingModel::kCount:
-			throw std::runtime_error("bmaterial: unwritable shading model");
-		}
-
-		json["name"] = material.name;
-
-		// A string, not an embedded object -- see materialFromDocument.
-		if (!material.editorGraph.empty())
-			json["editorGraph"] = material.editorGraph;
-		else
-			json.erase("editorGraph");
-
-		const MaterialLayer& layer = material.layer;
-		json["alphaMode"]          = alphaModeName(layer.alphaMode);
-		json["alphaCutoff"]        = doc::plainFloat(layer.alphaCutoff);
-		json["doubleSided"]        = layer.doubleSided;
-
-		writePbr(json, material);
-		writePbrSurface(json, material);
-
-		return doc::toBytes(json);
+	std::vector<std::byte>
+	serializeStripped(BMaterial material)
+	{
+		stripAuthoringData(material);
+		return serializeDocument(material);
 	}
 
 	BMaterial

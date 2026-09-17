@@ -21,6 +21,7 @@
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 
 using namespace assetlib;
 
@@ -61,6 +62,7 @@ namespace
 	RoutedMaterial()
 	{
 		BMaterial mat;
+		mat.editorGraph  = std::string(assetlib::test::c_TestEditorGraph);
 		mat.shadingModel = ShadingModel::kPbrSurface;
 		mat.surface.name = "Rim";
 
@@ -232,6 +234,7 @@ TEST_CASE("unknown keys inside a routed slot survive the round-trip", "[bmateria
 	const std::string_view text = R"({
 	"shadingModel": "pbrSurface",
 	"surface": "Rim",
+	"editorGraph": "{\"connections\":[],\"nodes\":[]}",
 	"textures": {
 		"baseColor": "albedo.ktx2",
 		"orm": {

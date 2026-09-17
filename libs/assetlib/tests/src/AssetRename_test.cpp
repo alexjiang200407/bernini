@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "RefsSandbox.h"
+#include "test_editor_graph.h"
 
 #include "MountAt.h"
 #include "mounted_io.h"
@@ -682,7 +683,8 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	const DataRoot root("bernini_rename_importdoc");
 
 	BMaterial material;
-	material.name = "skin";
+	material.name        = "skin";
+	material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 	core::file::write_atomic(
 		root.path / "Authored/Materials" / "old.bmaterial",
 		AssetCodec<BMaterial>::Serialize(material));

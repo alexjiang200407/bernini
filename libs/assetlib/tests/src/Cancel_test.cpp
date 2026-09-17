@@ -23,6 +23,7 @@
 #include "MountAt.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
+#include "test_editor_graph.h"
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
 
@@ -278,7 +279,11 @@ TEST_CASE("every container that cannot be written reports why", "[io][fs]")
 	const Container containers[] = {
 		{ "bmaterial",
 		  authored,
-		  [](const AssetStore& s, std::string_view k) { s.Save(BMaterial(), k); } },
+		  [](const AssetStore& s, std::string_view k) {
+			  BMaterial material;
+			  material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
+			  s.Save(material, k);
+		  } },
 		{ "benv", authored, [](const AssetStore& s, std::string_view k) { s.Save(BEnv(), k); } },
 		{ "bsky", derived, [](const AssetStore& s, std::string_view k) { s.Save(BSky(), k); } },
 		{ "benvl",

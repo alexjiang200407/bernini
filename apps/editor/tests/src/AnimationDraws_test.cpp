@@ -8,6 +8,7 @@
 #include <QTemporaryDir>
 
 #include "StoreAt.h"
+#include "test_editor_graph.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
@@ -136,11 +137,14 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 	std::ofstream(root / "Authored/Materials" / "albedo.ktx2", std::ios::binary).put('\0');
 
 	auto unbaked                  = assetlib::BMaterial();
+	unbaked.editorGraph           = std::string(editor::test::c_TestEditorGraph);
 	unbaked.pbr.routes[0].texture = "Authored/Materials/albedo.ktx2";
 	const std::string unbakedPath = write("unbaked.bmaterial", unbaked);
 
 	// Nothing routed: a bake has nothing to composite, so offering one would be a dead end.
-	const std::string emptyPath = write("empty.bmaterial", assetlib::BMaterial());
+	auto empty                  = assetlib::BMaterial();
+	empty.editorGraph           = std::string(editor::test::c_TestEditorGraph);
+	const std::string emptyPath = write("empty.bmaterial", empty);
 
 	const auto                     store = assetlib::AssetStore(root);
 	const std::vector<std::string> bakeable =

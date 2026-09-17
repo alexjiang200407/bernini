@@ -1,6 +1,7 @@
 #include "StoreAt.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/test_editor_graph.h"
 #include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
@@ -114,6 +115,7 @@ struct RimSurface : ISurfaceSource
 	{
 		auto material           = assetlib::BMaterial();
 		material.name           = "rim";
+		material.editorGraph    = std::string(game::test::c_TestEditorGraph);
 		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name   = "Rim";
 		material.surface.values = { { "rimColor", { rimColor.r, rimColor.g, rimColor.b } },
@@ -337,6 +339,7 @@ TEST_CASE("A routed slot draws through its routes when its bake is absent", "[ga
 	// The angelica shape: AO in one map's R, roughness/metallic in another's G/B. Never baked.
 	auto material         = assetlib::BMaterial();
 	material.name         = "routed";
+	material.editorGraph  = std::string(game::test::c_TestEditorGraph);
 	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
 	material.surface.name = "Rim";
 

@@ -856,14 +856,10 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			// Throws when the material has never been baked, leaving it untouched -- so the file is
-			// only written once there is a shippable form to write.
-			assetlib::stripAuthoringData(material);
-			// Bytes to a host path, not a project write: --out names a shipping tree, which no store
-			// owns. The encode is the codec's; where it lands is the caller's.
-			core::file::write_atomic(
-				out,
-				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material));
+			// Throws when the material has never been baked, so the file is only written once there
+			// is a shippable form to write. Bytes to a host path, not a project write: --out names a
+			// shipping tree, which no store owns.
+			core::file::write_atomic(out, assetlib::serializeStripped(std::move(material)));
 
 			spdlog::info("Stripped '{}' -> '{}'", in.string(), out.string());
 		}

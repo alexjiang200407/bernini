@@ -12,6 +12,7 @@
 #include "MountAt.h"
 #include "RefsSandbox.h"
 #include "mounted_io.h"
+#include "test_editor_graph.h"
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
@@ -293,6 +294,7 @@ TEST_CASE("A material routing one texture into two channels is one blocker", "[a
 	WriteSource(root.path / "Derived/SourceTextures" / "orm.ktx2", { { 10, 60, 90, 255 } });
 
 	BMaterial material;
+	material.editorGraph = std::string(assetlib::test::c_TestEditorGraph);
 	material.pbr.routes[channelIndex(PbrChannel::kRoughness)] = { "Derived/SourceTextures/orm.ktx2",
 		                                                          1 };
 	material.pbr.routes[channelIndex(PbrChannel::kMetallic)]  = { "Derived/SourceTextures/orm.ktx2",

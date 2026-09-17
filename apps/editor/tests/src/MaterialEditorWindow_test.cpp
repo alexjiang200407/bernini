@@ -5,6 +5,7 @@
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
+#include "test_editor_graph.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QCheckBox>
@@ -331,6 +332,7 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[materialedi
 	{
 		auto material           = assetlib::BMaterial();
 		material.name           = "rim";
+		material.editorGraph    = std::string(editor::test::c_TestEditorGraph);
 		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name   = "Rim";
 		material.surface.values = { { "rimPower", { 2.0f } } };
@@ -384,6 +386,7 @@ TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]"
 	{
 		auto material         = assetlib::BMaterial();
 		material.name         = "rim";
+		material.editorGraph  = std::string(editor::test::c_TestEditorGraph);
 		material.shadingModel = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name = "Rim";
 
