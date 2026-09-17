@@ -2,6 +2,7 @@
 
 #include <assetlib/env_import_parameters.h>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace assetlib
@@ -21,13 +22,30 @@ namespace assetlib
 	inline constexpr std::string_view c_PrefilterSourceSuffix  = "_prefilter.ktx2";
 	inline constexpr std::string_view c_IrradianceSourceSuffix = "_irradiance.ktx2";
 
+	/** What one file an environment import writes is. */
+	enum class EnvironmentOutput
+	{
+		kSkySource,
+		kSky,
+		kPrefilterSource,
+		kIrradianceSource,
+		kLighting
+	};
+
 	/**
-	 * Which part an import's output belongs to: the `.bsky` and its float cube are the sky, the
-	 * `.benvl` and its two are the lighting. Read off the names `ImportEnvironment` gives them,
-	 * which is the only place those names are chosen.
+	 * What `outputKey` is, read off the names `ImportEnvironment` gives its files -- the only place
+	 * those names are chosen. Nullopt for a key no environment import writes.
 	 */
+	[[nodiscard]] std::optional<EnvironmentOutput>
+	environmentOutputOf(std::string_view outputKey);
+
+	/** The `.bsky` and its float cube are the sky; the `.benvl` and its two are the lighting. */
 	[[nodiscard]] EnvironmentPart
-	environmentPartOf(std::string_view outputKey);
+	partOf(EnvironmentOutput output) noexcept;
+
+	/** Whether `outputKey` is a file `part` writes. */
+	[[nodiscard]] bool
+	isPartOutput(std::string_view outputKey, EnvironmentPart part);
 
 	/**
 	 * The hash of the parameters one part's pixels depend on, and only those: the sky's face size
