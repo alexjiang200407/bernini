@@ -113,6 +113,11 @@ target_sources(core PRIVATE ${CORE_SOURCES} ${CORE_HEADERS} ${CORE_INTERNAL_HEAD
 if (PLATFORM STREQUAL "WINDOWS")
     target_compile_definitions(core PRIVATE PLATFORM_WINDOWS)
 
+    # For whichever header pulls in <windows.h> first -- d3dx12.h, wrl, a test -- so no source meets
+    # its min/max macros. Empty, to match the `#define`s some sources carry themselves: MSVC calls a
+    # differing value a redefinition.
+    target_compile_definitions(core PUBLIC NOMINMAX= WIN32_LEAN_AND_MEAN=)
+
     file(GLOB_RECURSE WIN32_SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/win32/*.c
