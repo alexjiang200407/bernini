@@ -5,6 +5,7 @@ import idl.MeshInstance;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
+import lib.types.UploadBuffer;
 import lib.data.SubmeshInstance;
 
 struct Uniforms
@@ -16,7 +17,7 @@ struct Uniforms
     // One flag per bucket, mirrored from the CPU's bucket table. A transparent instance is drawn
     // from the depth-sorted list rather than its counting-sort bucket, so it is the only kind this
     // pass keys.
-    ComputeBuffer<uint> transparentFlags;
+    UploadBuffer<uint> transparentFlags;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;

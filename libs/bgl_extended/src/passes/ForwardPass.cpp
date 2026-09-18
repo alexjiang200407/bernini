@@ -82,7 +82,7 @@ namespace bgl
 
 		struct PsoConfig
 		{
-			std::string_view pixelSrc;
+			std::string      pixelSrc;
 			RasterCullMode   cull;
 			bool             depthWrite;
 			bool             blend;
@@ -205,7 +205,7 @@ namespace bgl
 				m_TransparentKernel,
 				ForwardPipelineDesc(
 					device,
-					PsoConfig{ c_TransparentSrc,
+					PsoConfig{ std::string(c_TransparentSrc),
 			                   RasterCullMode::kNone,
 			                   false,
 			                   true,
@@ -403,7 +403,7 @@ namespace bgl
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
 				(*expansionData)["drawBucketIndex"] = bucket;
-				(*expansionData)["baseTable"]       = idl::BaseTable::kByDrawBucket;
+				(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansionData)["cullBackfaces"] =
 					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
@@ -449,7 +449,7 @@ namespace bgl
 		if (auto expansionData = kernel.FindUniforms("expansionData"))
 		{
 			(*expansionData)["compactedInstances"] = sortedInstances;
-			(*expansionData)["baseTable"]          = idl::BaseTable::kByDepth;
+			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
 			(*expansionData)["cullBackfaces"]      = 1u;
 		}
 

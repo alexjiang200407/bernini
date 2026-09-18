@@ -619,7 +619,7 @@ Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) i
 R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
 the shared `programs.forward.AnyMesh` amplification/mesh shaders with a trivial coverage pixel shader
 (`programs/screen/OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
-CPU-built selected list with `baseTable = kByDepth`, the same expansion shape as the
+CPU-built selected list with `baseTable = kDepthSorted`, the same expansion shape as the
 transparent phase, so no culling and no indirect args are involved. A selection mixes tiers as freely
 as the sorted list does, so it takes the same tier-branching geometry stage and a selected rig
 contours the pose it is drawn in.

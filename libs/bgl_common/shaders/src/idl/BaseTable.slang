@@ -3,6 +3,6 @@
 // bucket, transparent is sorted by depth.
 public enum BaseTable : uint32_t
 {
-    kByDrawBucket = 0,
-    kByDepth,
+    kDrawBucketed = 0,
+    kDepthSorted,
 }

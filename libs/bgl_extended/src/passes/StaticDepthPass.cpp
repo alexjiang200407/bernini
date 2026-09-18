@@ -243,7 +243,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-			(*foundExpansion)["baseTable"] = idl::BaseTable::kByDrawBucket;
+			(*foundExpansion)["baseTable"] = idl::BaseTable::kDrawBucketed;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))

@@ -25,7 +25,7 @@ public ConstantBuffer<ExpansionData> expansionData;
 // drawn whole and starts at zero. Shared so the two stages that expand instances cannot disagree.
 public uint ResolveInstanceBase()
 {
-    if (expansionData.baseTable == BaseTable::kByDepth)
+    if (expansionData.baseTable == BaseTable::kDepthSorted)
     {
         return 0u;
     }

@@ -1,6 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
+#include <string>
 #include <string_view>
 
 namespace bgl
@@ -10,7 +11,7 @@ namespace bgl
 	 * @pre the bucket is not transparent -- the depth-sorted list draws through the one shared
 	 * blend program, which no bucket owns.
 	 */
-	[[nodiscard]] std::string_view
+	[[nodiscard]] std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc);
 
 	/** The amplification/mesh module for the bucket's tier. @pre the bucket is not transparent. */
@@ -22,7 +23,7 @@ namespace bgl
 	 * evaluated with the colour pass's own arithmetic, or the receiver would catch shadows on
 	 * discarded texels. @pre a static-tier bucket on the kMask or kHashed layer.
 	 */
-	[[nodiscard]] std::string_view
+	[[nodiscard]] std::string
 	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc);
 
 	/**

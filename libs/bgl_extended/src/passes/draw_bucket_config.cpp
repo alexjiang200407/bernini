@@ -2,12 +2,12 @@
 #include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include "util/util.h"
-#include <array>
 #include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/gassert.h>
-#include <cstdint>
+#include <format>
+#include <string>
 #include <string_view>
 
 namespace bgl
@@ -16,78 +16,62 @@ namespace bgl
 	{
 		using namespace std::string_view_literals;
 
-		// A program is a file with an entry point, so each reserved slot is one triple, plus the
-		// depth-only twins of its coverage layers. Hand-written until the wrapper generation task.
-		struct GameSlotSrcs
+		// A program is a file, named `programs.forward.[DepthOnly_]<stem><layer suffix>`: one stem
+		// per material kind, one suffix per layer.
+		std::string
+		ProgramStem(const MaterialType material)
 		{
-			std::string_view opaque;
-			std::string_view cutout;
-			std::string_view hashed;
-			std::string_view cutoutDepth;
-			std::string_view hashedDepth;
-		};
+			if (const auto slot = GameSlot(material))
+			{
+				return std::format("GameSlot{}", *slot);
+			}
 
-		constexpr std::array<GameSlotSrcs, cGameSlots> c_GameSlotSrcs = { {
-			{ "programs.forward.GameSlot0"sv,
-			  "programs.forward.GameSlot0_AlphaTest"sv,
-			  "programs.forward.GameSlot0_HashedAlpha"sv,
-			  "programs.forward.DepthOnly_GameSlot0_AlphaTest"sv,
-			  "programs.forward.DepthOnly_GameSlot0_HashedAlpha"sv },
-			{ "programs.forward.GameSlot1"sv,
-			  "programs.forward.GameSlot1_AlphaTest"sv,
-			  "programs.forward.GameSlot1_HashedAlpha"sv,
-			  "programs.forward.DepthOnly_GameSlot1_AlphaTest"sv,
-			  "programs.forward.DepthOnly_GameSlot1_HashedAlpha"sv },
-			{ "programs.forward.GameSlot2"sv,
-			  "programs.forward.GameSlot2_AlphaTest"sv,
-			  "programs.forward.GameSlot2_HashedAlpha"sv,
-			  "programs.forward.DepthOnly_GameSlot2_AlphaTest"sv,
-			  "programs.forward.DepthOnly_GameSlot2_HashedAlpha"sv },
-			{ "programs.forward.GameSlot3"sv,
-			  "programs.forward.GameSlot3_AlphaTest"sv,
-			  "programs.forward.GameSlot3_HashedAlpha"sv,
-			  "programs.forward.DepthOnly_GameSlot3_AlphaTest"sv,
-			  "programs.forward.DepthOnly_GameSlot3_HashedAlpha"sv },
-		} };
+			switch (material)
+			{
+			case MaterialType::kPBR:
+				return "PBR";
+			case MaterialType::kLoosePbr:
+				return "PBR_Loose";
+			case MaterialType::kNull:
+				return "Null";
+			case MaterialType::kAssert:
+				return "Assert";
+			case MaterialType::kGameStart:
+			case MaterialType::kInvalid:
+			case MaterialType::kCount:
+				break;
+			}
+			gfatal("A draw bucket's material kind has no program stem");
+		}
+
+		std::string_view
+		LayerSuffix(const LayerType layer) noexcept
+		{
+			switch (layer)
+			{
+			case LayerType::kMask:
+				return "_AlphaTest"sv;
+			case LayerType::kHashed:
+				return "_HashedAlpha"sv;
+			case LayerType::kOpaque:
+			case LayerType::kBlend:
+			case LayerType::kInvalid:
+			case LayerType::kCount:
+				break;
+			}
+			return ""sv;
+		}
 	}
 
-	std::string_view
+	std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc)
 	{
-		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no pixel program");
+		gassert(desc.layer != LayerType::kBlend, "A transparent draw bucket owns no pixel program");
 
-		const bool cutout = desc.layer == LayerType::kMask;
-		const bool hashed = desc.layer == LayerType::kHashed;
-
-		if (const auto slot = GameSlot(desc.material))
-		{
-			const GameSlotSrcs& srcs = c_GameSlotSrcs[*slot];
-			return cutout ? srcs.cutout : hashed ? srcs.hashed : srcs.opaque;
-		}
-
-		switch (desc.material)
-		{
-		case MaterialType::kPBR:
-			return cutout ? "programs.forward.PBR_AlphaTest"sv :
-			       hashed ? "programs.forward.PBR_HashedAlpha"sv :
-			                "programs.forward.PBR"sv;
-		case MaterialType::kLoosePbr:
-			return cutout ? "programs.forward.PBR_Loose_AlphaTest"sv :
-			       hashed ? "programs.forward.PBR_Loose_HashedAlpha"sv :
-			                "programs.forward.PBR_Loose"sv;
-
-		// Neither shades a base color, so there is no alpha for a coverage layer to read.
-		case MaterialType::kNull:
-			return "programs.forward.Null"sv;
-		case MaterialType::kAssert:
-			return "programs.forward.Assert"sv;
-
-		case MaterialType::kGameStart:
-		case MaterialType::kInvalid:
-		case MaterialType::kCount:
-			break;
-		}
-		gfatal("A bucket's material kind has no pixel program");
+		return std::format(
+			"programs.forward.{}{}",
+			ProgramStem(desc.material),
+			LayerSuffix(desc.layer));
 	}
 
 	std::string_view
@@ -98,38 +82,19 @@ namespace bgl
 		                                             "programs.forward.StaticMesh"sv;
 	}
 
-	std::string_view
+	std::string
 	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc)
 	{
 		gassert(
 			desc.geom == GeomType::kStaticMesh &&
-				(desc.layer == LayerType::kMask || desc.layer == LayerType::kHashed),
-			"Coverage twins exist for static cutout and hashed buckets alone");
+				(desc.layer == LayerType::kMask || desc.layer == LayerType::kHashed) &&
+				desc.material != MaterialType::kNull && desc.material != MaterialType::kAssert,
+			"Coverage twins exist for static cutout and hashed buckets of a shaded kind alone");
 
-		const bool cutout = desc.layer == LayerType::kMask;
-
-		if (const auto slot = GameSlot(desc.material))
-		{
-			const GameSlotSrcs& srcs = c_GameSlotSrcs[*slot];
-			return cutout ? srcs.cutoutDepth : srcs.hashedDepth;
-		}
-
-		switch (desc.material)
-		{
-		case MaterialType::kPBR:
-			return cutout ? "programs.forward.DepthOnly_PBR_AlphaTest"sv :
-			                "programs.forward.DepthOnly_PBR_HashedAlpha"sv;
-		case MaterialType::kLoosePbr:
-			return cutout ? "programs.forward.DepthOnly_PBR_Loose_AlphaTest"sv :
-			                "programs.forward.DepthOnly_PBR_Loose_HashedAlpha"sv;
-		case MaterialType::kNull:
-		case MaterialType::kAssert:
-		case MaterialType::kGameStart:
-		case MaterialType::kInvalid:
-		case MaterialType::kCount:
-			break;
-		}
-		gfatal("A bucket's material kind has no coverage twin");
+		return std::format(
+			"programs.forward.DepthOnly_{}{}",
+			ProgramStem(desc.material),
+			LayerSuffix(desc.layer));
 	}
 
 	RasterCullMode
