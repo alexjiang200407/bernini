@@ -58,7 +58,7 @@ namespace
 	{
 		// An update keeps the record's surface and layer, so it stands only while both still
 		// agree -- `kind` is *this* surface's, so a handle from another surface, or from a PBR
-		// board this one replaced, is a different PSO row and has to be a new material.
+		// board this one replaced, is a different bucket and has to be a new material.
 		if (graph.preview.IsValid() && graph.preview.materialType == kind &&
 		    graph.preview.layerType == desc.layerType)
 		{
@@ -217,7 +217,7 @@ namespace editor
 			desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
 		// The kind check matters since a board switches: a handle left by a surface sink is a
-		// different PSO row, and updating it in place would throw on every keystroke.
+		// different bucket, and updating it in place would throw on every keystroke.
 		if (graph.preview.IsValid() && graph.preview.materialType == bgl::MaterialType::kLoosePbr &&
 		    graph.preview.layerType == desc.layerType)
 		{

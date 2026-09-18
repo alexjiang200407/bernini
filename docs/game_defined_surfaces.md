@@ -94,7 +94,7 @@ read by the `Graphics` constructor
 ([`surface_registry.cpp`](../libs/bgl_extended/src/gfx/surface_registry.cpp)). The consequences
 follow from that and are worth stating plainly:
 
-* **Registration happens once, inside `CreateGraphics`.** The four reserved rows are bound to the
+* **Registration happens once, inside `CreateGraphics`.** The four reserved slots are bound to the
   surfaces found then and every pipeline is built against them. An edited surface is seen at the
   next launch.
 * **The editor registers the project it started with**, and opens one with other shaders by
@@ -110,9 +110,11 @@ startup rather than ignored.
 
 ## What it draws on
 
-Static and skinned geometry both, at every layer. A slot holds seven pipeline rows: an opaque, an
-alpha-test and a hashed row per tier, and one blended row the two tiers share, because the blended
-pipeline's geometry stage is `AnyMesh` and branches tier per instance. The tiers differ in nothing
+Static and skinned geometry both, at every layer. A slot's material kind gets a draw bucket for each
+(tier, layer) a material of it is drawn at, allocated the first time one resolves there, and only
+the draw buckets a scene uses build a pipeline: opaque, alpha-test and hashed each have their own per
+tier, and blended draws through the one shared blend pipeline, whose geometry stage is `AnyMesh`
+and branches tier per instance. The tiers differ in nothing
 else — a slot's pixel shader reads a `ForwardVSOut` and a material offset, and neither says which
 geometry stage filled them, so a surface is written once and a rig costs it nothing.
 
@@ -256,6 +258,6 @@ Deliberate, and each is a decision rather than an omission:
 ## Reading further
 
 * [bgl Public API](bgl_api.md) — `SurfaceType`, `SurfaceMaterialDesc`, `GetSurfaceTypes()`.
-* [Passes Overview](passes.md) § Two-sided surfaces, and the reserved game rows in the forward pass.
+* [Passes Overview](passes.md) § Two-sided surfaces, and how the forward pass picks a draw bucket's programs.
 * [Uniforms](uniforms.md) — why a record is reflected under scalar rules whatever backend draws it.
 * [Slang Shaders](slang_shaders.md) — the conventions every module in the tree keeps.

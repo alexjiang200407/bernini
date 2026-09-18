@@ -1,6 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -9,6 +10,7 @@
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/UploadBuffer.h"
 #include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
@@ -18,11 +20,13 @@
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialType.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -81,20 +85,25 @@ TEST_CASE(
 	struct Placement
 	{
 		float             z;
-		bgl::idl::PsoType pso;
+		bgl::MaterialType material;
+		bgl::LayerType    layer;
 	};
 	const std::array<Placement, 7> placements = { {
-		{ 10.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
-		{ 5.0f, bgl::idl::PsoType::kOpaque_StaticMesh_PBR },
-		{ 30.0f, bgl::idl::PsoType::kTransparent_StaticMesh_LoosePbr },
-		{ 20.0f, bgl::idl::PsoType::kTransparent_StaticMesh_LoosePbr },
-		{ 7.0f, bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR },
-		{ 50.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
+		{ 10.0f, bgl::MaterialType::kPBR, bgl::LayerType::kBlend },
+		{ 5.0f, bgl::MaterialType::kPBR, bgl::LayerType::kOpaque },
+		{ 30.0f, bgl::MaterialType::kLoosePbr, bgl::LayerType::kBlend },
+		{ 20.0f, bgl::MaterialType::kLoosePbr, bgl::LayerType::kBlend },
+		{ 7.0f, bgl::MaterialType::kPBR, bgl::LayerType::kMask },
+		{ 50.0f, bgl::MaterialType::kPBR, bgl::LayerType::kBlend },
 		// Exactly at the camera: distSq is 0, which inverts to all-ones and would key to the sort's
 		// padding value if the key were not capped below it. Padding could then outrank a real entry
 		// and put 0xFFFFFFFF into the drawn range, which ASBase dereferences unchecked.
-		{ 0.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
+		{ 0.0f, bgl::MaterialType::kPBR, bgl::LayerType::kBlend },
 	} };
+
+	// The ids come from a table, as they do in a view: the shader knows nothing of what a bucket
+	// is and reads its transparency off the flags this table mirrors.
+	bgl::DrawBucketTable buckets;
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
 
@@ -131,18 +140,28 @@ TEST_CASE(
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0;
-		instance.pso          = static_cast<uint32_t>(placement.pso);
+		instance.drawBucket =
+			buckets.Resolve(bgl::GeomType::kStaticMesh, placement.material, placement.layer);
 
 		const auto instanceHandle = instanceBuffer.Add(std::move(instance));
 		const auto denseIndex     = static_cast<uint32_t>(zOfInstance.size());
 
 		zOfInstance.emplace(denseIndex, placement.z);
-		if (bgl::IsTransparentPso(static_cast<uint32_t>(placement.pso)))
+		if (placement.layer == bgl::LayerType::kBlend)
 		{
 			transparentInstances.insert(denseIndex);
 		}
 		(void)instanceHandle;
 	}
+
+	auto transparentFlags = bgl::UploadBuffer<uint32_t>();
+	{
+		auto desc         = bgl::UploadBufferDesc();
+		desc.initialCount = bgl::idl::cMaxDrawBuckets;
+		desc.debugName    = "Transparent Bucket Flags";
+		transparentFlags.Init(std::move(desc), resourceManager);
+	}
+	transparentFlags.Assign(buckets.TransparentFlags());
 
 	auto entries = bgl::ComputeBuffer();
 	{
@@ -174,17 +193,19 @@ TEST_CASE(
 			.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 			.SetDebugName("Transparent Depth Keys"));
 
-	kernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
-	kernel["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
-	kernel["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
-	kernel["gUniforms"]["outEntries"]     = entries.GetBufferHandle();
-	kernel["gUniforms"]["outCount"]       = counter.GetBufferHandle();
-	kernel["gUniforms"]["cameraPos"]      = glm::vec3(0.0f);
+	kernel["gUniforms"]["instanceBuffer"]   = instanceBuffer.GetBufferHandle();
+	kernel["gUniforms"]["meshBuffer"]       = meshBuffer.GetBufferHandle();
+	kernel["gUniforms"]["visibility"]       = visibility.GetBufferHandle();
+	kernel["gUniforms"]["transparentFlags"] = transparentFlags.GetBufferHandle();
+	kernel["gUniforms"]["outEntries"]       = entries.GetBufferHandle();
+	kernel["gUniforms"]["outCount"]         = counter.GetBufferHandle();
+	kernel["gUniforms"]["cameraPos"]        = glm::vec3(0.0f);
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 
 	meshBuffer.Update(cmdList.Get());
 	instanceBuffer.Update(cmdList.Get());
+	transparentFlags.Update(cmdList.Get());
 	entries.Clear(cmdList.Get());
 	counter.Clear(cmdList.Get());
 
@@ -220,6 +241,7 @@ TEST_CASE(
 
 	cmdList->Barrier(instanceBuffer.GetBufferHandle(), toRead);
 	cmdList->Barrier(meshBuffer.GetBufferHandle(), toRead);
+	cmdList->Barrier(transparentFlags.GetBufferHandle(), toRead);
 	cmdList->Barrier(visibility.GetBufferHandle(), toWrite);
 	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
 	cmdList->Barrier(counter.GetBufferHandle(), toWrite);
@@ -257,7 +279,7 @@ TEST_CASE(
 	std::memcpy(&count, resourceManager->MapReadback(countReadback), sizeof(count));
 	resourceManager->UnmapReadback(countReadback);
 
-	// Only the transparent instances are keyed; the opaque and cutout ones draw from their PSO
+	// Only the transparent instances are keyed; the opaque and cutout ones draw from their own
 	// bucket and must not appear here.
 	REQUIRE(count == transparentInstances.size());
 

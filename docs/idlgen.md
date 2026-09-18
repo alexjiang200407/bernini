@@ -91,8 +91,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 
   The list is also what keeps renderer-shaped data off the public surface, which is the other half
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
-  describes *this* renderer's pipelines. `PsoType` was in this list and is no longer — it names
-  mesh-shader pipeline permutations, so it belongs in `bgl::idl` with the rest of bgl_extended's internals.
+  describes *this* renderer's pipelines — a renderer's pipeline permutations belong in `bgl::idl`
+  with the rest of bgl_extended's internals, or nowhere.
 
 * **Generated headers are write-only build artifacts.** Each `.h` carries a
   `// THIS IS A FILE GENERATED FROM ... DO NOT EDIT MANUALLY` banner. Edit the IDL module and

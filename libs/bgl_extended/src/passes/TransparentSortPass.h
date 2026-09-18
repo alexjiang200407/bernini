@@ -17,7 +17,7 @@ namespace bgl
 	/**
 	 * Depth-sorts the transparent instances on the GPU.
 	 *
-	 * Blending needs back-to-front order, which cuts across the PSO bucketing the opaque path uses,
+	 * Blending needs back-to-front order, which cuts across the bucketing the opaque path uses,
 	 * so transparent instances are compacted into their own list and sorted by distance. The forward
 	 * pass draws that list whole, with one indirect dispatch whose count this pass emits.
 	 */
