@@ -17,6 +17,7 @@
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
+#include <bgl/IRenderTarget.h>
 
 #include <QAction>
 #include <QComboBox>
@@ -319,6 +320,65 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 	CHECK(static_cast<int>(viewports.size()) == c_ViewportCount);
 
 	for (const RenderTargetWindow* view : viewports) CHECK(view->IsHeadless());
+}
+
+// How a viewport blooms is config.json's alone: the Render menu may switch it on and off and nothing
+// else. A partial section overrides only what it names, and a value bgl would throw on is clamped
+// rather than taking the editor down with it.
+TEST_CASE(
+	"A viewport blooms as config.json says, and the menu only toggles it",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "startupProject": ")" + editor.EscapedProjectFile() +
+	                           R"(",
+  "materialEditor":  { "temporalAA": false,
+                       "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.5,
+                                  "softKnee": 5.0 } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	const MainWindow window(nullptr, editor.ConfigFile());
+
+	const auto* material = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(material != nullptr);
+	const auto* materialView = material->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+
+	CHECK(materialView->IsBloomEnabled());
+
+	const bgl::BloomSettings named = materialView->GetBloomSettings();
+	CHECK(named.intensity == Catch::Approx(0.3f));
+	CHECK(named.threshold == Catch::Approx(0.5f));
+	CHECK(named.softKnee == Catch::Approx(1.0f));
+	CHECK(named.scatter == Catch::Approx(bgl::BloomSettings().scatter));
+
+	// No section is bloom's default: off, and with the settings bgl ships.
+	const auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(animationView->IsBloomEnabled());
+	CHECK(
+		animationView->GetBloomSettings().intensity ==
+		Catch::Approx(bgl::BloomSettings().intensity));
+
+	// Checked because a viewport started with it on; and a toggle is all the menu offers.
+	const QAction* bloom = ActionNamed(window, "Bloom");
+	REQUIRE(bloom != nullptr);
+	CHECK(bloom->isChecked());
+
+	for (const char* valueMenu :
+	     { "Bloom Intensity", "Bloom Threshold", "Bloom Soft Knee", "Bloom Scatter" })
+	{
+		INFO(valueMenu);
+		CHECK(ActionNamed(window, valueMenu) == nullptr);
+	}
 }
 
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is

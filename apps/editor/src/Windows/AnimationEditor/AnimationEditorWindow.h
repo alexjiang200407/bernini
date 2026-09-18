@@ -2,6 +2,7 @@
 
 #include <QElapsedTimer>
 #include <QWidget>
+#include <bgl/IRenderTarget.h>
 #include <cstdint>
 #include <gamelib/BlendSpaceInfo.h>
 #include <qcontainerfwd.h>
@@ -41,6 +42,8 @@ struct AnimationEditorWindowDesc
 	bool                         taaEnabled              = true;
 	float                        renderScale             = 1.0f;
 	float                        taaReconstructionWidth  = 0.4f;
+	bool                         bloomEnabled            = false;
+	bgl::BloomSettings           bloom;
 	editor::EnvironmentApplyDesc previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.

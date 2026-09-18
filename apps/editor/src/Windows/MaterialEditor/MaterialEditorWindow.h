@@ -6,6 +6,7 @@
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
+#include <bgl/IRenderTarget.h>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -47,6 +48,8 @@ struct MaterialEditorWindowDesc
 	bool               taaEnabled              = true;
 	float              renderScale             = 1.0f;
 	float              taaReconstructionWidth  = 0.4f;
+	bool               bloomEnabled            = false;
+	bgl::BloomSettings bloom;
 	MaterialPreviewEnv previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.

@@ -82,6 +82,35 @@ namespace
 
 		return clamped;
 	}
+
+	float
+	ClampBloomValue(const char* name, float value, float lo, float hi)
+	{
+		const float clamped = std::isfinite(value) ? std::clamp(value, lo, hi) : lo;
+		if (clamped != value)
+		{
+			qWarning(
+				"RenderTarget: bloom %s %.3f out of range, using %.3f",
+				name,
+				static_cast<double>(value),
+				static_cast<double>(clamped));
+		}
+
+		return clamped;
+	}
+
+	// bgl throws on these, which is right for a caller and wrong for a hand-edited config.json: a
+	// typo there should cost a warning, not the editor. The upper bounds on intensity and threshold
+	// are sanity only -- bgl takes any finite non-negative value.
+	bgl::BloomSettings
+	ClampBloomSettings(bgl::BloomSettings settings)
+	{
+		settings.intensity = ClampBloomValue("intensity", settings.intensity, 0.0f, 16.0f);
+		settings.threshold = ClampBloomValue("threshold", settings.threshold, 0.0f, 64.0f);
+		settings.softKnee  = ClampBloomValue("softKnee", settings.softKnee, 0.0f, 1.0f);
+		settings.scatter   = ClampBloomValue("scatter", settings.scatter, 0.0f, 1.0f);
+		return settings;
+	}
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
@@ -134,9 +163,15 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
 	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
-	m_RenderTarget = m_Desc.renderer->Invoke(
-		[&] { return m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc); });
-	m_SceneView = m_Desc.renderer->Invoke([&] {
+	const bgl::BloomSettings bloom = ClampBloomSettings(m_Desc.bloom);
+
+	m_RenderTarget = m_Desc.renderer->Invoke([&] {
+		auto target = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc);
+		target->SetBloomSettings(bloom);
+		target->SetBloomEnabled(m_Desc.bloomEnabled);
+		return target;
+	});
+	m_SceneView    = m_Desc.renderer->Invoke([&] {
 		return m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
 			m_Desc.initialInstances);
@@ -342,56 +377,22 @@ RenderTargetWindow::SetBloomEnabled(bool enabled)
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetBloomEnabled(enabled); });
 }
 
-void
-RenderTargetWindow::SetBloomIntensity(float intensity)
+bool
+RenderTargetWindow::IsBloomEnabled() const
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
+		return false;
 
-	m_Desc.renderer->Invoke([&] {
-		auto settings      = m_RenderTarget->GetBloomSettings();
-		settings.intensity = intensity;
-		m_RenderTarget->SetBloomSettings(settings);
-	});
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsBloomEnabled(); });
 }
 
-void
-RenderTargetWindow::SetBloomThreshold(float threshold)
+bgl::BloomSettings
+RenderTargetWindow::GetBloomSettings() const
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
+		return {};
 
-	m_Desc.renderer->Invoke([&] {
-		auto settings      = m_RenderTarget->GetBloomSettings();
-		settings.threshold = threshold;
-		m_RenderTarget->SetBloomSettings(settings);
-	});
-}
-
-void
-RenderTargetWindow::SetBloomSoftKnee(float softKnee)
-{
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
-
-	m_Desc.renderer->Invoke([&] {
-		auto settings     = m_RenderTarget->GetBloomSettings();
-		settings.softKnee = softKnee;
-		m_RenderTarget->SetBloomSettings(settings);
-	});
-}
-
-void
-RenderTargetWindow::SetBloomScatter(float scatter)
-{
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
-
-	m_Desc.renderer->Invoke([&] {
-		auto settings    = m_RenderTarget->GetBloomSettings();
-		settings.scatter = scatter;
-		m_RenderTarget->SetBloomSettings(settings);
-	});
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
 }
 
 void

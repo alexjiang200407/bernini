@@ -74,7 +74,6 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
-#include <span>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
@@ -203,6 +202,24 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			return sky;
 		};
 
+		// A viewport's `bloom` object; each absent key keeps what `bloom` came with, so a partial
+		// section overrides only what it names. Range checks are the viewport's, at creation.
+		struct BloomConfig
+		{
+			bool               enabled = false;
+			bgl::BloomSettings settings;
+		};
+		const auto readBloom = [](const auto& section, BloomConfig bloom) {
+			const auto node = section["bloom"];
+			bloom.enabled   = node["enabled"].GetOrDefault(bloom.enabled);
+			auto& s         = bloom.settings;
+			s.intensity     = node["intensity"].GetOrDefault(s.intensity);
+			s.threshold     = node["threshold"].GetOrDefault(s.threshold);
+			s.softKnee      = node["softKnee"].GetOrDefault(s.softKnee);
+			s.scatter       = node["scatter"].GetOrDefault(s.scatter);
+			return bloom;
+		};
+
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
@@ -213,6 +230,9 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		const BloomConfig matBloom      = readBloom(matSettings, BloomConfig());
+		matDesc.bloomEnabled            = matBloom.enabled;
+		matDesc.bloom                   = matBloom.settings;
 		matDesc.headless                = headless;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
@@ -243,6 +263,9 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
 		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
 		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		const BloomConfig animBloom     = readBloom(animSettings, BloomConfig());
+		animDesc.bloomEnabled           = animBloom.enabled;
+		animDesc.bloom                  = animBloom.settings;
 		animDesc.headless               = headless;
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
@@ -265,6 +288,8 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		blendRt.taaEnabled             = animDesc.taaEnabled;
 		blendRt.renderScale            = animDesc.renderScale;
 		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
+		blendRt.bloomEnabled           = animDesc.bloomEnabled;
+		blendRt.bloom                  = animDesc.bloom;
 		blendRt.headless               = headless;
 		auto blendEnv                  = animDesc.previewEnv;
 
@@ -465,18 +490,23 @@ MainWindow::SetUpRenderMenu()
 			view->SetOutlineEnabled(enabled);
 	});
 
+	// On and off only: how a viewport blooms is config.json's, so a comparison against itself is
+	// the one thing asked of the menu. Checked when config.json started any viewport with it.
+	bool anyBloom = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyBloom = anyBloom || view->IsBloomEnabled();
+
 	auto* bloom = render->addAction("Bloom");
 	bloom->setCheckable(true);
-	bloom->setChecked(false);
+	bloom->setChecked(anyBloom);
 	bloom->setStatusTip(
-		"Spill the viewports' bright pixels into a glow, ahead of the display curve.");
+		"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
+		"bloom is each viewport's `bloom` section in config.json.");
 
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetBloomEnabled(enabled);
 	});
-
-	SetUpBloomMenus(render);
 
 	auto* timing = render->addAction("GPU Pass Timing");
 	timing->setCheckable(true);
@@ -502,77 +532,6 @@ MainWindow::SetUpRenderMenu()
 	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
-}
-
-void
-MainWindow::SetUpBloomValueMenu(
-	QMenu*                 render,
-	const QString&         title,
-	const QString&         tip,
-	std::span<const float> values,
-	float                  current,
-	void (RenderTargetWindow::*apply)(float))
-{
-	QMenu* menu = render->addMenu(title);
-	menu->setStatusTip(tip);
-
-	auto* group = new QActionGroup(menu);
-	group->setExclusive(true);
-
-	for (const float value : values)
-	{
-		QAction* action = menu->addAction(QString("%1").arg(value));
-		action->setCheckable(true);
-		action->setChecked(qFuzzyCompare(value, current));
-		group->addAction(action);
-
-		connect(action, &QAction::triggered, this, [this, value, apply]() {
-			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-				(view->*apply)(value);
-		});
-	}
-}
-
-void
-MainWindow::SetUpBloomMenus(QMenu* render)
-{
-	// Each list straddles its shipped default, spaced by feel rather than evenly: every knob
-	// scales or gates an addition to the scene, so equal steps read progressively smaller.
-	static constexpr std::array c_Intensities = { 0.01f, 0.04f, 0.1f, 0.25f, 0.5f };
-	static constexpr std::array c_Thresholds  = { 0.0f, 0.5f, 1.0f, 2.0f };
-	static constexpr std::array c_Knees       = { 0.0f, 0.25f, 0.5f, 1.0f };
-	static constexpr std::array c_Scatters    = { 0.3f, 0.5f, 0.7f, 0.9f };
-
-	const auto defaults = bgl::BloomSettings();
-
-	SetUpBloomValueMenu(
-		render,
-		"Bloom Intensity",
-		"The glow's weight in the combine, applied while the scene is watched.",
-		c_Intensities,
-		defaults.intensity,
-		&RenderTargetWindow::SetBloomIntensity);
-	SetUpBloomValueMenu(
-		render,
-		"Bloom Threshold",
-		"The linear radiance where a pixel starts to bloom; 0 blooms everything.",
-		c_Thresholds,
-		defaults.threshold,
-		&RenderTargetWindow::SetBloomThreshold);
-	SetUpBloomValueMenu(
-		render,
-		"Bloom Soft Knee",
-		"How gradually the threshold takes hold, as a share of it; 0 is a hard cut.",
-		c_Knees,
-		defaults.softKnee,
-		&RenderTargetWindow::SetBloomSoftKnee);
-	SetUpBloomValueMenu(
-		render,
-		"Bloom Scatter",
-		"How far the glow spreads: the weight of the coarser level at each upsample.",
-		c_Scatters,
-		defaults.scatter,
-		&RenderTargetWindow::SetBloomScatter);
 }
 
 void

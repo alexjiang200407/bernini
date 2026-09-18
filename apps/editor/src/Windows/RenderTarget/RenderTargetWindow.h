@@ -43,6 +43,12 @@ struct RenderTargetWindowDesc
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
 
+	// Whether this viewport starts with bloom running, and how it blooms. Read from config.json;
+	// the Render menu toggles the first and never touches the second. Out-of-range settings are
+	// clamped and warned about, like the render scale.
+	bool               bloomEnabled = false;
+	bgl::BloomSettings bloom;
+
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to
 	// give, and realising one is what a test cannot do.
@@ -83,24 +89,18 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
-	// Turns bloom on or off for this viewport. Unlike TAA there is no config.json opt-in: the
-	// chain behind it is allocated at the first frame that blooms, so any viewport can turn it on.
+	// Turns bloom on or off for this viewport, with the settings config.json gave it. Unlike TAA
+	// nothing is allocated at creation -- the chain appears at the first frame that blooms -- so
+	// any viewport can turn it on.
 	void
 	SetBloomEnabled(bool enabled);
 
-	// Each sets one bloom knob and keeps the rest, so the Render menu can sweep them
-	// independently while the same scene is watched.
-	void
-	SetBloomIntensity(float intensity);
+	// What the viewport's target is blooming with now, read on the render thread that owns it.
+	[[nodiscard]] bool
+	IsBloomEnabled() const;
 
-	void
-	SetBloomThreshold(float threshold);
-
-	void
-	SetBloomSoftKnee(float softKnee);
-
-	void
-	SetBloomScatter(float scatter);
+	[[nodiscard]] bgl::BloomSettings
+	GetBloomSettings() const;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
