@@ -75,7 +75,7 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
-						c_TransparentDrawBucketFlagsName,
+						c_DrawBucketFlagsName,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
 					// Only the transparent instances take a slot, and the count that says how many
@@ -134,14 +134,13 @@ namespace bgl
 			return;
 		}
 
-		m_DepthKeys["gUniforms"]["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
-		m_DepthKeys["gUniforms"]["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
-		m_DepthKeys["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
-		m_DepthKeys["gUniforms"]["transparentFlags"] =
-			ctx.GetBuffer(c_TransparentDrawBucketFlagsName);
-		m_DepthKeys["gUniforms"]["outEntries"] = ctx.GetBuffer(c_TransparentSortEntriesName);
-		m_DepthKeys["gUniforms"]["outCount"]   = ctx.GetBuffer(c_TransparentSortCountName);
-		m_DepthKeys["gUniforms"]["cameraPos"]  = draw.viewState.cameraPos;
+		m_DepthKeys["gUniforms"]["instanceBuffer"]  = ctx.GetBuffer(c_InstanceBufferName);
+		m_DepthKeys["gUniforms"]["meshBuffer"]      = ctx.GetBuffer(c_MeshInstanceBufferName);
+		m_DepthKeys["gUniforms"]["visibility"]      = ctx.GetBuffer(c_InstanceVisibilityName);
+		m_DepthKeys["gUniforms"]["drawBucketFlags"] = ctx.GetBuffer(c_DrawBucketFlagsName);
+		m_DepthKeys["gUniforms"]["outEntries"]      = ctx.GetBuffer(c_TransparentSortEntriesName);
+		m_DepthKeys["gUniforms"]["outCount"]        = ctx.GetBuffer(c_TransparentSortCountName);
+		m_DepthKeys["gUniforms"]["cameraPos"]       = draw.viewState.cameraPos;
 
 		auto cmdList = ctx.GetCommandList();
 

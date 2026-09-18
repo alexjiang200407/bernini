@@ -41,6 +41,7 @@
 #include <core/glm.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -61,7 +62,7 @@ namespace bgl
 		RenderContext(
 			DeviceRef                        device,
 			ResourceManagerRef               resourceManager,
-			core::SharedRef<DrawBucketTable> buckets,
+			std::shared_ptr<DrawBucketTable> buckets,
 			bool                             enableDebug);
 
 		~RenderContext() noexcept;
@@ -217,7 +218,7 @@ namespace bgl
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
 
 		DeviceRef                        m_Device;
-		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 		CommandQueueRef                  m_CommandQueue;
 		ResourceManagerRef               m_ResourceManager;
 		CommandAllocatorRef              m_BootstrapAllocator;

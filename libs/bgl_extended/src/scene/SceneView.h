@@ -41,6 +41,7 @@
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -109,7 +110,7 @@ namespace bgl
 			const SceneRef&                   scene,
 			uint32_t                          initialInstances,
 			core::SharedRef<IResourceManager> resourceManager,
-			core::SharedRef<DrawBucketTable>  buckets);
+			std::shared_ptr<DrawBucketTable>  buckets);
 
 		~SceneView() noexcept override;
 
@@ -553,11 +554,11 @@ namespace bgl
 		DrawBucketMask m_DemandedDrawBuckets;
 
 		// The renderer-wide id table every instance's bucket comes from; shared with RenderContext.
-		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
 		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
 		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
-		UploadBuffer<uint32_t> m_TransparentDrawBucketFlags;
+		UploadBuffer<uint32_t> m_DrawBucketFlags;
 
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;

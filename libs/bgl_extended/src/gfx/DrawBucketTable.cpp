@@ -22,7 +22,7 @@ namespace bgl
 		gassert(
 			ceiling >= 1 && ceiling <= idl::cMaxDrawBuckets,
 			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
-		m_TransparentFlags.assign(ceiling, 0u);
+		m_Flags.assign(ceiling, 0u);
 		(void)Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
 	}
 
@@ -54,7 +54,7 @@ namespace bgl
 		}
 
 		const uint64_t key = PackKey(geom, material, layer);
-		if (const auto found = m_Ids.find(key); found != m_Ids.end())
+		if (const auto found = m_KeyToDrawBucket.find(key); found != m_KeyToDrawBucket.end())
 		{
 			return found->second;
 		}
@@ -76,8 +76,10 @@ namespace bgl
 
 		const auto bucket = static_cast<uint32_t>(m_Descs.size());
 		m_Descs.push_back(DrawBucketDesc{ geom, material, layer });
-		m_TransparentFlags[bucket] = layer == LayerType::kBlend ? 1u : 0u;
-		m_Ids.emplace(key, bucket);
+		m_Flags[bucket] = layer == LayerType::kBlend ?
+		                      static_cast<uint32_t>(idl::DrawBucketFlag::kTransparent) :
+		                      0u;
+		m_KeyToDrawBucket.emplace(key, bucket);
 
 		return bucket;
 	}
@@ -102,6 +104,6 @@ namespace bgl
 	DrawBucketTable::Transparent(const uint32_t bucket) const noexcept
 	{
 		gassert(bucket < Count(), "Transparent takes an allocated bucket");
-		return m_TransparentFlags[bucket] != 0u;
+		return (m_Flags[bucket] & static_cast<uint32_t>(idl::DrawBucketFlag::kTransparent)) != 0u;
 	}
 }

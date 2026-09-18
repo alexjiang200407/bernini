@@ -64,7 +64,7 @@ TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[draw
 
 	// The GPU upload source agrees with the per-bucket accessor, and covers the whole ceiling so
 	// an unallocated lane reads 0, never garbage.
-	const auto flags = table.TransparentFlags();
+	const auto flags = table.Flags();
 	REQUIRE(flags.size() == bgl::idl::cMaxDrawBuckets);
 	CHECK(flags[blend] == 1u);
 	CHECK(flags[hashed] == 0u);

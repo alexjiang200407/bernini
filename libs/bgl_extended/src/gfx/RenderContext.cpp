@@ -44,6 +44,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <memory>
 #include <optional>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -180,7 +181,7 @@ namespace bgl
 	RenderContext::RenderContext(
 		DeviceRef                        device,
 		ResourceManagerRef               resourceManager,
-		core::SharedRef<DrawBucketTable> buckets,
+		std::shared_ptr<DrawBucketTable> buckets,
 		bool                             enableDebug) :
 		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)

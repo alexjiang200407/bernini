@@ -408,7 +408,7 @@ instance buffer, not off the capacity, so the depth-key pass cannot append past 
 many instances turn out to be transparent; only the sort itself is bounded.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`,
-  `scene.transparentDrawBucketFlags` (one word per draw bucket, owned by the view and uploaded from the
+  `scene.drawBucketFlags` (one word per draw bucket, owned by the view and uploaded from the
   renderer's `DrawBucketTable` whenever it has grown), the camera position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
   `transparentSort.dispatchArgs` — all owned by the view's `TransparentSortState`, one per view

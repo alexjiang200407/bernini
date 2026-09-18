@@ -4,8 +4,6 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/idl/DrawBucket.h>
-#include <core/ref/Ref.h>
-#include <core/ref/RefCounter.h>
 #include <cstdint>
 #include <span>
 #include <unordered_map>
@@ -40,7 +38,7 @@ namespace bgl
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.
 	 */
-	class DrawBucketTable final : public core::RefCounter<core::Ref>
+	class DrawBucketTable final
 	{
 	public:
 		/** @pre ceiling >= 1 and <= idl::cMaxDrawBuckets. Tests shrink it to reach the clamp. */
@@ -85,19 +83,19 @@ namespace bgl
 		Transparent(uint32_t bucket) const noexcept;
 
 		/**
-		 * One flag per bucket, ceiling-sized: 1 where the bucket is transparent. The upload source
-		 * for the flag buffer TransparentDepthKeys reads.
+		 * One idl::DrawBucketFlag word per draw bucket, ceiling-sized: the upload source for the
+		 * flags the GPU reads (TransparentDepthKeys).
 		 */
 		[[nodiscard]] std::span<const uint32_t>
-		TransparentFlags() const noexcept
+		Flags() const noexcept
 		{
-			return m_TransparentFlags;
+			return m_Flags;
 		}
 
 	private:
 		std::vector<DrawBucketDesc>            m_Descs;
-		std::vector<uint32_t>                  m_TransparentFlags;
-		std::unordered_map<uint64_t, uint32_t> m_Ids;
+		std::vector<uint32_t>                  m_Flags;
+		std::unordered_map<uint64_t, uint32_t> m_KeyToDrawBucket;
 		std::unordered_set<uint64_t>           m_Refused;
 		uint32_t                               m_Ceiling;
 	};

@@ -14,10 +14,10 @@ struct Uniforms
     EntryBuffer<MeshInstance> meshBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
 
-    // One flag per bucket, mirrored from the CPU's bucket table. A transparent instance is drawn
-    // from the depth-sorted list rather than its counting-sort bucket, so it is the only kind this
-    // pass keys.
-    UploadBuffer<uint> transparentFlags;
+    // One DrawBucketFlag word per draw bucket, mirrored from the CPU's DrawBucketTable. A
+    // kTransparent instance is drawn from the depth-sorted list rather than by its draw bucket's
+    // dispatch, so it is the only kind this pass keys.
+    UploadBuffer<uint> drawBucketFlags;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;
@@ -46,7 +46,8 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    if (instance.drawBucket >= cMaxDrawBuckets || gUniforms.transparentFlags[instance.drawBucket] == 0u)
+    if (instance.drawBucket >= cMaxDrawBuckets ||
+        (gUniforms.drawBucketFlags[instance.drawBucket] & uint(DrawBucketFlag.kTransparent)) == 0u)
     {
         return;
     }

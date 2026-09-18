@@ -11,6 +11,7 @@
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
 #include <core/log/log.h>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -206,7 +207,7 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
-		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
@@ -297,7 +298,7 @@ namespace bgl
 		// whatever module this bound to that slot.
 		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
 
-		m_DrawBucketTable = core::SharedRef<DrawBucketTable>::Make();
+		m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 		m_Context         = std::make_unique<RenderContext>(
 			m_Device,
 			m_ResourceManager,

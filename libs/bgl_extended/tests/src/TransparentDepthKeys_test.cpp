@@ -154,14 +154,14 @@ TEST_CASE(
 		(void)instanceHandle;
 	}
 
-	auto transparentFlags = bgl::UploadBuffer<uint32_t>();
+	auto drawBucketFlags = bgl::UploadBuffer<uint32_t>();
 	{
 		auto desc         = bgl::UploadBufferDesc();
 		desc.initialCount = bgl::idl::cMaxDrawBuckets;
-		desc.debugName    = "Transparent Bucket Flags";
-		transparentFlags.Init(std::move(desc), resourceManager);
+		desc.debugName    = "Draw Bucket Flags";
+		drawBucketFlags.Init(std::move(desc), resourceManager);
 	}
-	transparentFlags.Assign(buckets.TransparentFlags());
+	drawBucketFlags.Assign(buckets.Flags());
 
 	auto entries = bgl::ComputeBuffer();
 	{
@@ -193,19 +193,19 @@ TEST_CASE(
 			.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 			.SetDebugName("Transparent Depth Keys"));
 
-	kernel["gUniforms"]["instanceBuffer"]   = instanceBuffer.GetBufferHandle();
-	kernel["gUniforms"]["meshBuffer"]       = meshBuffer.GetBufferHandle();
-	kernel["gUniforms"]["visibility"]       = visibility.GetBufferHandle();
-	kernel["gUniforms"]["transparentFlags"] = transparentFlags.GetBufferHandle();
-	kernel["gUniforms"]["outEntries"]       = entries.GetBufferHandle();
-	kernel["gUniforms"]["outCount"]         = counter.GetBufferHandle();
-	kernel["gUniforms"]["cameraPos"]        = glm::vec3(0.0f);
+	kernel["gUniforms"]["instanceBuffer"]  = instanceBuffer.GetBufferHandle();
+	kernel["gUniforms"]["meshBuffer"]      = meshBuffer.GetBufferHandle();
+	kernel["gUniforms"]["visibility"]      = visibility.GetBufferHandle();
+	kernel["gUniforms"]["drawBucketFlags"] = drawBucketFlags.GetBufferHandle();
+	kernel["gUniforms"]["outEntries"]      = entries.GetBufferHandle();
+	kernel["gUniforms"]["outCount"]        = counter.GetBufferHandle();
+	kernel["gUniforms"]["cameraPos"]       = glm::vec3(0.0f);
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 
 	meshBuffer.Update(cmdList.Get());
 	instanceBuffer.Update(cmdList.Get());
-	transparentFlags.Update(cmdList.Get());
+	drawBucketFlags.Update(cmdList.Get());
 	entries.Clear(cmdList.Get());
 	counter.Clear(cmdList.Get());
 
@@ -241,7 +241,7 @@ TEST_CASE(
 
 	cmdList->Barrier(instanceBuffer.GetBufferHandle(), toRead);
 	cmdList->Barrier(meshBuffer.GetBufferHandle(), toRead);
-	cmdList->Barrier(transparentFlags.GetBufferHandle(), toRead);
+	cmdList->Barrier(drawBucketFlags.GetBufferHandle(), toRead);
 	cmdList->Barrier(visibility.GetBufferHandle(), toWrite);
 	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
 	cmdList->Barrier(counter.GetBufferHandle(), toWrite);

@@ -172,7 +172,7 @@ namespace bgl
 			// whatever module this bound to that slot.
 			m_SurfaceTypes = RegisterSurfaces(*m_Device, opts.surfaceShaderDir);
 
-			m_DrawBucketTable = core::SharedRef<DrawBucketTable>::Make();
+			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 			m_Context         = std::make_unique<RenderContext>(
 				m_Device,
 				m_ResourceManager,
@@ -346,7 +346,7 @@ namespace bgl
 		// it once the device is released deallocs them into a purged one.
 		NS::SharedPtr<NS::AutoreleasePool> m_Pool;
 
-		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass
 		// resources through the members above, which must outlive it.

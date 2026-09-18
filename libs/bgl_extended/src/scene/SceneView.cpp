@@ -45,6 +45,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <optional>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -147,7 +148,7 @@ namespace bgl
 		const SceneRef&                   scene,
 		uint32_t                          initialInstances,
 		core::SharedRef<IResourceManager> resourceManager,
-		core::SharedRef<DrawBucketTable>  buckets) :
+		std::shared_ptr<DrawBucketTable>  buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
 		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
@@ -187,9 +188,9 @@ namespace bgl
 		{
 			auto flagsDesc         = UploadBufferDesc();
 			flagsDesc.initialCount = idl::cMaxDrawBuckets;
-			flagsDesc.debugName    = "Transparent Draw Bucket Flags";
+			flagsDesc.debugName    = "Draw Bucket Flags";
 
-			m_TransparentDrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
+			m_DrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
 		}
 
 		{
@@ -320,7 +321,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
-		m_TransparentDrawBucketFlags.Release();
+		m_DrawBucketFlags.Release();
 		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
@@ -1533,8 +1534,8 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
-		m_TransparentDrawBucketFlags.Assign(m_DrawBucketTable->TransparentFlags());
-		m_TransparentDrawBucketFlags.Update(cmdList);
+		m_DrawBucketFlags.Assign(m_DrawBucketTable->Flags());
+		m_DrawBucketFlags.Update(cmdList);
 
 		if (m_SelectionDirty)
 		{
@@ -1606,8 +1607,8 @@ namespace bgl
 		m_TransparentSort.ImportResources(fg, resourceNames);
 
 		{
-			auto flags = std::string(c_TransparentDrawBucketFlagsName);
-			fg.ImportBuffer(flags, m_TransparentDrawBucketFlags.GetBufferHandle());
+			auto flags = std::string(c_DrawBucketFlagsName);
+			fg.ImportBuffer(flags, m_DrawBucketFlags.GetBufferHandle());
 			resourceNames.push_back(std::move(flags));
 		}
 
