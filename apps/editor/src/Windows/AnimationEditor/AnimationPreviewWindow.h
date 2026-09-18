@@ -295,6 +295,15 @@ public:
 	void
 	SetBlobShadow(bool enabled);
 
+	/**
+	 * Whether the rig's feet each stand in a shadow of their own (editor::FootShadowForBounds),
+	 * which follows the pose where the disc cannot. Independent of the disc: either may be on
+	 * alone. Only an instance ISceneView::HasFootIK holds takes them -- a crowd-tier preview or a
+	 * rig without an avatar keeps the disc alone. A rebind, like SetBlobShadow.
+	 */
+	void
+	SetFootShadows(bool enabled);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -406,7 +415,8 @@ private:
 	void
 	ApplyFootIK(bgl::MeshInstanceHandle instance);
 
-	// Puts the disc on one instance, or takes it off, per m_BlobShadow. Render thread only.
+	// Puts the disc and the foot shadows on one instance, or takes them off, per m_BlobShadow and
+	// m_FootShadows. Render thread only.
 	void
 	ApplyBlobShadow(bgl::MeshInstanceHandle instance);
 
@@ -475,6 +485,10 @@ private:
 	// loaded bounds, and the default until the first load.
 	bool                m_BlobShadow = false;
 	bgl::BlobShadowDesc m_BlobDesc;
+
+	// The same for each foot, when m_FootShadows is on.
+	bool                m_FootShadows = false;
+	bgl::FootShadowDesc m_FootDesc;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;

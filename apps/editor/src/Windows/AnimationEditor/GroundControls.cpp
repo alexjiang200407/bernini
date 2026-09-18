@@ -52,6 +52,19 @@ GroundControls::GroundControls(AnimationPreviewWindow* preview, QWidget* parent)
 	});
 	ground->addWidget(m_BlobShadowCheck);
 
+	// Off by default: the disc already answers whether the rig is grounded, and this is the finer
+	// question of which foot is.
+	m_FootShadowCheck = new QCheckBox(QStringLiteral("Foot shadows"), m_Body);
+	m_FootShadowCheck->setChecked(false);
+	m_FootShadowCheck->setToolTip(QStringLiteral(
+		"Draws a shadow under each foot of a rig with an avatar, dark where the foot stands and "
+		"fading as it lifts. A crowd-tier preview has no pose of its own, so it keeps the disc "
+		"alone."));
+	connect(m_FootShadowCheck, &QCheckBox::toggled, this, [this](bool on) {
+		m_Preview->SetFootShadows(isChecked() && on);
+	});
+	ground->addWidget(m_FootShadowCheck);
+
 	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0°"), m_Body);
 	ground->addWidget(m_SlopeLabel);
 
@@ -139,4 +152,5 @@ GroundControls::Apply()
 	m_Preview->SetFloorVisible(planting);
 	m_Preview->SetFootPlanting(planting);
 	m_Preview->SetBlobShadow(planting && m_BlobShadowCheck->isChecked());
+	m_Preview->SetFootShadows(planting && m_FootShadowCheck->isChecked());
 }

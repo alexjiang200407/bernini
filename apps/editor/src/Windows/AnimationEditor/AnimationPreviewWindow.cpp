@@ -22,6 +22,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
@@ -199,11 +200,34 @@ AnimationPreviewWindow::SetBlobShadow(const bool enabled)
 }
 
 void
+AnimationPreviewWindow::SetFootShadows(const bool enabled)
+{
+	if (enabled == m_FootShadows)
+		return;
+
+	m_FootShadows = enabled;
+
+	if (m_AnimatedDraws.empty())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyBlobShadow(draw.instance);
+	});
+}
+
+void
 AnimationPreviewWindow::ApplyBlobShadow(const bgl::MeshInstanceHandle instance)
 {
 	bgl::ISceneView* view = GetPreviewView();
-	if (m_BlobShadow)
-		view->SetBlobShadow(instance, m_BlobDesc);
+
+	const std::optional<bgl::BlobShadowDesc> desc = editor::PreviewBlobShadow(
+		m_BlobShadow,
+		m_FootShadows,
+		view->HasFootIK(instance),
+		m_BlobDesc,
+		m_FootDesc);
+	if (desc)
+		view->SetBlobShadow(instance, *desc);
 	else
 		view->ClearBlobShadow(instance);
 }
@@ -635,7 +659,8 @@ AnimationPreviewWindow::LoadMesh(
 					// The bounds are only final here, after the acquire loop, so a disc a spawn in
 					// that loop put on still wears the previous load's size until this re-fit.
 					m_BlobDesc = editor::BlobShadowForBounds(aabbMin, aabbMax);
-					if (m_BlobShadow)
+					m_FootDesc = editor::FootShadowForBounds(aabbMin, aabbMax);
+					if (m_BlobShadow || m_FootShadows)
 					{
 						for (const AnimatedDraw& draw : m_AnimatedDraws)
 							ApplyBlobShadow(draw.instance);
