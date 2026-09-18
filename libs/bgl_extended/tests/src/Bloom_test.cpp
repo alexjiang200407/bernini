@@ -210,6 +210,68 @@ TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][
 	std::remove(disabledPath.c_str());
 }
 
+TEST_CASE("An exhausted RTV pool skips bloom instead of failing the frame", "[bloom][render]")
+{
+	// Room for the target's own attachments and the BRDF LUT, none for a whole chain -- the
+	// editor found this by enabling bloom on every viewport of a device sized without it.
+	auto opts    = HeadlessOptions();
+	opts.maxRtvs = 8;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Size);
+	targetDesc.height   = static_cast<int>(c_Size);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 40000;
+	sceneDesc.initialIndices              = 1000;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
+	view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, c_CameraDist),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
+
+	auto settings      = bgl::BloomSettings();
+	settings.threshold = 0.0f;
+	settings.intensity = 1.0f;
+	target->SetBloomSettings(settings);
+	target->SetBloomEnabled(true);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
+
+	gfx->DrawFrame(target, job);
+	gfx->DrawFrame(target, job);
+
+	const std::string path = "assets/golden/bloom_exhausted.got.png";
+	gfx->ScreenshotPng(target, path);
+
+	// The frame still rendered, and rendered plain: no chain, no spill, no crash.
+	REQUIRE(CenterProbe(path, c_Size).Luma() > 0.05f);
+	CHECK(SpillLuma(path, c_Size) < 0.01f);
+
+	std::remove(path.c_str());
+}
+
 TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());

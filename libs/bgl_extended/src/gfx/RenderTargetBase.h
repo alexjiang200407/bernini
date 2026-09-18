@@ -189,6 +189,11 @@ namespace bgl
 		void
 		SetBloomEnabled(bool enabled) noexcept final
 		{
+			if (enabled && !m_BloomEnabled)
+			{
+				m_BloomChain.Retry();
+			}
+
 			m_BloomEnabled = enabled;
 		}
 

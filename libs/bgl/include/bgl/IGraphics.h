@@ -100,10 +100,12 @@ namespace bgl
 
 		// Sized together, because one render target draws on both: seven RTVs -- two swapchain
 		// images, two TAA history buffers, and one each for motion vectors, scene colour and the
-		// outline mask -- against the single DSV of its depth buffer. So these carry eight targets,
-		// alongside the one RTV the BRDF LUT holds for the life of the device. A viewport, a
-		// material preview, a texture preview and the thumbnail cache are already four.
-		uint32_t maxRtvs            = 64;
+		// outline mask -- plus up to eleven more once the target blooms (six downsample levels and
+		// five upsample ones) -- against the single DSV of its depth buffer. So these carry eight
+		// targets with bloom on all of them, alongside the one RTV the BRDF LUT holds for the life
+		// of the device. A viewport, a material preview, a texture preview and the thumbnail cache
+		// are already four.
+		uint32_t maxRtvs            = 160;
 		uint32_t maxDsvs            = 8;
 		uint32_t maxTextures        = 1000;
 		uint32_t maxSamplers        = 128;

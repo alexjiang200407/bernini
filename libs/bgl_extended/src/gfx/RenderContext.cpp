@@ -1059,13 +1059,19 @@ namespace bgl
 			postProcessArgs.sourceName = GetHistoryName(current);
 		}
 
+		BloomChain& bloomChain = rt.GetBloomChain();
+
 		if (rt.IsBloomEnabled())
 		{
-			BloomChain& chain = rt.GetBloomChain();
-			chain.Ensure(m_ResourceManager, rt.GetWidth(), rt.GetHeight());
+			bloomChain.Ensure(m_ResourceManager, rt.GetWidth(), rt.GetHeight());
+		}
 
-			const std::span<const BloomChain::Level> levels = chain.GetLevels();
+		// Empty when bloom is off -- and when a resource pool refused the chain, where skipping
+		// the frame's bloom is the whole recovery.
+		const std::span<const BloomChain::Level> levels = bloomChain.GetLevels();
 
+		if (rt.IsBloomEnabled() && !levels.empty())
+		{
 			const BloomSettings settings = rt.GetBloomSettings();
 
 			auto bloomArgs       = BloomPass::Args();
@@ -1107,10 +1113,10 @@ namespace bgl
 
 			m_BloomPass.AttachToFrameGraph(m_FrameGraph, bloomArgs);
 
-			postProcessArgs.bloom        = chain.GetBloomSrv();
+			postProcessArgs.bloom        = bloomChain.GetBloomSrv();
 			postProcessArgs.bloomSampler = m_LinearClampSampler;
 			postProcessArgs.bloomName =
-				chain.IsUpsampled() ? GetBloomUpName(0) : GetBloomDownName(0);
+				bloomChain.IsUpsampled() ? GetBloomUpName(0) : GetBloomDownName(0);
 			postProcessArgs.bloomIntensity = settings.intensity;
 			postProcessArgs.bloomEnabled   = true;
 		}

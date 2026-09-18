@@ -52,9 +52,17 @@ namespace bgl
 		 * Creates the ladder for an output of `width` x `height`, or nothing when it already fits.
 		 * The first call records the resource manager; a size change releases the old ladder
 		 * (deferred) and builds the new one.
+		 *
+		 * @post the levels are empty when a resource pool was exhausted -- the caller skips bloom
+		 *       rather than drawing through null handles. A failed size is not asked again until
+		 *       the size changes or Retry is called.
 		 */
 		void
 		Ensure(ResourceManagerRef resourceManager, uint32_t width, uint32_t height);
+
+		/** Lets the next Ensure attempt a size that failed, as re-enabling bloom asks it to. */
+		void
+		Retry() noexcept;
 
 		/** Deferred-destroys every level. Safe with frames in flight, and idempotent. */
 		void
@@ -94,5 +102,8 @@ namespace bgl
 		std::vector<Level> m_Levels;
 		uint32_t           m_Width  = 0;
 		uint32_t           m_Height = 0;
+
+		// Set when the pools refused this size, so Ensure does not ask them again every frame.
+		bool m_AllocationFailed = false;
 	};
 }
