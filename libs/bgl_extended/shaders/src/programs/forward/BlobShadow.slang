@@ -21,7 +21,8 @@ struct Uniforms
     UploadBuffer<BlobShadow> blobBuffer;
     EntryBuffer<MeshInstance> meshBuffer;
 
-    // The palette arena, read only for the soles the pose pass wrote at the end of a hero's slice.
+    // The palette arena, GPU-written: read only for the soles PoseSkinned wrote at the end of a
+    // hero's slice this frame.
     ComputeBuffer<float4> palettes;
 
     // The static receivers' depth, written by the StaticDepth pass under this frame's viewProj.
@@ -65,8 +66,8 @@ struct VSOut
     nointerpolation uint blob : BLOB;
 
     // A foot's sole, world space, read once per group rather than per pixel. Unread on a body disc.
-    nointerpolation float3 heel : HEEL;
-    nointerpolation float3 ball : BALL;
+    nointerpolation float3 heelPos : HEEL;
+    nointerpolation float3 ballPos : BALL;
 };
 
 // The volume a blob's shadow can land in: the caster's footprint swept from just above the caster
@@ -98,7 +99,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
 // The volume a foot's shadow can land in: the sole's heel-to-ball segment widened by the radius,
 // swept from `lift` above the higher end down to fadeHeight below the lower one. A box in the ground
 // plane's own axes, so the corners keep the order VolumeCorners gives them.
-void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heel, float3 ball, out float3 corners[cVolumeCorners])
+void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float3 ballPos, out float3 corners[cVolumeCorners])
 {
     let n = gBlobShadowData.groundNormal;
 
@@ -109,8 +110,8 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heel, float3 b
     let tangent = normalize(cross(n, axis));
     let bitangent = cross(n, tangent);
 
-    let heelIn = float3(dot(heel, tangent), dot(heel, bitangent), dot(heel, n));
-    let ballIn = float3(dot(ball, tangent), dot(ball, bitangent), dot(ball, n));
+    let heelIn = float3(dot(heelPos, tangent), dot(heelPos, bitangent), dot(heelPos, n));
+    let ballIn = float3(dot(ballPos, tangent), dot(ballPos, bitangent), dot(ballPos, n));
     let lo = min(heelIn, ballIn) - float3(radius, radius, blob.fadeHeight);
     let hi = max(heelIn, ballIn) + float3(radius, radius, blob.lift + blob.fadeHeight * cTopSlack);
 
@@ -138,15 +139,15 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
     // reconstruction anyway. A corner at or behind the near plane makes the projected bounds
     // meaningless, so that quad covers the whole viewport instead.
-    // A branch, not a select: a body disc's `sole` is no index, and a select loads both sides.
-    var heel = float3(0.0, 0.0, 0.0);
-    var ball = float3(0.0, 0.0, 0.0);
+    // A branch, not a select: a body disc's `soleSlot` is no index, and a select loads both sides.
+    var heelPos = float3(0.0, 0.0, 0.0);
+    var ballPos = float3(0.0, 0.0, 0.0);
     float3 corners[cVolumeCorners];
-    if (blob.sole != cBodyDisc)
+    if (blob.soleSlot != cBodyDisc)
     {
-        heel = gBlobShadowData.palettes[blob.sole].xyz;
-        ball = gBlobShadowData.palettes[blob.sole + 1].xyz;
-        FootVolumeCorners(blob, mesh, heel, ball, corners);
+        heelPos = gBlobShadowData.palettes[blob.soleSlot].xyz;
+        ballPos = gBlobShadowData.palettes[blob.soleSlot + 1].xyz;
+        FootVolumeCorners(blob, mesh, heelPos, ballPos, corners);
     }
     else
     {
@@ -189,8 +190,8 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
         VSOut vout;
         vout.position = float4(corner, 0.0, 1.0);
         vout.blob = gid;
-        vout.heel = heel;
-        vout.ball = ball;
+        vout.heelPos = heelPos;
+        vout.ballPos = ballPos;
         verts[gtid] = vout;
     }
 
@@ -209,6 +210,17 @@ float3 ReceiverWorld(float2 position, float depth)
     let ndc = float2((position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (position.y - rect.y) * rect.w * 2.0);
     let world = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
     return world.xyz / world.w;
+}
+
+// The point of the heel-to-ball segment nearest `receiver` across the ground -- measured in the plane
+// normal to `n` -- so a heel raised off a planted toe fades while the toe stays dark.
+float3 NearestOnSole(float3 heelPos, float3 ballPos, float3 receiver, float3 n)
+{
+    let segment = ballPos - heelPos;
+    let across = segment - n * dot(segment, n);
+    let length2 = dot(across, across);
+    let t = length2 > 0.0 ? saturate(dot(receiver - heelPos, across) / length2) : 0.0;
+    return heelPos + segment * t;
 }
 
 struct PSOut
@@ -250,7 +262,7 @@ PSOut PSMain(VSOut input)
     float3 delta;
     float height;
     float fade;
-    if (blob.sole == cBodyDisc)
+    if (blob.soleSlot == cBodyDisc)
     {
         let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + n * blob.lift;
         delta = caster - world;
@@ -264,16 +276,10 @@ PSOut PSMain(VSOut input)
     }
     else
     {
-        // A foot casts from the point of its sole nearest the receiver across the ground, so a heel
-        // raised off a planted toe fades while the toe stays dark. The lift only lets a receiver sit
-        // that far above the sole: a planted sole is at street level, and measuring the fade from a
-        // lifted point would pre-fade exactly the foot that should be darkest.
-        let segment = input.ball - input.heel;
-        let across = segment - n * dot(segment, n);
-        let length2 = dot(across, across);
-        let t = length2 > 0.0 ? saturate(dot(world - input.heel, across) / length2) : 0.0;
-
-        delta = input.heel + segment * t - world;
+        // The lift only lets a receiver sit that far above the sole: a planted sole is at street
+        // level, and measuring the fade from a lifted point would pre-fade exactly the foot that
+        // should be darkest.
+        delta = NearestOnSole(input.heelPos, input.ballPos, world, n) - world;
         height = dot(delta, n);
         if (height + blob.lift < 0.0)
         {

@@ -56,7 +56,7 @@ public static const uint cMaxLegsPerRig = 8;
 // as the pose at `time` stands them. The blob phase's foot shadows read them.
 public static const uint cFloat4sPerSole = 2;
 
-// A blob-shadow entry's `sole` when the entry is the placement's own disc rather than a foot's.
+// A blob-shadow entry's `soleSlot` when the entry is the placement's own disc rather than a foot's.
 public static const uint cBodyDisc = 0xFFFFFFFF;
 
 // How far a planted ankle may be turned to bring its sole onto the ground, 30 degrees. A cliff edge

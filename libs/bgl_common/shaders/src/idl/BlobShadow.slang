@@ -12,7 +12,7 @@ public struct BlobShadow
     // two meet the same problem differently, see programs.forward.BlobShadow.
     public float lift;
 
-    // Where the foot's heel sits in the palette arena, world space, with its ball in the next float4;
-    // the pose pass writes both. cBodyDisc on the placement's own disc.
-    public uint sole;
+    // The palette-arena slot of the foot's heel, world space, with its ball in the next slot; the
+    // pose pass writes both. cBodyDisc on the placement's own disc.
+    public uint soleSlot;
 };

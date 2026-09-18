@@ -72,15 +72,15 @@ namespace bgl
 			"FootIKDesc has a slot per leg the IDL lets a rig carry");
 
 		/**
-		 * Where leg `leg`'s sole sits in the palette arena: a hero palette ends with one per leg of
+		 * The palette-arena slot of leg `leg`'s sole: a hero palette ends with one per leg of
 		 * its rig, which PoseSkinned writes after the two poses and the blob phase reads.
 		 */
 		uint32_t
-		SoleOf(const MeshMeta& meta, uint32_t leg) noexcept
+		SoleSlotOf(const MeshMeta& meta, uint32_t leg) noexcept
 		{
-			const uint32_t soles =
+			const uint32_t firstSoleSlot =
 				meta.palette.index + meta.palette.count - idl::cFloat4sPerSole * meta.footIK.count;
-			return soles + idl::cFloat4sPerSole * leg;
+			return firstSoleSlot + idl::cFloat4sPerSole * leg;
 		}
 
 		idl::Ramp
@@ -713,7 +713,7 @@ namespace bgl
 	{
 		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
 		// lets the mesh shader write a motion vector without a history buffer. Then each leg's sole
-		// as the pose at `time` stands it -- see SoleOf.
+		// as the pose at `time` stands it -- see SoleSlotOf.
 		const auto palette = m_Palettes.Allocate(
 			idl::cFloat4sPerBone * boneCount * 2 + idl::cFloat4sPerSole * legCount);
 
@@ -1248,7 +1248,7 @@ namespace bgl
 				entry.intensity  = desc.intensity;
 				entry.fadeHeight = desc.fadeHeight;
 				entry.lift       = desc.casterLift;
-				entry.sole       = idl::cBodyDisc;
+				entry.soleSlot   = idl::cBodyDisc;
 			}
 
 			if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
@@ -1261,7 +1261,7 @@ namespace bgl
 					entry.intensity  = desc.feet->intensity;
 					entry.fadeHeight = desc.feet->fadeHeight;
 					entry.lift       = desc.feet->maxReceiverRise;
-					entry.sole       = SoleOf(meta, leg);
+					entry.soleSlot   = SoleSlotOf(meta, leg);
 				}
 			}
 		}

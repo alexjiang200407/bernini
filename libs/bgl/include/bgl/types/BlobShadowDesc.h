@@ -22,11 +22,8 @@ namespace bgl
 		// units.
 		float fadeHeight = 0.3f;
 
-		// How far a receiver may rise above the sole and still take the shadow, in world units. A
-		// planted sole sits exactly on what it stands on, so at zero the depth buffer's own error
-		// refuses half the ground under it, and the cobble tops around it are refused outright.
-		// Unlike BlobShadowDesc::casterLift this moves only that cut-off, never where the fade is
-		// measured from: a planted foot stays fully dark.
+		// How far a receiver may rise above the sole and still take the shadow, in world units.
+		// Unlike BlobShadowDesc::casterLift it moves only that cut-off, not where the fade starts.
 		float maxReceiverRise = 0.05f;
 	};
 

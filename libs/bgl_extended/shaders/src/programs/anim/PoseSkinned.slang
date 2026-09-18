@@ -448,11 +448,11 @@ void PlantFeet(
     CarrySolvedDescendants(tables, rig, rig.legs.count * 3, paletteBase, localIdx);
 }
 
-// Writes where each foot stands, world space, cFloat4sPerSole float4s a leg from `soleBase`: the
+// Writes where each foot stands, world space, cFloat4sPerSole slots a leg from `firstSoleSlot`: the
 // heel, then the ball. The blob phase's foot shadows read them. After the plant, so a planted foot's
 // shadow lies under the foot the frame draws, and before the fold, which is the only time a slot
 // holds a bone's model transform.
-void WriteSoles(PoseTables tables, Rig rig, float4x4 modelToWorld, uint paletteBase, uint soleBase, uint localIdx)
+void WriteSoles(PoseTables tables, Rig rig, float4x4 modelToWorld, uint paletteBase, uint firstSoleSlot, uint localIdx)
 {
     if (localIdx < rig.legs.count)
     {
@@ -465,7 +465,7 @@ void WriteSoles(PoseTables tables, Rig rig, float4x4 modelToWorld, uint paletteB
         float3 ball;
         HeelAndBall(ankleModel, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w), leg.solePoint.xyz, leg.soleNormal.xyz, heel, ball);
 
-        let slot = soleBase + localIdx * cFloat4sPerSole;
+        let slot = firstSoleSlot + localIdx * cFloat4sPerSole;
         tables.SetPalette(slot + 0, float4(TransformPoint(modelToWorld, ankle + heel), 1.0));
         tables.SetPalette(slot + 1, float4(TransformPoint(modelToWorld, ankle + ball), 1.0));
     }
@@ -475,8 +475,8 @@ void WriteSoles(PoseTables tables, Rig rig, float4x4 modelToWorld, uint paletteB
 }
 
 // Poses one instance into the palette starting at `paletteBase`, planting its feet in the one window
-// of the walk where every slot holds a model-space transform, and writing its soles at `soleBase`
-// when that is not null.
+// of the walk where every slot holds a model-space transform, and writing its soles from
+// `firstSoleSlot` when that is not null.
 //
 // The plant is group-uniform -- a rig either authored legs or did not, and the scene's switch is
 // one value -- so the barriers inside it are reached by the whole group or by none of it. So is the
@@ -489,7 +489,7 @@ void PoseInstance(
     float time,
     float4x4 modelToWorld,
     uint paletteBase,
-    uint soleBase,
+    uint firstSoleSlot,
     uint localIdx
 )
 {
@@ -500,9 +500,9 @@ void PoseInstance(
         PlantFeet(tables, rig, pose, footIK, time, modelToWorld, paletteBase, localIdx);
     }
 
-    if (!rig.legs.Null() && soleBase != 0)
+    if (!rig.legs.Null() && firstSoleSlot != 0)
     {
-        WriteSoles(tables, rig, modelToWorld, paletteBase, soleBase, localIdx);
+        WriteSoles(tables, rig, modelToWorld, paletteBase, firstSoleSlot, localIdx);
     }
 
     FoldInverseBind(tables, rig, paletteBase, localIdx);
@@ -761,10 +761,10 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     // Only the pose at `time` has soles: the blob decal is colour only, so nothing reads a previous
     // one. The arena reserves offset 0, so 0 is the null the second call passes.
-    let soleBase = base + stride * 2;
+    let firstSoleSlot = base + stride * 2;
 
     PoseInstance(
-        tables, rig, ResolveSlots(state, rig, gUniforms.time), entry.footIK, gUniforms.time, modelToWorld, base, soleBase, localIdx
+        tables, rig, ResolveSlots(state, rig, gUniforms.time), entry.footIK, gUniforms.time, modelToWorld, base, firstSoleSlot, localIdx
     );
     PoseInstance(
         tables,
