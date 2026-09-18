@@ -52,6 +52,13 @@ public static const uint cFloat4sPerBone = 3;
 // any animal rig we cook; AddSkinnedMeshGeom refuses past it rather than overrunning here.
 public static const uint cMaxLegsPerRig = 8;
 
+// float4s one leg's sole occupies at the end of a hero palette: its heel and its ball, world space,
+// as the pose at `time` stands them. The blob phase's foot shadows read them.
+public static const uint cFloat4sPerSole = 2;
+
+// A blob-shadow entry's `soleSlot` when the entry is the placement's own disc rather than a foot's.
+public static const uint cBodyDisc = 0xFFFFFFFF;
+
 // How far a planted ankle may be turned to bring its sole onto the ground, 30 degrees. A cliff edge
 // under one foot would otherwise rotate the ankle past where one bends, and a broken ankle reads as
 // a worse artefact than a foot that does not quite meet the slope.

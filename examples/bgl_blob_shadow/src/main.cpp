@@ -113,6 +113,7 @@ main(int argc, char** argv)
 		std::string staticKey;
 		std::string staticProject;
 		float       hoverOverride = 0.0f;
+		bool        feet          = false;
 
 		{
 			auto app = CLI::App{ "A hovering caster whose blob shadow drapes over static crates" };
@@ -148,6 +149,11 @@ main(int argc, char** argv)
 				"--hover",
 				hoverOverride,
 				"Height the caster hovers at; 0 picks a default per caster kind");
+			app.add_flag(
+				"--feet",
+				feet,
+				"Stand each foot of a skinned --import in a shadow of its own, under a fainter "
+				"disc; the caster runs in place on the ground, and the camera closes in on it");
 			app.add_flag("!--no-taa", taaEnabled, "Draw without temporal antialiasing");
 			app.add_flag("--headless", headless, "Render offscreen for --frames and exit");
 			app.add_option("--frames", frames, "Frames to render in --headless mode")
@@ -162,6 +168,7 @@ main(int argc, char** argv)
 		core::throw_runtime_error_if(
 			!staticKey.empty() && staticProject.empty() && project.empty(),
 			"--static needs --static-project (or --project) to key it against");
+		core::throw_runtime_error_if(feet && importKey.empty(), "--feet needs a skinned --import");
 
 		// Headless renders offscreen, so the example is runnable unattended -- which is how anything
 		// but a person can tell it still starts.
@@ -302,6 +309,8 @@ main(int argc, char** argv)
 		std::optional<game::AssetManager> casterAssets;
 		float                             hover      = c_Hover;
 		float                             discRadius = c_DiscRadius;
+		auto                              footDesc   = bgl::FootShadowDesc();
+		float                             reach      = 1.0f;
 
 		if (!importKey.empty())
 		{
@@ -422,6 +431,11 @@ main(int argc, char** argv)
 			const glm::vec3 size = bounds.max - bounds.min;
 			discRadius           = std::max(0.5f * std::max(size.x, size.z), 0.4f);
 			hover                = 1.4f;
+
+			// A foot is a small fraction of the body, and a stride lifts it a fraction of the height.
+			footDesc.radius     = std::max(0.1f * std::min(size.x, size.z), 0.05f);
+			footDesc.fadeHeight = std::max(0.2f * size.y, 0.1f);
+			reach               = std::max({ size.x, size.y, size.z, 0.5f });
 		}
 		else
 		{
@@ -438,12 +452,44 @@ main(int argc, char** argv)
 		{
 			hover = hoverOverride;
 		}
+		else if (feet)
+		{
+			hover = 0.0f;
+		}
+
+		// A foot is a fraction of the body, so --feet holds the caster still -- no slide and no bob --
+		// and looks at it closely.
+		if (feet)
+		{
+			period = 0.0f;
+		}
+
+		// Feet need a pose of the placement's own to stand in, so they go on the first part the
+		// view says has one -- a static prop node of the same import has none.
+		bgl::MeshInstanceHandle shadowed = casterParts.front().instance;
+		if (feet)
+		{
+			const auto posed = std::ranges::find_if(casterParts, [&](const CasterPart& part) {
+				return view->HasFootIK(part.instance);
+			});
+			core::throw_runtime_error_if(
+				posed == casterParts.end(),
+				"--feet: {} places no skinned mesh whose rig has an avatar",
+				importKey);
+			shadowed = posed->instance;
+		}
 
 		view->SetBlobShadow(
-			casterParts.front().instance,
-			bgl::BlobShadowDesc{ .radius     = discRadius,
-		                         .intensity  = c_Intensity,
-		                         .fadeHeight = fadeHeight });
+			shadowed,
+			bgl::BlobShadowDesc{
+				.radius     = discRadius,
+				.intensity  = feet ? c_Intensity * 0.5f : c_Intensity,
+				.fadeHeight = fadeHeight,
+				// Standing on the ground its origin is at receiver height, and a disc cast from there
+				// refuses the ground wherever the depth buffer reads it a hair high.
+				.casterLift = feet ? 0.05f : 0.0f,
+				.feet       = feet ? std::optional(footDesc) : std::nullopt,
+			});
 
 		// A grounded twin for contrast: its disc is at full strength and never moves.
 		const bgl::MeshInstanceHandle rester = view->CreateStaticMeshInstance(
@@ -460,10 +506,10 @@ main(int argc, char** argv)
 		auto camera = bgl::Camera();
 		camera
 			.LookAt(
-				glm::vec3(0.0f, 5.0f, 11.0f),
-				glm::vec3(0.0f, 0.8f, 0.0f),
+				feet ? glm::vec3(0.0f, 0.8f, 1.6f) * reach : glm::vec3(0.0f, 5.0f, 11.0f),
+				feet ? glm::vec3(0.0f, 0.2f, 0.0f) * reach : glm::vec3(0.0f, 0.8f, 0.0f),
 				glm::vec3(0.0f, 1.0f, 0.0f))
-			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+			.Perspective(glm::radians(60.0f), aspect, feet ? 0.05f : 0.5f, 500.0f);
 
 		auto job     = bgl::RenderJob{};
 		job.view     = view;

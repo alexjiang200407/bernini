@@ -11,7 +11,7 @@ class Scrubber;
 
 /**
  * The *Plant feet* group: one switch that stands a preview's rig on a ground plane and solves each
- * leg onto it, titling the blob-shadow toggle and the four sliders that shape the result -- slope,
+ * leg onto it, titling the two shadow toggles and the four sliders that shape the result -- slope,
  * uphill heading, IK weight and sole turn.
  *
  * One switch rather than a floor and a solve separately, because neither half is worth anything
@@ -47,9 +47,10 @@ private:
 	// would leave the box's own height behind and whatever sits under it would not move up.
 	QWidget* m_Body = nullptr;
 
-	// The contact disc under the rig, drawn only while the group is on: without the floor there
-	// is nothing for a disc to land on.
+	// The contact disc under the rig and the shadow under each foot, drawn only while the group is
+	// on: without the floor there is nothing for either to land on.
 	QCheckBox* m_BlobShadowCheck = nullptr;
+	QCheckBox* m_FootShadowCheck = nullptr;
 
 	// The ground's tilt and which way uphill points, in whole degrees.
 	Scrubber* m_SlopeSlider   = nullptr;

@@ -340,7 +340,14 @@ to keep in agreement beyond the one below.
   engine's contact disc (`ISceneView::SetBlobShadow`) on every animated instance — the cheap read
   of whether a foot is grounded, sized from the loaded bounds by `editor::BlobShadowForBounds` —
   the narrower horizontal extent, because the bounds are the clip union and their long axis is
-  stride reach, not body (free of the window, pinned by `[blobshadow]`). It lives in the group's body rather than beside
+  stride reach, not body, and cast from a twentieth of the rig's height up, because its origin
+  stands exactly on the floor and a disc cast from there refuses whichever half of the floor the
+  depth buffer rounds high — a different half every frame the camera orbits (free of the window,
+  pinned by `[blobshadow]`). Beside it a **Foot shadows**
+  checkbox (off by default) adds `BlobShadowDesc::feet`, sized by `editor::FootShadowForBounds` — a
+  tenth of the body's width across, faded a fifth of its height up — and independent of the disc, so
+  either may be on alone. Only an instance `HasFootIK` holds takes them: a crowd-tier preview or a rig
+  without an avatar keeps the disc. It lives in the group's body rather than beside
   it because the disc lands on the floor the group draws: without the floor there is nothing in
   the picture to receive it. Per instance like the IK record, so unlike the slope it needs no
   undoing on hide. Nothing else in the scene should stand on a slope this panel set while
@@ -703,6 +710,15 @@ instance's position weight scales the whole correction, lift included — at zer
 animation's, terrain and all, which is what a unit standing on something the ground does not
 describe asks for — and its rotation weight the turn. The two outer gates are whole: a rig without
 legs and a scene with planting off run no solve at all.
+
+**The same soles ground a foot's shadow.** A hero whose rig authored legs owns one more stretch of
+its palette slice, after the two poses: each leg's heel and ball, world space, as the pose at `time`
+stands them. `PoseSkinned` writes them in the model-space window, after the plant and whether or not
+the scene plants at all, measured by the same `HeelAndBall` the plant measures its contact with — so
+the shadow `BlobShadowDesc::feet` casts lies under the foot the frame draws, whatever put it there.
+Only the hero tier has them, for the reason only the hero tier plants: a crowd instance has no pose
+of its own, so `SetBlobShadow` refuses `feet` on one and it keeps its body disc. See
+[Passes](passes.md) § Blob shadows for what the decal does with them.
 
 ### What the cook derives
 

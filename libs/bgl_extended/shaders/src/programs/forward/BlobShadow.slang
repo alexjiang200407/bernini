@@ -1,5 +1,7 @@
 import idl.BlobShadow;
+import idl.Constants;
 import idl.MeshInstance;
+import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.Texture;
 import lib.types.UploadBuffer;
@@ -9,11 +11,19 @@ import lib.types.UploadBuffer;
 // darkens it by a radial falloff, fading with the caster's height above that surface. Composites
 // between the opaque buckets and the depth-sorted transparents, colour only -- a blended decal has
 // no single depth to reproject, exactly as programs.forward.Transparent has none.
+//
+// An entry is either a placement's own disc, cast from its origin, or one foot's: a capsule lying on
+// the sole from heel to ball, cast from the pose the frame draws. The two differ only in where the
+// shadow is cast from and how high it is measured; the falloff and the facing are one path.
 
 struct Uniforms
 {
     UploadBuffer<BlobShadow> blobBuffer;
     EntryBuffer<MeshInstance> meshBuffer;
+
+    // The palette arena, GPU-written: read only for the soles PoseSkinned wrote at the end of a
+    // hero's slice this frame.
+    ComputeBuffer<float4> palettes;
 
     // The static receivers' depth, written by the StaticDepth pass under this frame's viewProj.
     Texture2D.Handle staticDepth;
@@ -54,6 +64,10 @@ struct VSOut
 {
     float4 position : SV_Position;
     nointerpolation uint blob : BLOB;
+
+    // A foot's sole, world space, read once per group rather than per pixel. Unread on a body disc.
+    nointerpolation float3 heelPos : HEEL;
+    nointerpolation float3 ballPos : BALL;
 };
 
 // The volume a blob's shadow can land in: the caster's footprint swept from just above the caster
@@ -62,7 +76,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
 {
     let n = gBlobShadowData.groundNormal;
 
-    let position = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + gBlobShadowData.groundNormal * blob.casterLift;
+    let position = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + gBlobShadowData.groundNormal * blob.lift;
     let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
     let radius = blob.radius * scale;
 
@@ -82,6 +96,35 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
     }
 }
 
+// The volume a foot's shadow can land in: the sole's heel-to-ball segment widened by the radius,
+// swept from `lift` above the higher end down to fadeHeight below the lower one. A box in the ground
+// plane's own axes, so the corners keep the order VolumeCorners gives them.
+void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float3 ballPos, out float3 corners[cVolumeCorners])
+{
+    let n = gBlobShadowData.groundNormal;
+
+    let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
+    let radius = blob.radius * scale;
+
+    let axis = abs(n.x) < 0.7 ? float3(1.0, 0.0, 0.0) : float3(0.0, 0.0, 1.0);
+    let tangent = normalize(cross(n, axis));
+    let bitangent = cross(n, tangent);
+
+    let heelIn = float3(dot(heelPos, tangent), dot(heelPos, bitangent), dot(heelPos, n));
+    let ballIn = float3(dot(ballPos, tangent), dot(ballPos, bitangent), dot(ballPos, n));
+    let lo = min(heelIn, ballIn) - float3(radius, radius, blob.fadeHeight);
+    let hi = max(heelIn, ballIn) + float3(radius, radius, blob.lift + blob.fadeHeight * cTopSlack);
+
+    [unroll]
+    for (uint i = 0; i < cVolumeCorners; ++i)
+    {
+        let x = (i & 1) != 0 ? hi.x : lo.x;
+        let y = (i & 2) != 0 ? hi.y : lo.y;
+        let z = (i & 4) != 0 ? hi.z : lo.z;
+        corners[i] = tangent * x + bitangent * y + n * z;
+    }
+}
+
 [shader("mesh")]
 [numthreads(4, 1, 1)]
 [outputtopology("triangle")]
@@ -96,8 +139,20 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
     // reconstruction anyway. A corner at or behind the near plane makes the projected bounds
     // meaningless, so that quad covers the whole viewport instead.
+    // A branch, not a select: a body disc's `soleSlot` is no index, and a select loads both sides.
+    var heelPos = float3(0.0, 0.0, 0.0);
+    var ballPos = float3(0.0, 0.0, 0.0);
     float3 corners[cVolumeCorners];
-    VolumeCorners(blob, mesh, corners);
+    if (blob.soleSlot != cBodyDisc)
+    {
+        heelPos = gBlobShadowData.palettes[blob.soleSlot].xyz;
+        ballPos = gBlobShadowData.palettes[blob.soleSlot + 1].xyz;
+        FootVolumeCorners(blob, mesh, heelPos, ballPos, corners);
+    }
+    else
+    {
+        VolumeCorners(blob, mesh, corners);
+    }
 
     var lo = float2(1.0, 1.0);
     var hi = float2(-1.0, -1.0);
@@ -135,6 +190,8 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
         VSOut vout;
         vout.position = float4(corner, 0.0, 1.0);
         vout.blob = gid;
+        vout.heelPos = heelPos;
+        vout.ballPos = ballPos;
         verts[gtid] = vout;
     }
 
@@ -153,6 +210,17 @@ float3 ReceiverWorld(float2 position, float depth)
     let ndc = float2((position.x - rect.x) * rect.z * 2.0 - 1.0, 1.0 - (position.y - rect.y) * rect.w * 2.0);
     let world = mul(gBlobShadowData.invViewProj, float4(ndc, depth, 1.0));
     return world.xyz / world.w;
+}
+
+// The point of the heel-to-ball segment nearest `receiver` across the ground -- measured in the plane
+// normal to `n` -- so a heel raised off a planted toe fades while the toe stays dark.
+float3 NearestOnSole(float3 heelPos, float3 ballPos, float3 receiver, float3 n)
+{
+    let segment = ballPos - heelPos;
+    let across = segment - n * dot(segment, n);
+    let length2 = dot(across, across);
+    let t = length2 > 0.0 ? saturate(dot(receiver - heelPos, across) / length2) : 0.0;
+    return heelPos + segment * t;
 }
 
 struct PSOut
@@ -186,20 +254,41 @@ PSOut PSMain(VSOut input)
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
     let n = gBlobShadowData.groundNormal;
 
-    let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + n * blob.casterLift;
     let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
 
     // A shadow falls down: a surface above its caster receives nothing, one below fades with the
     // per-pixel gap, so a bush top just under the animal is dark while the ground either side of
     // it is faint.
-    let delta = caster - world;
-    let height = dot(delta, n);
-    if (height < 0.0)
+    float3 delta;
+    float height;
+    float fade;
+    if (blob.soleSlot == cBodyDisc)
     {
-        discard;
+        let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + n * blob.lift;
+        delta = caster - world;
+        height = dot(delta, n);
+        if (height < 0.0)
+        {
+            discard;
+        }
+
+        fade = saturate(1.0 - height / blob.fadeHeight);
+    }
+    else
+    {
+        // The lift only lets a receiver sit that far above the sole: a planted sole is at street
+        // level, and measuring the fade from a lifted point would pre-fade exactly the foot that
+        // should be darkest.
+        delta = NearestOnSole(input.heelPos, input.ballPos, world, n) - world;
+        height = dot(delta, n);
+        if (height + blob.lift < 0.0)
+        {
+            discard;
+        }
+
+        fade = saturate(1.0 - max(height, 0.0) / blob.fadeHeight);
     }
 
-    let fade = saturate(1.0 - height / blob.fadeHeight);
     if (fade <= 0.0)
     {
         discard;

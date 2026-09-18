@@ -38,6 +38,22 @@ public float3 OnSolePlane(float3 point, float3 sole, float3 soleUp)
     return point - dot(point - sole, soleUp) * soleUp;
 }
 
+// Where a foot stands, relative to its ankle joint: the heel (the ankle) and the ball (the toe
+// joint), each dropped onto the sole plane. A rotation about the ankle turns both exactly as it would
+// turn the foot, so a caller about to turn the foot turns these rather than measuring again.
+//
+// Measured through the ankle's model transform, never in the ankle-local sole: bone space carries
+// whatever scale the bind does, so a distance read there is in those units.
+public void HeelAndBall(float4x4 ankleModel, float3 toeJoint, float3 solePoint, float3 soleNormal, out float3 heel, out float3 ball)
+{
+    let ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
+    let sole = TransformPoint(ankleModel, solePoint) - ankle;
+    let soleUp = normalize(TransformDir(ankleModel, soleNormal));
+
+    heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
+    ball = OnSolePlane(toeJoint - ankle, sole, soleUp);
+}
+
 // The analytic two-bone solve: law of cosines on a root-mid-tip chain toward `target`, keeping the
 // bend in the plane the chain is already bent in, then one aim rotation bringing the tip onto the
 // target.
