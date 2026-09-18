@@ -228,6 +228,39 @@ TEST_CASE("an imported source is known by its category and extension", "[importd
 	CHECK_FALSE(isImportedSourceKey(""));
 }
 
+// One copy for every import: a mesh's `.glb` and an environment's `.hdr` are stamped by the same
+// call, so only one place decides what a file the project now owns measures as.
+TEST_CASE("an imported source is copied and stamped by its key", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_copyany");
+	WriteText(root.path / "incoming.hdr", "not really a radiance file");
+	const AssetStore store(root.path);
+
+	const SourceRef ref =
+		store.CopyImportedSource(root.path / "incoming.hdr", "Authored/EnvSources/dusk.hdr");
+	CHECK(ref.key == "Authored/EnvSources/dusk.hdr");
+	CHECK(ref.stamp.size == fs::file_size(root.path / "Authored/EnvSources/dusk.hdr"));
+
+	// What keys an import is the importer's to add: a mesh's rate hashes, an environment's
+	// parameters live in its document.
+	CHECK(ref.parametersHash == 0);
+
+	SECTION("a copy onto itself writes nothing, rather than truncating the source first")
+	{
+		const SourceRef again = store.CopyImportedSource(
+			root.path / "Authored/EnvSources/dusk.hdr",
+			"Authored/EnvSources/dusk.hdr");
+		CHECK(again.stamp == ref.stamp);
+	}
+
+	SECTION("a key no import would look in is refused")
+	{
+		CHECK_THROWS_WITH(
+			store.CopyImportedSource(root.path / "incoming.hdr", "Authored/Environments/dusk.hdr"),
+			Catch::Matchers::ContainsSubstring("imported source"));
+	}
+}
+
 TEST_CASE("the document names the source it describes", "[importdoc]")
 {
 	ImportDocument document;

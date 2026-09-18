@@ -184,30 +184,35 @@ namespace assetlib
 	}
 
 	SourceRef
-	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
-		const
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, std::string_view key) const
 	{
-		requireSelfContainedSource(source);
-		requireImportedSourceKey(target.source);
+		core::throw_runtime_error_if(
+			!isImportedSourceKey(key),
+			"'{}' is not where an imported source lives, so a re-import would never find it",
+			key);
 
-		const std::filesystem::path copied = ResolveWritePath(target.source);
-		std::filesystem::create_directories(copied.parent_path());
+		const std::filesystem::path copied = ResolveWritePath(key);
 
 		std::error_code ec;
-		std::filesystem::copy_file(
-			source,
-			copied,
-			std::filesystem::copy_options::overwrite_existing,
-			ec);
-		core::throw_runtime_error_if(
-			static_cast<bool>(ec),
-			"cannot copy '{}' to '{}': {}",
-			source.string(),
-			copied.string(),
-			ec.message());
+		if (!std::filesystem::exists(copied, ec) ||
+		    !std::filesystem::equivalent(source, copied, ec))
+		{
+			std::filesystem::create_directories(copied.parent_path());
+			std::filesystem::copy_file(
+				source,
+				copied,
+				std::filesystem::copy_options::overwrite_existing,
+				ec);
+			core::throw_runtime_error_if(
+				static_cast<bool>(ec),
+				"cannot copy '{}' to '{}': {}",
+				source.string(),
+				copied.string(),
+				ec.message());
+		}
 
 		SourceRef ref;
-		ref.key                            = normalizeRef(target.source);
+		ref.key                            = normalizeRef(key);
 		ref.stamp.size                     = std::filesystem::file_size(copied);
 		const std::optional<uint64_t> hash = core::file::hash_file(copied);
 		core::throw_runtime_error_if(
@@ -215,6 +220,17 @@ namespace assetlib
 			"cannot hash '{}' after copying it",
 			copied.string());
 		ref.stamp.hash = *hash;
+		return ref;
+	}
+
+	SourceRef
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+		const
+	{
+		requireSelfContainedSource(source);
+		requireImportedSourceKey(target.source);
+
+		SourceRef ref = CopyImportedSource(source, target.source);
 		ref.parametersHash =
 			importParametersHash(ImportDocumentPath(target.source), target.sampleRate);
 		return ref;

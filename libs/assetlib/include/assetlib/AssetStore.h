@@ -691,14 +691,33 @@ namespace assetlib
 		ImportDocumentPath(std::string_view sourceKey) const;
 
 		/**
-		 * Copies the self-contained source to `target.source` and stamps it: the returned reference
-		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
-		 * derived from it *before* saving them. The document itself is written afterwards by
-		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
-		 * deliberately outside the parameter hash.
+		 * Copies an incoming file to `key` and stamps the copy: the returned reference is what the
+		 * caller records on whatever it derives from it. Every import copies its source this way --
+		 * a mesh's `.glb`, an environment's `.hdr` or float cube -- so one place stamps a file the
+		 * project now owns.
 		 *
-		 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
-		 * parameter -- is what the returned reference's parameter hash covers.
+		 * A copy onto itself writes nothing: re-importing from the copy already in the project is
+		 * the recovery path for an environment whose derived files are gone, and `copy_file` would
+		 * truncate the source first.
+		 *
+		 * `parametersHash` is left zero; what keys an import is the importer's to add.
+		 *
+		 * @throws std::runtime_error unless `key` names an imported source -- see
+		 *         `isImportedSourceKey`, which is the category as much as the extension -- and on a
+		 *         copy or hash failure.
+		 */
+		SourceRef
+		CopyImportedSource(const std::filesystem::path& source, std::string_view key) const;
+
+		/**
+		 * The same for a mesh, with what only a mesh import owes: the source must be self-contained,
+		 * and the returned reference carries the parameter hash its containers key on.
+		 *
+		 * The document itself is written afterwards by
+		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
+		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
+		 * deliberately outside the parameter hash. `target.sampleRate` -- the rate clips are
+		 * resampled to at import, the import's one parameter -- is what that hash covers.
 		 *
 		 * @throws what requireSelfContainedSource throws, std::runtime_error if `target.source` is
 		 *         not a `.glb` under `Authored/Meshes/`, and std::runtime_error on a copy failure.

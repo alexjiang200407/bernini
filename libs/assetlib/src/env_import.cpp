@@ -200,30 +200,6 @@ namespace assetlib
 			return document;
 		}
 
-		/**
-		 * Copies the incoming file into the project. A copy onto itself is a re-import from the
-		 * source already there -- the recovery path -- and copies nothing.
-		 */
-		void
-		copySource(const std::filesystem::path& from, const std::filesystem::path& to)
-		{
-			std::error_code ec;
-			if (std::filesystem::exists(to, ec) && std::filesystem::equivalent(from, to, ec))
-				return;
-
-			createDirectories(to.parent_path());
-			std::filesystem::copy_file(
-				from,
-				to,
-				std::filesystem::copy_options::overwrite_existing,
-				ec);
-			core::throw_runtime_error_if(
-				static_cast<bool>(ec),
-				"AssetStore::ImportEnvironment: cannot copy '{}' to '{}': {}",
-				from.string(),
-				to.string(),
-				ec.message());
-		}
 	}
 
 	std::vector<std::string>
@@ -327,14 +303,13 @@ namespace assetlib
 
 		throwIfCancelled(cancel);
 
-		const std::filesystem::path copied = GetDataRoot() / sourceKey;
 		created.WillWrite(sourceKey);
-		copySource(desc.source, copied);
-		result.source = sourceKey;
 
-		// Stamped before the cook reads it, so a copy rewritten while the parts convolve reads as
-		// stale afterwards rather than as the file those pixels came from.
-		const SourceStamp copiedStamp = stampOf(copied);
+		// Stamped as it is copied, and before the cook reads it: a copy rewritten while the parts
+		// convolve then reads as stale afterwards rather than as the file those pixels came from.
+		const SourceStamp           copiedStamp = CopyImportedSource(desc.source, sourceKey).stamp;
+		const std::filesystem::path copied      = ResolveWritePath(sourceKey);
+		result.source                           = sourceKey;
 
 		auto       input       = EnvironmentInput(copied);
 		const auto beforeWrite = [&created](const std::string& key) { created.WillWrite(key); };
