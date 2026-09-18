@@ -160,6 +160,24 @@ TEST_CASE("The total carries every tag", "[memory]")
 	CHECK(memory_totals().live == before + 48);
 }
 
+TEST_CASE("A table still counts after later enums have registered", "[memory]")
+{
+	const uint64_t before = LiveOf(c_Tag);
+
+	// Enough registrations that a table held in a growing array has been moved at least once.
+	for (int i = 0; i < 64; ++i)
+	{
+		const std::string key = "later enum " + std::to_string(i);
+		static_cast<void>(detail::register_table(key, 1, [](std::size_t) -> std::string_view {
+			return "later";
+		}));
+	}
+
+	const TestBytes held(c_Tag, 64);
+
+	CHECK(LiveOf(c_Tag) == before + 64);
+}
+
 TEST_CASE("A default-constructed holder charges nothing", "[memory]")
 {
 	const uint64_t before = memory_totals().live;

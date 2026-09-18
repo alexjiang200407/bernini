@@ -6,7 +6,8 @@ where coverage changes the performance of everything it instruments.
 
 It is still a switch, and the reason is not cost. Tracy's client opens a TCP socket and announces
 itself over UDP from process start, so a profiler can find it — which is the whole mechanism, and is
-not something a shipping binary should carry. `core` links it and everything links `core`, so the
+not something a shipping binary should carry. `core_process` links it, once per process (see
+[core_process.md](core_process.md)), and everything links `core_process` through `core`, so the
 switch has to exist before the tree grows more consumers rather than after.
 
 `BERNINI_PROFILING` is declared at the root and defaults **off**; the `debug` and `release` presets
@@ -400,7 +401,9 @@ is templated on a tag enum and asks only for a count and a name, both found by A
 enum sits at the lowest point that everything charging memory can see — the renderer's resources and
 gamelib's container cache — so `bgl_wgpu` reaches it from there too. A report never names a tag enum
 at all: each instantiation registers its table on first use and the report walks what registered,
-which is what lets `assetlib_cli` write one without linking a renderer.
+which is what lets `assetlib_cli` write one without linking a renderer. The registry is held once
+per process, in `core_process` ([core_process.md](core_process.md)), which is how the renderer
+DLL's `device buffer` and `device texture` charges reach a report the executable writes.
 
 **`untagged` is not an error, it is the mechanism.** It is `footprint - tagged live`: memory the OS
 charges us for that no tag claimed. It is how a missing tag announces itself, and on a unified-memory

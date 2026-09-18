@@ -151,6 +151,13 @@ rather than a judgement call, and how `just tidy` enforces it. Then the other ch
 include hygiene, how a subsystem switches it on for itself, and what `--fix` will and will not do
 for you.
 
+**[core_process](./docs/core_process.md)**
+
+Why `core` is static but the state it must hold once per process is not: what lives in
+`core_process`, the directory rule that decides it, why it is shared exactly where the renderer is,
+and how a static dependency with state of its own is linked into it whole rather than into every
+binary.
+
 **[bgl Public API](./docs/bgl_api.md)**
 
 What a client links against: `IGraphics`, `IScene`, `ISceneView`, `IRenderTarget`, the handle and

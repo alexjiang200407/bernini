@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <core/err/util.h>
@@ -14,6 +13,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <ios>
 #include <optional>
 #include <span>
@@ -141,13 +141,13 @@ namespace core::file
 	void
 	write_atomic(const std::filesystem::path& path, std::span<const std::byte> bytes)
 	{
-		static std::atomic<uint32_t> g_Counter = 0;
-
+		// Keyed on the thread rather than a counter: each binary linking core has its own copy of a
+		// counter, while two writers that overlap are always two threads.
 		const std::filesystem::path tmp = std::format(
 			"{}.{}.{}.tmp",
 			path.string(),
 			core::process_id(),
-			g_Counter.fetch_add(1, std::memory_order_relaxed));
+			std::hash<std::thread::id>()(std::this_thread::get_id()));
 
 		{
 			// Cleared so the message cannot blame a stale errno from an unrelated call.

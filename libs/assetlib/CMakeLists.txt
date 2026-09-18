@@ -86,6 +86,21 @@ set_target_properties(assetlib_cli PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 
+# core_process is ours rather than a dependency the set above resolves, so it is named: on macOS
+# the set finds no @rpath library, and the build-tree rpath that would is stripped on install.
+get_target_property(CORE_PROCESS_TYPE core_process TYPE)
+if (CORE_PROCESS_TYPE STREQUAL "SHARED_LIBRARY")
+	install(TARGETS core_process
+		COMPONENT tools
+		RUNTIME DESTINATION .
+		LIBRARY DESTINATION .
+	)
+endif()
+
+if (APPLE)
+	set_target_properties(assetlib_cli PROPERTIES INSTALL_RPATH "@executable_path")
+endif()
+
 install(TARGETS assetlib_cli
 	COMPONENT tools
 	RUNTIME_DEPENDENCY_SET assetlib_cli_deps

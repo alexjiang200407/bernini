@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -61,16 +62,29 @@ namespace core::profiling
 			return g_Total;
 		}
 
+		struct RegisteredTable
+		{
+			std::string      key;
+			detail::TagTable table;
+
+			// A table has no default, and MSVC's /Wall makes the implicitly deleted default
+			// constructor that leaves this an error.
+			RegisteredTable(std::string name, detail::TagTable registered) noexcept :
+				key(std::move(name)), table(std::move(registered))
+			{}
+		};
+
 		/**
 		 * Every table that has been used, in first-use order so a report reads the same way twice.
 		 *
 		 * Function-local: a table registers itself the first time something charges to it, which
-		 * may be during another translation unit's dynamic initialisation.
+		 * may be during another translation unit's dynamic initialisation. A deque, because
+		 * `table_for` keeps the reference `register_table` returns for the life of the process.
 		 */
 		struct Registry
 		{
-			std::mutex                                            lock;
-			std::vector<std::pair<std::string, detail::TagTable>> tables;
+			std::mutex                  lock;
+			std::deque<RegisteredTable> tables;
 
 			// A mutex member deletes all four implicitly, which MSVC's /Wall makes an error. The
 			// registry is a function-local singleton reached by reference, so deleting them says
@@ -189,14 +203,13 @@ namespace core::profiling
 			Registry&                         all = registry();
 			const std::lock_guard<std::mutex> held(all.lock);
 
-			for (auto& [registered, table] : all.tables)
+			for (RegisteredTable& registered : all.tables)
 			{
-				if (registered == key)
-					return table;
+				if (registered.key == key)
+					return registered.table;
 			}
 
-			all.tables.emplace_back(std::string(key), TagTable(count, nameOf));
-			return all.tables.back().second;
+			return all.tables.emplace_back(std::string(key), TagTable(count, nameOf)).table;
 		}
 
 		uint64_t

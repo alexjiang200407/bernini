@@ -11,24 +11,27 @@
 #include <string_view>
 #include <utility>
 
+namespace
+{
+	constexpr auto c_LoggerName = "global log";
+}
+
 namespace core::logging
 {
 	void
 	init_file_logger(const std::string_view fileName, const int level)
 	{
-		static bool g_Installed = false;
-
-		if (!g_Installed)
+		// Asked of spdlog's registry, which core_process holds once, rather than of a flag here: a
+		// flag in core would be one per binary, and the renderer would open a log of its own.
+		if (!spdlog::get(c_LoggerName))
 		{
 			const std::filesystem::path path =
 				core::file::get_executable_path().parent_path() / fileName;
 
 			auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), true);
 			spdlog::set_default_logger(
-				std::make_shared<spdlog::logger>("global log", std::move(sink)));
+				std::make_shared<spdlog::logger>(c_LoggerName, std::move(sink)));
 			spdlog::set_pattern("[%H:%M:%S:%e] [thread %t] [%l] %v");
-
-			g_Installed = true;
 		}
 
 		const std::shared_ptr<spdlog::logger> log = spdlog::default_logger();

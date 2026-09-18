@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <core/process_api.h>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -63,24 +64,25 @@ namespace core::profiling
 		class TagTable
 		{
 		public:
+			CORE_PROCESS_API
 			TagTable(std::size_t count, std::string_view (*nameOf)(std::size_t)) noexcept;
 
-			void
+			CORE_PROCESS_API void
 			Charge(std::size_t tag, uint64_t bytes) noexcept;
 
-			void
+			CORE_PROCESS_API void
 			Discharge(std::size_t tag, uint64_t bytes) noexcept;
 
-			[[nodiscard]] MemoryTotals
+			[[nodiscard]] CORE_PROCESS_API MemoryTotals
 			Totals(std::size_t tag) const noexcept;
 
-			[[nodiscard]] std::size_t
-			Count() const noexcept;
+			[[nodiscard]] CORE_PROCESS_API std::size_t
+										   Count() const noexcept;
 
-			[[nodiscard]] std::string_view
-			NameOf(std::size_t tag) const noexcept;
+			[[nodiscard]] CORE_PROCESS_API std::string_view
+										   NameOf(std::size_t tag) const noexcept;
 
-			void
+			CORE_PROCESS_API void
 			ResetPeaks() noexcept;
 
 		private:
@@ -89,20 +91,20 @@ namespace core::profiling
 		};
 
 		/** Registers `table` so a report can find it, and hands back the same one every time. */
-		[[nodiscard]] TagTable&
+		[[nodiscard]] CORE_PROCESS_API TagTable&
 		register_table(
 			std::string_view key,
 			std::size_t      count,
 			std::string_view (*nameOf)(std::size_t));
 
 		/** One id an allocation is keyed on, never an address — see TaggedBytes. */
-		[[nodiscard]] uint64_t
+		[[nodiscard]] CORE_PROCESS_API uint64_t
 		mint_allocation_id() noexcept;
 
-		void
+		CORE_PROCESS_API void
 		tracy_alloc(uint64_t id, uint64_t bytes, const char* pool) noexcept;
 
-		void
+		CORE_PROCESS_API void
 		tracy_free(uint64_t id, const char* pool) noexcept;
 
 		/** The one table `Tag` charges, made on first use rather than during static init. */
@@ -133,12 +135,12 @@ namespace core::profiling
 	 * so is not the sum of the per-tag peaks — two subsystems that peak at different moments never
 	 * cost their sum.
 	 */
-	[[nodiscard]] MemoryTotals
+	[[nodiscard]] CORE_PROCESS_API MemoryTotals
 	memory_totals() noexcept;
 
 	/** Every registered tag, for a report. Order is registration order, then enum order. */
-	[[nodiscard]] std::vector<MemoryTagTotals>
-	memory_tag_totals();
+	[[nodiscard]] CORE_PROCESS_API std::vector<MemoryTagTotals>
+								   memory_tag_totals();
 
 	/**
 	 * Drops every peak to its tag's current `live`, so the next reading measures one phase.
@@ -146,6 +148,6 @@ namespace core::profiling
 	 * Does not touch `live`, which belongs to allocations that are still charged: a reset that
 	 * cleared it would make the next release underflow.
 	 */
-	void
+	CORE_PROCESS_API void
 	reset_memory_peaks() noexcept;
 }
