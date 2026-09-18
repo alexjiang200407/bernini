@@ -33,8 +33,8 @@
         "taaReconstructionWidth": 0.4,
         "bloom": {
             "enabled": false,
-            "intensity": 0.04,
-            "threshold": 1.0,
+            "intensity": 0.25,
+            "threshold": 0.5,
             "softKnee": 0.5,
             "scatter": 0.7
         },
@@ -52,8 +52,8 @@
         "taaReconstructionWidth": 0.4,
         "bloom": {
             "enabled": false,
-            "intensity": 0.04,
-            "threshold": 1.0,
+            "intensity": 0.25,
+            "threshold": 0.5,
             "softKnee": 0.5,
             "scatter": 0.7
         },

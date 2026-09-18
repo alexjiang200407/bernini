@@ -336,7 +336,7 @@ TEST_CASE(
   "startupProject": ")" + editor.EscapedProjectFile() +
 	                           R"(",
   "materialEditor":  { "temporalAA": false,
-                       "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.5,
+                       "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.8,
                                   "softKnee": 5.0 } },
   "animationEditor": { "temporalAA": false }
 })";
@@ -353,7 +353,7 @@ TEST_CASE(
 
 	const bgl::BloomSettings named = materialView->GetBloomSettings();
 	CHECK(named.intensity == Catch::Approx(0.3f));
-	CHECK(named.threshold == Catch::Approx(0.5f));
+	CHECK(named.threshold == Catch::Approx(0.8f));
 	CHECK(named.softKnee == Catch::Approx(1.0f));
 	CHECK(named.scatter == Catch::Approx(bgl::BloomSettings().scatter));
 

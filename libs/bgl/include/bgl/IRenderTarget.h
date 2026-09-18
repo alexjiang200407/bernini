@@ -44,12 +44,13 @@ namespace bgl
 	{
 		// The glow's weight in the combine: sceneColor + intensity * bloom. Zero adds nothing but
 		// still pays for the chain; turn bloom off instead.
-		float intensity = 0.04f;
+		float intensity = 0.25f;
 
-		// The linear radiance where a pixel starts to contribute. 1.0 blooms only what is brighter
-		// than white after exposure; 0.0 blooms everything, which reads as soft-focus at high
-		// intensity.
-		float threshold = 1.0f;
+		// The linear radiance where a pixel starts to contribute, after exposure. Exposure puts a
+		// scene's average near middle grey (0.18), so 0.5 blooms bright surfaces and highlights and
+		// leaves mid-tones alone; 1.0 leaves almost nothing but specular peaks, and 0.0 blooms
+		// everything, which reads as soft focus.
+		float threshold = 0.5f;
 
 		// How gradually the threshold takes hold, as a share of it: 0 is a hard cut, 1 fades in
 		// from half the threshold.

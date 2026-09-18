@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -9,6 +10,7 @@
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <bgl/error.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -73,6 +75,103 @@ namespace
 		const int origin = static_cast<int>(size) / 2 - 8;
 		return bgl::test::MeanColor(path, origin, origin, 16, 16);
 	}
+
+	/**
+	 * A near-white, fairly glossy cube under the shipped environment at its baked exposure -- the
+	 * brightness the editor's viewports show, where every environment averages middle grey. No
+	 * skybox, so the frame outside the silhouette is black and any light there is bloom's.
+	 */
+	struct LitCube
+	{
+		bgl::GraphicsRef     gfx;
+		bgl::RenderTargetRef target;
+		bgl::SceneRef        scene;
+		bgl::SceneViewRef    view;
+		bgl::RenderJob       job;
+
+		explicit LitCube()
+		{
+			gfx = bgl::CreateGraphics(HeadlessOptions());
+			REQUIRE(gfx != nullptr);
+
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = static_cast<int>(c_Size);
+			targetDesc.height   = static_cast<int>(c_Size);
+			targetDesc.headless = true;
+			target              = gfx->CreateRenderTarget(targetDesc);
+			REQUIRE(target != nullptr);
+
+			auto sceneDesc                        = bgl::SceneDesc();
+			sceneDesc.initialGeom                 = 4;
+			sceneDesc.initialMeshlets             = 64;
+			sceneDesc.initialSubmeshes            = 4;
+			sceneDesc.initialVertexBufferByteSize = 40000;
+			sceneDesc.initialIndices              = 1000;
+			sceneDesc.initialPbrMaterials         = 4;
+
+			scene = gfx->CreateScene(sceneDesc);
+			view  = gfx->CreateSceneView(scene, 4);
+			bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+			const auto white = scene->CreatePbrMaterial(
+				{ .baseColorFactor = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f),
+			      .metallicFactor  = 0.0f,
+			      .roughnessFactor = 0.3f });
+
+			view->CreateStaticMeshInstance(scene->AddCubeGeom(white), glm::mat4(1.0f));
+
+			auto camera = bgl::Camera();
+			camera
+				.LookAt(
+					glm::vec3(0.0f, 0.0f, c_CameraDist),
+					glm::vec3(0.0f, 0.0f, 0.0f),
+					glm::vec3(0.0f, 1.0f, 0.0f))
+				.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
+
+			job.view     = view;
+			job.camera   = camera;
+			job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
+		}
+
+		void
+		Capture(const std::string& path)
+		{
+			gfx->DrawFrame(target, job);
+			gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, path);
+		}
+	};
+}
+
+// The defaults are what a viewport gets when nobody tunes it, so they are held to the brightness a
+// real scene has here -- every environment normalized to middle grey -- rather than to a synthetic
+// bright one. A threshold of 1.0 at intensity 0.04 passed every other case and glowed 0.002 here.
+TEST_CASE("Default bloom glows visibly on a scene lit at the engine's exposure", "[bloom][render]")
+{
+	auto lit = LitCube();
+
+	const std::string offPath = "assets/golden/bloom_default_off.got.png";
+	const std::string onPath  = "assets/golden/bloom_default_on.got.png";
+
+	lit.Capture(offPath);
+	lit.target->SetBloomEnabled(true);
+	lit.Capture(onPath);
+
+	const float centerOff = CenterProbe(offPath, c_Size).Luma();
+	REQUIRE(centerOff > 0.3f);
+
+	// About 8/255 of display luma: a halo a person sees, not one a probe can only just find.
+	const float spill = SpillLuma(onPath, c_Size);
+	INFO("default spill: " << spill);
+	CHECK(spill > 0.03f);
+
+	// And a halo rather than a wash: the lit face itself barely moves.
+	const float centerDelta = CenterProbe(onPath, c_Size).Luma() - centerOff;
+	INFO("default brightening of the cube: " << centerDelta);
+	CHECK(centerDelta < 0.05f);
+
+	std::remove(offPath.c_str());
+	std::remove(onPath.c_str());
 }
 
 TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][render]")
