@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost -- in time and in memory -- that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost -- in time and in memory -- that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. On a pull request based on origin/master it also reports the added lines no test executed. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -316,7 +316,50 @@ What no tool owns: whether every function is marked `noexcept` or deliberately i
 
 Do not flag formatting. `just format` owns it, and the same hook has already run it.
 
-## 7. Verify, then report
+## 7. What did no test execute?
+
+Only when the base from § 1 is `origin/master`, and only when the diff adds executable lines under
+`libs/` or `apps/`. A slice landing on a feature branch skips this: the feature is measured once,
+on the PR that makes it permanent, rather than once per slice against a branch nothing ships from.
+
+```bash
+just coverage assetlib editor --diff origin/master --json
+```
+
+Name the suites the change could plausibly reach rather than taking the default of all of them — an
+argument is a substring of a suite's name, so `libs/assetlib` is `assetlib` and `apps/editor` is
+`editor`.
+`--json` puts `{"uncovered": {…}, "no_data": […]}` alone on stdout and everything else on stderr.
+
+**macOS only.** Source-based coverage is clang's and MSVC has none
+([docs/coverage.md](docs/coverage.md)), so on any other host this section is one line saying so.
+
+**It takes the machine-wide suite lock, and should.** § 5 passes `--no-lock` because one tag of
+`assetlib` holds no graphics device and the reason the lock exists does not apply. That argument
+does not carry here: this runs whole suites, and `bgl_extended_tests` and `editor_tests` each create
+a device. So `scripts/coverage.py` offers no `--no-lock` and wants none — bypassing it would put an
+instrumented run of every suite beside another checkout's `just test`, which is the oversubscription
+the lock exists to prevent.
+
+What that costs is a wait, and a gate before every pull request cannot take one blind: **bound the
+call.** When the timeout expires — behind another checkout's lock, or in an instrumented build
+starting from nothing — report that coverage did not run and which of the two it was. Silence reads
+as a pass; a skip that says so does not.
+
+The two halves of the answer are not worth the same:
+
+- **`no_data` names a changed file that nothing measured at all** — compiled into no instrumented
+  image. That is louder than any uncovered line and is a finding on its own.
+- **An uncovered line is a question, not a defect.** Worth naming are the paths a reader would
+  assume were tested: a new `throw`, a refusal, an error branch, a rollback. Not worth naming: a log
+  call, a line no test could reasonably reach, or a whole file because its ratio looks low.
+
+**It never sets the verdict.** `docs/coverage.md` refuses a threshold deliberately — a percentage
+rewards tests that execute lines without asserting anything about them — so coverage here is a
+diagnostic. Report what it found as `revise` at most, never as `blocking`, and report ranges rather
+than a percentage.
+
+## 8. Verify, then report
 
 Every finding, before it goes in: name the line that makes it true, then try to refute it — ask what
 would have to hold for the code to be right as written, and check whether it does. Most first-pass
@@ -351,8 +394,8 @@ stop.
 - **Ground every finding in a line you read.** If you cannot cite it, drop it.
 - **Never flag anything in `bcp-review` § 4.** Those are this repo's conventions; flagging them tells
   the author to break their own guide.
-- **Never claim a test result you did not observe.** You have no GPU, and the only thing you run is
-  § 5's `[perf]` tag — one tag of one suite, never a whole suite, and never a build you were not
-  given. A run you did not make is a
-  sentence saying so, never a number.
+- **Never claim a test result you did not observe.** You have no GPU. Two things run here and
+  nothing else: § 5's `[perf]` tag — one tag of one suite — and § 7's diff coverage, which does
+  build its own preset and does run whole suites, and is confined to a PR based on `origin/master`
+  for exactly that reason. A run you did not make is a sentence saying so, never a number.
 - **Never edit, commit, push or post.** You report; the caller acts.
