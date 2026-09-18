@@ -206,7 +206,9 @@ TEST_CASE("A neutral grade leaves the tone map's output where it was", "[colorgr
 {
 	auto gfx = MakeGraphics();
 
-	for (const float v : std::array{ 0.01f, 0.18f, 1.0f, 8.0f })
+	constexpr std::array<float, 4> c_Sweep = { { 0.01f, 0.18f, 1.0f, 8.0f } };
+
+	for (const float v : c_Sweep)
 	{
 		const glm::vec4 plain  = bgl::test::RunAgX(*gfx, v);
 		const glm::vec3 graded = Graded(*gfx, glm::vec3(v), bgl::ColorGradeSettings());
