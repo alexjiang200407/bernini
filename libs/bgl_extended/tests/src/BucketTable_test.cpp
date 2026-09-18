@@ -1,0 +1,129 @@
+#include "gfx/BucketTable.h"
+#include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl_common/idl/PsoType.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+
+using bgl::BucketTable;
+using bgl::GeomType;
+using bgl::LayerType;
+using bgl::MaterialHandle;
+using bgl::MaterialType;
+
+TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[bucket]")
+{
+	BucketTable table;
+
+	// The unlit fallback exists before anything resolves: it is what a demand past the ceiling
+	// clamps to, so it can never itself be past the ceiling.
+	REQUIRE(table.Count() == 1);
+	CHECK(table.Desc(0).geom == GeomType::kStaticMesh);
+	CHECK(table.Desc(0).material == MaterialType::kNull);
+	CHECK(table.Desc(0).layer == LayerType::kOpaque);
+	CHECK_FALSE(table.Transparent(0));
+
+	// Re-resolving the seed's own key allocates nothing.
+	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque) == 0);
+	CHECK(table.Count() == 1);
+
+	// Ids are dense, in first-use order, and stable on re-resolve.
+	const auto opaquePbr =
+		table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
+	const auto cutoutPbr =
+		table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask);
+	const auto skinnedPbr =
+		table.Resolve(GeomType::kSkinnedMesh, MaterialType::kPBR, LayerType::kOpaque);
+
+	CHECK(opaquePbr == 1);
+	CHECK(cutoutPbr == 2);
+	CHECK(skinnedPbr == 3);
+	CHECK(table.Count() == 4);
+	CHECK(
+		table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque) == opaquePbr);
+	CHECK(table.Count() == 4);
+
+	// The desc reads back exactly the key the id was allocated for.
+	CHECK(table.Desc(skinnedPbr).geom == GeomType::kSkinnedMesh);
+	CHECK(table.Desc(skinnedPbr).material == MaterialType::kPBR);
+	CHECK(table.Desc(skinnedPbr).layer == LayerType::kOpaque);
+}
+
+TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[bucket]")
+{
+	BucketTable table;
+
+	const auto blend = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kBlend);
+	const auto hashed =
+		table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
+
+	CHECK(table.Transparent(blend));
+	CHECK_FALSE(table.Transparent(hashed));
+
+	// The GPU upload source agrees with the per-bucket accessor, and covers the whole ceiling so
+	// an unallocated lane reads 0, never garbage.
+	const auto flags = table.TransparentFlags();
+	REQUIRE(flags.size() == bgl::idl::cMaxPsoBuckets);
+	CHECK(flags[blend] == 1u);
+	CHECK(flags[hashed] == 0u);
+	CHECK(flags[table.Count()] == 0u);
+}
+
+TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unlit", "[bucket]")
+{
+	BucketTable table;
+
+	auto handle         = MaterialHandle();
+	handle.materialType = MaterialType::kPBR;
+	handle.layerType    = LayerType::kMask;
+	handle.byteOffset   = 640;
+
+	const auto byHandle = table.Resolve(GeomType::kStaticMesh, handle);
+	const auto byKey = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask);
+	CHECK(byHandle == byKey);
+
+	// The arena offset is data, not identity: two records of one kind and layer share a bucket.
+	handle.byteOffset = 1280;
+	CHECK(table.Resolve(GeomType::kStaticMesh, handle) == byHandle);
+
+	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialHandle()) == 0);
+}
+
+TEST_CASE("the version counts allocations, not lookups", "[bucket]")
+{
+	BucketTable table;
+	const auto  seeded = table.Version();
+
+	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
+	CHECK(table.Version() == seeded + 1);
+
+	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
+	CHECK(table.Version() == seeded + 1);
+}
+
+TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[bucket]")
+{
+	// Ceiling 3: the seed plus two. Small because a real ceiling cannot be filled while
+	// MaterialType still caps the distinct keys -- the clamp logic is what is under test.
+	BucketTable table(3);
+
+	const auto a = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
+	const auto b = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask);
+	CHECK(a == 1);
+	CHECK(b == 2);
+
+	// The fourth distinct key is refused: reported, clamped to bucket 0, and never allocated.
+	const auto over = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
+	CHECK(over == 0);
+	CHECK(table.Count() == 3);
+
+	// A key allocated before the ceiling keeps resolving to its own bucket.
+	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask) == b);
+
+	// The version did not move for the refusal, so no flag re-upload is provoked.
+	const auto version = table.Version();
+	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
+	CHECK(table.Version() == version);
+}

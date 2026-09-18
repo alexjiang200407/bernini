@@ -1,0 +1,102 @@
+#include "gfx/BucketTable.h"
+#include "util/util.h"
+#include <bgl_common/gassert.h>
+#include <cstdint>
+#include <spdlog/spdlog.h>
+
+namespace bgl
+{
+	namespace
+	{
+		uint64_t
+		PackKey(const GeomType geom, const MaterialType material, const LayerType layer)
+		{
+			return static_cast<uint64_t>(static_cast<uint32_t>(material)) |
+			       (static_cast<uint64_t>(static_cast<uint32_t>(geom)) << 32u) |
+			       (static_cast<uint64_t>(static_cast<uint32_t>(layer)) << 40u);
+		}
+	}
+
+	BucketTable::BucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
+	{
+		gassert(
+			ceiling >= 1 && ceiling <= idl::cMaxPsoBuckets,
+			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
+		m_TransparentFlags.assign(ceiling, 0u);
+		(void)Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
+	}
+
+	uint32_t
+	BucketTable::Resolve(const GeomType geom, const MaterialType material, const LayerType layer)
+	{
+		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
+		{
+			gfatal("A bucket's geometry kind is a drawable tier");
+		}
+		if (material == MaterialType::kInvalid || material == MaterialType::kCount)
+		{
+			gfatal("A bucket's material kind is a real one");
+		}
+		if (layer == LayerType::kInvalid || layer == LayerType::kCount)
+		{
+			gfatal("A bucket's layer is a real one");
+		}
+		if (geom == GeomType::kSkinnedMesh && material != MaterialType::kPBR &&
+		    !GameSlot(material).has_value())
+		{
+			gfatal("Skinned geometry is only drawable with a kPBR or a game surface material");
+		}
+
+		const uint64_t key = PackKey(geom, material, layer);
+		if (const auto found = m_Ids.find(key); found != m_Ids.end())
+		{
+			return found->second;
+		}
+
+		if (m_Descs.size() >= m_Ceiling)
+		{
+			if (m_Refused.insert(key).second)
+			{
+				logger::error(
+					"Bucket ceiling ({}) reached: (geom {}, material {}, layer {}) draws through "
+					"the unlit fallback",
+					m_Ceiling,
+					static_cast<uint32_t>(geom),
+					static_cast<uint32_t>(material),
+					static_cast<uint32_t>(layer));
+			}
+			return 0u;
+		}
+
+		const auto bucket = static_cast<uint32_t>(m_Descs.size());
+		m_Descs.push_back(BucketDesc{ geom, material, layer });
+		m_TransparentFlags[bucket] = layer == LayerType::kBlend ? 1u : 0u;
+		m_Ids.emplace(key, bucket);
+		++m_Version;
+
+		return bucket;
+	}
+
+	uint32_t
+	BucketTable::Resolve(const GeomType geom, const MaterialHandle material)
+	{
+		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
+		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
+
+		return Resolve(geom, type, layer);
+	}
+
+	const BucketDesc&
+	BucketTable::Desc(const uint32_t bucket) const noexcept
+	{
+		gassert(bucket < Count(), "Desc takes an allocated bucket");
+		return m_Descs[bucket];
+	}
+
+	bool
+	BucketTable::Transparent(const uint32_t bucket) const noexcept
+	{
+		gassert(bucket < Count(), "Transparent takes an allocated bucket");
+		return m_TransparentFlags[bucket] != 0u;
+	}
+}
