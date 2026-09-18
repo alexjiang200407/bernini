@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
 #include <vector>
 
 namespace core::profiling
@@ -65,6 +66,12 @@ namespace core::profiling
 		{
 			std::string      key;
 			detail::TagTable table;
+
+			// A table has no default, and MSVC's /Wall makes the implicitly deleted default
+			// constructor that leaves this an error.
+			RegisteredTable(std::string name, detail::TagTable registered) noexcept :
+				key(std::move(name)), table(std::move(registered))
+			{}
 		};
 
 		/**
