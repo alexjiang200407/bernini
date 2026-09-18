@@ -7,6 +7,8 @@ struct Uniforms
     ComputeBuffer<float4> outColor;
     float3 sceneLinear;
     float2 uv;
+
+    // The shipped AgX strip, bound by RunProbe in util/AgxProbe.cpp; the grade itself has no LUT.
     Texture2D.Handle lut;
     SamplerState.Handle lutSampler;
 
