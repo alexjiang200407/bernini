@@ -215,8 +215,6 @@ LegPose ReadLeg(
     // sole's centre. Rigid with the ankle, since the foot keeps its orientation through the solve,
     // so the contact measured here is the contact that lands.
     //
-    // Measured in model space through the ankle's transform, never in the stored ankle-local sole:
-    // bone space carries whatever scale the bind does, so a distance read there is in those units.
     // The blend's baked weight by the instance's own, for each of the two things it scales.
     let baked = PlantWeight(rig, pose, index);
     let seatWeight = baked * positionScale;
@@ -235,16 +233,14 @@ LegPose ReadLeg(
     }
     let turn = RotationAbout(float3(0.0, 0.0, 0.0), legPose.turnAxis, legPose.turnAngle);
 
-    // The foot as it will stand, turned about the ankle, with the ankle at the origin.
-    let sole = TransformDir(turn, TransformPoint(ankleModel, leg.solePoint.xyz) - legPose.ankle);
-    let soleUp = normalize(TransformDir(turn, TransformDir(ankleModel, leg.soleNormal.xyz)));
+    // The foot as it will stand, turned about the ankle. Whichever of the heel and the ball is lower
+    // along the ground normal is what touches.
     let toeModel = PaletteMatrix(tables, paletteBase + leg.toe * cFloat4sPerBone);
-    let toe = TransformDir(turn, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w) - legPose.ankle);
-
-    // The heel and the ball: the two joints dropped onto the sole plane. Whichever is lower along
-    // the ground normal is what touches.
-    let heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
-    let ball = OnSolePlane(toe, sole, soleUp);
+    float3 heel;
+    float3 ball;
+    HeelAndBall(ankleModel, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w), leg.solePoint.xyz, leg.soleNormal.xyz, heel, ball);
+    heel = TransformDir(turn, heel);
+    ball = TransformDir(turn, ball);
     let contact = legPose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
 
     // Two terms, and the baked weight scales only one. The seat drops the contact from the height
