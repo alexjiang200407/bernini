@@ -66,6 +66,9 @@ namespace
 		float    fps    = 30.0f;
 		bool     taa    = true;
 
+		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
+		bool bloom = false;
+
 		// The sun is off unless asked for, as bgl's own default is: every render this tool made
 		// before there was one stays the render it made.
 		float              sunAzimuth   = 35.0f;
@@ -223,6 +226,7 @@ try
 		app.add_option("-w,--width", opts.width, "Render width")->check(CLI::PositiveNumber);
 		app.add_option("-h,--height", opts.height, "Render height")->check(CLI::PositiveNumber);
 		app.add_option("--taa", opts.taa, "Render with temporal antialiasing, as a viewport does");
+		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
 		app.add_option(
 			   "--sun",
 			   opts.sunIntensity,
@@ -288,6 +292,7 @@ try
 
 	auto graphics = headless::CreateHeadlessGraphics();
 	auto target   = headless::CreateHeadlessTarget(graphics, opts.width, opts.height, opts.taa);
+	target->SetBloomEnabled(opts.bloom);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, 128);
@@ -366,7 +371,7 @@ try
 	if (!skinned.empty())
 		PrintClips(clips, clip);
 	std::cout << std::format(
-		"{} frames at {} fps, {}x{}, {}, TAA {}, {} warm-up frames held at t = 0\n\n",
+		"{} frames at {} fps, {}x{}, {}, TAA {}, bloom {}, {} warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
 		opts.width,
@@ -375,6 +380,7 @@ try
 			std::format("{}, sun {:.2f}", envLit ? "lit" : "unlit by env", opts.sunIntensity) :
 			std::string(lit ? "lit" : "unlit"),
 		opts.taa ? "on" : "off",
+		opts.bloom ? "on" : "off",
 		opts.warmup);
 
 	const std::filesystem::path outDir = std::filesystem::absolute(opts.outDir);

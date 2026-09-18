@@ -123,7 +123,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
   and exposure adaptation belong between a resolved scene and the screen, and each would otherwise
-  arrive as a change to the TAA shader.
+  arrive as a change to the TAA shader. Bloom is the first occupant: its chain reads the freshly
+  resolved history (docs/passes.md § Bloom), which is exactly what the seam was kept for.
 
 * **History is HDR, and so is the accumulation.** Both `sceneColor` and the two history buffers are
   `RGBA16_FLOAT` linear radiance with exposure already folded in. The display curve is the last thing

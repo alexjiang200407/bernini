@@ -45,6 +45,7 @@
 #include <assetlib/reimport.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
@@ -201,6 +202,20 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			return sky;
 		};
 
+		// Each absent key keeps the default, so a partial section overrides only what it names.
+		// Range checks are the viewport's, at creation.
+		const auto readBloom = [](const auto& section) {
+			auto       bloom = BloomConfig();
+			const auto node  = section["bloom"];
+			bloom.enabled    = node["enabled"].GetOrDefault(bloom.enabled);
+			auto& s          = bloom.settings;
+			s.intensity      = node["intensity"].GetOrDefault(s.intensity);
+			s.threshold      = node["threshold"].GetOrDefault(s.threshold);
+			s.softKnee       = node["softKnee"].GetOrDefault(s.softKnee);
+			s.scatter        = node["scatter"].GetOrDefault(s.scatter);
+			return bloom;
+		};
+
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
@@ -211,6 +226,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		matDesc.bloom                   = readBloom(matSettings);
 		matDesc.headless                = headless;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
@@ -241,6 +257,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
 		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
 		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		animDesc.bloom                  = readBloom(animSettings);
 		animDesc.headless               = headless;
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
@@ -263,6 +280,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		blendRt.taaEnabled             = animDesc.taaEnabled;
 		blendRt.renderScale            = animDesc.renderScale;
 		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
+		blendRt.bloom                  = animDesc.bloom;
 		blendRt.headless               = headless;
 		auto blendEnv                  = animDesc.previewEnv;
 
@@ -461,6 +479,24 @@ MainWindow::SetUpRenderMenu()
 	connect(outline, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
+	});
+
+	// On and off only: how a viewport blooms is config.json's, so a comparison against itself is
+	// the one thing asked of the menu. Checked when config.json started any viewport with it.
+	bool anyBloom = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyBloom = anyBloom || view->IsBloomEnabled();
+
+	auto* bloom = render->addAction("Bloom");
+	bloom->setCheckable(true);
+	bloom->setChecked(anyBloom);
+	bloom->setStatusTip(
+		"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
+		"bloom is each viewport's `bloom` section in config.json.");
+
+	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetBloomEnabled(enabled);
 	});
 
 	auto* timing = render->addAction("GPU Pass Timing");

@@ -33,9 +33,10 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 8> c_Fields = {
-			"sceneColor"sv,  "sampler"sv,  "maskSampler"sv, "outlineEnabled"sv,
-			"outlineMask"sv, "maskSize"sv, "tonemapLut"sv,  "lutSampler"sv,
+		constexpr std::array<std::string_view, 12> c_Fields = {
+			"sceneColor"sv,  "sampler"sv,      "maskSampler"sv,    "outlineEnabled"sv,
+			"outlineMask"sv, "maskSize"sv,     "tonemapLut"sv,     "lutSampler"sv,
+			"bloom"sv,       "bloomSampler"sv, "bloomIntensity"sv, "bloomEnabled"sv,
 		};
 	}
 
@@ -97,6 +98,15 @@ namespace bgl
 			                BarrierLayout::kShaderResource });
 		}
 
+		if (args.bloomEnabled)
+		{
+			desc.AddTextureArg(
+				TextureArg{ args.bloomName,
+			                BarrierSyncFlag::kPixelShader,
+			                BarrierAccessFlag::kShaderResource,
+			                BarrierLayout::kShaderResource });
+		}
+
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -124,6 +134,14 @@ namespace bgl
 			{
 				tonemap["outlineMask"].SetIfValid(args.outlineMask);
 				tonemap["maskSize"].SetIfValid(args.maskSize);
+			}
+
+			tonemap["bloomEnabled"].SetIfValid(args.bloomEnabled ? 1u : 0u);
+			if (args.bloomEnabled)
+			{
+				tonemap["bloom"].SetIfValid(args.bloom);
+				tonemap["bloomSampler"].SetIfValid(args.bloomSampler);
+				tonemap["bloomIntensity"].SetIfValid(args.bloomIntensity);
 			}
 		}
 		else

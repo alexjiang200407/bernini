@@ -34,6 +34,22 @@ namespace bgl
 		void* wnd = nullptr;
 	};
 
+	/** How a target blooms. Per-frame constants: a change reallocates nothing. */
+	struct BloomSettings
+	{
+		// sceneColor + intensity * bloom.
+		float intensity = 0.25f;
+
+		// Linear radiance after exposure, which puts a scene's average near 0.18.
+		float threshold = 0.5f;
+
+		// The threshold's fade-in, as a share of it: 0 is a hard cut.
+		float softKnee = 0.5f;
+
+		// How far the glow spreads: the coarser level's weight at each upsample.
+		float scatter = 0.7f;
+	};
+
 	/**
 	 * A render output: a swapchain (windowed) or offscreen backbuffers (headless),
 	 * plus depth, owned independently of the renderer. One Graphics can drive many
@@ -118,6 +134,27 @@ namespace bgl
 		 */
 		virtual void
 		SetOutlineEnabled(bool enabled) noexcept = 0;
+
+		/** Whether bloom runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsBloomEnabled() const noexcept = 0;
+
+		/**
+		 * Turns bloom on or off for subsequent frames. The chain is allocated at the first frame
+		 * that blooms and kept when turned off (~11 MiB at 1080p, ~44 MiB at 4K).
+		 */
+		virtual void
+		SetBloomEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual BloomSettings
+		GetBloomSettings() const noexcept = 0;
+
+		/**
+		 * @throws GraphicsError if `intensity` or `threshold` is negative or not finite, or
+		 *         `softKnee` or `scatter` is outside [0, 1].
+		 */
+		virtual void
+		SetBloomSettings(const BloomSettings& settings) = 0;
 
 		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
 		[[nodiscard]] virtual bool

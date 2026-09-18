@@ -22,6 +22,13 @@ class QTimer;
 
 #include "Render/Renderer.h"
 
+// A viewport's `bloom` section of config.json. The Render menu toggles `enabled`, never `settings`.
+struct BloomConfig
+{
+	bool               enabled = false;
+	bgl::BloomSettings settings;
+};
+
 struct RenderTargetWindowDesc
 {
 	Renderer* renderer         = nullptr;
@@ -42,6 +49,9 @@ struct RenderTargetWindowDesc
 	// with. Narrower is sharper and slower to settle, and it does nothing at a render scale of 1,
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
+
+	// Out-of-range settings are clamped and warned about, like the render scale.
+	BloomConfig bloom;
 
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to
@@ -82,6 +92,19 @@ public:
 	// re-enabling shows the current selection again.
 	void
 	SetOutlineEnabled(bool enabled);
+
+	// Turns bloom on or off for this viewport, with the settings config.json gave it. Unlike TAA
+	// nothing is allocated at creation -- the chain appears at the first frame that blooms -- so
+	// any viewport can turn it on.
+	void
+	SetBloomEnabled(bool enabled);
+
+	// What the viewport's target is blooming with now, read on the render thread that owns it.
+	[[nodiscard]] bool
+	IsBloomEnabled() const;
+
+	[[nodiscard]] bgl::BloomSettings
+	GetBloomSettings() const;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.

@@ -10,8 +10,8 @@
 #include "fg/PassTimer.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
-#include "gfx/TonemapLut.h"
 #include "overlay/Overlay.h"
+#include "passes/BloomPass.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
@@ -25,6 +25,7 @@
 #include "passes/StaticDepthPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
+#include "postprocess/TonemapLut.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
@@ -280,6 +281,7 @@ namespace bgl
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;
+		BloomPass            m_BloomPass;
 		OverlayPass          m_OverlayPass;
 		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;

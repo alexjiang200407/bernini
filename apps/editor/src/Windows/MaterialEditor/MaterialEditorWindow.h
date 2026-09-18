@@ -18,6 +18,7 @@
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 
 class TexturePreviewCache;
 
@@ -47,6 +48,7 @@ struct MaterialEditorWindowDesc
 	bool               taaEnabled              = true;
 	float              renderScale             = 1.0f;
 	float              taaReconstructionWidth  = 0.4f;
+	BloomConfig        bloom;
 	MaterialPreviewEnv previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.

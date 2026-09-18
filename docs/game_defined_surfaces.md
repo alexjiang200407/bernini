@@ -277,6 +277,9 @@ Deliberate, and each is a decision rather than an omission:
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
   Nothing of the frame — no depth, no history, no lights.
+* **No say over bloom beyond `emissive`.** A surface cannot mark itself as glowing or not; bloom
+  selects by brightness alone, which is wrong for flat toon shading. `emissive` above the
+  target's threshold is the one lever — see [Passes Overview](passes.md) § Bloom.
 
 ## Reading further
 

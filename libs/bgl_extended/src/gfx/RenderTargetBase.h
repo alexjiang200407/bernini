@@ -3,6 +3,7 @@
 #include "cmd/TimestampHeap.h"
 #include "constants/constants.h"
 #include "fg/PassTimer.h"
+#include "postprocess/BloomChain.h"
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
@@ -177,6 +178,65 @@ namespace bgl
 			}
 
 			m_TaaReconstructionWidth = width;
+		}
+
+		[[nodiscard]] bool
+		IsBloomEnabled() const noexcept final
+		{
+			return m_BloomEnabled;
+		}
+
+		void
+		SetBloomEnabled(bool enabled) noexcept final
+		{
+			if (enabled && !m_BloomEnabled)
+			{
+				m_BloomChain.Retry();
+			}
+
+			m_BloomEnabled = enabled;
+		}
+
+		[[nodiscard]] BloomSettings
+		GetBloomSettings() const noexcept final
+		{
+			return m_BloomSettings;
+		}
+
+		/**
+		 * The ladder the bloom passes render through, created by the render context at the first
+		 * frame that blooms. Held here because its size is this target's, like every attachment.
+		 */
+		[[nodiscard]] BloomChain&
+		GetBloomChain() noexcept
+		{
+			return m_BloomChain;
+		}
+
+		void
+		SetBloomSettings(const BloomSettings& settings) final
+		{
+			if (!(settings.intensity >= 0.0f) || !std::isfinite(settings.intensity))
+			{
+				throw GraphicsError("BloomSettings::intensity must be non-negative and finite");
+			}
+
+			if (!(settings.threshold >= 0.0f) || !std::isfinite(settings.threshold))
+			{
+				throw GraphicsError("BloomSettings::threshold must be non-negative and finite");
+			}
+
+			if (!(settings.softKnee >= 0.0f) || !(settings.softKnee <= 1.0f))
+			{
+				throw GraphicsError("BloomSettings::softKnee must be within [0, 1]");
+			}
+
+			if (!(settings.scatter >= 0.0f) || !(settings.scatter <= 1.0f))
+			{
+				throw GraphicsError("BloomSettings::scatter must be within [0, 1]");
+			}
+
+			m_BloomSettings = settings;
 		}
 
 		/**
@@ -425,6 +485,12 @@ namespace bgl
 		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
 		// GPU idle to change.
 		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
+
+		// Like the reconstruction width: shader constants and a toggle, never an allocation --
+		// the chain the toggle turns on is the render context's, sized lazily at the frame.
+		bool          m_BloomEnabled = false;
+		BloomSettings m_BloomSettings;
+		BloomChain    m_BloomChain;
 
 		bool                                           m_GpuTimingEnabled = false;
 		TimestampHeapRef                               m_TimingHeap;

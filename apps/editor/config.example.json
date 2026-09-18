@@ -11,7 +11,7 @@
         "maxCbvSrvUavs": 2048,
         "maxBuffers": 500,
         "maxSrvs": 500,
-        "maxRtvs": 32,
+        "maxRtvs": 96,
         "maxDsvs": 16,
         "maxTextures": 2048,
         "strictError": false,
@@ -31,6 +31,13 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
+        "bloom": {
+            "enabled": false,
+            "intensity": 0.25,
+            "threshold": 0.5,
+            "softKnee": 0.5,
+            "scatter": 0.7
+        },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",
         "skyMipLevel": 3,
@@ -43,6 +50,13 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
+        "bloom": {
+            "enabled": false,
+            "intensity": 0.25,
+            "threshold": 0.5,
+            "softKnee": 0.5,
+            "scatter": 0.7
+        },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",
         "skyMipLevel": 3,

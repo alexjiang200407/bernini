@@ -18,6 +18,7 @@
 #include <bgl/InstanceDesc.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -41,6 +42,7 @@ struct AnimationEditorWindowDesc
 	bool                         taaEnabled              = true;
 	float                        renderScale             = 1.0f;
 	float                        taaReconstructionWidth  = 0.4f;
+	BloomConfig                  bloom;
 	editor::EnvironmentApplyDesc previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.
