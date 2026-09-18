@@ -6,7 +6,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletKernel.h"
@@ -42,7 +42,7 @@ namespace bgl
 	namespace
 	{
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
-		// the code that writes them so BinderNames catches a shader rename at startup: a
+		// the code that writes them so BindingNameCheck catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
 		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
@@ -286,18 +286,40 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
+		m_BlobShadows.Init(device, pipelines);
+	}
+
+	void
+	ForwardPass::AddBucketKernels(
+		IDevice*          device,
+		PipelineBatch&    pipelines,
+		const BucketMask& buckets)
+	{
+		gassert(device != nullptr, "Device must be initialized");
+
 		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
-			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
+			if (buckets.test(pso) && !m_Kernels[pso].pipeline.IsInitialized())
+			{
+				pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
+			}
 		}
-
-		m_BlobShadows.Init(device, pipelines);
 	}
 
 	void
 	ForwardPass::CheckBindings() const
 	{
-		BinderNames("ForwardPass"sv, m_Kernels)
+		// Always-on kernels first: the bucket guard below must not gate them.
+		m_BlobShadows.CheckBindings();
+
+		// The buckets are demand-built, so nothing reads their names off until a first one is;
+		// EnsureBucketPipelinesExist re-checks after every build.
+		if (!AnyInitialized(m_Kernels))
+		{
+			return;
+		}
+
+		BindingNameCheck("ForwardPass"sv, m_Kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
@@ -305,8 +327,6 @@ namespace bgl
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
-
-		m_BlobShadows.CheckBindings();
 	}
 
 	void
@@ -456,8 +476,12 @@ namespace bgl
 				continue;
 			}
 
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
 			MeshletKernel& kernel = m_Kernels[pso];
-			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+			if (!kernel.pipeline.IsInitialized())
+			{
+				continue;
+			}
 
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
@@ -504,9 +528,13 @@ namespace bgl
 		                             .AddColorAttachment(draw.targets.sceneColor)
 		                             .SetDepthAttachment(draw.targets.depth);
 
+		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
 		MeshletKernel& kernel =
 			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
-		gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+		if (!kernel.pipeline.IsInitialized())
+		{
+			return;
+		}
 
 		BindKernel(kernel, draw, resources);
 		if (auto expansionData = kernel.FindUniforms("expansionData"))

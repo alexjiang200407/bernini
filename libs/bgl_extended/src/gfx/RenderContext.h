@@ -27,6 +27,7 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
+#include "types/BucketMask.h"
 #include "types/Format.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
@@ -128,10 +129,34 @@ namespace bgl
 		void
 		DiscardPendingGpuAssertions() noexcept;
 
+		/**
+		 * The buckets whose kernels exist. Grown by Draw, which builds what its view demands and
+		 * nothing else -- with one substitution: any transparent demand builds (and marks) the one
+		 * shared blend bucket instead of the demanded transparent buckets, since no pass binds any
+		 * other.
+		 */
+		[[nodiscard]] const BucketMask&
+		InitializedBuckets() const noexcept
+		{
+			return m_InitializedBuckets;
+		}
+
 		[[nodiscard]] PassTimings
 		GetPassTimings(const RenderTargetRef& target);
 
 	private:
+		/**
+		 * Makes every demanded bucket's kernels exist: the ones missing are built in one parallel
+		 * batch, and the Slang sessions a cold-cache build stood up are dropped. Idempotent -- a
+		 * bucket already initialized costs nothing. The whole depth-sorted transparent list draws
+		 * through the one shared blend kernel, so any transparent demand also demands that bucket.
+		 *
+		 * @param demanded every bucket the view's instances have resolved to
+		 * (SceneView::DemandedBuckets).
+		 */
+		void
+		EnsureBucketPipelinesExist(BucketMask demanded);
+
 		// Passes a frame may time; a frame past it lists the rest unsampled. Every target owns this
 		// many pairs per frame in flight, so the heap is sized from it.
 		static constexpr uint32_t c_MaxTimedPasses      = 128;
@@ -233,6 +258,8 @@ namespace bgl
 
 		std::array<CaptureSlot, IGraphics::c_MaxPendingCaptures> m_Captures;
 		uint64_t                                                 m_NextCaptureId = 1;
+
+		BucketMask m_InitializedBuckets;
 
 		BrdfLutGenPass       m_BrdfLut;
 		TonemapLut           m_TonemapLut;

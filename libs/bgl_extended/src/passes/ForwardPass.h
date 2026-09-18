@@ -1,6 +1,7 @@
 #pragma once
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
+#include "types/BucketMask.h"
 #include "types/MeshletState.h"
 #include "types/RasterState.h"
 #include <array>
@@ -42,9 +43,23 @@ namespace bgl
 			m_BlobShadows.Release();
 		}
 
-		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
+		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddBucketKernels. */
 		void
 		Init(IDevice* device, PipelineBatch& pipelines);
+
+		/**
+		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
+		 * they are live once `pipelines` is built. A bucket already initialized is left alone.
+		 */
+		void
+		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
+
+		/** @pre pso < idl::c_PsoCount. */
+		[[nodiscard]] bool
+		BucketInitialized(uint16_t pso) const noexcept
+		{
+			return m_Kernels[pso].pipeline.IsInitialized();
+		}
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
 		void
