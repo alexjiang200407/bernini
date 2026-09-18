@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl_common/idl/Bucket.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/Entry.h>
 #include <bgl_common/idl/RawEntry.h>
 #include <cstdint>
@@ -20,8 +20,8 @@ namespace bgl
 		// element index. The record says which kind it is; `bucket` agrees by construction.
 		idl::RawEntry material;
 
-		// cInvalidBucket, not 0: the sort skips an id past the ceiling, which is what keeps tail
+		// cInvalidDrawBucket, not 0: the sort skips an id past the ceiling, which is what keeps tail
 		// padding out of a real bucket.
-		uint32_t bucket = idl::cInvalidBucket;
+		uint32_t drawBucket = idl::cInvalidDrawBucket;
 	};
 }

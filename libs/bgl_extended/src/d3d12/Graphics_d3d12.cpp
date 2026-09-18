@@ -1,7 +1,7 @@
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
@@ -85,7 +85,7 @@ namespace bgl
 				scene,
 				initialInstances,
 				m_ResourceManager,
-				m_BucketTable);
+				m_DrawBucketTable);
 		}
 
 		OverlayRef
@@ -206,7 +206,7 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
-		core::SharedRef<BucketTable> m_BucketTable;
+		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
 
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
@@ -297,11 +297,11 @@ namespace bgl
 		// whatever module this bound to that slot.
 		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
 
-		m_BucketTable = core::SharedRef<BucketTable>::Make();
-		m_Context     = std::make_unique<RenderContext>(
+		m_DrawBucketTable = core::SharedRef<DrawBucketTable>::Make();
+		m_Context         = std::make_unique<RenderContext>(
 			m_Device,
 			m_ResourceManager,
-			m_BucketTable,
+			m_DrawBucketTable,
 			m_Opts.enableDebugLayer);
 
 		// The always-on set is built by the RenderContext above; the per-bucket kernels are built by

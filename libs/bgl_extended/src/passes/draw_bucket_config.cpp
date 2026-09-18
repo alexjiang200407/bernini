@@ -1,5 +1,5 @@
-#include "passes/bucket_config.h"
-#include "gfx/BucketTable.h"
+#include "passes/draw_bucket_config.h"
+#include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include "util/util.h"
 #include <array>
@@ -52,7 +52,7 @@ namespace bgl
 	}
 
 	std::string_view
-	BucketPixelSrc(const BucketDesc& desc)
+	DrawBucketPixelSrc(const DrawBucketDesc& desc)
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no pixel program");
 
@@ -91,7 +91,7 @@ namespace bgl
 	}
 
 	std::string_view
-	BucketGeometrySrc(const BucketDesc& desc)
+	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no geometry program");
 		return desc.geom == GeomType::kSkinnedMesh ? "programs.forward.SkinnedMesh"sv :
@@ -99,7 +99,7 @@ namespace bgl
 	}
 
 	std::string_view
-	BucketCoveragePixelSrc(const BucketDesc& desc)
+	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc)
 	{
 		gassert(
 			desc.geom == GeomType::kStaticMesh &&
@@ -133,7 +133,7 @@ namespace bgl
 	}
 
 	RasterCullMode
-	BucketCullMode(const BucketDesc& desc) noexcept
+	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{
 		return desc.material == MaterialType::kNull || desc.material == MaterialType::kAssert ?
 		           RasterCullMode::kBack :

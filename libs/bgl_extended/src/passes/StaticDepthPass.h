@@ -1,7 +1,7 @@
 #pragma once
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "pipeline/MeshletKernel.h"
-#include "types/BucketMask.h"
+#include "types/DrawBucketMask.h"
 #include <spdlog/spdlog.h>
 #include <vector>
 
@@ -51,7 +51,7 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines, const BucketTable& buckets);
+		Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets);
 
 		/**
 		 * Requests the coverage kernels for the buckets set in `buckets` that are not already
@@ -59,7 +59,10 @@ namespace bgl
 		 * are ignored.
 		 */
 		void
-		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
+		AddDrawBucketKernels(
+			IDevice*              device,
+			PipelineBatch&        pipelines,
+			const DrawBucketMask& buckets);
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void
@@ -76,7 +79,7 @@ namespace bgl
 		Execute(const DrawData& draw, const PassContext& resources);
 
 		// The opaque buckets need no pixel stage beyond depth, so they share two pipelines split
-		// by how BucketCullMode culls each bucket: in hardware (the material kinds with no
+		// by how DrawBucketCullMode culls each bucket: in hardware (the material kinds with no
 		// doubleSided flag), or not at all, leaving back faces to the mesh stage. The coverage
 		// kernels each pair the same geometry stage with their own discard-only pixel stage --
 		// indexed by bucket id, grown with the table, empty except at static cutout and hashed
@@ -85,6 +88,6 @@ namespace bgl
 		MeshletKernel              m_MaterialCullKernel;
 		std::vector<MeshletKernel> m_CoverageKernels;
 
-		const BucketTable* m_Buckets = nullptr;
+		const DrawBucketTable* m_DrawBuckets = nullptr;
 	};
 }

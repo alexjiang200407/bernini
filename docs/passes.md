@@ -9,8 +9,8 @@ that machinery. This page is the catalog of the passes `bgl_extended` ships.
 A pass's `Init` does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
 lands in, and `RenderContext` builds each batch's requests at once across threads (see
-[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-bucket meshlet
-kernels in the first `Draw` whose view demands each bucket. Anything in a pass that reads a built
+[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-draw-bucket meshlet
+kernels in the first `Draw` whose view demands each draw bucket. Anything in a pass that reads a built
 kernel — the `BindingNameCheck` of the cbuffer names it binds — lives in `CheckBindings`, which
 `RenderContext` calls after every batch.
 
@@ -121,7 +121,7 @@ opaque; the marker never becomes display transparency.
 
 ## Two-sided surfaces
 
-Every bucket that draws a material — opaque, cutout, blend and hashed — is `RasterCullMode::kNone`,
+Every draw bucket that draws a material — opaque, cutout, blend and hashed — is `RasterCullMode::kNone`,
 so the pipeline draws both sides of a surface. **Whether a given material's back faces reach the
 rasterizer is the material's choice** — `PbrMaterialDesc::doubleSided`, glTF's `doubleSided`, on by
 default — and the mesh stage is what honours it: `PrepareMeshlet` reads the flag once per group off
@@ -129,7 +129,7 @@ the material record
 (`MaterialData::IsMaterialDoubleSided`, by kind), each vertex leaves its clip position in
 threadgroup memory beside its output, and `CullBackface` replaces a back-facing triangle of a
 single-sided material with a degenerate one — on a draw whose `expansionData.cullBackfaces` says
-the pipeline draws both sides, which Forward sets per bucket from `BucketCullMode` and the
+the pipeline draws both sides, which Forward sets per draw bucket from `DrawBucketCullMode` and the
 [Outline Mask](#outline-mask) sets to zero, since the mask is the whole silhouette whichever way
 its triangles face. A draw that culls in hardware, and every double-sided material, skips the
 record, the barrier and the material read. The rasterizer sets a degenerate triangle up and drops
@@ -141,7 +141,7 @@ plane is judged as the hardware judges it, and the `[twosided]` cases pin the si
 windings. It is the mesh stage and not a second PSO because the transparent phase draws every
 material through one pipeline and one sorted dispatch, where no PSO state can vary per material.
 
-Only the materialless Null and Assert buckets cull in hardware, since there is no flag to read. An
+Only the materialless Null and Assert draw buckets cull in hardware, since there is no flag to read. An
 opaque material is otherwise no exception, so a closed opaque mesh left at the flag's default
 rasterizes its hidden inside as well: set `doubleSided = false` where nothing inside is ever seen.
 
@@ -158,7 +158,7 @@ detail the wrong way on every back face.
 `programs.forward.Null` and `programs.forward.Assert` take `ForwardVSOut` but never read its normal, so they do not
 take the flag.
 
-A **closed** two-sided mesh in the blend bucket therefore composites twice: the sort orders instances,
+A **closed** two-sided mesh in the blend draw bucket therefore composites twice: the sort orders instances,
 not the triangles inside one, so the far hemisphere blends under the near one in raster order and
 brings its own lighting with it. Flipped normals put its terminator somewhere the near hemisphere's
 is not, and on a coarse mesh that terminator steps along the triangle rows — a band of horizontal
@@ -170,7 +170,7 @@ sort: the fix is `doubleSided = false` where a translucent solid has no inside w
 
 ## Blended surfaces
 
-`LayerType::kBlend` resolves to a transparent bucket — one per (tier, material kind) pair that
+`LayerType::kBlend` resolves to a transparent draw bucket — one per (tier, material kind) pair that
 can carry it, flagged transparent by the table — and every one of them draws through the one shared
 blend kernel, whose PSO blends
 **premultiplied** — `SrcBlend = One`, `DestBlend = InvSrcAlpha`. `programs.forward.Transparent` therefore
@@ -217,7 +217,7 @@ Emissive follows the specular lobe, not the diffuse: it is light leaving the sur
 than light that came through from behind, so transmission exempts it from thinning the same way, and
 it raises the coverage not at all — emission adds to the backdrop, it does not hide it.
 
-**Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
+**Only the blend draw bucket is premultiplied.** The opaque, cutout and hashed draw buckets write with no blend
 at all, so their pixel shaders return the plain radiance sum. Their alpha is the TAA depth-validity
 marker described above; scaling a surviving cutout fragment's radiance by texture alpha would be wrong.
 
@@ -227,8 +227,8 @@ marker described above; scaling a surviving cutout fragment's radiance by textur
 alpha becomes a per-pixel hashed threshold rather than a cutoff, so every layer of a self-occluding
 surface writes depth and participates, and the correct blend is what the ensemble averages to.
 
-It resolves to a hashed bucket per (tier, material kind), which is **opaque-shaped** — depth
-write, no blend, velocity written like any other geometry — and drawn in the bucketed phase
+It resolves to a hashed draw bucket per (tier, material kind), which is **opaque-shaped** — depth
+write, no blend, velocity written like any other geometry — and drawn in the draw-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
 threshold ([lib/math/HashedAlpha.slang](libs/bgl_common/shaders/src/lib/math/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
@@ -327,17 +327,17 @@ culling, so it fills only where nothing has been drawn.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl_extended/src/passes/CompactInstancesPass.cpp)
 
-Frustum-culls the view's instances, then buckets the survivors by their bucket id into contiguous
-ranges and builds the per-bucket indirect dispatch arguments that `Forward` consumes. The ids come
-from the renderer's `BucketTable` ([gfx/BucketTable.h](libs/bgl_extended/src/gfx/BucketTable.h)),
+Frustum-culls the view's instances, then draw buckets the survivors by their draw bucket id into contiguous
+ranges and builds the per-draw-bucket indirect dispatch arguments that `Forward` consumes. The ids come
+from the renderer's `DrawBucketTable` ([gfx/DrawBucketTable.h](libs/bgl_extended/src/gfx/DrawBucketTable.h)),
 dense from 0 in first-use order; nothing in this chain derives or assumes one. Owns four compute kernels, all
 under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
 `CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
 in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
 
-The buffers it *writes* belong to the view being culled — `bucketPrefixSumBuffer` and
-`compactDispatchArgs` (sized `cMaxBuckets`, the ceiling every count-sized structure is built
+The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
+`compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
 to) and `cull.view` (one `CullView`: view-proj + frustum
 planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
 under that frustum's scope. The pass reaches them through `DrawData::cullState` and names them by
@@ -347,7 +347,7 @@ rather than per namespace.
 
 It adds **four sub-passes**:
 
-1. **Clear** — zeroes `bucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
+1. **Clear** — zeroes `drawBucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
    `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
    Y = Z = 1). The written buffers are declared copy-dest.
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
@@ -356,21 +356,21 @@ It adds **four sub-passes**:
    depth-key passes all gate on it, so a culled instance reaches no draw. A placement whose
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
-3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per bucket into
-   `bucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
+3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per draw bucket into
+   `drawBucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
    sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
-   zero. The scan is one thread group of `cMaxBuckets` threads, which is why that constant is a
+   zero. The scan is one thread group of `cMaxDrawBuckets` threads, which is why that constant is a
    hard ceiling. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
    no barrier between them; the pass issues the one intra-pass UAV barrier itself — the sanctioned
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
 4. **Compact Instances** — scatters each **visible** instance into `scene.compactedInstances` at its
-   bucket's prefix-sum offset and finalizes each bucket's dispatch args. Skipped when the instance count
+   draw bucket's prefix-sum offset and finalizes each draw bucket's dispatch args. Skipped when the instance count
    is 0.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`
   (all read).
-* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `bucketPrefixSumBuffer`,
+* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `drawBucketPrefixSumBuffer`,
   `compactDispatchArgs` (and `cull.stats` in debug) — all UAV / indirect-args downstream.
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl_extended/src/passes/TransparentSortPass.cpp)
@@ -401,8 +401,8 @@ instance buffer, not off the capacity, so the depth-key pass cannot append past 
 many instances turn out to be transparent; only the sort itself is bounded.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`,
-  `scene.transparentBucketFlags` (one word per bucket, owned by the view and uploaded from the
-  renderer's `BucketTable` whenever it has grown), the camera position.
+  `scene.transparentDrawBucketFlags` (one word per draw bucket, owned by the view and uploaded from the
+  renderer's `DrawBucketTable` whenever it has grown), the camera position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
   `transparentSort.dispatchArgs` — all owned by the view's `TransparentSortState`, one per view
   rather than per frustum since only a camera sorts transparents, the last two consumed by
@@ -482,20 +482,20 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 
 Renders the static geometry's depth into the target's own receiver texture (`staticDepth`, the
 scene depth's format and grid), ahead of `Forward`: what the blob-shadow decal reconstructs the
-surface under each pixel from. The opaque static buckets share a depth-only pixel stage —
+surface under each pixel from. The opaque static draw buckets share a depth-only pixel stage —
 `programs.forward.DepthOnly`, with no outputs, since a pipeline with no pixel shader at all is
 reflection-only on Metal — over the `StaticMesh` geometry stage, in two pipelines split by where
 back faces are culled. Every pipeline and every dispatch here takes its culling from
-`BucketCullMode` ([passes/bucket_config.h](libs/bgl_extended/src/passes/bucket_config.h)), the one
-rule: hardware culling where the Forward bucket culls, and
+`DrawBucketCullMode` ([passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h)), the one
+rule: hardware culling where the Forward draw bucket culls, and
 otherwise `cullBackfaces` hands back faces to the mesh stage and the material's `doubleSided`,
 exactly as `Forward` binds it — so the receiver holds precisely the faces the colour pass drew, a
 double-sided surface's back included and a single-sided one's excluded. The cutout and hashed static
-buckets render too, each through its own `programs.forward.DepthOnly_*` twin
-(`BucketCoveragePixelSrc`), built the first time the bucket is demanded: the identical coverage
+draw buckets render too, each through its own `programs.forward.DepthOnly_*` twin
+(`DrawBucketCoveragePixelSrc`), built the first time the draw bucket is demanded: the identical coverage
 discard with nothing shaded — same records, same samplers, and the colour pass's own
 `alphaHashSeed` — so a shadow lands on a bush's leaves and falls through its gaps, texel for texel
-with what the colour pass drew. Every bucket dispatches indirect off the same
+with what the colour pass drew. Every draw bucket dispatches indirect off the same
 `compactDispatchArgs` the Forward pass draws from, so it sees exactly the instances the cull kept.
 Statics only, deliberately: units are absent, so a blob shadow never lands on another unit passing
 beneath its caster — and statics are therefore drawn twice per frame, a cost the HZB milestone
@@ -511,16 +511,16 @@ repays when this is promoted into the shared depth prepass the roadmap already a
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds one
-`MeshletKernel` per bucket, indexed by bucket id and grown with the renderer's `BucketTable`, each
-configured from the bucket's desc by the functions in
-[passes/bucket_config.h](libs/bgl_extended/src/passes/bucket_config.h) (pixel-shader module,
-mesh-shader module, cull mode) — each built by the first `Draw` whose view demands the bucket
-(`RenderContext::EnsureBucketPipelinesExist`), and skipped while unbuilt, which by construction is
-only while no instance can be in it. A transparent bucket owns no kernel: the whole depth-sorted
-list draws through one shared blend kernel, a named member built when any transparent bucket is
+`MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
+configured from the draw bucket's desc by the functions in
+[passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h) (pixel-shader module,
+mesh-shader module, cull mode) — each built by the first `Draw` whose view demands the draw bucket
+(`RenderContext::EnsureDrawBucketPipelinesExist`), and skipped while unbuilt, which by construction is
+only while no instance can be in it. A transparent draw bucket owns no kernel: the whole depth-sorted
+list draws through one shared blend kernel, a named member built when any transparent draw bucket is
 first demanded.
 
-Each bucket names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,
+Each draw bucket names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,
 which blends the bind-pose vertex bytes by a pose — the bone palette `Pose Skinned` wrote this
 frame, or the rig's shared table, whichever kind of playback record the placement holds. Both are
 the same shader with one function swapped: the instance expansion, the meshlet lookup, the triangle
@@ -530,22 +530,22 @@ mesh-output loops are still written out per entry point — Slang's Metal backen
 function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMesh` is the third,
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
-The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
+The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and `GameSlot0..3`
 with their `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material kind and layer —
-every tier draws every layer, so the buckets are the (tier × layer × material kind) keys a material
+every tier draws every layer, so the draw buckets are the (tier × layer × material kind) keys a material
 actually resolves to, with the loose material type static-only and `kNull`/`kAssert` opaque
-whatever the layer. A bucket exists only once something resolves to it: the table hands ids out on
+whatever the layer. A draw bucket exists only once something resolves to it: the table hands ids out on
 first use, so a scene pays for the combinations it draws, not for the product. A game slot's
-buckets draw whatever surface `game.slotN` binds, the null surface until one is registered
+draw buckets draw whatever surface `game.slotN` binds, the null surface until one is registered
 ([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)). The
-two tiers' buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
+two tiers' draw buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
 material offset, and neither says which tier filled them.
 
-**Opaque and alpha-test** are bucketed: per bucket it populates the cbuffers the kernel declares
+**Opaque and alpha-test** are draw-bucketed: per draw bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
-derive the pose from), `expansionData` (`bucketIndex` and the instance-list tables), `materialData`
+derive the pose from), `expansionData` (`drawBucketIndex` and the instance-list tables), `materialData`
 (samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(bucket)`, whose grid comes from the `compactDispatchArgs` entry that
@@ -578,7 +578,7 @@ never smears across another animal passing beneath. The cost of a static caster 
 own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
 remains is any upward-facing surface of the caster below its own origin.
 
-**Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
+**Transparent draw buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent
 PSO shares one pipeline and the list is drawn whole, so the transparent phase is **one
@@ -599,8 +599,8 @@ than blending: stochastic coverage writes real depth, so it self-occludes in the
 pre-pass. That replaced an `occlude` flag which drew a blend material twice — a depth-only pre-pass,
 then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
-The depth-sorted path starts at zero; the opaque path reads `bucketPrefixSum` indexed by
-`bucketIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
+The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum` indexed by
+`drawBucketIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
@@ -619,7 +619,7 @@ Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) i
 R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
 the shared `programs.forward.AnyMesh` amplification/mesh shaders with a trivial coverage pixel shader
 (`programs/screen/OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
-CPU-built selected list with `baseTable = kDepthSorted`, the same expansion shape as the
+CPU-built selected list with `baseTable = kByDepth`, the same expansion shape as the
 transparent phase, so no culling and no indirect args are involved. A selection mixes tiers as freely
 as the sorted list does, so it takes the same tier-branching geometry stage and a selected rig
 contours the pose it is drawn in.
@@ -747,12 +747,12 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
 ## Risky / Non-obvious Contracts
 
 * **`Forward` depends on `Compact Instances` by resource, not by ordering code.** It reads
-  `compactedInstances`, `bucketPrefixSumBuffer`, and `compactDispatchArgs`; the graph's last-writer
+  `compactedInstances`, `drawBucketPrefixSumBuffer`, and `compactDispatchArgs`; the graph's last-writer
   dependency is what puts the compaction before it. Adding `Forward` without the compaction in the
   same frame leaves its indirect args seeded to zero groups (nothing draws) — not an error.
-* **The histogram reuses `bucketPrefixSumBuffer` as its output.** The histogram and the scan are the
+* **The histogram reuses `drawBucketPrefixSumBuffer` as its output.** The histogram and the scan are the
   same buffer read-modify-written back to back; the intra-pass UAV barrier between them is
-  mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing buckets —
+  mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing draw buckets —
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier
   caveat is written from.
 * **A bound framebuffer's colour-attachment count must match the PSO's `rtvFormats` count.** The
@@ -761,10 +761,10 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
   `MeshletState`. Handing the opaque framebuffer to a blend PSO binds a render target it does not
   declare; the reverse leaves a declared target unbound. `PsoConfig::blend` is what decides whether
   `BuildForwardKernel` adds the velocity format, so the two sides move together.
-* **A bucket's program names are strings, resolved the first time the bucket is demanded.**
-  `bucket_config` maps a desc to module names, and a renamed or deleted program file fails when a
+* **A draw bucket's program names are strings, resolved the first time the draw bucket is demanded.**
+  `draw_bucket_config` maps a desc to module names, and a renamed or deleted program file fails when a
   scene first draws that combination, not at startup. The `[pipeline][demand][bindings]` case builds
-  every bucket a material can resolve to, which is what turns that into a suite failure.
+  every draw bucket a material can resolve to, which is what turns that into a suite failure.
 * **The transparent blend factor and `programs.forward.Transparent`'s return value are one decision made in
   two files.** `SrcBlend = One` is only correct because the shader premultiplies; either one changed
   alone is silently wrong rather than a build error — a `SrcAlpha` factor against premultiplied

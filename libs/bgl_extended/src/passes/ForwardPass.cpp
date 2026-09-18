@@ -9,7 +9,7 @@
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
-#include "passes/bucket_config.h"
+#include "passes/draw_bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -65,7 +65,7 @@ namespace bgl
 		// clang-format on
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"bucketIndex"sv,
+			"drawBucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -92,10 +92,10 @@ namespace bgl
 
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
 		PsoConfig
-		ConfigFor(const BucketDesc& desc)
+		ConfigFor(const DrawBucketDesc& desc)
 		{
-			return PsoConfig{ BucketPixelSrc(desc),  BucketCullMode(desc),   true, false,
-				              ComparisonFunc::kLess, BucketGeometrySrc(desc) };
+			return PsoConfig{ DrawBucketPixelSrc(desc), DrawBucketCullMode(desc),   true, false,
+				              ComparisonFunc::kLess,    DrawBucketGeometrySrc(desc) };
 		}
 
 		MeshletPipelineDesc
@@ -158,23 +158,23 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines, const BucketTable& buckets)
+	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_Buckets = &buckets;
+		m_DrawBuckets = &buckets;
 		m_BlobShadows.Init(device, pipelines);
 	}
 
 	void
-	ForwardPass::AddBucketKernels(
-		IDevice*          device,
-		PipelineBatch&    pipelines,
-		const BucketMask& buckets)
+	ForwardPass::AddDrawBucketKernels(
+		IDevice*              device,
+		PipelineBatch&        pipelines,
+		const DrawBucketMask& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const uint32_t count = m_Buckets->Count();
+		const uint32_t count = m_DrawBuckets->Count();
 		if (m_Kernels.size() < count)
 		{
 			m_Kernels.resize(count);
@@ -185,11 +185,11 @@ namespace bgl
 			if (buckets.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
 			{
 				gassert(
-					!m_Buckets->Transparent(bucket),
+					!m_DrawBuckets->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
 				pipelines.Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(device, ConfigFor(m_Buckets->Desc(bucket))));
+					ForwardPipelineDesc(device, ConfigFor(m_DrawBuckets->Desc(bucket))));
 			}
 		}
 	}
@@ -228,7 +228,7 @@ namespace bgl
 	ForwardPass::CheckKernelNames(std::span<const MeshletKernel> kernels) const
 	{
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
-		// EnsureBucketPipelinesExist re-checks after every build.
+		// EnsureDrawBucketPipelinesExist re-checks after every build.
 		if (!AnyInitialized(kernels))
 		{
 			return;
@@ -385,15 +385,15 @@ namespace bgl
 		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
 		// table's live count. The transparent buckets are skipped here -- their order is depth,
 		// not bucket, so they draw below.
-		for (uint32_t bucket = 0, count = m_Buckets->Count(); bucket < count; ++bucket)
+		for (uint32_t bucket = 0, count = m_DrawBuckets->Count(); bucket < count; ++bucket)
 		{
-			if (m_Buckets->Transparent(bucket))
+			if (m_DrawBuckets->Transparent(bucket))
 			{
 				continue;
 			}
 
 			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
-			if (!BucketInitialized(bucket))
+			if (!DrawBucketInitialized(bucket))
 			{
 				continue;
 			}
@@ -402,11 +402,12 @@ namespace bgl
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*expansionData)["bucketIndex"] = bucket;
-				(*expansionData)["baseTable"]   = idl::BaseTable::kBucketed;
+				(*expansionData)["drawBucketIndex"] = bucket;
+				(*expansionData)["baseTable"]       = idl::BaseTable::kByDrawBucket;
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansionData)["cullBackfaces"] =
-					BucketCullMode(m_Buckets->Desc(bucket)) == RasterCullMode::kNone ? 1u : 0u;
+					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
+																							   0u;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -448,7 +449,7 @@ namespace bgl
 		if (auto expansionData = kernel.FindUniforms("expansionData"))
 		{
 			(*expansionData)["compactedInstances"] = sortedInstances;
-			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
+			(*expansionData)["baseTable"]          = idl::BaseTable::kByDepth;
 			(*expansionData)["cullBackfaces"]      = 1u;
 		}
 

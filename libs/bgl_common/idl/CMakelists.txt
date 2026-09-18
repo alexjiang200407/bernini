@@ -60,7 +60,7 @@ set(IDL_CPP_SOURCES
     GameSurfaceRecord.slang
     RawTextureHandle.slang
     ErrorCode.slang
-    Bucket.slang
+    DrawBucket.slang
     DispatchArgs.slang
     BaseTable.slang
     BoneSample.slang

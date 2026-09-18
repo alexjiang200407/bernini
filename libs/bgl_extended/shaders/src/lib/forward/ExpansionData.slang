@@ -4,14 +4,14 @@ import lib.types.ComputeBuffer;
 // Which slice of the compacted instance list one dispatch covers.
 public struct ExpansionData
 {
-    public uint bucketIndex;
+    public uint drawBucketIndex;
 
     // Where in `compactedInstances` this dispatch's instances start is a GPU value, so what the CPU
     // supplies is which table to read it out of.
     public BaseTable baseTable;
 
     public ComputeBuffer<uint> compactedInstances;
-    public ComputeBuffer<uint> bucketPrefixSum;
+    public ComputeBuffer<uint> drawBucketPrefixSum;
 
     // Non-zero on a draw whose pipeline draws both sides, so a single-sided material's back faces
     // are the mesh stage's to cull; zero where the pipeline culls in hardware, and on a draw that
@@ -25,10 +25,10 @@ public ConstantBuffer<ExpansionData> expansionData;
 // drawn whole and starts at zero. Shared so the two stages that expand instances cannot disagree.
 public uint ResolveInstanceBase()
 {
-    if (expansionData.baseTable == BaseTable::kDepthSorted)
+    if (expansionData.baseTable == BaseTable::kByDepth)
     {
         return 0u;
     }
 
-    return (expansionData.bucketIndex == 0u) ? 0u : expansionData.bucketPrefixSum[expansionData.bucketIndex - 1u];
+    return (expansionData.drawBucketIndex == 0u) ? 0u : expansionData.drawBucketPrefixSum[expansionData.drawBucketIndex - 1u];
 }

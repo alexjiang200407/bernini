@@ -2,9 +2,9 @@
 #include "fg/FrameGraph.h"
 #include "resource/ResourceManager.h"
 #include "scene/scene_buffer_names.h"
-#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <cstdint>
 #include <format>
@@ -38,16 +38,16 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::cMaxBuckets)
+				.SetInitialCount(idl::cMaxDrawBuckets)
 				.SetDebugName("Bucket Prefix Sum");
 
-			m_BucketPrefixSum.Init(std::move(desc), resourceManager);
+			m_DrawBucketPrefixSum.Init(std::move(desc), resourceManager);
 		}
 
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::cMaxBuckets)
+				.SetInitialCount(idl::cMaxDrawBuckets)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);
@@ -79,7 +79,7 @@ namespace bgl
 	{
 		m_CompactedInstances.Release(deferred);
 		m_InstanceVisibility.Release(deferred);
-		m_BucketPrefixSum.Release(deferred);
+		m_DrawBucketPrefixSum.Release(deferred);
 		m_CompactedDispatchArgs.Release(deferred);
 		m_CullView.Release(deferred);
 	}
@@ -107,7 +107,7 @@ namespace bgl
 		importUpdated(c_CompactedInstancesName, m_CompactedInstances);
 		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
 
-		fg.ImportBuffer(c_BucketPrefixSumName, m_BucketPrefixSum.GetBufferHandle());
+		fg.ImportBuffer(c_DrawBucketPrefixSumName, m_DrawBucketPrefixSum.GetBufferHandle());
 		fg.ImportBuffer(c_CompactDispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
 		fg.ImportBuffer(c_CullViewName, m_CullView.GetBufferHandle());
 	}

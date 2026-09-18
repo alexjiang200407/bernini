@@ -1,7 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "scene/Scene.h"
@@ -46,8 +46,8 @@ namespace
 	Shading
 	ShadingOf(bgl::IGraphics& gfx, uint32_t bucket)
 	{
-		const bgl::BucketDesc& desc =
-			gfx.As<bgl::GraphicsBase>()->GetRenderContext()->Buckets().Desc(bucket);
+		const bgl::DrawBucketDesc& desc =
+			gfx.As<bgl::GraphicsBase>()->GetRenderContext()->DrawBuckets().Desc(bucket);
 		return { desc.material, desc.layer };
 	}
 
@@ -328,7 +328,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 // SetSubmeshMaterial is indexed by source submesh. Once chunking made that index disagree with the
 // GPU submesh index, materialing one submesh wrote over a neighbour's, or covered only part of its
 // own -- a mesh half-textured along a triangle-aligned seam.
-TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][bucket][scene]")
+TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][drawbucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -379,7 +379,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	}
 }
 
-TEST_CASE("SetSubmeshMaterial re-selects a submesh's bucket", "[material][bucket][scene]")
+TEST_CASE("SetSubmeshMaterial re-selects a submesh's bucket", "[material][drawbucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -454,7 +454,7 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's bucket", "[material][bucket
 // rather than a crash.
 TEST_CASE(
 	"A live instance re-resolves its bucket after SetSubmeshMaterial",
-	"[material][bucket][scene]")
+	"[material][drawbucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -485,7 +485,7 @@ TEST_CASE(
 	const auto submeshInstance = meta.submeshInstances[0];
 
 	const auto instanceShading = [&]() {
-		return ShadingOf(*gfx, instanceBuffer[submeshInstance].bucket);
+		return ShadingOf(*gfx, instanceBuffer[submeshInstance].drawBucket);
 	};
 
 	// It resolved off the geom's default at placement time.
@@ -555,7 +555,8 @@ TEST_CASE(
 		const auto& laterMeta = meshBuffer.MetaAt(later.handle.index);
 		REQUIRE(laterMeta.submeshInstances.size() == 1);
 
-		CHECK(ShadingOf(*gfx, instanceBuffer[laterMeta.submeshInstances[0]].bucket) == c_Opaque);
+		CHECK(
+			ShadingOf(*gfx, instanceBuffer[laterMeta.submeshInstances[0]].drawBucket) == c_Opaque);
 
 		// ...and the older one still catches up on the next Update, rather than being stranded by the
 		// newer placement having already advanced the view's epoch.
@@ -568,7 +569,7 @@ TEST_CASE(
 // different materials, bucketed into different PSOs. A skin.
 TEST_CASE(
 	"A material override changes one instance and not its siblings",
-	"[material][bucket][scene]")
+	"[material][drawbucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -602,7 +603,7 @@ TEST_CASE(
 
 	const auto shadingOf = [&](bgl::MeshInstanceHandle instance) {
 		const auto& meta = meshBuffer.MetaAt(instance.handle.index);
-		return ShadingOf(*gfx, instanceBuffer[meta.submeshInstances[0]].bucket);
+		return ShadingOf(*gfx, instanceBuffer[meta.submeshInstances[0]].drawBucket);
 	};
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

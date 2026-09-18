@@ -29,8 +29,8 @@
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
-#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PlaybackType.h>
@@ -59,7 +59,7 @@ namespace bgl
 	namespace
 	{
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
-		// must read as skippable: a default SubmeshInstance names no mesh and carries cInvalidBucket,
+		// must read as skippable: a default SubmeshInstance names no mesh and carries cInvalidDrawBucket,
 		// which both the histogram and the compaction skip.
 		constexpr std::array<SubmeshInstance, idl::cHistogramGroupSize> c_InstanceTailPadding{};
 
@@ -135,11 +135,11 @@ namespace bgl
 		const SceneRef&                   scene,
 		uint32_t                          initialInstances,
 		core::SharedRef<IResourceManager> resourceManager,
-		core::SharedRef<BucketTable>      buckets) :
+		core::SharedRef<DrawBucketTable>  buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
-		m_InitialInstances(initialInstances), m_BucketTable(std::move(buckets))
+		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
-		gassert(m_BucketTable != nullptr, "SceneView requires the renderer's bucket table");
+		gassert(m_DrawBucketTable != nullptr, "SceneView requires the renderer's bucket table");
 
 		m_SceneRaw = m_Scene->As<Scene>();
 		gassert(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
@@ -174,10 +174,10 @@ namespace bgl
 
 		{
 			auto flagsDesc         = UploadBufferDesc();
-			flagsDesc.initialCount = idl::cMaxBuckets;
+			flagsDesc.initialCount = idl::cMaxDrawBuckets;
 			flagsDesc.debugName    = "Transparent Bucket Flags";
 
-			m_TransparentBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
+			m_TransparentDrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
 		}
 
 		{
@@ -308,7 +308,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
-		m_TransparentBucketFlags.Release();
+		m_TransparentDrawBucketFlags.Release();
 		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
@@ -1398,8 +1398,8 @@ namespace bgl
 			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
-		instance.bucket = m_BucketTable->Resolve(geomType, material);
-		m_DemandedBuckets.set(instance.bucket);
+		instance.drawBucket = m_DrawBucketTable->Resolve(geomType, material);
+		m_DemandedDrawBuckets.set(instance.drawBucket);
 	}
 
 	void
@@ -1415,13 +1415,13 @@ namespace bgl
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
 		const idl::RawEntry material = instance.material;
-		const uint32_t      bucket   = instance.bucket;
+		const uint32_t      bucket   = instance.drawBucket;
 
 		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.
-		if (instance.material.byteOffset != material.byteOffset || instance.bucket != bucket)
+		if (instance.material.byteOffset != material.byteOffset || instance.drawBucket != bucket)
 		{
 			m_InstanceBuffer.Set(handle, instance);
 		}
@@ -1470,8 +1470,8 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
-		m_TransparentBucketFlags.Assign(m_BucketTable->TransparentFlags());
-		m_TransparentBucketFlags.Update(cmdList);
+		m_TransparentDrawBucketFlags.Assign(m_DrawBucketTable->TransparentFlags());
+		m_TransparentDrawBucketFlags.Update(cmdList);
 
 		if (m_SelectionDirty)
 		{
@@ -1543,8 +1543,8 @@ namespace bgl
 		m_TransparentSort.ImportResources(fg, resourceNames);
 
 		{
-			auto flags = std::string(c_TransparentBucketFlagsName);
-			fg.ImportBuffer(flags, m_TransparentBucketFlags.GetBufferHandle());
+			auto flags = std::string(c_TransparentDrawBucketFlagsName);
+			fg.ImportBuffer(flags, m_TransparentDrawBucketFlags.GetBufferHandle());
 			resourceNames.push_back(std::move(flags));
 		}
 

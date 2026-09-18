@@ -1,21 +1,21 @@
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/Bucket.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
-using bgl::BucketTable;
+using bgl::DrawBucketTable;
 using bgl::GeomType;
 using bgl::LayerType;
 using bgl::MaterialHandle;
 using bgl::MaterialType;
 
-TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[bucket]")
+TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[drawbucket]")
 {
-	BucketTable table;
+	DrawBucketTable table;
 
 	// The unlit fallback exists before anything resolves: it is what a demand past the ceiling
 	// clamps to, so it can never itself be past the ceiling.
@@ -51,9 +51,9 @@ TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[bu
 	CHECK(table.Desc(skinnedPbr).layer == LayerType::kOpaque);
 }
 
-TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[bucket]")
+TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[drawbucket]")
 {
-	BucketTable table;
+	DrawBucketTable table;
 
 	const auto blend = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kBlend);
 	const auto hashed =
@@ -65,15 +65,15 @@ TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[buck
 	// The GPU upload source agrees with the per-bucket accessor, and covers the whole ceiling so
 	// an unallocated lane reads 0, never garbage.
 	const auto flags = table.TransparentFlags();
-	REQUIRE(flags.size() == bgl::idl::cMaxBuckets);
+	REQUIRE(flags.size() == bgl::idl::cMaxDrawBuckets);
 	CHECK(flags[blend] == 1u);
 	CHECK(flags[hashed] == 0u);
 	CHECK(flags[table.Count()] == 0u);
 }
 
-TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unlit", "[bucket]")
+TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unlit", "[drawbucket]")
 {
-	BucketTable table;
+	DrawBucketTable table;
 
 	auto handle         = MaterialHandle();
 	handle.materialType = MaterialType::kPBR;
@@ -91,9 +91,9 @@ TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unl
 	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialHandle()) == 0);
 }
 
-TEST_CASE("an unshaded material has one bucket whatever its layer", "[bucket]")
+TEST_CASE("an unshaded material has one bucket whatever its layer", "[drawbucket]")
 {
-	BucketTable table;
+	DrawBucketTable table;
 
 	// No base color, so no alpha for a coverage or blend layer to read: every layer is the opaque
 	// bucket. The coverage-twin lookup has no entry for these kinds, so a second bucket would be
@@ -111,11 +111,11 @@ TEST_CASE("an unshaded material has one bucket whatever its layer", "[bucket]")
 	CHECK(table.Count() == 2);
 }
 
-TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[bucket]")
+TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[drawbucket]")
 {
 	// Ceiling 3: the seed plus two. Small because a real ceiling cannot be filled while
 	// MaterialType still caps the distinct keys -- the clamp logic is what is under test.
-	BucketTable table(3);
+	DrawBucketTable table(3);
 
 	const auto a = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
 	const auto b = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask);

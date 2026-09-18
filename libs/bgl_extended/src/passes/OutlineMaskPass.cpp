@@ -154,12 +154,12 @@ namespace bgl
 
 			const auto selected = resources.GetBuffer(c_SelectedInstancesName);
 
-			// kDepthSorted starts the list at zero, exactly like the transparent phase; the
+			// kByDepth starts the list at zero, exactly like the transparent phase; the
 			// prefix-sum key is never read under it, and is bound only so it holds a live handle.
-			expansion["compactedInstances"] = selected;
-			expansion["bucketPrefixSum"]    = selected;
-			expansion["baseTable"]          = idl::BaseTable::kDepthSorted;
-			expansion["bucketIndex"]        = 0u;
+			expansion["compactedInstances"]  = selected;
+			expansion["drawBucketPrefixSum"] = selected;
+			expansion["baseTable"]           = idl::BaseTable::kByDepth;
+			expansion["drawBucketIndex"]     = 0u;
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;

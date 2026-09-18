@@ -23,7 +23,7 @@ renderer's internals fails the build); the wording half is review's.
 
 The same surface has a Slang half, [libs/bgl/shaders/src/bgl](libs/bgl/shaders/src/bgl): what a
 surface written outside the engine conforms to and reads through, and nothing that names a handle,
-an arena or a bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
+an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
 only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
@@ -135,11 +135,11 @@ disagrees, trust the header, then fix this doc.
   added against it is still alive, so the order — geoms, then the rig they were skinned to — is
   enforced instead of merely documented. It is the one deletion here whose misuse is an error you see.
 
-* **A material's bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
+* **A material's draw bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
-  therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl_extended's own
-  business: its `BucketTable` ([libs/bgl_extended/src/gfx/BucketTable.h](libs/bgl_extended/src/gfx/BucketTable.h))
+  therefore part of the handle, not just the desc. Which draw bucket a pair resolves to is bgl_extended's own
+  business: its `DrawBucketTable` ([libs/bgl_extended/src/gfx/DrawBucketTable.h](libs/bgl_extended/src/gfx/DrawBucketTable.h))
   hands the ids out on first use, and nothing on this surface names one.
 
 * **Failures are exceptions, not return codes.** Everything derives from
@@ -371,7 +371,7 @@ flowchart TD
 * **`UpdatePbrMaterial` / `UpdateLoosePbrMaterial`** — rewrites the payload in place, keeping the
   record's offset and its header, so every submesh already bound picks the change up with no
   rebinding. The material's *type* cannot
-  change, so the bucket is unaffected. @throws `SceneError` on a type mismatch.
+  change, so the draw bucket is unaffected. @throws `SceneError` on a type mismatch.
 * **`CreateSurfaceMaterial(desc)` / `UpdateSurfaceMaterial(material, desc)`** — a material drawn by
   one of `IGraphics::GetSurfaceTypes()`. Its `MaterialType` is the reserved kind that surface was
   given, so that is what picks its pipelines. Values and textures are matched by the names the
@@ -433,7 +433,7 @@ flowchart TD
 * **`SetBlobShadow(instance, desc)` / `ClearBlobShadow(instance)` / `GetBlobShadow(instance)`** —
   the placement's blob shadow: a soft radial-falloff decal draped over whatever static surface
   lies directly beneath it — a crate top, a bush, the ground — drawn by the forward pass between
-  the opaque buckets and the transparents, shrinking and fading per pixel with the placement's
+  the opaque draw buckets and the transparents, shrinking and fading per pixel with the placement's
   height above the surface it lands on (gone at `BlobShadowDesc::fadeHeight`). Receivers are
   static geometry only — a shadow never lands on another unit — and a placement with no static
   surface beneath it casts nothing. A contact cue, not a lighting term. Any placement may carry

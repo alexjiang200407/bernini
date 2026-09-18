@@ -57,7 +57,7 @@ when this doc disagrees, trust the source, then fix this doc.
   exists until a compile actually reaches it — which on a fully warm cache is never. The compile
   paths therefore take no session: they reach one only through `Shader::GetSlangModule()`, down the
   miss path, and read it back off the module. The renderer builds in batches — the always-on set
-  inside the `Graphics` constructor, then one batch per `Draw` that demands buckets with no
+  inside the `Graphics` constructor, then one batch per `Draw` that demands draw buckets with no
   kernels yet — and each batch ends by calling `Device::ReleaseSlangSession()`; a pipeline created
   outside a batch (every `bgl_extended_tests` case that builds its own kernel) transparently gets a new
   session on whichever thread asks. The salt reads the compiler version through the free

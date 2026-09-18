@@ -1,5 +1,5 @@
 #pragma once
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include <string_view>
 
@@ -11,11 +11,11 @@ namespace bgl
 	 * blend program, which no bucket owns.
 	 */
 	[[nodiscard]] std::string_view
-	BucketPixelSrc(const BucketDesc& desc);
+	DrawBucketPixelSrc(const DrawBucketDesc& desc);
 
 	/** The amplification/mesh module for the bucket's tier. @pre the bucket is not transparent. */
 	[[nodiscard]] std::string_view
-	BucketGeometrySrc(const BucketDesc& desc);
+	DrawBucketGeometrySrc(const DrawBucketDesc& desc);
 
 	/**
 	 * The discard-only twin of the bucket's pixel program, for the static depth pass: coverage is
@@ -23,7 +23,7 @@ namespace bgl
 	 * discarded texels. @pre a static-tier bucket on the kMask or kHashed layer.
 	 */
 	[[nodiscard]] std::string_view
-	BucketCoveragePixelSrc(const BucketDesc& desc);
+	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc);
 
 	/**
 	 * How a bucket's pipelines cull in hardware. A bucket that culls nothing leaves back faces to
@@ -32,5 +32,5 @@ namespace bgl
 	 * must agree, or its depth holds faces the colour pass never drew.
 	 */
 	[[nodiscard]] RasterCullMode
-	BucketCullMode(const BucketDesc& desc) noexcept;
+	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept;
 }

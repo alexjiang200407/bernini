@@ -20,7 +20,7 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/Bucket.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_test_macros.hpp>
@@ -67,7 +67,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	constexpr uint32_t c_ActiveCount = 1000;
 	constexpr uint32_t c_GroupCount  = (c_ActiveCount + c_ThreadsPerGroup - 1) / c_ThreadsPerGroup;
 	constexpr uint32_t c_PaddedCount = c_GroupCount * c_ThreadsPerGroup;
-	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxBuckets - 1u };
+	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u };
 
 	// The bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
 	// no submesh, no indirection to build. Two instances of one submesh are free to bucket
@@ -89,12 +89,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		// is the null one, so the first element past it will do.
 		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
-		instance.bucket              = c_Buckets[bucketIdx];
+		instance.drawBucket          = c_Buckets[bucketIdx];
 
 		instanceBuffer.Add(instance);
 	};
 
-	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedHistogram{};
+	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedHistogram{};
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
 		const uint32_t b = i % c_BucketCount;
@@ -107,21 +107,21 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
-	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedPrefixSum{};
-	uint32_t                                    running = 0;
-	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
+	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedPrefixSum{};
+	uint32_t                                        running = 0;
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
 	{
 		running += expectedHistogram[i];
 		expectedPrefixSum[i] = running;  // inclusive scan
 	}
 
-	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxBuckets threads and
+	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxDrawBuckets threads and
 	// touches every element.
 	auto outBuffer = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::idl::cMaxBuckets;
+		desc.initialCount = bgl::idl::cMaxDrawBuckets;
 		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
@@ -160,7 +160,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto makeReadback = [&](const char* name) {
 		auto desc      = bgl::ReadbackBufferDesc();
-		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxBuckets) * sizeof(uint32_t);
+		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
 	};
@@ -258,7 +258,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	const auto* histogram = static_cast<const uint32_t*>(resourceManager->MapReadback(rbHistogram));
 	REQUIRE(histogram != nullptr);
 	// Every row of the ceiling: a bucket no instance names must be left at zero by the flush.
-	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
 	{
 		CHECK(histogram[i] == expectedHistogram[i]);
 	}
@@ -268,11 +268,11 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	REQUIRE(prefixSum != nullptr);
 	// Inclusive over the whole ceiling, so the last row is the full total -- which is what lets
 	// any reader take it as "everything visible".
-	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
 	{
 		CHECK(prefixSum[i] == expectedPrefixSum[i]);
 	}
-	CHECK(prefixSum[bgl::idl::cMaxBuckets - 1] == c_ActiveCount);
+	CHECK(prefixSum[bgl::idl::cMaxDrawBuckets - 1] == c_ActiveCount);
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	outBuffer.Release(false);

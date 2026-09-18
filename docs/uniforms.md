@@ -31,7 +31,7 @@ doc disagrees, trust the header, then fix this doc.
   3. **Reflection lets one binder serve a family of PSO variants.** The load-bearing reason. The pass
      *asks the layout* whether a field exists instead of being compiled against a fixed struct, so
      variants declaring different subsets share one binder.
-     [ForwardPass::BindKernel](libs/bgl_extended/src/passes/ForwardPass.cpp) binds every bucket's kernel
+     [ForwardPass::BindKernel](libs/bgl_extended/src/passes/ForwardPass.cpp) binds every draw bucket's kernel
      through one function even though [programs/forward/Null.slang](libs/bgl_extended/shaders/src/programs/forward/Null.slang)
      imports no `MaterialData` and has no `materialData` cbuffer at all. A `memcpy`'d IDL struct
      structurally cannot express "this variant has no such field".

@@ -7,7 +7,7 @@
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
-#include "passes/bucket_config.h"
+#include "passes/draw_bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -43,7 +43,7 @@ namespace bgl
 		};
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"bucketIndex"sv,
+			"drawBucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -94,11 +94,11 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines, const BucketTable& buckets)
+	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_Buckets = &buckets;
+		m_DrawBuckets = &buckets;
 
 		// Opaque depth does not depend on the material, so the opaque buckets share a depth-only
 		// pixel stage and differ only in where back faces are culled.
@@ -111,14 +111,14 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::AddBucketKernels(
-		IDevice*          device,
-		PipelineBatch&    pipelines,
-		const BucketMask& buckets)
+	StaticDepthPass::AddDrawBucketKernels(
+		IDevice*              device,
+		PipelineBatch&        pipelines,
+		const DrawBucketMask& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const uint32_t count = m_Buckets->Count();
+		const uint32_t count = m_DrawBuckets->Count();
 		if (m_CoverageKernels.size() < count)
 		{
 			m_CoverageKernels.resize(count);
@@ -131,7 +131,7 @@ namespace bgl
 				continue;
 			}
 
-			const BucketDesc& desc = m_Buckets->Desc(bucket);
+			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
 			if (desc.geom != GeomType::kStaticMesh ||
 			    (desc.layer != LayerType::kMask && desc.layer != LayerType::kHashed))
 			{
@@ -140,7 +140,10 @@ namespace bgl
 
 			pipelines.Add(
 				m_CoverageKernels[bucket],
-				DepthPipelineDesc(device, BucketCoveragePixelSrc(desc), BucketCullMode(desc)));
+				DepthPipelineDesc(
+					device,
+					DrawBucketCoveragePixelSrc(desc),
+					DrawBucketCullMode(desc)));
 		}
 	}
 
@@ -161,7 +164,7 @@ namespace bgl
 		}
 
 		// The coverage family is demand-built; nothing to read names off until a first bucket is,
-		// and EnsureBucketPipelinesExist re-checks after every build.
+		// and EnsureDrawBucketPipelinesExist re-checks after every build.
 		if (!AnyInitialized(m_CoverageKernels))
 		{
 			return;
@@ -240,7 +243,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-			(*foundExpansion)["baseTable"] = idl::BaseTable::kBucketed;
+			(*foundExpansion)["baseTable"] = idl::BaseTable::kByDrawBucket;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -274,14 +277,15 @@ namespace bgl
 		gfxState.indirectArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
 		// One bucket per dispatch: the cbuffer is re-uploaded on every dispatch, so rewriting
-		// bucketIndex and cullBackfaces between them is sound (docs/uniforms.md).
+		// drawBucketIndex and cullBackfaces between them is sound (docs/uniforms.md).
 		const auto dispatch = [&](MeshletKernel& kernel, const uint32_t bucket) {
 			if (auto expansion = kernel.FindUniforms("expansionData"))
 			{
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
-				(*expansion)["bucketIndex"] = bucket;
+				(*expansion)["drawBucketIndex"] = bucket;
 				(*expansion)["cullBackfaces"] =
-					BucketCullMode(m_Buckets->Desc(bucket)) == RasterCullMode::kNone ? 1u : 0u;
+					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
+																							   0u;
 			}
 
 			gfxState.kernel = &kernel;
@@ -295,9 +299,9 @@ namespace bgl
 		// Statics only, to the table's live count: opaque buckets through the two shared
 		// depth-only kernels, coverage layers through their own demand-built kernels, blended
 		// never -- a blended surface writes no depth for the receiver to reconstruct.
-		for (uint32_t bucket = 0, count = m_Buckets->Count(); bucket < count; ++bucket)
+		for (uint32_t bucket = 0, count = m_DrawBuckets->Count(); bucket < count; ++bucket)
 		{
-			const BucketDesc& desc = m_Buckets->Desc(bucket);
+			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
 			if (desc.geom != GeomType::kStaticMesh)
 			{
 				continue;
@@ -306,8 +310,8 @@ namespace bgl
 			if (desc.layer == LayerType::kOpaque)
 			{
 				dispatch(
-					BucketCullMode(desc) == RasterCullMode::kNone ? m_MaterialCullKernel :
-																	m_HardwareCullKernel,
+					DrawBucketCullMode(desc) == RasterCullMode::kNone ? m_MaterialCullKernel :
+																		m_HardwareCullKernel,
 					bucket);
 				continue;
 			}

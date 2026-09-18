@@ -1,8 +1,8 @@
 #pragma once
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
-#include "types/BucketMask.h"
+#include "types/DrawBucketMask.h"
 #include "types/MeshletState.h"
 #include <cstdint>
 #include <span>
@@ -45,9 +45,9 @@ namespace bgl
 			m_BlobShadows.Release();
 		}
 
-		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddBucketKernels. */
+		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddDrawBucketKernels. */
 		void
-		Init(IDevice* device, PipelineBatch& pipelines, const BucketTable& buckets);
+		Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets);
 
 		/**
 		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
@@ -55,7 +55,10 @@ namespace bgl
 		 * @pre every set bit is an allocated, non-transparent bucket.
 		 */
 		void
-		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
+		AddDrawBucketKernels(
+			IDevice*              device,
+			PipelineBatch&        pipelines,
+			const DrawBucketMask& buckets);
 
 		/**
 		 * Requests the one shared blend kernel the whole depth-sorted list draws through --
@@ -65,7 +68,7 @@ namespace bgl
 		AddTransparentKernel(IDevice* device, PipelineBatch& pipelines);
 
 		[[nodiscard]] bool
-		BucketInitialized(uint32_t bucket) const noexcept
+		DrawBucketInitialized(uint32_t bucket) const noexcept
 		{
 			return bucket < m_Kernels.size() && m_Kernels[bucket].pipeline.IsInitialized();
 		}
@@ -112,7 +115,7 @@ namespace bgl
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
 		MeshletKernel m_TransparentKernel;
 
-		const BucketTable* m_Buckets = nullptr;
+		const DrawBucketTable* m_DrawBuckets = nullptr;
 
 		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
 		// is a phase of this pass rather than a pass of its own.

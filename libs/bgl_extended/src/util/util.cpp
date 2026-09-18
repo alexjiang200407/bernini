@@ -8,7 +8,7 @@
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl_common/gassert.h>
-#include <bgl_common/idl/Bucket.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <cstddef>
 #include <cstdint>
@@ -116,7 +116,7 @@ namespace bgl
 		static_cast<uint32_t>(MaterialType::kCount));
 
 	// 1024 is a compute thread group's maximum; PrefixSumInstances.slang is one group.
-	static_assert(idl::cMaxBuckets <= 1024);
+	static_assert(idl::cMaxDrawBuckets <= 1024);
 
 	std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept

@@ -3,7 +3,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/Bucket.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
@@ -15,11 +15,11 @@
 namespace bgl
 {
 	/**
-	 * What a bucket draws: the key its id was allocated for. Everything a pass needs to build or
+	 * What a draw bucket draws: the key its id was allocated for. Everything a pass needs to build or
 	 * pick the bucket's kernels derives from these three -- the pixel program from (material,
 	 * layer), the geometry program from geom, the raster state from material and layer.
 	 */
-	struct BucketDesc
+	struct DrawBucketDesc
 	{
 		GeomType     geom;
 		MaterialType material;
@@ -27,8 +27,8 @@ namespace bgl
 	};
 
 	/**
-	 * Hands out dense bucket ids per distinct (geometry kind x material kind x layer), on first
-	 * use. The id is simultaneously the histogram slot, the prefix-sum lane, the indirect-arg
+	 * Hands out dense draw-bucket ids per distinct (geometry kind x material kind x layer), on
+	 * first use -- a draw bucket being every instance one indirect dispatch per pass draws. The id is simultaneously the histogram slot, the prefix-sum lane, the indirect-arg
 	 * element and every pass's kernel-table index, so it is allocated once here and nowhere
 	 * derived.
 	 *
@@ -40,20 +40,20 @@ namespace bgl
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.
 	 */
-	class BucketTable final : public core::RefCounter<core::Ref>
+	class DrawBucketTable final : public core::RefCounter<core::Ref>
 	{
 	public:
-		/** @pre ceiling >= 1 and <= idl::cMaxBuckets. Tests shrink it to reach the clamp. */
-		explicit BucketTable(uint32_t ceiling = idl::cMaxBuckets);
+		/** @pre ceiling >= 1 and <= idl::cMaxDrawBuckets. Tests shrink it to reach the clamp. */
+		explicit DrawBucketTable(uint32_t ceiling = idl::cMaxDrawBuckets);
 
-		BucketTable(const BucketTable&) = delete;
-		BucketTable(BucketTable&&)      = delete;
+		DrawBucketTable(const DrawBucketTable&) = delete;
+		DrawBucketTable(DrawBucketTable&&)      = delete;
 
-		BucketTable&
-		operator=(const BucketTable&) = delete;
+		DrawBucketTable&
+		operator=(const DrawBucketTable&) = delete;
 
-		BucketTable&
-		operator=(BucketTable&&) = delete;
+		DrawBucketTable&
+		operator=(DrawBucketTable&&) = delete;
 
 		/**
 		 * The bucket for the key, allocated if this is its first use. kNull and kAssert shade no
@@ -70,7 +70,7 @@ namespace bgl
 		Resolve(GeomType geom, MaterialHandle material);
 
 		/** @pre bucket < Count(). */
-		[[nodiscard]] const BucketDesc&
+		[[nodiscard]] const DrawBucketDesc&
 		Desc(uint32_t bucket) const noexcept;
 
 		/** Allocated buckets. Ids below this are dense; the ceiling caps it. */
@@ -95,7 +95,7 @@ namespace bgl
 		}
 
 	private:
-		std::vector<BucketDesc>                m_Descs;
+		std::vector<DrawBucketDesc>            m_Descs;
 		std::vector<uint32_t>                  m_TransparentFlags;
 		std::unordered_map<uint64_t, uint32_t> m_Ids;
 		std::unordered_set<uint64_t>           m_Refused;

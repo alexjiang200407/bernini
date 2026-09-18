@@ -1,5 +1,5 @@
-#include "gfx/BucketTable.h"
-#include "passes/bucket_config.h"
+#include "gfx/DrawBucketTable.h"
+#include "passes/draw_bucket_config.h"
 #include "types/RasterState.h"
 #include "util/util.h"
 #include <array>
@@ -39,7 +39,7 @@ namespace
 	} };
 }
 
-TEST_CASE("every layer of a kPBR material binds to animated geometry", "[bucket]")
+TEST_CASE("every layer of a kPBR material binds to animated geometry", "[drawbucket]")
 {
 	for (const bgl::LayerType layer : c_Layers)
 	{
@@ -49,7 +49,7 @@ TEST_CASE("every layer of a kPBR material binds to animated geometry", "[bucket]
 	}
 }
 
-TEST_CASE("animated geometry takes no unlit or loose material", "[bucket]")
+TEST_CASE("animated geometry takes no unlit or loose material", "[drawbucket]")
 {
 	// No unlit variant to fall back to, so an unnamed material is a refusal rather than the flat
 	// shading a static submesh gets.
@@ -69,12 +69,12 @@ TEST_CASE("animated geometry takes no unlit or loose material", "[bucket]")
 	CHECK(bgl::AcceptsMaterial(bgl::GeomType::kStaticMesh, bgl::MaterialHandle{}));
 }
 
-TEST_CASE("every drawable key has a bucket of its own", "[bucket]")
+TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 {
-	bgl::BucketTable table;
+	bgl::DrawBucketTable table;
 
 	// Every key a door admits: each tier's every layer of every kind it accepts. kNull and kAssert
-	// collapse to their opaque bucket (BucketTable_test), so they are resolved once, opaque.
+	// collapse to their opaque bucket (DrawBucketTable_test), so they are resolved once, opaque.
 	std::set<uint32_t> seen;
 	uint32_t           keys = 0;
 	for (uint32_t kind = 0; kind < static_cast<uint32_t>(bgl::MaterialType::kCount); ++kind)
@@ -120,47 +120,52 @@ TEST_CASE("every drawable key has a bucket of its own", "[bucket]")
 
 // A bucket's kernels are functions of its desc, not of its id: the pixel program follows the
 // material kind and the layer, the geometry program the tier, and the hardware cull the kind.
-TEST_CASE("a bucket's programs follow its desc", "[bucket]")
+TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 {
-	using bgl::BucketDesc;
+	using bgl::DrawBucketDesc;
 	using bgl::GeomType;
 	using bgl::LayerType;
 	using bgl::MaterialType;
 
-	const BucketDesc staticCutout = { GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask };
-	const BucketDesc skinnedCutout = { GeomType::kSkinnedMesh,
-		                               MaterialType::kPBR,
-		                               LayerType::kMask };
+	const DrawBucketDesc staticCutout  = { GeomType::kStaticMesh,
+		                                   MaterialType::kPBR,
+		                                   LayerType::kMask };
+	const DrawBucketDesc skinnedCutout = { GeomType::kSkinnedMesh,
+		                                   MaterialType::kPBR,
+		                                   LayerType::kMask };
 
 	// The two tiers differ only in their geometry stage: the pixel shader reads a vertex output
 	// and a material offset, and neither says which tier filled them.
-	CHECK(bgl::BucketPixelSrc(staticCutout) == "programs.forward.PBR_AlphaTest"sv);
-	CHECK(bgl::BucketPixelSrc(skinnedCutout) == bgl::BucketPixelSrc(staticCutout));
-	CHECK(bgl::BucketGeometrySrc(staticCutout) == "programs.forward.StaticMesh"sv);
-	CHECK(bgl::BucketGeometrySrc(skinnedCutout) == "programs.forward.SkinnedMesh"sv);
+	CHECK(bgl::DrawBucketPixelSrc(staticCutout) == "programs.forward.PBR_AlphaTest"sv);
+	CHECK(bgl::DrawBucketPixelSrc(skinnedCutout) == bgl::DrawBucketPixelSrc(staticCutout));
+	CHECK(bgl::DrawBucketGeometrySrc(staticCutout) == "programs.forward.StaticMesh"sv);
+	CHECK(bgl::DrawBucketGeometrySrc(skinnedCutout) == "programs.forward.SkinnedMesh"sv);
 
 	// The static depth pass evaluates coverage with the colour pass's own arithmetic.
 	CHECK(
-		bgl::BucketCoveragePixelSrc(staticCutout) == "programs.forward.DepthOnly_PBR_AlphaTest"sv);
+		bgl::DrawBucketCoveragePixelSrc(staticCutout) ==
+		"programs.forward.DepthOnly_PBR_AlphaTest"sv);
 	CHECK(
-		bgl::BucketCoveragePixelSrc(
+		bgl::DrawBucketCoveragePixelSrc(
 			{ GeomType::kStaticMesh, MaterialType::kLoosePbr, LayerType::kHashed }) ==
 		"programs.forward.DepthOnly_PBR_Loose_HashedAlpha"sv);
 
 	// Only the materialless kinds cull in hardware: every material bucket leaves back faces to the
 	// mesh stage and the material's doubleSided flag.
 	CHECK(
-		bgl::BucketCullMode({ GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque }) ==
+		bgl::DrawBucketCullMode(
+			{ GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque }) ==
 		bgl::RasterCullMode::kBack);
 	CHECK(
-		bgl::BucketCullMode({ GeomType::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque }) ==
+		bgl::DrawBucketCullMode(
+			{ GeomType::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque }) ==
 		bgl::RasterCullMode::kBack);
-	CHECK(bgl::BucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
+	CHECK(bgl::DrawBucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
 }
 
 // Each reserved game slot is its own material kind, so its layers resolve to buckets of their own
 // on both tiers, and draw with the slot's own programs -- never another slot's, never engine PBR's.
-TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[bucket]")
+TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[drawbucket]")
 {
 	using bgl::GeomType;
 	using bgl::LayerType;
@@ -178,14 +183,16 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[b
 
 		for (const GeomType geom : { GeomType::kStaticMesh, GeomType::kSkinnedMesh })
 		{
-			CHECK(bgl::BucketPixelSrc({ geom, kind, LayerType::kOpaque }) == program(""));
-			CHECK(bgl::BucketPixelSrc({ geom, kind, LayerType::kMask }) == program("_AlphaTest"));
+			CHECK(bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kOpaque }) == program(""));
 			CHECK(
-				bgl::BucketPixelSrc({ geom, kind, LayerType::kHashed }) == program("_HashedAlpha"));
+				bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kMask }) == program("_AlphaTest"));
+			CHECK(
+				bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kHashed }) ==
+				program("_HashedAlpha"));
 		}
 
 		CHECK(
-			bgl::BucketCoveragePixelSrc({ GeomType::kStaticMesh, kind, LayerType::kMask }) ==
+			bgl::DrawBucketCoveragePixelSrc({ GeomType::kStaticMesh, kind, LayerType::kMask }) ==
 			"programs.forward.DepthOnly_GameSlot" + std::to_string(slot) + "_AlphaTest");
 
 		// The skinned door is open for every layer a game surface can carry, hashed included: a

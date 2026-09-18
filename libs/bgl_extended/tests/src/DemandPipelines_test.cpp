@@ -1,11 +1,11 @@
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "passes/ForwardPass.h"
 #include "passes/StaticDepthPass.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
-#include "types/BucketMask.h"
+#include "types/DrawBucketMask.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
@@ -36,15 +36,15 @@ namespace
 
 	// The id the table gave a key, read back by desc so the lookup cannot itself allocate.
 	std::optional<uint32_t>
-	FindBucket(
-		const bgl::BucketTable& table,
-		bgl::GeomType           geom,
-		bgl::MaterialType       material,
-		bgl::LayerType          layer)
+	FindDrawBucket(
+		const bgl::DrawBucketTable& table,
+		bgl::GeomType               geom,
+		bgl::MaterialType           material,
+		bgl::LayerType              layer)
 	{
 		for (uint32_t bucket = 0; bucket < table.Count(); ++bucket)
 		{
-			const bgl::BucketDesc& desc = table.Desc(bucket);
+			const bgl::DrawBucketDesc& desc = table.Desc(bucket);
 			if (desc.geom == geom && desc.material == material && desc.layer == layer)
 			{
 				return bucket;
@@ -70,7 +70,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 	REQUIRE(context != nullptr);
 
 	// Creation builds no bucket kernel: the always-on set carries no per-bucket pipeline.
-	CHECK(context->InitializedBuckets().none());
+	CHECK(context->InitializedDrawBuckets().none());
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
@@ -115,7 +115,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	// An empty view demands nothing, so a frame builds nothing.
 	gfx->DrawFrame(target, job);
-	CHECK(context->InitializedBuckets().none());
+	CHECK(context->InitializedDrawBuckets().none());
 
 	auto opaqueDesc            = bgl::PbrMaterialDesc();
 	opaqueDesc.baseColorFactor = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
@@ -129,17 +129,17 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	gfx->DrawFrame(target, job);
 
-	const bgl::BucketTable& table = context->Buckets();
+	const bgl::DrawBucketTable& table = context->DrawBuckets();
 
-	const auto opaqueBucket = FindBucket(
+	const auto opaqueBucket = FindDrawBucket(
 		table,
 		bgl::GeomType::kStaticMesh,
 		bgl::MaterialType::kPBR,
 		bgl::LayerType::kOpaque);
 	REQUIRE(opaqueBucket.has_value());
 
-	const bgl::BucketMask afterOpaque = context->InitializedBuckets();
-	CHECK(afterOpaque == sceneView->DemandedBuckets());
+	const bgl::DrawBucketMask afterOpaque = context->InitializedDrawBuckets();
+	CHECK(afterOpaque == sceneView->DemandedDrawBuckets());
 	CHECK(afterOpaque.test(*opaqueBucket));
 	CHECK(afterOpaque.count() == 1);
 
@@ -157,15 +157,15 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	gfx->DrawFrame(target, job);
 
-	const auto cutoutBucket = FindBucket(
+	const auto cutoutBucket = FindDrawBucket(
 		table,
 		bgl::GeomType::kStaticMesh,
 		bgl::MaterialType::kPBR,
 		bgl::LayerType::kMask);
 	REQUIRE(cutoutBucket.has_value());
 
-	const bgl::BucketMask afterCutout = context->InitializedBuckets();
-	CHECK(afterCutout == sceneView->DemandedBuckets());
+	const bgl::DrawBucketMask afterCutout = context->InitializedDrawBuckets();
+	CHECK(afterCutout == sceneView->DemandedDrawBuckets());
 	CHECK(afterCutout.test(*cutoutBucket));
 	CHECK(afterCutout.count() == 2);
 
@@ -190,13 +190,13 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 	gfx->DrawFrame(target, job);
 
 	CHECK(table.Count() == bucketsBefore);
-	CHECK(context->InitializedBuckets() == afterCutout);
+	CHECK(context->InitializedDrawBuckets() == afterCutout);
 }
 
 // Demand building means an ordinary run checks only the buckets its content uses, so a renamed
 // member in a skinned or game-slot shader could pass every suite whose scenes are static. This
 // is the case that keeps the binder-name check's old full coverage: build every bucket the way
-// EnsureBucketPipelinesExist would, then run the checks over the complete family.
+// EnsureDrawBucketPipelinesExist would, then run the checks over the complete family.
 TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand][bindings]")
 {
 	auto opts             = bgl::GraphicsOptions();
@@ -212,7 +212,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 	auto* device = gfxBase->GetDevice();
 
 	// Every key a material can resolve to: each tier's every layer of every kind it accepts.
-	bgl::BucketTable table;
+	bgl::DrawBucketTable table;
 	for (uint32_t kind = 0; kind < static_cast<uint32_t>(bgl::MaterialType::kCount); ++kind)
 	{
 		const auto material = static_cast<bgl::MaterialType>(kind);
@@ -233,7 +233,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 		}
 	}
 
-	bgl::BucketMask opaqueShaped;
+	bgl::DrawBucketMask opaqueShaped;
 	for (uint32_t bucket = 0; bucket < table.Count(); ++bucket)
 	{
 		opaqueShaped.set(bucket, !table.Transparent(bucket));
@@ -245,14 +245,14 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 	auto pipelines = bgl::PipelineBatch(device);
 	forward.Init(device, pipelines, table);
 	depth.Init(device, pipelines, table);
-	forward.AddBucketKernels(device, pipelines, opaqueShaped);
+	forward.AddDrawBucketKernels(device, pipelines, opaqueShaped);
 	forward.AddTransparentKernel(device, pipelines);
-	depth.AddBucketKernels(device, pipelines, opaqueShaped);
+	depth.AddDrawBucketKernels(device, pipelines, opaqueShaped);
 	pipelines.Build();
 
 	for (uint32_t bucket = 0; bucket < table.Count(); ++bucket)
 	{
-		CHECK(forward.BucketInitialized(bucket) == !table.Transparent(bucket));
+		CHECK(forward.DrawBucketInitialized(bucket) == !table.Transparent(bucket));
 	}
 	CHECK(forward.TransparentInitialized());
 

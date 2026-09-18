@@ -110,9 +110,9 @@ startup rather than ignored.
 
 ## What it draws on
 
-Static and skinned geometry both, at every layer. A slot's material kind gets a bucket for each
+Static and skinned geometry both, at every layer. A slot's material kind gets a draw bucket for each
 (tier, layer) a material of it is drawn at, allocated the first time one resolves there, and only
-the buckets a scene uses build a pipeline: opaque, alpha-test and hashed each have their own per
+the draw buckets a scene uses build a pipeline: opaque, alpha-test and hashed each have their own per
 tier, and blended draws through the one shared blend pipeline, whose geometry stage is `AnyMesh`
 and branches tier per instance. The tiers differ in nothing
 else — a slot's pixel shader reads a `ForwardVSOut` and a material offset, and neither says which
@@ -258,6 +258,6 @@ Deliberate, and each is a decision rather than an omission:
 ## Reading further
 
 * [bgl Public API](bgl_api.md) — `SurfaceType`, `SurfaceMaterialDesc`, `GetSurfaceTypes()`.
-* [Passes Overview](passes.md) § Two-sided surfaces, and how the forward pass picks a bucket's programs.
+* [Passes Overview](passes.md) § Two-sided surfaces, and how the forward pass picks a draw bucket's programs.
 * [Uniforms](uniforms.md) — why a record is reflected under scalar rules whatever backend draws it.
 * [Slang Shaders](slang_shaders.md) — the conventions every module in the tree keeps.

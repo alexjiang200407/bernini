@@ -178,11 +178,11 @@ namespace bgl
 	}
 
 	RenderContext::RenderContext(
-		DeviceRef                    device,
-		ResourceManagerRef           resourceManager,
-		core::SharedRef<BucketTable> buckets,
-		bool                         enableDebug) :
-		m_Device(std::move(device)), m_BucketTable(std::move(buckets)),
+		DeviceRef                        device,
+		ResourceManagerRef               resourceManager,
+		core::SharedRef<DrawBucketTable> buckets,
+		bool                             enableDebug) :
+		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
 	{
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
@@ -197,15 +197,15 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
-		// built at once. The per-bucket meshlet kernels are not among them: EnsureBucketPipelinesExist
+		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
 		auto pipelines = PipelineBatch(m_Device.Get());
 		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
 		m_RigFrames.Init(m_Device.Get(), pipelines);
 		m_SkinnedPose.Init(m_Device.Get(), pipelines);
 		m_TransparentSort.Init(m_Device.Get(), pipelines);
-		m_StaticDepth.Init(m_Device.Get(), pipelines, *m_BucketTable);
-		m_Forward.Init(m_Device.Get(), pipelines, *m_BucketTable);
+		m_StaticDepth.Init(m_Device.Get(), pipelines, *m_DrawBucketTable);
+		m_Forward.Init(m_Device.Get(), pipelines, *m_DrawBucketTable);
 		m_Skybox.Init(m_Device.Get(), pipelines);
 		m_PostProcess.Init(m_Device.Get(), pipelines);
 		m_OverlayPass.Init(m_Device.Get(), pipelines);
@@ -604,13 +604,13 @@ namespace bgl
 	}
 
 	void
-	RenderContext::EnsureBucketPipelinesExist(BucketMask demanded)
+	RenderContext::EnsureDrawBucketPipelinesExist(DrawBucketMask demanded)
 	{
-		const BucketTable& table = *m_BucketTable;
+		const DrawBucketTable& table = *m_DrawBucketTable;
 
 		// A transparent bucket owns no kernel: the whole depth-sorted list draws through the one
 		// shared blend kernel (ForwardPass), so its demand is satisfied the moment that exists.
-		BucketMask transparent;
+		DrawBucketMask transparent;
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
 			if (demanded.test(bucket) && table.Transparent(bucket))
@@ -620,17 +620,17 @@ namespace bgl
 		}
 		demanded &= ~transparent;
 
-		const BucketMask missing      = demanded & ~m_InitializedBuckets;
+		const DrawBucketMask missing  = demanded & ~m_InitializedDrawBuckets;
 		const bool missingTransparent = transparent.any() && !m_Forward.TransparentInitialized();
 		if (missing.none() && !missingTransparent)
 		{
-			m_InitializedBuckets |= transparent;
+			m_InitializedDrawBuckets |= transparent;
 			return;
 		}
 
 		auto pipelines = PipelineBatch(m_Device.Get());
-		m_Forward.AddBucketKernels(m_Device.Get(), pipelines, missing);
-		m_StaticDepth.AddBucketKernels(m_Device.Get(), pipelines, missing);
+		m_Forward.AddDrawBucketKernels(m_Device.Get(), pipelines, missing);
+		m_StaticDepth.AddDrawBucketKernels(m_Device.Get(), pipelines, missing);
 		if (missingTransparent)
 		{
 			m_Forward.AddTransparentKernel(m_Device.Get(), pipelines);
@@ -644,19 +644,19 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_StaticDepth.CheckBindings();
 
-		m_InitializedBuckets |= missing | transparent;
+		m_InitializedDrawBuckets |= missing | transparent;
 
 		// The draw-time miss the demand contract turns into a bug: a bucket this view demands
 		// whose kernel still does not exist after the build that was meant to make it.
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
 			gassert(
-				!missing.test(bucket) || m_Forward.BucketInitialized(bucket),
-				"EnsureBucketPipelinesExist left a demanded bucket uninitialized");
+				!missing.test(bucket) || m_Forward.DrawBucketInitialized(bucket),
+				"EnsureDrawBucketPipelinesExist left a demanded bucket uninitialized");
 		}
 		gassert(
 			!transparent.any() || m_Forward.TransparentInitialized(),
-			"EnsureBucketPipelinesExist left the shared blend kernel uninitialized");
+			"EnsureDrawBucketPipelinesExist left the shared blend kernel uninitialized");
 	}
 
 	void
@@ -675,7 +675,7 @@ namespace bgl
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
 
-		EnsureBucketPipelinesExist(view->DemandedBuckets());
+		EnsureDrawBucketPipelinesExist(view->DemandedDrawBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.

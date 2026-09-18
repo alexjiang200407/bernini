@@ -1,4 +1,4 @@
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "util/util.h"
 #include <bgl_common/gassert.h>
 #include <cstdint>
@@ -17,17 +17,17 @@ namespace bgl
 		}
 	}
 
-	BucketTable::BucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
+	DrawBucketTable::DrawBucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
 	{
 		gassert(
-			ceiling >= 1 && ceiling <= idl::cMaxBuckets,
+			ceiling >= 1 && ceiling <= idl::cMaxDrawBuckets,
 			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
 		m_TransparentFlags.assign(ceiling, 0u);
 		(void)Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
 	}
 
 	uint32_t
-	BucketTable::Resolve(const GeomType geom, const MaterialType material, LayerType layer)
+	DrawBucketTable::Resolve(const GeomType geom, const MaterialType material, LayerType layer)
 	{
 		// Neither shades a base color, so there is no alpha for a coverage or blend layer to read.
 		if (material == MaterialType::kNull || material == MaterialType::kAssert)
@@ -75,7 +75,7 @@ namespace bgl
 		}
 
 		const auto bucket = static_cast<uint32_t>(m_Descs.size());
-		m_Descs.push_back(BucketDesc{ geom, material, layer });
+		m_Descs.push_back(DrawBucketDesc{ geom, material, layer });
 		m_TransparentFlags[bucket] = layer == LayerType::kBlend ? 1u : 0u;
 		m_Ids.emplace(key, bucket);
 
@@ -83,7 +83,7 @@ namespace bgl
 	}
 
 	uint32_t
-	BucketTable::Resolve(const GeomType geom, const MaterialHandle material)
+	DrawBucketTable::Resolve(const GeomType geom, const MaterialHandle material)
 	{
 		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
 		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
@@ -91,15 +91,15 @@ namespace bgl
 		return Resolve(geom, type, layer);
 	}
 
-	const BucketDesc&
-	BucketTable::Desc(const uint32_t bucket) const noexcept
+	const DrawBucketDesc&
+	DrawBucketTable::Desc(const uint32_t bucket) const noexcept
 	{
 		gassert(bucket < Count(), "Desc takes an allocated bucket");
 		return m_Descs[bucket];
 	}
 
 	bool
-	BucketTable::Transparent(const uint32_t bucket) const noexcept
+	DrawBucketTable::Transparent(const uint32_t bucket) const noexcept
 	{
 		gassert(bucket < Count(), "Transparent takes an allocated bucket");
 		return m_TransparentFlags[bucket] != 0u;

@@ -21,8 +21,8 @@
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -97,7 +97,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	REQUIRE(scene != nullptr);
 
 	// A real material, so the instances land in a real bucket: the histogram and the compaction
-	// both skip an instance carrying cInvalidBucket, and every assertion below would read zero.
+	// both skip an instance carrying cInvalidDrawBucket, and every assertion below would read zero.
 	auto material         = bgl::MaterialHandle();
 	material.materialType = bgl::MaterialType::kPBR;
 
@@ -197,7 +197,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxBuckets) * sizeof(uint32_t);
+		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
 		rbDesc.debugName     = "Prefix-Sum Readback";
 		rbPrefixSum[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 	}
@@ -244,7 +244,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.AddBufferArg(
-					bgl::c_BucketPrefixSumName,
+					bgl::c_DrawBucketPrefixSumName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.SetSideEffect()
@@ -255,7 +255,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 						ctx.GetBuffer(bgl::c_CompactedInstancesName));
 					cmd->CopyBufferToReadback(
 						rbPrefixSum[cullIdx],
-						ctx.GetBuffer(bgl::c_BucketPrefixSumName));
+						ctx.GetBuffer(bgl::c_DrawBucketPrefixSumName));
 				}));
 	}
 
@@ -277,7 +277,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		REQUIRE(prefixSum != nullptr);
 
 		// Inclusive scan over the whole ceiling, so the last entry is everything that survived.
-		const uint32_t visible = prefixSum[bgl::idl::cMaxBuckets - 1];
+		const uint32_t visible = prefixSum[bgl::idl::cMaxDrawBuckets - 1];
 		resourceManager->UnmapReadback(rbPrefixSum[cullIdx]);
 
 		CHECK(visible == expected[cullIdx].size());

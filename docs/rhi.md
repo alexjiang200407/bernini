@@ -127,8 +127,8 @@ doc and a header disagree, trust the header, then fix this doc.
   are kernels — each worker that misses the cache stands up a Slang global session of about
   200 MB, and past six the links stop getting faster), then the passes check their binder names
   against the built kernels. Two batches exist: the always-on set in `RenderContext`'s
-  constructor, and one per `Draw` that demands buckets with no kernels yet
-  (`RenderContext::EnsureBucketPipelinesExist`) — so a scene builds only the buckets it uses, and each
+  constructor, and one per `Draw` that demands draw buckets with no kernels yet
+  (`RenderContext::EnsureDrawBucketPipelinesExist`) — so a scene builds only the draw buckets it uses, and each
   batch releases the Slang sessions when it is done. Pipeline creation is callable from any thread:
   each thread compiles on a Slang session of its own (see [Shader Cache](docs/shader_cache.md)),
   and the backend's `ShaderCache` serializes its driver pipeline library. A kernel created

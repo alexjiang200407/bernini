@@ -1,6 +1,6 @@
 import idl.Constants;
 import idl.InstanceVisibility;
-import idl.Bucket;
+import idl.DrawBucket;
 import lib.debug.dbg;
 import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
@@ -15,13 +15,13 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gLocalHistogram[cMaxBuckets];
+groupshared Atomic<uint> gLocalHistogram[cMaxDrawBuckets];
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    for (uint i = localIdx; i < cMaxBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxDrawBuckets; i += cHistogramGroupSize)
     {
         gLocalHistogram[i].store(0u);
     }
@@ -31,11 +31,11 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     if (!instance.meshInstance.Null() && gUniforms.visibility[globalIdx].visible != 0u)
     {
-        let bucket = instance.bucket;
+        let bucket = instance.drawBucket;
 
-        dbg_assert(bucket < cMaxBuckets, ErrorCode.kInvalidBucket);
+        dbg_assert(bucket < cMaxDrawBuckets, ErrorCode.kInvalidDrawBucket);
 
-        if (bucket < cMaxBuckets)
+        if (bucket < cMaxDrawBuckets)
         {
             gLocalHistogram[bucket].add(1u);
         }
@@ -45,7 +45,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     // Skip the empty rows: every group flushing zero adds to the same 1 KB region is the
     // worst-contention case, not a free one.
-    for (uint i = localIdx; i < cMaxBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxDrawBuckets; i += cHistogramGroupSize)
     {
         let count = gLocalHistogram[i].load();
         if (count != 0u)

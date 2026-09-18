@@ -1,7 +1,7 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
-#include "gfx/BucketTable.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -103,7 +103,7 @@ TEST_CASE(
 
 	// The ids come from a table, as they do in a view: the shader knows nothing of what a bucket
 	// is and reads its transparency off the flags this table mirrors.
-	bgl::BucketTable buckets;
+	bgl::DrawBucketTable buckets;
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
 
@@ -140,7 +140,7 @@ TEST_CASE(
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0;
-		instance.bucket =
+		instance.drawBucket =
 			buckets.Resolve(bgl::GeomType::kStaticMesh, placement.material, placement.layer);
 
 		const auto instanceHandle = instanceBuffer.Add(std::move(instance));
@@ -157,7 +157,7 @@ TEST_CASE(
 	auto transparentFlags = bgl::UploadBuffer<uint32_t>();
 	{
 		auto desc         = bgl::UploadBufferDesc();
-		desc.initialCount = bgl::idl::cMaxBuckets;
+		desc.initialCount = bgl::idl::cMaxDrawBuckets;
 		desc.debugName    = "Transparent Bucket Flags";
 		transparentFlags.Init(std::move(desc), resourceManager);
 	}
