@@ -728,6 +728,21 @@ here — the one brightness knob.
 * The levels are `RGBA16_FLOAT` like the scene colour, and per target, not per frame in flight:
   consumed within the frame that wrote them.
 
+**What blooms is chosen by brightness alone.** The prefilter reads the scene colour's radiance
+against the threshold; no material can say "glow" or "don't glow", because nothing per-material
+reaches the chain. On PBR shading that is the standard selector. On flat, banded (toon/cel)
+shading it is the wrong one: a sunlit flat region sits at one level, so it either blooms whole —
+haze over clothes and faces — or not at all. Stylized engines select per material instead, with a
+bloom weight or mask the material writes; this one has none.
+
+The way to control it today is **emissive-only bloom**: set `threshold` above the brightest lit
+surface (around 1.0–1.5 at the exposure environments are normalized to) and drive glow through
+the surface's `emissive` ([Game-Defined Surfaces](game_defined_surfaces.md)), which lands in the
+scene colour at whatever radiance the surface asks for. Specular peaks can still cross a threshold
+set this way, so a stylized material wants little specular. Glow colour also goes through AgX,
+which pulls very bright colours toward white — a saturated emissive glows paler than it is
+authored.
+
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl_extended/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
