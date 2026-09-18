@@ -44,7 +44,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    if (gUniforms.transparentFlags[instance.pso] == 0u)
+    if (gUniforms.transparentFlags[instance.bucket] == 0u)
     {
         return;
     }

@@ -43,7 +43,7 @@ namespace bgl
 		};
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"psoIndex"sv,
+			"bucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -240,7 +240,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-			(*foundExpansion)["baseTable"] = idl::BaseTable::kPsoBucketed;
+			(*foundExpansion)["baseTable"] = idl::BaseTable::kBucketed;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -274,12 +274,12 @@ namespace bgl
 		gfxState.indirectArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
 		// One bucket per dispatch: the cbuffer is re-uploaded on every dispatch, so rewriting
-		// psoIndex and cullBackfaces between them is sound (docs/uniforms.md).
+		// bucketIndex and cullBackfaces between them is sound (docs/uniforms.md).
 		const auto dispatch = [&](MeshletKernel& kernel, const uint32_t bucket) {
 			if (auto expansion = kernel.FindUniforms("expansionData"))
 			{
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
-				(*expansion)["psoIndex"] = bucket;
+				(*expansion)["bucketIndex"] = bucket;
 				(*expansion)["cullBackfaces"] =
 					BucketCullMode(m_Buckets->Desc(bucket)) == RasterCullMode::kNone ? 1u : 0u;
 			}

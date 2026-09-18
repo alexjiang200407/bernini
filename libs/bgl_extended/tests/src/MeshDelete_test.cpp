@@ -328,7 +328,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 // SetSubmeshMaterial is indexed by source submesh. Once chunking made that index disagree with the
 // GPU submesh index, materialing one submesh wrote over a neighbour's, or covered only part of its
 // own -- a mesh half-textured along a triangle-aligned seam.
-TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][pso][scene]")
+TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][bucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -379,7 +379,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	}
 }
 
-TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scene]")
+TEST_CASE("SetSubmeshMaterial re-selects a submesh's bucket", "[material][bucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -452,7 +452,9 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 // epoch, and the SceneView re-resolves in its next Update. Without that, an instance placed before
 // the change would keep drawing with the stale PSO forever, which is a silent wrong-pixel-shader bug
 // rather than a crash.
-TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[material][pso][scene]")
+TEST_CASE(
+	"A live instance re-resolves its bucket after SetSubmeshMaterial",
+	"[material][bucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -483,7 +485,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 	const auto submeshInstance = meta.submeshInstances[0];
 
 	const auto instanceShading = [&]() {
-		return ShadingOf(*gfx, instanceBuffer[submeshInstance].pso);
+		return ShadingOf(*gfx, instanceBuffer[submeshInstance].bucket);
 	};
 
 	// It resolved off the geom's default at placement time.
@@ -553,7 +555,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		const auto& laterMeta = meshBuffer.MetaAt(later.handle.index);
 		REQUIRE(laterMeta.submeshInstances.size() == 1);
 
-		CHECK(ShadingOf(*gfx, instanceBuffer[laterMeta.submeshInstances[0]].pso) == c_Opaque);
+		CHECK(ShadingOf(*gfx, instanceBuffer[laterMeta.submeshInstances[0]].bucket) == c_Opaque);
 
 		// ...and the older one still catches up on the next Update, rather than being stranded by the
 		// newer placement having already advanced the view's epoch.
@@ -564,7 +566,9 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 
 // The whole point of moving the material onto the instance: two instances of one geom, wearing
 // different materials, bucketed into different PSOs. A skin.
-TEST_CASE("A material override changes one instance and not its siblings", "[material][pso][scene]")
+TEST_CASE(
+	"A material override changes one instance and not its siblings",
+	"[material][bucket][scene]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -598,7 +602,7 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 
 	const auto shadingOf = [&](bgl::MeshInstanceHandle instance) {
 		const auto& meta = meshBuffer.MetaAt(instance.handle.index);
-		return ShadingOf(*gfx, instanceBuffer[meta.submeshInstances[0]].pso);
+		return ShadingOf(*gfx, instanceBuffer[meta.submeshInstances[0]].bucket);
 	};
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

@@ -89,7 +89,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		// is the null one, so the first element past it will do.
 		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
-		instance.pso                 = c_Buckets[bucketIdx];
+		instance.bucket              = c_Buckets[bucketIdx];
 
 		instanceBuffer.Add(instance);
 	};

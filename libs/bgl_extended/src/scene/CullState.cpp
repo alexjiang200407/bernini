@@ -39,9 +39,9 @@ namespace bgl
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
 				.SetInitialCount(idl::cMaxBuckets)
-				.SetDebugName("Pso Prefix Sum");
+				.SetDebugName("Bucket Prefix Sum");
 
-			m_PsoPrefixSum.Init(std::move(desc), resourceManager);
+			m_BucketPrefixSum.Init(std::move(desc), resourceManager);
 		}
 
 		{
@@ -79,7 +79,7 @@ namespace bgl
 	{
 		m_CompactedInstances.Release(deferred);
 		m_InstanceVisibility.Release(deferred);
-		m_PsoPrefixSum.Release(deferred);
+		m_BucketPrefixSum.Release(deferred);
 		m_CompactedDispatchArgs.Release(deferred);
 		m_CullView.Release(deferred);
 	}
@@ -107,7 +107,7 @@ namespace bgl
 		importUpdated(c_CompactedInstancesName, m_CompactedInstances);
 		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
 
-		fg.ImportBuffer(c_PsoPrefixSumName, m_PsoPrefixSum.GetBufferHandle());
+		fg.ImportBuffer(c_BucketPrefixSumName, m_BucketPrefixSum.GetBufferHandle());
 		fg.ImportBuffer(c_CompactDispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
 		fg.ImportBuffer(c_CullViewName, m_CullView.GetBufferHandle());
 	}

@@ -166,7 +166,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0u;
-		instance.pso          = 1u;
+		instance.bucket       = 1u;
 		instanceBuffer.Add(instance);
 	}
 	for (uint32_t i = c_LiveCount; i < padded; ++i)

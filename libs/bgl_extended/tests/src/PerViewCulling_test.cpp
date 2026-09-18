@@ -96,8 +96,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto* scene = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	// A real material, so the instances land in a real PSO bucket: the histogram and the compaction
-	// both skip an instance carrying pso kInvalid, and every assertion below would read zero.
+	// A real material, so the instances land in a real bucket: the histogram and the compaction
+	// both skip an instance carrying cInvalidBucket, and every assertion below would read zero.
 	auto material         = bgl::MaterialHandle();
 	material.materialType = bgl::MaterialType::kPBR;
 
@@ -244,7 +244,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.AddBufferArg(
-					bgl::c_PsoPrefixSumName,
+					bgl::c_BucketPrefixSumName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.SetSideEffect()
@@ -255,7 +255,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 						ctx.GetBuffer(bgl::c_CompactedInstancesName));
 					cmd->CopyBufferToReadback(
 						rbPrefixSum[cullIdx],
-						ctx.GetBuffer(bgl::c_PsoPrefixSumName));
+						ctx.GetBuffer(bgl::c_BucketPrefixSumName));
 				}));
 	}
 

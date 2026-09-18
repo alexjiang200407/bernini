@@ -100,7 +100,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   UAV and a following pass that reads it declare the very same `(sync, access)`, so a diff-driven
   graph would emit nothing and let the two dispatches overlap. The barrier it emits has
   `before == after` — which is exactly how enhanced barriers spell a UAV barrier. *Bug precedent:*
-  `CompactInstancesPass` writes `psoPrefixSum` in its scan pass and reads it in the following
+  `CompactInstancesPass` writes `bucketPrefixSum` in its scan pass and reads it in the following
   compaction pass, both as a UAV; with no barrier the compaction read pre-scan counts and scattered
   instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing PSO
   buckets.

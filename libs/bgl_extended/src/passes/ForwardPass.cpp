@@ -65,7 +65,7 @@ namespace bgl
 		// clang-format on
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"psoIndex"sv,
+			"bucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -402,8 +402,8 @@ namespace bgl
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*expansionData)["psoIndex"]  = bucket;
-				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
+				(*expansionData)["bucketIndex"] = bucket;
+				(*expansionData)["baseTable"]   = idl::BaseTable::kBucketed;
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansionData)["cullBackfaces"] =
 					BucketCullMode(m_Buckets->Desc(bucket)) == RasterCullMode::kNone ? 1u : 0u;

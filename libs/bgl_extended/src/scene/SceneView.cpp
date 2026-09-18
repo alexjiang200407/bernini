@@ -59,7 +59,7 @@ namespace bgl
 	namespace
 	{
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
-		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
+		// must read as skippable: a default SubmeshInstance names no mesh and carries cInvalidBucket,
 		// which both the histogram and the compaction skip.
 		constexpr std::array<SubmeshInstance, idl::cHistogramGroupSize> c_InstanceTailPadding{};
 
@@ -1012,11 +1012,11 @@ namespace bgl
 					MaterialHandle{},
 					geom.geomType);
 
-				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
-				// past the bucket ceiling, and the sort would skip it regardless. A null slot is
+				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a bucket
+				// past the ceiling, and the sort would skip it regardless. A null slot is
 				// still pushed, because overrides, selection marks and the epoch re-resolve all
 				// address a submesh by its index in this vector.
-				if (instance.pso != idl::cInvalidBucket)
+				if (instance.bucket != idl::cInvalidBucket)
 				{
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}
@@ -1415,8 +1415,8 @@ namespace bgl
 			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
-		instance.pso = m_BucketTable->Resolve(geomType, material);
-		m_DemandedBuckets.set(instance.pso);
+		instance.bucket = m_BucketTable->Resolve(geomType, material);
+		m_DemandedBuckets.set(instance.bucket);
 	}
 
 	void
@@ -1433,13 +1433,13 @@ namespace bgl
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
 		const idl::RawEntry material = instance.material;
-		const uint32_t      pso      = instance.pso;
+		const uint32_t      bucket   = instance.bucket;
 
 		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.
-		if (instance.material.byteOffset != material.byteOffset || instance.pso != pso)
+		if (instance.material.byteOffset != material.byteOffset || instance.bucket != bucket)
 		{
 			m_InstanceBuffer.Set(handle, instance);
 		}

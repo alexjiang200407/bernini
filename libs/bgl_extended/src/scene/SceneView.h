@@ -61,7 +61,7 @@ namespace bgl
 		std::vector<uint8_t>           selected;
 
 		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
-		// pso for the pipeline family it actually draws through.
+		// bucket for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
 		// Whether a write has already rolled this placement's prevTransform this frame.

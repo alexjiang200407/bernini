@@ -60,7 +60,7 @@ namespace bgl
 
 	// Scratch a scene collaborator owns, imported into a namespace of its own rather than the
 	// scene's. cull.* is per culled frustum, so a view carries one set per CullState.
-	constexpr std::string_view c_PsoPrefixSumName = "compactedInstances.psoPrefixSumBuffer"sv;
+	constexpr std::string_view c_BucketPrefixSumName = "compactedInstances.bucketPrefixSumBuffer"sv;
 	constexpr std::string_view c_CompactDispatchArgsName =
 		"compactedInstances.compactDispatchArgs"sv;
 	constexpr std::string_view c_TransparentDispatchArgsName = "transparentSort.dispatchArgs"sv;

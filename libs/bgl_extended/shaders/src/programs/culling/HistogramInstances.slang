@@ -31,13 +31,13 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     if (!instance.meshInstance.Null() && gUniforms.visibility[globalIdx].visible != 0u)
     {
-        let psoType = instance.pso;
+        let bucket = instance.bucket;
 
-        dbg_assert(psoType < cMaxBuckets, ErrorCode.kInvalidPsoType);
+        dbg_assert(bucket < cMaxBuckets, ErrorCode.kInvalidBucket);
 
-        if (psoType < cMaxBuckets)
+        if (bucket < cMaxBuckets)
         {
-            gLocalHistogram[psoType].add(1u);
+            gLocalHistogram[bucket].add(1u);
         }
     }
 

@@ -3,6 +3,6 @@
 // transparent is depth-sorted and split into partitions.
 public enum BaseTable : uint32_t
 {
-    kPsoBucketed = 0,
+    kBucketed = 0,
     kDepthSorted,
 }

@@ -140,7 +140,7 @@ TEST_CASE(
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0;
-		instance.pso =
+		instance.bucket =
 			buckets.Resolve(bgl::GeomType::kStaticMesh, placement.material, placement.layer);
 
 		const auto instanceHandle = instanceBuffer.Add(std::move(instance));

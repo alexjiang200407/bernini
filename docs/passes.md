@@ -336,7 +336,7 @@ under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInst
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
 in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
 
-The buffers it *writes* belong to the view being culled — `psoPrefixSumBuffer` and
+The buffers it *writes* belong to the view being culled — `bucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxBuckets`, the ceiling every count-sized structure is built
 to) and `cull.view` (one `CullView`: view-proj + frustum
 planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
@@ -347,7 +347,7 @@ rather than per namespace.
 
 It adds **four sub-passes**:
 
-1. **Clear** — zeroes `psoPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
+1. **Clear** — zeroes `bucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
    `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
    Y = Z = 1). The written buffers are declared copy-dest.
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
@@ -357,7 +357,7 @@ It adds **four sub-passes**:
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
 3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per bucket into
-   `psoPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
+   `bucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
    sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
    zero. The scan is one thread group of `cMaxBuckets` threads, which is why that constant is a
    hard ceiling. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
@@ -370,7 +370,7 @@ It adds **four sub-passes**:
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`
   (all read).
-* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `psoPrefixSumBuffer`,
+* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `bucketPrefixSumBuffer`,
   `compactDispatchArgs` (and `cull.stats` in debug) — all UAV / indirect-args downstream.
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl_extended/src/passes/TransparentSortPass.cpp)
@@ -544,10 +544,10 @@ material offset, and neither says which tier filled them.
 **Opaque and alpha-test** are bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
-derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
+derive the pose from), `expansionData` (`bucketIndex` and the instance-list tables), `materialData`
 (samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
-`DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
+`DispatchMeshIndirect(bucket)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
 
 **Blob shadows draw between the two phases.** `BlobShadowPhase`
@@ -598,8 +598,8 @@ than blending: stochastic coverage writes real depth, so it self-occludes in the
 pre-pass. That replaced an `occlude` flag which drew a blend material twice — a depth-only pre-pass,
 then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
-The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` indexed by
-`psoIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
+The depth-sorted path starts at zero; the opaque path reads `bucketPrefixSum` indexed by
+`bucketIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
@@ -746,10 +746,10 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
 ## Risky / Non-obvious Contracts
 
 * **`Forward` depends on `Compact Instances` by resource, not by ordering code.** It reads
-  `compactedInstances`, `psoPrefixSumBuffer`, and `compactDispatchArgs`; the graph's last-writer
+  `compactedInstances`, `bucketPrefixSumBuffer`, and `compactDispatchArgs`; the graph's last-writer
   dependency is what puts the compaction before it. Adding `Forward` without the compaction in the
   same frame leaves its indirect args seeded to zero groups (nothing draws) — not an error.
-* **The histogram reuses `psoPrefixSumBuffer` as its output.** The histogram and the scan are the
+* **The histogram reuses `bucketPrefixSumBuffer` as its output.** The histogram and the scan are the
   same buffer read-modify-written back to back; the intra-pass UAV barrier between them is
   mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing PSO buckets —
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier

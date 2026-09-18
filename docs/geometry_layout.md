@@ -78,10 +78,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   identity across the pieces and breaks source-index addressing (see the contract below).
 
 * **The `SubmeshInstance` is the unit of pipeline state.** It carries the *resolved* `material` entry
-  and `pso` — the geom's default material, unless that instance overrides it. They live on the
+  and `bucket` — the geom's default material, unless that instance overrides it. They live on the
   instance and not on the `Submesh` because a submesh is shared by every instance placed from its
   geom: a cosmetic **skin** (the same unit mesh, a different material per unit) has nowhere else to
-  go. The counting sort buckets on `SubmeshInstance::pso`, so an overridden instance can draw from a
+  go. The counting sort buckets on `SubmeshInstance::bucket`, so an overridden instance can draw from a
   different pipeline than its sibling — an opaque unit and a cutout one, from one geom.
 
   **Transparent buckets are the exception.** Blending must composite back-to-front, which is a
@@ -207,7 +207,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 
 ```mermaid
 flowchart TD
-    Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + pso</b>"]
+    Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + bucket</b>"]
     Mesh["MeshInstance (root)<br/>transform + submeshes"]
     Submesh["Submesh<br/>layout + ranges (geometry only)"]
     Meshlet["Meshlet<br/>rel offsets + bounds"]

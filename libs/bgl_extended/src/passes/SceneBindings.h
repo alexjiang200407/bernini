@@ -100,8 +100,8 @@ namespace bgl
 		    "compactedInstances",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader },
-		  { c_PsoPrefixSumName,
-		    "psoPrefixSum",
+		  { c_BucketPrefixSumName,
+		    "bucketPrefixSum",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader } }
 	};

@@ -9,5 +9,5 @@ public struct SubmeshInstance
     public Entry<MeshInstance> meshInstance;
     public uint submeshIndex;
     public RawEntry<IMaterial> material;
-    public uint pso;
+    public uint bucket;
 };

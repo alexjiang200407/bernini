@@ -35,7 +35,7 @@
 // the same pass declarations CompactInstancesPass makes, and checks every instance landed inside its
 // own PSO bucket.
 //
-// The scan and the compaction both declare psoPrefixSum as a UAV, so the graph sees no state change
+// The scan and the compaction both declare bucketPrefixSum as a UAV, so the graph sees no state change
 // between them. It must still barrier: the compaction reads the bases the scan writes, and without
 // one the two dispatches overlap and the compaction scatters against a pre-scan prefix sum. Only a
 // bucket whose base is non-zero can detect that -- a lone bucket's base is the sum of empty buckets
@@ -87,22 +87,22 @@ TEST_CASE(
 
 	// The bucket each instance index carries, so a compacted index can be checked against the
 	// bucket it was filed under.
-	std::vector<uint32_t>                       psoOf(c_ActiveCount);
+	std::vector<uint32_t>                       bucketOf(c_ActiveCount);
 	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedCount{};
 
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		const uint32_t pso = c_Buckets[i % c_BucketCount];
+		const uint32_t bucket = c_Buckets[i % c_BucketCount];
 
 		// Any non-null mesh entry: offset 0 is the null one, so the first element past it will do.
 		auto instance                = bgl::SubmeshInstance();
 		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
-		instance.pso                 = pso;
+		instance.bucket              = bucket;
 		instanceBuffer.Add(instance);
 
-		psoOf[i] = pso;
-		expectedCount[pso] += 1;
+		bucketOf[i] = bucket;
+		expectedCount[bucket] += 1;
 	}
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
@@ -129,7 +129,7 @@ TEST_CASE(
 		return buffer;
 	};
 
-	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::idl::cMaxBuckets, "Pso Prefix Sum");
+	auto bucketPrefixSum = makeCompute(uint32_t{}, bgl::idl::cMaxBuckets, "Bucket Prefix Sum");
 	auto dispatchArgs =
 		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxBuckets, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
@@ -156,7 +156,7 @@ TEST_CASE(
 	fg.RegisterQueue("main", cmdQueue, cmdList);
 
 	fg.ImportBuffer("instanceBuffer", instanceBuffer.GetBufferHandle());
-	fg.ImportBuffer("psoPrefixSum", psoPrefixSum.GetBufferHandle());
+	fg.ImportBuffer("bucketPrefixSum", bucketPrefixSum.GetBufferHandle());
 	fg.ImportBuffer("dispatchArgs", dispatchArgs.GetBufferHandle());
 	fg.ImportBuffer("compactedInstances", compacted.GetBufferHandle());
 	fg.ImportBuffer("visibility", visibility.GetBufferHandle());
@@ -171,7 +171,7 @@ TEST_CASE(
 				bgl::BarrierSyncFlag::kCopy,
 				bgl::BarrierAccessFlag::kCopyDest)
 			.AddBufferArg(
-				"psoPrefixSum",
+				"bucketPrefixSum",
 				bgl::BarrierSyncFlag::kCopy,
 				bgl::BarrierAccessFlag::kCopyDest)
 			.AddBufferArg(
@@ -189,7 +189,7 @@ TEST_CASE(
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				instanceBuffer.Update(cmd);
-				psoPrefixSum.Clear(cmd);
+				bucketPrefixSum.Clear(cmd);
 				compacted.Clear(cmd);
 
 				const std::vector<uint32_t> allVisible(c_PaddedCount, 1u);
@@ -214,7 +214,7 @@ TEST_CASE(
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kShaderResource)
 			.AddBufferArg(
-				"psoPrefixSum",
+				"bucketPrefixSum",
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kUnorderedAccess)
 			.AddBufferArg(
@@ -226,7 +226,7 @@ TEST_CASE(
 
 				histogram["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
 				histogram["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
-				histogram["gUniforms"]["outBuffer"]      = psoPrefixSum.GetBufferHandle();
+				histogram["gUniforms"]["outBuffer"]      = bucketPrefixSum.GetBufferHandle();
 
 				auto state   = bgl::ComputeState();
 				state.kernel = &histogram;
@@ -235,14 +235,14 @@ TEST_CASE(
 
 				// Both dispatches live in this one pass, so the graph cannot barrier between them.
 				cmd->Barrier(
-					psoPrefixSum.GetBufferHandle(),
+					bucketPrefixSum.GetBufferHandle(),
 					bgl::BufferBarrierDesc()
 						.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
 						.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
 						.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
 						.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
 
-				prefixSum["gUniforms"]["inOutBuffer"] = psoPrefixSum.GetBufferHandle();
+				prefixSum["gUniforms"]["inOutBuffer"] = bucketPrefixSum.GetBufferHandle();
 
 				state.kernel = &prefixSum;
 				cmd->SetComputeState(state);
@@ -257,7 +257,7 @@ TEST_CASE(
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kShaderResource)
 			.AddBufferArg(
-				"psoPrefixSum",
+				"bucketPrefixSum",
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kUnorderedAccess)
 			.AddBufferArg(
@@ -277,7 +277,7 @@ TEST_CASE(
 
 				compact["gUniforms"]["instanceBuffer"]     = instanceBuffer.GetBufferHandle();
 				compact["gUniforms"]["visibility"]         = visibility.GetBufferHandle();
-				compact["gUniforms"]["psoPrefixSum"]       = psoPrefixSum.GetBufferHandle();
+				compact["gUniforms"]["bucketPrefixSum"]    = bucketPrefixSum.GetBufferHandle();
 				compact["gUniforms"]["compactedInstances"] = compacted.GetBufferHandle();
 				compact["gUniforms"]["dispatchArgs"]       = dispatchArgs.GetBufferHandle();
 
@@ -292,7 +292,7 @@ TEST_CASE(
 
 	fg.Compile(resourceManager.Get());
 
-	// The compaction reads the bases the scan wrote. Both declare psoPrefixSum as a UAV, so this
+	// The compaction reads the bases the scan wrote. Both declare bucketPrefixSum as a UAV, so this
 	// barrier is the only thing separating the two dispatches -- assert on that buffer specifically,
 	// not merely that the pass barriers something (it always transitions compactedInstances).
 	{
@@ -300,7 +300,7 @@ TEST_CASE(
 
 		const bool barriersPrefixSum =
 			std::ranges::any_of(barriers.bufferHandles, [&](bgl::BufferHandle handle) {
-				return handle.slot.index == psoPrefixSum.GetBufferHandle().slot.index;
+				return handle.slot.index == bucketPrefixSum.GetBufferHandle().slot.index;
 			});
 
 		CHECK(barriersPrefixSum);
@@ -339,11 +339,11 @@ TEST_CASE(
 	cmdList->CopyBufferToReadback(rbCompacted, compacted.GetBufferHandle());
 
 	cmdList->Barrier(
-		psoPrefixSum.GetBufferHandle(),
+		bucketPrefixSum.GetBufferHandle(),
 		toCopySource(
 			bgl::BarrierSyncFlag::kComputeShader,
 			bgl::BarrierAccessFlag::kUnorderedAccess));
-	cmdList->CopyBufferToReadback(rbPrefixSum, psoPrefixSum.GetBufferHandle());
+	cmdList->CopyBufferToReadback(rbPrefixSum, bucketPrefixSum.GetBufferHandle());
 
 	cmdList->Barrier(
 		dispatchArgs.GetBufferHandle(),
@@ -396,7 +396,7 @@ TEST_CASE(
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
 			const uint32_t instanceIdx = compactedOut[slot];
-			if (instanceIdx >= c_ActiveCount || psoOf[instanceIdx] != p)
+			if (instanceIdx >= c_ActiveCount || bucketOf[instanceIdx] != p)
 			{
 				++misfiled;
 			}
@@ -434,7 +434,7 @@ TEST_CASE(
 	resourceManager->UnmapReadback(rbCompacted);
 
 	instanceBuffer.Release(false);
-	psoPrefixSum.Release(false);
+	bucketPrefixSum.Release(false);
 	dispatchArgs.Release(false);
 	compacted.Release(false);
 	visibility.Release(false);

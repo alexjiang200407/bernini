@@ -42,8 +42,8 @@ namespace bgl
 			return "InvalidVertexIndex";
 		case idl::ErrorCode::kInvalidSubmeshInstance:
 			return "InvalidSubmeshInstance";
-		case idl::ErrorCode::kInvalidPsoType:
-			return "InvalidPsoType";
+		case idl::ErrorCode::kInvalidBucket:
+			return "InvalidBucket";
 		case idl::ErrorCode::kInvalidBoneIndex:
 			return "InvalidBoneIndex";
 		case idl::ErrorCode::kNullEntryDeref:

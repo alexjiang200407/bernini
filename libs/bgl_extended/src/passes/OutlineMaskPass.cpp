@@ -157,9 +157,9 @@ namespace bgl
 			// kDepthSorted starts the list at zero, exactly like the transparent phase; the
 			// prefix-sum key is never read under it, and is bound only so it holds a live handle.
 			expansion["compactedInstances"] = selected;
-			expansion["psoPrefixSum"]       = selected;
+			expansion["bucketPrefixSum"]    = selected;
 			expansion["baseTable"]          = idl::BaseTable::kDepthSorted;
-			expansion["psoIndex"]           = 0u;
+			expansion["bucketIndex"]        = 0u;
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;
