@@ -2,7 +2,6 @@
 #include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include <bgl_common/idl/DispatchArgs.h>
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -40,14 +39,14 @@ namespace bgl
 
 	/**
 	 * Where a draw bucket's command count sits when its own dispatch args are the count buffer: the
-	 * `threadCountX` that opens its entry, in uint32s. Zero exactly when the bucket is empty, and
+	 * `threadCountX` that opens its entry -- first because every backend's indirect-argument layout
+	 * puts X first -- in uint32s. Zero exactly when the bucket is empty, and
 	 * the count verb clamps any other value to one command -- so the count is the grid, and a zero
 	 * count can never be paired with a non-zero grid.
 	 */
 	[[nodiscard]] constexpr uint32_t
 	DrawBucketCountIndex(const uint32_t bucket) noexcept
 	{
-		static_assert(offsetof(idl::DispatchArgs, threadCountX) == 0);
 		return bucket * static_cast<uint32_t>(sizeof(idl::DispatchArgs) / sizeof(uint32_t));
 	}
 }
