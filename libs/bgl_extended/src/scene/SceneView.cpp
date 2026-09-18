@@ -1051,10 +1051,7 @@ namespace bgl
 		// Erase every submesh-instance this mesh contributed to the sort buffer.
 		for (const core::slot_handle submeshInstance : meta.submeshInstances)
 		{
-			if (m_InstanceBuffer.IsValid(submeshInstance))
-			{
-				m_InstanceBuffer.Erase(submeshInstance);
-			}
+			m_InstanceBuffer.Erase(submeshInstance);
 		}
 
 		if (meta.animState != 0)
@@ -1234,11 +1231,7 @@ namespace bgl
 					continue;
 				}
 
-				const core::slot_handle handle = meta.submeshInstances[s];
-				if (m_InstanceBuffer.IsValid(handle))
-				{
-					list.push_back(m_InstanceBuffer.GetDenseIndex(handle));
-				}
+				list.push_back(m_InstanceBuffer.GetDenseIndex(meta.submeshInstances[s]));
 			}
 		}
 
@@ -1415,10 +1408,9 @@ namespace bgl
 		const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
-		if (!m_InstanceBuffer.IsValid(handle))
-		{
-			return;
-		}
+		gassert(
+			m_InstanceBuffer.IsValid(handle),
+			"Every submesh of a live placement has an instance");
 
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 

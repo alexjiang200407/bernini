@@ -71,7 +71,7 @@ and portability.
     workgroup, capped at 1024 transparent instances; a multi-group radix sort is the scale-up.
   - [x] Texture Asset Import
   - [x] Per-instance material override — one mesh, a different material per instance, resolved into
-    the cached `SubmeshInstance` so the draw pays nothing and an instance may change PSO bucket. For
+    the cached `SubmeshInstance` so the draw pays nothing and an instance may change bucket. For
     tens of hand-placed instances; crowd kit variation is the atlasing line under Crowd Variation,
     not this. No editor surface yet (see Level Editor for Battles).
   - [x] Editor Material Graph

@@ -102,7 +102,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   `before == after` — which is exactly how enhanced barriers spell a UAV barrier. *Bug precedent:*
   `CompactInstancesPass` writes `bucketPrefixSum` in its scan pass and reads it in the following
   compaction pass, both as a UAV; with no barrier the compaction read pre-scan counts and scattered
-  instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing PSO
+  instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing
   buckets.
 
 * **Poisoning a scratch output is a graph service, not pass code.** A pass declares an output it

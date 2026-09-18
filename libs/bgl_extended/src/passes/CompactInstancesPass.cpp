@@ -275,7 +275,7 @@ namespace bgl
 		// explicit UAV barrier or the scan races the histogram. The race only corrupts
 		// results with multiple buckets (a lone bucket's base is the prefix sum of
 		// prior, empty buckets, which is always 0), which is why it shows up as
-		// flickering only in scenes mixing PSO types.
+		// flickering only in scenes mixing buckets.
 		cmdList->Barrier(
 			bucketPrefixSumBuffer,
 			BufferBarrierDesc()
