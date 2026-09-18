@@ -225,7 +225,7 @@ namespace bgl
 		}
 
 		// The coverage family is demand-built; nothing to read names off until a first bucket is,
-		// and EnsureBucketPipelines re-checks after every build.
+		// and EnsureBucketPipelinesExist re-checks after every build.
 		if (!AnyInitialized(m_CoverageKernels))
 		{
 			return;

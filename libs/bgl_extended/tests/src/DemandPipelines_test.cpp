@@ -134,7 +134,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 // Demand building means an ordinary run checks only the buckets its content uses, so a renamed
 // member in a skinned or game-slot shader could pass every suite whose scenes are static. This
 // is the case that keeps the binder-name check's old full coverage: build every bucket the way
-// EnsureBucketPipelines would, then run the checks over the complete family.
+// EnsureBucketPipelinesExist would, then run the checks over the complete family.
 TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand][bindings]")
 {
 	auto opts             = bgl::GraphicsOptions();

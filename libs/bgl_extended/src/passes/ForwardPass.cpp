@@ -313,7 +313,7 @@ namespace bgl
 		m_BlobShadows.CheckBindings();
 
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
-		// EnsureBucketPipelines re-checks after every build.
+		// EnsureBucketPipelinesExist re-checks after every build.
 		if (!AnyInitialized(m_Kernels))
 		{
 			return;

@@ -197,7 +197,7 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
-		// built at once. The per-bucket meshlet kernels are not among them: EnsureBucketPipelines
+		// built at once. The per-bucket meshlet kernels are not among them: EnsureBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
 		auto pipelines = PipelineBatch(m_Device.Get());
 		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
@@ -604,7 +604,7 @@ namespace bgl
 	}
 
 	void
-	RenderContext::EnsureBucketPipelines(BucketMask demanded)
+	RenderContext::EnsureBucketPipelinesExist(BucketMask demanded)
 	{
 		// The one shared blend kernel draws the whole depth-sorted list (ForwardPass), so any
 		// transparent demand is a demand for that bucket.
@@ -654,7 +654,7 @@ namespace bgl
 		{
 			gassert(
 				!missing.test(pso) || m_Forward.BucketInitialized(pso),
-				"EnsureBucketPipelines left a demanded bucket uninitialized");
+				"EnsureBucketPipelinesExist left a demanded bucket uninitialized");
 		}
 	}
 
@@ -674,7 +674,7 @@ namespace bgl
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
 
-		EnsureBucketPipelines(view->DemandedBuckets());
+		EnsureBucketPipelinesExist(view->DemandedBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.

@@ -155,7 +155,7 @@ namespace bgl
 		 * (SceneView::DemandedBuckets).
 		 */
 		void
-		EnsureBucketPipelines(BucketMask demanded);
+		EnsureBucketPipelinesExist(BucketMask demanded);
 
 		// Passes a frame may time; a frame past it lists the rest unsampled. Every target owns this
 		// many pairs per frame in flight, so the heap is sized from it.
