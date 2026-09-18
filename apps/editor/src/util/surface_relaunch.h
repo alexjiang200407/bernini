@@ -11,8 +11,7 @@ namespace editor
 
 	/**
 	 * Whether a project whose shaders are in `projectShaders` has to be opened in a new editor
-	 * process, given this session registered `registeredSurfaces` surfaces from `registeredShaders`
-	 * (empty when it started without a project).
+	 * process, given this session registered `registeredSurfaces` surfaces from `registeredShaders`.
 	 *
 	 * Surfaces are registered once, as the renderer is built, so a different directory is only
 	 * harmless when neither side could hold one. The new side is judged by the presence of a

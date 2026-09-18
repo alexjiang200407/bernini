@@ -39,8 +39,17 @@ point: bgl_extended opens the log from its `Graphics` constructor, and the first
 naming it here is what puts the renderer's lines, assetlib's and the editor's own `qWarning` in one
 `editor.log` on one clock instead of two files. There is no `bgl.log` under the editor.
 
-`main.cpp` then shows an `editor::StartupScreen` **before** it constructs `MainWindow`, because
-constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
+`main.cpp` then decides the project **before** anything renders, because the project decides which
+surfaces the renderer compiles. `editor::OpenStartupProject` (`src/Startup/startup_project.h`) opens
+`--project`, or failing that `startupProject`. When neither names a project, or the one named will
+not open, `main` shows `editor::ProjectLauncher`, the landing page: recent projects, New and Open,
+and no renderer at all. So an editor started with no project compiles its shaders once, for the
+project chosen, rather than once for nothing and again after a restart. **`MainWindow` takes an
+opened `assetlib::Project`** and cannot be built without one, so there is no empty state to keep in
+step with the menus.
+
+With a project in hand, `main.cpp` shows an `editor::StartupScreen` **before** it constructs
+`MainWindow`, because constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
 ever use, which on a cold shader cache is tens of seconds. The screen takes a
 `background::ProgressSink`; `MainWindow` reports one step for the shaders — bgl_extended builds them all
 inside `CreateGraphics`, and a warm cache makes the whole stretch milliseconds — then one per file
@@ -58,29 +67,35 @@ open the project's own assets.
 ## config.json
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
-`startupProject` names the project to open on launch, `instanceName` names *this* editor, `headless`
+`startupProject` names the project to open on launch (read by `main`, never by `MainWindow`),
+`instanceName` names *this* editor, `headless`
 builds every viewport offscreen, and `memoryReport` (default true) decides whether the run's memory
 table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
-§ Memory. `MainWindow::Build` reads it for everything but the last: the report is armed in `main`
+§ Memory. `MainWindow::Build` reads it for everything but those two: the report is armed in `main`
 before the window exists, so that building the window is inside what it measures, and
 `editor::DefaultConfigPath` is the one place that says where the file lives. An
 `instanceName` leads the window title — `A — Bernini Editor — Test Project` — so two editors run
 side by side for an A/B comparison can be told apart where every other part of the title is
 identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.
 
-The editor never writes the file — `ws` seeds it and a person edits it. **`--project <path>`**
-outranks `startupProject` for one launch, and it is how the editor restarts itself: surfaces are
-registered once, as the renderer is built, so New or Open Project on a project whose shaders are not
-the ones this session registered asks to restart, and `main` starts the new process with the project
-once the window is gone. When that is needed is `editor::OpeningNeedsRelaunch`
-(`src/util/surface_relaunch.h`); see [docs/game_defined_surfaces.md](../../docs/game_defined_surfaces.md).
+The editor never writes the file — `ws` seeds it and a person edits it. What it *does* write beside
+it is `recent_projects.json`, the list the landing page offers (`src/util/recent_projects.h`): every
+project `SetActiveProject` opens goes to its top, and one that is gone from disk is dropped when read.
+Beside the config rather than in per-user settings, so every checkout keeps its own list.
+**`--project <path>`** outranks `startupProject` for one launch, and it is how the editor restarts
+itself: surfaces are registered once, as the renderer is built, so New or Open Project from the File
+menu on a project whose shaders are not the ones this session registered asks to restart, and `main`
+starts the new process with the project once the window is gone. When that is needed is
+`editor::OpeningNeedsRelaunch` (`src/util/surface_relaunch.h`); see
+[docs/game_defined_surfaces.md](../../docs/game_defined_surfaces.md). The landing page never
+restarts: no renderer exists yet when it opens a project.
 
 **`MainWindow` reads the config it is given**, defaulting to the deployed one when handed nothing —
 which is what `main.cpp` does. `editor_tests` runs from the directory that file is deployed into, so
 a test that wrote `headless` into it would be writing the shipping editor's config; instead each
-case writes one in a temp directory and names it. That is also how a test opens a project at all:
-`startupProject`, and the `project` the constructor takes in its place, are the only routes into
-`SetActiveProject` that raise no dialog.
+case writes one in a temp directory and names it, which also keeps the recent-projects list it
+writes beside that config off the shipping editor's. The `assetlib::Project` the constructor takes is
+the only route into `SetActiveProject` that raises no dialog.
 
 ## editor_lib
 
@@ -285,8 +300,11 @@ Two things a test cannot drive, and why:
 `background::ProgressSink` `main.cpp` hands the real one. `MainWindow_test.cpp` pins that the
 reports actually arrive — landing none of them would look exactly like a working build with a
 screen stuck on "Starting..." — and `StartupLabels_test.cpp` pins what a rebuild step *reads*,
-through the free function in `src/Startup/startup_labels.h`. `StartupScreen` itself is a widget with no seam and `main.cpp` is
-outside `editor_lib`, so what the screen looks like still needs eyes.
+through the free function in `src/Startup/startup_labels.h`. What `main` decides before the renderer
+exists is `startup_project_test.cpp`'s: which project `OpenStartupProject` opens, and that a project
+which will not open lands on the landing page, which lists and opens recent projects without a
+device. `StartupScreen` itself is a widget with no seam and `main.cpp` is outside `editor_lib`, so
+what the screen looks like still needs eyes.
 
 `background::RunWithLoadingScreen` is testable despite its nested event loop and modal
 screen: arm `editor::test::OnLoadingScreen` (`tests/src/util/Modal.h`) **before** the

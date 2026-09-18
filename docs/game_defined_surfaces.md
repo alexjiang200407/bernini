@@ -98,8 +98,10 @@ follow from that and are worth stating plainly:
   slot, its programs are generated from source, and every pipeline is built against them. An edited surface is seen at the
   next launch.
 * **The editor registers the project it started with**, and opens one with other shaders by
-  restarting into it. New or Open Project on a project whose `Authored/Shaders` is a different
-  directory asks first, then relaunches the editor with `--project`. Two projects with no shaders
+  restarting into it. The first project never restarts: without one the editor starts on a landing
+  page that builds no renderer, and the renderer is built for the project chosen there. After that,
+  New or Open Project on a project whose `Authored/Shaders` is a different directory asks first, then
+  relaunches the editor with `--project`. Two projects with no shaders
   at all share a session. ([`surface_relaunch.h`](../apps/editor/src/util/surface_relaunch.h))
 * **A `.bpak` holds no shaders.** `pack` skips a file whose extension names no container, and a
   packed game reads its shaders off the loose directory beside it.
