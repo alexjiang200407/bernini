@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -65,12 +66,13 @@ namespace core::profiling
 		 * Every table that has been used, in first-use order so a report reads the same way twice.
 		 *
 		 * Function-local: a table registers itself the first time something charges to it, which
-		 * may be during another translation unit's dynamic initialisation.
+		 * may be during another translation unit's dynamic initialisation. A deque, because
+		 * `table_for` keeps the reference `register_table` returns for the life of the process.
 		 */
 		struct Registry
 		{
-			std::mutex                                            lock;
-			std::vector<std::pair<std::string, detail::TagTable>> tables;
+			std::mutex                                           lock;
+			std::deque<std::pair<std::string, detail::TagTable>> tables;
 
 			// A mutex member deletes all four implicitly, which MSVC's /Wall makes an error. The
 			// registry is a function-local singleton reached by reference, so deleting them says
