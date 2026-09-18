@@ -136,7 +136,8 @@ core::profiling::name_this_thread("bgl-render");
 The first name a thread is given is the one it keeps, so a pooled worker can call that at the top of
 every task rather than needing a thread body to put it in. Four are named: `bgl-render`,
 `assetlib cook` (every fanned-out cook, so `Reimport`'s stages and `Migrate`'s resave walk both),
-`bgl pipeline build` (the renderer's start-up pipeline batch) and `editor thumbnails`.
+`bgl pipeline build` (the renderer's pipeline batches — start-up's and each demand build's) and
+`editor thumbnails`.
 
 ## Where they are
 

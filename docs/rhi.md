@@ -121,17 +121,19 @@ doc and a header disagree, trust the header, then fix this doc.
   pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by
   name. `CreateComputeKernel` / `CreateMeshletKernel` build this from slang reflection.
 
-* **The renderer's kernels are requested first and built together.** A
-  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects every pass's kernel
-  request in `RenderContext`'s constructor and builds the set across worker threads
-  (`core::parallel_for`, up to six and never more than there are kernels — each worker that misses
-  the cache stands up a Slang global session of about 200 MB, and past six the links stop getting
-  faster), then the passes check their binder names against the built kernels. On a cold shader cache that build is
-  most of a start-up, and the links are independent. Pipeline creation is therefore callable from
-  any thread: each thread compiles on a Slang session of its own (see
-  [Shader Cache](docs/shader_cache.md)), and the backend's `ShaderCache` serializes its driver
-  pipeline library. A kernel created *after* `CreateGraphics` is built on the calling thread, as
-  before — the batch is a start-up device, not an async pipeline API.
+* **The renderer's kernels are requested in batches and built together.** A
+  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects kernel requests and
+  builds the set across worker threads (`core::parallel_for`, up to six and never more than there
+  are kernels — each worker that misses the cache stands up a Slang global session of about
+  200 MB, and past six the links stop getting faster), then the passes check their binder names
+  against the built kernels. Two batches exist: the always-on set in `RenderContext`'s
+  constructor, and one per `Draw` that demands buckets with no kernels yet
+  (`RenderContext::EnsureBucketPipelinesExist`) — so a scene builds only the buckets it uses, and each
+  batch releases the Slang sessions when it is done. Pipeline creation is callable from any thread:
+  each thread compiles on a Slang session of its own (see [Shader Cache](docs/shader_cache.md)),
+  and the backend's `ShaderCache` serializes its driver pipeline library. A kernel created
+  outside a batch is built on the calling thread — the batch is a parallelism device, not an
+  async pipeline API.
 
 * **Uniforms are a reflection-driven CPU mirror, bound by name.** `Uniforms` lays out one
   constant buffer from the shader's slang reflection. Populate it with chained `operator[]`

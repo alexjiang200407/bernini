@@ -1454,7 +1454,7 @@ namespace bgl
 		SubmeshInstance& instance,
 		uint32_t         submeshRoot,
 		MaterialHandle   materialOverride,
-		GeomType         geomType) const
+		GeomType         geomType)
 	{
 		const MaterialHandle material =
 			materialOverride.IsValid() ?
@@ -1468,6 +1468,11 @@ namespace bgl
 		}
 
 		instance.pso = SubmeshPso(geomType, material);
+
+		if (instance.pso < idl::c_PsoCount)
+		{
+			m_DemandedBuckets.set(instance.pso);
+		}
 	}
 
 	void

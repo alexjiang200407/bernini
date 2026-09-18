@@ -2,7 +2,7 @@
 #include "cmd/CommandList.h"
 #include "device/Device.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -39,7 +39,7 @@ namespace bgl
 		// ConstantBuffer declaration in BlobShadow.slang.
 		constexpr auto c_Cbuffer = "gBlobShadowData"sv;
 
-		// Every member Draw writes, kept beside the code that writes them so BinderNames catches
+		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
 		constexpr std::array<std::string_view, 8> c_Fields = {
 			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "staticDepth"sv,
@@ -97,7 +97,7 @@ namespace bgl
 	void
 	BlobShadowPhase::CheckBindings() const
 	{
-		BinderNames("BlobShadowPhase"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("BlobShadowPhase"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void

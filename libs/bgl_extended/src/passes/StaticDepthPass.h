@@ -1,5 +1,6 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
+#include "types/BucketMask.h"
 #include <array>
 #include <bgl/MaterialType.h>
 #include <spdlog/spdlog.h>
@@ -51,6 +52,14 @@ namespace bgl
 
 		void
 		Init(IDevice* device, PipelineBatch& pipelines);
+
+		/**
+		 * Requests the coverage kernels for the buckets set in `buckets` that are not already
+		 * initialized; they are live once `pipelines` is built. Buckets with no coverage kernel
+		 * are ignored.
+		 */
+		void
+		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void

@@ -48,7 +48,7 @@ when this doc disagrees, trust the source, then fix this doc.
   program-cache miss. On a hit, `BuildPipelineLayout` rebuilds the root signature, reflection, and
   bytecode straight from the `.bsc` and never calls `GetSlangModule()`.
 
-* **Slang sessions are per thread, lazy, and dropped once the renderer is built.** A global
+* **Slang sessions are per thread, lazy, and dropped after every pipeline batch.** A global
   session and everything created from it are not thread-safe, but distinct global sessions may run
   in parallel (`slang.h`, `IGlobalSession`) — so
   [SlangSessions](libs/bgl_extended/src/slang/SlangSessions.h) hands each thread that compiles a global
@@ -56,10 +56,11 @@ when this doc disagrees, trust the source, then fix this doc.
   session loads Slang's core module, a few hundred megabytes that then stay resident, so none
   exists until a compile actually reaches it — which on a fully warm cache is never. The compile
   paths therefore take no session: they reach one only through `Shader::GetSlangModule()`, down the
-  miss path, and read it back off the module. Everything the renderer draws with is built inside the
-  `Graphics` constructor, which ends by calling `Device::ReleaseSlangSession()`; a pipeline created
-  later (every `bgl_extended_tests` case that builds its own kernel) transparently gets a new session
-  on whichever thread asks. The salt reads the compiler version through the free
+  miss path, and read it back off the module. The renderer builds in batches — the always-on set
+  inside the `Graphics` constructor, then one batch per `Draw` that demands buckets with no
+  kernels yet — and each batch ends by calling `Device::ReleaseSlangSession()`; a pipeline created
+  outside a batch (every `bgl_extended_tests` case that builds its own kernel) transparently gets a new
+  session on whichever thread asks. The salt reads the compiler version through the free
   `spGetBuildTagString()` rather than `IGlobalSession::getBuildTagString()` — the two return the
   same string, and only the free one avoids creating a session just to key the cache.
 
@@ -159,7 +160,8 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   is why `Shader` does *not* memoize its module and calls `loadModule` each time — the session
   already caches modules by name, so the repeat call is a lookup — and why a module must never
   cross threads: it belongs to the session of the thread that loaded it. @pre anything new that stores a
-  `slang::` pointer must drop it before the `Graphics` constructor returns.
+  `slang::` pointer must drop it before the batch that compiled it releases the sessions -- the
+  `Graphics` constructor's batch and every later demand batch alike.
 
 * **A module loaded from source shadows the file of its name, and is in the salt.**
   `IDevice::AddSourceModule` hands the sessions a module as text under a name spelled as an import
