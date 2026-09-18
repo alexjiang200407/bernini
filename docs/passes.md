@@ -550,9 +550,12 @@ material offset, and neither says which tier filled them.
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
 derive the pose from), `expansionData` (`drawBucketIndex` and the instance-list tables), `materialData`
 (samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
-colour/velocity/depth framebuffer), and calls
-`DispatchMeshIndirect(bucket)`, whose grid comes from the `compactDispatchArgs` entry that
-`Compact Instances` produced.
+colour/velocity/depth framebuffer), and calls `DispatchMeshIndirectCount`, whose grid comes from
+the `compactDispatchArgs` entry that `Compact Instances` produced -- and whose command count is the
+same entry's `threadCountX` (`DrawBucketCountIndex`): the args are their own count buffer, so a
+built draw bucket with nothing visible this frame issues no command on D3D12 and dispatches its
+zero grid on Metal ([RHI](docs/rhi.md) § the count verb), and a zero count can never meet a non-zero
+grid. Static Depth dispatches the same way.
 
 **Blob shadows draw between the two phases.** `BlobShadowPhase`
 ([passes/BlobShadowPhase.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPhase.cpp)) — a phase

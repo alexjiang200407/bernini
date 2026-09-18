@@ -410,10 +410,11 @@ namespace bgl
 																							   0u;
 			}
 
-			gfxState.kernel       = &kernel;
-			gfxState.indirectArgs = dispatchArgs;
+			gfxState.kernel        = &kernel;
+			gfxState.indirectArgs  = dispatchArgs;
+			gfxState.commandCounts = dispatchArgs;
 			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(bucket);
+			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
 		}
 
 		m_BlobShadows.Draw(draw, resources);
