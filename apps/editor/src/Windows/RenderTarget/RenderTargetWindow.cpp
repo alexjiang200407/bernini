@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <core/glm.h>
 #include <cstdint>
+#include <format>
 #include <qcoreevent.h>
 #include <qlogging.h>
 #include <qnamespace.h>
@@ -85,13 +87,20 @@ namespace
 	}
 
 	float
-	ClampBloomValue(std::string_view name, float value, float lo, float hi)
+	ClampSectionValue(
+		std::string_view section,
+		std::string_view name,
+		float            value,
+		float            lo,
+		float            hi)
 	{
 		const float clamped = std::isfinite(value) ? std::clamp(value, lo, hi) : lo;
 		if (clamped != value)
 		{
 			qWarning(
-				"RenderTarget: bloom %.*s %.3f out of range, using %.3f",
+				"RenderTarget: %.*s %.*s %.3f out of range, using %.3f",
+				static_cast<int>(section.size()),
+				section.data(),
 				static_cast<int>(name.size()),
 				name.data(),
 				static_cast<double>(value),
@@ -99,6 +108,12 @@ namespace
 		}
 
 		return clamped;
+	}
+
+	float
+	ClampBloomValue(std::string_view name, float value, float lo, float hi)
+	{
+		return ClampSectionValue("bloom", name, value, lo, hi);
 	}
 
 	// bgl throws on these, which is right for a caller and wrong for a hand-edited config.json: a
@@ -112,6 +127,40 @@ namespace
 		settings.softKnee  = ClampBloomValue("softKnee", settings.softKnee, 0.0f, 1.0f);
 		settings.scatter   = ClampBloomValue("scatter", settings.scatter, 0.0f, 1.0f);
 		return settings;
+	}
+
+	float
+	ClampGradeValue(std::string_view name, float value, float lo, float hi)
+	{
+		return ClampSectionValue("colorGrade", name, value, lo, hi);
+	}
+
+	glm::vec3
+	ClampGradeRgb(std::string_view name, glm::vec3 rgb, float lo, float hi)
+	{
+		const auto channel = [&](std::string_view suffix, float value) {
+			return ClampGradeValue(std::format("{}.{}", name, suffix), value, lo, hi);
+		};
+
+		return glm::vec3(channel("r", rgb.r), channel("g", rgb.g), channel("b", rgb.b));
+	}
+
+	// As ClampBloomSettings. The upper bounds on slope, saturation and contrast are sanity only, and
+	// power's floor stands in for bgl's "positive".
+	bgl::ColorGradeSettings
+	ClampColorGradeSettings(bgl::ColorGradeSettings s)
+	{
+		s.temperature       = ClampGradeValue("temperature", s.temperature, -100.0f, 100.0f);
+		s.tint              = ClampGradeValue("tint", s.tint, -100.0f, 100.0f);
+		s.slope             = ClampGradeRgb("slope", s.slope, 0.0f, 16.0f);
+		s.offset            = ClampGradeRgb("offset", s.offset, -1.0f, 1.0f);
+		s.power             = ClampGradeRgb("power", s.power, 0.01f, 16.0f);
+		s.saturation        = ClampGradeValue("saturation", s.saturation, 0.0f, 16.0f);
+		s.contrast          = ClampGradeValue("contrast", s.contrast, 0.0f, 16.0f);
+		s.vignetteIntensity = ClampGradeValue("vignetteIntensity", s.vignetteIntensity, 0.0f, 1.0f);
+		s.vignetteSmoothness =
+			ClampGradeValue("vignetteSmoothness", s.vignetteSmoothness, 0.01f, 1.0f);
+		return s;
 	}
 }
 
@@ -165,12 +214,15 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
 	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
-	const bgl::BloomSettings bloom = ClampBloomSettings(m_Desc.bloom.settings);
+	const bgl::BloomSettings      bloom = ClampBloomSettings(m_Desc.bloom.settings);
+	const bgl::ColorGradeSettings grade = ClampColorGradeSettings(m_Desc.colorGrade.settings);
 
 	m_RenderTarget = m_Desc.renderer->Invoke([&] {
 		auto target = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc);
 		target->SetBloomSettings(bloom);
 		target->SetBloomEnabled(m_Desc.bloom.enabled);
+		target->SetColorGradeSettings(grade);
+		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
@@ -395,6 +447,33 @@ RenderTargetWindow::GetBloomSettings() const
 		return {};
 
 	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
+}
+
+void
+RenderTargetWindow::SetColorGradeEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetColorGradeEnabled(enabled); });
+}
+
+bool
+RenderTargetWindow::IsColorGradeEnabled() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return false;
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsColorGradeEnabled(); });
+}
+
+bgl::ColorGradeSettings
+RenderTargetWindow::GetColorGradeSettings() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return {};
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetColorGradeSettings(); });
 }
 
 void

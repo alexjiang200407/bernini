@@ -1121,6 +1121,9 @@ namespace bgl
 			postProcessArgs.bloomEnabled   = true;
 		}
 
+		postProcessArgs.colorGrade        = rt.GetColorGradeSettings();
+		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
+
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
 		// Every presentable this frame leaves in kPresent: its own backbuffer first.

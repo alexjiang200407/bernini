@@ -74,6 +74,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 	rt.renderScale            = desc.renderScale;
 	rt.taaReconstructionWidth = desc.taaReconstructionWidth;
 	rt.bloom                  = desc.bloom;
+	rt.colorGrade             = desc.colorGrade;
 	rt.headless               = desc.headless;
 	rt.headlessWidth          = desc.headlessWidth;
 	rt.headlessHeight         = desc.headlessHeight;

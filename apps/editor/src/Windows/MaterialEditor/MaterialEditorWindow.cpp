@@ -191,6 +191,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		rtDesc.renderScale            = m_Desc.renderScale;
 		rtDesc.taaReconstructionWidth = m_Desc.taaReconstructionWidth;
 		rtDesc.bloom                  = m_Desc.bloom;
+		rtDesc.colorGrade             = m_Desc.colorGrade;
 		rtDesc.headless               = m_Desc.headless;
 		rtDesc.headlessWidth          = m_Desc.headlessWidth;
 		rtDesc.headlessHeight         = m_Desc.headlessHeight;

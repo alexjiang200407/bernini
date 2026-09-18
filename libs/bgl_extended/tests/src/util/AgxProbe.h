@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <core/glm.h>
 
 namespace bgl::test
@@ -22,4 +23,15 @@ namespace bgl::test
 	 */
 	[[nodiscard]] glm::vec4
 	RunAgX(bgl::IGraphics& gfx, float sceneLinear);
+
+	/**
+	 * `sceneLinear` at output position `uv` through the post pass's grade and AgX, with `settings`
+	 * converted to constants the way the pass converts them: one dispatch of CSColorGradeProbe.
+	 */
+	[[nodiscard]] glm::vec4
+	RunGradedAgX(
+		bgl::IGraphics&                gfx,
+		glm::vec3                      sceneLinear,
+		glm::vec2                      uv,
+		const bgl::ColorGradeSettings& settings);
 }

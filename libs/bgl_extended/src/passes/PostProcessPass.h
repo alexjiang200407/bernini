@@ -5,6 +5,7 @@
 #include "resource/Sampler.h"
 #include "resource/Srv.h"
 #include "types/ViewportState.h"
+#include <bgl/IRenderTarget.h>
 #include <bgl/Viewport.h>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -23,9 +24,9 @@ namespace bgl
 	 * writes it afterwards, blending over this -- so the capture path, a readback of the last
 	 * presented backbuffer, still describes what was shown.
 	 *
-	 * Today that is the bloom combine and the display curve. Everything between a resolved scene
-	 * and the screen belongs here as it lands -- grading, exposure adaptation -- so the stage is
-	 * named for the role rather than for its current steps.
+	 * Today that is the bloom combine, the colour grade and the display curve. Everything between a
+	 * resolved scene and the screen belongs here as it lands -- exposure adaptation next -- so the
+	 * stage is named for the role rather than for its current steps.
 	 *
 	 * Exposure is not applied here: it is a per-view scale the geometry passes have already folded
 	 * in, while a target may carry several views.
@@ -67,6 +68,10 @@ namespace bgl
 			std::string   bloomName;
 			float         bloomIntensity = 0.0f;
 			bool          bloomEnabled   = false;
+
+			// Validated by the target that carries it; written only when enabled.
+			ColorGradeSettings colorGrade;
+			bool               colorGradeEnabled = false;
 		};
 
 		PostProcessPass() = default;

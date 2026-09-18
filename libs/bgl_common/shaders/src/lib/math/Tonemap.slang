@@ -34,22 +34,33 @@ public StripLutTaps StripLutTaps3D(float3 coord, uint size)
     return taps;
 }
 
-public float3 AgX<L : ITonemapLut>(float3 color, L lut)
+// OCIO's lg2 allocation: log2 over [minEv, maxEv] normalized to [0, 1], 25 stops.
+static const float c_AgXMinEv = -12.47393;
+static const float c_AgXMaxEv = 12.5260688117;
+
+// Scene-linear Rec.709 to the coordinate the formation LUT is read at: FilmLight E-Gamut, log2
+// encoded. Unclamped above, so a grade applied here can still pull a highlight back into range.
+public float3 AgXLogEncode(float3 color)
 {
     // Rec.709 -> CIE XYZ D65 -> Linear FilmLight E-Gamut, as one matrix in row-vector layout.
     const float3x3 rec709ToEGamut = float3x3(
         0.5593711304, 0.0762207051, 0.0655266974, 0.3047832593, 0.7879718287, 0.1645467499, 0.1358455635, 0.1358074780, 0.7699265344
     );
 
-    // OCIO's lg2 allocation: log2 over [minEv, maxEv] normalized to [0, 1], 25 stops.
-    const float minEv = -12.47393;
-    const float maxEv = 12.5260688117;
-
     float3 e = mul(color, rec709ToEGamut);
-    float3 coord = (log2(max(e, exp2(minEv))) - minEv) / (maxEv - minEv);
+    return (log2(max(e, exp2(c_AgXMinEv))) - c_AgXMinEv) / (c_AgXMaxEv - c_AgXMinEv);
+}
 
+// The LUT read at an encoded coordinate, returned scene-linear for the sRGB target to re-encode.
+public float3 AgXFormation<L : ITonemapLut>(float3 coord, L lut)
+{
     float3 display = lut.Sample(saturate(coord));
 
     // The LUT formed a Rec.1886 image; linearize it so the sRGB target re-encodes it.
     return pow(max(display, 0.0), float3(2.4, 2.4, 2.4));
+}
+
+public float3 AgX<L : ITonemapLut>(float3 color, L lut)
+{
+    return AgXFormation(AgXLogEncode(color), lut);
 }

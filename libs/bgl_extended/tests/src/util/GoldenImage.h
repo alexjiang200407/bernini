@@ -92,6 +92,17 @@ namespace bgl::test
 		float              threshold = 0.02f);
 
 	/**
+	 * The largest difference in any RGB channel of any pixel between two frames, in [0,1].
+	 *
+	 * For a change that must leave an image alone: a mean hides the one region it moved, and a
+	 * frame that is the same within an 8-bit step is at most 1/255 here.
+	 *
+	 * @throws std::runtime_error if either image cannot be read or they differ in size.
+	 */
+	[[nodiscard]] float
+	MaxChannelDelta(const std::string& pathA, const std::string& pathB);
+
+	/**
 	 * Mean absolute difference between `path` and `truthPath` box-downsampled by `factor`, over the
 	 * `w` x `h` box at (`x`, `y`) in `path`'s pixels — each channel in [0,1], so zero is agreement.
 	 *

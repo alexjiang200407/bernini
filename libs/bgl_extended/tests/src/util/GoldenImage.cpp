@@ -231,6 +231,47 @@ namespace bgl::test
 	}
 
 	float
+	MaxChannelDelta(const std::string& pathA, const std::string& pathB)
+	{
+		int            aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
+		unsigned char* a = stbi_load(pathA.c_str(), &aw, &ah, &ac, 4);
+		if (a == nullptr)
+			throw std::runtime_error("MaxChannelDelta: cannot read '" + pathA + "'");
+
+		unsigned char* b = stbi_load(pathB.c_str(), &bw, &bh, &bc, 4);
+		if (b == nullptr)
+		{
+			stbi_image_free(a);
+			throw std::runtime_error("MaxChannelDelta: cannot read '" + pathB + "'");
+		}
+
+		if (aw != bw || ah != bh)
+		{
+			stbi_image_free(a);
+			stbi_image_free(b);
+			throw std::runtime_error(
+				"MaxChannelDelta: '" + pathA + "' and '" + pathB + "' differ in size");
+		}
+
+		int          largest = 0;
+		const size_t texels  = static_cast<size_t>(aw) * ah;
+
+		for (size_t texel = 0; texel < texels; ++texel)
+		{
+			for (size_t c = 0; c < 3; ++c)
+			{
+				const size_t i = texel * 4 + c;
+				largest        = std::max(largest, std::abs(static_cast<int>(a[i]) - b[i]));
+			}
+		}
+
+		stbi_image_free(a);
+		stbi_image_free(b);
+
+		return static_cast<float>(largest) / 255.0f;
+	}
+
+	float
 	MeanAbsDiffToTruth(
 		const std::string& path,
 		const std::string& truthPath,

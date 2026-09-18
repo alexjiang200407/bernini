@@ -754,13 +754,14 @@ the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader,
 
 Today it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
 `BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing — then
-applies `AgX` through the LUT above, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+applies `AgX` through the LUT above, graded when the target has `SetColorGradeEnabled` (see
+[the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
 not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
-the stage rather than those steps: everything between a resolved scene and the screen — grading,
-exposure adaptation — belongs here as it lands.
+the stage rather than those steps: everything between a resolved scene and the screen — exposure
+adaptation next — belongs here as it lands.
 
 The outline width is **4 px at a 2160-line target, scaled by the mask's height** — not a fixed texel
 count. The mask is on the render grid while the image around it is reconstructed onto the output
@@ -780,6 +781,32 @@ contour no thicker on screen.
 * **It is the first writer of the backbuffer, and the only other is the overlay below**, which
   blends over what it wrote. `SubmitCapture` reads the last presented backbuffer, so a capture
   describes what was displayed either way — a scene golden simply submits no overlay.
+
+#### The colour grade
+
+`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl_common/shaders/src/lib/math/ColorGrade.slang)
+runs `AgX`'s two halves — `AgXLogEncode` and `AgXFormation` — with the `ColorGradeSettings` steps
+between and before them:
+
+1. **White balance**, in scene linear: a von Kries scale in CAT02 LMS. `temperature` and `tint`
+   pick a white on the CIE daylight locus as Unity does, and `WhiteBalanceLmsScale`
+   ([postprocess/color_grade.h](libs/bgl_extended/src/postprocess/color_grade.h)) turns it into
+   three gains on the CPU once per frame.
+2. **Vignette**, in scene linear: Unity's frame-shaped falloff, `vignetteIntensity` reaching a black
+   corner at 1 and `vignetteSmoothness` the exponent's share of 5.
+3. **The ASC CDL**, in the log coordinate the formation LUT reads — where a colourist applies one in
+   a scene-referred pipeline and where Blender's looks run. `slope` and `offset` act on a 25-stop
+   encoding with 0 at −12.5 EV, so a slope brightens the top of the range more than the bottom;
+   `saturation` is about Rec.709 luma, as the CDL defines it.
+4. **Contrast**, in the same coordinate, pivoting at middle grey's (0.4), so 0.18 stays where the
+   curve put it.
+
+Every default is the identity, and a neutral grade with the toggle on renders the ungraded image
+exactly (`ColorGrade_test`). There is no look: Blender's looks run in its `AgX Log` space, which no
+CDL in this coordinate reproduces, and a game authors its grade from the controls instead. The
+grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's CombineLUTs and
+Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
+work this pass does in a few dozen ALU.
 
 ### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl_extended/src/passes/OverlayPass.cpp)
 

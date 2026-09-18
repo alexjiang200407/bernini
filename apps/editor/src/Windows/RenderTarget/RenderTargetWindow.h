@@ -29,6 +29,28 @@ struct BloomConfig
 	bgl::BloomSettings settings;
 };
 
+// bgl's defaults are the identity, which leaves the Render menu's toggle nothing to show. A viewport
+// whose config.json leaves a key out takes this mild grade's value for it instead: warmer, a touch
+// more saturated and contrasty, darker corners.
+[[nodiscard]] inline bgl::ColorGradeSettings
+DefaultViewportGrade() noexcept
+{
+	auto settings              = bgl::ColorGradeSettings();
+	settings.temperature       = 10.0f;
+	settings.saturation        = 1.15f;
+	settings.contrast          = 1.1f;
+	settings.vignetteIntensity = 0.25f;
+	return settings;
+}
+
+// A viewport's `colorGrade` section of config.json. The Render menu toggles `enabled`, never
+// `settings`.
+struct ColorGradeConfig
+{
+	bool                    enabled  = false;
+	bgl::ColorGradeSettings settings = DefaultViewportGrade();
+};
+
 struct RenderTargetWindowDesc
 {
 	Renderer* renderer         = nullptr;
@@ -51,7 +73,8 @@ struct RenderTargetWindowDesc
 	float taaReconstructionWidth = 0.4f;
 
 	// Out-of-range settings are clamped and warned about, like the render scale.
-	BloomConfig bloom;
+	BloomConfig      bloom;
+	ColorGradeConfig colorGrade;
 
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to
@@ -105,6 +128,16 @@ public:
 
 	[[nodiscard]] bgl::BloomSettings
 	GetBloomSettings() const;
+
+	// Turns the colour grade on or off for this viewport, with the settings config.json gave it.
+	void
+	SetColorGradeEnabled(bool enabled);
+
+	[[nodiscard]] bool
+	IsColorGradeEnabled() const;
+
+	[[nodiscard]] bgl::ColorGradeSettings
+	GetColorGradeSettings() const;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.

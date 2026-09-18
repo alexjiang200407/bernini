@@ -47,6 +47,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
+#include <core/glm.h>
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
@@ -210,6 +211,32 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return bloom;
 		};
 
+		// The CDL's per-channel values are objects -- { "r": .., "g": .., "b": .. } -- so a partial
+		// one overrides only the channels it names, like the rest of the section.
+		const auto readRgb = [](const auto& node, glm::vec3 rgb) {
+			rgb.r = node["r"].GetOrDefault(rgb.r);
+			rgb.g = node["g"].GetOrDefault(rgb.g);
+			rgb.b = node["b"].GetOrDefault(rgb.b);
+			return rgb;
+		};
+
+		const auto readColorGrade = [&readRgb](const auto& section) {
+			auto       grade     = ColorGradeConfig();
+			const auto node      = section["colorGrade"];
+			grade.enabled        = node["enabled"].GetOrDefault(grade.enabled);
+			auto& s              = grade.settings;
+			s.temperature        = node["temperature"].GetOrDefault(s.temperature);
+			s.tint               = node["tint"].GetOrDefault(s.tint);
+			s.slope              = readRgb(node["slope"], s.slope);
+			s.offset             = readRgb(node["offset"], s.offset);
+			s.power              = readRgb(node["power"], s.power);
+			s.saturation         = node["saturation"].GetOrDefault(s.saturation);
+			s.contrast           = node["contrast"].GetOrDefault(s.contrast);
+			s.vignetteIntensity  = node["vignetteIntensity"].GetOrDefault(s.vignetteIntensity);
+			s.vignetteSmoothness = node["vignetteSmoothness"].GetOrDefault(s.vignetteSmoothness);
+			return grade;
+		};
+
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
@@ -221,6 +248,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
 		matDesc.bloom                   = readBloom(matSettings);
+		matDesc.colorGrade              = readColorGrade(matSettings);
 		matDesc.headless                = headless;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
@@ -252,6 +280,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
 		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
 		animDesc.bloom                  = readBloom(animSettings);
+		animDesc.colorGrade             = readColorGrade(animSettings);
 		animDesc.headless               = headless;
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
@@ -275,6 +304,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		blendRt.renderScale            = animDesc.renderScale;
 		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
 		blendRt.bloom                  = animDesc.bloom;
+		blendRt.colorGrade             = animDesc.colorGrade;
 		blendRt.headless               = headless;
 		auto blendEnv                  = animDesc.previewEnv;
 
@@ -487,6 +517,23 @@ MainWindow::SetUpRenderMenu()
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetBloomEnabled(enabled);
+	});
+
+	// As bloom: the grade itself is each viewport's config.json section.
+	bool anyGrade = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyGrade = anyGrade || view->IsColorGradeEnabled();
+
+	auto* grade = render->addAction("Color Grade");
+	grade->setCheckable(true);
+	grade->setChecked(anyGrade);
+	grade->setStatusTip(
+		"White-balance and grade the viewports ahead of the display curve. The grade is each "
+		"viewport's `colorGrade` section in config.json.");
+
+	connect(grade, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetColorGradeEnabled(enabled);
 	});
 
 	auto* timing = render->addAction("GPU Pass Timing");

@@ -43,6 +43,7 @@ struct AnimationEditorWindowDesc
 	float                        renderScale             = 1.0f;
 	float                        taaReconstructionWidth  = 0.4f;
 	BloomConfig                  bloom;
+	ColorGradeConfig             colorGrade;
 	editor::EnvironmentApplyDesc previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.

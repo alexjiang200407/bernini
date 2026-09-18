@@ -38,6 +38,18 @@
             "softKnee": 0.5,
             "scatter": 0.7
         },
+        "colorGrade": {
+            "enabled": false,
+            "temperature": 10.0,
+            "tint": 0.0,
+            "slope": { "r": 1.0, "g": 1.0, "b": 1.0 },
+            "offset": { "r": 0.0, "g": 0.0, "b": 0.0 },
+            "power": { "r": 1.0, "g": 1.0, "b": 1.0 },
+            "saturation": 1.15,
+            "contrast": 1.1,
+            "vignetteIntensity": 0.25,
+            "vignetteSmoothness": 0.2
+        },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",
         "skyMipLevel": 3,
@@ -56,6 +68,18 @@
             "threshold": 0.5,
             "softKnee": 0.5,
             "scatter": 0.7
+        },
+        "colorGrade": {
+            "enabled": false,
+            "temperature": 10.0,
+            "tint": 0.0,
+            "slope": { "r": 1.0, "g": 1.0, "b": 1.0 },
+            "offset": { "r": 0.0, "g": 0.0, "b": 0.0 },
+            "power": { "r": 1.0, "g": 1.0, "b": 1.0 },
+            "saturation": 1.15,
+            "contrast": 1.1,
+            "vignetteIntensity": 0.25,
+            "vignetteSmoothness": 0.2
         },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",
