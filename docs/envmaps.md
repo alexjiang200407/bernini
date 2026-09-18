@@ -348,7 +348,9 @@ assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.ktx2   # what ho
 
 A golden pins that a render has not moved; nothing in it says whether the level is right. The one
 measurement against another renderer is a matte middle-grey sphere under `forest`, rendered by
-both:
+both. The file both start from is in the tree: `assets/Data/Authored/EnvSources/forest.hdr` is
+Blender 5.2's own CC0 `forest.exr` (Poly Haven's `ninomaru_teien`, 1K) converted to Radiance, and
+the `.bimport` beside it records the parameters the shipped maps were made at.
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \

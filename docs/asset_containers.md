@@ -217,6 +217,23 @@ tree that `bgl_extended_tests`, `assetlib_tests` and `editor_tests` read directl
 as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 
+The `forest` environment is the one half-exception, and it is deliberate. Its source lives in the
+tree (`Authored/EnvSources/forest.hdr`, Blender 5.2's CC0 `forest.exr` in Radiance form) with the
+`.bimport` recording the parameters it was made at, so a reader can see what an environment's
+authored half looks like. Its containers and baked maps stay exactly as committed rather than being
+re-cooked from it: the float cubes a re-cook writes are 43 MB, which a project ignores because
+`Reimport` puts them back and a fixture tree cannot. Re-importing at the recorded parameters
+reproduces the committed **baked** sky and irradiance maps byte for byte, which is what says the
+record is true. The `.bsky` and `.benvl` themselves would not: they predate the source-tracking
+scheme and carry no route, which a live bake would fill in.
+
+**That document claims no `outputs`, and an adopted one never should.** A claim is what `Reimport`
+reads as "produce this if it is absent", so claiming the float cubes beside an unrouted container
+has it write tens of megabytes that nothing references -- no route names them, no staleness compares
+them, and the prune sweeps `Derived/BakedTextures/` and not them. A document that records a source
+and the parameters it was made at, and claims nothing, says exactly what is true of one adopted
+beside files it did not produce.
+
 A project that takes the second half up must run `assetlib_cli migrate` **before** it does: the
 producing side reads each source's `outputs`, and a document written before that field existed
 records none. `migrate` backfills them by reading the derived files, which have to be there to be
