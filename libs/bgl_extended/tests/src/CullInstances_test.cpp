@@ -24,13 +24,13 @@
 #include <bgl/IGraphics.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/Geom.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_message.hpp>
@@ -166,7 +166,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0u;
-		instance.pso          = static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR);
+		instance.pso          = 1u;
 		instanceBuffer.Add(instance);
 	}
 	for (uint32_t i = c_LiveCount; i < padded; ++i)

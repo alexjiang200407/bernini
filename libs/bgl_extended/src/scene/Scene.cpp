@@ -51,7 +51,6 @@
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/RawTextureHandle.h>
 #include <bgl_common/idl/SkinnedBone.h>

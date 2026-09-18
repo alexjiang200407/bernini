@@ -13,11 +13,11 @@
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/PsoType.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -196,8 +196,8 @@ namespace bgl
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
 		draw.cullState->GetCullView().Update(cmd);
 
-		static constexpr std::array<idl::DispatchArgs, idl::cMaxPsoBuckets> c_Seed = [] {
-			std::array<idl::DispatchArgs, idl::cMaxPsoBuckets> seed{};
+		static constexpr std::array<idl::DispatchArgs, idl::cMaxBuckets> c_Seed = [] {
+			std::array<idl::DispatchArgs, idl::cMaxBuckets> seed{};
 			for (idl::DispatchArgs& args : seed)
 			{
 				args = { 0u, 1u, 1u };

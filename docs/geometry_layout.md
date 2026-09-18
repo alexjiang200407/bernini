@@ -84,10 +84,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   go. The counting sort buckets on `SubmeshInstance::pso`, so an overridden instance can draw from a
   different pipeline than its sibling — an opaque unit and a cutout one, from one geom.
 
-  **Transparent PSOs are the exception.** Blending must composite back-to-front, which is a depth
-  order, not a PSO order. The counting sort still buckets a transparent instance like any other, but
-  `ForwardPass::Execute` skips those buckets in the opaque draw loop (`IsTransparentPso`) — they are
-  never dispatched — and the instance is instead drawn from a separate, per-frame depth-sorted list
+  **Transparent buckets are the exception.** Blending must composite back-to-front, which is a
+  depth order, not a bucket order. The counting sort still buckets a transparent instance like any
+  other, but `ForwardPass::Execute` skips those buckets in the opaque draw loop
+  (`BucketTable::Transparent`) — they are never dispatched — and the instance is instead drawn from a separate, per-frame depth-sorted list
   (`scene.sortedTransparentInstances`) after the opaque buckets, in the same forward pass. That list
   is built entirely on the GPU by `TransparentSortPass`; see
   [TransparentSortPass.h](libs/bgl_extended/src/passes/TransparentSortPass.h) and `ForwardPass::DrawTransparent`.

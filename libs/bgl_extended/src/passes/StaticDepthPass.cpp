@@ -26,7 +26,6 @@
 #include <bgl/MaterialType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>

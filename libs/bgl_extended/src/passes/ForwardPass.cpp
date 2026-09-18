@@ -31,7 +31,6 @@
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -457,8 +456,8 @@ namespace bgl
 		colorState.indirectArgs = transparentArgs;
 		cmd->SetMeshletState(colorState);
 
-		// The argument index within `transparentArgs`, which holds a single grid now that the sorted
-		// list is drawn whole. The opaque path indexes the same way, by PsoType.
+		// The argument index within `transparentArgs`, which holds the single grid the whole sorted
+		// list draws with; the bucketed path indexes its own buffer by bucket id.
 		cmd->DispatchMeshIndirect(0);
 	}
 

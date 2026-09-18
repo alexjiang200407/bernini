@@ -3,7 +3,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/Bucket.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
@@ -65,7 +65,7 @@ TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[buck
 	// The GPU upload source agrees with the per-bucket accessor, and covers the whole ceiling so
 	// an unallocated lane reads 0, never garbage.
 	const auto flags = table.TransparentFlags();
-	REQUIRE(flags.size() == bgl::idl::cMaxPsoBuckets);
+	REQUIRE(flags.size() == bgl::idl::cMaxBuckets);
 	CHECK(flags[blend] == 1u);
 	CHECK(flags[hashed] == 0u);
 	CHECK(flags[table.Count()] == 0u);

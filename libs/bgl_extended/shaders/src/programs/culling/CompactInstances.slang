@@ -1,7 +1,7 @@
 import idl.Constants;
 import idl.DispatchArgs;
 import idl.InstanceVisibility;
-import idl.PsoType;
+import idl.Bucket;
 import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
 import lib.data.SubmeshInstance;
@@ -17,14 +17,14 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gGroupCount[cMaxPsoBuckets];
-groupshared uint gGroupBase[cMaxPsoBuckets];
+groupshared Atomic<uint> gGroupCount[cMaxBuckets];
+groupshared uint gGroupBase[cMaxBuckets];
 
 [shader("compute")]
 [numthreads(cCompactGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    for (uint i = localIdx; i < cMaxPsoBuckets; i += cCompactGroupSize)
+    for (uint i = localIdx; i < cMaxBuckets; i += cCompactGroupSize)
     {
         gGroupCount[i].store(0u);
     }
@@ -34,7 +34,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     let psoType = instance.pso;
 
     // Skip exactly what the histogram skipped, or the bucket bases and the scatter disagree.
-    let scatters = !instance.meshInstance.Null() && psoType < cMaxPsoBuckets && gUniforms.visibility[globalIdx].visible != 0u;
+    let scatters = !instance.meshInstance.Null() && psoType < cMaxBuckets && gUniforms.visibility[globalIdx].visible != 0u;
 
     // No early-out past this point: a thread that does not scatter must still reach every
     // GroupMemoryBarrierWithGroupSync below, or the ones that do scatter hang on it.
@@ -48,7 +48,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     // One reservation per bucket per group, and none at all for a bucket this group did not fill.
     // Reserving per instance instead makes threadCountX a single contended address -- a scene drawn
     // from one pso serializes its every instance on it.
-    for (uint i = localIdx; i < cMaxPsoBuckets; i += cCompactGroupSize)
+    for (uint i = localIdx; i < cMaxBuckets; i += cCompactGroupSize)
     {
         let count = gGroupCount[i].load();
         gGroupBase[i] = (count != 0u) ? gUniforms.dispatchArgs[i].threadCountX.add(count) : 0u;

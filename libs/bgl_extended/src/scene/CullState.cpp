@@ -2,10 +2,10 @@
 #include "fg/FrameGraph.h"
 #include "resource/ResourceManager.h"
 #include "scene/scene_buffer_names.h"
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstdint>
 #include <format>
 #include <string_view>
@@ -38,7 +38,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::cMaxPsoBuckets)
+				.SetInitialCount(idl::cMaxBuckets)
 				.SetDebugName("Pso Prefix Sum");
 
 			m_PsoPrefixSum.Init(std::move(desc), resourceManager);
@@ -47,7 +47,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::cMaxPsoBuckets)
+				.SetInitialCount(idl::cMaxBuckets)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);

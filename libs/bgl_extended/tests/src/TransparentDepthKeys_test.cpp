@@ -157,7 +157,7 @@ TEST_CASE(
 	auto transparentFlags = bgl::UploadBuffer<uint32_t>();
 	{
 		auto desc         = bgl::UploadBufferDesc();
-		desc.initialCount = bgl::idl::cMaxPsoBuckets;
+		desc.initialCount = bgl::idl::cMaxBuckets;
 		desc.debugName    = "Transparent Bucket Flags";
 		transparentFlags.Init(std::move(desc), resourceManager);
 	}

@@ -3,7 +3,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/Bucket.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
@@ -42,8 +42,8 @@ namespace bgl
 	class BucketTable final : public core::RefCounter<core::Ref>
 	{
 	public:
-		/** @pre ceiling >= 1 and <= idl::cMaxPsoBuckets. Tests shrink it to reach the clamp. */
-		explicit BucketTable(uint32_t ceiling = idl::cMaxPsoBuckets);
+		/** @pre ceiling >= 1 and <= idl::cMaxBuckets. Tests shrink it to reach the clamp. */
+		explicit BucketTable(uint32_t ceiling = idl::cMaxBuckets);
 
 		/**
 		 * The bucket for the key, allocated if this is its first use. kNull and kAssert shade no

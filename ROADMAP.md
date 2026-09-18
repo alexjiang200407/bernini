@@ -25,7 +25,7 @@ and portability.
 
 ## Guiding Constraints (design rules the roadmap must respect)
 
-- **GPU-driven by default.** The instance pipeline already buckets by `PsoType` and emits
+- **GPU-driven by default.** The instance pipeline already buckets instances by pipeline and emits
   indirect dispatch args. New systems (culling, shadows, skinning) should stay on the GPU
   and extend this pipeline rather than adding CPU-side per-object work.
 - **One dominant light.** Forward rendering with a single sun keeps shading cheap. Do *not*

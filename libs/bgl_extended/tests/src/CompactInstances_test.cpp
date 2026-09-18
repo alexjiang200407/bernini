@@ -21,10 +21,10 @@
 #include <algorithm>
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -71,12 +71,11 @@ TEST_CASE(
 		((c_ActiveCount + bgl::idl::cHistogramGroupSize - 1) / bgl::idl::cHistogramGroupSize) *
 		bgl::idl::cHistogramGroupSize;
 
-	// kOpaque_StaticMesh_PBR is bucket 1, so its base is the (empty) null bucket: 0 before the scan
-	// and 0 after. The alpha-test and transparent buckets are the ones with something to get wrong.
-	constexpr bgl::idl::PsoType c_Buckets[]   = { bgl::idl::PsoType::kOpaque_StaticMesh_PBR,
-		                                          bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                          bgl::idl::PsoType::kTransparent_StaticMesh_PBR };
-	constexpr uint32_t          c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
+	// Bucket 1's base is the (empty) bucket 0: 0 before the scan and 0 after. The other two are
+	// the ones with something to get wrong, and the last sits at the top of the ceiling -- a
+	// second lap of the 128-thread reservation stride -- so nothing may assume ids stop short.
+	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxBuckets - 1u };
+	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
 	{
@@ -86,14 +85,14 @@ TEST_CASE(
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
-	// The pso each instance index carries, so a compacted index can be checked against the bucket it
-	// was filed under.
-	std::vector<uint32_t>                      psoOf(c_ActiveCount);
-	std::array<uint32_t, bgl::idl::c_PsoCount> expectedCount{};
+	// The bucket each instance index carries, so a compacted index can be checked against the
+	// bucket it was filed under.
+	std::vector<uint32_t>                       psoOf(c_ActiveCount);
+	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedCount{};
 
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		const auto pso = static_cast<uint32_t>(c_Buckets[i % c_BucketCount]);
+		const uint32_t pso = c_Buckets[i % c_BucketCount];
 
 		// Any non-null mesh entry: offset 0 is the null one, so the first element past it will do.
 		auto instance                = bgl::SubmeshInstance();
@@ -112,9 +111,9 @@ TEST_CASE(
 	}
 
 	// Exclusive base of each bucket -- where the compaction should have put it.
-	std::array<uint32_t, bgl::idl::c_PsoCount> expectedBase{};
-	uint32_t                                   running = 0;
-	for (uint32_t p = 0; p < bgl::idl::c_PsoCount; ++p)
+	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedBase{};
+	uint32_t                                    running = 0;
+	for (uint32_t p = 0; p < bgl::idl::cMaxBuckets; ++p)
 	{
 		expectedBase[p] = running;
 		running += expectedCount[p];
@@ -130,9 +129,9 @@ TEST_CASE(
 		return buffer;
 	};
 
-	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::idl::cMaxPsoBuckets, "Pso Prefix Sum");
+	auto psoPrefixSum = makeCompute(uint32_t{}, bgl::idl::cMaxBuckets, "Pso Prefix Sum");
 	auto dispatchArgs =
-		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxPsoBuckets, "Compacted Dispatch Args");
+		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxBuckets, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
 
 	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
@@ -199,7 +198,7 @@ TEST_CASE(
 					allVisible.data(),
 					allVisible.size() * sizeof(uint32_t));
 
-				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxPsoBuckets> seed{};
+				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxBuckets> seed{};
 				for (bgl::idl::DispatchArgs& args : seed)
 				{
 					args = { 0u, 1u, 1u };
@@ -312,12 +311,11 @@ TEST_CASE(
 	rbDesc.debugName = "Compacted Readback";
 	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(uint32_t);
+	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxBuckets) * sizeof(uint32_t);
 	rbDesc.debugName = "Prefix-Sum Readback";
 	auto rbPrefixSum = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	rbDesc.byteSize =
-		static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(bgl::idl::DispatchArgs);
+	rbDesc.byteSize = static_cast<uint64_t>(bgl::idl::cMaxBuckets) * sizeof(bgl::idl::DispatchArgs);
 	rbDesc.debugName = "Dispatch Args Readback";
 	auto rbArgs      = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -362,26 +360,24 @@ TEST_CASE(
 	const auto* prefixSumOut =
 		static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
 	REQUIRE(prefixSumOut != nullptr);
-	for (uint32_t p = 0; p < bgl::idl::c_PsoCount; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxBuckets; ++p)
 	{
 		const uint32_t exclusive = (p == 0) ? 0u : prefixSumOut[p - 1];
 		CHECK(exclusive == expectedBase[p]);
 	}
-	// The inclusive scan carries the full total into every ceiling row past the enum.
-	for (uint32_t p = bgl::idl::c_PsoCount; p < bgl::idl::cMaxPsoBuckets; ++p)
-	{
-		CHECK(prefixSumOut[p] == c_ActiveCount);
-	}
+	// The scan is inclusive, so the last row carries the full total.
+	CHECK(prefixSumOut[bgl::idl::cMaxBuckets - 1] == c_ActiveCount);
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	// The reservation loop strides the whole ceiling (two laps of a 128-thread group), but only a
-	// bucket something filled may touch its args -- the rows past the enum must still hold the
+	// bucket something filled may touch its args -- every other row must still hold the
 	// { 0, 1, 1 } seed.
 	const auto* argsOut = static_cast<const uint32_t*>(resourceManager->MapReadback(rbArgs));
 	REQUIRE(argsOut != nullptr);
-	for (uint32_t p = bgl::idl::c_PsoCount; p < bgl::idl::cMaxPsoBuckets; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxBuckets; ++p)
 	{
-		CHECK(argsOut[p * 3 + 0] == 0u);
+		INFO("bucket " << p);
+		CHECK(argsOut[p * 3 + 0] == expectedCount[p]);
 		CHECK(argsOut[p * 3 + 1] == 1u);
 		CHECK(argsOut[p * 3 + 2] == 1u);
 	}
@@ -395,7 +391,7 @@ TEST_CASE(
 	// non-zero lands on top of an earlier one, so its slots hold foreign instances and its own are
 	// nowhere.
 	uint32_t misfiled = 0;
-	for (uint32_t p = 0; p < bgl::idl::c_PsoCount; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxBuckets; ++p)
 	{
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
@@ -413,7 +409,7 @@ TEST_CASE(
 	// Both sit in the right bucket, so the misfiled count above cannot see it. 4000 instances is 32
 	// groups of 128, the last one partial, so the runs actually have to abut.
 	std::vector<uint32_t> occurrences(c_ActiveCount, 0u);
-	for (uint32_t p = 0; p < bgl::idl::c_PsoCount; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxBuckets; ++p)
 	{
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{

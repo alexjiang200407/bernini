@@ -479,11 +479,10 @@ in `docs/specs/`.
   binding for every kind; pixel-shader modules under `libs/bgl_extended/shaders/src` for the opaque,
   alpha-test and hashed modes — blend instead shares `programs.forward.Transparent` across material types,
   dispatching on the kind in the record's own header, which takes a third material type without
-  changing shape; `PsoType` enumerators
-  (`libs/bgl_common/shaders/src/idl/PsoType.slang`) appended at the end, because `c_Psos` in `ForwardPass.cpp` is
-  index-parallel to the enum and its static_assert catches only an empty row, not a misordered one;
-  arms in `GetPsoFromGeomAndMaterial` (`libs/bgl_extended/src/util/util.cpp`); and material storage in
-  `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the three
+  changing shape; arms in the bucket-config functions
+  (`libs/bgl_extended/src/passes/bucket_config.cpp`) naming the new kind's pixel modules and depth
+  twins — the kind needs no bucket id of its own, since the `BucketTable` allocates one per (tier,
+  kind, layer) the first time a material resolves to it; and material storage in `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the three
   geometry modules — `programs.forward.StaticMesh`, `programs.forward.SkinnedMesh`, or the
   tier-branching `programs.forward.AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.

@@ -3,14 +3,13 @@
 #include "types/FormatInfo.h"
 #include <algorithm>
 #include <bgl/GeomType.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/MeshInstance.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -110,23 +109,14 @@ namespace bgl
 		return info;
 	}
 
-	// The two enums end where the slots end: kCount is a literal in the IDL, so this is what holds
-	// it to the slot count.
+	// The enum ends where the slots end: kCount is a literal in the IDL, so this is what holds it to
+	// the slot count.
 	static_assert(
 		static_cast<uint32_t>(MaterialType::kGameStart) + cGameSlots ==
 		static_cast<uint32_t>(MaterialType::kCount));
-	static_assert(
-		static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + cGameSlots * idl::cGameSlotRows ==
-		static_cast<uint32_t>(idl::PsoType::kCount));
 
-	static_assert(idl::c_PsoCount <= idl::cMaxPsoBuckets);
 	// 1024 is a compute thread group's maximum; PrefixSumInstances.slang is one group.
-	static_assert(idl::cMaxPsoBuckets <= 1024);
-
-	// A slot's block is each tier's own layers, then the one row both tiers share -- which is what
-	// makes the blend row last and the skinned block start cGameSlotTierRows along.
-	static_assert(idl::cGameSlotTiers * idl::cGameSlotTierRows + 1 == idl::cGameSlotRows);
-	static_assert(idl::cGameSlotBlendRow == idl::cGameSlotRows - 1);
+	static_assert(idl::cMaxBuckets <= 1024);
 
 	std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept
@@ -163,119 +153,6 @@ namespace bgl
 	}
 
 	bool
-	IsGameRow(const uint32_t pso) noexcept
-	{
-		return pso >= static_cast<uint32_t>(idl::PsoType::kGameRowsStart) && pso < idl::c_PsoCount;
-	}
-
-	uint32_t
-	GameRowOffset(const uint32_t pso) noexcept
-	{
-		gassert(IsGameRow(pso), "GameRowOffset takes one of the reserved game rows");
-		return (pso - static_cast<uint32_t>(idl::PsoType::kGameRowsStart)) % idl::cGameSlotRows;
-	}
-
-	idl::PsoType
-	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer)
-	{
-		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
-		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
-			gfatal("A game surface draws on static and skinned geometry only");
-
-		const uint32_t offset = [&] {
-			if (layer == LayerType::kBlend)
-				return idl::cGameSlotBlendRow;
-
-			const uint32_t tier = geom == GeomType::kSkinnedMesh ? idl::cGameSlotTierRows : 0u;
-
-			// A tier's own layers, in the order PsoType lists them.
-			switch (layer)
-			{
-			case LayerType::kOpaque:
-				return tier;
-			case LayerType::kMask:
-				return tier + 1u;
-			case LayerType::kHashed:
-				return tier + 2u;
-			case LayerType::kBlend:
-			case LayerType::kInvalid:
-			case LayerType::kCount:
-				break;
-			}
-			gfatal("A game surface has no row for this layer");
-		}();
-
-		return static_cast<idl::PsoType>(GameSlotRowBase(slot) + offset);
-	}
-
-	idl::PsoType
-	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
-	{
-		const bool cutout = layer == LayerType::kMask;
-		const bool blend  = layer == LayerType::kBlend;
-		const bool hashed = layer == LayerType::kHashed;
-
-		switch (geom)
-		{
-		case GeomType::kStaticMesh:
-			if (const auto slot = GameSlot(material))
-				return GameSlotRow(*slot, geom, layer);
-
-			switch (material)
-			{
-			case MaterialType::kPBR:
-				if (blend)
-					return idl::PsoType::kTransparent_StaticMesh_PBR;
-				if (hashed)
-					return idl::PsoType::kHashedAlpha_StaticMesh_PBR;
-				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_PBR :
-				                idl::PsoType::kOpaque_StaticMesh_PBR;
-			case MaterialType::kLoosePbr:
-				if (blend)
-					return idl::PsoType::kTransparent_StaticMesh_LoosePbr;
-				if (hashed)
-					return idl::PsoType::kHashedAlpha_StaticMesh_LoosePbr;
-				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_LoosePbr :
-				                idl::PsoType::kOpaque_StaticMesh_LoosePbr;
-
-			// Neither shades a base color, so there is no alpha to cut or blend against.
-			case MaterialType::kNull:
-				return idl::PsoType::kOpaque_StaticMesh_Null;
-			case MaterialType::kAssert:
-				return idl::PsoType::kAssert_StaticMesh;
-
-			// kGameStart is every slot's kind, answered above.
-			case MaterialType::kGameStart:
-			case MaterialType::kInvalid:
-			case MaterialType::kCount:
-				gfatal("Invalid MaterialType");
-			}
-
-		// The material is constrained to kPBR and the game slots at every door that binds one to
-		// skinned geometry (AddSkinnedMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so
-		// any other type reaching here is bgl's own bug.
-		case GeomType::kSkinnedMesh:
-			if (const auto slot = GameSlot(material))
-				return GameSlotRow(*slot, geom, layer);
-
-			if (material != MaterialType::kPBR)
-				gfatal("Skinned geometry is only drawable with a kPBR or a game surface material");
-			if (blend)
-				return idl::PsoType::kTransparent_SkinnedMesh_PBR;
-			if (cutout)
-				return idl::PsoType::kAlphaTest_SkinnedMesh_PBR;
-			if (hashed)
-				return idl::PsoType::kHashedAlpha_SkinnedMesh_PBR;
-			return idl::PsoType::kOpaque_SkinnedMesh_PBR;
-
-		case GeomType::kInvalid:
-		case GeomType::kCount:
-		default:
-			gfatal("Invalid GeomType");
-		}
-	}
-
-	bool
 	AcceptsMaterial(const GeomType geomType, const MaterialHandle material) noexcept
 	{
 		if (geomType == GeomType::kStaticMesh)
@@ -283,17 +160,6 @@ namespace bgl
 
 		return material.IsValid() && (material.materialType == MaterialType::kPBR ||
 		                              GameSlot(material.materialType).has_value());
-	}
-
-	bool
-	IsTransparentPso(uint32_t pso) noexcept
-	{
-		if (IsGameRow(pso))
-			return GameRowOffset(pso) == idl::cGameSlotBlendRow;
-
-		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
 	bool
@@ -331,14 +197,5 @@ namespace bgl
 				instance.transform[1],
 				instance.transform[2],
 				glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)));
-	}
-
-	uint32_t
-	SubmeshPso(GeomType geomType, MaterialHandle material)
-	{
-		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
-		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;
-
-		return static_cast<uint32_t>(GetPsoFromGeomAndMaterial(geomType, type, layer));
 	}
 }

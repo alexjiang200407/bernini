@@ -20,7 +20,7 @@ namespace bgl
 	BucketTable::BucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
 	{
 		gassert(
-			ceiling >= 1 && ceiling <= idl::cMaxPsoBuckets,
+			ceiling >= 1 && ceiling <= idl::cMaxBuckets,
 			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
 		m_TransparentFlags.assign(ceiling, 0u);
 		(void)Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);

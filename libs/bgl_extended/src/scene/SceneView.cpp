@@ -29,12 +29,12 @@
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/PosedInstance.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
@@ -174,7 +174,7 @@ namespace bgl
 
 		{
 			auto flagsDesc         = UploadBufferDesc();
-			flagsDesc.initialCount = idl::cMaxPsoBuckets;
+			flagsDesc.initialCount = idl::cMaxBuckets;
 			flagsDesc.debugName    = "Transparent Bucket Flags";
 
 			m_TransparentBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
@@ -1016,7 +1016,7 @@ namespace bgl
 				// past the bucket ceiling, and the sort would skip it regardless. A null slot is
 				// still pushed, because overrides, selection marks and the epoch re-resolve all
 				// address a submesh by its index in this vector.
-				if (instance.pso != static_cast<uint32_t>(idl::PsoType::kInvalid))
+				if (instance.pso != idl::cInvalidBucket)
 				{
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}

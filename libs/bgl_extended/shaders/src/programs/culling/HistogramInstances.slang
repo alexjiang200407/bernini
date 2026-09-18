@@ -1,6 +1,6 @@
 import idl.Constants;
 import idl.InstanceVisibility;
-import idl.PsoType;
+import idl.Bucket;
 import lib.debug.dbg;
 import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
@@ -15,13 +15,13 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gLocalHistogram[cMaxPsoBuckets];
+groupshared Atomic<uint> gLocalHistogram[cMaxBuckets];
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    for (uint i = localIdx; i < cMaxPsoBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxBuckets; i += cHistogramGroupSize)
     {
         gLocalHistogram[i].store(0u);
     }
@@ -33,9 +33,9 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     {
         let psoType = instance.pso;
 
-        dbg_assert(psoType < cMaxPsoBuckets, ErrorCode.kInvalidPsoType);
+        dbg_assert(psoType < cMaxBuckets, ErrorCode.kInvalidPsoType);
 
-        if (psoType < cMaxPsoBuckets)
+        if (psoType < cMaxBuckets)
         {
             gLocalHistogram[psoType].add(1u);
         }
@@ -45,7 +45,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     // Skip the empty rows: every group flushing zero adds to the same 1 KB region is the
     // worst-contention case, not a free one.
-    for (uint i = localIdx; i < cMaxPsoBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxBuckets; i += cHistogramGroupSize)
     {
         let count = gLocalHistogram[i].load();
         if (count != 0u)

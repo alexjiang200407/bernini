@@ -139,8 +139,8 @@ disagrees, trust the header, then fix this doc.
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
   therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl_extended's own
-  business: the enum lives at [libs/bgl_common/shaders/src/idl/PsoType.slang](libs/bgl_common/shaders/src/idl/PsoType.slang) and is
-  generated into `bgl::idl`, not onto this surface.
+  business: its `BucketTable` ([libs/bgl_extended/src/gfx/BucketTable.h](libs/bgl_extended/src/gfx/BucketTable.h))
+  hands the ids out on first use, and nothing on this surface names one.
 
 * **Failures are exceptions, not return codes.** Everything derives from
   [ApiError](libs/bgl/include/bgl/error.h): `GraphicsError` for device/frame misuse, `SceneError` for

@@ -36,7 +36,6 @@
 #include <bgl_common/Frustum.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/jitter.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>

@@ -20,8 +20,8 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/Bucket.h>
 #include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -60,17 +60,16 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	// Many real instances spread (with collisions) across the non-null PSO types. The
-	// instance buffer is padded to a whole number of groups; the histogram dispatches one
-	// thread per slot and skips the kInvalid padding, so no instance count is passed.
+	// Many real instances spread (with collisions) across three buckets, the last at the very top
+	// of the ceiling: a table hands ids out densely, but nothing in the chain may assume they stop
+	// short of it. The instance buffer is padded to a whole number of groups; the histogram
+	// dispatches one thread per slot and skips the padding, so no instance count is passed.
 	constexpr uint32_t c_ActiveCount = 1000;
 	constexpr uint32_t c_GroupCount  = (c_ActiveCount + c_ThreadsPerGroup - 1) / c_ThreadsPerGroup;
 	constexpr uint32_t c_PaddedCount = c_GroupCount * c_ThreadsPerGroup;
-	constexpr bgl::idl::PsoType c_Buckets[] = { bgl::idl::PsoType::kOpaque_StaticMesh_PBR,
-		                                        bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                        bgl::idl::PsoType::kTransparent_StaticMesh_PBR };
+	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxBuckets - 1u };
 
-	// The PSO bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
+	// The bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
 	// no submesh, no indirection to build. Two instances of one submesh are free to bucket
 	// differently, which is exactly what a per-instance material override is.
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
@@ -90,17 +89,17 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		// is the null one, so the first element past it will do.
 		instance.meshInstance.offset = 1;
 		instance.submeshIndex        = 0u;
-		instance.pso                 = static_cast<uint32_t>(c_Buckets[bucketIdx]);
+		instance.pso                 = c_Buckets[bucketIdx];
 
 		instanceBuffer.Add(instance);
 	};
 
-	std::array<uint32_t, bgl::idl::c_PsoCount> expectedHistogram{};
+	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedHistogram{};
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
 		const uint32_t b = i % c_BucketCount;
 		addInstance(b);
-		expectedHistogram[static_cast<size_t>(c_Buckets[b])] += 1;
+		expectedHistogram[c_Buckets[b]] += 1;
 	}
 	// A default SubmeshInstance names no mesh; the shader skips it.
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
@@ -108,21 +107,21 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
-	std::array<uint32_t, bgl::idl::c_PsoCount> expectedPrefixSum{};
-	uint32_t                                   running = 0;
-	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
+	std::array<uint32_t, bgl::idl::cMaxBuckets> expectedPrefixSum{};
+	uint32_t                                    running = 0;
+	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
 	{
 		running += expectedHistogram[i];
 		expectedPrefixSum[i] = running;  // inclusive scan
 	}
 
-	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxPsoBuckets threads and
+	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxBuckets threads and
 	// touches every element.
 	auto outBuffer = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::idl::cMaxPsoBuckets;
+		desc.initialCount = bgl::idl::cMaxBuckets;
 		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
@@ -161,7 +160,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto makeReadback = [&](const char* name) {
 		auto desc      = bgl::ReadbackBufferDesc();
-		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxPsoBuckets) * sizeof(uint32_t);
+		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxBuckets) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
 	};
@@ -258,30 +257,22 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto* histogram = static_cast<const uint32_t*>(resourceManager->MapReadback(rbHistogram));
 	REQUIRE(histogram != nullptr);
-	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
+	// Every row of the ceiling: a bucket no instance names must be left at zero by the flush.
+	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
 	{
 		CHECK(histogram[i] == expectedHistogram[i]);
-	}
-	// The ceiling rows past the enum: no instance can land there, so the flush must leave them
-	// untouched.
-	for (uint32_t i = bgl::idl::c_PsoCount; i < bgl::idl::cMaxPsoBuckets; ++i)
-	{
-		CHECK(histogram[i] == 0u);
 	}
 	resourceManager->UnmapReadback(rbHistogram);
 
 	const auto* prefixSum = static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
 	REQUIRE(prefixSum != nullptr);
-	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
+	// Inclusive over the whole ceiling, so the last row is the full total -- which is what lets
+	// any reader take it as "everything visible".
+	for (uint32_t i = 0; i < bgl::idl::cMaxBuckets; ++i)
 	{
 		CHECK(prefixSum[i] == expectedPrefixSum[i]);
 	}
-	// The scan is inclusive over the whole ceiling, so every row past the enum accumulates the
-	// full total -- which is what lets any reader take the last row as "everything visible".
-	for (uint32_t i = bgl::idl::c_PsoCount; i < bgl::idl::cMaxPsoBuckets; ++i)
-	{
-		CHECK(prefixSum[i] == c_ActiveCount);
-	}
+	CHECK(prefixSum[bgl::idl::cMaxBuckets - 1] == c_ActiveCount);
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	outBuffer.Release(false);

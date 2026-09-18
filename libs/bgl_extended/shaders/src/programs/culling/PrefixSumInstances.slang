@@ -1,4 +1,4 @@
-import idl.PsoType;
+import idl.Bucket;
 import lib.types.ComputeBuffer;
 
 struct Uniforms
@@ -8,17 +8,17 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared uint gScan[cMaxPsoBuckets];
+groupshared uint gScan[cMaxBuckets];
 
-// One thread group, one thread per bucket: cMaxPsoBuckets is this scan's hard ceiling.
+// One thread group, one thread per bucket: cMaxBuckets is this scan's hard ceiling.
 [shader("compute")]
-[numthreads(cMaxPsoBuckets, 1, 1)]
+[numthreads(cMaxBuckets, 1, 1)]
 void main(uint idx: SV_GroupThreadID)
 {
     gScan[idx] = gUniforms.inOutBuffer[idx];
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint offset = 1u; offset < cMaxPsoBuckets; offset <<= 1u)
+    for (uint offset = 1u; offset < cMaxBuckets; offset <<= 1u)
     {
         uint addend = (idx >= offset) ? gScan[idx - offset] : 0u;
         GroupMemoryBarrierWithGroupSync();
