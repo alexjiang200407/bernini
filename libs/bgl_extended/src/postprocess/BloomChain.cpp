@@ -1,4 +1,4 @@
-#include "gfx/BloomChain.h"
+#include "postprocess/BloomChain.h"
 #include "types/Format.h"
 #include <algorithm>
 #include <bgl_common/gassert.h>

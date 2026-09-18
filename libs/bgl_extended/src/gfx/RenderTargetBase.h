@@ -3,7 +3,7 @@
 #include "cmd/TimestampHeap.h"
 #include "constants/constants.h"
 #include "fg/PassTimer.h"
-#include "gfx/BloomChain.h"
+#include "postprocess/BloomChain.h"
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
