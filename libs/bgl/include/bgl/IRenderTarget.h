@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/api.h>
+#include <bgl/glm.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -48,6 +49,31 @@ namespace bgl
 
 		// How far the glow spreads: the coarser level's weight at each upsample.
 		float scatter = 0.7f;
+	};
+
+	/**
+	 * How a target grades its image on the way to the display curve. Per-frame constants: a change
+	 * reallocates nothing. Every default is neutral. See docs/passes.md for where each step runs.
+	 */
+	struct ColorGradeSettings
+	{
+		// Within [-100, 100]. Positive is warmer, and positive tint is more magenta than green.
+		float temperature = 0.0f;
+		float tint        = 0.0f;
+
+		// The ASC CDL, applied in the tone map's log encoding: (x * slope + offset) ^ power, then
+		// saturation about Rec.709 luma.
+		glm::vec3 slope{ 1.0f };
+		glm::vec3 offset{ 0.0f };
+		glm::vec3 power{ 1.0f };
+		float     saturation = 1.0f;
+
+		// About middle grey in the same encoding, so 0.18 stays where the curve put it.
+		float contrast = 1.0f;
+
+		// How far a frame corner darkens, and how gradually from the centre.
+		float vignetteIntensity  = 0.0f;
+		float vignetteSmoothness = 0.2f;
 	};
 
 	/**
@@ -155,6 +181,26 @@ namespace bgl
 		 */
 		virtual void
 		SetBloomSettings(const BloomSettings& settings) = 0;
+
+		/** Whether the colour grade runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsColorGradeEnabled() const noexcept = 0;
+
+		/** Turns the grade on or off for subsequent frames. Nothing is allocated either way. */
+		virtual void
+		SetColorGradeEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual ColorGradeSettings
+		GetColorGradeSettings() const noexcept = 0;
+
+		/**
+		 * @throws GraphicsError if `temperature` or `tint` is outside [-100, 100], a `slope`
+		 *         component or `saturation` or `contrast` is negative or not finite, an `offset`
+		 *         component is outside [-1, 1], a `power` component is not positive and finite,
+		 *         `vignetteIntensity` is outside [0, 1], or `vignetteSmoothness` is outside (0, 1].
+		 */
+		virtual void
+		SetColorGradeSettings(const ColorGradeSettings& settings) = 0;
 
 		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
 		[[nodiscard]] virtual bool

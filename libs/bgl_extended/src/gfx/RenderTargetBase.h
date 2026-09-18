@@ -4,6 +4,7 @@
 #include "constants/constants.h"
 #include "fg/PassTimer.h"
 #include "postprocess/BloomChain.h"
+#include "postprocess/color_grade.h"
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
@@ -237,6 +238,31 @@ namespace bgl
 			}
 
 			m_BloomSettings = settings;
+		}
+
+		[[nodiscard]] bool
+		IsColorGradeEnabled() const noexcept final
+		{
+			return m_ColorGradeEnabled;
+		}
+
+		void
+		SetColorGradeEnabled(bool enabled) noexcept final
+		{
+			m_ColorGradeEnabled = enabled;
+		}
+
+		[[nodiscard]] ColorGradeSettings
+		GetColorGradeSettings() const noexcept final
+		{
+			return m_ColorGradeSettings;
+		}
+
+		void
+		SetColorGradeSettings(const ColorGradeSettings& settings) final
+		{
+			ValidateColorGradeSettings(settings);
+			m_ColorGradeSettings = settings;
 		}
 
 		/**
@@ -491,6 +517,9 @@ namespace bgl
 		bool          m_BloomEnabled = false;
 		BloomSettings m_BloomSettings;
 		BloomChain    m_BloomChain;
+
+		bool               m_ColorGradeEnabled = false;
+		ColorGradeSettings m_ColorGradeSettings;
 
 		bool                                           m_GpuTimingEnabled = false;
 		TimestampHeapRef                               m_TimingHeap;
