@@ -237,7 +237,7 @@ TEST_CASE(
 	SECTION("the PSO follows the override: one geom drawn by two pipelines in one frame")
 	{
 		// The strongest claim the feature makes. The override flips the *layer*, so the two instances
-		// land in different PSO buckets -- kOpaque_StaticMesh_PBR and kAlphaTest_StaticMesh_PBR -- and
+		// land in different buckets -- (kPBR, kOpaque) and (kPBR, kMask) -- and
 		// the counting sort has to dispatch the same submesh twice, under two different pipelines, in
 		// a single frame. If it bucketed per submesh (as it did before), both would draw opaque and the
 		// hole below would never appear.

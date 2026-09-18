@@ -36,10 +36,8 @@
 #include <format>
 #include <limits>
 
-// What AddSkinnedMeshGeom uploads, and what it refuses. Nothing here draws: the skinned forward
-// kernel does not exist yet, so a skinned submesh resolves to PsoType::kInvalid and the counting
-// sort skips it. The tables and the playback record are the whole of what this task delivers, so
-// they are read back off the CPU mirror -- which is exactly the bytes Update() uploads.
+// What AddSkinnedMeshGeom uploads, and what it refuses. Nothing here draws: the tables and the
+// playback record are read back off the CPU mirror -- which is exactly the bytes Update() uploads.
 
 namespace
 {

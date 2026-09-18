@@ -60,7 +60,7 @@ set(IDL_CPP_SOURCES
     GameSurfaceRecord.slang
     RawTextureHandle.slang
     ErrorCode.slang
-    PsoType.slang
+    DrawBucket.slang
     DispatchArgs.slang
     BaseTable.slang
     BoneSample.slang
@@ -89,8 +89,8 @@ set(IDL_CPP_SOURCES
 # duplicate waiting to be included by mistake.
 #
 # Keep this list to what a *client* names. An enum only bgl_extended's own passes switch on belongs above,
-# however public its consumers feel: PsoType was here and enumerates this renderer's mesh-shader
-# pipeline permutations, which is not vocabulary a public interface should carry.
+# however public its consumers feel: a renderer's pipeline permutations are not vocabulary a public
+# interface should carry.
 set(IDL_PUBLIC_CPP_SOURCES
     MaterialType.slang
     MeshInstanceFlag.slang

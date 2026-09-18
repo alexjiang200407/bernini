@@ -30,11 +30,11 @@
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/PosedInstance.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
@@ -59,7 +59,7 @@ namespace bgl
 	namespace
 	{
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
-		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
+		// must read as skippable: a default SubmeshInstance names no mesh and carries cInvalidDrawBucket,
 		// which both the histogram and the compaction skip.
 		constexpr std::array<SubmeshInstance, idl::cHistogramGroupSize> c_InstanceTailPadding{};
 
@@ -146,10 +146,13 @@ namespace bgl
 	SceneView::SceneView(
 		const SceneRef&                   scene,
 		uint32_t                          initialInstances,
-		core::SharedRef<IResourceManager> resourceManager) :
+		core::SharedRef<IResourceManager> resourceManager,
+		core::SharedRef<DrawBucketTable>  buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
-		m_InitialInstances(initialInstances)
+		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
+		gassert(m_DrawBucketTable != nullptr, "SceneView requires the renderer's bucket table");
+
 		m_SceneRaw = m_Scene->As<Scene>();
 		gassert(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
 
@@ -179,6 +182,14 @@ namespace bgl
 			instanceBufferDesc.blockSize         = sizeof(SubmeshInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto flagsDesc         = UploadBufferDesc();
+			flagsDesc.initialCount = idl::cMaxDrawBuckets;
+			flagsDesc.debugName    = "Transparent Bucket Flags";
+
+			m_TransparentDrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
 		}
 
 		{
@@ -309,6 +320,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
+		m_TransparentDrawBucketFlags.Release();
 		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
@@ -1043,18 +1055,7 @@ namespace bgl
 					MaterialHandle{},
 					geom.geomType);
 
-				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
-				// past the bucket count, and the sort would skip it regardless. A null slot is still
-				// pushed, because overrides, selection marks and the epoch re-resolve all address a
-				// submesh by its index in this vector.
-				if (instance.pso < idl::c_PsoCount)
-				{
-					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
-				}
-				else
-				{
-					meta.submeshInstances.emplace_back();
-				}
+				meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
 
 			SyncInstanceScratch();
@@ -1092,10 +1093,7 @@ namespace bgl
 		// Erase every submesh-instance this mesh contributed to the sort buffer.
 		for (const core::slot_handle submeshInstance : meta.submeshInstances)
 		{
-			if (m_InstanceBuffer.IsValid(submeshInstance))
-			{
-				m_InstanceBuffer.Erase(submeshInstance);
-			}
+			m_InstanceBuffer.Erase(submeshInstance);
 		}
 
 		if (meta.animState != 0)
@@ -1296,11 +1294,7 @@ namespace bgl
 					continue;
 				}
 
-				const core::slot_handle handle = meta.submeshInstances[s];
-				if (m_InstanceBuffer.IsValid(handle))
-				{
-					list.push_back(m_InstanceBuffer.GetDenseIndex(handle));
-				}
+				list.push_back(m_InstanceBuffer.GetDenseIndex(meta.submeshInstances[s]));
 			}
 		}
 
@@ -1467,12 +1461,8 @@ namespace bgl
 			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
-		instance.pso = SubmeshPso(geomType, material);
-
-		if (instance.pso < idl::c_PsoCount)
-		{
-			m_DemandedBuckets.set(instance.pso);
-		}
+		instance.drawBucket = m_DrawBucketTable->Resolve(geomType, material);
+		m_DemandedDrawBuckets.set(instance.drawBucket);
 	}
 
 	void
@@ -1481,21 +1471,20 @@ namespace bgl
 		const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
-		if (!m_InstanceBuffer.IsValid(handle))
-		{
-			return;
-		}
+		gassert(
+			m_InstanceBuffer.IsValid(handle),
+			"Every submesh of a live placement has an instance");
 
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
 		const idl::RawEntry material = instance.material;
-		const uint32_t      pso      = instance.pso;
+		const uint32_t      bucket   = instance.drawBucket;
 
 		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.
-		if (instance.material.byteOffset != material.byteOffset || instance.pso != pso)
+		if (instance.material.byteOffset != material.byteOffset || instance.drawBucket != bucket)
 		{
 			m_InstanceBuffer.Set(handle, instance);
 		}
@@ -1543,6 +1532,9 @@ namespace bgl
 		}
 
 		m_TransparentSort.Update(cmdList);
+
+		m_TransparentDrawBucketFlags.Assign(m_DrawBucketTable->TransparentFlags());
+		m_TransparentDrawBucketFlags.Update(cmdList);
 
 		if (m_SelectionDirty)
 		{
@@ -1612,6 +1604,12 @@ namespace bgl
 		});
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		{
+			auto flags = std::string(c_TransparentDrawBucketFlagsName);
+			fg.ImportBuffer(flags, m_TransparentDrawBucketFlags.GetBufferHandle());
+			resourceNames.push_back(std::move(flags));
+		}
 
 		{
 			// Rebuilt before the handle is read: a stale list can grow the buffer, and growth mints

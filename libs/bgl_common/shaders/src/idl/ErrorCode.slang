@@ -8,7 +8,7 @@ public enum ErrorCode : uint
     kMeshletPrimitiveOverflow,
     kInvalidVertexIndex,
     kInvalidSubmeshInstance,
-    kInvalidPsoType,
+    kInvalidDrawBucket,
     // A vertex naming a bone its rig does not have: the palette read would land in a neighbouring
     // instance's slice, which shades as a plausible pose rather than as anything obviously wrong.
     kInvalidBoneIndex,

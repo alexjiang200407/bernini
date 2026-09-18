@@ -25,7 +25,7 @@ and portability.
 
 ## Guiding Constraints (design rules the roadmap must respect)
 
-- **GPU-driven by default.** The instance pipeline already buckets by `PsoType` and emits
+- **GPU-driven by default.** The instance pipeline already sorts instances into draw buckets and emits
   indirect dispatch args. New systems (culling, shadows, skinning) should stay on the GPU
   and extend this pipeline rather than adding CPU-side per-object work.
 - **One dominant light.** Forward rendering with a single sun keeps shading cheap. Do *not*
@@ -71,7 +71,7 @@ and portability.
     workgroup, capped at 1024 transparent instances; a multi-group radix sort is the scale-up.
   - [x] Texture Asset Import
   - [x] Per-instance material override — one mesh, a different material per instance, resolved into
-    the cached `SubmeshInstance` so the draw pays nothing and an instance may change PSO bucket. For
+    the cached `SubmeshInstance` so the draw pays nothing and an instance may change draw bucket. For
     tens of hand-placed instances; crowd kit variation is the atlasing line under Crowd Variation,
     not this. No editor surface yet (see Level Editor for Battles).
   - [x] Editor Material Graph
@@ -220,7 +220,7 @@ and portability.
     organism; offset clip time and preserve it across state transitions.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
-  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by
+  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — draw-bucketed by
     mask alongside LOD. The *wardrobe* is not this: a swappable kit is a slot mesh of its own on the
     shared rig, which is what the crowd tier was built for.
   - [ ] Attachment variation as separate instanced draws off the rig's bone anim table, which is
@@ -319,7 +319,7 @@ and portability.
   - [ ] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the pose-source boundary.
   - [ ] Dithered LOD crossfade resolved by TAA; also the mechanism for the pose-source swap.
   - [ ] Per-tier compaction → indirect args; fixed `maxPerLOD` regions hold until submesh-mask
-    variation multiplies the bucket count.
+    variation multiplies the draw bucket count.
   - [ ] Separate mesh LOD and animation LOD tables driven from the same screen-size value.
   - [ ] Animation ticking and tagging LODs.
   - [ ] Compute skinning bandwidth — measure palette writes, palette reads, bone anim table fetches,
@@ -397,7 +397,7 @@ and portability.
     [docs/profiling.md](docs/profiling.md) § Memory.
   - [x] GPU timestamp per pass with on-screen breakdown — a FrameGraph feature (`PassTimer`) over
     an RHI timestamp span (`ICommandList::BeginTiming`), read through `IGraphics::GetPassTimings`
-    and written to `editor.log` on demand. Per pass, not per draw: a bucket inside Forward is not a
+    and written to `editor.log` on demand. Per pass, not per draw: a draw bucket inside Forward is not a
     row. See [docs/framegraph.md](docs/framegraph.md).
   - [x] A frame-stats window that graphs the per-pass rows over time — a stacked band per pass over
     the last 600 timed frames, sampled every frame, exported as a CSV beside `editor.log`. See

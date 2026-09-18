@@ -183,7 +183,7 @@ a second view, not a wider one.
 An enum a shader only *compares against* is folded to a literal and never appears in the generated
 code. An enum a function **returns** is emitted as a type — and HLSL has no `uint8_t`, so a tag
 declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
-`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`, as `PsoType` always was.
+`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`.
 
 This is worth knowing because the check that catches it runs in one place only:
 [libs/bgl_extended/shaders/CMakeLists.txt](../libs/bgl_extended/shaders/CMakeLists.txt) validates to DXIL at build

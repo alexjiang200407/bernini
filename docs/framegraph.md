@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   is the one sanctioned exception to "pass code must not barrier." *Bug precedent:* the
   histogram and prefix-sum dispatches in `CompactInstancesPass` shared one buffer in a single pass
   with no barrier between them; the scan raced the histogram and produced wrong prefix sums —
-  visible only with multiple PSO buckets, as nondeterministic flicker.
+  visible only with multiple draw buckets, as nondeterministic flicker.
 
 * **Ordering is submission order; the graph adds dependencies and culling, not reordering.** Passes
   execute in `AddPass` order. `Compile` builds a *last-writer* dependency edge (a pass depends on
@@ -100,10 +100,10 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   UAV and a following pass that reads it declare the very same `(sync, access)`, so a diff-driven
   graph would emit nothing and let the two dispatches overlap. The barrier it emits has
   `before == after` — which is exactly how enhanced barriers spell a UAV barrier. *Bug precedent:*
-  `CompactInstancesPass` writes `psoPrefixSum` in its scan pass and reads it in the following
+  `CompactInstancesPass` writes `drawBucketPrefixSum` in its scan pass and reads it in the following
   compaction pass, both as a UAV; with no barrier the compaction read pre-scan counts and scattered
-  instances to the wrong bucket offsets — nondeterministic flicker, again only in scenes mixing PSO
-  buckets.
+  instances to the wrong draw bucket offsets — nondeterministic flicker, again only in scenes mixing
+  draw buckets.
 
 * **Poisoning a scratch output is a graph service, not pass code.** A pass declares an output it
   rewrites from nothing with `AddPoisonedBufferArg` instead of `AddBufferArg`; if a poisoner is

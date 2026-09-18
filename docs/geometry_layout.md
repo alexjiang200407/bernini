@@ -78,17 +78,17 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   identity across the pieces and breaks source-index addressing (see the contract below).
 
 * **The `SubmeshInstance` is the unit of pipeline state.** It carries the *resolved* `material` entry
-  and `pso` — the geom's default material, unless that instance overrides it. They live on the
+  and `bucket` — the geom's default material, unless that instance overrides it. They live on the
   instance and not on the `Submesh` because a submesh is shared by every instance placed from its
   geom: a cosmetic **skin** (the same unit mesh, a different material per unit) has nowhere else to
-  go. The counting sort buckets on `SubmeshInstance::pso`, so an overridden instance can draw from a
+  go. The counting sort groups by `SubmeshInstance::drawBucket`, so an overridden instance can draw from a
   different pipeline than its sibling — an opaque unit and a cutout one, from one geom.
 
-  **Transparent PSOs are the exception.** Blending must composite back-to-front, which is a depth
-  order, not a PSO order. The counting sort still buckets a transparent instance like any other, but
-  `ForwardPass::Execute` skips those buckets in the opaque draw loop (`IsTransparentPso`) — they are
-  never dispatched — and the instance is instead drawn from a separate, per-frame depth-sorted list
-  (`scene.sortedTransparentInstances`) after the opaque buckets, in the same forward pass. That list
+  **Transparent draw buckets are the exception.** Blending must composite back-to-front, which is a
+  depth order, not a draw bucket order. The counting sort still counts a transparent instance into its draw bucket like any
+  other, but `ForwardPass::Execute` skips those draw buckets in the opaque draw loop
+  (`DrawBucketTable::Transparent`) — they are never dispatched — and the instance is instead drawn from a separate, per-frame depth-sorted list
+  (`scene.sortedTransparentInstances`) after the opaque draw buckets, in the same forward pass. That list
   is built entirely on the GPU by `TransparentSortPass`; see
   [TransparentSortPass.h](libs/bgl_extended/src/passes/TransparentSortPass.h) and `ForwardPass::DrawTransparent`.
 
@@ -171,7 +171,7 @@ copies must be kept in step by hand:
 
 | Struct | Files | Role |
 |---|---|---|
-| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_common/shaders/src/lib/data/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `MeshInstance` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
+| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_common/shaders/src/lib/data/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `MeshInstance` entry + submesh index, plus the **resolved** `material` entry and `drawBucket`. The unit the counting sort counts into draw buckets and the mesh shader draws. |
 
 ### Offset primitives
 
@@ -207,7 +207,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 
 ```mermaid
 flowchart TD
-    Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + pso</b>"]
+    Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + draw bucket</b>"]
     Mesh["MeshInstance (root)<br/>transform + submeshes"]
     Submesh["Submesh<br/>layout + ranges (geometry only)"]
     Meshlet["Meshlet<br/>rel offsets + bounds"]

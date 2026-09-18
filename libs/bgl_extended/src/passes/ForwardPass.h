@@ -1,12 +1,13 @@
 #pragma once
+#include "gfx/DrawBucketTable.h"
 #include "passes/BlobShadowPhase.h"
 #include "pipeline/MeshletKernel.h"
-#include "types/BucketMask.h"
+#include "types/DrawBucketMask.h"
 #include "types/MeshletState.h"
-#include "types/RasterState.h"
-#include <array>
-#include <bgl_common/idl/PsoType.h>
+#include <cstdint>
+#include <span>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 namespace bgl
 {
@@ -40,25 +41,42 @@ namespace bgl
 			{
 				kernel.Reset();
 			}
+			m_TransparentKernel.Reset();
 			m_BlobShadows.Release();
 		}
 
-		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddBucketKernels. */
+		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddDrawBucketKernels. */
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets);
 
 		/**
 		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
 		 * they are live once `pipelines` is built. A bucket already initialized is left alone.
+		 * @pre every set bit is an allocated, non-transparent bucket.
 		 */
 		void
-		AddBucketKernels(IDevice* device, PipelineBatch& pipelines, const BucketMask& buckets);
+		AddDrawBucketKernels(
+			IDevice*              device,
+			PipelineBatch&        pipelines,
+			const DrawBucketMask& buckets);
 
-		/** @pre pso < idl::c_PsoCount. */
+		/**
+		 * Requests the one shared blend kernel the whole depth-sorted list draws through --
+		 * demanded by any transparent bucket, owned by none.
+		 */
+		void
+		AddTransparentKernel(IDevice* device, PipelineBatch& pipelines);
+
 		[[nodiscard]] bool
-		BucketInitialized(uint16_t pso) const noexcept
+		DrawBucketInitialized(uint32_t bucket) const noexcept
 		{
-			return m_Kernels[pso].pipeline.IsInitialized();
+			return bucket < m_Kernels.size() && m_Kernels[bucket].pipeline.IsInitialized();
+		}
+
+		[[nodiscard]] bool
+		TransparentInitialized() const noexcept
+		{
+			return m_TransparentKernel.pipeline.IsInitialized();
 		}
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
@@ -70,16 +88,6 @@ namespace bgl
 
 		void
 		Execute(const DrawData& draw, const PassContext& resources);
-
-		/**
-		 * How `pso`'s pipeline culls in hardware. A row that culls nothing leaves back faces to the
-		 * mesh stage, which reads each material's doubleSided flag. A pass that draws the same buckets
-		 * must mirror this, or its depth holds faces the colour pass never drew.
-		 *
-		 * @pre pso < idl::c_PsoCount.
-		 */
-		[[nodiscard]] static RasterCullMode
-		PsoCullMode(uint16_t pso) noexcept;
 
 	private:
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
@@ -97,7 +105,17 @@ namespace bgl
 		void
 		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
-		std::array<MeshletKernel, idl::c_PsoCount> m_Kernels;
+		/** The binder-name check over one kernel family; a family with nothing built is skipped. */
+		void
+		CheckKernelNames(std::span<const MeshletKernel> kernels) const;
+
+		// Indexed by bucket id, grown to the table's count as buckets are demanded.
+		std::vector<MeshletKernel> m_Kernels;
+
+		// The shared blend kernel (see DrawTransparent); no bucket owns it.
+		MeshletKernel m_TransparentKernel;
+
+		const DrawBucketTable* m_DrawBuckets = nullptr;
 
 		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
 		// is a phase of this pass rather than a pass of its own.

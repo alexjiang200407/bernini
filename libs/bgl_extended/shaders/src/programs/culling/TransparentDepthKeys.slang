@@ -1,29 +1,23 @@
+import idl.DrawBucket;
 import idl.Constants;
 import idl.InstanceVisibility;
 import idl.MeshInstance;
-import idl.PsoType;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
+import lib.types.UploadBuffer;
 import lib.data.SubmeshInstance;
-
-// Mirrors bgl::IsTransparentPso. A transparent instance is drawn from the depth-sorted list rather
-// than its counting-sort bucket, so it is the only kind this pass keys.
-bool IsTransparentPso(PsoType pso)
-{
-    if (IsGameRow(uint(pso)))
-    {
-        return GameRowOffset(uint(pso)) == cGameSlotBlendRow;
-    }
-    return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_SkinnedMesh_PBR;
-}
 
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<MeshInstance> meshBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
+
+    // One flag per bucket, mirrored from the CPU's bucket table. A transparent instance is drawn
+    // from the depth-sorted list rather than its counting-sort bucket, so it is the only kind this
+    // pass keys.
+    UploadBuffer<uint> transparentFlags;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.
     ComputeBuffer<uint2> outEntries;
@@ -52,9 +46,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    let pso = PsoType(instance.pso);
-
-    if (!IsTransparentPso(pso))
+    if (instance.drawBucket >= cMaxDrawBuckets || gUniforms.transparentFlags[instance.drawBucket] == 0u)
     {
         return;
     }
