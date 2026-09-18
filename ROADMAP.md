@@ -53,6 +53,12 @@ and portability.
   - [x] GPU Ring Buffer
   - [ ] Readback ring — N buffers, persistently mapped, fenced; never map a buffer written this frame.
   - [ ] `ExecuteIndirect` / `DispatchIndirect` plumbing so counts never leave the GPU.
+    - [x] Mesh dispatch: `DispatchMeshIndirectCount` -- an empty draw bucket issues no command
+      on D3D12, its dispatch args serving as their own count buffer.
+    - [ ] Compute `DispatchIndirect`.
+  - [ ] Async pipeline creation with skip-until-ready. Draw-bucket pipelines are built on demand
+    at the top of the `Draw` that first needs them; a cold-cache link there is a hitch.
+  - [ ] Pipeline eviction -- a built pipeline lives for the run.
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
     dead-pass culling (`libs/bgl_extended/src/fg`)
@@ -220,7 +226,7 @@ and portability.
     organism; offset clip time and preserve it across state transitions.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
-  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — draw-bucketed by
+  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by
     mask alongside LOD. The *wardrobe* is not this: a swappable kit is a slot mesh of its own on the
     shared rig, which is what the crowd tier was built for.
   - [ ] Attachment variation as separate instanced draws off the rig's bone anim table, which is
@@ -411,6 +417,9 @@ and portability.
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.
 - [ ] Capacity policy — one table, with clamp-and-report behaviour defined for every entry.
+  - [x] Draw buckets -- `cMaxDrawBuckets` (256); a key past it resolves to the unlit fallback,
+    reported once, and a surface past `cMaxDrawBuckets - 1` is refused at registration.
+    Past 1024 the single-group bucket scan must be replaced first.
   - [ ] Max agents, max per cell, event buffer size, flow fields resident.
   - [ ] Top-K skinned budget.
   - [ ] Concurrent dying units and solver slots → overflow falls back to canned death clips.

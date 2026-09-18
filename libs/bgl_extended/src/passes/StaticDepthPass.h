@@ -62,7 +62,15 @@ namespace bgl
 		AddDrawBucketKernels(
 			IDevice*              device,
 			PipelineBatch&        pipelines,
-			const DrawBucketMask& buckets);
+			const DrawBucketMask& demanded);
+
+		/**
+		 * Whether the bucket has what this pass draws it with: always for one drawn through the two
+		 * shared depth kernels, and its own coverage twin otherwise.
+		 * @pre bucket < the table's count.
+		 */
+		[[nodiscard]] bool
+		DrawBucketInitialized(uint32_t bucket) const noexcept;
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void
@@ -88,6 +96,6 @@ namespace bgl
 		MeshletKernel              m_MaterialCullKernel;
 		std::vector<MeshletKernel> m_CoverageKernels;
 
-		const DrawBucketTable* m_DrawBuckets = nullptr;
+		const DrawBucketTable* m_DrawBucketTable = nullptr;
 	};
 }

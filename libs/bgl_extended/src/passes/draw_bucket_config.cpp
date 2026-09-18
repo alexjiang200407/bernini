@@ -97,6 +97,19 @@ namespace bgl
 			LayerSuffix(desc.layer));
 	}
 
+	uint32_t
+	DrawBucketMeshStageCullsBackfaces(const DrawBucketDesc& desc) noexcept
+	{
+		return DrawBucketCullMode(desc) == RasterCullMode::kNone ? 1u : 0u;
+	}
+
+	bool
+	DrawBucketHasCoverageTwin(const DrawBucketDesc& desc) noexcept
+	{
+		return desc.geom == GeomType::kStaticMesh &&
+		       (desc.layer == LayerType::kMask || desc.layer == LayerType::kHashed);
+	}
+
 	RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{

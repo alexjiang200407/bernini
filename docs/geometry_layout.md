@@ -78,7 +78,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   identity across the pieces and breaks source-index addressing (see the contract below).
 
 * **The `SubmeshInstance` is the unit of pipeline state.** It carries the *resolved* `material` entry
-  and `bucket` — the geom's default material, unless that instance overrides it. They live on the
+  and `drawBucket` — the geom's default material, unless that instance overrides it. They live on the
   instance and not on the `Submesh` because a submesh is shared by every instance placed from its
   geom: a cosmetic **skin** (the same unit mesh, a different material per unit) has nowhere else to
   go. The counting sort groups by `SubmeshInstance::drawBucket`, so an overridden instance can draw from a

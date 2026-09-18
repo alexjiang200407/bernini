@@ -423,7 +423,7 @@ namespace bgl
 
 	private:
 		/**
-		 * Fills `instance`'s material + PSO: `override` if it is valid, else the Scene's default for
+		 * Fills `instance`'s material and draw bucket: `override` if it is valid, else the Scene's default for
 		 * that submesh. `submeshRoot` is where its geom's range starts; the instance names its own
 		 * offset into that range.
 		 *
@@ -562,7 +562,7 @@ namespace bgl
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
-		// stage that draws more than one can ask rather than mirror the PSO table.
+		// stage that draws more than one can ask rather than mirror the draw-bucket table.
 		RawBuffer<idl::PlaybackType> m_Playback;
 
 		BonePaletteBuffer m_Palettes;

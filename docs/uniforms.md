@@ -164,9 +164,10 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 * **`IsValid() == false` is ambiguous at the call site; only a family disambiguates it.** It means
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
-  typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl_extended/src/passes/BindingNameCheck.h)) is what every pass
-  checks its cbuffers through from `Init`, and `SetIfValid` is the per-draw guard it licenses. A
+  typo, absent from some is a per-variant field. @pre resolve a binder's names once per batch of
+  kernels built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl_extended/src/passes/BindingNameCheck.h)) is what every pass
+  checks its cbuffers through from `CheckBindings`, run after every batch over the kernels built so
+  far, and `SetIfValid` is the per-draw guard it licenses. A
   binder never validated this way has no protection against a shader rename.
 
 * **Which of the two write spellings a member uses is the statement of whether it is optional.**

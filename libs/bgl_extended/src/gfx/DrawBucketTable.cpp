@@ -64,8 +64,8 @@ namespace bgl
 			if (m_Refused.insert(key).second)
 			{
 				logger::error(
-					"Bucket ceiling ({}) reached: (geom {}, material {}, layer {}) draws through "
-					"the unlit fallback",
+					"Draw bucket ceiling ({}) reached: (geom {}, material {}, layer {}) draws "
+					"through the unlit fallback",
 					m_Ceiling,
 					static_cast<uint32_t>(geom),
 					static_cast<uint32_t>(material),

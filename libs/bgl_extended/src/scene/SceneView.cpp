@@ -187,7 +187,7 @@ namespace bgl
 		{
 			auto flagsDesc         = UploadBufferDesc();
 			flagsDesc.initialCount = idl::cMaxDrawBuckets;
-			flagsDesc.debugName    = "Transparent Bucket Flags";
+			flagsDesc.debugName    = "Transparent Draw Bucket Flags";
 
 			m_TransparentDrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
 		}

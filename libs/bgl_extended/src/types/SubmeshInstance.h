@@ -8,8 +8,8 @@ namespace bgl
 {
 	/**
 	 * One drawable: a submesh of a placed mesh instance, with its resolved shading. `material` and
-	 * `bucket` are the geom's defaults unless this instance overrides them. The counting sort buckets
-	 * on `bucket`, so two instances of one submesh may draw from different pipelines.
+	 * `drawBucket` are the geom's defaults unless this instance overrides them. The counting sort
+	 * groups on `drawBucket`, so two instances of one submesh may draw from different pipelines.
 	 */
 	struct SubmeshInstance
 	{
@@ -17,11 +17,11 @@ namespace bgl
 		uint32_t   submeshIndex = 0;
 
 		// A byte offset into the scene's material arena, naming the record's header -- not an
-		// element index. The record says which kind it is; `bucket` agrees by construction.
+		// element index. The record says which kind it is; `drawBucket` agrees by construction.
 		idl::RawEntry material;
 
 		// cInvalidDrawBucket, not 0: the sort skips an id past the ceiling, which is what keeps tail
-		// padding out of a real bucket.
+		// padding out of a real draw bucket.
 		uint32_t drawBucket = idl::cInvalidDrawBucket;
 	};
 }

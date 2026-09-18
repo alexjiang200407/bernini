@@ -40,8 +40,8 @@ float4 SampleRoutedSlot(uint byteOffset, uint slot, float2 uv)
 }
 
 // SampleRoutedSlot displaced along the mip chain, for BiasedArenaReader -- a second function for
-// the reason that reader is a wrapper: a bias parameter here would put SampleBias on every row's
-// material sampling path to serve the coverage read.
+// the reason that reader is a wrapper: a bias parameter here would put SampleBias on every
+// program's material sampling path to serve the coverage read.
 float4 SampleRoutedSlotBias(uint byteOffset, uint slot, float2 uv, float lodBias)
 {
     float4 gathered;
@@ -92,7 +92,7 @@ public struct MaterialArenaReader : IMaterialReader
 // without ISurfaceSource carrying a word about either.
 //
 // A wrapper rather than a bias on MaterialArenaReader: that would put SampleBias on the material
-// sampling path of every row to serve one. The interpolants forward, so there is one definition of
+// sampling path of every program to serve one. The interpolants forward, so there is one definition of
 // each and the one method that differs is the only one written out.
 public struct BiasedArenaReader : IMaterialReader
 {

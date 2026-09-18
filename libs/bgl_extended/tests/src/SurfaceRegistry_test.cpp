@@ -156,8 +156,8 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 			MessageMatches(ContainsSubstring("is not a directory")));
 	}
 
-	// Every registered surface must be able to draw in one frame -- a draw bucket each, beside the
-	// unlit fallback's -- so the one past that is refused by name rather than clamped to unlit.
+	// Past cMaxDrawBuckets - 1 surfaces not even one draw bucket each could exist beside the unlit
+	// fallback's, so the one past that is refused by name rather than clamped to unlit.
 	SECTION("a surface past the draw-bucket ceiling")
 	{
 		const std::filesystem::path dir = FreshDir("bernini_surfaces_ceiling");

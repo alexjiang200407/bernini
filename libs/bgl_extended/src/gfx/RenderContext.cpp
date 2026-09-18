@@ -651,8 +651,9 @@ namespace bgl
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
 			gassert(
-				!missing.test(bucket) || m_Forward.DrawBucketInitialized(bucket),
-				"EnsureDrawBucketPipelinesExist left a demanded bucket uninitialized");
+				!missing.test(bucket) || (m_Forward.DrawBucketInitialized(bucket) &&
+			                              m_StaticDepth.DrawBucketInitialized(bucket)),
+				"EnsureDrawBucketPipelinesExist left a demanded draw bucket uninitialized");
 		}
 		gassert(
 			!transparent.any() || m_Forward.TransparentInitialized(),

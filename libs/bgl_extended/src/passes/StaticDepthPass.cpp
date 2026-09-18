@@ -20,10 +20,10 @@
 #include "types/MeshletState.h"
 #include "types/RasterState.h"
 #include "types/RenderState.h"
-#include "util/util.h"
 #include <array>
+#include <bgl/GeomType.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MaterialType.h>
+#include <bgl/LayerType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <cstddef>
@@ -98,7 +98,7 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_DrawBuckets = &buckets;
+		m_DrawBucketTable = &buckets;
 
 		// Opaque depth does not depend on the material, so the opaque buckets share a depth-only
 		// pixel stage and differ only in where back faces are culled.
@@ -114,11 +114,11 @@ namespace bgl
 	StaticDepthPass::AddDrawBucketKernels(
 		IDevice*              device,
 		PipelineBatch&        pipelines,
-		const DrawBucketMask& buckets)
+		const DrawBucketMask& demanded)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const uint32_t count = m_DrawBuckets->Count();
+		const uint32_t count = m_DrawBucketTable->Count();
 		if (m_CoverageKernels.size() < count)
 		{
 			m_CoverageKernels.resize(count);
@@ -126,14 +126,13 @@ namespace bgl
 
 		for (uint32_t bucket = 0; bucket < count; ++bucket)
 		{
-			if (!buckets.test(bucket) || m_CoverageKernels[bucket].pipeline.IsInitialized())
+			if (!demanded.test(bucket) || m_CoverageKernels[bucket].pipeline.IsInitialized())
 			{
 				continue;
 			}
 
-			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
-			if (desc.geom != GeomType::kStaticMesh ||
-			    (desc.layer != LayerType::kMask && desc.layer != LayerType::kHashed))
+			const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
+			if (!DrawBucketHasCoverageTwin(desc))
 			{
 				continue;
 			}
@@ -145,6 +144,17 @@ namespace bgl
 					DrawBucketCoveragePixelSrc(desc),
 					DrawBucketCullMode(desc)));
 		}
+	}
+
+	bool
+	StaticDepthPass::DrawBucketInitialized(const uint32_t bucket) const noexcept
+	{
+		if (!DrawBucketHasCoverageTwin(m_DrawBucketTable->Desc(bucket)))
+		{
+			return true;
+		}
+		return bucket < m_CoverageKernels.size() &&
+		       m_CoverageKernels[bucket].pipeline.IsInitialized();
 	}
 
 	void
@@ -282,11 +292,9 @@ namespace bgl
 		const auto dispatch = [&](MeshletKernel& kernel, const uint32_t bucket) {
 			if (auto expansion = kernel.FindUniforms("expansionData"))
 			{
-				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansion)["drawBucketIndex"] = bucket;
 				(*expansion)["cullBackfaces"] =
-					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
-																							   0u;
+					DrawBucketMeshStageCullsBackfaces(m_DrawBucketTable->Desc(bucket));
 			}
 
 			gfxState.kernel = &kernel;
@@ -300,9 +308,9 @@ namespace bgl
 		// Statics only, to the table's live count: opaque buckets through the two shared
 		// depth-only kernels, coverage layers through their own demand-built kernels, blended
 		// never -- a blended surface writes no depth for the receiver to reconstruct.
-		for (uint32_t bucket = 0, count = m_DrawBuckets->Count(); bucket < count; ++bucket)
+		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
 		{
-			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
+			const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
 			if (desc.geom != GeomType::kStaticMesh)
 			{
 				continue;
