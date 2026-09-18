@@ -426,7 +426,7 @@ namespace bgl
 		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentInstancesName);
 		const auto    transparentArgs = resources.GetBuffer(c_TransparentDispatchArgsName);
 
-		// The sort leaves the whole list farthest-first and both transparent PSOs share one pipeline,
+		// The sort leaves the whole list farthest-first and every transparent bucket shares one kernel,
 		// so the depth-sorted draw is a single dispatch whose count lives entirely on the GPU.
 		//
 		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be attached

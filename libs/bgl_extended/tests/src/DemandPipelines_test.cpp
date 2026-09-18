@@ -26,9 +26,8 @@
 // Bucket pipelines are built by the first Draw that demands them, and never for a bucket nothing
 // demands. The initialized set is read back from the RenderContext and compared against the view's
 // own demand -- equality is the assertion, so an over-build (the old build-everything) and an
-// under-build (a demanded bucket skipped) both fail. Equality holds for the buckets the passes
-// bind directly, which is everything this scene demands; a transparent demand is substituted with
-// the one shared blend bucket and would not compare equal.
+// under-build (a demanded bucket skipped) both fail. A demanded transparent bucket counts as
+// initialized once the one shared blend kernel exists, so equality holds for it too.
 
 namespace
 {
@@ -170,10 +169,11 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 	CHECK(afterCutout.test(*cutoutBucket));
 	CHECK(afterCutout.count() == 2);
 
-	// The perf shape: the passes issue one dispatch per initialized, non-transparent bucket, so
-	// what a frame issues scales with the distinct (tier, kind, layer) keys in use -- never with the
-	// material count and never with a fixed grid. Six more materials, each on its own placement,
-	// across the two keys already drawn, add no bucket and no kernel.
+	// The perf shape at the table: buckets -- and so the dispatch loops, which run to the table's
+	// count -- scale with the distinct (tier, kind, layer) keys in use, never with the material
+	// count or a fixed grid. Six more materials, each on its own placement, across the two keys
+	// already drawn, allocate no bucket and build no kernel. Counting the commands themselves is
+	// the count-buffer task's recording-list check.
 	const uint32_t bucketsBefore = table.Count();
 	for (uint32_t i = 0; i < 6; ++i)
 	{

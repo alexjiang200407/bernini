@@ -78,7 +78,6 @@ namespace bgl
 		m_Descs.push_back(BucketDesc{ geom, material, layer });
 		m_TransparentFlags[bucket] = layer == LayerType::kBlend ? 1u : 0u;
 		m_Ids.emplace(key, bucket);
-		++m_Version;
 
 		return bucket;
 	}

@@ -33,7 +33,7 @@
 
 // Drives the whole counting sort -- histogram, scan, compaction -- through a real FrameGraph, with
 // the same pass declarations CompactInstancesPass makes, and checks every instance landed inside its
-// own PSO bucket.
+// own bucket.
 //
 // The scan and the compaction both declare bucketPrefixSum as a UAV, so the graph sees no state change
 // between them. It must still barrier: the compaction reads the bases the scan writes, and without
@@ -41,7 +41,7 @@
 // bucket whose base is non-zero can detect that -- a lone bucket's base is the sum of empty buckets
 // before it, which is 0 either way -- so the instances below span three buckets.
 TEST_CASE(
-	"Compact instances: every instance lands in its own PSO bucket exactly once",
+	"Compact instances: every instance lands in its own bucket exactly once",
 	"[compute][compact]")
 {
 	auto opts                     = bgl::GraphicsOptions();

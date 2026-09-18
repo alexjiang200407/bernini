@@ -111,8 +111,8 @@ writing radiance, not a display value, so its `1.0` reaches the screen as the cu
 unit radiance and not as white.
 
 `sceneColor` alpha marks reliable opaque coverage for TAA: opaque and surviving cutout fragments
-write one; built-in and game-defined hashed fragments write zero. Transparent PSOs keep their
-premultiplied RGB blend but clear destination alpha with zero alpha blend factors. TAA stores
+write one; built-in and game-defined hashed fragments write zero. The shared blend PSO keeps its
+premultiplied RGB blend but clears destination alpha with zero alpha blend factors. TAA stores
 unavailable history depth for uncertain pixels rather than mistaking stochastic coverage or a
 composited surface for an opaque disocclusion. `PostProcess` reads RGB and writes the backbuffer
 opaque; the marker never becomes display transparency.
@@ -400,8 +400,9 @@ nearest ones — a visible artifact, not a memory error. The keys buffer is size
 instance buffer, not off the capacity, so the depth-key pass cannot append past its end no matter how
 many instances turn out to be transparent; only the sort itself is bounded.
 
-* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`, the camera
-  position.
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`,
+  `scene.transparentBucketFlags` (one word per bucket, owned by the view and uploaded from the
+  renderer's `BucketTable` whenever it has grown), the camera position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
   `transparentSort.dispatchArgs` — all owned by the view's `TransparentSortState`, one per view
   rather than per frustum since only a camera sorts transparents, the last two consumed by
@@ -751,7 +752,7 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
   same frame leaves its indirect args seeded to zero groups (nothing draws) — not an error.
 * **The histogram reuses `bucketPrefixSumBuffer` as its output.** The histogram and the scan are the
   same buffer read-modify-written back to back; the intra-pass UAV barrier between them is
-  mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing PSO buckets —
+  mandatory. Dropping it produces wrong prefix sums that surface only in scenes mixing buckets —
   nondeterministic flicker. This is the bug precedent the [Frame Graph](docs/framegraph.md) barrier
   caveat is written from.
 * **A bound framebuffer's colour-attachment count must match the PSO's `rtvFormats` count.** The

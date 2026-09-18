@@ -1,3 +1,4 @@
+import idl.Bucket;
 import idl.Constants;
 import idl.InstanceVisibility;
 import idl.MeshInstance;
@@ -44,7 +45,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    if (gUniforms.transparentFlags[instance.bucket] == 0u)
+    if (instance.bucket >= cMaxBuckets || gUniforms.transparentFlags[instance.bucket] == 0u)
     {
         return;
     }

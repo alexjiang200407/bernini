@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   is the one sanctioned exception to "pass code must not barrier." *Bug precedent:* the
   histogram and prefix-sum dispatches in `CompactInstancesPass` shared one buffer in a single pass
   with no barrier between them; the scan raced the histogram and produced wrong prefix sums —
-  visible only with multiple PSO buckets, as nondeterministic flicker.
+  visible only with multiple buckets, as nondeterministic flicker.
 
 * **Ordering is submission order; the graph adds dependencies and culling, not reordering.** Passes
   execute in `AddPass` order. `Compile` builds a *last-writer* dependency edge (a pass depends on

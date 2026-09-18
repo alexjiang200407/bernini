@@ -34,7 +34,8 @@ namespace bgl
 	 *
 	 * Bucket 0 is always (kStaticMesh, kNull, kOpaque): the fallback a demand past the ceiling
 	 * clamps to -- visibly unlit, never a crash and never silently absent. A refused key is
-	 * reported once.
+	 * reported once. Skinned geometry has no unlit bucket, so a refused skinned key draws through
+	 * the static fallback, unposed.
 	 *
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.
@@ -74,13 +75,6 @@ namespace bgl
 		[[nodiscard]] bool
 		Transparent(uint32_t bucket) const noexcept;
 
-		/** Bumped by every allocation; what a GPU mirror of the flags keys its re-upload on. */
-		[[nodiscard]] uint32_t
-		Version() const noexcept
-		{
-			return m_Version;
-		}
-
 		/**
 		 * One flag per bucket, ceiling-sized: 1 where the bucket is transparent. The upload source
 		 * for the flag buffer TransparentDepthKeys reads.
@@ -97,6 +91,5 @@ namespace bgl
 		std::unordered_map<uint64_t, uint32_t> m_Ids;
 		std::unordered_set<uint64_t>           m_Refused;
 		uint32_t                               m_Ceiling;
-		uint32_t                               m_Version = 0;
 	};
 }

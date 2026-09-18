@@ -206,9 +206,10 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
+		core::SharedRef<BucketTable> m_BucketTable;
+
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
-		core::SharedRef<BucketTable>   m_BucketTable;
 		std::unique_ptr<RenderContext> m_Context;
 
 		// Fixed at construction, before the pipelines that draw them were built.

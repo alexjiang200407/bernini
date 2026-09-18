@@ -308,6 +308,7 @@ namespace bgl
 		}
 
 		m_TransparentSort.Release();
+		m_TransparentBucketFlags.Release();
 		m_CurrentSelectedInstances.Release();
 
 		logger::trace("~SceneView");
@@ -1012,18 +1013,7 @@ namespace bgl
 					MaterialHandle{},
 					geom.geomType);
 
-				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a bucket
-				// past the ceiling, and the sort would skip it regardless. A null slot is
-				// still pushed, because overrides, selection marks and the epoch re-resolve all
-				// address a submesh by its index in this vector.
-				if (instance.bucket != idl::cInvalidBucket)
-				{
-					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
-				}
-				else
-				{
-					meta.submeshInstances.emplace_back();
-				}
+				meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
 
 			SyncInstanceScratch();

@@ -111,18 +111,6 @@ TEST_CASE("an unshaded material has one bucket whatever its layer", "[bucket]")
 	CHECK(table.Count() == 2);
 }
 
-TEST_CASE("the version counts allocations, not lookups", "[bucket]")
-{
-	BucketTable table;
-	const auto  seeded = table.Version();
-
-	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
-	CHECK(table.Version() == seeded + 1);
-
-	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
-	CHECK(table.Version() == seeded + 1);
-}
-
 TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[bucket]")
 {
 	// Ceiling 3: the seed plus two. Small because a real ceiling cannot be filled while
@@ -142,8 +130,7 @@ TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[bucket]")
 	// A key allocated before the ceiling keeps resolving to its own bucket.
 	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kMask) == b);
 
-	// The version did not move for the refusal, so no flag re-upload is provoked.
-	const auto version = table.Version();
+	// Refused again, still unallocated: a refusal never claims a slot.
 	(void)table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
-	CHECK(table.Version() == version);
+	CHECK(table.Count() == 3);
 }

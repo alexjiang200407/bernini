@@ -257,7 +257,7 @@ public extension MaterialData
         return float4(ShadeSurface(input, record.Evaluate(input, isFrontFace), isFrontFace), 0.0);
     }
 
-    // Premultiplied, against the transparent PSOs' SrcBlend = One; see ShadeSurfaceBlended.
+    // Premultiplied, against the shared blend PSO's SrcBlend = One; see ShadeSurfaceBlended.
     public float4 ShadeGameBlended<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
         let record = GameRecord<G>.Load(input.materialOffset);

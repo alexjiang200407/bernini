@@ -273,7 +273,7 @@ namespace bgl
 		// rewrites the same buffer. Both dispatches run back-to-back inside this single
 		// frame-graph pass, so no pass-boundary barrier separates them -- insert an
 		// explicit UAV barrier or the scan races the histogram. The race only corrupts
-		// results with multiple PSO buckets (a lone bucket's base is the prefix sum of
+		// results with multiple buckets (a lone bucket's base is the prefix sum of
 		// prior, empty buckets, which is always 0), which is why it shows up as
 		// flickering only in scenes mixing PSO types.
 		cmdList->Barrier(

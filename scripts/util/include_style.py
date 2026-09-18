@@ -62,7 +62,7 @@ def wanted_quoted(target, repo_root):
     CLAUDE.md draws the line at the directory: a subsystem's `include/` is what it publishes
     and is `<>`, its `src/` is internal and is `""`. Anything that is not our source at all --
     vcpkg, the standard library, and the IDL headers generated under `build/` that this tree
-    already spells `<bgl_common/idl/PsoType.h>` -- is an interface by construction.
+    already spells `<bgl_common/idl/Bucket.h>` -- is an interface by construction.
 
     None means the convention does not reach this header, and the spelling is then left
     exactly as written. `examples/util` is the case that forces it: its headers sit beside

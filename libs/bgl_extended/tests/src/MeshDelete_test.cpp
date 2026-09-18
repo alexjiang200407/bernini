@@ -535,7 +535,7 @@ TEST_CASE(
 		CHECK(instanceShading() == c_Opaque);
 	}
 
-	SECTION("the layer type moves the instance to a different PSO bucket")
+	SECTION("the layer type moves the instance to a different bucket")
 	{
 		// Same material *type*, different layer -- so this only lands in the right bucket if the
 		// resolve keeps the whole MaterialHandle rather than just its buffer index.
@@ -584,7 +584,7 @@ TEST_CASE(
 	auto pbr         = bgl::MaterialHandle();
 	pbr.materialType = bgl::MaterialType::kPBR;
 
-	// A cutout: same material *type*, different layer, so it lands in a different PSO bucket.
+	// A cutout: same material *type*, different layer, so it lands in a different bucket.
 	auto cutout         = bgl::MaterialHandle();
 	cutout.materialType = bgl::MaterialType::kPBR;
 	cutout.layerType    = bgl::LayerType::kMask;
