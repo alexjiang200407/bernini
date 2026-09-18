@@ -174,9 +174,9 @@ namespace bgl
 			m_Context =
 				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
 
-			// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
-			// past this point compiles a shader and the Slang core module can stop occupying a few
-			// hundred megabytes. A later CreatePipeline would silently recreate the session.
+			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
+			// by the first Draw that demands each, and that path drops the sessions again after
+			// every batch. This release covers the start-up build.
 			device->ReleaseSlangSession();
 
 			logger::info("BGL initialized successfully.");
@@ -192,6 +192,12 @@ namespace bgl
 		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager;
+		}
+
+		const RenderContext*
+		GetRenderContext() const noexcept override
+		{
+			return m_Context.get();
 		}
 
 		void

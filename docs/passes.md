@@ -8,10 +8,11 @@ that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
-lands in, and `RenderContext` builds every pass's requests at once across threads (see
-[RHI](docs/rhi.md) § Design Choices). Anything in a pass that reads a built kernel — the
-`BinderNames` check of the cbuffer names it binds — lives in `CheckBindings`, which `RenderContext`
-calls once the batch is built.
+lands in, and `RenderContext` builds each batch's requests at once across threads (see
+[RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-bucket meshlet
+kernels in the first `Draw` whose view demands each bucket. Anything in a pass that reads a built
+kernel — the `BindingNameCheck` of the cbuffer names it binds — lives in `CheckBindings`, which
+`RenderContext` calls after every batch.
 
 **This document is a map, not a mirror.** It captures each pass's role, the resources it reads and
 writes, and the non-obvious contracts — not full signatures. The header at each linked path is the
@@ -505,8 +506,10 @@ repays when this is promoted into the shared depth prepass the roadmap already a
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
-`MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state + mesh-shader source).
+`MeshletKernel` slots, one per `PsoType`, configured from the `c_Psos` table (pixel-shader module
++ raster/depth/blend state + mesh-shader source) — each built by the first `Draw` whose view
+demands the bucket (`RenderContext::EnsureBucketPipelinesExist`), and skipped while unbuilt, which by
+construction is only while no instance can be in it.
 
 Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,
 which blends the bind-pose vertex bytes by a pose — the bone palette `Pose Skinned` wrote this
@@ -520,9 +523,9 @@ and calls whichever of the two an instance's `MeshInstance` names — see the tr
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`, and
-`GameSlot0..3` with their `_AlphaTest` and `_HashedAlpha` variants), and is chosen by layer alone —
-every tier draws every layer, so the buckets are the (tier × layer) product with the loose material
-type static-only.
+`GameSlot0..3` with their `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material kind and layer —
+every tier draws every layer, so the buckets are the (tier × layer × material kind) product, with
+the loose material type static-only.
 A game slot has seven rows: an opaque, an alpha-test and a hashed row per tier, and one bucket in the
 shared transparent pipeline that both tiers use — the blended pipeline's geometry stage is `AnyMesh`,
 which branches tier per instance, so a second blended row would name the same pipeline. All seven

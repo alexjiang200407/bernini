@@ -4,7 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPass.h"
 #include "passes/SceneBindings.h"
@@ -134,12 +134,14 @@ namespace bgl
 		}
 	}
 
-	void
-	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines)
+	namespace
 	{
-		gassert(device != nullptr, "Device must be initialized");
-
-		const auto makeDesc = [device](const std::string_view pixelSrc, const RasterCullMode cull) {
+		MeshletPipelineDesc
+		DepthPipelineDesc(
+			IDevice*               device,
+			const std::string_view pixelSrc,
+			const RasterCullMode   cull)
+		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
 			pipelineDesc.ampShader   = device->CreateShader(std::string(c_GeomSrc), "ASMain");
@@ -164,19 +166,45 @@ namespace bgl
 				RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 			return pipelineDesc;
-		};
+		}
+	}
+
+	void
+	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines)
+	{
+		gassert(device != nullptr, "Device must be initialized");
 
 		// Opaque depth does not depend on the material, so the opaque rows share a depth-only pixel
 		// stage and differ only in where back faces are culled.
-		pipelines.Add(m_HardwareCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kBack));
-		pipelines.Add(m_MaterialCullKernel, makeDesc(c_PixelSrc, RasterCullMode::kNone));
+		pipelines.Add(
+			m_HardwareCullKernel,
+			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kBack));
+		pipelines.Add(
+			m_MaterialCullKernel,
+			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kNone));
+	}
 
-		const auto buckets = StaticCoverageBuckets();
-		for (size_t i = 0; i < buckets.size(); ++i)
+	void
+	StaticDepthPass::AddBucketKernels(
+		IDevice*          device,
+		PipelineBatch&    pipelines,
+		const BucketMask& buckets)
+	{
+		gassert(device != nullptr, "Device must be initialized");
+
+		const auto coverageBuckets = StaticCoverageBuckets();
+		for (size_t i = 0; i < coverageBuckets.size(); ++i)
 		{
-			pipelines.Add(
-				m_CoverageKernels[i],
-				makeDesc(buckets[i].pixelSrc, ForwardPass::PsoCullMode(buckets[i].pso)));
+			if (buckets.test(coverageBuckets[i].pso) &&
+			    !m_CoverageKernels[i].pipeline.IsInitialized())
+			{
+				pipelines.Add(
+					m_CoverageKernels[i],
+					DepthPipelineDesc(
+						device,
+						coverageBuckets[i].pixelSrc,
+						ForwardPass::PsoCullMode(coverageBuckets[i].pso)));
+			}
 		}
 	}
 
@@ -188,7 +216,7 @@ namespace bgl
 			                                                 &m_MaterialCullKernel };
 		for (const MeshletKernel* kernel : opaque)
 		{
-			BinderNames("StaticDepthPass"sv, { kernel, 1 })
+			BindingNameCheck("StaticDepthPass"sv, { kernel, 1 })
 				.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 				.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 				.Check("expansionData"sv, c_ExpansionDataFields)
@@ -196,7 +224,16 @@ namespace bgl
 				.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers));
 		}
 
-		BinderNames("StaticDepthPass"sv, { m_CoverageKernels.data(), m_CoverageKernels.size() })
+		// The coverage family is demand-built; nothing to read names off until a first bucket is,
+		// and EnsureBucketPipelinesExist re-checks after every build.
+		if (!AnyInitialized(m_CoverageKernels))
+		{
+			return;
+		}
+
+		BindingNameCheck(
+			"StaticDepthPass"sv,
+			{ m_CoverageKernels.data(), m_CoverageKernels.size() })
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
@@ -334,6 +371,12 @@ namespace bgl
 		const auto buckets = StaticCoverageBuckets();
 		for (size_t i = 0; i < buckets.size(); ++i)
 		{
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances.
+			if (!m_CoverageKernels[i].pipeline.IsInitialized())
+			{
+				continue;
+			}
+
 			BindKernel(m_CoverageKernels[i], draw, resources);
 			dispatch(m_CoverageKernels[i], buckets[i].pso);
 		}

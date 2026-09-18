@@ -165,7 +165,7 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
   typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `BinderNames` ([BinderNames.h](libs/bgl_extended/src/passes/BinderNames.h)) is what every pass
+  is built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl_extended/src/passes/BindingNameCheck.h)) is what every pass
   checks its cbuffers through from `Init`, and `SetIfValid` is the per-draw guard it licenses. A
   binder never validated this way has no protection against a shader rename.
 

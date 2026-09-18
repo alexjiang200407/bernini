@@ -1,8 +1,10 @@
 #pragma once
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
+#include <algorithm>
 #include <core/ref/SharedRef.h>
 #include <core/str/str.h>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -61,4 +63,12 @@ namespace bgl
 			uniforms.clear();
 		}
 	};
+
+	[[nodiscard]] inline bool
+	AnyInitialized(std::span<const MeshletKernel> kernels) noexcept
+	{
+		return std::ranges::any_of(kernels, [](const MeshletKernel& kernel) {
+			return kernel.pipeline.IsInitialized();
+		});
+	}
 }
