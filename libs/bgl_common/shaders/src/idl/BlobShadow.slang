@@ -1,11 +1,18 @@
-// One entry of a view's blob-shadow list: the placement shadowed, and the disc it casts on the
-// ground plane. Dense and CPU-authored like the pose list -- the forward pass dispatches one
-// group per entry.
+// One entry of a view's blob-shadow list: one disc, either the placement's own or one foot's, and
+// how it falls. Dense and CPU-authored like the pose list -- the forward pass dispatches one group
+// per entry.
 public struct BlobShadow
 {
     public uint mesh;
     public float radius;
     public float intensity;
     public float fadeHeight;
-    public float casterLift;
+
+    // The body disc's BlobShadowDesc::casterLift, or a foot's FootShadowDesc::maxReceiverRise: the
+    // two meet the same problem differently, see programs.forward.BlobShadow.
+    public float lift;
+
+    // Where the foot's heel sits in the palette arena, world space, with its ball in the next float4;
+    // the pose pass writes both. cBodyDisc on the placement's own disc.
+    public uint sole;
 };

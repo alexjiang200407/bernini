@@ -441,11 +441,18 @@ flowchart TD
   receiver, darkening the surface it sits on at full strength. A caster whose origin sits on the
   ground casts from ground level, so everything growing around it is above the cast point and takes
   nothing; `BlobShadowDesc::casterLift` raises that point above the clutter, and the disc fades
-  over it instead of cutting on and off at every silhouette. Setting or clearing one bumps the
+  over it instead of cutting on and off at every silhouette. `BlobShadowDesc::feet` adds a shadow
+  under each foot of a hero whose rig authored legs: a capsule lying on the sole from heel to ball,
+  cast straight down from the pose the frame draws and fading with that foot's own height, so a
+  planted foot is dark and a lifted one fades out (`FootShadowDesc`). Its `maxReceiverRise` lets a
+  receiver sit that far above the sole without moving where the fade is measured from — a planted
+  sole is exactly at street level. The body disc stays alongside; an `intensity` of zero drops it
+  and leaves the feet. Setting or clearing one bumps the
   temporal epoch — a decal appearing is a rebind, not motion — and `DeleteMeshInstance` takes the
   shadow with the placement. @throws on an invalid handle, a non-positive or non-finite `radius`
-  or `fadeHeight`, or an `intensity` outside `[0, 1]`; `Get` returns empty for a placement
-  carrying none.
+  or `fadeHeight`, or an `intensity` outside `[0, 1]` — the same bounds on `feet` — and on `feet`
+  wherever `HasFootIK` is false: a crowd instance has no pose of its own to find a foot in, so it
+  draws the body disc alone. `Get` returns empty for a placement carrying none.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.

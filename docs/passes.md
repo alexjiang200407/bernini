@@ -429,7 +429,11 @@ hierarchy array and so no ceiling on a rig's bone count; the price is that the p
 orders device memory rather than groupshared.
 
 It runs **twice per instance in one dispatch**, at `time` and at `prevTime`, writing two palettes back
-to back from `SkinnedState::palette`. That is how skinned geometry gets a motion vector without a
+to back from `SkinnedState::palette`, and after them, on a rig with legs, each leg's sole as the pose
+at `time` stands it: the heel and the ball, world space, read by the blob phase's foot shadows. The
+soles are written after the plant and before the inverse bind is folded in — the one window a slot
+holds a model transform — and only for `time`, since the decal is colour only and has no motion
+vector to want a previous one. That is how skinned geometry gets a motion vector without a
 history buffer — and it holds because time is the sole input to a pose: a record is rewritten only by
 `ISceneView::SetSkinnedPlayback`, and a rewrite that leaves the record's value at `prevTime` what the
 old one gave reprojects exactly. A rewrite that does not — a slot dropped rather than ramped down —
@@ -444,7 +448,7 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   records sharing it), `scene.meshInstanceBuffer`, `scene.playbackBuffer`, `scene.rigBuffer`,
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`,
   `scene.skinnedLegBuffer`, `scene.plantWeightBuffer`, `scene.footIKBuffer`.
-* **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
+* **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer`, soles included — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
 * **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
   anim table is not one of them. The dense list is built from instances that own a palette, which is
@@ -543,8 +547,9 @@ colour/velocity/depth framebuffer), and calls
 ([passes/BlobShadowPhase.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPhase.cpp)) — a phase
 ForwardPass owns rather than a pass of its own, because a separate pass cannot interleave between
 two phases sharing one depth attachment — dispatches one mesh-shader group
-per placement carrying a blob shadow (`ISceneView::SetBlobShadow`), off the view's dense
-`scene.blobShadows` list — the pose list's shape. Each group emits a screen-space quad over the
+per disc (`ISceneView::SetBlobShadow`), off the view's dense
+`scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
+`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
 projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
 normal), and the pixel shader reconstructs the static surface under each pixel from the
 [Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
@@ -565,6 +570,15 @@ Receivers are static by construction — units are absent from the receiver text
 never smears across another animal passing beneath. The cost of a static caster is that it is its
 own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
 remains is any upward-facing surface of the caster below its own origin.
+
+A foot's entry casts from its sole rather than from the origin: the heel and the ball, world space,
+which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. The mesh stage reads
+the two once per group — the palette arena is already declared by the pass, for the skinned tables —
+and hands them to the pixel stage, which casts from the point of that segment nearest the receiver
+across the ground, so a heel raised off a planted toe fades while the toe stays dark. Its lift only
+lets a receiver rise that far above the sole; the fade is measured from the sole itself, because a
+planted sole is at street level and a lifted cast point would pre-fade exactly the foot that should
+be darkest.
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted

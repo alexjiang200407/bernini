@@ -41,9 +41,9 @@ namespace bgl
 
 		// Every member Draw writes, kept beside the code that writes them so BinderNames catches
 		// a shader rename at startup.
-		constexpr std::array<std::string_view, 7> c_Fields = {
-			"blobBuffer"sv,  "meshBuffer"sv,   "staticDepth"sv,  "viewProj"sv,
-			"invViewProj"sv, "groundNormal"sv, "viewportRect"sv,
+		constexpr std::array<std::string_view, 8> c_Fields = {
+			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "staticDepth"sv,
+			"viewProj"sv,   "invViewProj"sv, "groundNormal"sv, "viewportRect"sv,
 		};
 	}
 
@@ -103,6 +103,8 @@ namespace bgl
 	void
 	BlobShadowPhase::DeclareResources(PassDesc& desc)
 	{
+		// The palette arena is read too, for the soles; ForwardPass declares it with the skinned
+		// tables, at the stage and access this reads it with.
 		desc.AddBufferArg(
 			BufferArg{ std::string(c_BlobShadowsName),
 		               BarrierSyncFlag::kVertexShader,
@@ -135,6 +137,7 @@ namespace bgl
 
 			uniforms["blobBuffer"] = resources.GetBuffer(c_BlobShadowsName);
 			uniforms["meshBuffer"] = resources.GetBuffer(c_MeshInstanceBufferName);
+			uniforms["palettes"]   = resources.GetBuffer(c_BonePaletteName);
 			uniforms["staticDepth"].SetIfValid(draw.targets.staticDepthSrv);
 			uniforms["viewProj"]    = draw.viewState.viewProj;
 			uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);

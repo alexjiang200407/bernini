@@ -704,6 +704,15 @@ animation's, terrain and all, which is what a unit standing on something the gro
 describe asks for — and its rotation weight the turn. The two outer gates are whole: a rig without
 legs and a scene with planting off run no solve at all.
 
+**The same soles ground a foot's shadow.** A hero whose rig authored legs owns one more stretch of
+its palette slice, after the two poses: each leg's heel and ball, world space, as the pose at `time`
+stands them. `PoseSkinned` writes them in the model-space window, after the plant and whether or not
+the scene plants at all, measured by the same `HeelAndBall` the plant measures its contact with — so
+the shadow `BlobShadowDesc::feet` casts lies under the foot the frame draws, whatever put it there.
+Only the hero tier has them, for the reason only the hero tier plants: a crowd instance has no pose
+of its own, so `SetBlobShadow` refuses `feet` on one and it keeps its body disc. See
+[Passes](passes.md) § Blob shadows for what the decal does with them.
+
 ### What the cook derives
 
 Two measurements, both derived and neither authored — a plane per foot and a weight per leg per

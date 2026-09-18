@@ -201,11 +201,14 @@ namespace bgl
 		 * surface grows -- see BlobShadowDesc. Only static, upward-facing surfaces receive it: a
 		 * unit never catches a neighbour's shadow, and a wall beside the placement keeps its face.
 		 * Replaces any blob shadow the placement holds. Any placement may carry one; the expected
-		 * consumers are skinned units, which nothing enforces.
+		 * consumers are skinned units, which nothing enforces. `desc.feet` adds a shadow under each
+		 * foot, read from the pose the frame draws -- see FootShadowDesc.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
 		 *         `desc.fadeHeight` is not finite and positive, `desc.intensity` is not
-		 *         finite in [0, 1], or `desc.casterLift` is not finite and non-negative.
+		 *         finite in [0, 1], or `desc.casterLift` is not finite and non-negative; or if
+		 *         `desc.feet` is set on a placement HasFootIK refuses, or holds a field outside
+		 *         the same bounds (`maxReceiverRise` as `casterLift`).
 		 */
 		virtual void
 		SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc) = 0;

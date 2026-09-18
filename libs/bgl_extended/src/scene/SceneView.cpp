@@ -71,6 +71,18 @@ namespace bgl
 			c_MaxLegsPerRig == idl::cMaxLegsPerRig,
 			"FootIKDesc has a slot per leg the IDL lets a rig carry");
 
+		/**
+		 * Where leg `leg`'s sole sits in the palette arena: a hero palette ends with one per leg of
+		 * its rig, which PoseSkinned writes after the two poses and the blob phase reads.
+		 */
+		uint32_t
+		SoleOf(const MeshMeta& meta, uint32_t leg) noexcept
+		{
+			const uint32_t soles =
+				meta.palette.index + meta.palette.count - idl::cFloat4sPerSole * meta.footIK.count;
+			return soles + idl::cFloat4sPerSole * leg;
+		}
+
 		idl::Ramp
 		ToRecord(const WeightRamp& ramp) noexcept
 		{
@@ -700,8 +712,10 @@ namespace bgl
 		const SkinnedPlaybackDesc& desc)
 	{
 		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
-		// lets the mesh shader write a motion vector without a history buffer.
-		const auto palette = m_Palettes.Allocate(idl::cFloat4sPerBone * boneCount * 2);
+		// lets the mesh shader write a motion vector without a history buffer. Then each leg's sole
+		// as the pose at `time` stands it -- see SoleOf.
+		const auto palette = m_Palettes.Allocate(
+			idl::cFloat4sPerBone * boneCount * 2 + idl::cFloat4sPerSole * legCount);
 
 		auto footIK = core::multi_slot_handle();
 		auto record = idl::RawEntry();
@@ -915,6 +929,34 @@ namespace bgl
 		if (!std::isfinite(desc.casterLift) || desc.casterLift < 0.0f)
 		{
 			throw SceneError("BlobShadowDesc::casterLift must be finite and non-negative");
+		}
+
+		if (desc.feet.has_value())
+		{
+			if (!HasFootIK(instance))
+			{
+				throw SceneError(
+					"BlobShadowDesc::feet needs a skinned placement on the per-instance source "
+					"whose "
+					"rig authored legs");
+			}
+			if (!std::isfinite(desc.feet->radius) || desc.feet->radius <= 0.0f)
+			{
+				throw SceneError("FootShadowDesc::radius must be finite and positive");
+			}
+			if (!std::isfinite(desc.feet->intensity) || desc.feet->intensity < 0.0f ||
+			    desc.feet->intensity > 1.0f)
+			{
+				throw SceneError("FootShadowDesc::intensity must be finite and in [0, 1]");
+			}
+			if (!std::isfinite(desc.feet->fadeHeight) || desc.feet->fadeHeight <= 0.0f)
+			{
+				throw SceneError("FootShadowDesc::fadeHeight must be finite and positive");
+			}
+			if (!std::isfinite(desc.feet->maxReceiverRise) || desc.feet->maxReceiverRise < 0.0f)
+			{
+				throw SceneError("FootShadowDesc::maxReceiverRise must be finite and non-negative");
+			}
 		}
 
 		m_MeshBuffer.MetaAt(instance.handle.index).blobShadow = desc;
@@ -1195,12 +1237,33 @@ namespace bgl
 				continue;
 			}
 
-			auto& entry      = list.emplace_back();
-			entry.mesh       = meshIndex;
-			entry.radius     = meta.blobShadow->radius;
-			entry.intensity  = meta.blobShadow->intensity;
-			entry.fadeHeight = meta.blobShadow->fadeHeight;
-			entry.casterLift = meta.blobShadow->casterLift;
+			// A disc of zero intensity darkens nothing, so it costs nothing either: that is how a
+			// caller asks for the feet alone.
+			const BlobShadowDesc& desc = *meta.blobShadow;
+			if (desc.intensity > 0.0f)
+			{
+				auto& entry      = list.emplace_back();
+				entry.mesh       = meshIndex;
+				entry.radius     = desc.radius;
+				entry.intensity  = desc.intensity;
+				entry.fadeHeight = desc.fadeHeight;
+				entry.lift       = desc.casterLift;
+				entry.sole       = idl::cBodyDisc;
+			}
+
+			if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
+			{
+				for (uint32_t leg = 0; leg < meta.footIK.count; ++leg)
+				{
+					auto& entry      = list.emplace_back();
+					entry.mesh       = meshIndex;
+					entry.radius     = desc.feet->radius;
+					entry.intensity  = desc.feet->intensity;
+					entry.fadeHeight = desc.feet->fadeHeight;
+					entry.lift       = desc.feet->maxReceiverRise;
+					entry.sole       = SoleOf(meta, leg);
+				}
+			}
 		}
 
 		m_BlobShadows.Assign(list);
