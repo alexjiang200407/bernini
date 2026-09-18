@@ -1,12 +1,17 @@
 #include "gfx/surface_registry.h"
 
 #include "device/Device.h"
+#include "gfx/DrawBucketTable.h"
+#include "passes/draw_bucket_config.h"
 #include "slang/SlangSessions.h"
 #include "util/util.h"
+#include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
 #include <bgl_common/SurfaceReflection.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <core/log/log.h>
 
 #include <algorithm>
@@ -15,7 +20,9 @@
 #include <filesystem>
 #include <format>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -53,6 +60,92 @@ namespace bgl
 				module,
 				slot,
 				sourceType);
+		}
+
+		// A registered surface's programs, generated rather than shipped because a program has to
+		// name the surface's type. Each is a one-line call into lib/forward/GameSurface.slang, where
+		// the body lives and is validated at build time (programs/forward/GameSurfaceShapes.slang).
+		std::string
+		ColorProgramSource(uint32_t slot, std::string_view program)
+		{
+			return std::format(
+				"import {};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.common;\n\n[shader(\"pixel\")]\n"
+				"ForwardPSOut PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
+				"    return materialData.{}<Slot{}Surface>(input, isFrontFace);\n}}\n",
+				BindingModuleName(slot),
+				program,
+				slot);
+		}
+
+		std::string
+		CoverageProgramSource(uint32_t slot, std::string_view discard)
+		{
+			return std::format(
+				"import {};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.common;\n\n[shader(\"pixel\")]\n"
+				"void PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
+				"    materialData.{}<Slot{}Surface>(input, isFrontFace);\n}}\n",
+				BindingModuleName(slot),
+				discard,
+				slot);
+		}
+
+		// The shared blend program, with one arm per registered surface ahead of the engine's own
+		// kinds; it shadows programs/forward/Transparent.slang, which is this with no arms.
+		std::string
+		TransparentProgramSource(const std::span<const SurfaceType> types)
+		{
+			std::string imports;
+			std::string arms;
+			for (uint32_t slot = 0; slot < types.size(); ++slot)
+			{
+				imports += std::format("import {};\n", BindingModuleName(slot));
+				arms += std::format(
+					"    case {}u:\n        return "
+					"materialData.ShadeGameBlended<Slot{}Surface>(input, "
+					"isFrontFace);\n",
+					static_cast<uint32_t>(types[slot].kind),
+					slot);
+			}
+
+			return std::format(
+				"{}import lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.MaterialShading;\nimport lib.forward.common;\n\n"
+				"[shader(\"pixel\")]\n"
+				"float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : "
+				"SV_Target\n{{\n"
+				"    switch (uint(LoadMaterialKind(input.materialOffset)))\n    {{\n{}"
+				"    default:\n        return materialData.ShadeBlendedEngineKind(input, "
+				"isFrontFace);\n"
+				"    }}\n}}\n",
+				imports,
+				arms);
+		}
+
+		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
+		// program, and the static depth pass's coverage twins. Named by the draw-bucket config, so the
+		// names generated here are the names the passes build.
+		std::vector<SlangSourceModule>
+		SurfacePrograms(uint32_t slot, MaterialType kind)
+		{
+			const auto colour = [kind](LayerType layer) {
+				return DrawBucketPixelSrc(DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
+			};
+			const auto coverage = [kind](LayerType layer) {
+				return DrawBucketCoveragePixelSrc(
+					DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
+			};
+
+			return {
+				{ colour(LayerType::kOpaque), ColorProgramSource(slot, "GameOpaqueProgram") },
+				{ colour(LayerType::kMask), ColorProgramSource(slot, "GameAlphaTestedProgram") },
+				{ colour(LayerType::kHashed), ColorProgramSource(slot, "GameHashedAlphaProgram") },
+				{ coverage(LayerType::kMask),
+				  CoverageProgramSource(slot, "DiscardUncoveredGameAlphaTested") },
+				{ coverage(LayerType::kHashed),
+				  CoverageProgramSource(slot, "DiscardUncoveredGameHashedAlpha") },
+			};
 		}
 
 		std::vector<std::filesystem::path>
@@ -120,14 +213,16 @@ namespace bgl
 				continue;
 			}
 
-			if (types.size() == cGameSlots)
+			// Every surface needs at least one draw bucket of its own and bucket 0 is the unlit
+			// fallback, so past this not even one draw of the surface could be allocated.
+			if (types.size() == idl::cMaxDrawBuckets - 1)
 			{
 				throw ApiError(
 					std::format(
-						"surfaceShaderDir '{}' holds more surfaces than the {} slots the engine "
-						"reserves; '{}' is past the last",
+						"surfaceShaderDir '{}' holds more surfaces than the {} draw buckets the "
+						"renderer can allocate; '{}' is past the last",
 						dir.generic_string(),
-						cGameSlots,
+						idl::cMaxDrawBuckets,
 						stem));
 			}
 
@@ -144,7 +239,18 @@ namespace bgl
 				{ BindingModuleName(slot),
 			      BindingModuleSource(slot, types[slot].name, sourceTypes[slot]) });
 
+			for (const SlangSourceModule& program : SurfacePrograms(slot, types[slot].kind))
+			{
+				device.AddSourceModule(program);
+			}
+
 			logger::info("surface '{}' registered into game slot {}", types[slot].name, slot);
+		}
+
+		if (!types.empty())
+		{
+			device.AddSourceModule(
+				{ "programs.forward.Transparent", TransparentProgramSource(types) });
 		}
 
 		return types;

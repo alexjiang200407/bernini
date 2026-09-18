@@ -109,12 +109,6 @@ namespace bgl
 		return info;
 	}
 
-	// The enum ends where the slots end: kCount is a literal in the IDL, so this is what holds it to
-	// the slot count.
-	static_assert(
-		static_cast<uint32_t>(MaterialType::kGameStart) + cGameSlots ==
-		static_cast<uint32_t>(MaterialType::kCount));
-
 	// 1024 is a compute thread group's maximum; PrefixSumInstances.slang is one group.
 	static_assert(idl::cMaxDrawBuckets <= 1024);
 
@@ -123,7 +117,7 @@ namespace bgl
 	{
 		const auto kind  = static_cast<uint32_t>(material);
 		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
-		if (kind < start || kind >= static_cast<uint32_t>(MaterialType::kCount))
+		if (material == MaterialType::kInvalid || kind < start)
 			return std::nullopt;
 		return kind - start;
 	}
@@ -131,7 +125,6 @@ namespace bgl
 	MaterialType
 	GameSlotKind(uint32_t slot) noexcept
 	{
-		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
 		return static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + slot);
 	}
 

@@ -18,7 +18,7 @@ namespace bgl
 	 * A module given as text rather than found on a search path. Loaded into every session under
 	 * `name` before anything else compiles, so an `import` of that name resolves to it, and a file
 	 * of the same name on a search path is shadowed. `name` is spelled as an import spells it --
-	 * `game.slot0` -- and never as a path.
+	 * `game.slot0`, `programs.forward.GameSlot0` -- and never as a path.
 	 */
 	struct SlangSourceModule
 	{

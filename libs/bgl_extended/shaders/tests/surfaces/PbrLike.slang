@@ -3,7 +3,7 @@ import bgl.PbrSurface;
 import bgl.SurfaceSource;
 
 // A surface that fills PbrSurface exactly as the engine's own PBR record does, so a scene drawn
-// through a reserved game slot lands on the engine's answer for that scene and not near it. The
+// through a game surface's programs lands on the engine's answer for that scene and not near it. The
 // gate for the whole contract: if the two disagree, the seam between them is wrong.
 struct PbrLikeParams
 {

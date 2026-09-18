@@ -30,7 +30,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <format>
+#include <fstream>
+#include <string>
 #include <utility>
+#include <vector>
 
 using namespace bgl;
 
@@ -243,6 +247,162 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 		bgl::test::MatchesGolden(
 			"assets/golden/surface_rim.exp.png",
 			"assets/golden/surface_rim.got.png"));
+}
+
+namespace
+{
+	// One flat, emissive surface: black base, so what lands on screen is the emissive colour and
+	// nothing the environment reflects could be mistaken for it. Every one declares the same struct
+	// name, so the programs generated for them must keep each surface behind its own slot rather
+	// than import the six side by side.
+	std::string
+	EmissiveSurface(const glm::vec3 colour)
+	{
+		return std::format(
+			"import bgl.MaterialReader;\nimport bgl.PbrSurface;\nimport bgl.SurfaceSource;\n\n"
+			"struct FlatParams {{ float unused; }};\n\n"
+			"struct FlatSurface : ISurfaceSource\n{{\n"
+			"    typealias MaterialParams = FlatParams;\n"
+			"    static float Coverage<R : IMaterialReader>(R reader, FlatParams params) {{ return "
+			"1.0; }}\n"
+			"    static PbrSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)\n    "
+			"{{\n"
+			"        PbrSurface surface = PbrSurface();\n"
+			"        surface.baseColor = float4(0.0, 0.0, 0.0, 1.0);\n"
+			"        surface.orm = float3(1.0, 1.0, 0.0);\n"
+			"        surface.emissive = float3({}, {}, {});\n"
+			"        return surface;\n    }}\n}};\n",
+			colour.r,
+			colour.g,
+			colour.b);
+	}
+}
+
+// More surfaces than the engine once reserved, all drawing in one frame: each through its own
+// generated colour program (top row) and every one through the one generated blend program (bottom
+// row). The blend row is the case the old four-arm switch got silently wrong -- it sent any kind past
+// the fourth to the fourth surface -- so every sphere is checked for its own surface's colour.
+TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]")
+{
+	const std::filesystem::path dir =
+		std::filesystem::temp_directory_path() / "bernini_surfaces_six_draw";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	// Saturated, far apart, and dim enough that the tonemap keeps them saturated: the check is which
+	// channels dominate, not a tolerance on a value the tonemap has had its way with.
+	const std::array<glm::vec3, 6> colours = { {
+		{ 0.5f, 0.0f, 0.0f },
+		{ 0.0f, 0.5f, 0.0f },
+		{ 0.0f, 0.0f, 0.5f },
+		{ 0.5f, 0.5f, 0.0f },
+		{ 0.0f, 0.5f, 0.5f },
+		{ 0.5f, 0.0f, 0.5f },
+	} };
+
+	for (size_t i = 0; i < colours.size(); ++i)
+	{
+		std::ofstream out(dir / std::format("Flat{}.slang", i), std::ios::binary | std::ios::trunc);
+		REQUIRE(out.is_open());
+		out << EmissiveSurface(colours[i]);
+	}
+
+	auto opts             = SurfaceOptions();
+	opts.surfaceShaderDir = dir;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+	REQUIRE(gfx->GetSurfaceTypes().size() == colours.size());
+
+	constexpr uint32_t c_Width  = 400;
+	constexpr uint32_t c_Height = 300;
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                    = SphereScene();
+	sceneDesc.initialGeom             = 16;
+	sceneDesc.initialSubmeshes        = 16;
+	sceneDesc.initialSurfaceMaterials = 16;
+	auto scene                        = gfx->CreateScene(sceneDesc);
+	auto view                         = gfx->CreateSceneView(scene, 16);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const bgl::Camera camera = SphereCamera();
+
+	struct Sphere
+	{
+		glm::vec3 centre;
+		size_t    surface;
+	};
+	std::vector<Sphere> spheres;
+
+	for (size_t i = 0; i < colours.size(); ++i)
+	{
+		const std::string name = std::format("Flat{}", i);
+		const float       x    = -12.5f + 5.0f * static_cast<float>(i);
+
+		const auto opaque = scene->CreateSurfaceMaterial({ .surface = name });
+		const auto blend  = scene->CreateSurfaceMaterial(
+			{ .surface = name, .layerType = LayerType::kBlend, .doubleSided = false });
+
+		for (const auto& [material, y] : { std::pair{ opaque, 4.0f }, std::pair{ blend, -4.0f } })
+		{
+			const glm::vec3 centre(x, y, 0.0f);
+			const auto      geom = scene->AddSphereGeom(16, 16, 1.8f, material);
+			view->CreateStaticMeshInstance(geom, glm::translate(glm::mat4(1.0f), centre));
+			spheres.push_back({ centre, i });
+		}
+	}
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
+
+	const assetlib::ImageData image = gfx->ScreenshotToMemory(target);
+	REQUIRE(image.width == c_Width);
+	REQUIRE(image.height == c_Height);
+
+	const auto* pixels = reinterpret_cast<const uint8_t*>(image.pixels.data());
+	for (const Sphere& sphere : spheres)
+	{
+		const glm::vec4 clip = camera.GetViewProjection() * glm::vec4(sphere.centre, 1.0f);
+		const auto      px   = static_cast<uint32_t>((clip.x / clip.w * 0.5f + 0.5f) * c_Width);
+		const auto      py   = static_cast<uint32_t>((0.5f - clip.y / clip.w * 0.5f) * c_Height);
+		REQUIRE(px < c_Width);
+		REQUIRE(py < c_Height);
+
+		const uint8_t*   rgba = pixels + (static_cast<size_t>(py) * c_Width + px) * 4;
+		const glm::vec3  lit(rgba[0], rgba[1], rgba[2]);
+		const glm::vec3& want = colours[sphere.surface];
+
+		INFO(
+			"surface " << sphere.surface << (sphere.centre.y > 0.0f ? " opaque" : " blend")
+					   << " at (" << px << ", " << py << ") reads " << lit.r << ", " << lit.g
+					   << ", " << lit.b);
+
+		// Every channel the surface emits must stand clear of every one it does not.
+		for (int litChannel = 0; litChannel < 3; ++litChannel)
+		{
+			for (int darkChannel = 0; darkChannel < 3; ++darkChannel)
+			{
+				if (want[litChannel] > 0.0f && want[darkChannel] == 0.0f)
+				{
+					CHECK(lit[litChannel] > lit[darkChannel] + 60.0f);
+				}
+			}
+		}
+	}
+
+	std::filesystem::remove_all(dir);
 }
 
 // What a material can get wrong about a surface it does not own: every name it writes was declared

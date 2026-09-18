@@ -5,12 +5,8 @@ public enum MaterialType : uint32_t
     kAssert,                 // debug: pixel shader raises a GPU assertion (dbg_raise). No-op in Release.
     kPBR,
     kLoosePbr, // unbaked, per-channel PBR material (editor / channel-viz); bakes to kPBR.
-    // The reserved game surface slots, one kind each from here: a surface registered into slot N
-    // tags its records kGameStart + N, and the slot's rows draw it. A slot nothing filled draws
-    // the null surface. cGameSlots of them, so kCount is the literal the C++ side asserts.
+    // The game surfaces, one kind each from here and unbounded: the surface registered Nth tags its
+    // records kGameStart + N. Any kind at or past this is a surface's.
     kGameStart,
-    kCount = 8,
 }
 ;
-
-public static const uint32_t cGameSlots = 4;

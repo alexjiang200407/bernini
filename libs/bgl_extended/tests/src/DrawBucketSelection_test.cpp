@@ -31,6 +31,10 @@ namespace
 		return handle;
 	}
 
+	// Game kinds are unbounded, so the cases walk well past the four slots the engine once
+	// reserved; nothing here may assume a surface count.
+	constexpr uint32_t c_Surfaces = 6;
+
 	constexpr std::array<bgl::LayerType, 4> c_Layers = { {
 		bgl::LayerType::kOpaque,
 		bgl::LayerType::kMask,
@@ -76,8 +80,9 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 	// Every key a door admits: each tier's every layer of every kind it accepts. kNull and kAssert
 	// collapse to their opaque bucket (DrawBucketTable_test), so they are resolved once, opaque.
 	std::set<uint32_t> seen;
-	uint32_t           keys = 0;
-	for (uint32_t kind = 0; kind < static_cast<uint32_t>(bgl::MaterialType::kCount); ++kind)
+	uint32_t           keys  = 0;
+	const uint32_t     kinds = static_cast<uint32_t>(bgl::MaterialType::kGameStart) + c_Surfaces;
+	for (uint32_t kind = 0; kind < kinds; ++kind)
 	{
 		const auto material = static_cast<bgl::MaterialType>(kind);
 		const bool unshaded =
@@ -163,14 +168,14 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 	CHECK(bgl::DrawBucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
 }
 
-// Each reserved game slot is its own material kind, so its layers resolve to buckets of their own
-// on both tiers, and draw with the slot's own programs -- never another slot's, never engine PBR's.
+// Each surface's slot is its own material kind, so its layers resolve to buckets of their own on
+// both tiers, and draw with the slot's own programs -- never another slot's, never engine PBR's.
 TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[drawbucket]")
 {
 	using bgl::GeomType;
 	using bgl::LayerType;
 
-	for (uint32_t slot = 0; slot < bgl::cGameSlots; ++slot)
+	for (uint32_t slot = 0; slot < c_Surfaces; ++slot)
 	{
 		INFO("slot " << slot);
 
@@ -203,7 +208,8 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[d
 		}
 	}
 
-	// A kind outside the slots is nobody's slot.
+	// An engine kind, or no kind, is nobody's slot; any kind past kGameStart is one.
 	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kPBR).has_value());
-	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kCount).has_value());
+	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kInvalid).has_value());
+	CHECK(bgl::GameSlot(bgl::GameSlotKind(200)) == 200u);
 }

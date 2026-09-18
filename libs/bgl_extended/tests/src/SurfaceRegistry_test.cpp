@@ -6,6 +6,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl_common/idl/DrawBucket.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -68,9 +69,8 @@ struct FillerSurface : ISurfaceSource
 )";
 }
 
-// The whole registration path, and the only one that proves the binding compiles: every reserved
-// slot's pipelines are built by the constructor this returns from, and slot 0's now instantiate the
-// engine's record on RimSurface rather than on the null surface the tree ships.
+// The whole registration path: each surface is reflected, bound to a slot and given the programs
+// its draw buckets will ask for, in filename order.
 TEST_CASE("A surface directory fills the reserved slots in filename order", "[surface][registry]")
 {
 	auto gfx = bgl::CreateGraphics(SurfaceOptions("./shaders/tests/surfaces"));
@@ -112,6 +112,27 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	CHECK(types[2].params.values[0].name == "tint");
 }
 
+// The engine once reserved four slots and refused a fifth surface by name. A surface's programs are
+// now generated at registration, so the count is bounded only by the draw-bucket ceiling -- six here,
+// each a kind of its own in filename order.
+TEST_CASE("More than four surfaces register, each a kind of its own", "[surface][registry]")
+{
+	const std::filesystem::path dir = FreshDir("bernini_surfaces_six");
+	for (const char* name : { "A", "B", "C", "D", "E", "F" })
+		WriteSurface(dir / (std::string(name) + ".slang"), c_Trivial);
+
+	auto gfx = bgl::CreateGraphics(SurfaceOptions(dir));
+	REQUIRE(gfx != nullptr);
+
+	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
+	REQUIRE(types.size() == 6u);
+	for (uint32_t slot = 0; slot < types.size(); ++slot)
+	{
+		CHECK(types[slot].kind == GameSlotKind(slot));
+	}
+	CHECK(types[5].name == "F");
+}
+
 // Naming no directory is not an error -- it is what every client that has no surfaces does, which
 // is all of them until one is written.
 TEST_CASE("No surface directory registers nothing", "[surface][registry]")
@@ -136,16 +157,19 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 			MessageMatches(ContainsSubstring("is not a directory")));
 	}
 
-	SECTION("a fifth surface")
+	// Every surface needs a draw bucket of its own and bucket 0 is the unlit fallback, so the one
+	// past the ceiling is refused by name rather than clamped into drawing unlit.
+	SECTION("a surface past the draw-bucket ceiling")
 	{
-		const std::filesystem::path dir = FreshDir("bernini_surfaces_five");
-		for (const char* name : { "A", "B", "C", "D", "E" })
-			WriteSurface(dir / (std::string(name) + ".slang"), c_Trivial);
+		const std::filesystem::path dir = FreshDir("bernini_surfaces_ceiling");
+		for (uint32_t i = 0; i < idl::cMaxDrawBuckets; ++i)
+			WriteSurface(dir / std::format("S{:03}.slang", i), c_Trivial);
 
 		CHECK_THROWS_MATCHES(
 			bgl::CreateGraphics(SurfaceOptions(dir)),
 			ApiError,
-			MessageMatches(ContainsSubstring("'E' is past the last")));
+			MessageMatches(ContainsSubstring(
+				std::format("'S{:03}' is past the last", idl::cMaxDrawBuckets - 1))));
 	}
 
 	SECTION("a file that means to be a surface and is not one")

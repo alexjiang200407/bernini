@@ -38,7 +38,6 @@ namespace bgl
 				return "Assert";
 			case MaterialType::kGameStart:
 			case MaterialType::kInvalid:
-			case MaterialType::kCount:
 				break;
 			}
 			gfatal("A draw bucket's material kind has no program stem");

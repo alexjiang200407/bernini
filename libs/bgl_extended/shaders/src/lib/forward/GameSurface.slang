@@ -169,13 +169,10 @@ public struct NullSurfaceParams
     public uint unused;
 };
 
-// What an unfilled slot's pipelines compile against: a flat mid-grey dielectric, fully covering. The
-// tree ships it under every game.slotN, and a registered surface's binding module shadows that file.
-//
-// Not something anything draws. A material only carries slot N's MaterialType if surface N
-// registered -- CreateSurfaceMaterial refuses a name it has no SurfaceType for -- so an unfilled
-// slot's rows have no instances. This exists so the reserved rows link whether the slot is filled
-// or not, and its colour is never on screen.
+// What the build validates the game-surface programs against: a flat mid-grey dielectric, fully
+// covering. A registered surface's programs exist only at runtime (surface_registry.cpp generates
+// them), so programs/forward/GameSurfaceShapes.slang instantiates every shape on this instead, and
+// that is what holds the shapes to DXIL validation. Nothing draws it.
 public struct NullSurface : ISurfaceSource
 {
     public typealias MaterialParams = NullSurfaceParams;
@@ -192,6 +189,33 @@ public struct NullSurface : ISurfaceSource
 
 public extension MaterialData
 {
+    // The colour-pass programs a registered surface draws through, one per layer. Each generated
+    // program (surface_registry.cpp) is a one-line call to one of these, so the bodies live where
+    // the build validates them.
+    public ForwardPSOut GameOpaqueProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGame<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
+    public ForwardPSOut GameAlphaTestedProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGameAlphaTested<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
+    public ForwardPSOut GameHashedAlphaProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGameHashedAlpha<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
     public float4 ShadeGame<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
         let record = GameRecord<G>.Load(input.materialOffset);

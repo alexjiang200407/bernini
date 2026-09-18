@@ -269,8 +269,8 @@ namespace bgl
 
 		/**
 		 * Creates a material drawn by one of the surfaces the client registered, in the same arena as
-		 * CreatePbrMaterial. Its `MaterialType` is the reserved kind that surface was given, which is
-		 * what decides the pipelines it draws through.
+		 * CreatePbrMaterial. Its `MaterialType` is the kind that surface was given at registration,
+		 * which is what decides the pipelines it draws through.
 		 *
 		 * @throws SceneError if no registered surface has that name, if a value or texture names a
 		 *         field the surface does not declare, or if the layer is kHashed and the surface
