@@ -83,6 +83,25 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
+	// Turns bloom on or off for this viewport. Unlike TAA there is no config.json opt-in: the
+	// chain behind it is allocated at the first frame that blooms, so any viewport can turn it on.
+	void
+	SetBloomEnabled(bool enabled);
+
+	// Each sets one bloom knob and keeps the rest, so the Render menu can sweep them
+	// independently while the same scene is watched.
+	void
+	SetBloomIntensity(float intensity);
+
+	void
+	SetBloomThreshold(float threshold);
+
+	void
+	SetBloomSoftKnee(float softKnee);
+
+	void
+	SetBloomScatter(float scatter);
+
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
 	void

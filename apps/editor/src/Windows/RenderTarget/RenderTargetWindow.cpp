@@ -23,6 +23,7 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
@@ -330,6 +331,67 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 		return;
 
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetOutlineEnabled(enabled); });
+}
+
+void
+RenderTargetWindow::SetBloomEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetBloomEnabled(enabled); });
+}
+
+void
+RenderTargetWindow::SetBloomIntensity(float intensity)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] {
+		auto settings      = m_RenderTarget->GetBloomSettings();
+		settings.intensity = intensity;
+		m_RenderTarget->SetBloomSettings(settings);
+	});
+}
+
+void
+RenderTargetWindow::SetBloomThreshold(float threshold)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] {
+		auto settings      = m_RenderTarget->GetBloomSettings();
+		settings.threshold = threshold;
+		m_RenderTarget->SetBloomSettings(settings);
+	});
+}
+
+void
+RenderTargetWindow::SetBloomSoftKnee(float softKnee)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] {
+		auto settings     = m_RenderTarget->GetBloomSettings();
+		settings.softKnee = softKnee;
+		m_RenderTarget->SetBloomSettings(settings);
+	});
+}
+
+void
+RenderTargetWindow::SetBloomScatter(float scatter)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] {
+		auto settings    = m_RenderTarget->GetBloomSettings();
+		settings.scatter = scatter;
+		m_RenderTarget->SetBloomSettings(settings);
+	});
 }
 
 void

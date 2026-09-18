@@ -13,6 +13,7 @@
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
+#include <span>
 #include <vector>
 
 #include "Async/BackgroundTask.h"
@@ -181,6 +182,20 @@ private:
 	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
 	SetUpRenderMenu();
+
+	// The four bloom submenus, one per BloomSettings knob, each swept independently while the
+	// same scene is watched.
+	void
+	SetUpBloomMenus(QMenu* render);
+
+	void
+	SetUpBloomValueMenu(
+		QMenu*                 render,
+		const QString&         title,
+		const QString&         tip,
+		std::span<const float> values,
+		float                  current,
+		void (RenderTargetWindow::*apply)(float));
 
 	void
 	SetUpRenderScaleMenu(QMenu* render);

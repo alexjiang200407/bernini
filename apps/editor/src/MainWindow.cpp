@@ -45,6 +45,7 @@
 #include <assetlib/reimport.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
@@ -73,6 +74,7 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
+#include <span>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
@@ -463,6 +465,19 @@ MainWindow::SetUpRenderMenu()
 			view->SetOutlineEnabled(enabled);
 	});
 
+	auto* bloom = render->addAction("Bloom");
+	bloom->setCheckable(true);
+	bloom->setChecked(false);
+	bloom->setStatusTip(
+		"Spill the viewports' bright pixels into a glow, ahead of the display curve.");
+
+	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetBloomEnabled(enabled);
+	});
+
+	SetUpBloomMenus(render);
+
 	auto* timing = render->addAction("GPU Pass Timing");
 	timing->setCheckable(true);
 	timing->setChecked(false);
@@ -487,6 +502,77 @@ MainWindow::SetUpRenderMenu()
 	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
+}
+
+void
+MainWindow::SetUpBloomValueMenu(
+	QMenu*                 render,
+	const QString&         title,
+	const QString&         tip,
+	std::span<const float> values,
+	float                  current,
+	void (RenderTargetWindow::*apply)(float))
+{
+	QMenu* menu = render->addMenu(title);
+	menu->setStatusTip(tip);
+
+	auto* group = new QActionGroup(menu);
+	group->setExclusive(true);
+
+	for (const float value : values)
+	{
+		QAction* action = menu->addAction(QString("%1").arg(value));
+		action->setCheckable(true);
+		action->setChecked(qFuzzyCompare(value, current));
+		group->addAction(action);
+
+		connect(action, &QAction::triggered, this, [this, value, apply]() {
+			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+				(view->*apply)(value);
+		});
+	}
+}
+
+void
+MainWindow::SetUpBloomMenus(QMenu* render)
+{
+	// Each list straddles its shipped default, spaced by feel rather than evenly: every knob
+	// scales or gates an addition to the scene, so equal steps read progressively smaller.
+	static constexpr std::array c_Intensities = { 0.01f, 0.04f, 0.1f, 0.25f, 0.5f };
+	static constexpr std::array c_Thresholds  = { 0.0f, 0.5f, 1.0f, 2.0f };
+	static constexpr std::array c_Knees       = { 0.0f, 0.25f, 0.5f, 1.0f };
+	static constexpr std::array c_Scatters    = { 0.3f, 0.5f, 0.7f, 0.9f };
+
+	const auto defaults = bgl::BloomSettings();
+
+	SetUpBloomValueMenu(
+		render,
+		"Bloom Intensity",
+		"The glow's weight in the combine, applied while the scene is watched.",
+		c_Intensities,
+		defaults.intensity,
+		&RenderTargetWindow::SetBloomIntensity);
+	SetUpBloomValueMenu(
+		render,
+		"Bloom Threshold",
+		"The linear radiance where a pixel starts to bloom; 0 blooms everything.",
+		c_Thresholds,
+		defaults.threshold,
+		&RenderTargetWindow::SetBloomThreshold);
+	SetUpBloomValueMenu(
+		render,
+		"Bloom Soft Knee",
+		"How gradually the threshold takes hold, as a share of it; 0 is a hard cut.",
+		c_Knees,
+		defaults.softKnee,
+		&RenderTargetWindow::SetBloomSoftKnee);
+	SetUpBloomValueMenu(
+		render,
+		"Bloom Scatter",
+		"How far the glow spreads: the weight of the coarser level at each upsample.",
+		c_Scatters,
+		defaults.scatter,
+		&RenderTargetWindow::SetBloomScatter);
 }
 
 void
