@@ -2314,7 +2314,7 @@ namespace bgl
 	{
 		// A kind with an arena record can be freed. kNull and kAssert name shading behaviour, not
 		// an entry in a buffer, so there is nothing to release.
-		// A game slot's kind is kGameStart + slot, so the switch below sees only the first.
+		// A surface's kind is kGameStart + its slot, so the switch below sees only the first.
 		const bool gameKind = GameSlot(material.materialType).has_value();
 
 		switch (gameKind ? MaterialType::kGameStart : material.materialType)
@@ -2343,7 +2343,6 @@ namespace bgl
 		case MaterialType::kInvalid:
 		case MaterialType::kNull:
 		case MaterialType::kAssert:
-		case MaterialType::kCount:
 			break;
 		}
 

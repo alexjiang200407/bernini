@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bgl_common/SurfaceReflection.h>
+#include <core/str/str.h>
 
 #include <filesystem>
 #include <mutex>
@@ -18,12 +19,15 @@ namespace bgl
 	 * A module given as text rather than found on a search path. Loaded into every session under
 	 * `name` before anything else compiles, so an `import` of that name resolves to it, and a file
 	 * of the same name on a search path is shadowed. `name` is spelled as an import spells it --
-	 * `game.slot0` -- and never as a path.
+	 * `game.slot0`, `programs.forward.GameSlot0` -- and never as a path.
 	 */
 	struct SlangSourceModule
 	{
 		std::string name;
 		std::string source;
+
+		// False for a program nothing imports: loaded on its first LoadModule, not into every session.
+		bool imported = true;
 	};
 
 	/**
@@ -107,6 +111,14 @@ namespace bgl
 		ReflectSurface(std::string_view moduleName, std::string_view surfaceName);
 
 		/**
+		 * The named module in the calling thread's session: a registered module nothing imports is
+		 * loaded from its text on first request, anything else by name as an import would find it.
+		 * Fatal on a diagnostic, like every other load of the engine's own shaders.
+		 */
+		[[nodiscard]] slang::IModule*
+		LoadModule(std::string_view moduleName) noexcept;
+
+		/**
 		 * The calling thread's session, created on first call.
 		 *
 		 * @post the session belongs to the calling thread until ReleaseAll; using it from another
@@ -137,6 +149,9 @@ namespace bgl
 			// A second session on a DXIL target, made only if a surface is reflected: the layout a
 			// record is read at is the scalar one, which this device's own target may not give.
 			Slang::ComPtr<slang::ISession> scalarLayout;
+
+			// The on-demand modules `session` has loaded so far, by name. Owned by the session.
+			core::str::unordered_str_map<slang::IModule*> loadedOnDemand;
 		};
 
 		SlangSessionDesc m_Desc;

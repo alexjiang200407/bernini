@@ -113,8 +113,8 @@ TEST_CASE("an unshaded material has one bucket whatever its layer", "[drawbucket
 
 TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[drawbucket]")
 {
-	// Ceiling 3: the seed plus two. Small because a real ceiling cannot be filled while
-	// MaterialType still caps the distinct keys -- the clamp logic is what is under test.
+	// Ceiling 3: the seed plus two. Small so the clamp is reached in three resolves -- the clamp
+	// logic is what is under test, not the ceiling's value.
 	DrawBucketTable table(3);
 
 	const auto a = table.Resolve(GeomType::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);

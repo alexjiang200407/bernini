@@ -147,8 +147,8 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
-		// The startup project's alone. Surfaces are registered inside CreateGraphics and the
-		// reserved rows are bound to what was there then, so a project with other shaders is opened
+		// The startup project's alone. Surfaces are registered inside CreateGraphics and their
+		// programs are generated from what was there then, so a project with other shaders is opened
 		// by restarting into it -- see RelaunchInsteadOfOpening.
 		if (!startupProject.empty())
 			gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(startupProject);

@@ -15,7 +15,6 @@ libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
   lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
-  game/       slot0..3                               what each reserved game slot binds: the null surface on disk, a registered surface's module loaded from source under the same name
 ```
 
 All three are staged into one `./shaders/src` beside the executable, the contract first and

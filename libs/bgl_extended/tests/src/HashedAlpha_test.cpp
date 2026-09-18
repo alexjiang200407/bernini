@@ -517,9 +517,8 @@ namespace
 		opts.enableDebugLayer         = true;
 		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-		// Only for a surface card: registration is the Graphics constructor's and binds every
-		// reserved slot's pipelines to the directory's surfaces, which a PBR card has no reason to
-		// wait for.
+		// Only for a surface card: registration is the Graphics constructor's and generates every
+		// surface's programs, which a PBR card has no reason to wait for.
 		if (cardMaterial == CardMaterial::kSurface)
 			opts.surfaceShaderDir = "./shaders/tests/surfaces";
 
