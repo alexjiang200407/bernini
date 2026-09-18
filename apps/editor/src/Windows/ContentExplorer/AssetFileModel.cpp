@@ -33,6 +33,7 @@ AssetFileModel::SetTexturePreviews(TexturePreviewCache* previews)
 void
 AssetFileModel::SetDataRoot(const QString& dataRoot)
 {
+	m_DataRoot = dataRoot;
 	m_SourceMeshes.SetDataRoot(dataRoot);
 	m_SourceForSubject.clear();
 }
@@ -76,7 +77,7 @@ AssetFileModel::CacheFor(const QString& path) const
 QString
 AssetFileModel::SubjectOf(const QString& path) const
 {
-	if (!editor::IsImportedSource(path))
+	if (!editor::IsImportedSource(m_DataRoot, path))
 		return path;
 
 	const QString mesh = m_SourceMeshes.Of(path);

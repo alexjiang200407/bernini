@@ -78,6 +78,10 @@ public:
 	QString
 	GetSourceDirectory() const;
 
+	/** Where the source itself is copied, with the `.bimport` describing it beside it. */
+	QString
+	GetImportedSourceDirectory() const;
+
 private:
 	QCheckBox* m_ImportSky         = nullptr;
 	QCheckBox* m_ImportLighting    = nullptr;
@@ -86,5 +90,6 @@ private:
 	QLineEdit* m_SkyDir            = nullptr;
 	QLineEdit* m_LightingDir       = nullptr;
 	QLineEdit* m_SourceDir         = nullptr;
+	QLineEdit* m_ImportedSourceDir = nullptr;
 	QString    m_DefaultName;
 };

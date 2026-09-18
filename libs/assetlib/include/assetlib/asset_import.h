@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 namespace assetlib
 {
@@ -18,6 +19,24 @@ namespace assetlib
 	 */
 	void
 	requireSelfContainedSource(const std::filesystem::path& source);
+
+	/**
+	 * Whether `key` names a file an import copied into the project: a `.glb` under
+	 * `Authored/Meshes`, or an environment's `.hdr` or float cube `.ktx2` under
+	 * `Authored/EnvSources`.
+	 *
+	 * By the key alone -- nothing is opened, and no document has to be there. The category is half
+	 * the answer and cannot be left out: a `.ktx2` is an ordinary texture everywhere else, and a
+	 * `.glb` in the derived half is a file somebody left there rather than a source this project
+	 * imported.
+	 *
+	 * This is what a file *looks* like, which is the question a view asks of a path it has never
+	 * opened. What an import actually *owns* is the document naming it, and that is what
+	 * `planRename` moves a group by -- so a source dropped in and not yet imported is one of these
+	 * and has no group.
+	 */
+	[[nodiscard]] bool
+	isImportedSourceKey(std::string_view key);
 
 	/**
 	 * @throws std::runtime_error if two submeshes share a name. The name is the import document's

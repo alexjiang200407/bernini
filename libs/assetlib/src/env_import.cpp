@@ -27,6 +27,7 @@
 #include "fs_util.h"
 #include "ref_paths.h"
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/SourceStamp.h>
 
@@ -34,8 +35,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_HdrExtension = ".hdr";
-		constexpr std::string_view c_KtxExtension = ".ktx2";
 
 		/**
 		 * The files an import has brought into being, and the undo for them.
@@ -267,12 +266,12 @@ namespace assetlib
 
 		const std::string extension = extensionOf(desc.source.generic_string());
 		core::throw_runtime_error_if(
-			extension != c_HdrExtension && extension != c_KtxExtension,
+			extension != c_EnvSourceHdrExtension && extension != c_TextureExtension,
 			"AssetStore::ImportEnvironment: '{}' is neither an equirectangular '{}' nor a cube "
 			"'{}'",
 			desc.source.string(),
-			c_HdrExtension,
-			c_KtxExtension);
+			c_EnvSourceHdrExtension,
+			c_TextureExtension);
 
 		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
 		// `.benvl` until they were spent. The float intermediates never reach Save at all.

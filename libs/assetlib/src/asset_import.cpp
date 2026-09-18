@@ -247,6 +247,21 @@ namespace assetlib
 			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
+	bool
+	isImportedSourceKey(std::string_view key)
+	{
+		const std::string normalized = normalizeRef(key);
+		const std::string extension  = extensionOf(normalized);
+
+		if (isUnder(normalized, c_MeshSourcesDirectoryName))
+			return extension == c_ImportedSourceExtension;
+
+		if (isUnder(normalized, c_EnvSourcesDirectoryName))
+			return extension == c_EnvSourceHdrExtension || extension == c_TextureExtension;
+
+		return false;
+	}
+
 	std::vector<std::string>
 	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings)
 	{
