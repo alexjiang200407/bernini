@@ -2,8 +2,6 @@
 
 #include <QCoreApplication>
 #include <QDockWidget>
-#include <QFileDialog>
-#include <QInputDialog>
 #include <QLabel>
 #include <QLocale>
 #include <QMessageBox>
@@ -29,6 +27,8 @@
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/panel_visibility.h"
+#include "util/project_dialogs.h"
+#include "util/recent_projects.h"
 #include "util/surface_relaunch.h"
 #include "util/window_title.h"
 #include <array>
@@ -48,7 +48,6 @@
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <core/glm.h>
-#include <core/platform/util.h>
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
@@ -81,14 +80,14 @@
 #include <vector>
 
 MainWindow::MainWindow(
-	QWidget*                 parent,
+	assetlib::Project        project,
 	std::filesystem::path    configPath,
 	background::ProgressSink startup,
-	std::filesystem::path    project) : QMainWindow(parent), m_StartupProgress(std::move(startup))
+	QWidget*                 parent) : QMainWindow(parent), m_StartupProgress(std::move(startup))
 {
 	try
 	{
-		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath, project);
+		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath, std::move(project));
 	}
 	catch (...)
 	{
@@ -102,7 +101,7 @@ MainWindow::MainWindow(
 }
 
 void
-MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem::path& project)
+MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project project)
 {
 	ZoneScopedN("editor build window");
 
@@ -113,15 +112,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	connect(m_Ui.cleanUnusedTextures, &QAction::triggered, this, &MainWindow::CleanUnusedTextures);
 	connect(m_Ui.exit, &QAction::triggered, this, &QWidget::close);
 
-	std::filesystem::path startupProject = project;
+	m_RecentProjectsFile = editor::RecentProjectsFileBeside(configPath);
+
 	{
 		core::Settings settings(configPath);
 
-		if (startupProject.empty())
-		{
-			startupProject = std::filesystem::path(
-				core::expand_home(settings["startupProject"].GetOrDefault(std::string())));
-		}
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
 
@@ -149,12 +144,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
-		// The startup project's alone. Surfaces are registered inside CreateGraphics and their
-		// programs are generated from what was there then, so a project with other shaders is opened
-		// by restarting into it -- see RelaunchInsteadOfOpening.
-		if (!startupProject.empty())
-			gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(startupProject);
-		m_SurfaceShaderDir = gfxOpts.surfaceShaderDir;
+		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are
+		// generated from what was there then, so a project with other shaders is opened by
+		// restarting into it -- see AskHowToOpen.
+		gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(project.GetProjectFile());
+		m_SurfaceShaderDir       = gfxOpts.surfaceShaderDir;
 
 		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
@@ -451,11 +445,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 
 	SetUpFrameStats();
 
-	// config.json may name a project to open on launch, so working on one does not mean reopening
-	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
-	// absolute path in it reasonable.
-	if (startupProject.empty() || !OpenProjectAt(startupProject))
-		ShowEmptyState();
+	SetActiveProject(std::move(project));
 
 	// Startup is over: a project opened from the menu from here on gets the modal screen, not the
 	// one main() is about to close.
@@ -695,28 +685,21 @@ MainWindow::ReleaseRenderResources() noexcept
 void
 MainWindow::NewProject()
 {
-	const auto name = QInputDialog::getText(this, "New Project", "Project name:").trimmed();
-	if (name.isEmpty())
+	const std::optional<editor::NewProjectRequest> request = editor::AskForNewProject(this);
+	if (!request)
 		return;
-
-	const auto location = QFileDialog::getExistingDirectory(this, "Select Project Location");
-	if (location.isEmpty())
-		return;
-
-	const auto root        = std::filesystem::path(location.toStdWString()) / name.toStdString();
-	const auto projectFile = root / (name.toStdString() + assetlib::Project::c_FileExtension);
 
 	// Asked before Create, so declining writes nothing.
-	const ProjectOpening opening = AskHowToOpen("New Project", projectFile);
+	const ProjectOpening opening = AskHowToOpen("New Project", request->projectFile);
 	if (opening == ProjectOpening::kCancelled)
 		return;
 
 	try
 	{
-		auto project = assetlib::Project::Create(projectFile, name.toStdString());
+		auto project = assetlib::Project::Create(request->projectFile, request->name);
 		if (opening == ProjectOpening::kRestart)
 		{
-			RestartInto(projectFile);
+			RestartInto(request->projectFile);
 			return;
 		}
 
@@ -731,13 +714,10 @@ MainWindow::NewProject()
 void
 MainWindow::OpenProject()
 {
-	const auto filter =
-		QString("Bernini Project (*%1)").arg(QString::fromUtf8(assetlib::Project::c_FileExtension));
-	const auto file = QFileDialog::getOpenFileName(this, "Open Project", QString(), filter);
-	if (file.isEmpty())
+	const std::filesystem::path path = editor::AskForProjectToOpen(this);
+	if (path.empty())
 		return;
 
-	const auto path = std::filesystem::path(file.toStdWString());
 	switch (AskHowToOpen("Open Project", path))
 	{
 	case ProjectOpening::kHere:
@@ -1114,6 +1094,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	ZoneScopedN("editor set active project");
 
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
+	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
@@ -1316,45 +1297,13 @@ MainWindow::SetUpFrameStats()
 }
 
 void
-MainWindow::ShowEmptyState()
-{
-	setWindowTitle(editor::WindowTitle(m_InstanceName, QString()));
-
-	m_MaterialEditorDock->hide();
-	m_AnimationEditorDock->hide();
-	m_BlendSpaceEditorDock->hide();
-	m_ContentExplorerDock->hide();
-
-	m_Ui.save->setEnabled(false);
-	m_Ui.cleanUnusedTextures->setEnabled(false);
-	m_Ui.editMenu->setEnabled(false);
-	m_Ui.windowMenu->setEnabled(false);
-
-	auto* placeholder = new QLabel(
-		"Open a project to get started.\n\nFile ▸ New Project…   or   File ▸ Open Project…",
-		this);
-	placeholder->setObjectName("EmptyStatePlaceholder");
-	placeholder->setAlignment(Qt::AlignCenter);
-	placeholder->setEnabled(false);
-
-	setCentralWidget(placeholder);
-}
-
-void
 MainWindow::ShowProjectState()
 {
-	setCentralWidget(nullptr);
-
 	m_MaterialEditorDock->show();
 	m_AnimationEditorDock->show();
 	m_BlendSpaceEditorDock->show();
 	m_ContentExplorerDock->show();
 	m_MaterialEditorDock->raise();
-
-	m_Ui.save->setEnabled(true);
-	m_Ui.cleanUnusedTextures->setEnabled(true);
-	m_Ui.editMenu->setEnabled(true);
-	m_Ui.windowMenu->setEnabled(true);
 
 	resizeDocks({ m_MaterialEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }

@@ -78,8 +78,8 @@ namespace assetlib
 		/**
 		 * Where the `.bproj` at `projectFile` keeps its data root, without opening it.
 		 *
-		 * For the caller that has a path and no project yet -- the renderer is built before the
-		 * startup project is opened, and it has to be told where that project's shaders are.
+		 * For the caller that has a path and no project yet -- the editor decides whether a project
+		 * can open in this process from its shaders before it creates or opens it.
 		 */
 		[[nodiscard]] static std::filesystem::path
 		DataDirectoryOf(const std::filesystem::path& projectFile)
