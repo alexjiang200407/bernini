@@ -417,16 +417,21 @@ TEST_CASE(
 	CHECK(named.slope.g == Catch::Approx(1.0f));
 	CHECK(named.power.g > 0.0f);
 	CHECK(named.tint == Catch::Approx(100.0f));
-	CHECK(named.contrast == Catch::Approx(bgl::ColorGradeSettings().contrast));
+	CHECK(named.contrast == Catch::Approx(DefaultViewportGrade().contrast));
 
-	// No section is the grade's default: off and neutral.
+	// No section is the editor's default grade, off -- and not bgl's neutral one, or the Render
+	// menu's toggle would switch between two identical images.
 	const auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
 	const auto* animationView = animation->findChild<RenderTargetWindow*>();
 	REQUIRE(animationView != nullptr);
 
 	CHECK_FALSE(animationView->IsColorGradeEnabled());
-	CHECK(animationView->GetColorGradeSettings().saturation == Catch::Approx(1.0f));
+
+	const bgl::ColorGradeSettings unnamed = animationView->GetColorGradeSettings();
+	CHECK(unnamed.saturation == Catch::Approx(DefaultViewportGrade().saturation));
+	CHECK(unnamed.saturation != Catch::Approx(bgl::ColorGradeSettings().saturation));
+	CHECK(unnamed.vignetteIntensity > 0.0f);
 
 	QAction* grade = ActionNamed(window, "Color Grade");
 	REQUIRE(grade != nullptr);

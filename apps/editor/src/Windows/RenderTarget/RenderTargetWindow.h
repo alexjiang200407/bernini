@@ -29,12 +29,26 @@ struct BloomConfig
 	bgl::BloomSettings settings;
 };
 
+// bgl's defaults are the identity, which leaves the Render menu's toggle nothing to show. A viewport
+// whose config.json leaves a key out takes this mild grade's value for it instead: warmer, a touch
+// more saturated and contrasty, darker corners.
+[[nodiscard]] inline bgl::ColorGradeSettings
+DefaultViewportGrade() noexcept
+{
+	auto settings              = bgl::ColorGradeSettings();
+	settings.temperature       = 10.0f;
+	settings.saturation        = 1.15f;
+	settings.contrast          = 1.1f;
+	settings.vignetteIntensity = 0.25f;
+	return settings;
+}
+
 // A viewport's `colorGrade` section of config.json. The Render menu toggles `enabled`, never
 // `settings`.
 struct ColorGradeConfig
 {
-	bool                    enabled = false;
-	bgl::ColorGradeSettings settings;
+	bool                    enabled  = false;
+	bgl::ColorGradeSettings settings = DefaultViewportGrade();
 };
 
 struct RenderTargetWindowDesc
