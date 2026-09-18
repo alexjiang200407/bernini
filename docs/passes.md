@@ -327,8 +327,8 @@ culling, so it fills only where nothing has been drawn.
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl_extended/src/passes/CompactInstancesPass.cpp)
 
-Frustum-culls the view's instances, then draw buckets the survivors by their draw bucket id into contiguous
-ranges and builds the per-draw-bucket indirect dispatch arguments that `Forward` consumes. The ids come
+Frustum-culls the view's instances, then groups the survivors by draw bucket into contiguous ranges
+and builds the per-draw-bucket indirect dispatch arguments that `Forward` consumes. The ids come
 from the renderer's `DrawBucketTable` ([gfx/DrawBucketTable.h](libs/bgl_extended/src/gfx/DrawBucketTable.h)),
 dense from 0 in first-use order; nothing in this chain derives or assumes one. Owns four compute kernels, all
 under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
@@ -344,6 +344,13 @@ under that frustum's scope. The pass reaches them through `DrawData::cullState` 
 the same graph names as before, so N frustums of one view carry identical names without aliasing.
 Its four sub-pass names are keyed on `(drawIdx, cullIdx)`, since pass names are unique graph-wide
 rather than per namespace.
+
+**The ceiling is a policy, not a crash.** A key the table would allocate past `cMaxDrawBuckets` is
+refused with one report per key and resolves to draw bucket 0, the unlit fallback -- visibly wrong,
+never absent and never out of bounds; registration refuses surfaces past the point where all of
+them could draw in one frame. Raising the ceiling is the one constant, up to 1024 (the stride loops
+and the asserts hold at any value), because the scan is a single thread group of `cMaxDrawBuckets`
+threads; past 1024 that scan has to be replaced first.
 
 It adds **four sub-passes**:
 

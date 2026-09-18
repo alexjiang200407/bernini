@@ -112,7 +112,14 @@ ignored. A surface's programs -- its opaque, alpha-test and hashed colour
 programs, the static depth pass's coverage twins, and an arm in the shared blend program -- are
 generated at registration (`src/gfx/surface_registry.cpp`); each is one call into
 `lib/forward/GameSurface.slang`, and `programs/forward/GameSurfaceShapes.slang` instantiates every
-shape on the null surface so the build validates them.
+shape on the null surface so the build validates them. Only the slot bindings load into every Slang
+session; a generated program loads from its text the first time a pipeline names it.
+
+The shared blend program is the one runtime switch on the surface: a program has to name a
+surface's type, and the depth-sorted list draws in one dispatch through one pipeline so it can stay
+in depth order across surfaces. It costs one `ShadeGameBlended` instantiation per registered
+surface, compiled once per surface set and only when something blends. Splitting that draw per
+surface would lose the ordering between two surfaces' blended instances.
 
 ## What it draws on
 
