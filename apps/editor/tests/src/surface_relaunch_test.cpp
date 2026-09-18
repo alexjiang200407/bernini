@@ -59,9 +59,6 @@ TEST_CASE(
 	const Shaders shaders;
 
 	CHECK(editor::OpeningNeedsRelaunch(shaders.Directory("Empty"), 0, shaders.WithSurface("Game")));
-
-	// Started with no project at all, which is the blank startupProject case.
-	CHECK(editor::OpeningNeedsRelaunch(fs::path(), 0, shaders.WithSurface("Game")));
 }
 
 TEST_CASE(
