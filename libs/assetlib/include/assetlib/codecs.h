@@ -47,10 +47,12 @@ namespace assetlib
 	inline constexpr std::string_view c_AvatarExtension = ".bavatar";
 	inline constexpr std::string_view c_BlendExtension  = ".bblend";
 
-	// Not an asset either, and the only source kind an import takes: the file a `.bimport`
-	// describes, copied into the project beside it. `assetTypeFromExtension` does not know it, so a
-	// plan that has to reach one asks by this rather than by type.
+	// Not assets either: the files a `.bimport` describes, copied into the project beside it. A
+	// mesh import takes the first; an environment import takes the second or a float cube `.ktx2`.
+	// `assetTypeFromExtension` knows none of them as a source, so a plan that has to reach one asks
+	// `isImportedSourceKey` rather than by type.
 	inline constexpr std::string_view c_ImportedSourceExtension = ".glb";
+	inline constexpr std::string_view c_EnvSourceHdrExtension   = ".hdr";
 
 	// The archive the others are packed into, rather than an asset: nothing references a `.bpak`,
 	// and assetTypeFromExtension does not know it.

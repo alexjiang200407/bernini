@@ -184,30 +184,35 @@ namespace assetlib
 	}
 
 	SourceRef
-	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
-		const
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, std::string_view key) const
 	{
-		requireSelfContainedSource(source);
-		requireImportedSourceKey(target.source);
+		core::throw_runtime_error_if(
+			!isImportedSourceKey(key),
+			"'{}' is not where an imported source lives, so a re-import would never find it",
+			key);
 
-		const std::filesystem::path copied = ResolveWritePath(target.source);
-		std::filesystem::create_directories(copied.parent_path());
+		const std::filesystem::path copied = ResolveWritePath(key);
 
 		std::error_code ec;
-		std::filesystem::copy_file(
-			source,
-			copied,
-			std::filesystem::copy_options::overwrite_existing,
-			ec);
-		core::throw_runtime_error_if(
-			static_cast<bool>(ec),
-			"cannot copy '{}' to '{}': {}",
-			source.string(),
-			copied.string(),
-			ec.message());
+		if (!std::filesystem::exists(copied, ec) ||
+		    !std::filesystem::equivalent(source, copied, ec))
+		{
+			std::filesystem::create_directories(copied.parent_path());
+			std::filesystem::copy_file(
+				source,
+				copied,
+				std::filesystem::copy_options::overwrite_existing,
+				ec);
+			core::throw_runtime_error_if(
+				static_cast<bool>(ec),
+				"cannot copy '{}' to '{}': {}",
+				source.string(),
+				copied.string(),
+				ec.message());
+		}
 
 		SourceRef ref;
-		ref.key                            = normalizeRef(target.source);
+		ref.key                            = normalizeRef(key);
 		ref.stamp.size                     = std::filesystem::file_size(copied);
 		const std::optional<uint64_t> hash = core::file::hash_file(copied);
 		core::throw_runtime_error_if(
@@ -215,6 +220,17 @@ namespace assetlib
 			"cannot hash '{}' after copying it",
 			copied.string());
 		ref.stamp.hash = *hash;
+		return ref;
+	}
+
+	SourceRef
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+		const
+	{
+		requireSelfContainedSource(source);
+		requireImportedSourceKey(target.source);
+
+		SourceRef ref = CopyImportedSource(source, target.source);
 		ref.parametersHash =
 			importParametersHash(ImportDocumentPath(target.source), target.sampleRate);
 		return ref;
@@ -227,6 +243,7 @@ namespace assetlib
 
 		ImportDocument document =
 			importParameters(ImportDocumentPath(target.source), target.sampleRate);
+		document.source     = target.source;
 		document.textureDir = target.textureDir;
 		document.skeleton   = target.skeleton;
 		document.outputs    = target.outputs;
@@ -244,6 +261,21 @@ namespace assetlib
 		core::file::write_atomic(
 			ImportDocumentPath(target.source),
 			AssetCodec<ImportDocument>::Serialize(document));
+	}
+
+	bool
+	isImportedSourceKey(std::string_view key)
+	{
+		const std::string normalized = normalizeRef(key);
+		const std::string extension  = extensionOf(normalized);
+
+		if (isUnder(normalized, c_MeshSourcesDirectoryName))
+			return extension == c_ImportedSourceExtension;
+
+		if (isUnder(normalized, c_EnvSourcesDirectoryName))
+			return extension == c_EnvSourceHdrExtension || extension == c_TextureExtension;
+
+		return false;
 	}
 
 	std::vector<std::string>
@@ -350,12 +382,17 @@ namespace assetlib
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_ImportDocumentExtension)
 				continue;
 
-			const std::string key       = mountKeyFor(GetDataRoot(), entry.path());
-			const std::string sourceKey = importedSourceKeyFor(key);
+			const std::string key = mountKeyFor(GetDataRoot(), entry.path());
 
 			ReauthoredDocument result{ key, ReauthoredDocument::Outcome::kUnchanged, {} };
 			try
 			{
+				const std::vector<std::byte> bytes =
+					core::file::read_file_bytes(entry.path().string());
+				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
+
+				const std::string sourceKey = importedSourceKeyFor(key, document);
+
 				const auto   claimed   = claims.find(sourceKey);
 				const size_t claimants = claimed == claims.end() ? 0 : claimed->second.size();
 				core::throw_runtime_error_if(
@@ -376,10 +413,6 @@ namespace assetlib
 						sourceKey,
 						unreadable.front());
 				}
-
-				const std::vector<std::byte> bytes =
-					core::file::read_file_bytes(entry.path().string());
-				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 
 				document.bindings =
 					claimants == 0 ?

@@ -136,7 +136,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. The `.banim` also carries what the cook derived off the walk: a posed box per mesh entry, and a plant weight per leg per frame, each self-keyed so a pairing that has changed is measured instead. |
 | `.rml` / `.rcss` / `.ttf` | Not containers — foreign kinds the UI runtime parses. Listed here only because the project stores and packs them. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
-| `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bimport` | One per copied source under `Authored/Meshes/` or `Authored/EnvSources/`: the source it describes, and the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. `source` is recorded rather than derived from the document's own name, so a source kind with more than one extension is still reachable; one written before that field falls back to the `.glb` swap. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name, and how far each named clip plants (`plant`, a weight per clip name; zero takes the clip out, and the `unplanted` list it once was still reads). Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
 | `.bblend` | The blend spaces authored against one clip set: each a named, ordered run of clips with the parameter each plays alone at. Names the `.banim` by a path it stores, so unlike a `.bavatar` it is an ordinary asset — renamed freely, and a rename of the clip set rewrites it (`RefKind::kBlendClips`). Clips are named, never indexed, and resolved where both name tables meet. Its struct is [blend.h](libs/assetlib/include/assetlib/blend.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
@@ -240,13 +240,16 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   the files last, because a move is the step most likely to be refused. A failure writes the
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
-* **`planRename` on an imported source** — a `.glb` and its `.bimport` are one asset under two
-  names, so either spelling plans the same move and `subject` reads back as the document's. What
-  travels with it splits by the same rule the whole data root does. `RenamePlan::source` is the
-  `.glb`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
+* **`planRename` on an imported source** — a source and its `.bimport` are one asset under two
+  names, so either spelling plans the same move and `subject` reads back as the document's. A file
+  is a source when a document records it as one (`RefKind::kImportedSource`), whatever its extension,
+  and it keeps that extension; a rename that would move the document out of `Authored/Meshes` or
+  `Authored/EnvSources` is refused. What travels with it splits by the same rule the whole data root
+  does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
   that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
   containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An output a
+  since the document names the new path either way and `Reimport` writes it there. An environment's
+  float cubes keep their part suffix across the move. An output a
   rename of its own has since taken off the source's stem is left where it is — its name no longer
   says it came from this source — and the document's reference to it is rewritten like any other.
 
@@ -261,7 +264,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   skeleton to rename instead. Only avatars that exist are listed; most rigs have none.
 
   Its edge is derived from its key rather than stored in the document, so it is not a referrer to
-  rewrite — see `isStoredRef`, which is also why a `.bimport`'s edge to its own `.glb` is not one.
+  rewrite — see `isStoredRef`, and it is now the only such edge. A `.bimport`'s edge to its own
+  source *is* stored: the document records `source` because the extension swap that finds one cannot
+  answer for a source kind with more than one extension, so a rename rewrites it like any other
+  reference.
 
   A **directory** rename gets the same treatment one file at a time, because the pair straddles the
   two halves and no single move can carry both ends: renaming a directory of `.bskel`s takes each

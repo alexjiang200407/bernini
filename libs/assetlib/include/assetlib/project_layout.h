@@ -24,9 +24,10 @@ namespace assetlib
 	 * split `CacheEntryCodecFor` draws over the codecs, projected onto the disk -- so a project's
 	 * commit rule is a directory rather than a list of extensions.
 	 *
-	 * `Derived/Sky` and `Derived/EnvLighting` are the exception a project's `.gitignore` has to
-	 * carry: they are cache entries whose bake reads a `.hdr` no project copies in, so nothing puts
-	 * an absent one back. See [Asset Containers](docs/asset_containers.md).
+	 * One exception remains, and it only shrinks: an environment imported before environment
+	 * sources were copied in has no `.bimport`, so nothing puts its `Derived/Sky`,
+	 * `Derived/EnvLighting` or float cubes back until it is re-imported. See
+	 * [Asset Containers](docs/asset_containers.md).
 	 */
 	inline constexpr auto c_AuthoredDirectoryName = "Authored";
 	inline constexpr auto c_DerivedDirectoryName  = "Derived";
@@ -34,6 +35,11 @@ namespace assetlib
 	// The imported .glb sources and their .bimport documents.
 	inline constexpr auto c_MeshSourcesDirectoryName = "Authored/Meshes";
 	inline constexpr auto c_MaterialsDirectoryName   = "Authored/Materials";
+
+	// The imported environment sources -- an equirectangular `.hdr` or a float cube `.ktx2` -- and
+	// their `.bimport` documents. Not a corner of `Authored/Environments`: every operation that
+	// produces a project enumerates one directory per source kind.
+	inline constexpr auto c_EnvSourcesDirectoryName = "Authored/EnvSources";
 
 	inline constexpr auto c_ShadersDirectoryName = "Authored/Shaders";
 
@@ -77,8 +83,9 @@ namespace assetlib
 	 * The halves themselves are not listed: they are the parents of everything here, and
 	 * IsRequiredDirectory reads them from the two constants above.
 	 */
-	inline constexpr std::array<std::string_view, 15> c_RequiredDirectories = { {
+	inline constexpr std::array<std::string_view, 16> c_RequiredDirectories = { {
 		c_MeshSourcesDirectoryName,
+		c_EnvSourcesDirectoryName,
 		c_MaterialsDirectoryName,
 		c_ShadersDirectoryName,
 		c_EnvironmentsDirectoryName,

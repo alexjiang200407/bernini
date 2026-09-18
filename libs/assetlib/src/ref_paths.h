@@ -23,6 +23,20 @@ namespace assetlib
 	[[nodiscard]] std::string
 	extensionOf(std::string_view key);
 
+	/** `key`'s file name without its extension, as a view into `key`. */
+	[[nodiscard]] std::string_view
+	stemOf(std::string_view key);
+
+	/**
+	 * `key` with `extension` in place of its own, directory and stem untouched -- how a file finds
+	 * the one authored beside it, `kirk.glb` -> `kirk.bimport` and back.
+	 *
+	 * @throws std::runtime_error if `key` has no extension, since there would be nothing to swap
+	 *         and the result would silently be a different name rather than the same one.
+	 */
+	[[nodiscard]] std::string
+	swapExtension(std::string_view key, std::string_view extension);
+
 	/**
 	 * `path` as a mount key relative to `dataRoot`: `/`-separated, as every stored reference is.
 	 *

@@ -1,4 +1,5 @@
 #include <assetlib/codecs.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 
@@ -9,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
+#include <assetlib_structs/SourceStamp.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -207,8 +209,102 @@ TEST_CASE("a malformed import document is refused with its reason", "[importdoc]
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
 {
 	CHECK(importDocumentKeyFor("Authored/Meshes/kirk.glb") == "Authored/Meshes/kirk.bimport");
-	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport") == "Authored/Meshes/kirk.glb");
 	CHECK_THROWS(importDocumentKeyFor("Authored/Meshes/no_extension"));
+}
+
+// What a view asks of a path it has never opened. The category is half of it: a `.ktx2` is an
+// ordinary texture everywhere but the environment sources' folder.
+TEST_CASE("an imported source is known by its category and extension", "[importdoc]")
+{
+	CHECK(isImportedSourceKey("Authored/Meshes/kirk.glb"));
+	CHECK(isImportedSourceKey("Authored/Meshes/crew/kirk.GLB"));
+	CHECK(isImportedSourceKey("Authored/EnvSources/forest.hdr"));
+	CHECK(isImportedSourceKey("Authored/EnvSources/outdoor/forest.ktx2"));
+
+	CHECK_FALSE(isImportedSourceKey("Derived/Meshes/kirk.glb"));
+	CHECK_FALSE(isImportedSourceKey("Authored/Meshes/kirk.bimport"));
+	CHECK_FALSE(isImportedSourceKey("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(isImportedSourceKey("Authored/Environments/forest.hdr"));
+	CHECK_FALSE(isImportedSourceKey(""));
+}
+
+// One copy for every import: a mesh's `.glb` and an environment's `.hdr` are stamped by the same
+// call, so only one place decides what a file the project now owns measures as.
+TEST_CASE("an imported source is copied and stamped by its key", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_copyany");
+	WriteText(root.path / "incoming.hdr", "not really a radiance file");
+	const AssetStore store(root.path);
+
+	const SourceRef ref =
+		store.CopyImportedSource(root.path / "incoming.hdr", "Authored/EnvSources/dusk.hdr");
+	CHECK(ref.key == "Authored/EnvSources/dusk.hdr");
+	CHECK(ref.stamp.size == fs::file_size(root.path / "Authored/EnvSources/dusk.hdr"));
+
+	// What keys an import is the importer's to add: a mesh's rate hashes, an environment's
+	// parameters live in its document.
+	CHECK(ref.parametersHash == 0);
+
+	SECTION("a copy onto itself writes nothing, rather than truncating the source first")
+	{
+		const SourceRef again = store.CopyImportedSource(
+			root.path / "Authored/EnvSources/dusk.hdr",
+			"Authored/EnvSources/dusk.hdr");
+		CHECK(again.stamp == ref.stamp);
+	}
+
+	SECTION("a key no import would look in is refused")
+	{
+		CHECK_THROWS_WITH(
+			store.CopyImportedSource(root.path / "incoming.hdr", "Authored/Environments/dusk.hdr"),
+			Catch::Matchers::ContainsSubstring("imported source"));
+	}
+}
+
+TEST_CASE("the document names the source it describes", "[importdoc]")
+{
+	ImportDocument document;
+	document.source = "Authored/Meshes/kirk.glb";
+	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) == document.source);
+
+	// The name is recorded rather than derived, so a source whose extension the swap could never
+	// have guessed is still reachable. This is what a second source kind rests on.
+	document.source = "Authored/EnvSources/forest.hdr";
+	CHECK(
+		importedSourceKeyFor("Authored/EnvSources/forest.bimport", document) ==
+		"Authored/EnvSources/forest.hdr");
+}
+
+// A document written before the field is every document in every project that predates it, so the
+// swap that was the only answer then has to stay the answer for one.
+TEST_CASE("a document with no recorded source falls back to the .glb beside it", "[importdoc]")
+{
+	const ImportDocument document = DocumentFrom("{}");
+	REQUIRE(document.source.empty());
+	CHECK(
+		importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) ==
+		"Authored/Meshes/kirk.glb");
+}
+
+// The source is outside `parameters`: naming the file says nothing about what the importer computes
+// from it, and a document that started keying on its own name would stale every container beside
+// every source anybody ever moved.
+TEST_CASE("naming the source does not move the parameter hash", "[importdoc]")
+{
+	ImportDocument document;
+	const uint64_t unnamed = parametersHashOf(document);
+
+	document.source = "Authored/Meshes/kirk.glb";
+	CHECK(parametersHashOf(document) == unnamed);
+}
+
+// Every `.bimport` on disk today has no `source`, and re-saving one must not rewrite it: a
+// serialized form that changed under a project would show up as a diff in every checkout at once.
+TEST_CASE("a document with no source round-trips byte-identically", "[importdoc]")
+{
+	const std::string before = DocumentText(ImportDocument());
+	CHECK(before.find("\"source\"") == std::string::npos);
+	CHECK(DocumentText(DocumentFrom(before)) == before);
 }
 
 TEST_CASE(
@@ -346,9 +442,8 @@ TEST_CASE("a source placed outside its category is refused", "[importdoc]")
 		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
 }
 
-// The extension is what `importDocumentKeyFor` swaps to reach the document, and what
-// `importedSourceKeyFor` swaps back to reach the source from it -- so a source under another one
-// has a document nothing can pair with it.
+// A mesh import takes one source kind, and `importDocumentKeyFor` swaps that extension to reach the
+// document -- so a source under another one has a document nothing can pair with it.
 TEST_CASE("a source key that is not a .glb is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_extension");
@@ -460,4 +555,130 @@ TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grou
 		twice.clipFloors = { { "Run", 0.0f }, { "Run", 1.0f } };
 		CHECK_THROWS(DocumentText(twice));
 	}
+}
+
+namespace
+{
+	EnvironmentImportParameters
+	DistinctEnvironment()
+	{
+		// Every field distinct, so a key written under the wrong name reads back as a mismatch.
+		return { .skyFaceSize        = 64,
+			     .skyMips            = 5,
+			     .prefilterFaceSize  = 32,
+			     .prefilterMips      = 4,
+			     .prefilterSamples   = 16,
+			     .irradianceFaceSize = 8 };
+	}
+}
+
+TEST_CASE("an environment document round-trips its parameters, canonically", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.source             = "Authored/EnvSources/forest.hdr";
+	document.environment        = DistinctEnvironment();
+	document.envSourceStamp     = SourceStamp{ 21, 22 };
+	document.envSourceBakeToken = 23;
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	CHECK(read == document);
+	CHECK(DocumentText(read) == text);
+}
+
+// The one parameter a mesh import has is meaningless for an environment, and keying on it would make
+// a change to the mesh default re-convolve every environment in every project.
+TEST_CASE("an environment document writes no sample rate", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	CHECK(DocumentText(document).find("sampleRate") == std::string::npos);
+
+	const uint64_t before = parametersHashOf(document);
+	document.sampleRate   = 60.0f;
+	CHECK(parametersHashOf(document) == before);
+}
+
+TEST_CASE("every environment parameter reaches the hash", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	const uint64_t base  = parametersHashOf(document);
+
+	for (uint32_t EnvironmentImportParameters::* field :
+	     { &EnvironmentImportParameters::skyFaceSize,
+	       &EnvironmentImportParameters::skyMips,
+	       &EnvironmentImportParameters::prefilterFaceSize,
+	       &EnvironmentImportParameters::prefilterMips,
+	       &EnvironmentImportParameters::prefilterSamples,
+	       &EnvironmentImportParameters::irradianceFaceSize })
+	{
+		ImportDocument changed = document;
+		++((*changed.environment).*field);
+		CHECK(parametersHashOf(changed) != base);
+	}
+}
+
+// The stamp and the token are the float sources' key, not the importer's input: a re-projection
+// under a new token must not also re-key every container beside it.
+TEST_CASE("the environment source's stamp and token stay out of the hash", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.environment = DistinctEnvironment();
+	const uint64_t base  = parametersHashOf(document);
+
+	document.envSourceStamp     = SourceStamp{ 1, 2 };
+	document.envSourceBakeToken = 3;
+	CHECK(parametersHashOf(document) == base);
+}
+
+// Every `.bimport` in every project today is a mesh's, and none of them may re-key or re-save
+// differently because a second kind learned to exist.
+TEST_CASE("a mesh document carries none of the environment keys", "[importdoc][env]")
+{
+	ImportDocument document;
+	document.sampleRate = 24.0f;
+
+	const std::string text = DocumentText(document);
+	for (const std::string_view key :
+	     { "environment", "envSourceStampSize", "envSourceStampHash", "envSourceBakeToken" })
+		CHECK(text.find(key) == std::string::npos);
+
+	CHECK_FALSE(DocumentFrom(text).environment.has_value());
+}
+
+TEST_CASE("an environment key a reader does not know survives, and keys", "[importdoc][env]")
+{
+	const std::string_view text = R"({
+	"parameters": { "environment": { "skyFaceSize": 64, "denoise": "oidn" } }
+})";
+
+	const ImportDocument document = DocumentFrom(text);
+	REQUIRE(document.environment.has_value());
+	CHECK(document.environment->skyFaceSize == 64);
+	CHECK(document.environment->skyMips == EnvironmentImportParameters().skyMips);
+
+	const std::string rewritten = DocumentText(document);
+	CHECK(rewritten.find("\"denoise\"") != std::string::npos);
+	CHECK(DocumentFrom(rewritten) == document);
+
+	ImportDocument unknowing      = document;
+	unknowing.extraParametersJson = "{}";
+	CHECK(parametersHashOf(unknowing) != parametersHashOf(document));
+}
+
+TEST_CASE("a malformed environment is refused with its reason", "[importdoc][env]")
+{
+	CHECK_THROWS(DocumentFrom(R"({ "parameters": { "environment": 7 } })"));
+	for (const std::string_view value : { "0", "-1", "\"big\"", "1.5", "4294967296" })
+	{
+		INFO(value);
+		CHECK_THROWS_WITH(
+			DocumentFrom(
+				std::string(R"({ "parameters": { "environment": { "skyMips": )") +
+				std::string(value) + " } } }"),
+			Catch::Matchers::ContainsSubstring("skyMips"));
+	}
+	CHECK_THROWS(DocumentFrom(R"({ "envSourceBakeToken": -1 })"));
 }

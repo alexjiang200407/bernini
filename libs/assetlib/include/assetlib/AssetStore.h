@@ -599,8 +599,9 @@ namespace assetlib
 		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
 		 * from. One with only some of them is a reference that has broken, and is reported.
 		 *
-		 * Runs in phases -- the documents, then what the sources say is absent, then the changed
-		 * textures, then the re-save walk -- and each reports its own count, so `onProgress` must
+		 * Runs in phases -- the documents, then the stale environments, then what the sources say
+		 * is absent, then the changed textures, then the re-save walk -- and each reports its own
+		 * count, so `onProgress` must
 		 * take the total from the event rather than the first one it sees. Within a phase the
 		 * files are independent and are cooked across threads; a `.banim` still never re-measures
 		 * against a mesh a later phase would rewrite.
@@ -630,7 +631,9 @@ namespace assetlib
 		 * texture folder being absent or empty.
 		 *
 		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
-		 * meshes on disk, and a mesh names the rig it binds.
+		 * meshes on disk, and a mesh names the rig it binds. Environments, from
+		 * `Authored/EnvSources`, come last and one at a time, each part re-run for only the files it
+		 * is missing: every convolution already uses all the cores there are.
 		 *
 		 * A source that cannot be re-imported is reported and skipped; the rest still run.
 		 *
@@ -688,14 +691,33 @@ namespace assetlib
 		ImportDocumentPath(std::string_view sourceKey) const;
 
 		/**
-		 * Copies the self-contained source to `target.source` and stamps it: the returned reference
-		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
-		 * derived from it *before* saving them. The document itself is written afterwards by
-		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
-		 * deliberately outside the parameter hash.
+		 * Copies an incoming file to `key` and stamps the copy: the returned reference is what the
+		 * caller records on whatever it derives from it. Every import copies its source this way --
+		 * a mesh's `.glb`, an environment's `.hdr` or float cube -- so one place stamps a file the
+		 * project now owns.
 		 *
-		 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
-		 * parameter -- is what the returned reference's parameter hash covers.
+		 * A copy onto itself writes nothing: re-importing from the copy already in the project is
+		 * the recovery path for an environment whose derived files are gone, and `copy_file` would
+		 * truncate the source first.
+		 *
+		 * `parametersHash` is left zero; what keys an import is the importer's to add.
+		 *
+		 * @throws std::runtime_error unless `key` names an imported source -- see
+		 *         `isImportedSourceKey`, which is the category as much as the extension -- and on a
+		 *         copy or hash failure.
+		 */
+		SourceRef
+		CopyImportedSource(const std::filesystem::path& source, std::string_view key) const;
+
+		/**
+		 * The same for a mesh, with what only a mesh import owes: the source must be self-contained,
+		 * and the returned reference carries the parameter hash its containers key on.
+		 *
+		 * The document itself is written afterwards by
+		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
+		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
+		 * deliberately outside the parameter hash. `target.sampleRate` -- the rate clips are
+		 * resampled to at import, the import's one parameter -- is what that hash covers.
 		 *
 		 * @throws what requireSelfContainedSource throws, std::runtime_error if `target.source` is
 		 *         not a `.glb` under `Authored/Meshes/`, and std::runtime_error on a copy failure.
@@ -750,6 +772,13 @@ namespace assetlib
 		 * them, writing the float intermediates into `Derived/SourceTextures/` as the routed
 		 * sources and baking each into `Derived/BakedTextures/`.
 		 *
+		 * The source is copied under `Authored/EnvSources/` and read from the copy, and a
+		 * `.bimport` beside it records the parameters, the copy's stamp and every derived file
+		 * written -- which is what lets `Reimport` produce the family again. Importing only one
+		 * part over an existing document keeps the other part's claim and parameters; that is
+		 * refused when the incoming file is not the one the document was stamped from, since the
+		 * part kept would then describe a different image.
+		 *
 		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
 		 * half-written environment is never left behind. It removes only what it *created*: a file
 		 * that was already there is one this import overwrote rather than made.
@@ -759,9 +788,11 @@ namespace assetlib
 		 * orphan left by a failed import is what FindUnusedBakedTextures sweeps.
 		 *
 		 * @param cancel Polled between the projection, each convolution and each bake.
-		 * @throws std::runtime_error if nothing is selected, if the source cannot be read, or if any
-		 *         directory `desc` names is the wrong half for what would land in it -- checked
-		 *         before the projection, so a misplaced one costs no bake.
+		 * @throws std::runtime_error if nothing is selected, if the source cannot be read or is
+		 *         neither a `.hdr` nor a `.ktx2`, if any directory `desc` names is the wrong half for
+		 *         what would land in it or `importedSourceDir` is outside `Authored/EnvSources`, or
+		 *         on the partial re-import above -- all checked before the projection, so none of
+		 *         them costs a bake.
 		 * @throws Cancelled if `cancel` is signalled.
 		 */
 		[[nodiscard]] EnvImportResult
@@ -775,6 +806,41 @@ namespace assetlib
 		 */
 		[[nodiscard]] std::vector<std::string>
 		EnvironmentImportTargets(const EnvImportDesc& desc) const;
+
+		/**
+		 * Every environment source whose derived files no longer match its import document, as
+		 * mount keys, sorted: the copy re-stamped, `c_EnvSourceBakeToken` moved, or a part's
+		 * parameters edited since that part was written. A stat, a hash and a document read apiece
+		 * -- no convolution -- so it is a question a project can afford to ask as it opens.
+		 *
+		 * An absent source stales nothing. Always empty on a read-only store.
+		 *
+		 * @throws std::runtime_error if an import document under `Authored/EnvSources` will not
+		 *         read, since "nothing to do" would then be a silent wrong answer.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		GetStaleEnvironmentSources() const;
+
+		/**
+		 * Re-cooks the stale parts of `sourceKey`'s environment -- the float cubes and the
+		 * containers baked from them -- and then records, in its import document, the source's
+		 * stamp, the current `c_EnvSourceBakeToken` and each refreshed part's parameters. A part
+		 * that is current is left as it is.
+		 *
+		 * Deliberately not on a load path: a part is minutes of convolution.
+		 *
+		 * @return The files written, sorted; empty when nothing was stale.
+		 * @throws std::runtime_error on a read-only store, a `sourceKey` not in the project, or a
+		 *         document that is absent or will not read -- and what `Reimport` throws for one
+		 *         that names no parameters or claims a file no environment import writes.
+		 * @throws Cancelled if `cancel` is signalled; the document is written last, so a cancelled
+		 *         refresh is still reported stale.
+		 */
+		std::vector<std::string>
+		RefreshEnvironmentSource(
+			std::string_view    sourceKey,
+			const ProgressSink& onProgress = {},
+			const CancelToken&  cancel     = {}) const;
 
 		// --- Describe --------------------------------------------------------------------------
 

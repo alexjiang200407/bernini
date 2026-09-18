@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/ImageData.h>
 #include <cstdint>
@@ -280,23 +281,21 @@ namespace assetlib
 		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
 		std::filesystem::path sourceDir      = c_SourceTexturesDirectoryName;
 
+		// Where `source` itself is copied, with the `.bimport` describing it beside it -- not
+		// `sourceDir`, which holds the float cubes computed *from* it. Must sit under
+		// `Authored/EnvSources`, the environment sources' category; anywhere else is refused. The
+		// import dialog offers a subfolder of it, as it does for each part.
+		std::filesystem::path importedSourceDir = c_EnvSourcesDirectoryName;
+
 		bool sky         = true;  // write the `.bsky`
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair
 		bool environment = true;  // write the `.benv` composing whichever of the two were written
 
-		uint32_t skyFaceSize = 512;
+		EnvironmentImportParameters parameters;
 
-		// Levels in the sky's defocus chain -- see skyChain. The backdrop is always baked sharp at
-		// mip 0; how defocused it is drawn is `skyMipLevel`, which a viewer may overrule.
-		uint32_t skyMips = 6;
-
-		// Which level the written `.benv` document presents. 0 is the sharp projection.
+		// Which level the written `.benv` document presents. 0 is the sharp projection; the sky is
+		// always baked sharp at mip 0 whatever this says.
 		uint32_t skyMipLevel = 0;
-
-		uint32_t prefilterFaceSize  = 256;
-		uint32_t prefilterMips      = 7;  // must match the shader's MAX_REFLECTION_LOD + 1
-		uint32_t prefilterSamples   = 128;
-		uint32_t irradianceFaceSize = 128;
 
 		uint32_t threads = 0;  // 0 means hardware concurrency
 	};
@@ -307,6 +306,9 @@ namespace assetlib
 		std::string sky;  // empty when that output was not requested
 		std::string lighting;
 		std::string environment;
+
+		std::string source;    // the copy of `EnvImportDesc::source` inside the project
+		std::string document;  // the `.bimport` beside it
 
 		/**
 		 * Every file this call brought into being, data-root relative -- not the ones it overwrote,

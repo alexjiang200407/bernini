@@ -36,7 +36,10 @@ disagrees, trust the header, then fix this doc.
   and what lets two environments share one sky. Either half may be empty. `.bsky` and `.benvl` are
   purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
   key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
-  fails loudly on one it cannot.
+  fails loudly on one it cannot, and `Reimport` produces an absent one — float cubes included —
+  from the source and the `.bimport` the import left under `Authored/EnvSources/`. `migrate`
+  re-cooks a part whose document has moved on — a re-exported `.hdr`, an edited parameter — and
+  never a load, which would put minutes of convolution inside it.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.
@@ -91,6 +94,7 @@ disagrees, trust the header, then fix this doc.
 | Header | Role |
 |---|---|
 | [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
+| [env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h) | `EnvironmentImportParameters`, the six numbers an import's pixels follow from, and `c_EnvSourceBakeToken` — apart from `envmap.h` because an import document holds them by value |
 | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
@@ -99,7 +103,8 @@ disagrees, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    HDR[".hdr or float cube"] -- "ImportEnvironment" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
+    HDR[".hdr or float cube"] -- "ImportEnvironment (copied)" --> COPY["Authored/EnvSources/*.hdr + .bimport"]
+    COPY -- "projected, convolved" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
     SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (RGB9E5, content-addressed)"]
 
     SRC -- "routed by" --> BSKY[".bsky"]
@@ -140,12 +145,39 @@ flowchart TD
 
 ### `AssetStore::ImportEnvironment`
 
-* **@post rolls back on failure and on cancel**, removing only files it *created* — one already on
-  disk was overwritten rather than made, and taking it would destroy whatever wrote it first.
+* **@post the source is in the project.** It is copied to `importedSourceDir` — under
+  `Authored/EnvSources/`, and refused anywhere else — and read from the copy, never from where the
+  caller found it. Importing from that copy again is the recovery path, and copies nothing onto
+  itself.
+* **@post a `.bimport` stands beside the copy**, written last and stamped from the copy: the
+  parameters, the source's stamp and `c_EnvSourceBakeToken`, a hash of each part's parameters as it
+  was written, and every derived file the import produced — the float cubes, the `.bsky`, the
+  `.benvl` — in `outputs`. Not the `.benv`, which is authored. See
+  [Asset Containers](asset_containers.md).
+* **A part-only import keeps the other part.** Re-authoring the sky over an existing document keeps
+  the lighting's claim, parameters and hash as they were, which is what makes the split worth having.
+  It is **refused** when the incoming file is not the one the document was stamped from, since the
+  kept part would then describe a different image.
+* **Each part projects its own cube.** The sky at `skyFaceSize`, the lighting at twice
+  `prefilterFaceSize` (`lightingProjectionSize`), shared when the two agree — as they do at the
+  defaults. So a part's pixels follow from its own parameters and never from the other's.
+* **@post rolls back on failure and on cancel**, removing only files it *created* — the copy and the
+  document included — and never one already on disk, which it overwrote rather than made.
 * **Baked maps are deliberately not rolled back.** Content-addressed and shared, so the map this
   import wrote may be the one another environment already names. An orphan is the prune's business.
-* Requires an `.hdr` or a **float** cube. A baked `RGB9E5` map is not a valid source — the bake reads
-  `R32G32B32A32_SFLOAT` and refuses anything else.
+* Requires an `.hdr` or a `.ktx2` cube, refused otherwise before anything is written. A baked
+  `RGB9E5` cube is accepted and unpacked with a warning — a recovery path, since re-convolving it
+  quantizes twice.
+
+### Renaming and deleting an imported environment
+
+* **The source, its `.bimport`, the `.bsky`, the `.benvl` and the float cubes move as one.** Name
+  either the source or the document; the cubes keep their part suffix, and the `.benv` and the
+  containers' routes are rewritten to follow. The `.benv` itself is authored, not an output, and
+  stays where it is.
+* **Deleting the `.bimport` takes the source it alone names and leaves the derived files**, as for a
+  mesh. Deleting the `.benv` frees the `.bsky`, `.benvl` and cubes only it named, and drops their
+  claims from the document so `Reimport` does not put them back.
 
 ### `assetlib::resolveEnvironment`
 
@@ -316,7 +348,9 @@ assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.ktx2   # what ho
 
 A golden pins that a render has not moved; nothing in it says whether the level is right. The one
 measurement against another renderer is a matte middle-grey sphere under `forest`, rendered by
-both:
+both. The file both start from is in the tree: `assets/Data/Authored/EnvSources/forest.hdr` is
+Blender 5.2's own CC0 `forest.exr` (Poly Haven's `ninomaru_teien`, 1K) converted to Radiance, and
+the `.bimport` beside it records the parameters the shipped maps were made at.
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \

@@ -16,6 +16,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "cook_threads.h"
+#include "env_produce.h"
 #include "import_bounds.h"
 #include "plant_bake.h"
 #include "progress_report.h"
@@ -31,6 +32,7 @@
 #include <cstddef>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <span>
 #include <string>
@@ -260,10 +262,23 @@ namespace assetlib
 		{
 			if (extensionOf(documentKey) != c_ImportDocumentExtension)
 				continue;
-			pending.push_back(
-				{ importedSourceKeyFor(documentKey), loadImportDocument(GetFiles(), documentKey) });
+
+			ImportDocument document = loadImportDocument(GetFiles(), documentKey);
+			pending.push_back({ importedSourceKeyFor(documentKey, document), std::move(document) });
 		}
 		std::ranges::sort(pending, {}, &PendingSource::key);
+
+		auto environments = std::vector<PendingSource>();
+		for (const std::string& documentKey : GetFiles().Enumerate(c_EnvSourcesDirectoryName))
+		{
+			if (extensionOf(documentKey) != c_ImportDocumentExtension)
+				continue;
+
+			ImportDocument document = loadImportDocument(GetFiles(), documentKey);
+			environments.push_back(
+				{ importedSourceKeyFor(documentKey, document), std::move(document) });
+		}
+		std::ranges::sort(environments, {}, &PendingSource::key);
 
 		// The extracted textures are the one output no `outputs` entry names -- a `.ktx2` carries
 		// no header, so the document's textureDir and textureStamp are their whole key, and that
@@ -311,6 +326,21 @@ namespace assetlib
 				textures.push_back(i);
 			}
 
+		auto environmentWork = std::vector<StageItem>();
+		for (size_t i = 0; i < environments.size(); ++i)
+		{
+			auto outputs = std::vector<std::string>();
+			for (const std::string& output : environments[i].document.outputs)
+				if (wanted(*this, output) && claimed.insert(output).second)
+					outputs.push_back(output);
+
+			if (outputs.empty())
+				continue;
+
+			total += outputs.size();
+			environmentWork.push_back({ i, std::move(outputs) });
+		}
+
 		auto written = core::str::unordered_str_map<std::vector<std::string>>();
 		auto failed  = core::str::unordered_str_map<std::string>();
 		auto guard   = std::mutex();
@@ -327,6 +357,12 @@ namespace assetlib
 
 			for (const size_t i : textures)
 				written[pending[i].key].push_back(pending[i].document.textureDir);
+
+			for (const StageItem& item : environmentWork)
+			{
+				std::vector<std::string>& list = written[environments[item.source].key];
+				list.insert(list.end(), item.outputs.begin(), item.outputs.end());
+			}
 		}
 		else
 		{
@@ -426,25 +462,60 @@ namespace assetlib
 						failed.emplace(source.key, error.what());
 					}
 				});
+
+			// One at a time: every convolution already runs across all the cores there are, so
+			// two environments at once would only divide them.
+			for (const StageItem& item : environmentWork)
+			{
+				const PendingSource& source = environments[item.source];
+				try
+				{
+					core::throw_runtime_error_if(
+						!Exists(source.key),
+						"'{}' is not in the project, so nothing can be produced from it",
+						source.key);
+
+					produceEnvironmentOutputs(
+						*this,
+						source.key,
+						source.document,
+						item.outputs,
+						[&](const std::string& key) {
+							reportStep(
+								sink,
+								ProgressPhase::kRegenerating,
+								key,
+								done.fetch_add(1),
+								total);
+						},
+						[&](const std::string& key) { written[source.key].push_back(key); },
+						{});
+				}
+				catch (const std::exception& error)
+				{
+					failed.emplace(source.key, error.what());
+				}
+			}
 		}
 
 		ReimportReport report;
-		for (const PendingSource& source : pending)
-		{
-			const auto wrote = written.find(source.key);
-			const auto broke = failed.find(source.key);
-			if (wrote == written.end() && broke == failed.end())
-				continue;
+		for (const std::vector<PendingSource>* sources : { &pending, &environments })
+			for (const PendingSource& source : *sources)
+			{
+				const auto wrote = written.find(source.key);
+				const auto broke = failed.find(source.key);
+				if (wrote == written.end() && broke == failed.end())
+					continue;
 
-			ReimportedSource entry{ source.key, {}, {} };
-			if (wrote != written.end())
-				entry.written = wrote->second;
-			if (broke != failed.end())
-				entry.message = broke->second;
+				ReimportedSource entry{ source.key, {}, {} };
+				if (wrote != written.end())
+					entry.written = wrote->second;
+				if (broke != failed.end())
+					entry.message = broke->second;
 
-			std::ranges::sort(entry.written);
-			report.sources.push_back(std::move(entry));
-		}
+				std::ranges::sort(entry.written);
+				report.sources.push_back(std::move(entry));
+			}
 		return report;
 	}
 }

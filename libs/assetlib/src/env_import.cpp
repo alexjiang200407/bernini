@@ -1,17 +1,20 @@
 
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/container_info.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
+#include <assetlib/import_document.h>
 
-#include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
-#include <assetlib_structs/ImageData.h>
 
-#include <bit>
 #include <cctype>
+#include <core/err/util.h>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
-#include <spdlog/spdlog.h>
+#include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -19,28 +22,19 @@
 #include <utility>
 #include <vector>
 
+#include "env_parts.h"
+#include "env_produce.h"
 #include "fs_util.h"
+#include "ref_paths.h"
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
-#include <assetlib_structs/VkFormat.h>
+#include <assetlib_structs/SourceStamp.h>
 
 namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_HdrExtension = ".hdr";
-
-		// The suffix decides how the source is read, case-insensitively: what a file is named has
-		// nothing to do with the case someone typed it in.
-		bool
-		isHdr(const std::filesystem::path& path)
-		{
-			std::string ext = path.extension().string();
-			std::ranges::transform(ext, ext.begin(), [](unsigned char c) {
-				return static_cast<char>(std::tolower(c));
-			});
-			return ext == c_HdrExtension;
-		}
 
 		/**
 		 * The files an import has brought into being, and the undo for them.
@@ -105,40 +99,123 @@ namespace assetlib
 			return (dir / (name + suffix)).generic_string();
 		}
 
-		/** Writes `image` as an uncompressed float `.ktx2`, recording it if it is a new file. */
-		void
-		writeSource(
-			const std::filesystem::path& dataRoot,
-			CreatedFiles&                created,
-			const std::string&           relative,
-			const ImageData&             image)
+		/** `<importedSourceDir>/<name><the source's own extension>`. */
+		std::string
+		importedSourceKey(const EnvImportDesc& desc)
 		{
-			created.WillWrite(relative);
-			writeKTX2(image, dataRoot / relative, false, Ktx2Compression::kNone);
+			return assetRef(
+				desc.importedSourceDir,
+				desc.name,
+				extensionOf(desc.source.generic_string()).c_str());
 		}
+
+		/** The files one part writes, in the order it writes them. */
+		std::vector<std::string>
+		partOutputs(const EnvImportDesc& desc, EnvironmentPart part)
+		{
+			if (part == EnvironmentPart::kSky)
+				return { assetRef(desc.sourceDir, desc.name, c_SkySourceSuffix.data()),
+					     assetRef(desc.skyDir, desc.name, ".bsky") };
+
+			return { assetRef(desc.sourceDir, desc.name, c_PrefilterSourceSuffix.data()),
+				     assetRef(desc.sourceDir, desc.name, c_IrradianceSourceSuffix.data()),
+				     assetRef(desc.lightingDir, desc.name, ".benvl") };
+		}
+
+		bool
+		writes(const EnvImportDesc& desc, EnvironmentPart part)
+		{
+			return part == EnvironmentPart::kSky ? desc.sky : desc.lighting;
+		}
+
+		bool
+		claims(const ImportDocument& document, EnvironmentPart part)
+		{
+			return std::ranges::any_of(document.outputs, [part](const std::string& output) {
+				return isPartOutput(output, part);
+			});
+		}
+
+		/**
+		 * The document an import leaves: this run's parts as written, and whatever part it did not
+		 * write carried over from the document already there -- its claim, its parameters and the
+		 * hash they were written with -- so re-authoring a sky never forgets the lighting.
+		 */
+		ImportDocument
+		importedDocument(
+			const EnvImportDesc&                 desc,
+			const std::optional<ImportDocument>& existing,
+			const std::string&                   sourceKey)
+		{
+			ImportDocument document;
+			if (existing)
+			{
+				document.extraJson           = existing->extraJson;
+				document.extraParametersJson = existing->extraParametersJson;
+			}
+
+			document.source             = sourceKey;
+			document.environment        = desc.parameters;
+			document.envSourceBakeToken = c_EnvSourceBakeToken;
+
+			for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
+			{
+				uint64_t& hash = part == EnvironmentPart::kSky ? document.envSkyParametersHash :
+				                                                 document.envLightingParametersHash;
+				if (writes(desc, part))
+				{
+					hash = partParametersHashOf(desc.parameters, part);
+					std::ranges::copy(
+						partOutputs(desc, part),
+						std::back_inserter(document.outputs));
+					continue;
+				}
+
+				if (!existing || !existing->environment)
+					continue;
+
+				auto&       now = *document.environment;
+				const auto& was = *existing->environment;
+				if (part == EnvironmentPart::kSky)
+				{
+					now.skyFaceSize = was.skyFaceSize;
+					now.skyMips     = was.skyMips;
+					hash            = existing->envSkyParametersHash;
+				}
+				else
+				{
+					now.prefilterFaceSize  = was.prefilterFaceSize;
+					now.prefilterMips      = was.prefilterMips;
+					now.prefilterSamples   = was.prefilterSamples;
+					now.irradianceFaceSize = was.irradianceFaceSize;
+					hash                   = existing->envLightingParametersHash;
+				}
+				std::ranges::copy_if(
+					existing->outputs,
+					std::back_inserter(document.outputs),
+					[part](const std::string& output) { return isPartOutput(output, part); });
+			}
+
+			std::ranges::sort(document.outputs);
+			return document;
+		}
+
 	}
 
 	std::vector<std::string>
 	AssetStore::EnvironmentImportTargets(const EnvImportDesc& desc) const
 	{
-		auto out = std::vector<std::string>();
+		const std::string sourceKey = importedSourceKey(desc);
+		auto              out       = std::vector<std::string>{ sourceKey };
 
-		if (desc.sky)
-		{
-			out.push_back(assetRef(desc.sourceDir, desc.name, "_sky.ktx2"));
-			out.push_back(assetRef(desc.skyDir, desc.name, ".bsky"));
-		}
-
-		if (desc.lighting)
-		{
-			out.push_back(assetRef(desc.sourceDir, desc.name, "_prefilter.ktx2"));
-			out.push_back(assetRef(desc.sourceDir, desc.name, "_irradiance.ktx2"));
-			out.push_back(assetRef(desc.lightingDir, desc.name, ".benvl"));
-		}
+		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
+			if (writes(desc, part))
+				std::ranges::copy(partOutputs(desc, part), std::back_inserter(out));
 
 		if (desc.environment && (desc.sky || desc.lighting))
 			out.push_back(assetRef(desc.environmentDir, desc.name, ".benv"));
 
+		out.push_back(importDocumentKeyFor(sourceKey));
 		return out;
 	}
 
@@ -153,9 +230,7 @@ namespace assetlib
 		if (desc.environment && !desc.sky && !desc.lighting)
 			throw std::runtime_error(
 				"AssetStore::ImportEnvironment: an environment composes a sky or a lighting, so "
-				"one "
-				"of "
-				"them has to be written with it");
+				"one of them has to be written with it");
 
 		if (!std::filesystem::is_directory(GetDataRoot()))
 			throw std::runtime_error(
@@ -164,6 +239,15 @@ namespace assetlib
 
 		if (desc.name.empty())
 			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
+
+		const std::string extension = extensionOf(desc.source.generic_string());
+		core::throw_runtime_error_if(
+			extension != c_EnvSourceHdrExtension && extension != c_TextureExtension,
+			"AssetStore::ImportEnvironment: '{}' is neither an equirectangular '{}' nor a cube "
+			"'{}'",
+			desc.source.string(),
+			c_EnvSourceHdrExtension,
+			c_TextureExtension);
 
 		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
 		// `.benvl` until they were spent. The float intermediates never reach Save at all.
@@ -178,6 +262,38 @@ namespace assetlib
 		if (desc.environment)
 			requireOrigin(desc.environmentDir.generic_string(), AssetOrigin::kAuthored, "benv");
 
+		const std::string sourceKey   = importedSourceKey(desc);
+		const std::string documentKey = importDocumentKeyFor(sourceKey);
+		core::throw_runtime_error_if(
+			!isUnder(normalizeRef(sourceKey), c_EnvSourcesDirectoryName),
+			"AssetStore::ImportEnvironment: '{}': an imported environment source lives under "
+			"'{}', which is where a re-import looks for it",
+			sourceKey,
+			c_EnvSourcesDirectoryName);
+
+		// One that will not parse claims nothing; the import writes a fresh document rather than
+		// refusing over a file it is about to replace.
+		auto existing = std::optional<ImportDocument>();
+		try
+		{
+			if (std::filesystem::exists(GetDataRoot() / documentKey))
+				existing = loadImportDocument(GetDataRoot() / documentKey);
+		}
+		catch (const std::exception&)
+		{}
+
+		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
+		{
+			core::throw_runtime_error_if(
+				!writes(desc, part) && existing && claims(*existing, part) &&
+					stampOf(desc.source) != existing->envSourceStamp,
+				"AssetStore::ImportEnvironment: '{}' is not the file '{}' was imported from, so "
+				"keeping its {} would describe a different image; import both parts",
+				desc.source.string(),
+				sourceKey,
+				part == EnvironmentPart::kSky ? "sky" : "lighting");
+		}
+
 		// The float intermediates are written straight to the host by writeKTX2, which makes no
 		// directory; the three containers go through the store, which makes its own.
 		createDirectories(GetDataRoot() / desc.sourceDir);
@@ -187,91 +303,49 @@ namespace assetlib
 
 		throwIfCancelled(cancel);
 
-		// Projected at the skybox's size, which is the largest of the three: the prefilter and the
-		// irradiance convolve it down anyway, so starting them from the finer cube costs only the
-		// projection.
-		const auto faceSize = (std::max)(desc.skyFaceSize, desc.prefilterFaceSize);
-		ImageData  source   = isHdr(desc.source) ?
-		                          equirectToCube(loadRadianceHdr(desc.source), faceSize) :
-		                          loadKTX2(desc.source);
+		created.WillWrite(sourceKey);
 
-		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
-		// gone. Re-convolving one costs a generation of quantization, so it is a recovery path and
-		// not the one to reach for when the source is still there.
-		if (source.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
-		{
-			spdlog::warn(
-				"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes twice "
-				"-- prefer the source it was baked from",
-				desc.source.string());
-			source = unpackRgb9e5(source);
-		}
+		// Stamped as it is copied, and before the cook reads it: a copy rewritten while the parts
+		// convolve then reads as stale afterwards rather than as the file those pixels came from.
+		const SourceStamp           copiedStamp = CopyImportedSource(desc.source, sourceKey).stamp;
+		const std::filesystem::path copied      = ResolveWritePath(sourceKey);
+		result.source                           = sourceKey;
+
+		auto       input       = EnvironmentInput(copied);
+		const auto beforeWrite = [&created](const std::string& key) { created.WillWrite(key); };
 
 		if (desc.sky)
 		{
-			throwIfCancelled(cancel);
-
-			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
-			// belongs on the `.benv` document where a viewer can change it. The lighting still
-			// reads `source`.
-			//
-			// Clamped rather than refused: a sky too small for the requested chain is a small sky,
-			// not a bad request, and the levels it can carry are still the ones a viewer would ask
-			// for.
-			const auto maxMips =
-				static_cast<uint32_t>(std::bit_width(std::max(desc.skyFaceSize, 1u)));
-			const uint32_t skyMips = std::clamp(desc.skyMips, 1u, maxMips);
-
-			const ImageData chain = skyChain(source, desc.skyFaceSize, skyMips, 256, desc.threads);
-
-			const std::string ref = assetRef(desc.sourceDir, desc.name, "_sky.ktx2");
-			writeSource(GetDataRoot(), created, ref, chain);
-
-			auto bsky       = BSky();
-			bsky.name       = desc.name;
-			bsky.sky.source = ref;
-
-			throwIfCancelled(cancel);
-			BakeSky(bsky);
-
-			result.sky = assetRef(desc.skyDir, desc.name, ".bsky");
-			created.WillWrite(result.sky);
-			Save(bsky, result.sky);
+			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kSky);
+			produceSky(
+				*this,
+				input,
+				desc.parameters,
+				desc.threads,
+				desc.name,
+				SkyTargets{ .source = { keys[0] }, .container = { keys[1] } },
+				beforeWrite,
+				{},
+				cancel);
+			result.sky = keys[1];
 		}
 
 		if (desc.lighting)
 		{
-			throwIfCancelled(cancel);
-			const ImageData irradiance = irradianceSh(source, desc.irradianceFaceSize);
-
-			auto prefilterDesc      = PrefilterDesc();
-			prefilterDesc.faceSize  = desc.prefilterFaceSize;
-			prefilterDesc.mipLevels = desc.prefilterMips;
-			prefilterDesc.samples   = desc.prefilterSamples;
-			prefilterDesc.threads   = desc.threads;
-
-			throwIfCancelled(cancel);
-			const ImageData prefilter = prefilterRadiance(source, prefilterDesc);
-
-			const std::string prefilterRef = assetRef(desc.sourceDir, desc.name, "_prefilter.ktx2");
-			const std::string irradianceRef =
-				assetRef(desc.sourceDir, desc.name, "_irradiance.ktx2");
-			writeSource(GetDataRoot(), created, prefilterRef, prefilter);
-			writeSource(GetDataRoot(), created, irradianceRef, irradiance);
-
-			auto lighting              = BEnvLighting();
-			lighting.name              = desc.name;
-			lighting.prefilter.source  = prefilterRef;
-			lighting.irradiance.source = irradianceRef;
-
-			throwIfCancelled(cancel);
-			BakeEnvLighting(lighting);
-
-			result.lighting = assetRef(desc.lightingDir, desc.name, ".benvl");
-			created.WillWrite(result.lighting);
-			Save(lighting, result.lighting);
-
-			result.exposure = lighting.exposure;
+			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kLighting);
+			result.exposure                     = *produceLighting(
+				*this,
+				input,
+				desc.parameters,
+				desc.threads,
+				desc.name,
+				LightingTargets{ .prefilter  = { keys[0] },
+			                     .irradiance = { keys[1] },
+			                     .container  = { keys[2] } },
+				beforeWrite,
+				{},
+				cancel);
+			result.lighting = keys[2];
 		}
 
 		if (desc.environment)
@@ -290,6 +364,13 @@ namespace assetlib
 			created.WillWrite(result.environment);
 			Save(env, result.environment);
 		}
+
+		// Last: the document then cannot claim a file that was not written.
+		ImportDocument document = importedDocument(desc, existing, sourceKey);
+		document.envSourceStamp = copiedStamp;
+		result.document         = documentKey;
+		created.WillWrite(documentKey);
+		Save(document, documentKey);
 
 		result.written = created.Created();
 		created.Commit();

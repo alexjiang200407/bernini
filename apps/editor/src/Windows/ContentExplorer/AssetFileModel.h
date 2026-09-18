@@ -91,6 +91,7 @@ private:
 	AssetThumbnailCache* m_Thumbnails      = nullptr;
 	TexturePreviewCache* m_TexturePreviews = nullptr;
 
+	QString                 m_DataRoot;
 	editor::SourceMeshCache m_SourceMeshes;
 
 	/**

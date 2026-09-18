@@ -288,17 +288,21 @@ namespace assetlib
 			MigratedFile file{ documentPath, MigratedFile::Outcome::kUnchanged, {} };
 			try
 			{
-				const auto found = facts.find(importedSourceKeyFor(documentKey));
-				if (found == facts.end())
-					continue;
-
 				ImportDocument       document = loadImportDocument(GetFiles(), documentKey);
 				const ImportDocument before   = document;
 
-				if (document.skeleton.empty())
-					document.skeleton = found->second.skeleton;
-				if (document.outputs.empty())
-					document.outputs = found->second.outputs;
+				// Derivable from the document's own key, unlike the two below, so it is backfilled
+				// whether or not the source is on disk to be read.
+				if (document.source.empty())
+					document.source = importedSourceKeyFor(documentKey, document);
+
+				if (const auto found = facts.find(document.source); found != facts.end())
+				{
+					if (document.skeleton.empty())
+						document.skeleton = found->second.skeleton;
+					if (document.outputs.empty())
+						document.outputs = found->second.outputs;
+				}
 
 				// A source with no rig has no skeleton to record, so "still empty" is settled
 				// rather than pending; only a real change may report one.
@@ -320,6 +324,38 @@ namespace assetlib
 
 			if (file.outcome != MigratedFile::Outcome::kUnchanged)
 				report.files.push_back(std::move(file));
+		}
+
+		// Before Reimport: a part both absent and stale is re-cooked whole here, where Reimport
+		// would first convolve its missing files only for this to convolve them again. And before
+		// the walk, so it reads each container as re-cooked.
+		const std::vector<std::string> staleEnvironments = GetStaleEnvironmentSources();
+		for (size_t i = 0; i < staleEnvironments.size(); ++i)
+		{
+			const std::string&          source       = staleEnvironments[i];
+			const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(source);
+
+			reportStep(sink, ProgressPhase::kRegenerating, source, i, staleEnvironments.size());
+
+			MigratedFile file{ documentPath, MigratedFile::Outcome::kRewritten, {} };
+			if (dryRun)
+			{
+				report.files.push_back(std::move(file));
+				continue;
+			}
+
+			try
+			{
+				for (const std::string& written : RefreshEnvironmentSource(source))
+					report.files.push_back(
+						{ GetDataRoot() / written, MigratedFile::Outcome::kRewritten, {} });
+			}
+			catch (const std::exception& error)
+			{
+				file.outcome = MigratedFile::Outcome::kFailed;
+				file.message = error.what();
+			}
+			report.files.push_back(std::move(file));
 		}
 
 		// Then, before the walk: what the sources say should stand but does not. The walk below

@@ -6,6 +6,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
+#include <assetlib/project_layout.h>
 #include <core/err/util.h>
 
 #include "material_texture_refs.h"
@@ -26,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include "env_parts.h"
 #include "fs_util.h"
 #include "ref_paths.h"
 
@@ -69,16 +71,6 @@ namespace assetlib
 			return stored;
 		}
 
-		/** `key`'s file name without its extension. */
-		std::string_view
-		stemOf(std::string_view key)
-		{
-			const size_t           slash = key.find_last_of('/');
-			const std::string_view name =
-				slash == std::string_view::npos ? key : key.substr(slash + 1);
-			return name.substr(0, name.size() - extensionOf(name).size());
-		}
-
 		/** `key` in the same directory and with the same extension, under `stem`. */
 		std::string
 		reStem(std::string_view key, std::string_view stem)
@@ -108,6 +100,60 @@ namespace assetlib
 				plan.avatars.push_back(move);
 		}
 
+		/** The imported-source category `key` sits under, or empty when it is under neither. */
+		std::string_view
+		sourceCategoryOf(std::string_view key)
+		{
+			for (const std::string_view category : { std::string_view(c_MeshSourcesDirectoryName),
+			                                         std::string_view(c_EnvSourcesDirectoryName) })
+				if (isUnder(key, category))
+					return category;
+			return {};
+		}
+
+		/**
+		 * @throws std::runtime_error when a document under a source category would leave it:
+		 *         `Reimport` finds its work by enumerating that category, so a document moved out
+		 *         is one nothing can produce a project from again.
+		 */
+		void
+		requireSourceCategoryKept(std::string_view from, std::string_view to)
+		{
+			const std::string_view category = sourceCategoryOf(from);
+			core::throw_runtime_error_if(
+				!category.empty() && sourceCategoryOf(to) != category,
+				"assetlib::planRename: '{}' has to stay under '{}', the one place a re-import "
+				"looks "
+				"for it",
+				from,
+				category);
+		}
+
+		/**
+		 * The `.bimport` recording `key` as its source, or nullopt when none does.
+		 *
+		 * @throws std::runtime_error when more than one does: which import's containers move with
+		 *         the file would otherwise be whichever document sorts first.
+		 */
+		std::optional<std::string>
+		documentNaming(const AssetRefGraph& graph, std::string_view key)
+		{
+			auto found = std::optional<std::string>();
+			for (const AssetRef& ref : graph.ReferrersOf(key))
+			{
+				if (ref.kind != RefKind::kImportedSource)
+					continue;
+				core::throw_runtime_error_if(
+					found.has_value(),
+					"assetlib::planRename: '{}' and '{}' both record '{}' as their source",
+					*found,
+					ref.referrer,
+					key);
+				found = ref.referrer;
+			}
+			return found;
+		}
+
 		/**
 		 * Fills in what travels with an import document: the source it describes, and each
 		 * container `outputs` names after that source's stem.
@@ -121,8 +167,14 @@ namespace assetlib
 		void
 		planImportGroup(const std::filesystem::path& dataRoot, RenamePlan& plan)
 		{
-			const auto source = RenameMove{ importedSourceKeyFor(plan.subject.from),
-				                            importedSourceKeyFor(plan.subject.to) };
+			const ImportDocument document = loadImportDocument(dataRoot / plan.subject.from);
+
+			// The source lands where the document lands, keeping its own extension: the two find
+			// each other by sitting in one directory under one stem, so a move that kept the
+			// source where it was would break the pair rather than move it.
+			const std::string from = importedSourceKeyFor(plan.subject.from, document);
+			const auto        source =
+				RenameMove{ from, swapExtension(plan.subject.to, extensionOf(from)) };
 
 			core::throw_runtime_error_if(
 				!std::filesystem::exists(dataRoot / source.from),
@@ -135,17 +187,22 @@ namespace assetlib
 			const std::string_view was = stemOf(plan.subject.from);
 			const std::string_view now = stemOf(plan.subject.to);
 
-			const ImportDocument document = loadImportDocument(dataRoot / plan.subject.from);
 			for (const std::string& output : document.outputs)
 			{
 				const std::string key = normalizeRef(output);
 
+				// An environment names its cubes after the source plus the part they belong to, and
+				// that suffix is how a cube's part is told, so it survives the move.
+				const std::optional<EnvironmentOutput> role =
+					document.environment ? environmentOutputOf(key) : std::nullopt;
+				const std::string_view suffix = role ? outputStemSuffix(*role) : std::string_view();
+
 				// An output already taken off the source's stem by a rename of its own is not this
 				// source's to move: its name no longer says it came from here.
-				if (stemOf(key) != was)
+				if (stemOf(key) != std::string(was).append(suffix))
 					continue;
 
-				plan.outputs.push_back({ key, reStem(key, now) });
+				plan.outputs.push_back({ key, reStem(key, std::string(now).append(suffix)) });
 			}
 
 			for (const RenameMove& output : plan.outputs)
@@ -230,6 +287,7 @@ namespace assetlib
 				for (MaterialBinding& binding : document.bindings)
 					binding.material = mapTarget(plan, binding.material);
 
+				document.source   = mapTarget(plan, document.source);
 				document.skeleton = mapTarget(plan, document.skeleton);
 				for (std::string& output : document.outputs) output = mapTarget(plan, output);
 				return AssetCodec<ImportDocument>::Serialize(document);
@@ -261,13 +319,14 @@ namespace assetlib
 		plan.subject.from = normalizeRef(from);
 		plan.subject.to   = normalizeRef(to);
 
-		// A `.glb` and its `.bimport` are one asset under two names, and only the document is of a
-		// kind the project stores anything about -- so a source named on either side plans as the
-		// document, and the source itself travels in `plan.source`.
-		if (extensionOf(plan.subject.from) == c_ImportedSourceExtension)
+		// A source and its `.bimport` are one asset under two names, and the document is what says
+		// which containers move -- so a source named on either side plans as its document, and the
+		// source itself travels in `plan.source`. A document naming it is what makes a file a
+		// source, not its extension: an environment's may be a `.ktx2`, otherwise a texture.
+		if (const std::optional<std::string> document = documentNaming(graph, plan.subject.from))
 		{
 			core::throw_runtime_error_if(
-				extensionOf(plan.subject.to) != c_ImportedSourceExtension,
+				extensionOf(plan.subject.to) != extensionOf(plan.subject.from),
 				"assetlib::planRename: renaming '{}' to '{}' would change what kind of asset it is",
 				plan.subject.from,
 				plan.subject.to);
@@ -277,7 +336,7 @@ namespace assetlib
 				"assetlib::planRename: '{}' does not exist",
 				plan.subject.from);
 
-			plan.subject.from = importDocumentKeyFor(plan.subject.from);
+			plan.subject.from = *document;
 			plan.subject.to   = importDocumentKeyFor(plan.subject.to);
 		}
 
@@ -322,6 +381,9 @@ namespace assetlib
 						file,
 						skeletonKeyForAvatar(file));
 
+				if (type == AssetType::kImportDocument)
+					requireSourceCategoryKept(file, plan.subject.to + std::string(tail));
+
 				if (type == AssetType::kSkeleton)
 					planAvatar(
 						graph.DataRoot(),
@@ -345,7 +407,10 @@ namespace assetlib
 			// Its source key is derived from its own path and its outputs are named from the
 			// source, so a document never moves alone: the whole import goes with it.
 			if (plan.assetType == AssetType::kImportDocument)
+			{
+				requireSourceCategoryKept(plan.subject.from, plan.subject.to);
 				planImportGroup(graph.DataRoot(), plan);
+			}
 
 			// A skeleton's avatar is found from the skeleton's key, so it moves with it or stops
 			// being reachable at all.

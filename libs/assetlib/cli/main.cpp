@@ -264,6 +264,20 @@ main(int argc, char** argv)
 		envThreads,
 		"Worker threads (default: hardware concurrency)");
 
+	bool envNoSky         = false;
+	bool envNoLighting    = false;
+	bool envNoEnvironment = false;
+	envmap->add_flag(
+		"--no-sky",
+		envNoSky,
+		"Leave the .bsky and its cube alone -- the editor's checkboxes, on the command line");
+	envmap->add_flag("--no-lighting", envNoLighting, "Leave the .benvl and its two cubes alone");
+	envmap->add_flag(
+		"--no-environment",
+		envNoEnvironment,
+		"Leave the .benv alone. It is authored -- an exposure or a rotation somebody tuned lives "
+		"there -- so a re-import of the pixels alone keeps it");
+
 	std::string envName = "env";
 	addProject(envmap);
 	envmap->add_option("--name", envName, "Asset name for the written assets (default: env)");
@@ -639,17 +653,20 @@ main(int argc, char** argv)
 		{
 			const assetlib::Project project = assetlib::Project::Open(projectFile);
 
-			auto importDesc               = assetlib::EnvImportDesc();
-			importDesc.source             = envInput;
-			importDesc.name               = envName;
-			importDesc.skyFaceSize        = envSkyboxSize;
-			importDesc.skyMips            = envSkyboxMips;
-			importDesc.skyMipLevel        = envSkyboxMip;
-			importDesc.prefilterFaceSize  = envSize;
-			importDesc.prefilterMips      = envMips;
-			importDesc.prefilterSamples   = envSamples;
-			importDesc.irradianceFaceSize = envIemSize;
-			importDesc.threads            = envThreads;
+			auto importDesc                          = assetlib::EnvImportDesc();
+			importDesc.source                        = envInput;
+			importDesc.name                          = envName;
+			importDesc.parameters.skyFaceSize        = envSkyboxSize;
+			importDesc.parameters.skyMips            = envSkyboxMips;
+			importDesc.skyMipLevel                   = envSkyboxMip;
+			importDesc.parameters.prefilterFaceSize  = envSize;
+			importDesc.parameters.prefilterMips      = envMips;
+			importDesc.parameters.prefilterSamples   = envSamples;
+			importDesc.parameters.irradianceFaceSize = envIemSize;
+			importDesc.threads                       = envThreads;
+			importDesc.sky                           = !envNoSky;
+			importDesc.lighting                      = !envNoLighting;
+			importDesc.environment                   = !envNoEnvironment;
 
 			const assetlib::EnvImportResult imported =
 				project.GetStore().ImportEnvironment(importDesc);

@@ -68,15 +68,33 @@ namespace
 	}
 }
 
-TEST_CASE("An imported source is named by its extension alone", "[sourcemesh]")
+// The category is half the rule: a `.ktx2` is an ordinary texture everywhere but the environment
+// sources' folder, and a `.glb` in the derived half is a file somebody left there.
+TEST_CASE("An imported source is named by its category and extension", "[sourcemesh]")
 {
-	CHECK(editor::IsImportedSource("/tmp/Coyote.glb"));
-	CHECK(editor::IsImportedSource("/tmp/Coyote.GLB"));
-	CHECK(editor::IsImportedSource("/tmp/cha800_00.reduced.glb"));
+	CHECK(editor::IsImportedSourceKey("Authored/Meshes/Coyote.glb"));
+	CHECK(editor::IsImportedSourceKey("Authored/Meshes/crew/Coyote.GLB"));
+	CHECK(editor::IsImportedSourceKey("Authored/EnvSources/forest.hdr"));
+	CHECK(editor::IsImportedSourceKey("Authored/EnvSources/outdoor/forest.ktx2"));
 
-	CHECK_FALSE(editor::IsImportedSource("/tmp/Coyote.bimport"));
-	CHECK_FALSE(editor::IsImportedSource("/tmp/Coyote.gltf"));
-	CHECK_FALSE(editor::IsImportedSource({}));
+	CHECK_FALSE(editor::IsImportedSourceKey("Derived/Meshes/Coyote.glb"));
+	CHECK_FALSE(editor::IsImportedSourceKey("Authored/Meshes/Coyote.bimport"));
+	CHECK_FALSE(editor::IsImportedSourceKey("Authored/Meshes/Coyote.gltf"));
+	CHECK_FALSE(editor::IsImportedSourceKey("Derived/BakedTextures/sky_8300c4c0.ktx2"));
+	CHECK_FALSE(editor::IsImportedSourceKey("Authored/Environments/forest.hdr"));
+	CHECK_FALSE(editor::IsImportedSourceKey({}));
+}
+
+TEST_CASE("A path outside the project is no source of its", "[sourcemesh]")
+{
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+	const QString dataRoot = temp.filePath("Data");
+
+	CHECK(editor::IsImportedSource(dataRoot, dataRoot + "/Authored/Meshes/Coyote.glb"));
+	CHECK(editor::IsImportedSource(dataRoot, dataRoot + "/Authored/EnvSources/forest.hdr"));
+	CHECK_FALSE(editor::IsImportedSource(dataRoot, temp.filePath("elsewhere/Coyote.glb")));
+	CHECK_FALSE(editor::IsImportedSource({}, dataRoot + "/Authored/Meshes/Coyote.glb"));
 }
 
 TEST_CASE("A source resolves to what its document says it produced", "[sourcemesh]")

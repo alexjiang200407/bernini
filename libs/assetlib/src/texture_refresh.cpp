@@ -174,13 +174,15 @@ namespace assetlib
 			if (document.textureDir.empty())
 				continue;
 
+			const std::string sourceKey = importedSourceKeyFor(key, document);
+
 			// An absent source cannot be compared, so it stales nothing -- the rule the geometry
 			// cache keys follow, which keeps a project missing its sources usable.
-			const SourceStamp stamp = StampOf(importedSourceKeyFor(key));
+			const SourceStamp stamp = StampOf(sourceKey);
 			if (stamp != SourceStamp() &&
 			    (stamp != document.textureStamp || document.textureBakeToken != c_TextureBakeToken))
 			{
-				stale.push_back(importedSourceKeyFor(key));
+				stale.push_back(sourceKey);
 				continue;
 			}
 
@@ -191,7 +193,7 @@ namespace assetlib
 			if (std::ranges::any_of(
 					texturesDirectlyIn(GetFiles(), document.textureDir),
 					[](std::string_view name) { return isNumberedTextureName(name); }))
-				stale.push_back(importedSourceKeyFor(key));
+				stale.push_back(sourceKey);
 		}
 
 		std::ranges::sort(stale);

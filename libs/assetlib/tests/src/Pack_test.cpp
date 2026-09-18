@@ -77,6 +77,11 @@ namespace
 			core::file::write_atomic(
 				root.path / "Authored/Meshes/kirk.bimport",
 				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
+			fs::create_directories(root.path / "Authored/EnvSources");
+			std::ofstream(root.path / "Authored/EnvSources/forest.hdr") << "the imported source";
+			core::file::write_atomic(
+				root.path / "Authored/EnvSources/forest.bimport",
+				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
 			core::file::write_atomic(
 				root.path / "stray.bimport",
 				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
@@ -149,6 +154,8 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 	{
 		CHECK_FALSE(Contains(entries, "Authored/Meshes/kirk.glb"));
 		CHECK_FALSE(Contains(entries, "Authored/Meshes/kirk.bimport"));
+		CHECK_FALSE(Contains(entries, "Authored/EnvSources/forest.hdr"));
+		CHECK_FALSE(Contains(entries, "Authored/EnvSources/forest.bimport"));
 		// A stray document outside Authored/Meshes is excluded by its *type*, not the directory --
 		// the game never reads one, so it must not ride in on being a registered extension.
 		CHECK_FALSE(Contains(entries, "stray.bimport"));

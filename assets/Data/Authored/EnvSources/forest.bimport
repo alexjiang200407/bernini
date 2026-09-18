@@ -1,0 +1,17 @@
+{
+	"bindings": {},
+	"envSourceBakeToken": 1106924893425623401,
+	"envSourceStampHash": 1908233242519146849,
+	"envSourceStampSize": 1881948,
+	"parameters": {
+		"environment": {
+			"irradianceFaceSize": 128,
+			"prefilterFaceSize": 256,
+			"prefilterMips": 7,
+			"prefilterSamples": 128,
+			"skyFaceSize": 512,
+			"skyMips": 6
+		}
+	},
+	"source": "Authored/EnvSources/forest.hdr"
+}
