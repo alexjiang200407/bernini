@@ -9,7 +9,6 @@
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
-#include <utility>
 #include <vector>
 
 namespace core::profiling
@@ -62,6 +61,12 @@ namespace core::profiling
 			return g_Total;
 		}
 
+		struct RegisteredTable
+		{
+			std::string      key;
+			detail::TagTable table;
+		};
+
 		/**
 		 * Every table that has been used, in first-use order so a report reads the same way twice.
 		 *
@@ -71,8 +76,8 @@ namespace core::profiling
 		 */
 		struct Registry
 		{
-			std::mutex                                           lock;
-			std::deque<std::pair<std::string, detail::TagTable>> tables;
+			std::mutex                  lock;
+			std::deque<RegisteredTable> tables;
 
 			// A mutex member deletes all four implicitly, which MSVC's /Wall makes an error. The
 			// registry is a function-local singleton reached by reference, so deleting them says
@@ -191,14 +196,13 @@ namespace core::profiling
 			Registry&                         all = registry();
 			const std::lock_guard<std::mutex> held(all.lock);
 
-			for (auto& [registered, table] : all.tables)
+			for (RegisteredTable& registered : all.tables)
 			{
-				if (registered == key)
-					return table;
+				if (registered.key == key)
+					return registered.table;
 			}
 
-			all.tables.emplace_back(std::string(key), TagTable(count, nameOf));
-			return all.tables.back().second;
+			return all.tables.emplace_back(std::string(key), TagTable(count, nameOf)).table;
 		}
 
 		uint64_t
