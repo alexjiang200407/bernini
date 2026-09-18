@@ -28,7 +28,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_Skybox`, `m_TransparentSort`,
 `m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
-`m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
+`m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -48,7 +48,8 @@ flowchart TD
         FWD --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
-    TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
+    TAA --> BLM["Bloom (only when the target blooms; one pass per chain level each way)"]
+    BLM --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
     PPX --> OVL["Overlay (only when the frame submitted 2D draws; reads any target it borrowed)"]
     OVL --> PP["PreparePresent (backbuffer, and every borrowed target, to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
@@ -59,8 +60,9 @@ render targets and the imported `depth` texture as their depth attachment — **
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
-writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and writes
-the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
+writes the next one; `Bloom`, on a target that blooms, reads whichever of the two the last HDR
+stage produced and renders its ladder (`bloomDown0..`, `bloomUp0..`); `PostProcess` reads the same
+source — plus the finished `bloomUp0` when bloom ran — and writes the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
 last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
 transitions the backbuffer — and each of those borrowed backbuffers — to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
@@ -699,19 +701,48 @@ has always been.
 * The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
   declaration in `programs/screen/TaaResolve.slang`.
 
+### Bloom — [passes/BloomPass.{h,cpp}](libs/bgl_extended/src/passes/BloomPass.cpp)
+
+Renders the glow the [PostProcess](#postprocess) combine adds: a ladder of half-resolution levels
+(`gfx/BloomChain.h`, starting at half the *output* size, halving to a floor of eight texels or six
+levels), walked down with the 13-tap Jimenez downsample and back up with a 9-tap tent, one graph
+pass per level in each direction (`BloomDown0..`, `BloomUp0..`), each a full-screen triangle from
+the `programs.screen.Bloom` module sharing `programs.screen.FullscreenRect`'s mesh stage. Added in
+`EndFrame` between the resolve and `PostProcess`, and **only when the target has
+`SetBloomEnabled`** — the chain is created lazily at the first frame that blooms and rebuilt on
+resize, so enabling costs nothing at target creation.
+
+The first downsample owns the two scene-facing decisions: the threshold with its quadratic soft
+knee (at threshold zero it degenerates to identity, so "bloom everything" is a setting rather than
+a branch), and a Karis-weighted quad average, so one firefly the jitter moves every frame cannot
+own the whole chain. Each upsample folds the coarser level in by `scatter` as a lerp rather than an
+add, which keeps the chain energy-conserving and leaves `intensity` — applied in the combine, not
+here — the one brightness knob.
+
+* **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
+  TAA target — and its own levels; the render context's linear-clamp sampler. The
+  `gBloomDownsampleData` / `gBloomUpsampleData` cbuffer names are matched against Slang reflection,
+  so they must track the declarations in `programs/screen/Bloom.slang`.
+* **Out:** `bloomUp0` (or `bloomDown0` on a target too small for a second level), which
+  `PostProcess` samples.
+* The levels are `RGBA16_FLOAT` like the scene colour, and per target, not per frame in flight:
+  consumed within the frame that wrote them.
+
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl_extended/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-Today it applies `AgX` through the LUT above, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+Today it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
+`BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing — then
+applies `AgX` through the LUT above, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
 not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
-the stage rather than those steps: everything between a resolved scene and the screen — bloom,
-grading, exposure adaptation — belongs here as it lands.
+the stage rather than those steps: everything between a resolved scene and the screen — grading,
+exposure adaptation — belongs here as it lands.
 
 The outline width is **4 px at a 2160-line target, scaled by the mask's height** — not a fixed texel
 count. The mask is on the render grid while the image around it is reconstructed onto the output

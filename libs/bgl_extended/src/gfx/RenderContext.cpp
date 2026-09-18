@@ -7,8 +7,10 @@
 #include "debug/DebugReadback.h"
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
+#include "gfx/BloomChain.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
+#include "passes/BloomPass.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
@@ -148,6 +150,18 @@ namespace bgl
 			return std::format("{}{}", c_HistoryName, index);
 		}
 
+		std::string
+		GetBloomDownName(uint32_t level)
+		{
+			return std::format("bloomDown{}", level);
+		}
+
+		std::string
+		GetBloomUpName(uint32_t level)
+		{
+			return std::format("bloomUp{}", level);
+		}
+
 		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
 		// old DirectXTex DDS / WIC PNG encoders.
 		void
@@ -214,6 +228,7 @@ namespace bgl
 		m_Forward.Init(passes);
 		m_Skybox.Init(passes);
 		m_PostProcess.Init(passes);
+		m_BloomPass.Init(passes);
 		m_OverlayPass.Init(passes);
 		m_OutlineMask.Init(passes);
 		m_TaaResolve.Init(passes);
@@ -225,6 +240,7 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_Skybox.CheckBindings();
 		m_PostProcess.CheckBindings();
+		m_BloomPass.CheckBindings();
 		m_OverlayPass.CheckBindings();
 		m_TaaResolve.CheckBindings();
 
@@ -278,6 +294,7 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
+		m_BloomPass.Release();
 		m_OverlayPass.Release();
 		m_OutlineMask.Release();
 		m_TaaResolve.Release();
@@ -1040,6 +1057,62 @@ namespace bgl
 			// The display curve is applied to what the resolve produced, not to the raw frame.
 			postProcessArgs.source     = rt.GetHistorySrv(current);
 			postProcessArgs.sourceName = GetHistoryName(current);
+		}
+
+		if (rt.IsBloomEnabled())
+		{
+			BloomChain& chain = rt.GetBloomChain();
+			chain.Ensure(m_ResourceManager, rt.GetWidth(), rt.GetHeight());
+
+			const std::span<const BloomChain::Level> levels = chain.GetLevels();
+
+			const BloomSettings settings = rt.GetBloomSettings();
+
+			auto bloomArgs       = BloomPass::Args();
+			bloomArgs.source     = postProcessArgs.source;
+			bloomArgs.sourceName = postProcessArgs.sourceName;
+			bloomArgs.sampler    = m_LinearClampSampler;
+			bloomArgs.threshold  = settings.threshold;
+			bloomArgs.knee       = settings.threshold * settings.softKnee;
+			bloomArgs.scatter    = settings.scatter;
+
+			// The grid the source is on, which is the question sourceOnOutputGrid already
+			// answered for the same source.
+			bloomArgs.sourceSize = sourceOnOutputGrid ? glm::vec2(
+															static_cast<float>(rt.GetWidth()),
+															static_cast<float>(rt.GetHeight())) :
+			                                            renderSize;
+
+			for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+			{
+				const BloomChain::Level& level = levels[i];
+
+				m_FrameGraph.ImportTexture(GetBloomDownName(i), level.downTexture);
+
+				auto& levelArgs    = bloomArgs.levels.emplace_back();
+				levelArgs.downSrv  = level.downSrv;
+				levelArgs.downRtv  = level.downRtv;
+				levelArgs.downName = GetBloomDownName(i);
+				levelArgs.width    = level.width;
+				levelArgs.height   = level.height;
+
+				if (!level.upTexture.IsNull())
+				{
+					m_FrameGraph.ImportTexture(GetBloomUpName(i), level.upTexture);
+					levelArgs.upSrv  = level.upSrv;
+					levelArgs.upRtv  = level.upRtv;
+					levelArgs.upName = GetBloomUpName(i);
+				}
+			}
+
+			m_BloomPass.AttachToFrameGraph(m_FrameGraph, bloomArgs);
+
+			postProcessArgs.bloom        = chain.GetBloomSrv();
+			postProcessArgs.bloomSampler = m_LinearClampSampler;
+			postProcessArgs.bloomName =
+				chain.IsUpsampled() ? GetBloomUpName(0) : GetBloomDownName(0);
+			postProcessArgs.bloomIntensity = settings.intensity;
+			postProcessArgs.bloomEnabled   = true;
 		}
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
