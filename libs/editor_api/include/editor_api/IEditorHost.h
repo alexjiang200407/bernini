@@ -1,14 +1,9 @@
 #pragma once
 
 #include <QWidget>
+#include <assetlib/AssetStore.h>
 #include <editor_api/IEditorViewport.h>
-#include <functional>
 #include <string_view>
-
-namespace assetlib
-{
-	class AssetStore;
-}
 
 namespace editor
 {
@@ -23,7 +18,7 @@ namespace editor
 
 		/** Synchronous; exceptions return to the caller. No GUI waits or borrowed references escaping work. */
 		virtual void
-		InvokeRender(const std::function<void(RenderContext&)>& work) = 0;
+		InvokeRender(const RenderWork& work) = 0;
 
 		/** GUI thread; non-null parent owns the returned widget. The host selects native/headless output. */
 		[[nodiscard]] virtual IEditorViewport*

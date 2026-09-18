@@ -11,6 +11,8 @@ header and fix the map.
 - **Separate document semantics from Qt presentation.** `assetlib_plugin_api` has no Qt, renderer
   or implementation-library dependency. A runtime module registers authored kinds; its editor
   module registers panels and presentation. Built-in `AssetType` and codecs are unchanged.
+  This contract belongs in assetlib so the offline CLI and game can use a custom kind without
+  loading Qt or its editor module. `IAssetKind` represents one file type, not an individual record.
 - **General tabs require no document kind.** A project tool, including a future AI management tab,
   uses `PanelDesc`. `AssetEditorDesc` additionally supplies extensions and an asset-opening panel.
 - **One project, one host.** A panel borrows that project's `IEditorHost`. The host exposes the
@@ -37,6 +39,10 @@ header and fix the map.
 | `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_api/include/editor_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
+
+Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
+`EditorPluginPtr`. Descriptor callback aliases live in `IEditorRegistry.h`; `RenderWork` and
+`ViewportRenderWork` live beside `RenderContext`.
 
 Recheck this table whenever the public files move.
 
@@ -89,6 +95,10 @@ new panels against a new host; do not silently retarget stored references to old
 - **Actions:** both callbacks are required. Empty extensions means a menu action with an empty
   selection; otherwise the action is a content-menu contribution, offered only when every selected
   key matches. Menu components identify a menu path; the host owns the actual actions and menus.
+  A plugin can contribute to `File` or another menu, but its actions are disabled without an open
+  project because they borrow `IEditorHost`. Shell commands such as `File → Open Project` stay
+  host-owned and available before a project opens; this API does not expose project switching to
+  plugins. `AddAction` is a menu-bar/content-menu contract, not a toolbar-button contract.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
   own writes. The host reports thrown errors; a successful write calls `AssetChanged`.
 - **References:** `ReadReferences` must validate the document and report every reference, even
@@ -96,6 +106,8 @@ new panels against a new host; do not silently retarget stored references to old
   tokens as opaque, normalizes targets through assetlib and expands directory moves. A rewrite
   receives replacement targets with those tokens against the same input bytes. It preserves
   unknown fields and never writes to disk. The host alone commits or rolls back the resulting bytes.
+  Input spans borrow the original bytes without copying them. A returned vector owns the encoded
+  result; keeping the original unchanged permits rollback if another document's rewrite fails.
 - **Packing/migration:** registered kinds are authored documents, with an explicit include/exclude
   policy. `Migrate` validates and returns current-schema bytes even for a kind with no older schema.
   Custom derived cache formats are outside this initial contract. Existing typed codecs and store

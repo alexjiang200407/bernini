@@ -209,13 +209,13 @@ namespace
 
 namespace sample
 {
-	std::unique_ptr<assetlib::IAssetPlugin>
+	assetlib::AssetPluginPtr
 	CreateAssetPlugin()
 	{
 		return std::make_unique<SampleAssetPlugin>();
 	}
 
-	std::unique_ptr<editor::IEditorPlugin>
+	editor::EditorPluginPtr
 	CreateEditorPlugin()
 	{
 		return std::make_unique<SampleEditorPlugin>();

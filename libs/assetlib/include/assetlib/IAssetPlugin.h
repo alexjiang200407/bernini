@@ -28,7 +28,7 @@ namespace assetlib
 		std::string field;
 	};
 
-	/** Authored documents only; callbacks must be safe for concurrent reads and throw on invalid bytes. */
+	/** One authored file type; callbacks must be safe for concurrent reads and throw on invalid bytes. */
 	class IAssetKind
 	{
 	public:
@@ -52,6 +52,8 @@ namespace assetlib
 		Migrate(std::span<const std::byte> bytes) const = 0;
 	};
 
+	using AssetKindPtr = std::unique_ptr<IAssetKind>;
+
 	class IAssetKindRegistry
 	{
 	public:
@@ -59,7 +61,7 @@ namespace assetlib
 
 		/** Takes ownership; reject duplicate IDs/extensions, including built-ins, and null kinds. */
 		virtual void
-		Add(std::unique_ptr<IAssetKind> kind) = 0;
+		Add(AssetKindPtr kind) = 0;
 	};
 
 	class IAssetPlugin
@@ -71,6 +73,8 @@ namespace assetlib
 		virtual void
 		RegisterKinds(IAssetKindRegistry& registry) = 0;
 	};
+
+	using AssetPluginPtr = std::unique_ptr<IAssetPlugin>;
 
 	/** Called only after build compatibility is checked; ownership transfers to the host. */
 	using CreateAssetPlugin                                   = IAssetPlugin* (*)();

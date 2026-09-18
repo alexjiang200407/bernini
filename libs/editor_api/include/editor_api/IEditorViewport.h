@@ -2,21 +2,12 @@
 
 #include <QWidget>
 #include <bgl/Camera.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <core/glm.h>
 #include <cstdint>
 #include <functional>
-
-namespace bgl
-{
-	class IGraphics;
-	class IScene;
-}
-
-namespace game
-{
-	class AssetManager;
-}
+#include <gamelib/AssetManager.h>
 
 namespace editor
 {
@@ -26,6 +17,9 @@ namespace editor
 		bgl::IScene&        scene;
 		game::AssetManager& assets;
 	};
+
+	using RenderWork         = std::function<void(RenderContext&)>;
+	using ViewportRenderWork = std::function<void(RenderContext&, const bgl::SceneViewRef&)>;
 
 	struct ViewportDesc
 	{
@@ -41,7 +35,7 @@ namespace editor
 
 		/** Synchronous on the render thread; do not retain context or wait on the GUI thread. */
 		virtual void
-		Invoke(const std::function<void(RenderContext&, const bgl::SceneViewRef&)>& work) = 0;
+		Invoke(const ViewportRenderWork& work) = 0;
 
 		virtual void
 		SetCamera(const bgl::Camera& camera) = 0;

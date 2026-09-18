@@ -2,13 +2,12 @@
 
 #include <assetlib/IAssetPlugin.h>
 #include <editor_api/IEditorPlugin.h>
-#include <memory>
 
 namespace sample
 {
-	[[nodiscard]] std::unique_ptr<assetlib::IAssetPlugin>
+	[[nodiscard]] assetlib::AssetPluginPtr
 	CreateAssetPlugin();
 
-	[[nodiscard]] std::unique_ptr<editor::IEditorPlugin>
+	[[nodiscard]] editor::EditorPluginPtr
 	CreateEditorPlugin();
 }

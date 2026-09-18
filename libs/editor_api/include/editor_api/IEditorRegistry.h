@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QWidget>
+#include <assetlib/AssetStore.h>
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorHost.h>
 #include <editor_api/Thumbnail.h>
@@ -15,43 +16,52 @@
 
 namespace editor
 {
+	using PanelFactory       = std::function<EditorPanel*(IEditorHost&, QWidget*)>;
+	using AssetEditorFactory = std::function<AssetEditorPanel*(IEditorHost&, QWidget*)>;
+	using ActionPredicate    = std::function<bool(IEditorHost&, std::span<const std::string>)>;
+	using ActionCallback     = std::function<void(IEditorHost&, std::span<const std::string>)>;
+	using ImportCallback =
+		std::function<void(IEditorHost&, const std::filesystem::path&, std::string_view)>;
+	using ThumbnailCallback =
+		std::function<Thumbnail(const assetlib::AssetStore&, std::string_view)>;
+
 	struct PanelDesc
 	{
-		std::string                                         id;
-		QString                                             title;
-		std::function<EditorPanel*(IEditorHost&, QWidget*)> create;
+		std::string  id;
+		QString      title;
+		PanelFactory create;
 	};
 
 	struct AssetEditorDesc
 	{
-		std::string                                              id;
-		QString                                                  title;
-		std::vector<std::string>                                 extensions;
-		std::function<AssetEditorPanel*(IEditorHost&, QWidget*)> create;
+		std::string              id;
+		QString                  title;
+		std::vector<std::string> extensions;
+		AssetEditorFactory       create;
 	};
 
 	struct ActionDesc
 	{
-		std::string                                                     id;
-		QString                                                         title;
-		QStringList                                                     menu;
-		std::vector<std::string>                                        extensions;
-		std::function<bool(IEditorHost&, std::span<const std::string>)> enabled;
-		std::function<void(IEditorHost&, std::span<const std::string>)> invoke;
+		std::string              id;
+		QString                  title;
+		QStringList              menu;
+		std::vector<std::string> extensions;
+		ActionPredicate          enabled;
+		ActionCallback           invoke;
 	};
 
 	struct ImporterDesc
 	{
 		std::string              id;
 		std::vector<std::string> extensions;
-		std::function<void(IEditorHost&, const std::filesystem::path&, std::string_view)> import;
+		ImportCallback           import;
 	};
 
 	struct ThumbnailProviderDesc
 	{
-		std::string                                                             id;
-		std::vector<std::string>                                                extensions;
-		std::function<Thumbnail(const assetlib::AssetStore&, std::string_view)> describe;
+		std::string              id;
+		std::vector<std::string> extensions;
+		ThumbnailCallback        describe;
 	};
 
 	/** Startup only. Own descriptors by value; reject invalid IDs/callbacks and collisions. See docs/editor_plugins.md. */
@@ -68,7 +78,7 @@ namespace editor
 		virtual void
 		AddAssetEditor(AssetEditorDesc desc) = 0;
 
-		/** Empty extensions means a menu action; otherwise every selected asset must match. */
+		/** Requires an open project; empty extensions means a menu action, otherwise all selected assets must match. */
 		virtual void
 		AddAction(ActionDesc desc) = 0;
 

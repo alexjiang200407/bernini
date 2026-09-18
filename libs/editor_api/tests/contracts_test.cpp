@@ -3,7 +3,9 @@
 #include <QLabel>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
+#include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -12,8 +14,6 @@
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
 #include <exception>
-#include <functional>
-#include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
@@ -29,12 +29,12 @@ namespace
 		public assetlib::IAssetKindRegistry
 	{
 	public:
-		std::vector<editor::PanelDesc>                     panels;
-		std::vector<editor::AssetEditorDesc>               editors;
-		std::vector<editor::ActionDesc>                    actions;
-		std::vector<editor::ImporterDesc>                  importers;
-		std::vector<editor::ThumbnailProviderDesc>         thumbnails;
-		std::vector<std::unique_ptr<assetlib::IAssetKind>> kinds;
+		std::vector<editor::PanelDesc>             panels;
+		std::vector<editor::AssetEditorDesc>       editors;
+		std::vector<editor::ActionDesc>            actions;
+		std::vector<editor::ImporterDesc>          importers;
+		std::vector<editor::ThumbnailProviderDesc> thumbnails;
+		std::vector<assetlib::AssetKindPtr>        kinds;
 
 		void
 		AddPanel(editor::PanelDesc desc) override
@@ -62,7 +62,7 @@ namespace
 			thumbnails.push_back(std::move(desc));
 		}
 		void
-		Add(std::unique_ptr<assetlib::IAssetKind> kind) override
+		Add(assetlib::AssetKindPtr kind) override
 		{
 			kinds.push_back(std::move(kind));
 		}
@@ -79,7 +79,7 @@ namespace
 			std::terminate();
 		}
 		void
-		InvokeRender(const std::function<void(editor::RenderContext&)>&) override
+		InvokeRender(const editor::RenderWork&) override
 		{
 			throw std::runtime_error("Unexpected rendering");
 		}
@@ -124,6 +124,7 @@ TEST_CASE(
 	REQUIRE(registry.panels.front().id == "sample.overview");
 	REQUIRE(registry.actions.size() == 1);
 	REQUIRE(registry.actions.front().extensions.empty());
+	REQUIRE(registry.actions.front().menu == QStringList{ "Tools" });
 
 	RecordingHost host;
 	QWidget       root;

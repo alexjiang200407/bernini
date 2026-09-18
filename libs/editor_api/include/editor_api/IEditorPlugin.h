@@ -1,6 +1,7 @@
 #pragma once
 
 #include <editor_api/IEditorRegistry.h>
+#include <memory>
 #include <string_view>
 
 namespace editor
@@ -14,6 +15,8 @@ namespace editor
 		virtual void
 		Register(IEditorRegistry& registry) = 0;
 	};
+
+	using EditorPluginPtr = std::unique_ptr<IEditorPlugin>;
 
 	/** Called only after build compatibility is checked; ownership transfers to the host. */
 	using CreateEditorPlugin                                   = IEditorPlugin* (*)();
