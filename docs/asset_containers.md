@@ -133,9 +133,14 @@ produce a container that is not on disk at all -- a walk over derived files has 
 enumerate.
 
 It is also what makes an import **renameable as one thing**. Every file here is named from the
-source, so `planRename` on a `.glb` (or on its `.bimport` -- one asset, two names) moves the source,
+source, so `planRename` on a source (or on its `.bimport` -- one asset, two names) moves the source,
 the document and each output that still carries the source's stem, and rewrites every reference to
-any of them. A *bound* rig is not in `outputs` and so is never moved by the source that borrowed it;
+any of them. What makes a file a source is a document naming it, not its extension -- an
+environment's may be a `.ktx2`, which is otherwise a texture. An environment's float cubes carry the
+stem plus their part (`forest_sky.ktx2`), and move to `<new>_sky.ktx2`: the suffix is how a cube's
+part is told. A document is never moved out of its category, `Authored/Meshes` or
+`Authored/EnvSources`, by a rename of its own or of a folder holding it, since that is the one place
+`Reimport` looks for it. A *bound* rig is not in `outputs` and so is never moved by the source that borrowed it;
 a *produced* one is moved, and the borrowing document is rewritten to follow. See
 [assetlib API](assetlib_api.md).
 

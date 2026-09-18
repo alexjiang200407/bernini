@@ -47,6 +47,28 @@ namespace assetlib
 		return EnvironmentPart::kLighting;
 	}
 
+	std::string_view
+	outputStemSuffix(EnvironmentOutput output) noexcept
+	{
+		const auto stemPart = [](std::string_view suffix) {
+			return suffix.substr(0, suffix.size() - c_TextureExtension.size());
+		};
+
+		switch (output)
+		{
+		case EnvironmentOutput::kSkySource:
+			return stemPart(c_SkySourceSuffix);
+		case EnvironmentOutput::kPrefilterSource:
+			return stemPart(c_PrefilterSourceSuffix);
+		case EnvironmentOutput::kIrradianceSource:
+			return stemPart(c_IrradianceSourceSuffix);
+		case EnvironmentOutput::kSky:
+		case EnvironmentOutput::kLighting:
+			return {};
+		}
+		return {};
+	}
+
 	bool
 	isPartOutput(std::string_view outputKey, EnvironmentPart part)
 	{

@@ -5,6 +5,8 @@
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
 
 #include <assetlib/skinning.h>
@@ -981,4 +983,21 @@ TEST_CASE("A UI document renames as a leaf, and not into another kind", "[assetr
 	CHECK_THROWS_AS(
 		planRename(root.Scan(), "Authored/UI/main.rml", "Authored/UI/main.rcss"),
 		std::runtime_error);
+}
+
+// `Reimport` finds a mesh source by walking `Authored/Meshes`, so a document moved out of it is one a
+// fresh checkout can never produce its containers from.
+TEST_CASE("An imported source cannot leave its category", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_import_category");
+	const Import   kirk = WriteImport(root, "kirk", /*rigged*/ false);
+
+	CHECK_THROWS_WITH(
+		planRename(root.Scan(), kirk.source, "Authored/Levels/kirk.glb"),
+		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
+	CHECK_THROWS_WITH(
+		planRename(root.Scan(), kirk.document, "Authored/EnvSources/kirk.bimport"),
+		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
+	fs::create_directories(root.path / "Authored/Meshes/crew");
+	CHECK_NOTHROW(planRename(root.Scan(), kirk.source, "Authored/Meshes/crew/kirk.glb"));
 }
