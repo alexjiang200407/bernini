@@ -6,8 +6,8 @@
 #include "fg/PassDesc.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
-#include "passes/ForwardPass.h"
 #include "passes/SceneBindings.h"
+#include "passes/draw_bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -26,7 +26,6 @@
 #include <bgl/MaterialType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -44,7 +43,7 @@ namespace bgl
 		};
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"psoIndex"sv,
+			"drawBucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -57,81 +56,6 @@ namespace bgl
 			"alphaHashSeed"sv,
 		};
 
-		// The buckets whose depth is a receiver's and needs no coverage: every static row that
-		// writes depth unconditionally.
-		std::array<uint16_t, 4 + cGameSlots>
-		StaticOpaquePsos() noexcept
-		{
-			std::array<uint16_t, 4 + cGameSlots> psos = {
-				static_cast<uint16_t>(idl::PsoType::kOpaque_StaticMesh_Null),
-				static_cast<uint16_t>(idl::PsoType::kOpaque_StaticMesh_PBR),
-				static_cast<uint16_t>(idl::PsoType::kOpaque_StaticMesh_LoosePbr),
-				static_cast<uint16_t>(idl::PsoType::kAssert_StaticMesh),
-			};
-
-			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
-			{
-				psos[4 + slot] = static_cast<uint16_t>(GameSlotRowBase(slot));
-			}
-
-			return psos;
-		}
-
-		// The static cutout and hashed rows, each with the discard-only twin of its colour-pass
-		// pixel stage: coverage is evaluated here with the colour pass's own seed, or the receiver
-		// would catch shadows on discarded texels. Order matches m_CoverageKernels.
-		struct CoverageBucket
-		{
-			std::string_view pixelSrc;
-			uint16_t         pso;
-		};
-
-		std::array<CoverageBucket, 4 + 2 * cGameSlots>
-		StaticCoverageBuckets() noexcept
-		{
-			std::array<CoverageBucket, 4 + 2 * cGameSlots> buckets = { {
-				{ "programs.forward.DepthOnly_PBR_AlphaTest"sv,
-				  static_cast<uint16_t>(idl::PsoType::kAlphaTest_StaticMesh_PBR) },
-				{ "programs.forward.DepthOnly_PBR_Loose_AlphaTest"sv,
-				  static_cast<uint16_t>(idl::PsoType::kAlphaTest_StaticMesh_LoosePbr) },
-				{ "programs.forward.DepthOnly_PBR_HashedAlpha"sv,
-				  static_cast<uint16_t>(idl::PsoType::kHashedAlpha_StaticMesh_PBR) },
-				{ "programs.forward.DepthOnly_PBR_Loose_HashedAlpha"sv,
-				  static_cast<uint16_t>(idl::PsoType::kHashedAlpha_StaticMesh_LoosePbr) },
-			} };
-
-			constexpr std::array<std::string_view, cGameSlots> c_CutoutSrcs = {
-				"programs.forward.DepthOnly_GameSlot0_AlphaTest"sv,
-				"programs.forward.DepthOnly_GameSlot1_AlphaTest"sv,
-				"programs.forward.DepthOnly_GameSlot2_AlphaTest"sv,
-				"programs.forward.DepthOnly_GameSlot3_AlphaTest"sv,
-			};
-			constexpr std::array<std::string_view, cGameSlots> c_HashedSrcs = {
-				"programs.forward.DepthOnly_GameSlot0_HashedAlpha"sv,
-				"programs.forward.DepthOnly_GameSlot1_HashedAlpha"sv,
-				"programs.forward.DepthOnly_GameSlot2_HashedAlpha"sv,
-				"programs.forward.DepthOnly_GameSlot3_HashedAlpha"sv,
-			};
-
-			// The static tier's rows sit at the slot base: opaque, then cutout, then hashed
-			// (ForwardPass::MakePsos fixes the order).
-			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
-			{
-				const auto base       = static_cast<uint16_t>(GameSlotRowBase(slot));
-				buckets[4 + slot * 2] = { c_CutoutSrcs[slot], static_cast<uint16_t>(base + 1) };
-				buckets[5 + slot * 2] = { c_HashedSrcs[slot], static_cast<uint16_t>(base + 2) };
-			}
-
-			return buckets;
-		}
-
-		// The mesh stage's half of ForwardPass's culling: a row the hardware does not cull hands
-		// back faces to the material's doubleSided, exactly as ForwardPass::Execute binds it.
-		[[nodiscard]] uint32_t
-		MeshStageCullsBackfaces(const uint16_t pso) noexcept
-		{
-			return ForwardPass::PsoCullMode(pso) == RasterCullMode::kNone ? 1u : 0u;
-		}
 	}
 
 	namespace
@@ -170,12 +94,14 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines)
+	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		// Opaque depth does not depend on the material, so the opaque rows share a depth-only pixel
-		// stage and differ only in where back faces are culled.
+		m_DrawBuckets = &buckets;
+
+		// Opaque depth does not depend on the material, so the opaque buckets share a depth-only
+		// pixel stage and differ only in where back faces are culled.
 		pipelines.Add(
 			m_HardwareCullKernel,
 			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kBack));
@@ -185,26 +111,39 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::AddBucketKernels(
-		IDevice*          device,
-		PipelineBatch&    pipelines,
-		const BucketMask& buckets)
+	StaticDepthPass::AddDrawBucketKernels(
+		IDevice*              device,
+		PipelineBatch&        pipelines,
+		const DrawBucketMask& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const auto coverageBuckets = StaticCoverageBuckets();
-		for (size_t i = 0; i < coverageBuckets.size(); ++i)
+		const uint32_t count = m_DrawBuckets->Count();
+		if (m_CoverageKernels.size() < count)
 		{
-			if (buckets.test(coverageBuckets[i].pso) &&
-			    !m_CoverageKernels[i].pipeline.IsInitialized())
+			m_CoverageKernels.resize(count);
+		}
+
+		for (uint32_t bucket = 0; bucket < count; ++bucket)
+		{
+			if (!buckets.test(bucket) || m_CoverageKernels[bucket].pipeline.IsInitialized())
 			{
-				pipelines.Add(
-					m_CoverageKernels[i],
-					DepthPipelineDesc(
-						device,
-						coverageBuckets[i].pixelSrc,
-						ForwardPass::PsoCullMode(coverageBuckets[i].pso)));
+				continue;
 			}
+
+			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
+			if (desc.geom != GeomType::kStaticMesh ||
+			    (desc.layer != LayerType::kMask && desc.layer != LayerType::kHashed))
+			{
+				continue;
+			}
+
+			pipelines.Add(
+				m_CoverageKernels[bucket],
+				DepthPipelineDesc(
+					device,
+					DrawBucketCoveragePixelSrc(desc),
+					DrawBucketCullMode(desc)));
 		}
 	}
 
@@ -225,15 +164,13 @@ namespace bgl
 		}
 
 		// The coverage family is demand-built; nothing to read names off until a first bucket is,
-		// and EnsureBucketPipelinesExist re-checks after every build.
+		// and EnsureDrawBucketPipelinesExist re-checks after every build.
 		if (!AnyInitialized(m_CoverageKernels))
 		{
 			return;
 		}
 
-		BindingNameCheck(
-			"StaticDepthPass"sv,
-			{ m_CoverageKernels.data(), m_CoverageKernels.size() })
+		BindingNameCheck("StaticDepthPass"sv, m_CoverageKernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
@@ -306,7 +243,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-			(*foundExpansion)["baseTable"] = idl::BaseTable::kPsoBucketed;
+			(*foundExpansion)["baseTable"] = idl::BaseTable::kDrawBucketed;
 		}
 
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
@@ -340,45 +277,52 @@ namespace bgl
 		gfxState.indirectArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
 		// One bucket per dispatch: the cbuffer is re-uploaded on every dispatch, so rewriting
-		// psoIndex and cullBackfaces between them is sound (docs/uniforms.md).
-		const auto dispatch = [&](MeshletKernel& kernel, const uint16_t pso) {
+		// drawBucketIndex and cullBackfaces between them is sound (docs/uniforms.md).
+		const auto dispatch = [&](MeshletKernel& kernel, const uint32_t bucket) {
 			if (auto expansion = kernel.FindUniforms("expansionData"))
 			{
-				(*expansion)["psoIndex"]      = static_cast<uint32_t>(pso);
-				(*expansion)["cullBackfaces"] = MeshStageCullsBackfaces(pso);
+				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
+				(*expansion)["drawBucketIndex"] = bucket;
+				(*expansion)["cullBackfaces"] =
+					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
+																							   0u;
 			}
 
 			gfxState.kernel = &kernel;
 			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(pso);
+			cmd->DispatchMeshIndirect(bucket);
 		};
 
 		BindKernel(m_HardwareCullKernel, draw, resources);
 		BindKernel(m_MaterialCullKernel, draw, resources);
 
-		for (const uint16_t pso : StaticOpaquePsos())
+		// Statics only, to the table's live count: opaque buckets through the two shared
+		// depth-only kernels, coverage layers through their own demand-built kernels, blended
+		// never -- a blended surface writes no depth for the receiver to reconstruct.
+		for (uint32_t bucket = 0, count = m_DrawBuckets->Count(); bucket < count; ++bucket)
 		{
-			const RasterCullMode cull = ForwardPass::PsoCullMode(pso);
-			gassert(
-				cull == RasterCullMode::kBack || cull == RasterCullMode::kNone,
-				"StaticDepthPass mirrors back-face or no hardware culling only");
-
-			dispatch(
-				cull == RasterCullMode::kNone ? m_MaterialCullKernel : m_HardwareCullKernel,
-				pso);
-		}
-
-		const auto buckets = StaticCoverageBuckets();
-		for (size_t i = 0; i < buckets.size(); ++i)
-		{
-			// A bucket never demanded has no kernel -- and, by the same fact, no instances.
-			if (!m_CoverageKernels[i].pipeline.IsInitialized())
+			const DrawBucketDesc& desc = m_DrawBuckets->Desc(bucket);
+			if (desc.geom != GeomType::kStaticMesh)
 			{
 				continue;
 			}
 
-			BindKernel(m_CoverageKernels[i], draw, resources);
-			dispatch(m_CoverageKernels[i], buckets[i].pso);
+			if (desc.layer == LayerType::kOpaque)
+			{
+				dispatch(
+					DrawBucketCullMode(desc) == RasterCullMode::kNone ? m_MaterialCullKernel :
+																		m_HardwareCullKernel,
+					bucket);
+				continue;
+			}
+
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances.
+			if (bucket < m_CoverageKernels.size() &&
+			    m_CoverageKernels[bucket].pipeline.IsInitialized())
+			{
+				BindKernel(m_CoverageKernels[bucket], draw, resources);
+				dispatch(m_CoverageKernels[bucket], bucket);
+			}
 		}
 	}
 }

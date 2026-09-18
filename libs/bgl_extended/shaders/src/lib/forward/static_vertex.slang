@@ -1,7 +1,7 @@
 // The static tier's vertex evaluation: the bind-pose vertex bytes placed by the instance transform.
 //
 // One of three; forward/mesh_stage.slang holds what they share and says why the split exists. Two
-// entry points call this one: programs/forward/StaticMesh, which draws the PSO-bucketed phase,
+// entry points call this one: programs/forward/StaticMesh, which draws the bucketed phase,
 // and programs/forward/AnyMesh, which draws lists that mix tiers.
 
 import lib.forward.common;

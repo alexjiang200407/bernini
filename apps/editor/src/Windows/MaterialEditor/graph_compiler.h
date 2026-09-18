@@ -27,7 +27,7 @@ namespace editor
 	 * submesh the graph drives to it.
 	 *
 	 * Called on every keystroke, so it rewrites the existing handle in place where it can: the
-	 * instances already overriding with it then follow the edit with no rebinding. Only while the PSO
+	 * instances already overriding with it then follow the edit with no rebinding. Only while the
 	 * bucket is unchanged, which the layer decides and an update cannot rewrite -- so changing the
 	 * alpha mode does mean a new material, and the old one is destroyed only after its replacement is
 	 * bound.

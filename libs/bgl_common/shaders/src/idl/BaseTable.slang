@@ -1,8 +1,8 @@
 // Which GPU table a dispatch reads its start index into the compacted instance list out of. There
-// are two because the paths order that list differently: opaque and alpha-test are bucketed by PSO,
-// transparent is depth-sorted and split into partitions.
+// are two because the paths order that list differently: opaque and alpha-test are grouped by draw
+// bucket, transparent is sorted by depth.
 public enum BaseTable : uint32_t
 {
-    kPsoBucketed = 0,
+    kDrawBucketed = 0,
     kDepthSorted,
 }

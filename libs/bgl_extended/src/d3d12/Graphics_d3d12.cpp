@@ -1,6 +1,7 @@
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
@@ -80,7 +81,11 @@ namespace bgl
 		SceneViewRef
 		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
-			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
+			return core::SharedRef<SceneView>::Make(
+				scene,
+				initialInstances,
+				m_ResourceManager,
+				m_DrawBucketTable);
 		}
 
 		OverlayRef
@@ -201,6 +206,8 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
+		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
 		std::unique_ptr<RenderContext> m_Context;
@@ -290,8 +297,12 @@ namespace bgl
 		// whatever module this bound to that slot.
 		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
 
-		m_Context =
-			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);
+		m_DrawBucketTable = core::SharedRef<DrawBucketTable>::Make();
+		m_Context         = std::make_unique<RenderContext>(
+			m_Device,
+			m_ResourceManager,
+			m_DrawBucketTable,
+			m_Opts.enableDebugLayer);
 
 		// The always-on set is built by the RenderContext above; the per-bucket kernels are built by
 		// the first Draw that demands each, and that path drops the sessions again after every

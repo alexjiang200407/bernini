@@ -464,7 +464,7 @@ TEST_CASE("A surface board previews through its own surface", "[materialeditor][
 
 	CHECK(desc.surface == "Rim");
 
-	// The layer keys decide the PSO row, and they are the board's own widgets.
+	// The layer keys decide the bucket, and they are the board's own widgets.
 	CHECK(desc.layerType == bgl::LayerType::kMask);
 	CHECK(desc.alphaCutoff == 0.25f);
 	CHECK_FALSE(desc.doubleSided);

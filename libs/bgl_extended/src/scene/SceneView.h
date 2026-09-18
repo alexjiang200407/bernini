@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/DrawBucketTable.h"
 #include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
@@ -10,7 +11,7 @@
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
-#include "types/BucketMask.h"
+#include "types/DrawBucketMask.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -60,7 +61,7 @@ namespace bgl
 		std::vector<uint8_t>           selected;
 
 		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
-		// pso for the pipeline family it actually draws through.
+		// bucket for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
 		// Whether a write has already rolled this placement's prevTransform this frame.
@@ -107,7 +108,8 @@ namespace bgl
 		SceneView(
 			const SceneRef&                   scene,
 			uint32_t                          initialInstances,
-			core::SharedRef<IResourceManager> resourceManager);
+			core::SharedRef<IResourceManager> resourceManager,
+			core::SharedRef<DrawBucketTable>  buckets);
 
 		~SceneView() noexcept override;
 
@@ -413,10 +415,10 @@ namespace bgl
 		 * demanded stays demanded, which is what lets the renderer build its pipelines once and
 		 * trust them built for as long as the view lives.
 		 */
-		[[nodiscard]] const BucketMask&
-		DemandedBuckets() const noexcept
+		[[nodiscard]] const DrawBucketMask&
+		DemandedDrawBuckets() const noexcept
 		{
-			return m_DemandedBuckets;
+			return m_DemandedDrawBuckets;
 		}
 
 	private:
@@ -548,7 +550,14 @@ namespace bgl
 		uint64_t m_TemporalEpoch      = 0;
 		uint64_t m_DrawnTemporalEpoch = 0;
 
-		BucketMask m_DemandedBuckets;
+		DrawBucketMask m_DemandedDrawBuckets;
+
+		// The renderer-wide id table every instance's bucket comes from; shared with RenderContext.
+		core::SharedRef<DrawBucketTable> m_DrawBucketTable;
+
+		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
+		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
+		UploadBuffer<uint32_t> m_TransparentDrawBucketFlags;
 
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;

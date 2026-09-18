@@ -329,7 +329,7 @@ normals are why they shade flat. With no alpha channel every fragment lands at c
 whole head pays the transparent path's ordering hazards for an image Opaque would draw correctly.
 The full mechanism is [passes.md § Two-sided surfaces](passes.md) — "it is the geometry showing
 through, not a defect in the sort". The engine's own PBR blend materials do exactly the same; a
-game-defined surface inherits it from the shared blend bucket.
+game-defined surface inherits it from the shared blend draw bucket.
 
 **The answer** is a material choice, not a fix: Double Sided off where a translucent solid has no
 inside worth drawing, or the Hashed Alpha layer, which writes real depth and self-occludes (and
@@ -340,5 +340,5 @@ paragraph above rests on. There is no gate that could pin per-triangle sorting, 
 deliberately has none.
 
 **If it comes back.** It never left; this entry exists so the symptom is recognised as the blend
-bucket's documented behaviour rather than diagnosed as a regression of whatever feature last
+draw bucket's documented behaviour rather than diagnosed as a regression of whatever feature last
 touched the material path.
