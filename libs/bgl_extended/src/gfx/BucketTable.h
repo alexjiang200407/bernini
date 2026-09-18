@@ -46,6 +46,15 @@ namespace bgl
 		/** @pre ceiling >= 1 and <= idl::cMaxBuckets. Tests shrink it to reach the clamp. */
 		explicit BucketTable(uint32_t ceiling = idl::cMaxBuckets);
 
+		BucketTable(const BucketTable&) = delete;
+		BucketTable(BucketTable&&)      = delete;
+
+		BucketTable&
+		operator=(const BucketTable&) = delete;
+
+		BucketTable&
+		operator=(BucketTable&&) = delete;
+
 		/**
 		 * The bucket for the key, allocated if this is its first use. kNull and kAssert shade no
 		 * base color, so they resolve to their opaque bucket whatever the layer.
