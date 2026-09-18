@@ -5,6 +5,8 @@ message(STATUS "Qt6 version: ${Qt6_VERSION}")
 
 qt_standard_project_setup()   # enables AUTOMOC / AUTORCC
 
+add_subdirectory(${BERNINI_ROOT}/libs/editor_api ${CMAKE_BINARY_DIR}/libs/editor_api)
+
 find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 
 # QtNodes (node-graph UI for the Material Editor). Vendored via FetchContent so it builds against

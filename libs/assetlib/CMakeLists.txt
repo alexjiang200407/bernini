@@ -16,6 +16,15 @@ file(GLOB_RECURSE ASSETLIB_INTERNAL_HEADERS CONFIGURE_DEPENDS
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${ASSETLIB_SOURCES} ${ASSETLIB_INTERNAL_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/assetlib" PREFIX "Shared Header Files" FILES ${ASSETLIB_SHARED_HEADERS})
 
+add_library(assetlib_plugin_api INTERFACE)
+target_include_directories(assetlib_plugin_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/plugin_api_selfcheck.cpp
+    CONTENT "#include <assetlib/IAssetPlugin.h>\n")
+add_library(assetlib_plugin_api_selfcheck STATIC ${CMAKE_CURRENT_BINARY_DIR}/plugin_api_selfcheck.cpp)
+target_link_libraries(assetlib_plugin_api_selfcheck PRIVATE assetlib_plugin_api)
+set_target_properties(assetlib_plugin_api_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+
 add_library(assetlib STATIC
 	${ASSETLIB_SOURCES}
 	${ASSETLIB_SHARED_HEADERS}

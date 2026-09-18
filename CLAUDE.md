@@ -194,6 +194,10 @@ minority of sources need is a net loss — the ccache that survives a branch swi
 directory, and the job budget every checkout's build shares so three of them do not thrash one
 machine.
 
+**[Editor plugin contracts](./docs/editor_plugins.md)** — the public native extension interfaces,
+their ownership/thread rules, and the compiled sample with a fake host. Production loading and
+registered-kind store integration are not implemented yet.
+
 **[Embedding](./docs/embedding.md)**
 
 What a game's `CMakeLists.txt` owes the engine to build it as a subdirectory of its own project: the
