@@ -541,3 +541,163 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 
 	(void)groundInstance;
 }
+
+/**
+ * A disc whose volume reaches behind the camera: a runner's track section it has already passed.
+ *
+ * The camera stands low at (0, 2, 5) looking along -Z. One disc sits under it, its volume
+ * crossing the near plane, and must still shade the ground it reaches ahead of the camera; one sits
+ * wholly behind it and must change nothing. Which quad each one drew is asserted by
+ * BoxBounds_test -- a quad too large shades the same pixels, so no image can tell.
+ */
+TEST_CASE(
+	"A blob shadow reaching behind the camera shades only what is ahead",
+	"[blobshadow][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+
+	auto target = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 128;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 100000;
+	sceneDesc.initialIndices              = 4000;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	scene->SetGround(bgl::GroundPlaneDesc());
+
+	auto whiteDesc            = bgl::PbrMaterialDesc();
+	whiteDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	whiteDesc.metallicFactor  = 0.0f;
+	whiteDesc.roughnessFactor = 1.0f;
+
+	const auto white = scene->CreatePbrMaterial(whiteDesc);
+
+	const auto groundGeom = scene->AddPlaneGeom(1, 1, 40.0f, 40.0f, white);
+	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
+
+	const glm::vec3 eye(0.0f, 2.0f, 5.0f);
+	const glm::vec3 lookAt(0.0f, 0.0f, -3.0f);
+
+	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
+
+	// Radius 5 about z = 4: the volume runs from z = -1, ahead, to z = 9, behind the eye.
+	const auto underfoot = view->CreateStaticMeshInstance(
+		casterGeom,
+		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f)) * Lifted(0.5f));
+
+	// Radius 5 about z = 20: every corner of the volume is behind the eye.
+	const auto behind = view->CreateStaticMeshInstance(
+		casterGeom,
+		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 20.0f)) * Lifted(0.5f));
+
+	const float aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);
+
+	auto camera = bgl::Camera();
+	camera.LookAt(eye, lookAt, glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	const glm::mat4 viewProj = glm::perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f) *
+	                           glm::lookAt(eye, lookAt, glm::vec3(0.0f, 1.0f, 0.0f));
+
+	const auto pixelOf = [&](const glm::vec3& world) {
+		const glm::vec4 clip = viewProj * glm::vec4(world, 1.0f);
+		const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
+		return glm::ivec2(
+			static_cast<int>((ndc.x * 0.5f + 0.5f) * static_cast<float>(c_Width)),
+			static_cast<int>((0.5f - ndc.y * 0.5f) * static_cast<float>(c_Height)));
+	};
+
+	// On the ground 2 m ahead of the underfoot disc's centre, inside its radius; and 7 m ahead,
+	// outside it.
+	const glm::ivec2 inside  = pixelOf(glm::vec3(0.0f, 0.0f, 2.0f));
+	const glm::ivec2 outside = pixelOf(glm::vec3(0.0f, 0.0f, -4.0f));
+	REQUIRE(inside.y < static_cast<int>(c_Height) - c_SampleSize);
+
+	struct Frame
+	{
+		float inside;
+		float outside;
+	};
+
+	const auto capture = [&](const char* name, const char* keepAs = nullptr) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+
+		const auto luma = [&](const glm::ivec2 at) {
+			return bgl::test::MeanColor(
+					   path,
+					   at.x - c_SampleSize / 2,
+					   at.y - c_SampleSize / 2,
+					   c_SampleSize,
+					   c_SampleSize)
+			    .Luma();
+		};
+
+		const Frame frame{ luma(inside), luma(outside) };
+		if (keepAs != nullptr)
+			std::filesystem::rename(path, keepAs);
+		else
+			std::filesystem::remove(path);
+		return frame;
+	};
+
+	auto desc       = bgl::BlobShadowDesc();
+	desc.radius     = 5.0f;
+	desc.intensity  = c_Intensity;
+	desc.fadeHeight = c_FadeHeight;
+
+	const auto basePath =
+		(std::filesystem::temp_directory_path() / "bernini_blob_near_base_kept.png").string();
+	const Frame base = capture("bernini_blob_near_base", basePath.c_str());
+	REQUIRE(base.inside > 0.05f);
+	REQUIRE(base.outside > 0.05f);
+
+	SECTION("a disc wholly behind the camera changes nothing")
+	{
+		view->SetBlobShadow(behind, desc);
+
+		const auto gotPath =
+			(std::filesystem::temp_directory_path() / "bernini_blob_near_behind_kept.png").string();
+		capture("bernini_blob_near_behind", gotPath.c_str());
+		CHECK(bgl::test::MatchesGolden(basePath, gotPath, 0.0f));
+	}
+
+	SECTION("a disc straddling the near plane shades the ground ahead and nothing past it")
+	{
+		view->SetBlobShadow(underfoot, desc);
+
+		const Frame shadowed = capture("bernini_blob_near_straddle");
+		CHECK(shadowed.inside < base.inside * 0.95f);
+		CHECK(shadowed.outside > base.outside * 0.98f);
+	}
+
+	std::filesystem::remove(basePath);
+	(void)groundInstance;
+}

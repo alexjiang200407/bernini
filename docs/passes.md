@@ -581,7 +581,10 @@ per disc (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
 `BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
 projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
-normal), and the pixel shader reconstructs the static surface under each pixel from the
+normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
+bounded by where its edges cross it; a volume wholly outside any
+one frustum plane — most often, all of it behind the camera — emits no quad at all
+(`lib.math.box_bounds`). The pixel shader reconstructs the static surface under each pixel from the
 [Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
