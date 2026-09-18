@@ -169,6 +169,28 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 	CHECK(afterCutout == sceneView->DemandedBuckets());
 	CHECK(afterCutout.test(*cutoutBucket));
 	CHECK(afterCutout.count() == 2);
+
+	// The perf shape: the passes issue one dispatch per initialized, non-transparent bucket, so
+	// what a frame issues scales with the distinct (tier, kind, layer) keys in use -- never with the
+	// material count and never with a fixed grid. Six more materials, each on its own placement,
+	// across the two keys already drawn, add no bucket and no kernel.
+	const uint32_t bucketsBefore = table.Count();
+	for (uint32_t i = 0; i < 6; ++i)
+	{
+		auto desc            = i % 2 == 0 ? opaqueDesc : cutoutDesc;
+		desc.baseColorFactor = glm::vec4(0.1f * static_cast<float>(i), 0.5f, 0.5f, 1.0f);
+
+		const auto material = scene->CreatePbrMaterial(desc);
+		const auto geom     = scene->AddPlaneGeom(1, 1, 1.0f, 1.0f, material);
+		(void)view->CreateStaticMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(static_cast<float>(i), 0.0f, 0.0f)));
+	}
+
+	gfx->DrawFrame(target, job);
+
+	CHECK(table.Count() == bucketsBefore);
+	CHECK(context->InitializedBuckets() == afterCutout);
 }
 
 // Demand building means an ordinary run checks only the buckets its content uses, so a renamed
