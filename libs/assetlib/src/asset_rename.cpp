@@ -143,12 +143,12 @@ namespace assetlib
 			{
 				if (ref.kind != RefKind::kImportedSource)
 					continue;
-				core::throw_runtime_error_if(
-					found.has_value(),
-					"assetlib::planRename: '{}' and '{}' both record '{}' as their source",
-					*found,
-					ref.referrer,
-					key);
+				if (found.has_value())
+					core::throw_runtime_error(
+						"assetlib::planRename: '{}' and '{}' both record '{}' as their source",
+						*found,
+						ref.referrer,
+						key);
 				found = ref.referrer;
 			}
 			return found;
