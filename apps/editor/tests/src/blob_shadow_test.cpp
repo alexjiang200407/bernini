@@ -13,6 +13,23 @@ TEST_CASE("The preview's disc follows the rig's width, not its stride reach", "[
 	CHECK(desc.fadeHeight == 4.0f);
 }
 
+TEST_CASE("The preview's shadows clear the floor the rig stands on", "[blobshadow]")
+{
+	// The rig's origin and planted soles are exactly at floor height: with no slack the depth
+	// buffer refuses half the floor, and the orbiting camera reshuffles which half every frame.
+	const glm::vec3 lo(-0.5f, 0.0f, -1.0f);
+	const glm::vec3 hi(0.5f, 4.0f, 1.0f);
+
+	CHECK(editor::BlobShadowForBounds(lo, hi).casterLift == 0.2f);
+	CHECK(editor::FootShadowForBounds(lo, hi).maxReceiverRise == 0.2f);
+
+	// A lift far short of the fade height, so the disc is barely weakened by it.
+	CHECK(editor::BlobShadowForBounds(lo, hi).casterLift < 0.1f * 4.0f);
+
+	CHECK(editor::BlobShadowForBounds(glm::vec3(0.0f), glm::vec3(0.0f)).casterLift > 0.0f);
+	CHECK(editor::FootShadowForBounds(glm::vec3(0.0f), glm::vec3(0.0f)).maxReceiverRise > 0.0f);
+}
+
 TEST_CASE("A degenerate bounds still yields a desc SetBlobShadow accepts", "[blobshadow]")
 {
 	const auto desc = editor::BlobShadowForBounds(glm::vec3(0.0f), glm::vec3(0.0f));

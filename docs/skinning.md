@@ -340,7 +340,10 @@ to keep in agreement beyond the one below.
   engine's contact disc (`ISceneView::SetBlobShadow`) on every animated instance — the cheap read
   of whether a foot is grounded, sized from the loaded bounds by `editor::BlobShadowForBounds` —
   the narrower horizontal extent, because the bounds are the clip union and their long axis is
-  stride reach, not body (free of the window, pinned by `[blobshadow]`). Beside it a **Foot shadows**
+  stride reach, not body, and cast from a twentieth of the rig's height up, because its origin
+  stands exactly on the floor and a disc cast from there refuses whichever half of the floor the
+  depth buffer rounds high — a different half every frame the camera orbits (free of the window,
+  pinned by `[blobshadow]`). Beside it a **Foot shadows**
   checkbox (off by default) adds `BlobShadowDesc::feet`, sized by `editor::FootShadowForBounds` — a
   tenth of the body's width across, faded a fifth of its height up — and independent of the disc, so
   either may be on alone. Only an instance `HasFootIK` holds takes them: a crowd-tier preview or a rig

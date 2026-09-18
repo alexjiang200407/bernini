@@ -7,6 +7,21 @@
 
 namespace editor
 {
+	namespace
+	{
+		/**
+		 * How far above the floor a shadow is cast from, or a receiver may rise. The previewed rig
+		 * stands with its origin and its planted soles exactly on the floor, so at zero the depth
+		 * buffer's rounding refuses half the floor and the orbiting camera reshuffles which half
+		 * every frame. The camera frames the rig, so that error grows with it.
+		 */
+		float
+		FloorSlack(const glm::vec3& extent) noexcept
+		{
+			return 0.05f * std::max(0.1f, extent.y);
+		}
+	}
+
 	bgl::BlobShadowDesc
 	BlobShadowForBounds(const glm::vec3& aabbMin, const glm::vec3& aabbMax) noexcept
 	{
@@ -18,6 +33,7 @@ namespace editor
 		auto desc       = bgl::BlobShadowDesc();
 		desc.radius     = std::max(0.1f, std::min(extent.x, extent.z) * 0.5f);
 		desc.fadeHeight = std::max(0.1f, extent.y);
+		desc.casterLift = FloorSlack(extent);
 		return desc;
 	}
 
@@ -26,9 +42,10 @@ namespace editor
 	{
 		const glm::vec3 extent = aabbMax - aabbMin;
 
-		auto desc       = bgl::FootShadowDesc();
-		desc.radius     = std::max(0.01f, std::min(extent.x, extent.z) * 0.1f);
-		desc.fadeHeight = std::max(0.02f, extent.y * 0.2f);
+		auto desc            = bgl::FootShadowDesc();
+		desc.radius          = std::max(0.01f, std::min(extent.x, extent.z) * 0.1f);
+		desc.fadeHeight      = std::max(0.02f, extent.y * 0.2f);
+		desc.maxReceiverRise = FloorSlack(extent);
 		return desc;
 	}
 
