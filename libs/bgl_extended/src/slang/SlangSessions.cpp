@@ -105,6 +105,11 @@ namespace bgl
 			// argument is a name for diagnostics, never opened.
 			for (const SlangSourceModule& sourceModule : desc.sourceModules)
 			{
+				if (!sourceModule.imported)
+				{
+					continue;
+				}
+
 				const std::string path = SlangModulePath(sourceModule.name);
 
 				SlangErrorChecker moduleChecker;
@@ -147,6 +152,58 @@ namespace bgl
 		const auto held = std::lock_guard(m_Mutex);
 		return m_ByThread.insert_or_assign(std::this_thread::get_id(), std::move(mine))
 		    .first->second.session.get();
+	}
+
+	slang::IModule*
+	SlangSessions::LoadModule(std::string_view moduleName) noexcept
+	{
+		slang::ISession* session = ForThisThread();
+
+		const SlangSourceModule* onDemand = nullptr;
+		{
+			const auto      held = std::lock_guard(m_Mutex);
+			ThreadSessions& mine = m_ByThread.at(std::this_thread::get_id());
+			if (const auto loaded = mine.loadedOnDemand.find(std::string(moduleName));
+			    loaded != mine.loadedOnDemand.end())
+			{
+				return loaded->second;
+			}
+
+			const auto found =
+				std::ranges::find_if(m_Desc.sourceModules, [&](const SlangSourceModule& candidate) {
+					return !candidate.imported && candidate.name == moduleName;
+				});
+			if (found != m_Desc.sourceModules.end())
+			{
+				onDemand = &*found;
+			}
+		}
+
+		const std::string path = SlangModulePath(moduleName);
+		SlangErrorChecker errChecker;
+
+		if (onDemand == nullptr)
+		{
+			slang::IModule* slangModule =
+				session->loadModule(path.c_str(), errChecker.WriteDiagnosticBlob());
+			errChecker.ReportError();
+			return slangModule;
+		}
+
+		// The pointer stays valid: the list only grows under AddSourceModule, whose @pre rules out
+		// a compile in flight.
+		slang::IModule* slangModule = session->loadModuleFromSourceString(
+			path.c_str(),
+			(path + ".slang").c_str(),
+			onDemand->source.c_str(),
+			errChecker.WriteDiagnosticBlob());
+		errChecker.ReportError();
+		gassert(slangModule != nullptr, "Failed to load Slang module '{}' from source", moduleName);
+
+		const auto held = std::lock_guard(m_Mutex);
+		m_ByThread.at(std::this_thread::get_id())
+			.loadedOnDemand.emplace(std::string(moduleName), slangModule);
+		return slangModule;
 	}
 
 	std::optional<ReflectedSurface>

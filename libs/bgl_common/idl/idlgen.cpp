@@ -950,7 +950,7 @@ namespace
 
 		out += std::format("\nnamespace {}\n{{\n", ns);
 
-		// Enums first: constants below may cast an enumerator (e.g. `uint32_t(MaterialType::kCount)`)
+		// Enums first: constants below may cast an enumerator (e.g. `uint32_t(MaterialType::kGameStart)`)
 		// and struct fields reference enums by name; a locally defined enum emits no #include.
 		for (const EnumInfo& e : enums)
 		{

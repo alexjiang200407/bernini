@@ -31,8 +31,7 @@ namespace
 		return handle;
 	}
 
-	// Game kinds are unbounded, so the cases walk well past the four slots the engine once
-	// reserved; nothing here may assume a surface count.
+	// Game kinds are unbounded; more than four, so nothing here can pass on a small fixed count.
 	constexpr uint32_t c_Surfaces = 6;
 
 	constexpr std::array<bgl::LayerType, 4> c_Layers = { {

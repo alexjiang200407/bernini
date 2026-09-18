@@ -44,8 +44,10 @@ namespace bgl
 			});
 		}
 
-		// What the slot's programs import. The tree ships a file of this name aliasing the null
-		// surface; a module loaded from source under it shadows that file.
+		constexpr uint32_t c_MaxSurfaces = idl::cMaxDrawBuckets - 1;
+
+		// What the slot's programs import: the surface's type under a name of the slot's own, so two
+		// surfaces declaring the same struct name never meet in one program.
 		std::string
 		BindingModuleName(uint32_t slot)
 		{
@@ -63,8 +65,7 @@ namespace bgl
 		}
 
 		// A registered surface's programs, generated rather than shipped because a program has to
-		// name the surface's type. Each is a one-line call into lib/forward/GameSurface.slang, where
-		// the body lives and is validated at build time (programs/forward/GameSurfaceShapes.slang).
+		// name the surface's type.
 		std::string
 		ColorProgramSource(uint32_t slot, std::string_view program)
 		{
@@ -137,14 +138,23 @@ namespace bgl
 					DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
 			};
 
+			// Entry programs nothing imports, so each loads only when a draw bucket builds it.
 			return {
-				{ colour(LayerType::kOpaque), ColorProgramSource(slot, "GameOpaqueProgram") },
-				{ colour(LayerType::kMask), ColorProgramSource(slot, "GameAlphaTestedProgram") },
-				{ colour(LayerType::kHashed), ColorProgramSource(slot, "GameHashedAlphaProgram") },
+				{ colour(LayerType::kOpaque),
+				  ColorProgramSource(slot, "GameOpaqueProgram"),
+				  false },
+				{ colour(LayerType::kMask),
+				  ColorProgramSource(slot, "GameAlphaTestedProgram"),
+				  false },
+				{ colour(LayerType::kHashed),
+				  ColorProgramSource(slot, "GameHashedAlphaProgram"),
+				  false },
 				{ coverage(LayerType::kMask),
-				  CoverageProgramSource(slot, "DiscardUncoveredGameAlphaTested") },
+				  CoverageProgramSource(slot, "DiscardUncoveredGameAlphaTested"),
+				  false },
 				{ coverage(LayerType::kHashed),
-				  CoverageProgramSource(slot, "DiscardUncoveredGameHashedAlpha") },
+				  CoverageProgramSource(slot, "DiscardUncoveredGameHashedAlpha"),
+				  false },
 			};
 		}
 
@@ -213,16 +223,16 @@ namespace bgl
 				continue;
 			}
 
-			// Every surface needs at least one draw bucket of its own and bucket 0 is the unlit
-			// fallback, so past this not even one draw of the surface could be allocated.
-			if (types.size() == idl::cMaxDrawBuckets - 1)
+			// Every registered surface must be able to draw in the same frame (ADR-6's ceiling): a
+			// draw bucket each, beside the unlit fallback's.
+			if (types.size() == c_MaxSurfaces)
 			{
 				throw ApiError(
 					std::format(
-						"surfaceShaderDir '{}' holds more surfaces than the {} draw buckets the "
-						"renderer can allocate; '{}' is past the last",
+						"surfaceShaderDir '{}' holds more than {} surfaces, the most that can draw "
+						"in one frame; '{}' is past the last",
 						dir.generic_string(),
-						idl::cMaxDrawBuckets,
+						c_MaxSurfaces,
 						stem));
 			}
 
@@ -250,7 +260,7 @@ namespace bgl
 		if (!types.empty())
 		{
 			device.AddSourceModule(
-				{ "programs.forward.Transparent", TransparentProgramSource(types) });
+				{ "programs.forward.Transparent", TransparentProgramSource(types), false });
 		}
 
 		return types;

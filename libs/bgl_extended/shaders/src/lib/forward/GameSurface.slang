@@ -189,9 +189,8 @@ public struct NullSurface : ISurfaceSource
 
 public extension MaterialData
 {
-    // The colour-pass programs a registered surface draws through, one per layer. Each generated
-    // program (surface_registry.cpp) is a one-line call to one of these, so the bodies live where
-    // the build validates them.
+    // The colour-pass programs a registered surface draws through, one per layer; each generated
+    // program (surface_registry.cpp) is a one-line call to one of these.
     public ForwardPSOut GameOpaqueProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
         ForwardPSOut output;

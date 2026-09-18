@@ -6,7 +6,7 @@ public enum MaterialType : uint32_t
     kPBR,
     kLoosePbr, // unbaked, per-channel PBR material (editor / channel-viz); bakes to kPBR.
     // The game surfaces, one kind each from here and unbounded: the surface registered Nth tags its
-    // records kGameStart + N. Any kind at or past this is a surface's.
+    // records kGameStart + N.
     kGameStart,
 }
 ;

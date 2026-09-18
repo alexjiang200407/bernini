@@ -71,7 +71,7 @@ struct FillerSurface : ISurfaceSource
 
 // The whole registration path: each surface is reflected, bound to a slot and given the programs
 // its draw buckets will ask for, in filename order.
-TEST_CASE("A surface directory fills the reserved slots in filename order", "[surface][registry]")
+TEST_CASE("A surface directory fills slots in filename order", "[surface][registry]")
 {
 	auto gfx = bgl::CreateGraphics(SurfaceOptions("./shaders/tests/surfaces"));
 	REQUIRE(gfx != nullptr);
@@ -112,9 +112,8 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	CHECK(types[2].params.values[0].name == "tint");
 }
 
-// The engine once reserved four slots and refused a fifth surface by name. A surface's programs are
-// now generated at registration, so the count is bounded only by the draw-bucket ceiling -- six here,
-// each a kind of its own in filename order.
+// A surface's programs are generated at registration, so the count is bounded only by the
+// draw-bucket ceiling -- six here, each a kind of its own in filename order.
 TEST_CASE("More than four surfaces register, each a kind of its own", "[surface][registry]")
 {
 	const std::filesystem::path dir = FreshDir("bernini_surfaces_six");
@@ -157,8 +156,8 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 			MessageMatches(ContainsSubstring("is not a directory")));
 	}
 
-	// Every surface needs a draw bucket of its own and bucket 0 is the unlit fallback, so the one
-	// past the ceiling is refused by name rather than clamped into drawing unlit.
+	// Every registered surface must be able to draw in one frame -- a draw bucket each, beside the
+	// unlit fallback's -- so the one past that is refused by name rather than clamped to unlit.
 	SECTION("a surface past the draw-bucket ceiling")
 	{
 		const std::filesystem::path dir = FreshDir("bernini_surfaces_ceiling");

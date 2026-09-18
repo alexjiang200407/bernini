@@ -105,9 +105,10 @@ follow from that and are worth stating plainly:
   packed game reads its shaders off the loose directory beside it.
 
 Registration is in filename order, so which surface takes which slot is the directory's decision
-and not a document's. The count is bounded only by the draw-bucket ceiling
-(`cMaxDrawBuckets`): each surface needs a draw bucket of its own, so one past that is refused by name
-at startup rather than ignored. A surface's programs -- its opaque, alpha-test and hashed colour
+and not a document's. The count is bounded only by the draw-bucket ceiling: every registered
+surface must be able to draw in the same frame, a draw bucket each beside the unlit fallback's, so
+at most `cMaxDrawBuckets - 1` register and the next is refused by name at startup rather than
+ignored. A surface's programs -- its opaque, alpha-test and hashed colour
 programs, the static depth pass's coverage twins, and an arm in the shared blend program -- are
 generated at registration (`src/gfx/surface_registry.cpp`); each is one call into
 `lib/forward/GameSurface.slang`, and `programs/forward/GameSurfaceShapes.slang` instantiates every
@@ -234,7 +235,7 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
-| a file that will not compile, or a surface past the draw-bucket ceiling | `CreateGraphics`, naming the file |
+| a file that will not compile, or a surface past `cMaxDrawBuckets - 1` | `CreateGraphics`, naming the file |
 
 ## Boundaries
 

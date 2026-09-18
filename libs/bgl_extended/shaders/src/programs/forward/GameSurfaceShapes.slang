@@ -38,8 +38,18 @@ void PSDepthHashedAlpha(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
     materialData.DiscardUncoveredGameHashedAlpha<NullSurface>(input, isFrontFace);
 }
 
+// The generated blend program's shape: a switch on the record's kind, an arm per surface, and the
+// engine's kinds as the fallthrough.
 [shader("pixel")]
-float4 PSBlended(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
+float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
-    return materialData.ShadeGameBlended<NullSurface>(input, isFrontFace);
+    switch (uint(LoadMaterialKind(input.materialOffset)))
+    {
+    case 4u:
+        return materialData.ShadeGameBlended<NullSurface>(input, isFrontFace);
+    case 5u:
+        return materialData.ShadeGameBlended<NullSurface>(input, isFrontFace);
+    default:
+        return materialData.ShadeBlendedEngineKind(input, isFrontFace);
+    }
 }

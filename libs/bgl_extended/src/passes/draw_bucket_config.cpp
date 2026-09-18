@@ -16,8 +16,9 @@ namespace bgl
 	{
 		using namespace std::string_view_literals;
 
-		// A program is a file, named `programs.forward.[DepthOnly_]<stem><layer suffix>`: one stem
-		// per material kind, one suffix per layer.
+		// A program is named `programs.forward.[DepthOnly_]<stem><layer suffix>` -- a file for an
+		// engine kind, generated text for a surface's: one stem per material kind, one suffix per
+		// layer.
 		std::string
 		ProgramStem(const MaterialType material)
 		{

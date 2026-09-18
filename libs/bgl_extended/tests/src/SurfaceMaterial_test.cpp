@@ -93,7 +93,7 @@ namespace
 }
 
 // The gate for the whole contract. PbrLike fills PbrSurface exactly as the engine's own PBR record
-// does, so the same scene drawn through a reserved game slot has to land on the engine's own answer
+// does, so the same scene drawn through a game surface's programs has to land on the engine's own answer
 // -- the golden PbrRender_test writes, pixel for pixel at the suite's tolerance. Everything between
 // the two is the seam this feature adds: a record packed from a reflected layout, a reader over the
 // arena, a generic instantiated on a game's struct, and a row of its own.
@@ -278,10 +278,10 @@ namespace
 	}
 }
 
-// More surfaces than the engine once reserved, all drawing in one frame: each through its own
-// generated colour program (top row) and every one through the one generated blend program (bottom
-// row). The blend row is the case the old four-arm switch got silently wrong -- it sent any kind past
-// the fourth to the fourth surface -- so every sphere is checked for its own surface's colour.
+// More than four surfaces drawing in one frame: each through its own generated colour program (top
+// row), and every one through the one generated blend program (bottom row), where one surface
+// shaded as another is the likeliest wrong answer -- so every sphere is checked for its own
+// surface's colour.
 TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]")
 {
 	const std::filesystem::path dir =

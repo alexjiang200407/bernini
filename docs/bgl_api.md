@@ -272,9 +272,10 @@ flowchart TD
   names a file, and a file added later does not renumber the ones before it. Anything else there is
   the game's own code: the same directory is its module search path, so a shared header beside the
   surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.
-  **As many as the draw-bucket ceiling allows** -- each surface's programs are generated at
-  registration, so nothing is reserved per slot, and only a surface that could not get even one
-  draw bucket of its own is refused. A directory that is missing, a surface past that ceiling, or a
+  **Up to `cMaxDrawBuckets - 1`** -- each surface's programs are generated at registration, so
+  nothing is reserved per slot, and the bound is that every registered surface can draw in the
+  same frame, a draw bucket each beside the unlit fallback's. A directory that is missing, a surface
+  past that bound, or a
   module that imports the contract and holds no single conforming struct throws `ApiError` from
   `CreateGraphics`. **Read once**: the surfaces are bound to their slots in the constructor and
   nothing rebinds one afterwards -- a pipeline drawing one is built the first time a frame
