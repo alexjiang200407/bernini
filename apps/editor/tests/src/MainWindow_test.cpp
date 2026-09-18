@@ -381,6 +381,63 @@ TEST_CASE(
 	}
 }
 
+// As bloom: how a viewport grades is config.json's, and the Render menu only switches it. A partial
+// CDL channel set overrides only the channels it names, and a value bgl would throw on is clamped.
+TEST_CASE(
+	"A viewport grades as config.json says, and the menu only toggles it",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "startupProject": ")" + editor.EscapedProjectFile() +
+	                           R"(",
+  "materialEditor":  { "temporalAA": false,
+                       "colorGrade": { "enabled": true, "temperature": 20.0, "saturation": 1.3,
+                                       "slope": { "r": 1.1 }, "power": { "g": 0.0 },
+                                       "tint": 250.0 } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	MainWindow window(nullptr, editor.ConfigFile());
+
+	const auto* material = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(material != nullptr);
+	auto* materialView = material->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+
+	CHECK(materialView->IsColorGradeEnabled());
+
+	const bgl::ColorGradeSettings named = materialView->GetColorGradeSettings();
+	CHECK(named.temperature == Catch::Approx(20.0f));
+	CHECK(named.saturation == Catch::Approx(1.3f));
+	CHECK(named.slope.r == Catch::Approx(1.1f));
+	CHECK(named.slope.g == Catch::Approx(1.0f));
+	CHECK(named.power.g > 0.0f);
+	CHECK(named.tint == Catch::Approx(100.0f));
+	CHECK(named.contrast == Catch::Approx(bgl::ColorGradeSettings().contrast));
+
+	// No section is the grade's default: off and neutral.
+	const auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(animationView->IsColorGradeEnabled());
+	CHECK(animationView->GetColorGradeSettings().saturation == Catch::Approx(1.0f));
+
+	QAction* grade = ActionNamed(window, "Color Grade");
+	REQUIRE(grade != nullptr);
+	CHECK(grade->isChecked());
+
+	// Unchecking switches every viewport off and leaves what config.json named in place.
+	grade->setChecked(false);
+	CHECK_FALSE(materialView->IsColorGradeEnabled());
+	CHECK(materialView->GetColorGradeSettings().saturation == Catch::Approx(1.3f));
+}
+
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
 // behaviour rather than layout: the panel behind it holds no mesh and renders nothing.
 TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
