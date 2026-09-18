@@ -22,6 +22,13 @@ class QTimer;
 
 #include "Render/Renderer.h"
 
+// A viewport's `bloom` section of config.json. The Render menu toggles `enabled`, never `settings`.
+struct BloomConfig
+{
+	bool               enabled = false;
+	bgl::BloomSettings settings;
+};
+
 struct RenderTargetWindowDesc
 {
 	Renderer* renderer         = nullptr;
@@ -43,11 +50,8 @@ struct RenderTargetWindowDesc
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
 
-	// Whether this viewport starts with bloom running, and how it blooms. Read from config.json;
-	// the Render menu toggles the first and never touches the second. Out-of-range settings are
-	// clamped and warned about, like the render scale.
-	bool               bloomEnabled = false;
-	bgl::BloomSettings bloom;
+	// Out-of-range settings are clamped and warned about, like the render scale.
+	BloomConfig bloom;
 
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to

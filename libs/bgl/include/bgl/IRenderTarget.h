@@ -34,30 +34,19 @@ namespace bgl
 		void* wnd = nullptr;
 	};
 
-	/**
-	 * How a target blooms: what part of the linear HDR scene spills into a glow, and how strongly.
-	 * Applied ahead of the display curve, so the glow is of the scene's radiance rather than of the
-	 * displayed image. Every field is a per-frame shader constant -- nothing is reallocated by a
-	 * change.
-	 */
+	/** How a target blooms. Per-frame constants: a change reallocates nothing. */
 	struct BloomSettings
 	{
-		// The glow's weight in the combine: sceneColor + intensity * bloom. Zero adds nothing but
-		// still pays for the chain; turn bloom off instead.
+		// sceneColor + intensity * bloom.
 		float intensity = 0.25f;
 
-		// The linear radiance where a pixel starts to contribute, after exposure. Exposure puts a
-		// scene's average near middle grey (0.18), so 0.5 blooms bright surfaces and highlights and
-		// leaves mid-tones alone; 1.0 leaves almost nothing but specular peaks, and 0.0 blooms
-		// everything, which reads as soft focus.
+		// Linear radiance after exposure, which puts a scene's average near 0.18.
 		float threshold = 0.5f;
 
-		// How gradually the threshold takes hold, as a share of it: 0 is a hard cut, 1 fades in
-		// from half the threshold.
+		// The threshold's fade-in, as a share of it: 0 is a hard cut.
 		float softKnee = 0.5f;
 
-		// How far the glow spreads: the weight of the coarser level folded in at each upsample.
-		// Low keeps a tight halo; 1.0 lets the widest level through undiminished.
+		// How far the glow spreads: the coarser level's weight at each upsample.
 		float scatter = 0.7f;
 	};
 
@@ -151,12 +140,8 @@ namespace bgl
 		IsBloomEnabled() const noexcept = 0;
 
 		/**
-		 * Turns bloom on or off for subsequent frames. Unlike TAA there is nothing to opt into at
-		 * creation: the chain it renders through is allocated at the first frame that needs it, so
-		 * enabling cannot fail here. Turning it off keeps the chain -- bloom holds no history, so
-		 * there is nothing stale to discard and re-enabling costs nothing. What is kept is about a
-		 * third of the output size in RGBA16 twice over, roughly 11 MiB per 1080p target and 44 MiB
-		 * at 4K, charged to the device-texture memory tag.
+		 * Turns bloom on or off for subsequent frames. The chain is allocated at the first frame
+		 * that blooms and kept when turned off (~11 MiB at 1080p, ~44 MiB at 4K).
 		 */
 		virtual void
 		SetBloomEnabled(bool enabled) noexcept = 0;
@@ -165,9 +150,6 @@ namespace bgl
 		GetBloomSettings() const noexcept = 0;
 
 		/**
-		 * Sets how the target blooms from the next frame on. Per-frame shader constants only --
-		 * nothing is reallocated, so the settings can be swept while watching one scene.
-		 *
 		 * @throws GraphicsError if `intensity` or `threshold` is negative or not finite, or
 		 *         `softKnee` or `scatter` is outside [0, 1].
 		 */

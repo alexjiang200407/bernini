@@ -11,6 +11,7 @@
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <qwidget.h>
+#include <string_view>
 #include <utility>
 
 #if defined(__APPLE__)
@@ -84,14 +85,15 @@ namespace
 	}
 
 	float
-	ClampBloomValue(const char* name, float value, float lo, float hi)
+	ClampBloomValue(std::string_view name, float value, float lo, float hi)
 	{
 		const float clamped = std::isfinite(value) ? std::clamp(value, lo, hi) : lo;
 		if (clamped != value)
 		{
 			qWarning(
-				"RenderTarget: bloom %s %.3f out of range, using %.3f",
-				name,
+				"RenderTarget: bloom %.*s %.3f out of range, using %.3f",
+				static_cast<int>(name.size()),
+				name.data(),
 				static_cast<double>(value),
 				static_cast<double>(clamped));
 		}
@@ -163,12 +165,12 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
 	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
-	const bgl::BloomSettings bloom = ClampBloomSettings(m_Desc.bloom);
+	const bgl::BloomSettings bloom = ClampBloomSettings(m_Desc.bloom.settings);
 
 	m_RenderTarget = m_Desc.renderer->Invoke([&] {
 		auto target = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc);
 		target->SetBloomSettings(bloom);
-		target->SetBloomEnabled(m_Desc.bloomEnabled);
+		target->SetBloomEnabled(m_Desc.bloom.enabled);
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
