@@ -106,6 +106,17 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	             "baked from. "
 	             "They are what a re-bake reads, so they are kept rather than being scratch." });
 
+	m_ImportedSourceDir = editor::AddFolderRow(
+		layout,
+		this,
+		{ .label       = "Source folder:",
+	      .category    = assetlib::c_EnvSourcesDirectoryName,
+	      .objectName  = "importedSourceDirectory",
+	      .placeholder = c_OptionalPlaceholder,
+	      .tip = "Subfolder of Authored/EnvSources/ for the copy of the file being imported, and "
+	             "the .bimport beside it. Together they are what re-produces this environment in a "
+	             "checkout that does not carry the derived files." });
+
 	// It composes the other two, so with neither there is nothing for it to name. Disabled rather
 	// than left tickable, so the refusal is visible before OK rather than as an error afterwards.
 	const auto refreshEnvironment = [this] {
@@ -171,6 +182,14 @@ EnvironmentImporterDialog::GetSourceDirectory() const
 	return editor::JoinCategory(
 		assetlib::c_SourceTexturesDirectoryName,
 		m_SourceDir->text().trimmed());
+}
+
+QString
+EnvironmentImporterDialog::GetImportedSourceDirectory() const
+{
+	return editor::JoinCategory(
+		assetlib::c_EnvSourcesDirectoryName,
+		m_ImportedSourceDir->text().trimmed());
 }
 
 QString

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
@@ -30,8 +31,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_HdrExtension = ".hdr";
-
 		// The sky's defocus chain convolves every level below the first with this many samples.
 		constexpr uint32_t c_SkyChainSamples = 256;
 
@@ -52,7 +51,7 @@ namespace assetlib
 	}
 
 	EnvironmentInput::EnvironmentInput(const std::filesystem::path& source) :
-		m_Equirect(extensionOf(source.generic_string()) == c_HdrExtension)
+		m_Equirect(extensionOf(source.generic_string()) == c_EnvSourceHdrExtension)
 	{
 		m_Input = m_Equirect ? loadRadianceHdr(source) : loadKTX2(source);
 

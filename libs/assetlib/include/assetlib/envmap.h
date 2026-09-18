@@ -283,7 +283,8 @@ namespace assetlib
 
 		// Where `source` itself is copied, with the `.bimport` describing it beside it -- not
 		// `sourceDir`, which holds the float cubes computed *from* it. Must sit under
-		// `Authored/EnvSources`, the environment sources' category; anywhere else is refused.
+		// `Authored/EnvSources`, the environment sources' category; anywhere else is refused. The
+		// import dialog offers a subfolder of it, as it does for each part.
 		std::filesystem::path importedSourceDir = c_EnvSourcesDirectoryName;
 
 		bool sky         = true;  // write the `.bsky`

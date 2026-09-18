@@ -6,9 +6,18 @@
 
 namespace editor
 {
-	/** Whether `path` names an imported source, by its extension alone -- it is never opened. */
+	/**
+	 * Whether `key` -- data-root-relative -- names a file an import copied in: a mesh's `.glb` or an
+	 * environment's `.hdr` or cube `.ktx2`. `assetlib::isImportedSourceKey` is the rule; the
+	 * category is half of it, since a `.ktx2` is an ordinary texture anywhere else. Nothing is
+	 * opened.
+	 */
 	[[nodiscard]] bool
-	IsImportedSource(const QString& path);
+	IsImportedSourceKey(const QString& key);
+
+	/** The same of an absolute `path`, false when it lies outside `dataRoot` or none is open. */
+	[[nodiscard]] bool
+	IsImportedSource(const QString& dataRoot, const QString& path);
 
 	/**
 	 * The `.bmesh` the source at `path` produced, absolute, or empty. `dataRoot` is the project's

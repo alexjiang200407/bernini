@@ -369,6 +369,8 @@ namespace editor
 		desc.skyDir      = std::filesystem::path(dialog.GetSkyDirectory().toStdWString());
 		desc.lightingDir = std::filesystem::path(dialog.GetLightingDirectory().toStdWString());
 		desc.sourceDir   = std::filesystem::path(dialog.GetSourceDirectory().toStdWString());
+		desc.importedSourceDir =
+			std::filesystem::path(dialog.GetImportedSourceDirectory().toStdWString());
 
 		// Import never overwrites, here as for a mesh. The files are asked of assetlib rather than
 		// rebuilt here, so the check cannot come to name different ones than the import would write.

@@ -40,12 +40,11 @@ namespace editor
 			                                                                         relative;
 		}
 
-		// An imported source is not an asset kind -- `assetTypeFromExtension` does not know a `.glb`
-		// -- but it is the row standing for a model, so it is what a rename is asked of. Authored
-		// only: the extension alone would also claim a `.glb` sitting in the derived half, which is
-		// a file someone left there rather than a source this project imported.
-		if (IsImportedSource(path) &&
-		    assetlib::originOf(relative.toStdString()) == assetlib::AssetOrigin::kAuthored)
+		// An imported source is not an asset kind -- `assetTypeFromExtension` knows neither a `.glb`
+		// nor an environment's `.hdr` as one -- but it is the row standing for what was imported, so
+		// it is what a rename is asked of. Its category is part of the question, which is what keeps
+		// a `.glb` left in the derived half, or any other `.ktx2`, from claiming to be one.
+		if (IsImportedSourceKey(relative))
 			return relative;
 
 		const std::optional<assetlib::AssetType> type =
@@ -143,6 +142,6 @@ namespace editor
 	bool
 	IsRemovableAsset(const QString& asset)
 	{
-		return IsActionableAsset(asset) && !IsImportedSource(asset);
+		return IsActionableAsset(asset) && !IsImportedSourceKey(asset);
 	}
 }

@@ -212,6 +212,22 @@ TEST_CASE("the document lives beside its source, one key from the other", "[impo
 	CHECK_THROWS(importDocumentKeyFor("Authored/Meshes/no_extension"));
 }
 
+// What a view asks of a path it has never opened. The category is half of it: a `.ktx2` is an
+// ordinary texture everywhere but the environment sources' folder.
+TEST_CASE("an imported source is known by its category and extension", "[importdoc]")
+{
+	CHECK(isImportedSourceKey("Authored/Meshes/kirk.glb"));
+	CHECK(isImportedSourceKey("Authored/Meshes/crew/kirk.GLB"));
+	CHECK(isImportedSourceKey("Authored/EnvSources/forest.hdr"));
+	CHECK(isImportedSourceKey("Authored/EnvSources/outdoor/forest.ktx2"));
+
+	CHECK_FALSE(isImportedSourceKey("Derived/Meshes/kirk.glb"));
+	CHECK_FALSE(isImportedSourceKey("Authored/Meshes/kirk.bimport"));
+	CHECK_FALSE(isImportedSourceKey("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(isImportedSourceKey("Authored/Environments/forest.hdr"));
+	CHECK_FALSE(isImportedSourceKey(""));
+}
+
 TEST_CASE("the document names the source it describes", "[importdoc]")
 {
 	ImportDocument document;

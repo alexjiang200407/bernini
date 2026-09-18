@@ -2,6 +2,7 @@
 
 #include "util/asset_paths.h"
 
+#include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
@@ -10,7 +11,6 @@
 #include <exception>
 #include <filesystem>
 #include <qfileinfo.h>
-#include <qnamespace.h>
 #include <qobject.h>
 #include <qstringview.h>
 #include <qtypes.h>
@@ -38,7 +38,7 @@ namespace editor
 		QString
 		DocumentFor(const QString& dataRoot, const QString& path)
 		{
-			if (!IsImportedSource(path) || dataRoot.isEmpty())
+			if (dataRoot.isEmpty())
 				return {};
 
 			const QDir root(dataRoot);
@@ -46,7 +46,7 @@ namespace editor
 			// A source belonging to another project would otherwise resolve straight back into it;
 			// GetKeyUnder is where that is refused, and where the reason is written down.
 			const QString key = GetKeyUnder(dataRoot, path);
-			if (key.isEmpty() || key == ".")
+			if (key.isEmpty() || key == "." || !IsImportedSourceKey(key))
 				return {};
 
 			const QByteArray utf8 = key.toUtf8();
@@ -58,9 +58,21 @@ namespace editor
 	}
 
 	bool
-	IsImportedSource(const QString& path)
+	IsImportedSourceKey(const QString& key)
 	{
-		return path.endsWith(Suffix(assetlib::c_ImportedSourceExtension), Qt::CaseInsensitive);
+		const QByteArray utf8 = key.toUtf8();
+		return assetlib::isImportedSourceKey(
+			std::string_view(utf8.constData(), static_cast<size_t>(utf8.size())));
+	}
+
+	bool
+	IsImportedSource(const QString& dataRoot, const QString& path)
+	{
+		if (dataRoot.isEmpty())
+			return false;
+
+		const QString key = GetKeyUnder(dataRoot, path);
+		return !key.isEmpty() && key != "." && IsImportedSourceKey(key);
 	}
 
 	QString

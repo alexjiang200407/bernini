@@ -153,6 +153,12 @@ namespace
 	{
 		return dialog.findChild<QLineEdit*>("sourceDirectory");
 	}
+
+	QLineEdit*
+	ImportedSourceDirField(const EnvironmentImporterDialog& dialog)
+	{
+		return dialog.findChild<QLineEdit*>("importedSourceDirectory");
+	}
 }
 
 // Each part lands in its category by default: that is the layout assetlib::Project::Create scaffolds and every
@@ -164,6 +170,9 @@ TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
 	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
 	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures");
+
+	// The copy of the file being imported, which is what the family is re-produced from.
+	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources");
 }
 
 TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
@@ -175,6 +184,9 @@ TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
 
 	CHECK(dialog.GetSkyDirectory() == "Derived/Sky/outdoor/dusk");
 	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures/hdri");
+
+	ImportedSourceDirField(dialog)->setText("outdoor");
+	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources/outdoor");
 
 	// The others are untouched by it.
 	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
@@ -198,9 +210,13 @@ TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog
 	INFO("typed: " << rejected.toStdString());
 
 	SkyDirField(dialog)->setText(rejected);
+	ImportedSourceDirField(dialog)->setText(rejected);
 
 	// Falls back to the bare category rather than refusing: the import still lands somewhere correct.
 	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
+
+	// And the copied source stays in the one category a re-import looks in.
+	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources");
 }
 
 // A destination is meaningless when that part is not being written, and leaving it live invites the
