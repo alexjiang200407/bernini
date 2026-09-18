@@ -273,8 +273,9 @@ namespace bgl
 
 		auto gfxState = MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer  = FrameBuffer().SetDepthAttachment(draw.targets.staticDepth);
-		gfxState.indirectArgs = resources.GetBuffer(c_CompactDispatchArgsName);
+		gfxState.frameBuffer   = FrameBuffer().SetDepthAttachment(draw.targets.staticDepth);
+		gfxState.indirectArgs  = resources.GetBuffer(c_CompactDispatchArgsName);
+		gfxState.commandCounts = gfxState.indirectArgs;
 
 		// One bucket per dispatch: the cbuffer is re-uploaded on every dispatch, so rewriting
 		// drawBucketIndex and cullBackfaces between them is sound (docs/uniforms.md).
@@ -290,7 +291,7 @@ namespace bgl
 
 			gfxState.kernel = &kernel;
 			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(bucket);
+			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
 		};
 
 		BindKernel(m_HardwareCullKernel, draw, resources);

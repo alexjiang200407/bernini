@@ -29,6 +29,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <iterator>
+#include <numeric>
 #include <vector>
 
 // Drives the whole counting sort -- histogram, scan, compaction -- through a real FrameGraph, with
@@ -71,10 +72,14 @@ TEST_CASE(
 		((c_ActiveCount + bgl::idl::cHistogramGroupSize - 1) / bgl::idl::cHistogramGroupSize) *
 		bgl::idl::cHistogramGroupSize;
 
-	// Bucket 1's base is the (empty) bucket 0: 0 before the scan and 0 after. The other two are
-	// the ones with something to get wrong, and the last sits at the top of the ceiling -- a
-	// second lap of the 128-thread reservation stride -- so nothing may assume ids stop short.
-	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u };
+	// Bucket 1's base is the (empty) bucket 0: 0 before the scan and 0 after. 130 and the top of the
+	// ceiling are the ones with something to get wrong -- the second a second lap of the 128-thread
+	// reservation stride, so nothing may assume ids stop short.
+	// The last is a demanded bucket every instance of which the cull rejected: it must come out
+	// exactly as empty as a bucket nothing names -- a zero grid, which the geometry passes also read
+	// as its command count (DrawBucketCountIndex), so it issues no command where that is honoured.
+	constexpr uint32_t c_CulledBucket = 64u;
+	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u, c_CulledBucket };
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
 	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
@@ -88,6 +93,7 @@ TEST_CASE(
 	// The bucket each instance index carries, so a compacted index can be checked against the
 	// bucket it was filed under.
 	std::vector<uint32_t>                           bucketOf(c_ActiveCount);
+	std::vector<uint32_t>                           visibleOf(c_PaddedCount, 1u);
 	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedCount{};
 
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
@@ -101,8 +107,9 @@ TEST_CASE(
 		instance.drawBucket          = bucket;
 		instanceBuffer.Add(instance);
 
-		bucketOf[i] = bucket;
-		expectedCount[bucket] += 1;
+		bucketOf[i]  = bucket;
+		visibleOf[i] = bucket == c_CulledBucket ? 0u : 1u;
+		expectedCount[bucket] += visibleOf[i];
 	}
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
@@ -135,9 +142,9 @@ TEST_CASE(
 		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxDrawBuckets, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
 
-	// The histogram and compaction now gate on a per-instance visibility word the cull pass writes.
-	// This test isolates the counting sort, so it stands in for a cull that passed everything: the
-	// buffer is seeded all-visible. Frustum culling has its own test.
+	// The histogram and compaction gate on a per-instance visibility word the cull pass writes. This
+	// test isolates the counting sort, so it stands in for a cull that passed everything but
+	// c_CulledBucket's instances. Frustum culling has its own test.
 	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, c_PaddedCount, "Visibility");
 
 	const auto makeKernel = [&](const char* module, const char* debugName) {
@@ -193,11 +200,10 @@ TEST_CASE(
 				drawBucketPrefixSum.Clear(cmd);
 				compacted.Clear(cmd);
 
-				const std::vector<uint32_t> allVisible(c_PaddedCount, 1u);
 				cmd->WriteBuffer(
 					visibility.GetBufferHandle(),
-					allVisible.data(),
-					allVisible.size() * sizeof(uint32_t));
+					visibleOf.data(),
+					visibleOf.size() * sizeof(uint32_t));
 
 				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxDrawBuckets> seed{};
 				for (bgl::idl::DispatchArgs& args : seed)
@@ -368,7 +374,9 @@ TEST_CASE(
 		CHECK(exclusive == expectedBase[p]);
 	}
 	// The scan is inclusive, so the last row carries the full total.
-	CHECK(prefixSumOut[bgl::idl::cMaxDrawBuckets - 1] == c_ActiveCount);
+	CHECK(
+		prefixSumOut[bgl::idl::cMaxDrawBuckets - 1] ==
+		std::accumulate(expectedCount.begin(), expectedCount.end(), 0u));
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	// The reservation loop strides the whole ceiling (two laps of a 128-thread group), but only a
@@ -423,15 +431,17 @@ TEST_CASE(
 		}
 	}
 
+	// A visible instance is written exactly once, a culled one never.
 	uint32_t notWrittenExactlyOnce = 0;
-	for (const uint32_t seen : occurrences)
+	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		if (seen != 1u)
+		if (occurrences[i] != visibleOf[i])
 		{
 			++notWrittenExactlyOnce;
 		}
 	}
 	CHECK(notWrittenExactlyOnce == 0);
+	CHECK(expectedCount[c_CulledBucket] == 0u);
 
 	resourceManager->UnmapReadback(rbCompacted);
 
