@@ -84,10 +84,8 @@ namespace assetlib
 			if (present == 0)
 				return false;
 
-			core::throw_runtime_error_if(
-				present < routed,
-				"it routes '{}', which is not on disk",
-				*missing);
+			if (present < routed)
+				core::throw_runtime_error("it routes '{}', which is not on disk", *missing);
 
 			return true;
 		}
