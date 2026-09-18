@@ -113,7 +113,9 @@ and is a target of its own; nothing here is part of it.
   Because bytecode and reflection come from the same link, bindings always agree — shaders do
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
 - The renderer's PSOs are built together, in parallel: a pass's `Init` requests its always-on
-  kernels from the `PipelineBatch` it is handed (`src/pipeline/PipelineBatch.h`) and
+  kernels from the `PipelineBatch` in the `PassInitContext` it is handed
+  (`src/passes/PassInitContext.h`: the device, the batch, the resource manager and the draw-bucket
+  table, borrowed for the call) and
   `RenderContext` builds the set on `core::parallel_for` before any pass reads one. The per-draw-bucket
   meshlet kernels are the exception: `RenderContext::EnsureDrawBucketPipelinesExist` builds each draw bucket in
   the first `Draw` whose view demands it (`SceneView::DemandedDrawBuckets`), so a scene pays only for

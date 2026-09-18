@@ -18,20 +18,20 @@
 namespace bgl
 {
 	void
-	TransparentSortPass::Init(IDevice* device, PipelineBatch& pipelines)
+	TransparentSortPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device pointer is null");
+		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_DepthKeys,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_Sort,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.TransparentSort"))
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));
 	}
 

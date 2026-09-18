@@ -49,14 +49,14 @@ namespace bgl
 	}
 
 	void
-	TaaResolvePass::Init(IDevice* device, PipelineBatch& pipelines)
+	TaaResolvePass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
 
@@ -71,7 +71,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines.Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

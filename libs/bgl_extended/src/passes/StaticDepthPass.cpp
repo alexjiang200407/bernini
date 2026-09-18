@@ -94,29 +94,28 @@ namespace bgl
 	}
 
 	void
-	StaticDepthPass::Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets)
+	StaticDepthPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		m_DrawBucketTable = &buckets;
+		m_DrawBucketTable = &ctx.drawBucketTable;
 
-		// Opaque depth does not depend on the material, so the opaque buckets share a depth-only
+		// Opaque depth does not depend on the material, so the opaque ctx.drawBucketTable share a depth-only
 		// pixel stage and differ only in where back faces are culled.
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_HardwareCullKernel,
-			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kBack));
-		pipelines.Add(
+			DepthPipelineDesc(ctx.device, c_PixelSrc, RasterCullMode::kBack));
+		ctx.pipelines.Add(
 			m_MaterialCullKernel,
-			DepthPipelineDesc(device, c_PixelSrc, RasterCullMode::kNone));
+			DepthPipelineDesc(ctx.device, c_PixelSrc, RasterCullMode::kNone));
 	}
 
 	void
 	StaticDepthPass::AddDrawBucketKernels(
-		IDevice*              device,
-		PipelineBatch&        pipelines,
-		const DrawBucketMask& demanded)
+		const PassInitContext& ctx,
+		const DrawBucketMask&  demanded)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		const uint32_t count = m_DrawBucketTable->Count();
 		if (m_CoverageKernels.size() < count)
@@ -137,10 +136,10 @@ namespace bgl
 				continue;
 			}
 
-			pipelines.Add(
+			ctx.pipelines.Add(
 				m_CoverageKernels[bucket],
 				DepthPipelineDesc(
-					device,
+					ctx.device,
 					DrawBucketCoveragePixelSrc(desc),
 					DrawBucketCullMode(desc)));
 		}

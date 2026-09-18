@@ -7,7 +7,10 @@ graph then culls, orders, derives barriers, and records — see [Frame Graph](do
 that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
-[PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
+[PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) in the
+[PassInitContext](libs/bgl_extended/src/passes/PassInitContext.h) it is handed -- one argument for
+every pass, holding the device, the batch, the resource manager and the draw-bucket table -- naming
+the member each
 lands in, and `RenderContext` builds each batch's requests at once across threads (see
 [RHI](docs/rhi.md) § Design Choices) — the always-on set at construction, and the per-draw-bucket meshlet
 kernels in the first `Draw` whose view demands each draw bucket. Anything in a pass that reads a built

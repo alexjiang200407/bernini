@@ -1,6 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
 #include "passes/BlobShadowPhase.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/DrawBucketMask.h"
 #include "types/MeshletState.h"
@@ -47,7 +48,7 @@ namespace bgl
 
 		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddDrawBucketKernels. */
 		void
-		Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets);
+		Init(const PassInitContext& ctx);
 
 		/**
 		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
@@ -55,17 +56,14 @@ namespace bgl
 		 * @pre every set bit is an allocated, non-transparent bucket.
 		 */
 		void
-		AddDrawBucketKernels(
-			IDevice*              device,
-			PipelineBatch&        pipelines,
-			const DrawBucketMask& demanded);
+		AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded);
 
 		/**
 		 * Requests the one shared blend kernel the whole depth-sorted list draws through --
 		 * demanded by any transparent bucket, owned by none.
 		 */
 		void
-		AddTransparentKernel(IDevice* device, PipelineBatch& pipelines);
+		AddTransparentKernel(const PassInitContext& ctx);
 
 		[[nodiscard]] bool
 		DrawBucketInitialized(uint32_t bucket) const noexcept

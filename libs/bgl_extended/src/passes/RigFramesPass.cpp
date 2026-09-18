@@ -14,14 +14,14 @@
 namespace bgl
 {
 	void
-	RigFramesPass::Init(IDevice* device, PipelineBatch& pipelines)
+	RigFramesPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_PoseRigFrames,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.anim.PoseRigFrames"))
+				.SetShader(ctx.device->CreateShader("programs.anim.PoseRigFrames"))
 				.SetDebugName("Pose Rig Frames"));
 	}
 

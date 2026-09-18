@@ -2,9 +2,11 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
@@ -179,7 +181,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto compactPass = bgl::CompactInstancesPass();
 	{
 		auto pipelines = bgl::PipelineBatch(device);
-		compactPass.Init(device, pipelines, resourceManager);
+		auto table     = bgl::DrawBucketTable();
+		compactPass.Init(bgl::PassInitContext{ device, pipelines, resourceManager, table });
 		pipelines.Build();
 	}
 

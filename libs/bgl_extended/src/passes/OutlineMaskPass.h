@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include <cstdint>
 #include <spdlog/spdlog.h>
@@ -37,7 +38,7 @@ namespace bgl
 		operator=(OutlineMaskPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(const PassInitContext& ctx);
 
 		void
 		Release()

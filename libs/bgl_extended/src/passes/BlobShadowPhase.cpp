@@ -48,16 +48,16 @@ namespace bgl
 	}
 
 	void
-	BlobShadowPhase::Init(IDevice* device, PipelineBatch& pipelines)
+	BlobShadowPhase::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		// The transparents' render state -- colour only, blended, depth read without write --
 		// but its own two-stage program: the discs are not instance-pipeline geometry.
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
@@ -91,7 +91,7 @@ namespace bgl
 		pipelineDesc.renderState =
 			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines.Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

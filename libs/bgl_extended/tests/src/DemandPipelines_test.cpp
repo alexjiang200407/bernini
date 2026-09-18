@@ -2,6 +2,7 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "passes/ForwardPass.h"
+#include "passes/PassInitContext.h"
 #include "passes/StaticDepthPass.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
@@ -248,12 +249,14 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 	bgl::ForwardPass     forward;
 	bgl::StaticDepthPass depth;
 
-	auto pipelines = bgl::PipelineBatch(device);
-	forward.Init(device, pipelines, table);
-	depth.Init(device, pipelines, table);
-	forward.AddDrawBucketKernels(device, pipelines, opaqueShaped);
-	forward.AddTransparentKernel(device, pipelines);
-	depth.AddDrawBucketKernels(device, pipelines, opaqueShaped);
+	auto       pipelines       = bgl::PipelineBatch(device);
+	const auto resourceManager = gfxBase->GetResourceManagerCpy();
+	const auto passes          = bgl::PassInitContext{ device, pipelines, resourceManager, table };
+	forward.Init(passes);
+	depth.Init(passes);
+	forward.AddDrawBucketKernels(passes, opaqueShaped);
+	forward.AddTransparentKernel(passes);
+	depth.AddDrawBucketKernels(passes, opaqueShaped);
 	pipelines.Build();
 
 	for (uint32_t bucket = 0; bucket < table.Count(); ++bucket)

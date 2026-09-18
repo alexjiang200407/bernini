@@ -1,5 +1,6 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/DrawBucketMask.h"
 #include <spdlog/spdlog.h>
@@ -51,7 +52,7 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets);
+		Init(const PassInitContext& ctx);
 
 		/**
 		 * Requests the coverage kernels for the buckets set in `buckets` that are not already
@@ -59,10 +60,7 @@ namespace bgl
 		 * are ignored.
 		 */
 		void
-		AddDrawBucketKernels(
-			IDevice*              device,
-			PipelineBatch&        pipelines,
-			const DrawBucketMask& demanded);
+		AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded);
 
 		/**
 		 * Whether the bucket has what this pass draws it with: always for one drawn through the two

@@ -1,5 +1,6 @@
 #pragma once
 #include "device/Device.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
@@ -41,7 +42,7 @@ namespace bgl
 		 * built first.
 		 */
 		void
-		Init(IDevice* device, PipelineBatch& pipelines, ResourceManagerRef resourceManager);
+		Init(const PassInitContext& ctx);
 
 		/**
 		 * Records the integration into `cmdList`, leaving the texture readable by a pixel shader. The

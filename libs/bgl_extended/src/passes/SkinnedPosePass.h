@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/PassInitContext.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include <spdlog/spdlog.h>
@@ -38,7 +39,7 @@ namespace bgl
 		operator=(SkinnedPosePass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(const PassInitContext& ctx);
 
 		void
 		Release();

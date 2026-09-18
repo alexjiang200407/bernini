@@ -11,6 +11,7 @@
 #include "overlay/Overlay.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
@@ -200,19 +201,21 @@ namespace bgl
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
 		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
-		auto pipelines = PipelineBatch(m_Device.Get());
-		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
-		m_RigFrames.Init(m_Device.Get(), pipelines);
-		m_SkinnedPose.Init(m_Device.Get(), pipelines);
-		m_TransparentSort.Init(m_Device.Get(), pipelines);
-		m_StaticDepth.Init(m_Device.Get(), pipelines, *m_DrawBucketTable);
-		m_Forward.Init(m_Device.Get(), pipelines, *m_DrawBucketTable);
-		m_Skybox.Init(m_Device.Get(), pipelines);
-		m_PostProcess.Init(m_Device.Get(), pipelines);
-		m_OverlayPass.Init(m_Device.Get(), pipelines);
-		m_OutlineMask.Init(m_Device.Get(), pipelines);
-		m_TaaResolve.Init(m_Device.Get(), pipelines);
-		m_BrdfLut.Init(m_Device.Get(), pipelines, m_ResourceManager);
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes =
+			PassInitContext{ m_Device.Get(), pipelines, m_ResourceManager, *m_DrawBucketTable };
+		m_CompactInstances.Init(passes);
+		m_RigFrames.Init(passes);
+		m_SkinnedPose.Init(passes);
+		m_TransparentSort.Init(passes);
+		m_StaticDepth.Init(passes);
+		m_Forward.Init(passes);
+		m_Skybox.Init(passes);
+		m_PostProcess.Init(passes);
+		m_OverlayPass.Init(passes);
+		m_OutlineMask.Init(passes);
+		m_TaaResolve.Init(passes);
+		m_BrdfLut.Init(passes);
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
@@ -629,12 +632,13 @@ namespace bgl
 			return;
 		}
 
-		auto pipelines = PipelineBatch(m_Device.Get());
-		m_Forward.AddDrawBucketKernels(m_Device.Get(), pipelines, missing);
-		m_StaticDepth.AddDrawBucketKernels(m_Device.Get(), pipelines, missing);
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes = PassInitContext{ m_Device.Get(), pipelines, m_ResourceManager, table };
+		m_Forward.AddDrawBucketKernels(passes, missing);
+		m_StaticDepth.AddDrawBucketKernels(passes, missing);
 		if (missingTransparent)
 		{
-			m_Forward.AddTransparentKernel(m_Device.Get(), pipelines);
+			m_Forward.AddTransparentKernel(passes);
 		}
 		pipelines.Build();
 

@@ -26,42 +26,39 @@
 namespace bgl
 {
 	void
-	CompactInstancesPass::Init(
-		IDevice*                          device,
-		PipelineBatch&                    pipelines,
-		core::SharedRef<IResourceManager> resourceManager)
+	CompactInstancesPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device pointer is null");
+		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_CullInstances,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.CullInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_Histogram,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_PrefixSum,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
-		pipelines.Add(
+		ctx.pipelines.Add(
 			m_CompactInstances,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.CompactInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));
 
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
 
-			m_CullStats.Init(desc, resourceManager);
+			m_CullStats.Init(desc, ctx.resourceManager);
 		}
 	}
 

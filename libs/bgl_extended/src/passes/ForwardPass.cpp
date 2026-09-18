@@ -156,21 +156,18 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines, const DrawBucketTable& buckets)
+	ForwardPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		m_DrawBucketTable = &buckets;
-		m_BlobShadows.Init(device, pipelines);
+		m_DrawBucketTable = &ctx.drawBucketTable;
+		m_BlobShadows.Init(ctx);
 	}
 
 	void
-	ForwardPass::AddDrawBucketKernels(
-		IDevice*              device,
-		PipelineBatch&        pipelines,
-		const DrawBucketMask& demanded)
+	ForwardPass::AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		const uint32_t count = m_DrawBucketTable->Count();
 		if (m_Kernels.size() < count)
@@ -185,24 +182,24 @@ namespace bgl
 				gassert(
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
-				pipelines.Add(
+				ctx.pipelines.Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
+					ForwardPipelineDesc(ctx.device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
 			}
 		}
 	}
 
 	void
-	ForwardPass::AddTransparentKernel(IDevice* device, PipelineBatch& pipelines)
+	ForwardPass::AddTransparentKernel(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		if (!m_TransparentKernel.pipeline.IsInitialized())
 		{
-			pipelines.Add(
+			ctx.pipelines.Add(
 				m_TransparentKernel,
 				ForwardPipelineDesc(
-					device,
+					ctx.device,
 					PsoConfig{ std::string(c_TransparentSrc),
 			                   RasterCullMode::kNone,
 			                   false,
