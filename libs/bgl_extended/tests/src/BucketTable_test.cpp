@@ -91,6 +91,26 @@ TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unl
 	CHECK(table.Resolve(GeomType::kStaticMesh, MaterialHandle()) == 0);
 }
 
+TEST_CASE("an unshaded material has one bucket whatever its layer", "[bucket]")
+{
+	BucketTable table;
+
+	// No base color, so no alpha for a coverage or blend layer to read: every layer is the opaque
+	// bucket. The coverage-twin lookup has no entry for these kinds, so a second bucket would be
+	// one the depth pass could not build.
+	for (const auto layer : { LayerType::kMask, LayerType::kBlend, LayerType::kHashed })
+	{
+		CHECK(table.Resolve(GeomType::kStaticMesh, MaterialType::kNull, layer) == 0);
+
+		const auto assert = table.Resolve(GeomType::kStaticMesh, MaterialType::kAssert, layer);
+		CHECK(
+			assert ==
+			table.Resolve(GeomType::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque));
+		CHECK_FALSE(table.Transparent(assert));
+	}
+	CHECK(table.Count() == 2);
+}
+
 TEST_CASE("the version counts allocations, not lookups", "[bucket]")
 {
 	BucketTable table;

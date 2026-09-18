@@ -4,6 +4,8 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/idl/PsoType.h>
+#include <core/ref/Ref.h>
+#include <core/ref/RefCounter.h>
 #include <cstdint>
 #include <span>
 #include <unordered_map>
@@ -37,14 +39,15 @@ namespace bgl
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.
 	 */
-	class BucketTable final
+	class BucketTable final : public core::RefCounter<core::Ref>
 	{
 	public:
 		/** @pre ceiling >= 1 and <= idl::cMaxPsoBuckets. Tests shrink it to reach the clamp. */
 		explicit BucketTable(uint32_t ceiling = idl::cMaxPsoBuckets);
 
 		/**
-		 * The bucket for the key, allocated if this is its first use.
+		 * The bucket for the key, allocated if this is its first use. kNull and kAssert shade no
+		 * base color, so they resolve to their opaque bucket whatever the layer.
 		 *
 		 * A skinned tier with a material that is neither kPBR nor a game surface is bgl's own bug
 		 * here -- every door binding a material to animated geometry checks AcceptsMaterial first.

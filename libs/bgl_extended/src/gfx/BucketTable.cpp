@@ -27,8 +27,14 @@ namespace bgl
 	}
 
 	uint32_t
-	BucketTable::Resolve(const GeomType geom, const MaterialType material, const LayerType layer)
+	BucketTable::Resolve(const GeomType geom, const MaterialType material, LayerType layer)
 	{
+		// Neither shades a base color, so there is no alpha for a coverage or blend layer to read.
+		if (material == MaterialType::kNull || material == MaterialType::kAssert)
+		{
+			layer = LayerType::kOpaque;
+		}
+
 		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
 		{
 			gfatal("A bucket's geometry kind is a drawable tier");

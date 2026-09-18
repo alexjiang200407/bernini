@@ -6,8 +6,6 @@ import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
 import lib.data.SubmeshInstance;
 
-static const uint kPsoCount = uint(PsoType::kCount);
-
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
@@ -36,7 +34,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     let psoType = instance.pso;
 
     // Skip exactly what the histogram skipped, or the bucket bases and the scatter disagree.
-    let scatters = !instance.meshInstance.Null() && psoType < kPsoCount && gUniforms.visibility[globalIdx].visible != 0u;
+    let scatters = !instance.meshInstance.Null() && psoType < cMaxPsoBuckets && gUniforms.visibility[globalIdx].visible != 0u;
 
     // No early-out past this point: a thread that does not scatter must still reach every
     // GroupMemoryBarrierWithGroupSync below, or the ones that do scatter hang on it.

@@ -8,6 +8,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassTimer.h"
+#include "gfx/BucketTable.h"
 #include "gfx/RenderTargetBase.h"
 #include "gfx/TonemapLut.h"
 #include "overlay/Overlay.h"
@@ -57,7 +58,11 @@ namespace bgl
 	class RenderContext final
 	{
 	public:
-		RenderContext(DeviceRef device, ResourceManagerRef resourceManager, bool enableDebug);
+		RenderContext(
+			DeviceRef                    device,
+			ResourceManagerRef           resourceManager,
+			core::SharedRef<BucketTable> buckets,
+			bool                         enableDebug);
 
 		~RenderContext() noexcept;
 
@@ -131,14 +136,20 @@ namespace bgl
 
 		/**
 		 * The buckets whose kernels exist. Grown by Draw, which builds what its view demands and
-		 * nothing else -- with one substitution: any transparent demand builds (and marks) the one
-		 * shared blend bucket instead of the demanded transparent buckets, since no pass binds any
-		 * other.
+		 * nothing else. A transparent bucket owns no kernel: its bit is set once the one shared
+		 * blend kernel exists, which is all its demand means.
 		 */
 		[[nodiscard]] const BucketMask&
 		InitializedBuckets() const noexcept
 		{
 			return m_InitializedBuckets;
+		}
+
+		/** The table every bucket id in this renderer was allocated by. */
+		[[nodiscard]] const BucketTable&
+		Buckets() const noexcept
+		{
+			return *m_BucketTable;
 		}
 
 		[[nodiscard]] PassTimings
@@ -148,8 +159,8 @@ namespace bgl
 		/**
 		 * Makes every demanded bucket's kernels exist: the ones missing are built in one parallel
 		 * batch, and the Slang sessions a cold-cache build stood up are dropped. Idempotent -- a
-		 * bucket already initialized costs nothing. The whole depth-sorted transparent list draws
-		 * through the one shared blend kernel, so any transparent demand also demands that bucket.
+		 * bucket already initialized costs nothing. A demanded transparent bucket demands only the
+		 * one shared blend kernel the whole depth-sorted list draws through.
 		 *
 		 * @param demanded every bucket the view's instances have resolved to
 		 * (SceneView::DemandedBuckets).
@@ -205,11 +216,12 @@ namespace bgl
 		CaptureTicket
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
 
-		DeviceRef           m_Device;
-		CommandQueueRef     m_CommandQueue;
-		ResourceManagerRef  m_ResourceManager;
-		CommandAllocatorRef m_BootstrapAllocator;
-		CommandListRef      m_CommandList;
+		DeviceRef                    m_Device;
+		core::SharedRef<BucketTable> m_BucketTable;
+		CommandQueueRef              m_CommandQueue;
+		ResourceManagerRef           m_ResourceManager;
+		CommandAllocatorRef          m_BootstrapAllocator;
+		CommandListRef               m_CommandList;
 
 		bool m_EnableDebug = false;
 		bool m_FrameActive = false;

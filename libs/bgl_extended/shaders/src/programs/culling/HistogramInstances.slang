@@ -6,8 +6,6 @@ import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
 import lib.data.SubmeshInstance;
 
-static const uint kPsoCount = uint(PsoType::kCount);
-
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
@@ -35,9 +33,9 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     {
         let psoType = instance.pso;
 
-        dbg_assert(psoType < kPsoCount, ErrorCode.kInvalidPsoType);
+        dbg_assert(psoType < cMaxPsoBuckets, ErrorCode.kInvalidPsoType);
 
-        if (psoType < kPsoCount)
+        if (psoType < cMaxPsoBuckets)
         {
             gLocalHistogram[psoType].add(1u);
         }

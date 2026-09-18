@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/BucketTable.h"
 #include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
@@ -107,7 +108,8 @@ namespace bgl
 		SceneView(
 			const SceneRef&                   scene,
 			uint32_t                          initialInstances,
-			core::SharedRef<IResourceManager> resourceManager);
+			core::SharedRef<IResourceManager> resourceManager,
+			core::SharedRef<BucketTable>      buckets);
 
 		~SceneView() noexcept override;
 
@@ -549,6 +551,13 @@ namespace bgl
 		uint64_t m_DrawnTemporalEpoch = 0;
 
 		BucketMask m_DemandedBuckets;
+
+		// The renderer-wide id table every instance's bucket comes from; shared with RenderContext.
+		core::SharedRef<BucketTable> m_BucketTable;
+
+		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
+		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
+		UploadBuffer<uint32_t> m_TransparentBucketFlags;
 
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;

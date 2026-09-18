@@ -9,6 +9,7 @@
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
+#include "passes/bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -74,40 +75,11 @@ namespace bgl
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
-		constexpr auto c_GeomSrc             = "programs.forward.StaticMesh"sv;
-		constexpr auto c_SkinnedGeomSrc      = "programs.forward.SkinnedMesh"sv;
-		constexpr auto c_AnyGeomSrc          = "programs.forward.AnyMesh"sv;
-		constexpr auto c_PbrPixelSrc         = "programs.forward.PBR"sv;
-		constexpr auto c_LoosePixelSrc       = "programs.forward.PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc        = "programs.forward.Null"sv;
-		constexpr auto c_PbrCutoutPixelSrc   = "programs.forward.PBR_AlphaTest"sv;
-		constexpr auto c_LooseCutoutPixelSrc = "programs.forward.PBR_Loose_AlphaTest"sv;
-		constexpr auto c_PbrHashedPixelSrc   = "programs.forward.PBR_HashedAlpha"sv;
-		constexpr auto c_LooseHashedPixelSrc = "programs.forward.PBR_Loose_HashedAlpha"sv;
-		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
-		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
-
-		// A program is a file with an entry point, so the reserved slots are one triple each.
-		struct GameSlotSrcs
-		{
-			std::string_view opaque;
-			std::string_view cutout;
-			std::string_view hashed;
-		};
-		constexpr std::array<GameSlotSrcs, cGameSlots> c_GameSlotSrcs = { {
-			{ "programs.forward.GameSlot0"sv,
-			  "programs.forward.GameSlot0_AlphaTest"sv,
-			  "programs.forward.GameSlot0_HashedAlpha"sv },
-			{ "programs.forward.GameSlot1"sv,
-			  "programs.forward.GameSlot1_AlphaTest"sv,
-			  "programs.forward.GameSlot1_HashedAlpha"sv },
-			{ "programs.forward.GameSlot2"sv,
-			  "programs.forward.GameSlot2_AlphaTest"sv,
-			  "programs.forward.GameSlot2_HashedAlpha"sv },
-			{ "programs.forward.GameSlot3"sv,
-			  "programs.forward.GameSlot3_AlphaTest"sv,
-			  "programs.forward.GameSlot3_HashedAlpha"sv },
-		} };
+		// The shared blend kernel's programs: the whole depth-sorted list draws through this one
+		// pipeline, and AnyMesh branches tier per instance, so no bucket needs a blend kernel of
+		// its own.
+		constexpr auto c_AnyGeomSrc     = "programs.forward.AnyMesh"sv;
+		constexpr auto c_TransparentSrc = "programs.forward.Transparent"sv;
 
 		struct PsoConfig
 		{
@@ -116,111 +88,16 @@ namespace bgl
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
-			std::string_view geomSrc   = c_GeomSrc;
+			std::string_view geomSrc;
 		};
 
-		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
-		// The named rows are listed; the reserved game slots' rows follow from kGameRowsStart,
-		// cGameSlotRows per slot, in the order GameSlotRow derives them.
-		constexpr std::array<PsoConfig, idl::c_PsoCount>
-		MakePsos()
+		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
+		PsoConfig
+		ConfigFor(const BucketDesc& desc)
 		{
-			std::array<PsoConfig, idl::c_PsoCount> psos = { {
-				// kOpaque_StaticMesh_Null
-				{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
-				// kOpaque_StaticMesh_PBR
-				{ c_PbrPixelSrc, RasterCullMode::kNone, true, false },
-				// kOpaque_StaticMesh_LoosePbr
-				{ c_LoosePixelSrc, RasterCullMode::kNone, true, false },
-				// kAlphaTest_StaticMesh_PBR
-				{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
-				// kAlphaTest_StaticMesh_LoosePbr
-				{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
-				// kTransparent_StaticMesh_PBR: the whole sorted list draws through this one pipeline,
-				// so its geometry stage is the tier-branching one.
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-				// kTransparent_StaticMesh_LoosePbr
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-				// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
-				{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
-				// kHashedAlpha_StaticMesh_LoosePbr
-				{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
-				// kAssert_StaticMesh
-				{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-				// kOpaque_SkinnedMesh_PBR
-				{ c_PbrPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kAlphaTest_SkinnedMesh_PBR: an opaque draw that discards, so it needs no sorting.
-				{ c_PbrCutoutPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kHashedAlpha_SkinnedMesh_PBR: stochastic coverage, so also an opaque shape.
-				{ c_PbrHashedPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-			} };
-
-			// The two tiers differ only in their geometry stage: the pixel shader reads a
-			// ForwardVSOut and a material offset, and neither says which tier filled them. Hashed
-			// takes the cutout's shape -- the coverage is stochastic, the depth is not.
-			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
-			{
-				const GameSlotSrcs& srcs = c_GameSlotSrcs[slot];
-
-				for (uint32_t tier = 0; tier < idl::cGameSlotTiers; ++tier)
-				{
-					const uint32_t row = GameSlotRowBase(slot) + tier * idl::cGameSlotTierRows;
-					const std::string_view geom = tier == 0 ? c_GeomSrc : c_SkinnedGeomSrc;
-
-					psos[row]     = { srcs.opaque, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-					psos[row + 1] = { srcs.cutout, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-					psos[row + 2] = { srcs.hashed, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-				}
-
-				psos[GameSlotRowBase(slot) + idl::cGameSlotBlendRow] = {
-					c_TransparentSrc,      RasterCullMode::kNone, false, true,
-					ComparisonFunc::kLess, c_AnyGeomSrc
-				};
-			}
-			return psos;
+			return PsoConfig{ BucketPixelSrc(desc),  BucketCullMode(desc),   true, false,
+				              ComparisonFunc::kLess, BucketGeometrySrc(desc) };
 		}
-
-		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = MakePsos();
-
-		static_assert(
-			std::ranges::none_of(c_Psos, [](const PsoConfig& cfg) { return cfg.pixelSrc.empty(); }),
-			"every PsoType needs a row in c_Psos; a missing one silently value-initializes to an "
-			"empty pixel shader");
 
 		MeshletPipelineDesc
 		ForwardPipelineDesc(IDevice* device, const PsoConfig& cfg)
@@ -282,10 +159,11 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines)
+	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines, const BucketTable& buckets)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
+		m_Buckets = &buckets;
 		m_BlobShadows.Init(device, pipelines);
 	}
 
@@ -297,29 +175,67 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		const uint32_t count = m_Buckets->Count();
+		if (m_Kernels.size() < count)
 		{
-			if (buckets.test(pso) && !m_Kernels[pso].pipeline.IsInitialized())
+			m_Kernels.resize(count);
+		}
+
+		for (uint32_t bucket = 0; bucket < count; ++bucket)
+		{
+			if (buckets.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
 			{
-				pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
+				gassert(
+					!m_Buckets->Transparent(bucket),
+					"A transparent bucket demands the shared kernel, never one of its own");
+				pipelines.Add(
+					m_Kernels[bucket],
+					ForwardPipelineDesc(device, ConfigFor(m_Buckets->Desc(bucket))));
 			}
+		}
+	}
+
+	void
+	ForwardPass::AddTransparentKernel(IDevice* device, PipelineBatch& pipelines)
+	{
+		gassert(device != nullptr, "Device must be initialized");
+
+		if (!m_TransparentKernel.pipeline.IsInitialized())
+		{
+			pipelines.Add(
+				m_TransparentKernel,
+				ForwardPipelineDesc(
+					device,
+					PsoConfig{ c_TransparentSrc,
+			                   RasterCullMode::kNone,
+			                   false,
+			                   true,
+			                   ComparisonFunc::kLess,
+			                   c_AnyGeomSrc }));
 		}
 	}
 
 	void
 	ForwardPass::CheckBindings() const
 	{
-		// Always-on kernels first: the bucket guard below must not gate them.
+		// Always-on kernels first: the family guard below must not gate them.
 		m_BlobShadows.CheckBindings();
 
+		CheckKernelNames(m_Kernels);
+		CheckKernelNames({ &m_TransparentKernel, 1 });
+	}
+
+	void
+	ForwardPass::CheckKernelNames(std::span<const MeshletKernel> kernels) const
+	{
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
 		// EnsureBucketPipelinesExist re-checks after every build.
-		if (!AnyInitialized(m_Kernels))
+		if (!AnyInitialized(kernels))
 		{
 			return;
 		}
 
-		BindingNameCheck("ForwardPass"sv, m_Kernels)
+		BindingNameCheck("ForwardPass"sv, kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
@@ -467,47 +383,41 @@ namespace bgl
 
 		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
-		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
-		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
+		// table's live count. The transparent buckets are skipped here -- their order is depth,
+		// not bucket, so they draw below.
+		for (uint32_t bucket = 0, count = m_Buckets->Count(); bucket < count; ++bucket)
 		{
-			if (IsTransparentPso(pso))
+			if (m_Buckets->Transparent(bucket))
 			{
 				continue;
 			}
 
 			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
-			MeshletKernel& kernel = m_Kernels[pso];
-			if (!kernel.pipeline.IsInitialized())
+			if (!BucketInitialized(bucket))
 			{
 				continue;
 			}
 
+			MeshletKernel& kernel = m_Kernels[bucket];
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
+				(*expansionData)["psoIndex"]  = bucket;
 				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
 				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansionData)["cullBackfaces"] =
-					c_Psos[pso].cull == RasterCullMode::kNone ? 1u : 0u;
+					BucketCullMode(m_Buckets->Desc(bucket)) == RasterCullMode::kNone ? 1u : 0u;
 			}
 
 			gfxState.kernel       = &kernel;
 			gfxState.indirectArgs = dispatchArgs;
 			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(pso);
+			cmd->DispatchMeshIndirect(bucket);
 		}
 
 		m_BlobShadows.Draw(draw, resources);
 		DrawTransparent(draw, resources);
-	}
-
-	RasterCullMode
-	ForwardPass::PsoCullMode(const uint16_t pso) noexcept
-	{
-		gassert(pso < idl::c_PsoCount, "PsoCullMode: pso out of range");
-		return c_Psos[pso].cull;
 	}
 
 	void
@@ -529,8 +439,7 @@ namespace bgl
 		                             .SetDepthAttachment(draw.targets.depth);
 
 		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
-		MeshletKernel& kernel =
-			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
+		MeshletKernel& kernel = m_TransparentKernel;
 		if (!kernel.pipeline.IsInitialized())
 		{
 			return;

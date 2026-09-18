@@ -179,11 +179,12 @@ namespace bgl
 	}
 
 	RenderContext::RenderContext(
-		DeviceRef          device,
-		ResourceManagerRef resourceManager,
-		bool               enableDebug) :
-		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
-		m_EnableDebug(enableDebug)
+		DeviceRef                    device,
+		ResourceManagerRef           resourceManager,
+		core::SharedRef<BucketTable> buckets,
+		bool                         enableDebug) :
+		m_Device(std::move(device)), m_BucketTable(std::move(buckets)),
+		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
 	{
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
@@ -204,8 +205,8 @@ namespace bgl
 		m_RigFrames.Init(m_Device.Get(), pipelines);
 		m_SkinnedPose.Init(m_Device.Get(), pipelines);
 		m_TransparentSort.Init(m_Device.Get(), pipelines);
-		m_StaticDepth.Init(m_Device.Get(), pipelines);
-		m_Forward.Init(m_Device.Get(), pipelines);
+		m_StaticDepth.Init(m_Device.Get(), pipelines, *m_BucketTable);
+		m_Forward.Init(m_Device.Get(), pipelines, *m_BucketTable);
 		m_Skybox.Init(m_Device.Get(), pipelines);
 		m_PostProcess.Init(m_Device.Get(), pipelines);
 		m_OverlayPass.Init(m_Device.Get(), pipelines);
@@ -606,37 +607,35 @@ namespace bgl
 	void
 	RenderContext::EnsureBucketPipelinesExist(BucketMask demanded)
 	{
-		// The one shared blend kernel draws the whole depth-sorted list (ForwardPass), so any
-		// transparent demand is a demand for that bucket.
-		static const BucketMask c_TransparentBuckets = [] {
-			BucketMask buckets;
-			for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		const BucketTable& table = *m_BucketTable;
+
+		// A transparent bucket owns no kernel: the whole depth-sorted list draws through the one
+		// shared blend kernel (ForwardPass), so its demand is satisfied the moment that exists.
+		BucketMask transparent;
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
+		{
+			if (demanded.test(bucket) && table.Transparent(bucket))
 			{
-				if (IsTransparentPso(pso))
-				{
-					buckets.set(pso);
-				}
+				transparent.set(bucket);
 			}
-			return buckets;
-		}();
-
-		if ((demanded & c_TransparentBuckets).any())
-		{
-			// The shared kernel replaces the demanded transparent buckets rather than joining them:
-			// no pass ever binds any other transparent bucket's kernel, so building one is waste.
-			demanded &= ~c_TransparentBuckets;
-			demanded.set(static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR));
 		}
+		demanded &= ~transparent;
 
-		const BucketMask missing = demanded & ~m_InitializedBuckets;
-		if (missing.none())
+		const BucketMask missing      = demanded & ~m_InitializedBuckets;
+		const bool missingTransparent = transparent.any() && !m_Forward.TransparentInitialized();
+		if (missing.none() && !missingTransparent)
 		{
+			m_InitializedBuckets |= transparent;
 			return;
 		}
 
 		auto pipelines = PipelineBatch(m_Device.Get());
 		m_Forward.AddBucketKernels(m_Device.Get(), pipelines, missing);
 		m_StaticDepth.AddBucketKernels(m_Device.Get(), pipelines, missing);
+		if (missingTransparent)
+		{
+			m_Forward.AddTransparentKernel(m_Device.Get(), pipelines);
+		}
 		pipelines.Build();
 
 		// A cold-cache build stands per-thread Slang sessions up, a few hundred megabytes each;
@@ -646,16 +645,19 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_StaticDepth.CheckBindings();
 
-		m_InitializedBuckets |= missing;
+		m_InitializedBuckets |= missing | transparent;
 
 		// The draw-time miss the demand contract turns into a bug: a bucket this view demands
 		// whose kernel still does not exist after the build that was meant to make it.
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
 			gassert(
-				!missing.test(pso) || m_Forward.BucketInitialized(pso),
+				!missing.test(bucket) || m_Forward.BucketInitialized(bucket),
 				"EnsureBucketPipelinesExist left a demanded bucket uninitialized");
 		}
+		gassert(
+			!transparent.any() || m_Forward.TransparentInitialized(),
+			"EnsureBucketPipelinesExist left the shared blend kernel uninitialized");
 	}
 
 	void

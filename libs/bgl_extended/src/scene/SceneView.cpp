@@ -134,10 +134,13 @@ namespace bgl
 	SceneView::SceneView(
 		const SceneRef&                   scene,
 		uint32_t                          initialInstances,
-		core::SharedRef<IResourceManager> resourceManager) :
+		core::SharedRef<IResourceManager> resourceManager,
+		core::SharedRef<BucketTable>      buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
-		m_InitialInstances(initialInstances)
+		m_InitialInstances(initialInstances), m_BucketTable(std::move(buckets))
 	{
+		gassert(m_BucketTable != nullptr, "SceneView requires the renderer's bucket table");
+
 		m_SceneRaw = m_Scene->As<Scene>();
 		gassert(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
 
@@ -167,6 +170,14 @@ namespace bgl
 			instanceBufferDesc.blockSize         = sizeof(SubmeshInstance) * 256;
 
 			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto flagsDesc         = UploadBufferDesc();
+			flagsDesc.initialCount = idl::cMaxPsoBuckets;
+			flagsDesc.debugName    = "Transparent Bucket Flags";
+
+			m_TransparentBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
 		}
 
 		{
@@ -1002,10 +1013,10 @@ namespace bgl
 					geom.geomType);
 
 				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
-				// past the bucket count, and the sort would skip it regardless. A null slot is still
-				// pushed, because overrides, selection marks and the epoch re-resolve all address a
-				// submesh by its index in this vector.
-				if (instance.pso < idl::c_PsoCount)
+				// past the bucket ceiling, and the sort would skip it regardless. A null slot is
+				// still pushed, because overrides, selection marks and the epoch re-resolve all
+				// address a submesh by its index in this vector.
+				if (instance.pso != static_cast<uint32_t>(idl::PsoType::kInvalid))
 				{
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}
@@ -1404,12 +1415,8 @@ namespace bgl
 			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
-		instance.pso = SubmeshPso(geomType, material);
-
-		if (instance.pso < idl::c_PsoCount)
-		{
-			m_DemandedBuckets.set(instance.pso);
-		}
+		instance.pso = m_BucketTable->Resolve(geomType, material);
+		m_DemandedBuckets.set(instance.pso);
 	}
 
 	void
@@ -1481,6 +1488,9 @@ namespace bgl
 
 		m_TransparentSort.Update(cmdList);
 
+		m_TransparentBucketFlags.Assign(m_BucketTable->TransparentFlags());
+		m_TransparentBucketFlags.Update(cmdList);
+
 		if (m_SelectionDirty)
 		{
 			RebuildSelectedList();
@@ -1549,6 +1559,12 @@ namespace bgl
 		});
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		{
+			auto flags = std::string(c_TransparentBucketFlagsName);
+			fg.ImportBuffer(flags, m_TransparentBucketFlags.GetBufferHandle());
+			resourceNames.push_back(std::move(flags));
+		}
 
 		{
 			// Rebuilt before the handle is read: a stale list can grow the buffer, and growth mints

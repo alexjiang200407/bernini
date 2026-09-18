@@ -1,12 +1,13 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "gfx/BucketTable.h"
 #include "gfx/GraphicsBase.h"
+#include "gfx/RenderContext.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "types/QueueType.h"
 #include "util/TestOptions.h"
-#include "util/util.h"
 #include <array>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
@@ -15,9 +16,9 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -27,6 +28,36 @@
 
 namespace
 {
+	// What a bucket draws, as the material kind and layer it was allocated for. A bucket id is a
+	// first-use-order handle into the renderer's table, so the id itself pins nothing.
+	struct Shading
+	{
+		bgl::MaterialType material;
+		bgl::LayerType    layer;
+
+		bool
+		operator==(const Shading&) const = default;
+	};
+
+	constexpr Shading c_Unlit  = { bgl::MaterialType::kNull, bgl::LayerType::kOpaque };
+	constexpr Shading c_Opaque = { bgl::MaterialType::kPBR, bgl::LayerType::kOpaque };
+	constexpr Shading c_Cutout = { bgl::MaterialType::kPBR, bgl::LayerType::kMask };
+
+	Shading
+	ShadingOf(bgl::IGraphics& gfx, uint32_t bucket)
+	{
+		const bgl::BucketDesc& desc =
+			gfx.As<bgl::GraphicsBase>()->GetRenderContext()->Buckets().Desc(bucket);
+		return { desc.material, desc.layer };
+	}
+
+	// What a submesh default shades as: an invalid handle resolves to the unlit kind.
+	bgl::MaterialType
+	ShadedKind(const bgl::MaterialHandle& material)
+	{
+		return material.IsValid() ? material.materialType : bgl::MaterialType::kNull;
+	}
+
 	bgl::GraphicsOptions
 	HeadlessOptions()
 	{
@@ -312,15 +343,14 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	// The submesh's *default* material -- the PSO is no longer cached on the GPU submesh, it is
 	// resolved from this onto each SubmeshInstance. Checking the default is checking what every
 	// non-overridden instance of this geom will bucket into.
-	const auto checkPso =
-		[&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::idl::PsoType expected) {
+	const auto checkDefault =
+		[&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::MaterialType expected) {
 			const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
 			INFO("source submesh " << sourceIndex);
 			CHECK(
-				bgl::SubmeshPso(
-					bgl::GeomType::kStaticMesh,
+				ShadedKind(
 					scene->GetSubmeshDefaultMaterial(submeshes.range.offsetStart, sourceIndex)) ==
-				static_cast<uint32_t>(expected));
+				expected);
 		};
 
 	// Source submesh 0 has 65 meshlets, which chunking would have expanded into two GPU submeshes,
@@ -335,9 +365,9 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
 
-		checkPso(geom, 1, bgl::idl::PsoType::kOpaque_StaticMesh_PBR);
+		checkDefault(geom, 1, bgl::MaterialType::kPBR);
 		// Submesh 0 was never assigned a material, so it stays on the Null PSO.
-		checkPso(geom, 0, bgl::idl::PsoType::kOpaque_StaticMesh_Null);
+		checkDefault(geom, 0, bgl::MaterialType::kNull);
 	}
 
 	SECTION("One past the last source submesh throws")
@@ -368,14 +398,12 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 
 	// The defaults are keyed by the root of the geom's submesh range, not by a fixed index: element
 	// 0 of the submesh buffer is the reserved null.
-	const auto psoOfDefault = [&]() {
+	const auto kindOfDefault = [&]() {
 		const uint32_t root = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
-		return bgl::SubmeshPso(
-			bgl::GeomType::kStaticMesh,
-			scene->GetSubmeshDefaultMaterial(root, 0));
+		return ShadedKind(scene->GetSubmeshDefaultMaterial(root, 0));
 	};
 
-	CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(kindOfDefault() == bgl::MaterialType::kNull);
 
 	SECTION("A valid material re-selects the submesh's PSO, and bumps the epoch")
 	{
@@ -386,7 +414,7 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbr));
 
-		CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(kindOfDefault() == bgl::MaterialType::kPBR);
 
 		// The epoch is what carries the change to instances placed before it: a SceneView polls it in
 		// Update and re-resolves. Without the bump, a live instance would keep its stale PSO forever.
@@ -454,10 +482,12 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 	REQUIRE(meta.submeshInstances.size() == 1);
 	const auto submeshInstance = meta.submeshInstances[0];
 
-	const auto instancePso = [&]() { return instanceBuffer[submeshInstance].pso; };
+	const auto instanceShading = [&]() {
+		return ShadingOf(*gfx, instanceBuffer[submeshInstance].pso);
+	};
 
 	// It resolved off the geom's default at placement time.
-	CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(instanceShading() == c_Unlit);
 
 	// SceneView::Update is where the pull happens, and it flushes dirty blocks, so it needs a real
 	// command list to record the upload into.
@@ -483,7 +513,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 
 	// An Update with nothing changed must not disturb it.
 	pumpUpdate();
-	CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(instanceShading() == c_Unlit);
 
 	auto pbr         = bgl::MaterialHandle();
 	pbr.materialType = bgl::MaterialType::kPBR;
@@ -497,10 +527,10 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		scene->SetSubmeshMaterial(geom, 0, pbr);
 
 		// Not until the view runs: the Scene cannot reach into a view it does not know exists.
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
+		CHECK(instanceShading() == c_Unlit);
 
 		pumpUpdate();
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(instanceShading() == c_Opaque);
 	}
 
 	SECTION("the layer type moves the instance to a different PSO bucket")
@@ -510,7 +540,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		scene->SetSubmeshMaterial(geom, 0, cutout);
 		pumpUpdate();
 
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(instanceShading() == c_Cutout);
 	}
 
 	SECTION("an instance placed after the change is already current")
@@ -523,14 +553,12 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		const auto& laterMeta = meshBuffer.MetaAt(later.handle.index);
 		REQUIRE(laterMeta.submeshInstances.size() == 1);
 
-		CHECK(
-			instanceBuffer[laterMeta.submeshInstances[0]].pso ==
-			static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(ShadingOf(*gfx, instanceBuffer[laterMeta.submeshInstances[0]].pso) == c_Opaque);
 
 		// ...and the older one still catches up on the next Update, rather than being stranded by the
 		// newer placement having already advanced the view's epoch.
 		pumpUpdate();
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(instanceShading() == c_Opaque);
 	}
 }
 
@@ -568,9 +596,9 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 	auto& instanceBuffer = view->GetInstanceBuffer();
 	auto& meshBuffer     = view->GetMeshBuffer();
 
-	const auto psoOf = [&](bgl::MeshInstanceHandle instance) {
+	const auto shadingOf = [&](bgl::MeshInstanceHandle instance) {
 		const auto& meta = meshBuffer.MetaAt(instance.handle.index);
-		return instanceBuffer[meta.submeshInstances[0]].pso;
+		return ShadingOf(*gfx, instanceBuffer[meta.submeshInstances[0]].pso);
 	};
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -594,15 +622,15 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 	};
 
 	// Both start on the geom's default.
-	CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
-	CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+	CHECK(shadingOf(worn) == c_Opaque);
+	CHECK(shadingOf(plain) == c_Opaque);
 
 	SECTION("the override takes effect immediately, on that instance alone")
 	{
 		view->SetSubmeshMaterialOverride(worn, 0, cutout);
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
-		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(shadingOf(worn) == c_Cutout);
+		CHECK(shadingOf(plain) == c_Opaque);
 	}
 
 	SECTION("clearing it returns that instance to the default")
@@ -610,7 +638,7 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 		view->SetSubmeshMaterialOverride(worn, 0, cutout);
 		view->ClearSubmeshMaterialOverride(worn, 0);
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(shadingOf(worn) == c_Opaque);
 	}
 
 	SECTION("an override outranks a later change to the geom's default")
@@ -624,8 +652,8 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 		// The epoch re-resolve must skip the overridden instance and rewrite only its sibling.
 		pumpUpdate();
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
-		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
+		CHECK(shadingOf(worn) == c_Cutout);
+		CHECK(shadingOf(plain) == c_Unlit);
 	}
 
 	SECTION("a bad handle or index throws")
