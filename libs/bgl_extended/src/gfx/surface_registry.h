@@ -9,7 +9,9 @@ namespace bgl
 	class IDevice;
 
 	/**
-	 * Reads every surface in `dir` and binds each to one of the reserved game slots.
+	 * Reads every surface in `dir`, binds each to a slot, and generates the programs its draw
+	 * buckets draw through: an opaque, alpha-test and hashed colour program, the coverage twins,
+	 * and an arm in the shared blend program.
 	 *
 	 * Each `.slang` directly in the directory is one surface: its name is the file's stem, and its
 	 * slot is its position in filename order, so nothing outside the directory names a file. Each is
@@ -21,7 +23,7 @@ namespace bgl
 	 * @param device The device whose compiler reads the modules and whose slots are bound.
 	 * @param dir The client's surface directory. Empty registers nothing.
 	 * @return One entry per surface, in slot order, each carrying the material kind it was given.
-	 * @throws ApiError if the directory does not exist, holds more surfaces than there are slots, or
+	 * @throws ApiError if the directory does not exist, holds a surface past the draw-bucket ceiling, or
 	 *         holds a file whose stem is not a name a shader can import; and for anything the
 	 *         reflection itself refuses.
 	 */

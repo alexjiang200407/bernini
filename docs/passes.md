@@ -531,14 +531,17 @@ function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMe
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
-`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and `GameSlot0..3`
-with their `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material kind and layer —
+`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered
+surface's `GameSlotN` with its `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material
+kind and layer —
 every tier draws every layer, so the draw buckets are the (tier × layer × material kind) keys a material
 actually resolves to, with the loose material type static-only and `kNull`/`kAssert` opaque
 whatever the layer. A draw bucket exists only once something resolves to it: the table hands ids out on
-first use, so a scene pays for the combinations it draws, not for the product. A game slot's
-draw buckets draw whatever surface `game.slotN` binds, the null surface until one is registered
-([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)). The
+first use, so a scene pays for the combinations it draws, not for the product. A surface's
+programs, and the shared blend program's arm for it, are generated when it registers, each a call
+into [lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)
+on the surface its slot's `game.slotN` binding aliases -- see
+[Game-Defined Surfaces](docs/game_defined_surfaces.md). The
 two tiers' draw buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
 material offset, and neither says which tier filled them.
 

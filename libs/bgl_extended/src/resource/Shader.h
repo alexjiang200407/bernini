@@ -30,13 +30,6 @@ namespace bgl
 			this->debugName = std::move(_debugName);
 			return *this;
 		}
-
-		/** The module name as `ISession::loadModule` wants it; see bgl::SlangModulePath. */
-		[[nodiscard]] std::string
-		SlangModulePath() const noexcept
-		{
-			return bgl::SlangModulePath(slangModuleName);
-		}
 	};
 
 	class IShader : public core::Ref

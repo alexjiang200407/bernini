@@ -1,6 +1,5 @@
 #include "resource/Shader.h"
 #include "slang/SlangSessions.h"
-#include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
 #include <slang.h>
 #include <utility>
@@ -19,13 +18,6 @@ namespace bgl
 	slang::IModule*
 	Shader::GetSlangModule() const noexcept
 	{
-		SlangErrorChecker errChecker;
-
-		slang::IModule* module = m_Sessions->ForThisThread()->loadModule(
-			m_Desc.SlangModulePath().c_str(),
-			errChecker.WriteDiagnosticBlob());
-		errChecker.ReportError();
-
-		return module;
+		return m_Sessions->LoadModule(m_Desc.slangModuleName);
 	}
 }

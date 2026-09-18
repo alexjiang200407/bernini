@@ -16,11 +16,11 @@ namespace bgl
 	FormatInfo
 	GetFormatInfo(Format format);
 
-	/** The reserved game slot a kind names, or empty for a kind that is not a slot's. */
+	/** The game slot a kind names -- its surface's registration index -- or empty for an engine kind. */
 	[[nodiscard]] std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept;
 
-	/** The kind a reserved game slot's records carry. @pre slot < cGameSlots. */
+	/** The kind the records of the surface registered `slot`th carry. */
 	[[nodiscard]] MaterialType
 	GameSlotKind(uint32_t slot) noexcept;
 

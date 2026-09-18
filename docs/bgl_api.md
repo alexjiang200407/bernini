@@ -272,9 +272,10 @@ flowchart TD
   names a file, and a file added later does not renumber the ones before it. Anything else there is
   the game's own code: the same directory is its module search path, so a shared header beside the
   surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.
-  **At most four**, because each reserved
-  slot is a set of hand-written wrapper programs (`GameSlot0..3` and their depth twins); a fifth
-  needs those generated, not a bigger number. A directory that is missing, a fifth surface, or a
+  **Up to `cMaxDrawBuckets - 1`** -- each surface's programs are generated at registration, so
+  nothing is reserved per slot, and the bound is that every registered surface can draw in the
+  same frame, a draw bucket each beside the unlit fallback's. A directory that is missing, a surface
+  past that bound, or a
   module that imports the contract and holds no single conforming struct throws `ApiError` from
   `CreateGraphics`. **Read once**: the surfaces are bound to their slots in the constructor and
   nothing rebinds one afterwards -- a pipeline drawing one is built the first time a frame
@@ -373,8 +374,8 @@ flowchart TD
   rebinding. The material's *type* cannot
   change, so the draw bucket is unaffected. @throws `SceneError` on a type mismatch.
 * **`CreateSurfaceMaterial(desc)` / `UpdateSurfaceMaterial(material, desc)`** — a material drawn by
-  one of `IGraphics::GetSurfaceTypes()`. Its `MaterialType` is the reserved kind that surface was
-  given, so that is what picks its pipelines. Values and textures are matched by the names the
+  one of `IGraphics::GetSurfaceTypes()`. Its `MaterialType` is the kind that surface was given at
+  registration (`kGameStart` plus its slot), so that is what picks its pipelines. Values and textures are matched by the names the
   surface declared; anything the desc does not name takes the surface's own default, and a name the
   surface never declared throws rather than landing somewhere harmless — including a name declared as
   the *other* kind of field, which says so. An unbound texture reads the default its declared kind

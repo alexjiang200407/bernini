@@ -169,11 +169,10 @@ TEST_CASE(
 	CHECK(ProbeValue(opts, "CSClientProbe") == 8u);
 }
 
-// The engine's programs import a slot's surface by a fixed dotted name; the tree ships a file under
-// that name in a subdirectory, and a module loaded from text under it is what a registered surface
-// substitutes. So an import must resolve to the text over the file, and the text must be in the
-// salt: the middle pass reads 2 with the file still on disk saying 1, and the last pass, sharing
-// the cache with the first, gets the first's program back rather than the middle's.
+// A surface's programs import its slot binding by a dotted name loaded from text, and a file of
+// that name on a search path must not win. So an import resolves to the text over the file, and the
+// text is in the salt: the middle pass reads 2 with the file still on disk saying 1, and the last
+// pass, sharing the cache with the first, gets the first's program back rather than the middle's.
 TEST_CASE(
 	"A module loaded from source shadows the file of its name, and is in the salt",
 	"[slang][cache][compute]")
@@ -196,6 +195,44 @@ TEST_CASE(
 				  { "game.probe", "public static const uint kProbeValue = 2u;\n" });
 		  }) == 2u);
 
+	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
+}
+
+// A program nothing imports -- the shape of every program registration generates -- is not loaded
+// into a session up front: it is loaded from its text the first time a shader names it, and there it
+// shadows the file of its name, as the generated blend program shadows the shipped one.
+TEST_CASE("A program loaded from source on demand shadows its file", "[slang][compute]")
+{
+	const std::filesystem::path dir =
+		std::filesystem::temp_directory_path() / "bernini_on_demand_modules";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+
+	auto opts           = ProbeOptions();
+	opts.shaderCacheDir = dir / "shadercache";
+
+	constexpr std::string_view c_OnDemand = R"(import lib.types.ComputeBuffer;
+
+struct Uniforms
+{
+    ComputeBuffer<uint> outBuffer;
+};
+
+ConstantBuffer<Uniforms> gUniforms;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main()
+{
+    gUniforms.outBuffer[0] = 3u;
+}
+)";
+
+	CHECK(ProbeValue(opts, "CSSourceProbe", [&](bgl::IDevice& device) {
+			  device.AddSourceModule({ "CSSourceProbe", std::string(c_OnDemand), false });
+		  }) == 3u);
+
+	// The file is still what an unregistered device builds.
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 }
 

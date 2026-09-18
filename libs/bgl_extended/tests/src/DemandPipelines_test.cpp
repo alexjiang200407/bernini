@@ -199,21 +199,28 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 // EnsureDrawBucketPipelinesExist would, then run the checks over the complete family.
 TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand][bindings]")
 {
+	// Surfaces registered, because a surface's programs exist only once it is: they are generated
+	// at registration, so a device with none has no game kind to build.
 	auto opts             = bgl::GraphicsOptions();
 	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.enableDebugLayer = true;
+	opts.surfaceShaderDir = "./shaders/tests/surfaces";
 
 	auto gfx = bgl::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
+	REQUIRE_FALSE(gfx->GetSurfaceTypes().empty());
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
 	REQUIRE(gfxBase != nullptr);
 
 	auto* device = gfxBase->GetDevice();
 
-	// Every key a material can resolve to: each tier's every layer of every kind it accepts.
+	// Every key a material can resolve to: each tier's every layer of every engine kind and every
+	// registered surface's.
+	const uint32_t       kinds = static_cast<uint32_t>(bgl::MaterialType::kGameStart) +
+	                             static_cast<uint32_t>(gfx->GetSurfaceTypes().size());
 	bgl::DrawBucketTable table;
-	for (uint32_t kind = 0; kind < static_cast<uint32_t>(bgl::MaterialType::kCount); ++kind)
+	for (uint32_t kind = 0; kind < kinds; ++kind)
 	{
 		const auto material = static_cast<bgl::MaterialType>(kind);
 		for (const auto layer : { bgl::LayerType::kOpaque,

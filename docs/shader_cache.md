@@ -167,8 +167,11 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   `IDevice::AddSourceModule` hands the sessions a module as text under a name spelled as an import
   spells it; every session loads it, under the path form the loader keys a dotted import by, before
   it compiles anything, so an `import` of that name resolves to the text before any search path is
-  consulted — which is how a registered surface replaces the no-op the tree ships under a
-  slot's fixed name. Adding one drops every live session, since a session that has already resolved
+  consulted — which is how a surface's generated programs resolve its `game.slotN` binding. A
+  module no `import` names (`SlangSourceModule::imported` false: every generated program) is not
+  loaded up front but from its text the first time a shader names it, so a session parses only
+  the programs it builds; that is also how the generated `programs.forward.Transparent` shadows
+  the shipped file. Adding one drops every live session, since a session that has already resolved
   the name to a file keeps that answer, and folds the name and the text into the salt, so the
   program compiled against the file and the one compiled against the text never share a key.
 

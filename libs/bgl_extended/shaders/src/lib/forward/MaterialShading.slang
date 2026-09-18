@@ -2,6 +2,7 @@ import bgl.PbrSurface;
 import idl.Constants;
 import idl.IAlphaTestMaterial;
 import idl.IPbrMaterial;
+import idl.MaterialType;
 import idl.ISurfaceEnv;
 import lib.forward.common;
 import lib.forward.MaterialData;
@@ -67,6 +68,17 @@ public extension MaterialData
         M material = M.Load(input.materialOffset);
 
         return ShadeSurfaceBlended(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
+    }
+
+    // Every engine-defined kind under blend. The transparent program falls through to this for any
+    // record that is not a registered surface's, so it is the whole program when none is.
+    public float4 ShadeBlendedEngineKind(ForwardVSOut input, bool isFrontFace)
+    {
+        if (LoadMaterialKind(input.materialOffset) == MaterialType.kLoosePbr)
+        {
+            return ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
+        }
+        return ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
     }
 
     // The one cutout coverage decision, taking the sampled base colour as SurfaceOf does: the
