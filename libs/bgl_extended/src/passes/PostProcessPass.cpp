@@ -7,6 +7,7 @@
 #include "passes/BindingNameCheck.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
+#include "postprocess/color_grade.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/Barrier.h"
@@ -15,6 +16,7 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include <array>
+#include <bgl/IRenderTarget.h>
 #include <bgl_common/gassert.h>
 #include <string>
 #include <string_view>
@@ -33,10 +35,28 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 12> c_Fields = {
-			"sceneColor"sv,  "sampler"sv,      "maskSampler"sv,    "outlineEnabled"sv,
-			"outlineMask"sv, "maskSize"sv,     "tonemapLut"sv,     "lutSampler"sv,
-			"bloom"sv,       "bloomSampler"sv, "bloomIntensity"sv, "bloomEnabled"sv,
+		constexpr std::array<std::string_view, 21> c_Fields = {
+			"sceneColor"sv,
+			"sampler"sv,
+			"maskSampler"sv,
+			"outlineEnabled"sv,
+			"outlineMask"sv,
+			"maskSize"sv,
+			"tonemapLut"sv,
+			"lutSampler"sv,
+			"bloom"sv,
+			"bloomSampler"sv,
+			"bloomIntensity"sv,
+			"bloomEnabled"sv,
+			"gradeWhiteBalance"sv,
+			"gradeSlope"sv,
+			"gradeOffset"sv,
+			"gradePower"sv,
+			"gradeSaturation"sv,
+			"gradeContrast"sv,
+			"gradeVignetteIntensity"sv,
+			"gradeVignetteSmoothness"sv,
+			"gradeEnabled"sv,
 		};
 	}
 
@@ -142,6 +162,22 @@ namespace bgl
 				tonemap["bloom"].SetIfValid(args.bloom);
 				tonemap["bloomSampler"].SetIfValid(args.bloomSampler);
 				tonemap["bloomIntensity"].SetIfValid(args.bloomIntensity);
+			}
+
+			tonemap["gradeEnabled"].SetIfValid(args.colorGradeEnabled ? 1u : 0u);
+			if (args.colorGradeEnabled)
+			{
+				const ColorGradeSettings& grade = args.colorGrade;
+
+				tonemap["gradeWhiteBalance"].SetIfValid(
+					WhiteBalanceLmsScale(grade.temperature, grade.tint));
+				tonemap["gradeSlope"].SetIfValid(grade.slope);
+				tonemap["gradeOffset"].SetIfValid(grade.offset);
+				tonemap["gradePower"].SetIfValid(grade.power);
+				tonemap["gradeSaturation"].SetIfValid(grade.saturation);
+				tonemap["gradeContrast"].SetIfValid(grade.contrast);
+				tonemap["gradeVignetteIntensity"].SetIfValid(grade.vignetteIntensity);
+				tonemap["gradeVignetteSmoothness"].SetIfValid(grade.vignetteSmoothness);
 			}
 		}
 		else
