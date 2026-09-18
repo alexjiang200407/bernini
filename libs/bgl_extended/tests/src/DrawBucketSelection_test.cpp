@@ -7,6 +7,8 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -120,6 +122,17 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 	// Dense: the ids are exactly 0..count-1, the unlit seed among them.
 	CHECK(table.Count() == keys);
 	CHECK(*seen.rbegin() == keys - 1);
+}
+
+// A draw bucket's dispatch args are also its command count: the geometry passes point the count verb
+// at the threadCountX that opens the bucket's entry, so the index has to land on exactly that word.
+TEST_CASE("a draw bucket's command count is the first word of its dispatch args", "[drawbucket]")
+{
+	CHECK(bgl::DrawBucketCountIndex(0) == 0u);
+	CHECK(bgl::DrawBucketCountIndex(1) * sizeof(uint32_t) == sizeof(bgl::idl::DispatchArgs));
+	CHECK(
+		bgl::DrawBucketCountIndex(bgl::idl::cMaxDrawBuckets - 1) * sizeof(uint32_t) ==
+		(bgl::idl::cMaxDrawBuckets - 1) * sizeof(bgl::idl::DispatchArgs));
 }
 
 // A bucket's kernels are functions of its desc, not of its id: the pixel program follows the

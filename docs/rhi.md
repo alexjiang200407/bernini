@@ -358,7 +358,9 @@ Everything else is self-explanatory from the header.
   `drawMeshThreadgroups`, never reads the count, and dispatches unconditionally. The contract
   that keeps the backends identical is the caller's: **a zero count element must be paired with a
   zero grid** in `indirectArgs` — then a skipped dispatch and a zero-grid dispatch draw the same
-  nothing, and the count is purely how one backend skips earlier.
+  nothing, and the count is purely how one backend skips earlier. The geometry passes keep it by
+  construction: they bind the args as their own count buffer and point the count at each entry's
+  `threadCountX`, which D3D12's clamp to one command turns into 0 or 1.
 * **`Barrier(...)`** — **do not call from pass code.** The FrameGraph owns transitions. Batched
   overloads require `handles.size() == barriers.size()`.
 * **`BeginEvent` / `EndEvent`** must be balanced.
