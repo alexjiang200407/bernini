@@ -94,8 +94,8 @@ read by the `Graphics` constructor
 ([`surface_registry.cpp`](../libs/bgl_extended/src/gfx/surface_registry.cpp)). The consequences
 follow from that and are worth stating plainly:
 
-* **Registration happens once, inside `CreateGraphics`.** The four reserved slots are bound to the
-  surfaces found then and every pipeline is built against them. An edited surface is seen at the
+* **Registration happens once, inside `CreateGraphics`.** Each surface found then is bound to a
+  slot, its programs are generated from source, and every pipeline is built against them. An edited surface is seen at the
   next launch.
 * **The editor registers the project it started with**, and opens one with other shaders by
   restarting into it. New or Open Project on a project whose `Authored/Shaders` is a different
@@ -104,9 +104,15 @@ follow from that and are worth stating plainly:
 * **A `.bpak` holds no shaders.** `pack` skips a file whose extension names no container, and a
   packed game reads its shaders off the loose directory beside it.
 
-Registration is in filename order, so which surface takes which reserved slot is the directory's
-decision and not a document's. There are **four slots**; a fifth surface is refused by name at
-startup rather than ignored.
+Registration is in filename order, so which surface takes which slot is the directory's decision
+and not a document's. The count is bounded only by the draw-bucket ceiling: every registered
+surface must be able to draw in the same frame, a draw bucket each beside the unlit fallback's, so
+at most `cMaxDrawBuckets - 1` register and the next is refused by name at startup rather than
+ignored. A surface's programs -- its opaque, alpha-test and hashed colour
+programs, the static depth pass's coverage twins, and an arm in the shared blend program -- are
+generated at registration (`src/gfx/surface_registry.cpp`); each is one call into
+`lib/forward/GameSurface.slang`, and `programs/forward/GameSurfaceShapes.slang` instantiates every
+shape on the null surface so the build validates them.
 
 ## What it draws on
 
@@ -229,7 +235,7 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
-| a file that will not compile, or a fifth surface | `CreateGraphics`, naming the file |
+| a file that will not compile, or a surface past `cMaxDrawBuckets - 1` | `CreateGraphics`, naming the file |
 
 ## Boundaries
 

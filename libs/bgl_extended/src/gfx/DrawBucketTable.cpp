@@ -39,7 +39,7 @@ namespace bgl
 		{
 			gfatal("A bucket's geometry kind is a drawable tier");
 		}
-		if (material == MaterialType::kInvalid || material == MaterialType::kCount)
+		if (material == MaterialType::kInvalid)
 		{
 			gfatal("A bucket's material kind is a real one");
 		}

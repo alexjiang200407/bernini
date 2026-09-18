@@ -118,8 +118,8 @@ namespace bgl
 		// What a material names to draw with this surface, normally its module file's stem.
 		std::string name;
 
-		// What a record of this surface is tagged with: one of the reserved game kinds from
-		// `MaterialType::kGameStart`, and the kind a material handle of this surface carries.
+		// What a record of this surface is tagged with: `MaterialType::kGameStart` plus its slot,
+		// and the kind a material handle of this surface carries.
 		// Assigned by registration; reflection leaves it invalid.
 		MaterialType kind = MaterialType::kInvalid;
 
