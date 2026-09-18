@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bgl_common/SurfaceReflection.h>
+#include <core/str/str.h>
 
 #include <filesystem>
 #include <mutex>
@@ -25,10 +26,7 @@ namespace bgl
 		std::string name;
 		std::string source;
 
-		// Whether an `import` can name it. An imported module is loaded into every session up
-		// front, since an import only resolves a module already loaded; one nothing imports -- a
-		// program a shader names as its entry -- is loaded from this text the first time a
-		// LoadModule on that thread asks for it, so a session pays only for the programs it builds.
+		// False for a program nothing imports: loaded on its first LoadModule, not into every session.
 		bool imported = true;
 	};
 
@@ -153,7 +151,7 @@ namespace bgl
 			Slang::ComPtr<slang::ISession> scalarLayout;
 
 			// The on-demand modules `session` has loaded so far, by name. Owned by the session.
-			std::unordered_map<std::string, slang::IModule*> loadedOnDemand;
+			core::str::unordered_str_map<slang::IModule*> loadedOnDemand;
 		};
 
 		SlangSessionDesc m_Desc;

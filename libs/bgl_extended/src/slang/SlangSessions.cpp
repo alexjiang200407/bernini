@@ -163,7 +163,7 @@ namespace bgl
 		{
 			const auto      held = std::lock_guard(m_Mutex);
 			ThreadSessions& mine = m_ByThread.at(std::this_thread::get_id());
-			if (const auto loaded = mine.loadedOnDemand.find(std::string(moduleName));
+			if (const auto loaded = mine.loadedOnDemand.find(moduleName);
 			    loaded != mine.loadedOnDemand.end())
 			{
 				return loaded->second;
