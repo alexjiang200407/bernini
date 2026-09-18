@@ -98,14 +98,15 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		m_DrawBucketTable = &ctx.drawBucketTable;
+		gassert(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
+		m_DrawBucketTable = ctx.drawBucketTable;
 
 		// Opaque depth does not depend on the material, so the opaque ctx.drawBucketTable share a depth-only
 		// pixel stage and differ only in where back faces are culled.
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_HardwareCullKernel,
 			DepthPipelineDesc(ctx.device, c_PixelSrc, RasterCullMode::kBack));
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_MaterialCullKernel,
 			DepthPipelineDesc(ctx.device, c_PixelSrc, RasterCullMode::kNone));
 	}
@@ -136,7 +137,7 @@ namespace bgl
 				continue;
 			}
 
-			ctx.pipelines.Add(
+			ctx.pipelines->Add(
 				m_CoverageKernels[bucket],
 				DepthPipelineDesc(
 					ctx.device,

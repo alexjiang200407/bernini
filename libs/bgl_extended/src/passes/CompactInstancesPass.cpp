@@ -30,25 +30,25 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_CullInstances,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_Histogram,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_PrefixSum,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_CompactInstances,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CompactInstances"))

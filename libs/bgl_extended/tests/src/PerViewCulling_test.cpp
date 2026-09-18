@@ -182,7 +182,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	{
 		auto pipelines = bgl::PipelineBatch(device);
 		auto table     = bgl::DrawBucketTable();
-		compactPass.Init(bgl::PassInitContext{ device, pipelines, resourceManager, table });
+		compactPass.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &table });
 		pipelines.Build();
 	}
 

@@ -22,13 +22,13 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_DepthKeys,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_Sort,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))

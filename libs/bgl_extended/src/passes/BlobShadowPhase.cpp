@@ -91,7 +91,7 @@ namespace bgl
 		pipelineDesc.renderState =
 			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
 
-		ctx.pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

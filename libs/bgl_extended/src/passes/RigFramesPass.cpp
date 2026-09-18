@@ -18,7 +18,7 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		ctx.pipelines.Add(
+		ctx.pipelines->Add(
 			m_PoseRigFrames,
 			ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.anim.PoseRigFrames"))

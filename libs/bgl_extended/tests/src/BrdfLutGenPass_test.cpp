@@ -57,7 +57,7 @@ namespace
 		auto lut         = bgl::BrdfLutGenPass();
 		auto pipelines   = bgl::PipelineBatch(device);
 		auto drawBuckets = bgl::DrawBucketTable();
-		lut.Init(bgl::PassInitContext{ device, pipelines, resourceManager, drawBuckets });
+		lut.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
 		pipelines.Build();
 
 		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());

@@ -202,8 +202,10 @@ namespace bgl
 		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
 		auto       pipelines = PipelineBatch(m_Device.Get());
-		const auto passes =
-			PassInitContext{ m_Device.Get(), pipelines, m_ResourceManager, *m_DrawBucketTable };
+		const auto passes    = PassInitContext{ m_Device.Get(),
+			                                    &pipelines,
+			                                    m_ResourceManager,
+			                                    m_DrawBucketTable.get() };
 		m_CompactInstances.Init(passes);
 		m_RigFrames.Init(passes);
 		m_SkinnedPose.Init(passes);
@@ -633,7 +635,8 @@ namespace bgl
 		}
 
 		auto       pipelines = PipelineBatch(m_Device.Get());
-		const auto passes = PassInitContext{ m_Device.Get(), pipelines, m_ResourceManager, table };
+		const auto passes =
+			PassInitContext{ m_Device.Get(), &pipelines, m_ResourceManager, &table };
 		m_Forward.AddDrawBucketKernels(passes, missing);
 		m_StaticDepth.AddDrawBucketKernels(passes, missing);
 		if (missingTransparent)

@@ -251,7 +251,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 
 	auto       pipelines       = bgl::PipelineBatch(device);
 	const auto resourceManager = gfxBase->GetResourceManagerCpy();
-	const auto passes          = bgl::PassInitContext{ device, pipelines, resourceManager, table };
+	const auto passes = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 	forward.Init(passes);
 	depth.Init(passes);
 	forward.AddDrawBucketKernels(passes, opaqueShaped);

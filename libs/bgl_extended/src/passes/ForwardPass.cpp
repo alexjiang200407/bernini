@@ -160,7 +160,8 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		m_DrawBucketTable = &ctx.drawBucketTable;
+		gassert(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
+		m_DrawBucketTable = ctx.drawBucketTable;
 		m_BlobShadows.Init(ctx);
 	}
 
@@ -182,7 +183,7 @@ namespace bgl
 				gassert(
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
-				ctx.pipelines.Add(
+				ctx.pipelines->Add(
 					m_Kernels[bucket],
 					ForwardPipelineDesc(ctx.device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
 			}
@@ -196,7 +197,7 @@ namespace bgl
 
 		if (!m_TransparentKernel.pipeline.IsInitialized())
 		{
-			ctx.pipelines.Add(
+			ctx.pipelines->Add(
 				m_TransparentKernel,
 				ForwardPipelineDesc(
 					ctx.device,
