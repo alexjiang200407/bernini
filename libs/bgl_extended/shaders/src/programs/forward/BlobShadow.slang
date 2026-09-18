@@ -150,14 +150,10 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     // reconstruction anyway. A volume the frustum does not reach emits nothing, since every pixel
     // it covered would be rejected.
     let rect = ProjectBoxBounds(gBlobShadowData.viewProj, corners);
-    let culled = rect.IsEmpty();
-    SetMeshOutputCounts(culled ? 0 : 4, culled ? 0 : 2);
-    if (culled)
-    {
-        return;
-    }
+    let quads = uint(!rect.IsEmpty());
+    SetMeshOutputCounts(4 * quads, 2 * quads);
 
-    if (gtid < 4)
+    if (gtid < 4 * quads)
     {
         let corner = float2((gtid & 1) != 0 ? rect.hi.x : rect.lo.x, (gtid & 2) != 0 ? rect.hi.y : rect.lo.y);
 
@@ -169,7 +165,7 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
         verts[gtid] = vout;
     }
 
-    if (gtid == 0)
+    if (gtid < quads)
     {
         tris[0] = uint3(0, 1, 2);
         tris[1] = uint3(2, 1, 3);

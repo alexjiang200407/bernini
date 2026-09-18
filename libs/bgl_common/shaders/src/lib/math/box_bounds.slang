@@ -17,26 +17,29 @@ public struct NdcRect
 // [0, w] depth range.
 uint ClipOutcode(float4 clip)
 {
-    uint code = 0;
-    code |= clip.x < -clip.w ? 1u : 0u;
-    code |= clip.x > clip.w ? 2u : 0u;
-    code |= clip.y < -clip.w ? 4u : 0u;
-    code |= clip.y > clip.w ? 8u : 0u;
-    code |= clip.z < 0.0 ? 16u : 0u;
-    code |= clip.z > clip.w ? 32u : 0u;
+    uint code = uint(clip.x < -clip.w);
+    code |= uint(clip.x > clip.w) << 1;
+    code |= uint(clip.y < -clip.w) << 2;
+    code |= uint(clip.y > clip.w) << 3;
+    code |= uint(clip.z < 0.0) << 4;
+    code |= uint(clip.z > clip.w) << 5;
     return code;
 }
 
-void Include(inout NdcRect rect, float4 clip)
+// Grows the rect to take in a clip-space point, when `take` holds.
+void Include(inout NdcRect rect, float4 clip, bool take)
 {
     let ndc = clip.xy / clip.w;
-    rect.lo = min(rect.lo, ndc);
-    rect.hi = max(rect.hi, ndc);
+    rect.lo = select(bool2(take, take), min(rect.lo, ndc), rect.lo);
+    rect.hi = select(bool2(take, take), max(rect.hi, ndc), rect.hi);
 }
 
 // The viewport rect the box projects to, after clipping it to the near plane (clip z = 0) and
 // clamping to [-1, 1]. Empty when all eight corners lie outside one clip plane. Conservative
 // otherwise: a box that only crosses a frustum corner can still come back non-empty.
+//
+// Selects, not branches: a mesh stage sizes its output from this, and DXC threads a branch that
+// decides the count through SetMeshOutputCounts, then rejects the call it duplicated.
 public NdcRect ProjectBoxBounds(float4x4 viewProj, float3 corners[cBoxCorners])
 {
     float4 clip[cBoxCorners];
@@ -53,35 +56,28 @@ public NdcRect ProjectBoxBounds(float4x4 viewProj, float3 corners[cBoxCorners])
     rect.lo = float2(1.0, 1.0);
     rect.hi = float2(-1.0, -1.0);
 
-    if (outsideAll != 0)
-    {
-        return rect;
-    }
-
     // Behind the near plane a corner's divide is meaningless, so the clipped box's outline there is
     // the points where its edges cross z = 0, and those have w = near > 0.
     [unroll]
     for (uint i = 0; i < cBoxCorners; ++i)
     {
         let inFront = clip[i].z >= 0.0;
-        if (inFront)
-        {
-            Include(rect, clip[i]);
-        }
+        Include(rect, clip[i], inFront);
 
         [unroll]
         for (uint axis = 0; axis < 3; ++axis)
         {
-            let j = i | (1u << axis);
-            if (j != i && inFront != (clip[j].z >= 0.0))
+            if ((i & (1u << axis)) == 0)
             {
+                let j = i | (1u << axis);
                 let t = clip[i].z / (clip[i].z - clip[j].z);
-                Include(rect, lerp(clip[i], clip[j], t));
+                Include(rect, lerp(clip[i], clip[j], t), inFront != (clip[j].z >= 0.0));
             }
         }
     }
 
-    rect.lo = max(rect.lo, float2(-1.0, -1.0));
-    rect.hi = min(rect.hi, float2(1.0, 1.0));
+    let reached = outsideAll == 0;
+    rect.lo = select(bool2(reached, reached), max(rect.lo, float2(-1.0, -1.0)), float2(1.0, 1.0));
+    rect.hi = select(bool2(reached, reached), min(rect.hi, float2(1.0, 1.0)), float2(-1.0, -1.0));
     return rect;
 }
