@@ -18,6 +18,7 @@
 #include <span>
 #include <vector>
 
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
@@ -171,12 +172,16 @@ namespace bgl
 			// whatever module this bound to that slot.
 			m_SurfaceTypes = RegisterSurfaces(*m_Device, opts.surfaceShaderDir);
 
-			m_Context =
-				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
+			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
+			m_Context         = std::make_unique<RenderContext>(
+				m_Device,
+				m_ResourceManager,
+				m_DrawBucketTable,
+				opts.enableDebugLayer);
 
-			// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
-			// past this point compiles a shader and the Slang core module can stop occupying a few
-			// hundred megabytes. A later CreatePipeline would silently recreate the session.
+			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
+			// by the first Draw that demands each, and that path drops the sessions again after
+			// every batch. This release covers the start-up build.
 			device->ReleaseSlangSession();
 
 			logger::info("BGL initialized successfully.");
@@ -192,6 +197,12 @@ namespace bgl
 		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager;
+		}
+
+		const RenderContext*
+		GetRenderContext() const noexcept override
+		{
+			return m_Context.get();
 		}
 
 		void
@@ -215,7 +226,11 @@ namespace bgl
 		SceneViewRef
 		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
-			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
+			return core::SharedRef<SceneView>::Make(
+				scene,
+				initialInstances,
+				m_ResourceManager,
+				m_DrawBucketTable);
 		}
 
 		OverlayRef
@@ -330,6 +345,8 @@ namespace bgl
 		// Below the device: what it holds are Metal objects that reference the device, so draining
 		// it once the device is released deallocs them into a purged one.
 		NS::SharedPtr<NS::AutoreleasePool> m_Pool;
+
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass
 		// resources through the members above, which must outlive it.

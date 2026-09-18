@@ -11,6 +11,7 @@
 #include "overlay/Overlay.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
@@ -44,6 +45,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <memory>
 #include <optional>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -178,11 +180,12 @@ namespace bgl
 	}
 
 	RenderContext::RenderContext(
-		DeviceRef          device,
-		ResourceManagerRef resourceManager,
-		bool               enableDebug) :
-		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
-		m_EnableDebug(enableDebug)
+		DeviceRef                        device,
+		ResourceManagerRef               resourceManager,
+		std::shared_ptr<DrawBucketTable> buckets,
+		bool                             enableDebug) :
+		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
+		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
 	{
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
@@ -195,21 +198,26 @@ namespace bgl
 		m_CommandList =
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
-		// Every pipeline the renderer draws with, requested here and built at once: on a cold shader
-		// cache the build is most of a start-up, and the links are independent.
-		auto pipelines = PipelineBatch(m_Device.Get());
-		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
-		m_RigFrames.Init(m_Device.Get(), pipelines);
-		m_SkinnedPose.Init(m_Device.Get(), pipelines);
-		m_TransparentSort.Init(m_Device.Get(), pipelines);
-		m_StaticDepth.Init(m_Device.Get(), pipelines);
-		m_Forward.Init(m_Device.Get(), pipelines);
-		m_Skybox.Init(m_Device.Get(), pipelines);
-		m_PostProcess.Init(m_Device.Get(), pipelines);
-		m_OverlayPass.Init(m_Device.Get(), pipelines);
-		m_OutlineMask.Init(m_Device.Get(), pipelines);
-		m_TaaResolve.Init(m_Device.Get(), pipelines);
-		m_BrdfLut.Init(m_Device.Get(), pipelines, m_ResourceManager);
+		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
+		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
+		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes    = PassInitContext{ m_Device.Get(),
+			                                    &pipelines,
+			                                    m_ResourceManager,
+			                                    m_DrawBucketTable.get() };
+		m_CompactInstances.Init(passes);
+		m_RigFrames.Init(passes);
+		m_SkinnedPose.Init(passes);
+		m_TransparentSort.Init(passes);
+		m_StaticDepth.Init(passes);
+		m_Forward.Init(passes);
+		m_Skybox.Init(passes);
+		m_PostProcess.Init(passes);
+		m_OverlayPass.Init(passes);
+		m_OutlineMask.Init(passes);
+		m_TaaResolve.Init(passes);
+		m_BrdfLut.Init(passes);
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
@@ -602,6 +610,65 @@ namespace bgl
 	}
 
 	void
+	RenderContext::EnsureDrawBucketPipelinesExist(DrawBucketMask demanded)
+	{
+		const DrawBucketTable& table = *m_DrawBucketTable;
+
+		// A transparent bucket owns no kernel: the whole depth-sorted list draws through the one
+		// shared blend kernel (ForwardPass), so its demand is satisfied the moment that exists.
+		DrawBucketMask transparent;
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
+		{
+			if (demanded.test(bucket) && table.Transparent(bucket))
+			{
+				transparent.set(bucket);
+			}
+		}
+		demanded &= ~transparent;
+
+		const DrawBucketMask missing  = demanded & ~m_InitializedDrawBuckets;
+		const bool missingTransparent = transparent.any() && !m_Forward.TransparentInitialized();
+		if (missing.none() && !missingTransparent)
+		{
+			m_InitializedDrawBuckets |= transparent;
+			return;
+		}
+
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes =
+			PassInitContext{ m_Device.Get(), &pipelines, m_ResourceManager, &table };
+		m_Forward.AddDrawBucketKernels(passes, missing);
+		m_StaticDepth.AddDrawBucketKernels(passes, missing);
+		if (missingTransparent)
+		{
+			m_Forward.AddTransparentKernel(passes);
+		}
+		pipelines.Build();
+
+		// A cold-cache build stands per-thread Slang sessions up, a few hundred megabytes each;
+		// warm builds never reach Slang and this drops nothing.
+		m_Device->ReleaseSlangSession();
+
+		m_Forward.CheckBindings();
+		m_StaticDepth.CheckBindings();
+
+		m_InitializedDrawBuckets |= missing | transparent;
+
+		// The draw-time miss the demand contract turns into a bug: a bucket this view demands
+		// whose kernel still does not exist after the build that was meant to make it.
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
+		{
+			gassert(
+				!missing.test(bucket) || (m_Forward.DrawBucketInitialized(bucket) &&
+			                              m_StaticDepth.DrawBucketInitialized(bucket)),
+				"EnsureDrawBucketPipelinesExist left a demanded draw bucket uninitialized");
+		}
+		gassert(
+			!transparent.any() || m_Forward.TransparentInitialized(),
+			"EnsureDrawBucketPipelinesExist left the shared blend kernel uninitialized");
+	}
+
+	void
 	RenderContext::Draw(const RenderJob& job)
 	{
 		if (!m_FrameActive)
@@ -616,6 +683,8 @@ namespace bgl
 
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
+
+		EnsureDrawBucketPipelinesExist(view->DemandedDrawBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.

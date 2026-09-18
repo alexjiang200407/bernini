@@ -6,6 +6,7 @@ namespace bgl
 {
 	class IDevice;
 	class IResourceManager;
+	class RenderContext;
 
 	class GraphicsBase : public IGraphics
 	{
@@ -25,5 +26,8 @@ namespace bgl
 
 		virtual core::SharedRef<IResourceManager>
 		GetResourceManagerCpy() const noexcept = 0;
+
+		virtual const RenderContext*
+		GetRenderContext() const noexcept = 0;
 	};
 }

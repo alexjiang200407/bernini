@@ -33,23 +33,25 @@ namespace bgl
 	}
 
 	/**
-	 * One pass's binder, checked against the PSO family it binds into.
+	 * One pass's binder, checked against the built kernels of the PSO family it binds into.
 	 *
 	 * A variant omitting a member is ordinary and stays silent; a name *no* variant declares is a
 	 * typo or a shader rename, which binding cannot report because `IsValid()` reads the same either
-	 * way. @pre construct one in the pass's `CheckBindings`, once its batch is built, and check every
+	 * way. The family is demand-built, so an unbuilt kernel is not a variant, and a cbuffer no built
+	 * variant carries is checked only once one is -- re-run the check after every build.
+	 * @pre construct one in the pass's `CheckBindings`, once a batch is built, and check every
 	 * cbuffer it writes there, never per draw.
 	 */
-	class BinderNames final
+	class BindingNameCheck final
 	{
 	public:
 		/** @pre `kernels` outlives every `Check`; it is not copied. */
-		BinderNames(std::string_view binder, std::span<const MeshletKernel> kernels) noexcept :
+		BindingNameCheck(std::string_view binder, std::span<const MeshletKernel> kernels) noexcept :
 			m_Binder(binder), m_Kernels(kernels)
 		{}
 
 		/** @post Fatal when a name in `names` resolves in no variant's `cbuffer`. */
-		BinderNames&
+		BindingNameCheck&
 		Check(std::string_view cbuffer, std::span<const std::string_view> names);
 
 	private:

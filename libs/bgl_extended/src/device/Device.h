@@ -62,6 +62,16 @@ namespace bgl
 		AddSourceModule(const SlangSourceModule& sourceModule) noexcept = 0;
 
 		/**
+		 * Drops every thread's Slang session -- a few hundred resident megabytes apiece once a
+		 * cold-cache compile has stood one up. Call after each pipeline batch is built; the next
+		 * compile recreates what it needs.
+		 *
+		 * @pre no compile is in flight, and no slang:: object is held.
+		 */
+		virtual void
+		ReleaseSlangSession() noexcept = 0;
+
+		/**
 		 * The surface a game's module declares, read through this device's compiler and so at the
 		 * offsets this backend will read a record at.
 		 *

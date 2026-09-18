@@ -8,8 +8,9 @@ visible to a caller.
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is
-`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`.
-An API without those cannot implement this interface.
+`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`
+— `DispatchMeshIndirectCount` is the same dispatch with a GPU count an API may ignore (see
+§ ICommandList). An API without the three cannot implement this interface.
 
 This is the layer bgl_extended is built *on*. For the surface an application links against — `IGraphics`,
 `IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
@@ -120,17 +121,22 @@ doc and a header disagree, trust the header, then fix this doc.
   pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by
   name. `CreateComputeKernel` / `CreateMeshletKernel` build this from slang reflection.
 
-* **The renderer's kernels are requested first and built together.** A
-  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects every pass's kernel
-  request in `RenderContext`'s constructor and builds the set across worker threads
-  (`core::parallel_for`, up to six and never more than there are kernels — each worker that misses
-  the cache stands up a Slang global session of about 200 MB, and past six the links stop getting
-  faster), then the passes check their binder names against the built kernels. On a cold shader cache that build is
-  most of a start-up, and the links are independent. Pipeline creation is therefore callable from
-  any thread: each thread compiles on a Slang session of its own (see
-  [Shader Cache](docs/shader_cache.md)), and the backend's `ShaderCache` serializes its driver
-  pipeline library. A kernel created *after* `CreateGraphics` is built on the calling thread, as
-  before — the batch is a start-up device, not an async pipeline API.
+* **The renderer's kernels are requested in batches and built together.** A
+  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects kernel requests and
+  builds the set across worker threads (`core::parallel_for`, up to six and never more than there
+  are kernels — each worker that misses the cache stands up a Slang global session of about
+  200 MB, and past six the links stop getting faster), then the passes check their binder names
+  against the built kernels. Two batches exist: the always-on set in `RenderContext`'s
+  constructor, and one per `Draw` that demands draw buckets with no kernels yet
+  (`RenderContext::EnsureDrawBucketPipelinesExist`) — so a scene builds only the draw buckets it uses, and each
+  batch releases the Slang sessions when it is done. The demand batch runs at the top of `Draw`
+  rather than where a material resolves: `SceneView` has no reach into the passes, and one batch per
+  `Draw` gathers a load's many material creations into a single parallel build where per-creation
+  building would link serially. Pipeline creation is callable from any thread:
+  each thread compiles on a Slang session of its own (see [Shader Cache](docs/shader_cache.md)),
+  and the backend's `ShaderCache` serializes its driver pipeline library. A kernel created
+  outside a batch is built on the calling thread — the batch is a parallelism device, not an
+  async pipeline API.
 
 * **Uniforms are a reflection-driven CPU mirror, bound by name.** `Uniforms` lays out one
   constant buffer from the shader's slang reflection. Populate it with chained `operator[]`
@@ -348,6 +354,16 @@ Everything else is self-explanatory from the header.
   render-target/depth layout.
 * **`DispatchMeshIndirect(argIdx)`** — reads its grid from the bound state's `indirectArgs`
   buffer, which must be valid and in indirect-argument state.
+* **`DispatchMeshIndirectCount(argIdx, countIdx)`** — the same dispatch gated by a GPU-written
+  command count: element `countIdx` of the bound state's `commandCounts` buffer (a `uint32`
+  clamped to one command), in indirect-argument state like `indirectArgs`. D3D12 passes it to
+  `ExecuteIndirect` and skips the dispatch when it is zero; Metal has no count-buffer form of
+  `drawMeshThreadgroups`, never reads the count, and dispatches unconditionally. The contract
+  that keeps the backends identical is the caller's: **a zero count element must be paired with a
+  zero grid** in `indirectArgs` — then a skipped dispatch and a zero-grid dispatch draw the same
+  nothing, and the count is purely how one backend skips earlier. The geometry passes keep it by
+  construction: they bind the args as their own count buffer and point the count at each entry's
+  `threadCountX`, which D3D12's clamp to one command turns into 0 or 1.
 * **`Barrier(...)`** — **do not call from pass code.** The FrameGraph owns transitions. Batched
   overloads require `handles.size() == barriers.size()`.
 * **`BeginEvent` / `EndEvent`** must be balanced.

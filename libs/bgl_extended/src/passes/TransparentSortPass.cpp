@@ -18,20 +18,20 @@
 namespace bgl
 {
 	void
-	TransparentSortPass::Init(IDevice* device, PipelineBatch& pipelines)
+	TransparentSortPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device pointer is null");
+		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_DepthKeys,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_Sort,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.TransparentSort"))
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));
 	}
 
@@ -74,6 +74,10 @@ namespace bgl
 						c_InstanceVisibilityName,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferArg(
+						c_DrawBucketFlagsName,
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kShaderResource)
 					// Only the transparent instances take a slot, and the count that says how many
 					// is written by this same pass -- so a leftover entry is indistinguishable
 					// from one this frame produced.
@@ -130,12 +134,13 @@ namespace bgl
 			return;
 		}
 
-		m_DepthKeys["gUniforms"]["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
-		m_DepthKeys["gUniforms"]["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
-		m_DepthKeys["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
-		m_DepthKeys["gUniforms"]["outEntries"]     = ctx.GetBuffer(c_TransparentSortEntriesName);
-		m_DepthKeys["gUniforms"]["outCount"]       = ctx.GetBuffer(c_TransparentSortCountName);
-		m_DepthKeys["gUniforms"]["cameraPos"]      = draw.viewState.cameraPos;
+		m_DepthKeys["gUniforms"]["instanceBuffer"]  = ctx.GetBuffer(c_InstanceBufferName);
+		m_DepthKeys["gUniforms"]["meshBuffer"]      = ctx.GetBuffer(c_MeshInstanceBufferName);
+		m_DepthKeys["gUniforms"]["visibility"]      = ctx.GetBuffer(c_InstanceVisibilityName);
+		m_DepthKeys["gUniforms"]["drawBucketFlags"] = ctx.GetBuffer(c_DrawBucketFlagsName);
+		m_DepthKeys["gUniforms"]["outEntries"]      = ctx.GetBuffer(c_TransparentSortEntriesName);
+		m_DepthKeys["gUniforms"]["outCount"]        = ctx.GetBuffer(c_TransparentSortCountName);
+		m_DepthKeys["gUniforms"]["cameraPos"]       = draw.viewState.cameraPos;
 
 		auto cmdList = ctx.GetCommandList();
 

@@ -118,6 +118,9 @@ namespace bgl
 		DispatchMeshIndirect(uint32_t argIdx) noexcept override;
 
 		void
+		DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept override;
+
+		void
 		SetComputeState(const ComputeState& computeState) noexcept override;
 
 		void
@@ -168,6 +171,14 @@ namespace bgl
 		// Applies the bound MeshletState (viewport/scissor/targets/PSO/root sig/uniforms)
 		void
 		ApplyMeshletState() noexcept;
+
+		// The one ExecuteIndirect both indirect verbs funnel through; a null countBuffer is the
+		// uncounted form.
+		void
+		ExecuteMeshDispatch(
+			uint32_t        argIdx,
+			ID3D12Resource* countBuffer,
+			UINT64          countOffset) noexcept;
 
 		CommandListDesc    m_Desc;
 		ResourceManagerRef m_ResourceManager;

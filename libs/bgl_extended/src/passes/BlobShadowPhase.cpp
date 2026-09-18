@@ -2,7 +2,7 @@
 #include "cmd/CommandList.h"
 #include "device/Device.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -39,7 +39,7 @@ namespace bgl
 		// ConstantBuffer declaration in BlobShadow.slang.
 		constexpr auto c_Cbuffer = "gBlobShadowData"sv;
 
-		// Every member Draw writes, kept beside the code that writes them so BinderNames catches
+		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
 		constexpr std::array<std::string_view, 8> c_Fields = {
 			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "staticDepth"sv,
@@ -48,16 +48,16 @@ namespace bgl
 	}
 
 	void
-	BlobShadowPhase::Init(IDevice* device, PipelineBatch& pipelines)
+	BlobShadowPhase::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		// The transparents' render state -- colour only, blended, depth read without write --
 		// but its own two-stage program: the discs are not instance-pipeline geometry.
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
@@ -91,13 +91,13 @@ namespace bgl
 		pipelineDesc.renderState =
 			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void
 	BlobShadowPhase::CheckBindings() const
 	{
-		BinderNames("BlobShadowPhase"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("BlobShadowPhase"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void

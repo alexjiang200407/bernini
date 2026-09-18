@@ -17,7 +17,7 @@
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -26,42 +26,39 @@
 namespace bgl
 {
 	void
-	CompactInstancesPass::Init(
-		IDevice*                          device,
-		PipelineBatch&                    pipelines,
-		core::SharedRef<IResourceManager> resourceManager)
+	CompactInstancesPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device pointer is null");
+		gassert(ctx.device != nullptr, "Device pointer is null");
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_CullInstances,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.CullInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_Histogram,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_PrefixSum,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_CompactInstances,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.culling.CompactInstances"))
+				.SetShader(ctx.device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));
 
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
 
-			m_CullStats.Init(desc, resourceManager);
+			m_CullStats.Init(desc, ctx.resourceManager);
 		}
 	}
 
@@ -88,7 +85,7 @@ namespace bgl
 				PassDesc()
 					.SetName("Compact Instances Update {}.{}", draw.drawIdx, draw.cullIdx)
 					.AddBufferArg(
-						c_PsoPrefixSumName,
+						c_DrawBucketPrefixSumName,
 						BarrierSyncFlag::kCopy,
 						BarrierAccessFlag::kCopyDest)
 					.AddBufferArg(
@@ -148,7 +145,7 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
-						c_PsoPrefixSumName,
+						c_DrawBucketPrefixSumName,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.SetExec([draw, this](const PassContext& ctx) {
@@ -169,7 +166,7 @@ namespace bgl
 					// a stale entry left over from the previous frame is a plausible draw.
 					.AddPoisonedBufferArg(c_CompactedInstancesName, BarrierSyncFlag::kComputeShader)
 					.AddBufferArg(
-						c_PsoPrefixSumName,
+						c_DrawBucketPrefixSumName,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kUnorderedAccess)
 					.AddBufferArg(
@@ -188,7 +185,7 @@ namespace bgl
 
 		gassert(draw.cullState != nullptr, "Compact pass requires the draw's cull state");
 
-		draw.cullState->GetPsoPrefixSum().Clear(cmd);
+		draw.cullState->GetDrawBucketPrefixSum().Clear(cmd);
 		m_CullStats.Clear(cmd);
 
 		// Assigned here rather than at attach time: a view drawn twice in one frame shares this
@@ -196,8 +193,8 @@ namespace bgl
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
 		draw.cullState->GetCullView().Update(cmd);
 
-		static constexpr std::array<idl::DispatchArgs, idl::c_PsoCount> c_Seed = [] {
-			std::array<idl::DispatchArgs, idl::c_PsoCount> seed{};
+		static constexpr std::array<idl::DispatchArgs, idl::cMaxDrawBuckets> c_Seed = [] {
+			std::array<idl::DispatchArgs, idl::cMaxDrawBuckets> seed{};
 			for (idl::DispatchArgs& args : seed)
 			{
 				args = { 0u, 1u, 1u };
@@ -250,14 +247,14 @@ namespace bgl
 			return;
 		}
 
-		auto instanceBuffer     = ctx.GetBuffer(c_InstanceBufferName);
-		auto psoPrefixSumBuffer = ctx.GetBuffer(c_PsoPrefixSumName);
+		auto instanceBuffer            = ctx.GetBuffer(c_InstanceBufferName);
+		auto drawBucketPrefixSumBuffer = ctx.GetBuffer(c_DrawBucketPrefixSumName);
 
 		m_Histogram["gUniforms"]["instanceBuffer"] = instanceBuffer;
 		m_Histogram["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
 
 		// Reuse histogram buffer as prefix sum buffer
-		m_Histogram["gUniforms"]["outBuffer"] = psoPrefixSumBuffer;
+		m_Histogram["gUniforms"]["outBuffer"] = drawBucketPrefixSumBuffer;
 
 		auto cmdList = ctx.GetCommandList();
 
@@ -269,22 +266,22 @@ namespace bgl
 		const auto instanceCount = draw.view->GetInstanceCount();
 		cmdList->Dispatch(core::div_ceil(instanceCount, idl::cHistogramGroupSize), 1, 1);
 
-		// The histogram writes psoPrefixSum (UAV); the prefix-sum scan below reads and
+		// The histogram writes drawBucketPrefixSum (UAV); the prefix-sum scan below reads and
 		// rewrites the same buffer. Both dispatches run back-to-back inside this single
 		// frame-graph pass, so no pass-boundary barrier separates them -- insert an
 		// explicit UAV barrier or the scan races the histogram. The race only corrupts
-		// results with multiple PSO buckets (a lone bucket's base is the prefix sum of
+		// results with multiple buckets (a lone bucket's base is the prefix sum of
 		// prior, empty buckets, which is always 0), which is why it shows up as
-		// flickering only in scenes mixing PSO types.
+		// flickering only in scenes mixing buckets.
 		cmdList->Barrier(
-			psoPrefixSumBuffer,
+			drawBucketPrefixSumBuffer,
 			BufferBarrierDesc()
 				.AddSyncBefore(BarrierSyncFlag::kComputeShader)
 				.AddAccessBefore(BarrierAccessFlag::kUnorderedAccess)
 				.AddSyncAfter(BarrierSyncFlag::kComputeShader)
 				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
 
-		m_PrefixSum["gUniforms"]["inOutBuffer"] = psoPrefixSumBuffer;
+		m_PrefixSum["gUniforms"]["inOutBuffer"] = drawBucketPrefixSumBuffer;
 
 		computeState.kernel = &m_PrefixSum;
 
@@ -305,14 +302,14 @@ namespace bgl
 
 		auto instanceBuffer              = ctx.GetBuffer(c_InstanceBufferName);
 		auto compactedInstancesBuffer    = ctx.GetBuffer(c_CompactedInstancesName);
-		auto psoPrefixSumBuffer          = ctx.GetBuffer(c_PsoPrefixSumName);
+		auto drawBucketPrefixSumBuffer   = ctx.GetBuffer(c_DrawBucketPrefixSumName);
 		auto compactedDispatchArgsBuffer = ctx.GetBuffer(c_CompactDispatchArgsName);
 
 		m_CompactInstances["gUniforms"]["instanceBuffer"] = instanceBuffer;
 		m_CompactInstances["gUniforms"]["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
-		m_CompactInstances["gUniforms"]["psoPrefixSum"]   = psoPrefixSumBuffer;
-		m_CompactInstances["gUniforms"]["compactedInstances"] = compactedInstancesBuffer;
-		m_CompactInstances["gUniforms"]["dispatchArgs"]       = compactedDispatchArgsBuffer;
+		m_CompactInstances["gUniforms"]["drawBucketPrefixSum"] = drawBucketPrefixSumBuffer;
+		m_CompactInstances["gUniforms"]["compactedInstances"]  = compactedInstancesBuffer;
+		m_CompactInstances["gUniforms"]["dispatchArgs"]        = compactedDispatchArgsBuffer;
 
 		auto cmdList = ctx.GetCommandList();
 

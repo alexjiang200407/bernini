@@ -15,14 +15,14 @@
 namespace bgl
 {
 	void
-	SkinnedPosePass::Init(IDevice* device, PipelineBatch& pipelines)
+	SkinnedPosePass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		pipelines.Add(
+		ctx.pipelines->Add(
 			m_PoseSkinned,
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("programs.anim.PoseSkinned"))
+				.SetShader(ctx.device->CreateShader("programs.anim.PoseSkinned"))
 				.SetDebugName("Pose Skinned"));
 	}
 

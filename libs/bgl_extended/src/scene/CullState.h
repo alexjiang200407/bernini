@@ -15,7 +15,7 @@ namespace bgl
 
 	/**
 	 * The GPU scratch one culled frustum produces: which instances survived, where they were
-	 * compacted to, and the per-PSO bucket bases and indirect args built from that.
+	 * compacted to, and the per-bucket bases and indirect args built from that.
 	 *
 	 * Separate from the SceneView that owns it because these are outputs of culling *one* frustum,
 	 * not per-view state.
@@ -78,9 +78,9 @@ namespace bgl
 		// Non-const: the cull pass seeds these through Clear / Assign+Update, which need the
 		// object rather than the handle the frame graph hands back.
 		[[nodiscard]] ComputeBuffer&
-		GetPsoPrefixSum() noexcept
+		GetDrawBucketPrefixSum() noexcept
 		{
-			return m_PsoPrefixSum;
+			return m_DrawBucketPrefixSum;
 		}
 
 		[[nodiscard]] ComputeBuffer&
@@ -104,9 +104,9 @@ namespace bgl
 		// transparent depth-key pass.
 		ComputeBuffer m_InstanceVisibility;
 
-		// Sized by the PSO bucket count rather than the instance count, so Resize does not reach
+		// Sized by the bucket ceiling rather than the instance count, so Resize does not reach
 		// them: one running total per bucket, and the indirect args the forward pass dispatches on.
-		ComputeBuffer m_PsoPrefixSum;
+		ComputeBuffer m_DrawBucketPrefixSum;
 		ComputeBuffer m_CompactedDispatchArgs;
 
 		// This frustum's planes, assigned per draw and read by the cull dispatch.

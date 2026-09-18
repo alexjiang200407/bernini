@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/PassInitContext.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "scene/ComputeBuffer.h"
@@ -32,10 +33,7 @@ namespace bgl
 		operator=(CompactInstancesPass&&) noexcept = delete;
 
 		void
-		Init(
-			IDevice*                          device,
-			PipelineBatch&                    pipelines,
-			core::SharedRef<IResourceManager> resourceManager);
+		Init(const PassInitContext& ctx);
 
 		void
 		Release(bool deferred = true);

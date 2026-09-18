@@ -112,17 +112,23 @@ and is a target of its own; nothing here is part of it.
   `pipeline_util::BuildPipelineLayout`, which links all of a PSO's entry points into one program.
   Because bytecode and reflection come from the same link, bindings always agree — shaders do
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
-- The renderer's PSOs are built together, in parallel: a pass's `Init` requests its kernels from
-  the `PipelineBatch` it is handed (`src/pipeline/PipelineBatch.h`) and `RenderContext` builds the
-  set on `core::parallel_for` before any pass reads one. A new pass follows that shape — request in
-  `Init`, read kernels only from `CheckBindings` or later — and pipeline creation stays safe from
-  any thread.
+- The renderer's PSOs are built together, in parallel: a pass's `Init` requests its always-on
+  kernels from the `PipelineBatch` in the `PassInitContext` it is handed
+  (`src/passes/PassInitContext.h`: the device, the batch, the resource manager and the draw-bucket
+  table, borrowed for the call) and
+  `RenderContext` builds the set on `core::parallel_for` before any pass reads one. The per-draw-bucket
+  meshlet kernels are the exception: `RenderContext::EnsureDrawBucketPipelinesExist` builds each draw bucket in
+  the first `Draw` whose view demands it (`SceneView::DemandedDrawBuckets`), so a scene pays only for
+  the draw buckets it uses and an unbuilt draw bucket's kernel is skipped by `Execute` as having nothing to
+  draw. A new pass follows the `Init` shape — request in `Init`, read kernels only from `CheckBindings`
+  or later — and pipeline creation stays safe from any thread.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
 - Slang sessions are per thread (`src/slang/SlangSessions.h`): a thread's first compile creates
-  its own global session and session, and `CreateGraphics` drops them all once every renderer PSO
-  is built, because each global session's core module is a few hundred megabytes resident. Nothing
+  its own global session and session, and they are dropped after every pipeline batch — the
+  start-up build's in `CreateGraphics`, a demand build's in `EnsureDrawBucketPipelinesExist` — because each
+  global session's core module is a few hundred megabytes resident. Nothing
   may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
   module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a
   module as text under a name, shadowing a file of that name and joining the cache salt; it drops

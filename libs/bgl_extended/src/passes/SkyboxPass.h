@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include <spdlog/spdlog.h>
 
@@ -33,7 +34,7 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(const PassInitContext& ctx);
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void

@@ -25,7 +25,7 @@ and portability.
 
 ## Guiding Constraints (design rules the roadmap must respect)
 
-- **GPU-driven by default.** The instance pipeline already buckets by `PsoType` and emits
+- **GPU-driven by default.** The instance pipeline already sorts instances into draw buckets and emits
   indirect dispatch args. New systems (culling, shadows, skinning) should stay on the GPU
   and extend this pipeline rather than adding CPU-side per-object work.
 - **One dominant light.** Forward rendering with a single sun keeps shading cheap. Do *not*
@@ -53,6 +53,12 @@ and portability.
   - [x] GPU Ring Buffer
   - [ ] Readback ring — N buffers, persistently mapped, fenced; never map a buffer written this frame.
   - [ ] `ExecuteIndirect` / `DispatchIndirect` plumbing so counts never leave the GPU.
+    - [x] Mesh dispatch: `DispatchMeshIndirectCount` -- an empty draw bucket issues no command
+      on D3D12, its dispatch args serving as their own count buffer.
+    - [ ] Compute `DispatchIndirect`.
+  - [ ] Async pipeline creation with skip-until-ready. Draw-bucket pipelines are built on demand
+    at the top of the `Draw` that first needs them; a cold-cache link there is a hitch.
+  - [ ] Pipeline eviction -- a built pipeline lives for the run.
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
     dead-pass culling (`libs/bgl_extended/src/fg`)
@@ -71,7 +77,7 @@ and portability.
     workgroup, capped at 1024 transparent instances; a multi-group radix sort is the scale-up.
   - [x] Texture Asset Import
   - [x] Per-instance material override — one mesh, a different material per instance, resolved into
-    the cached `SubmeshInstance` so the draw pays nothing and an instance may change PSO bucket. For
+    the cached `SubmeshInstance` so the draw pays nothing and an instance may change draw bucket. For
     tens of hand-placed instances; crowd kit variation is the atlasing line under Crowd Variation,
     not this. No editor surface yet (see Level Editor for Battles).
   - [x] Editor Material Graph
@@ -319,7 +325,7 @@ and portability.
   - [ ] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the pose-source boundary.
   - [ ] Dithered LOD crossfade resolved by TAA; also the mechanism for the pose-source swap.
   - [ ] Per-tier compaction → indirect args; fixed `maxPerLOD` regions hold until submesh-mask
-    variation multiplies the bucket count.
+    variation multiplies the draw bucket count.
   - [ ] Separate mesh LOD and animation LOD tables driven from the same screen-size value.
   - [ ] Animation ticking and tagging LODs.
   - [ ] Compute skinning bandwidth — measure palette writes, palette reads, bone anim table fetches,
@@ -397,7 +403,7 @@ and portability.
     [docs/profiling.md](docs/profiling.md) § Memory.
   - [x] GPU timestamp per pass with on-screen breakdown — a FrameGraph feature (`PassTimer`) over
     an RHI timestamp span (`ICommandList::BeginTiming`), read through `IGraphics::GetPassTimings`
-    and written to `editor.log` on demand. Per pass, not per draw: a bucket inside Forward is not a
+    and written to `editor.log` on demand. Per pass, not per draw: a draw bucket inside Forward is not a
     row. See [docs/framegraph.md](docs/framegraph.md).
   - [x] A frame-stats window that graphs the per-pass rows over time — a stacked band per pass over
     the last 600 timed frames, sampled every frame, exported as a CSV beside `editor.log`. See
@@ -411,6 +417,9 @@ and portability.
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.
 - [ ] Capacity policy — one table, with clamp-and-report behaviour defined for every entry.
+  - [x] Draw buckets -- `cMaxDrawBuckets` (256); a key past it resolves to the unlit fallback,
+    reported once, and a surface past `cMaxDrawBuckets - 1` is refused at registration.
+    Past 1024 the single-group bucket scan must be replaced first.
   - [ ] Max agents, max per cell, event buffer size, flow fields resident.
   - [ ] Top-K skinned budget.
   - [ ] Concurrent dying units and solver slots → overflow falls back to canned death clips.

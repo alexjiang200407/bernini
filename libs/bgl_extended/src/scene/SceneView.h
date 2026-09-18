@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/DrawBucketTable.h"
 #include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
@@ -10,6 +11,7 @@
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
+#include "types/DrawBucketMask.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -39,6 +41,7 @@
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -59,7 +62,7 @@ namespace bgl
 		std::vector<uint8_t>           selected;
 
 		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
-		// pso for the pipeline family it actually draws through.
+		// bucket for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
 		// Whether a write has already rolled this placement's prevTransform this frame.
@@ -106,7 +109,8 @@ namespace bgl
 		SceneView(
 			const SceneRef&                   scene,
 			uint32_t                          initialInstances,
-			core::SharedRef<IResourceManager> resourceManager);
+			core::SharedRef<IResourceManager> resourceManager,
+			std::shared_ptr<DrawBucketTable>  buckets);
 
 		~SceneView() noexcept override;
 
@@ -407,9 +411,20 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList);
 
+		/**
+		 * Every bucket an instance of this view has ever resolved to. Never cleared: a bucket once
+		 * demanded stays demanded, which is what lets the renderer build its pipelines once and
+		 * trust them built for as long as the view lives.
+		 */
+		[[nodiscard]] const DrawBucketMask&
+		DemandedDrawBuckets() const noexcept
+		{
+			return m_DemandedDrawBuckets;
+		}
+
 	private:
 		/**
-		 * Fills `instance`'s material + PSO: `override` if it is valid, else the Scene's default for
+		 * Fills `instance`'s material and draw bucket: `override` if it is valid, else the Scene's default for
 		 * that submesh. `submeshRoot` is where its geom's range starts; the instance names its own
 		 * offset into that range.
 		 *
@@ -421,7 +436,7 @@ namespace bgl
 			SubmeshInstance& instance,
 			uint32_t         submeshRoot,
 			MaterialHandle   materialOverride,
-			GeomType         geomType) const;
+			GeomType         geomType);
 
 		/** Re-resolves one submesh instance of `meshIndex` and uploads it if it moved. */
 		void
@@ -536,10 +551,19 @@ namespace bgl
 		uint64_t m_TemporalEpoch      = 0;
 		uint64_t m_DrawnTemporalEpoch = 0;
 
+		DrawBucketMask m_DemandedDrawBuckets;
+
+		// The renderer-wide id table every instance's bucket comes from; shared with RenderContext.
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
+
+		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
+		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
+		UploadBuffer<uint32_t> m_DrawBucketFlags;
+
 		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
-		// stage that draws more than one can ask rather than mirror the PSO table.
+		// stage that draws more than one can ask rather than mirror the draw-bucket table.
 		RawBuffer<idl::PlaybackType> m_Playback;
 
 		BonePaletteBuffer m_Palettes;

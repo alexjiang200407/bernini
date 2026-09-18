@@ -1,8 +1,10 @@
 #pragma once
+#include "gfx/DrawBucketTable.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
-#include <array>
-#include <bgl/MaterialType.h>
+#include "types/DrawBucketMask.h"
 #include <spdlog/spdlog.h>
+#include <vector>
 
 namespace bgl
 {
@@ -50,7 +52,23 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(const PassInitContext& ctx);
+
+		/**
+		 * Requests the coverage kernels for the buckets set in `buckets` that are not already
+		 * initialized; they are live once `pipelines` is built. Buckets with no coverage kernel
+		 * are ignored.
+		 */
+		void
+		AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded);
+
+		/**
+		 * Whether the bucket has what this pass draws it with: always for one drawn through the two
+		 * shared depth kernels, and its own coverage twin otherwise.
+		 * @pre bucket < the table's count.
+		 */
+		[[nodiscard]] bool
+		DrawBucketInitialized(uint32_t bucket) const noexcept;
 
 		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
 		void
@@ -66,16 +84,16 @@ namespace bgl
 		void
 		Execute(const DrawData& draw, const PassContext& resources);
 
-		// The opaque buckets need no pixel stage beyond depth, so they share two pipelines split by
-		// how ForwardPass::PsoCullMode culls each row: in hardware (the rows with no material flag),
-		// or not at all, leaving back faces to the mesh stage and the material's doubleSided. The
-		// coverage buckets each pair the same geometry stage with their own discard-only pixel
-		// stage, one kernel per static cutout and hashed row (engine PBR and loose, then each game
-		// slot's pair).
-		static constexpr uint32_t c_CoverageKernelCount = 4 + 2 * cGameSlots;
+		// The opaque buckets need no pixel stage beyond depth, so they share two pipelines split
+		// by how DrawBucketCullMode culls each bucket: in hardware (the material kinds with no
+		// doubleSided flag), or not at all, leaving back faces to the mesh stage. The coverage
+		// kernels each pair the same geometry stage with their own discard-only pixel stage --
+		// indexed by bucket id, grown with the table, empty except at static cutout and hashed
+		// buckets.
+		MeshletKernel              m_HardwareCullKernel;
+		MeshletKernel              m_MaterialCullKernel;
+		std::vector<MeshletKernel> m_CoverageKernels;
 
-		MeshletKernel                                    m_HardwareCullKernel;
-		MeshletKernel                                    m_MaterialCullKernel;
-		std::array<MeshletKernel, c_CoverageKernelCount> m_CoverageKernels;
+		const DrawBucketTable* m_DrawBucketTable = nullptr;
 	};
 }

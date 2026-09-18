@@ -43,15 +43,15 @@ namespace bgl
 	}
 
 	void
-	OutlineMaskPass::Init(IDevice* device, PipelineBatch& pipelines)
+	OutlineMaskPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.ampShader   = device->CreateShader(std::string(c_GeomSrc), "ASMain");
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_GeomSrc), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_PixelSrc), "PSMain");
+		pipelineDesc.ampShader   = ctx.device->CreateShader(std::string(c_GeomSrc), "ASMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_GeomSrc), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_PixelSrc), "PSMain");
 
 		pipelineDesc.AddRtvFormat(c_MaskFormat);
 
@@ -68,7 +68,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void
@@ -156,10 +156,10 @@ namespace bgl
 
 			// kDepthSorted starts the list at zero, exactly like the transparent phase; the
 			// prefix-sum key is never read under it, and is bound only so it holds a live handle.
-			expansion["compactedInstances"] = selected;
-			expansion["psoPrefixSum"]       = selected;
-			expansion["baseTable"]          = idl::BaseTable::kDepthSorted;
-			expansion["psoIndex"]           = 0u;
+			expansion["compactedInstances"]  = selected;
+			expansion["drawBucketPrefixSum"] = selected;
+			expansion["baseTable"]           = idl::BaseTable::kDepthSorted;
+			expansion["drawBucketIndex"]     = 0u;
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;

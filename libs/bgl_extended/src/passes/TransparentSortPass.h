@@ -1,4 +1,5 @@
 #pragma once
+#include "passes/PassInitContext.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
@@ -17,7 +18,7 @@ namespace bgl
 	/**
 	 * Depth-sorts the transparent instances on the GPU.
 	 *
-	 * Blending needs back-to-front order, which cuts across the PSO bucketing the opaque path uses,
+	 * Blending needs back-to-front order, which cuts across the bucketing the opaque path uses,
 	 * so transparent instances are compacted into their own list and sorted by distance. The forward
 	 * pass draws that list whole, with one indirect dispatch whose count this pass emits.
 	 */
@@ -37,7 +38,7 @@ namespace bgl
 		operator=(TransparentSortPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device, PipelineBatch& pipelines);
+		Init(const PassInitContext& ctx);
 
 		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
 		// per view rather than per frustum -- so this only drops the kernels.

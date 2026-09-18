@@ -80,7 +80,7 @@ namespace bgl
 
 		/** Drops every thread's Slang session; see SlangSessions::ReleaseAll for the contract. */
 		void
-		ReleaseSlangSession() noexcept;
+		ReleaseSlangSession() noexcept override;
 
 	private:
 		wrl::ComPtr<ID3D12Device> m_Device;

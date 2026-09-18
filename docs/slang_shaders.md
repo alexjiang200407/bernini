@@ -15,7 +15,6 @@ libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
   lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
-  game/       slot0..3                               what each reserved game slot binds: the null surface on disk, a registered surface's module loaded from source under the same name
 ```
 
 All three are staged into one `./shaders/src` beside the executable, the contract first and
@@ -183,7 +182,7 @@ a second view, not a wider one.
 An enum a shader only *compares against* is folded to a literal and never appears in the generated
 code. An enum a function **returns** is emitted as a type — and HLSL has no `uint8_t`, so a tag
 declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
-`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`, as `PsoType` always was.
+`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`.
 
 This is worth knowing because the check that catches it runs in one place only:
 [libs/bgl_extended/shaders/CMakeLists.txt](../libs/bgl_extended/shaders/CMakeLists.txt) validates to DXIL at build

@@ -31,7 +31,7 @@ doc disagrees, trust the header, then fix this doc.
   3. **Reflection lets one binder serve a family of PSO variants.** The load-bearing reason. The pass
      *asks the layout* whether a field exists instead of being compiled against a fixed struct, so
      variants declaring different subsets share one binder.
-     [ForwardPass::BindKernel](libs/bgl_extended/src/passes/ForwardPass.cpp) binds all `c_PsoCount` kernels
+     [ForwardPass::BindKernel](libs/bgl_extended/src/passes/ForwardPass.cpp) binds every draw bucket's kernel
      through one function even though [programs/forward/Null.slang](libs/bgl_extended/shaders/src/programs/forward/Null.slang)
      imports no `MaterialData` and has no `materialData` cbuffer at all. A `memcpy`'d IDL struct
      structurally cannot express "this variant has no such field".
@@ -164,9 +164,10 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 * **`IsValid() == false` is ambiguous at the call site; only a family disambiguates it.** It means
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
-  typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `BinderNames` ([BinderNames.h](libs/bgl_extended/src/passes/BinderNames.h)) is what every pass
-  checks its cbuffers through from `Init`, and `SetIfValid` is the per-draw guard it licenses. A
+  typo, absent from some is a per-variant field. @pre resolve a binder's names once per batch of
+  kernels built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl_extended/src/passes/BindingNameCheck.h)) is what every pass
+  checks its cbuffers through from `CheckBindings`, run after every batch over the kernels built so
+  far, and `SetIfValid` is the per-draw guard it licenses. A
   binder never validated this way has no protection against a shader rename.
 
 * **Which of the two write spellings a member uses is the statement of whether it is optional.**

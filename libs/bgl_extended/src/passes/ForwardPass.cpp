@@ -6,9 +6,10 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
+#include "passes/draw_bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -24,13 +25,10 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
-#include "util/util.h"
-#include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -42,7 +40,7 @@ namespace bgl
 	namespace
 	{
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
-		// the code that writes them so BinderNames catches a shader rename at startup: a
+		// the code that writes them so BindingNameCheck catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
 		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
@@ -65,7 +63,7 @@ namespace bgl
 		// clang-format on
 
 		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"psoIndex"sv,
+			"drawBucketIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
 			"cullBackfaces"sv,
@@ -74,153 +72,29 @@ namespace bgl
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
-		constexpr auto c_GeomSrc             = "programs.forward.StaticMesh"sv;
-		constexpr auto c_SkinnedGeomSrc      = "programs.forward.SkinnedMesh"sv;
-		constexpr auto c_AnyGeomSrc          = "programs.forward.AnyMesh"sv;
-		constexpr auto c_PbrPixelSrc         = "programs.forward.PBR"sv;
-		constexpr auto c_LoosePixelSrc       = "programs.forward.PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc        = "programs.forward.Null"sv;
-		constexpr auto c_PbrCutoutPixelSrc   = "programs.forward.PBR_AlphaTest"sv;
-		constexpr auto c_LooseCutoutPixelSrc = "programs.forward.PBR_Loose_AlphaTest"sv;
-		constexpr auto c_PbrHashedPixelSrc   = "programs.forward.PBR_HashedAlpha"sv;
-		constexpr auto c_LooseHashedPixelSrc = "programs.forward.PBR_Loose_HashedAlpha"sv;
-		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
-		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
-
-		// A program is a file with an entry point, so the reserved slots are one triple each.
-		struct GameSlotSrcs
-		{
-			std::string_view opaque;
-			std::string_view cutout;
-			std::string_view hashed;
-		};
-		constexpr std::array<GameSlotSrcs, cGameSlots> c_GameSlotSrcs = { {
-			{ "programs.forward.GameSlot0"sv,
-			  "programs.forward.GameSlot0_AlphaTest"sv,
-			  "programs.forward.GameSlot0_HashedAlpha"sv },
-			{ "programs.forward.GameSlot1"sv,
-			  "programs.forward.GameSlot1_AlphaTest"sv,
-			  "programs.forward.GameSlot1_HashedAlpha"sv },
-			{ "programs.forward.GameSlot2"sv,
-			  "programs.forward.GameSlot2_AlphaTest"sv,
-			  "programs.forward.GameSlot2_HashedAlpha"sv },
-			{ "programs.forward.GameSlot3"sv,
-			  "programs.forward.GameSlot3_AlphaTest"sv,
-			  "programs.forward.GameSlot3_HashedAlpha"sv },
-		} };
+		// The shared blend kernel's programs: the whole depth-sorted list draws through this one
+		// pipeline, and AnyMesh branches tier per instance, so no bucket needs a blend kernel of
+		// its own.
+		constexpr auto c_AnyGeomSrc     = "programs.forward.AnyMesh"sv;
+		constexpr auto c_TransparentSrc = "programs.forward.Transparent"sv;
 
 		struct PsoConfig
 		{
-			std::string_view pixelSrc;
+			std::string      pixelSrc;
 			RasterCullMode   cull;
 			bool             depthWrite;
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
-			std::string_view geomSrc   = c_GeomSrc;
+			std::string_view geomSrc;
 		};
 
-		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
-		// The named rows are listed; the reserved game slots' rows follow from kGameRowsStart,
-		// cGameSlotRows per slot, in the order GameSlotRow derives them.
-		constexpr std::array<PsoConfig, idl::c_PsoCount>
-		MakePsos()
+		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
+		PsoConfig
+		ConfigFor(const DrawBucketDesc& desc)
 		{
-			std::array<PsoConfig, idl::c_PsoCount> psos = { {
-				// kOpaque_StaticMesh_Null
-				{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
-				// kOpaque_StaticMesh_PBR
-				{ c_PbrPixelSrc, RasterCullMode::kNone, true, false },
-				// kOpaque_StaticMesh_LoosePbr
-				{ c_LoosePixelSrc, RasterCullMode::kNone, true, false },
-				// kAlphaTest_StaticMesh_PBR
-				{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
-				// kAlphaTest_StaticMesh_LoosePbr
-				{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
-				// kTransparent_StaticMesh_PBR: the whole sorted list draws through this one pipeline,
-				// so its geometry stage is the tier-branching one.
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-				// kTransparent_StaticMesh_LoosePbr
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-				// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
-				{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
-				// kHashedAlpha_StaticMesh_LoosePbr
-				{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
-				// kAssert_StaticMesh
-				{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-				// kOpaque_SkinnedMesh_PBR
-				{ c_PbrPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kAlphaTest_SkinnedMesh_PBR: an opaque draw that discards, so it needs no sorting.
-				{ c_PbrCutoutPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kHashedAlpha_SkinnedMesh_PBR: stochastic coverage, so also an opaque shape.
-				{ c_PbrHashedPixelSrc,
-				  RasterCullMode::kNone,
-				  true,
-				  false,
-				  ComparisonFunc::kLess,
-				  c_SkinnedGeomSrc },
-				// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
-				{ c_TransparentSrc,
-				  RasterCullMode::kNone,
-				  false,
-				  true,
-				  ComparisonFunc::kLess,
-				  c_AnyGeomSrc },
-			} };
-
-			// The two tiers differ only in their geometry stage: the pixel shader reads a
-			// ForwardVSOut and a material offset, and neither says which tier filled them. Hashed
-			// takes the cutout's shape -- the coverage is stochastic, the depth is not.
-			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
-			{
-				const GameSlotSrcs& srcs = c_GameSlotSrcs[slot];
-
-				for (uint32_t tier = 0; tier < idl::cGameSlotTiers; ++tier)
-				{
-					const uint32_t row = GameSlotRowBase(slot) + tier * idl::cGameSlotTierRows;
-					const std::string_view geom = tier == 0 ? c_GeomSrc : c_SkinnedGeomSrc;
-
-					psos[row]     = { srcs.opaque, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-					psos[row + 1] = { srcs.cutout, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-					psos[row + 2] = { srcs.hashed, RasterCullMode::kNone, true,
-						              false,       ComparisonFunc::kLess, geom };
-				}
-
-				psos[GameSlotRowBase(slot) + idl::cGameSlotBlendRow] = {
-					c_TransparentSrc,      RasterCullMode::kNone, false, true,
-					ComparisonFunc::kLess, c_AnyGeomSrc
-				};
-			}
-			return psos;
+			return PsoConfig{ DrawBucketPixelSrc(desc), DrawBucketCullMode(desc),   true, false,
+				              ComparisonFunc::kLess,    DrawBucketGeometrySrc(desc) };
 		}
-
-		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = MakePsos();
-
-		static_assert(
-			std::ranges::none_of(c_Psos, [](const PsoConfig& cfg) { return cfg.pixelSrc.empty(); }),
-			"every PsoType needs a row in c_Psos; a missing one silently value-initializes to an "
-			"empty pixel shader");
 
 		MeshletPipelineDesc
 		ForwardPipelineDesc(IDevice* device, const PsoConfig& cfg)
@@ -282,22 +156,81 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines)
+	ForwardPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		gassert(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
+		m_DrawBucketTable = ctx.drawBucketTable;
+		m_BlobShadows.Init(ctx);
+	}
+
+	void
+	ForwardPass::AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded)
+	{
+		gassert(ctx.device != nullptr, "Device must be initialized");
+
+		const uint32_t count = m_DrawBucketTable->Count();
+		if (m_Kernels.size() < count)
 		{
-			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
+			m_Kernels.resize(count);
 		}
 
-		m_BlobShadows.Init(device, pipelines);
+		for (uint32_t bucket = 0; bucket < count; ++bucket)
+		{
+			if (demanded.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
+			{
+				gassert(
+					!m_DrawBucketTable->Transparent(bucket),
+					"A transparent bucket demands the shared kernel, never one of its own");
+				ctx.pipelines->Add(
+					m_Kernels[bucket],
+					ForwardPipelineDesc(ctx.device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
+			}
+		}
+	}
+
+	void
+	ForwardPass::AddTransparentKernel(const PassInitContext& ctx)
+	{
+		gassert(ctx.device != nullptr, "Device must be initialized");
+
+		if (!m_TransparentKernel.pipeline.IsInitialized())
+		{
+			ctx.pipelines->Add(
+				m_TransparentKernel,
+				ForwardPipelineDesc(
+					ctx.device,
+					PsoConfig{ std::string(c_TransparentSrc),
+			                   RasterCullMode::kNone,
+			                   false,
+			                   true,
+			                   ComparisonFunc::kLess,
+			                   c_AnyGeomSrc }));
+		}
 	}
 
 	void
 	ForwardPass::CheckBindings() const
 	{
-		BinderNames("ForwardPass"sv, m_Kernels)
+		// Always-on kernels first: the family guard below must not gate them.
+		m_BlobShadows.CheckBindings();
+
+		CheckKernelNames(m_Kernels);
+		CheckKernelNames({ &m_TransparentKernel, 1 });
+	}
+
+	void
+	ForwardPass::CheckKernelNames(std::span<const MeshletKernel> kernels) const
+	{
+		// The buckets are demand-built, so nothing reads their names off until a first one is;
+		// EnsureDrawBucketPipelinesExist re-checks after every build.
+		if (!AnyInitialized(kernels))
+		{
+			return;
+		}
+
+		BindingNameCheck("ForwardPass"sv, kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
@@ -305,8 +238,6 @@ namespace bgl
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
-
-		m_BlobShadows.CheckBindings();
 	}
 
 	void
@@ -447,43 +378,41 @@ namespace bgl
 
 		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
-		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
-		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
-		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
+		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
+		// table's live count. The transparent buckets are skipped here -- their order is depth,
+		// not bucket, so they draw below.
+		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
 		{
-			if (IsTransparentPso(pso))
+			if (m_DrawBucketTable->Transparent(bucket))
 			{
 				continue;
 			}
 
-			MeshletKernel& kernel = m_Kernels[pso];
-			gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
+			if (!DrawBucketInitialized(bucket))
+			{
+				continue;
+			}
 
+			MeshletKernel& kernel = m_Kernels[bucket];
 			BindKernel(kernel, draw, resources);
 			if (auto expansionData = kernel.FindUniforms("expansionData"))
 			{
-				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
-				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
-				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
+				(*expansionData)["drawBucketIndex"] = bucket;
+				(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
 				(*expansionData)["cullBackfaces"] =
-					c_Psos[pso].cull == RasterCullMode::kNone ? 1u : 0u;
+					DrawBucketMeshStageCullsBackfaces(m_DrawBucketTable->Desc(bucket));
 			}
 
-			gfxState.kernel       = &kernel;
-			gfxState.indirectArgs = dispatchArgs;
+			gfxState.kernel        = &kernel;
+			gfxState.indirectArgs  = dispatchArgs;
+			gfxState.commandCounts = dispatchArgs;
 			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirect(pso);
+			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
 		}
 
 		m_BlobShadows.Draw(draw, resources);
 		DrawTransparent(draw, resources);
-	}
-
-	RasterCullMode
-	ForwardPass::PsoCullMode(const uint16_t pso) noexcept
-	{
-		gassert(pso < idl::c_PsoCount, "PsoCullMode: pso out of range");
-		return c_Psos[pso].cull;
 	}
 
 	void
@@ -493,7 +422,7 @@ namespace bgl
 		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentInstancesName);
 		const auto    transparentArgs = resources.GetBuffer(c_TransparentDispatchArgsName);
 
-		// The sort leaves the whole list farthest-first and both transparent PSOs share one pipeline,
+		// The sort leaves the whole list farthest-first and every transparent bucket shares one kernel,
 		// so the depth-sorted draw is a single dispatch whose count lives entirely on the GPU.
 		//
 		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be attached
@@ -504,9 +433,12 @@ namespace bgl
 		                             .AddColorAttachment(draw.targets.sceneColor)
 		                             .SetDepthAttachment(draw.targets.depth);
 
-		MeshletKernel& kernel =
-			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
-		gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
+		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
+		MeshletKernel& kernel = m_TransparentKernel;
+		if (!kernel.pipeline.IsInitialized())
+		{
+			return;
+		}
 
 		BindKernel(kernel, draw, resources);
 		if (auto expansionData = kernel.FindUniforms("expansionData"))
@@ -520,8 +452,8 @@ namespace bgl
 		colorState.indirectArgs = transparentArgs;
 		cmd->SetMeshletState(colorState);
 
-		// The argument index within `transparentArgs`, which holds a single grid now that the sorted
-		// list is drawn whole. The opaque path indexes the same way, by PsoType.
+		// The argument index within `transparentArgs`, which holds the single grid the whole sorted
+		// list draws with; the bucketed path indexes its own buffer by bucket id.
 		cmd->DispatchMeshIndirect(0);
 	}
 

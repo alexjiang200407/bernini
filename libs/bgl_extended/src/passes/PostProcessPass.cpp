@@ -4,7 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
@@ -31,7 +31,7 @@ namespace bgl
 		constexpr auto c_Cbuffer = "gPostProcessData"sv;
 
 		// Every member Execute writes. Kept beside the code that writes them so
-		// BinderNames catches a shader rename at startup: an optional write is silent, so
+		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
 		constexpr std::array<std::string_view, 8> c_Fields = {
 			"sceneColor"sv,  "sampler"sv,  "maskSampler"sv, "outlineEnabled"sv,
@@ -40,14 +40,14 @@ namespace bgl
 	}
 
 	void
-	PostProcessPass::Init(IDevice* device, PipelineBatch& pipelines)
+	PostProcessPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 
@@ -62,13 +62,13 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void
 	PostProcessPass::CheckBindings() const
 	{
-		BinderNames("PostProcessPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("PostProcessPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void

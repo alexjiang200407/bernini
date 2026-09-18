@@ -51,7 +51,6 @@
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
-#include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/RawTextureHandle.h>
 #include <bgl_common/idl/SkinnedBone.h>
@@ -2147,7 +2146,7 @@ namespace bgl
 
 		// Rewriting the payload is all it takes: a submesh stores the material's byte offset, so
 		// every submesh bound to this material picks the new contents up with no rebinding. The
-		// record keeps its offset and its tag, so caller-held handles stay valid, and the PSO
+		// record keeps its offset and its tag, so caller-held handles stay valid, and the
 		// bucket -- which derives from materialType, not from the desc -- cannot change.
 		const idl::PbrMaterial rebuilt = BuildPbrMaterial(desc);
 		m_Materials.SetRecordPayload(
@@ -2315,7 +2314,7 @@ namespace bgl
 	{
 		// A kind with an arena record can be freed. kNull and kAssert name shading behaviour, not
 		// an entry in a buffer, so there is nothing to release.
-		// A game slot's kind is kGameStart + slot, so the switch below sees only the first.
+		// A surface's kind is kGameStart + its slot, so the switch below sees only the first.
 		const bool gameKind = GameSlot(material.materialType).has_value();
 
 		switch (gameKind ? MaterialType::kGameStart : material.materialType)
@@ -2344,7 +2343,6 @@ namespace bgl
 		case MaterialType::kInvalid:
 		case MaterialType::kNull:
 		case MaterialType::kAssert:
-		case MaterialType::kCount:
 			break;
 		}
 

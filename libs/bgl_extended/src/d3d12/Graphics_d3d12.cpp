@@ -1,6 +1,7 @@
 #include "cmd/CommandQueue.h"
 #include "device/Device.h"
 #include "device/Device_d3d12.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
@@ -10,6 +11,7 @@
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
 #include <core/log/log.h>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -53,6 +55,12 @@ namespace bgl
 			return m_ResourceManager.Get();
 		}
 
+		const RenderContext*
+		GetRenderContext() const noexcept override
+		{
+			return m_Context.get();
+		}
+
 		void
 		WaitIdle() noexcept override
 		{
@@ -74,7 +82,11 @@ namespace bgl
 		SceneViewRef
 		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
-			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
+			return core::SharedRef<SceneView>::Make(
+				scene,
+				initialInstances,
+				m_ResourceManager,
+				m_DrawBucketTable);
 		}
 
 		OverlayRef
@@ -195,6 +207,8 @@ namespace bgl
 
 		ResourceManagerRef m_ResourceManager;
 
+		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
+
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
 		std::unique_ptr<RenderContext> m_Context;
@@ -284,12 +298,16 @@ namespace bgl
 		// whatever module this bound to that slot.
 		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
 
-		m_Context =
-			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);
+		m_DrawBucketTable = std::make_shared<DrawBucketTable>();
+		m_Context         = std::make_unique<RenderContext>(
+			m_Device,
+			m_ResourceManager,
+			m_DrawBucketTable,
+			m_Opts.enableDebugLayer);
 
-		// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
-		// past this point compiles a shader and the Slang core module can stop occupying a few
-		// hundred megabytes. A later CreatePipeline would silently recreate the session.
+		// The always-on set is built by the RenderContext above; the per-bucket kernels are built by
+		// the first Draw that demands each, and that path drops the sessions again after every
+		// batch. This release covers the start-up build.
 		device->ReleaseSlangSession();
 	}
 

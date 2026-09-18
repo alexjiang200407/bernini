@@ -7,7 +7,7 @@
 // blend below never learns which source it is reading.
 //
 // One of three; forward/mesh_stage.slang holds what they share and says why the split exists. Two
-// entry points call this one: programs/forward/SkinnedMesh, which draws the PSO-bucketed phase,
+// entry points call this one: programs/forward/SkinnedMesh, which draws the bucketed phase,
 // and programs/forward/AnyMesh, which draws lists that mix tiers.
 
 import idl.Clip;

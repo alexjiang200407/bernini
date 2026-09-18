@@ -56,10 +56,12 @@ namespace bgl
 	constexpr std::string_view c_TransparentSortCountName   = "scene.transparentSortCount"sv;
 	constexpr std::string_view c_SortedTransparentInstancesName =
 		"scene.sortedTransparentInstances"sv;
+	constexpr std::string_view c_DrawBucketFlagsName = "scene.drawBucketFlags"sv;
 
 	// Scratch a scene collaborator owns, imported into a namespace of its own rather than the
 	// scene's. cull.* is per culled frustum, so a view carries one set per CullState.
-	constexpr std::string_view c_PsoPrefixSumName = "compactedInstances.psoPrefixSumBuffer"sv;
+	constexpr std::string_view c_DrawBucketPrefixSumName =
+		"compactedInstances.drawBucketPrefixSumBuffer"sv;
 	constexpr std::string_view c_CompactDispatchArgsName =
 		"compactedInstances.compactDispatchArgs"sv;
 	constexpr std::string_view c_TransparentDispatchArgsName = "transparentSort.dispatchArgs"sv;

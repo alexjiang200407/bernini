@@ -2,6 +2,7 @@ import bgl.PbrSurface;
 import idl.Constants;
 import idl.IAlphaTestMaterial;
 import idl.IPbrMaterial;
+import idl.MaterialType;
 import idl.ISurfaceEnv;
 import lib.forward.common;
 import lib.forward.MaterialData;
@@ -44,7 +45,7 @@ public extension MaterialData
      * A blended surface, as premultiplied colour and the coverage that goes with it.
      *
      * The returned colour is already weighted by its own coverage, which is correct only against the
-     * transparent PSOs' SrcBlend = One (ForwardPass's c_Psos): either side changed alone is silently
+     * shared blend PSO's SrcBlend = One (ForwardPass's PsoConfig): either side changed alone is silently
      * wrong rather than a build error. What the transmission factor selects between, and why coverage
      * rises with the reflectance, is in docs/passes.md#blended-surfaces.
      */
@@ -67,6 +68,17 @@ public extension MaterialData
         M material = M.Load(input.materialOffset);
 
         return ShadeSurfaceBlended(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
+    }
+
+    // Every engine-defined kind under blend. The transparent program falls through to this for any
+    // record that is not a registered surface's, so it is the whole program when none is.
+    public float4 ShadeBlendedEngineKind(ForwardVSOut input, bool isFrontFace)
+    {
+        if (LoadMaterialKind(input.materialOffset) == MaterialType.kLoosePbr)
+        {
+            return ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
+        }
+        return ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
     }
 
     // The one cutout coverage decision, taking the sampled base colour as SurfaceOf does: the

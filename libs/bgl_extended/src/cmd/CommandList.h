@@ -215,6 +215,20 @@ namespace bgl
 		virtual void
 		DispatchMeshIndirect(uint32_t argIdx) noexcept = 0;
 
+		/**
+		 * DispatchMeshIndirect gated by a GPU-written command count: element `countIdx` of the
+		 * bound state's `commandCounts` buffer, a uint32 clamped to one command.
+		 *
+		 * A backend without a count path (Metal) issues the dispatch unconditionally and never
+		 * reads the count, so the two backends draw identically only under the precondition
+		 * below; the count is how a backend that can skip the empty dispatch (D3D12) skips it.
+		 *
+		 * @pre the bound state's `indirectArgs` and `commandCounts` are valid and in
+		 *      indirect-argument state, and a zero count element is paired with a zero grid.
+		 */
+		virtual void
+		DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept = 0;
+
 		virtual void
 		SetComputeState(const ComputeState& computeState) noexcept = 0;
 

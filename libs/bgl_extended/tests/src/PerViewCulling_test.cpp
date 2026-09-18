@@ -2,9 +2,11 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
+#include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
+#include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
@@ -22,7 +24,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -96,8 +98,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto* scene = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	// A real material, so the instances land in a real PSO bucket: the histogram and the compaction
-	// both skip an instance carrying pso kInvalid, and every assertion below would read zero.
+	// A real material, so the instances land in a real bucket: the histogram and the compaction
+	// both skip an instance carrying cInvalidDrawBucket, and every assertion below would read zero.
 	auto material         = bgl::MaterialHandle();
 	material.materialType = bgl::MaterialType::kPBR;
 
@@ -179,7 +181,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto compactPass = bgl::CompactInstancesPass();
 	{
 		auto pipelines = bgl::PipelineBatch(device);
-		compactPass.Init(device, pipelines, resourceManager);
+		auto table     = bgl::DrawBucketTable();
+		compactPass.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &table });
 		pipelines.Build();
 	}
 
@@ -197,7 +200,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
+		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
 		rbDesc.debugName     = "Prefix-Sum Readback";
 		rbPrefixSum[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 	}
@@ -244,7 +247,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.AddBufferArg(
-					bgl::c_PsoPrefixSumName,
+					bgl::c_DrawBucketPrefixSumName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.SetSideEffect()
@@ -255,7 +258,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 						ctx.GetBuffer(bgl::c_CompactedInstancesName));
 					cmd->CopyBufferToReadback(
 						rbPrefixSum[cullIdx],
-						ctx.GetBuffer(bgl::c_PsoPrefixSumName));
+						ctx.GetBuffer(bgl::c_DrawBucketPrefixSumName));
 				}));
 	}
 
@@ -276,8 +279,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 			static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum[cullIdx]));
 		REQUIRE(prefixSum != nullptr);
 
-		// Inclusive scan over the PSO buckets, so the last entry is everything that survived.
-		const uint32_t visible = prefixSum[bgl::idl::c_PsoCount - 1];
+		// Inclusive scan over the whole ceiling, so the last entry is everything that survived.
+		const uint32_t visible = prefixSum[bgl::idl::cMaxDrawBuckets - 1];
 		resourceManager->UnmapReadback(rbPrefixSum[cullIdx]);
 
 		CHECK(visible == expected[cullIdx].size());

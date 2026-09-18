@@ -31,14 +31,11 @@ namespace bgl
 	}
 
 	void
-	BrdfLutGenPass::Init(
-		IDevice*           device,
-		PipelineBatch&     pipelines,
-		ResourceManagerRef resourceManager)
+	BrdfLutGenPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		m_ResourceManager = std::move(resourceManager);
+		m_ResourceManager = ctx.resourceManager;
 
 		auto textureDesc      = TextureDesc();
 		textureDesc.format    = c_Format;
@@ -70,8 +67,8 @@ namespace bgl
 		m_Rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
 
 		auto pipelineDesc        = MeshletPipelineDesc();
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 		pipelineDesc.AddRtvFormat(c_Format);
 
 		auto raster = RasterState();
@@ -85,7 +82,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

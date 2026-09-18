@@ -5,7 +5,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "overlay/Overlay.h"
-#include "passes/BinderNames.h"
+#include "passes/BindingNameCheck.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
@@ -47,14 +47,14 @@ namespace bgl
 	}
 
 	void
-	OverlayPass::Init(IDevice* device, PipelineBatch& pipelines)
+	OverlayPass::Init(const PassInitContext& ctx)
 	{
-		gassert(device != nullptr, "Device must be initialized");
+		gassert(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
-		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
 
@@ -83,13 +83,13 @@ namespace bgl
 		pipelineDesc.renderState =
 			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
 
-		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void
 	OverlayPass::CheckBindings() const
 	{
-		BinderNames("OverlayPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("OverlayPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void

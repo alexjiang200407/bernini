@@ -256,7 +256,7 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     // `reflectance` stays the environment's own ratio and the sun is added past it: it is what a
     // blended surface raises its coverage by, and a sun's radiance is not a fraction of anything.
     // The highlight still reaches a transmissive surface -- the lobe is summed either way, and the
-    // transparent PSOs add premultiplied colour (docs/passes.md#blended-surfaces).
+    // shared blend PSO adds premultiplied colour (docs/passes.md#blended-surfaces).
     lobes.specular = (prefilteredColor * lobes.reflectance + sunSpecular) * params.exposure;
     lobes.emissive = surface.emissive * params.exposure;
 
