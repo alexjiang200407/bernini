@@ -143,8 +143,7 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 			"assets/golden/surface_equivalence.got.png"));
 }
 
-// Two surfaces and three layers in one frame, which is what the reserved rows were cut for. The
-// blend spheres are the load-bearing pair: every blended draw in the frame goes through the one
+// Two surfaces and three layers in one frame. The blend spheres are the load-bearing pair: every blended draw in the frame goes through the one
 // shared transparent pipeline, so two game kinds in it prove the kind switch inside that program
 // picks a different surface per record rather than per pipeline.
 TEST_CASE("Two surfaces draw side by side across three layers", "[surface][render]")

@@ -273,8 +273,8 @@ flowchart TD
   the game's own code: the same directory is its module search path, so a shared header beside the
   surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.
   **Up to `cMaxDrawBuckets - 1`** -- each surface's programs are generated at registration, so
-  nothing is reserved per slot, and the bound is that every registered surface can draw in the
-  same frame, a draw bucket each beside the unlit fallback's. A directory that is missing, a surface
+  nothing is reserved per slot, and past that bound not even one draw bucket each could exist beside
+  the unlit fallback's. A directory that is missing, a surface
   past that bound, or a
   module that imports the contract and holds no single conforming struct throws `ApiError` from
   `CreateGraphics`. **Read once**: the surfaces are bound to their slots in the constructor and

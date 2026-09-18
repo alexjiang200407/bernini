@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "passes/draw_bucket_config.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
@@ -806,6 +807,143 @@ TEST_CASE("A zero count suppresses a non-zero grid on D3D12", "[meshlet]")
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroyBuffer(argsBuf, false);
 	resourceManager->DestroyBuffer(countBuf, false);
+	resourceManager->DestroyRtv(rtv, false);
+	resourceManager->DestroyTexture(tex, false);
+}
+
+// The shape the geometry passes dispatch in: one buffer as both the argument and the count buffer,
+// the count read off each entry's threadCountX (DrawBucketCountIndex). A grid of 5 is a count of 5,
+// which the verb clamps to one command -- it draws, once, reading nothing past its own entry -- and
+// a grid of 0 is a count of 0, which draws nothing.
+TEST_CASE("Dispatch args serve as their own count buffer on D3D12", "[meshlet]")
+{
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+	REQUIRE(resourceManager != nullptr);
+
+	auto device = gfxBase->GetDevice();
+
+	auto cmdListDesc = bgl::CommandListDesc();
+	cmdListDesc.type = bgl::QueueType::kGraphics;
+
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+	const uint32_t width  = 4;
+	const uint32_t height = 4;
+
+	auto texDesc          = bgl::TextureDesc();
+	texDesc.width         = width;
+	texDesc.height        = height;
+	texDesc.format        = bgl::Format::RGBA32_FLOAT;
+	texDesc.usage         = bgl::TextureUsageFlag::kRenderTarget;
+	texDesc.initialLayout = bgl::BarrierLayout::kRenderTarget;
+	texDesc.debugName     = "Self-Counted Dispatch Target";
+	texDesc.clearValue.SetColor(bgl::Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+	auto tex = resourceManager->CreateTexture(texDesc);
+
+	auto rtvDesc   = bgl::RtvDesc();
+	rtvDesc.format = bgl::Format::RGBA32_FLOAT;
+
+	auto rtv = resourceManager->CreateRtv(tex, rtvDesc);
+
+	auto kernel = device->CreateMeshletKernel(
+		bgl::MeshletPipelineDesc()
+			.SetMeshShader(device->CreateShader("programs.screen.FullscreenRect", "MSMain"))
+			.SetPixelShader(device->CreateShader("programs.screen.FullscreenRect", "PSMain"))
+			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+
+	// Two draw buckets' entries: a filled one, and an empty one after it.
+	auto argsDesc = bgl::ComputeBufferDesc();
+	argsDesc.SetElement<bgl::idl::DispatchArgs>().SetInitialCount(2).SetDebugName(
+		"Self-Counted Dispatch Args");
+
+	auto argsBuf = resourceManager->CreateComputeBuffer(argsDesc);
+
+	auto state   = bgl::MeshletState();
+	state.kernel = &kernel;
+	state.viewportState.AddViewportAndScissorRect(
+		bgl::Viewport(static_cast<float>(width), static_cast<float>(height)));
+	state.frameBuffer.AddColorAttachment(rtv);
+	state.indirectArgs  = argsBuf;
+	state.commandCounts = argsBuf;
+
+	auto layout      = resourceManager->GetTextureReadbackLayout(tex);
+	auto rbDesc      = bgl::ReadbackBufferDesc();
+	rbDesc.byteSize  = layout.totalBytes;
+	rbDesc.debugName = "Self-Counted Dispatch Readback";
+
+	auto rb = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	const auto drawBucket = [&](const uint32_t bucket) {
+		cmdList->Open(cmdQueue, cmdAllocator);
+
+		const std::array<bgl::idl::DispatchArgs, 2> args = { {
+			{ 5u, 1u, 1u },
+			{ 0u, 1u, 1u },
+		} };
+		cmdList->WriteBuffer(argsBuf, args.data(), sizeof(args));
+		cmdList->Barrier(
+			argsBuf,
+			bgl::BufferBarrierDesc()
+				.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(bgl::BarrierSyncFlag::kIndirectArgument)
+				.AddAccessAfter(bgl::BarrierAccessFlag::kIndirectArgument));
+
+		float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		resourceManager->ClearRtv(cmdList, rtv, clearColor);
+
+		cmdList->SetMeshletState(state);
+		cmdList->DispatchMeshIndirectCount(bucket, bgl::DrawBucketCountIndex(bucket));
+
+		auto toCopySrc = bgl::TextureBarrierDesc();
+		toCopySrc.AddSyncBefore(bgl::BarrierSyncFlag::kRenderTarget)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kRenderTarget)
+			.SetLayoutBefore(bgl::BarrierLayout::kRenderTarget)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
+			.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
+		cmdList->Barrier(tex, toCopySrc);
+
+		cmdList->CopyTextureToReadback(rb, tex);
+
+		auto toTarget = bgl::TextureBarrierDesc();
+		toTarget.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgl::BarrierAccessFlag::kCopySource)
+			.SetLayoutBefore(bgl::BarrierLayout::kCopySource)
+			.AddSyncAfter(bgl::BarrierSyncFlag::kRenderTarget)
+			.AddAccessAfter(bgl::BarrierAccessFlag::kRenderTarget)
+			.SetLayoutAfter(bgl::BarrierLayout::kRenderTarget);
+		cmdList->Barrier(tex, toTarget);
+		cmdList->Close();
+
+		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+
+		const auto* base = static_cast<const uint8_t*>(resourceManager->MapReadback(rb));
+		REQUIRE(base != nullptr);
+		const float red = reinterpret_cast<const float*>(base + layout.offset)[0];
+		resourceManager->UnmapReadback(rb);
+		return red;
+	};
+
+	CHECK(drawBucket(0) == Catch::Approx(1.0f));
+	CHECK(drawBucket(1) == Catch::Approx(0.0f));
+
+	resourceManager->DestroyReadbackBuffer(rb, false);
+	resourceManager->DestroyBuffer(argsBuf, false);
 	resourceManager->DestroyRtv(rtv, false);
 	resourceManager->DestroyTexture(tex, false);
 }

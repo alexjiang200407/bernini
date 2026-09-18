@@ -39,7 +39,7 @@ namespace bgl
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
 				.SetInitialCount(idl::cMaxDrawBuckets)
-				.SetDebugName("Bucket Prefix Sum");
+				.SetDebugName("Draw Bucket Prefix Sum");
 
 			m_DrawBucketPrefixSum.Init(std::move(desc), resourceManager);
 		}

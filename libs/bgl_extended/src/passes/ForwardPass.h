@@ -58,7 +58,7 @@ namespace bgl
 		AddDrawBucketKernels(
 			IDevice*              device,
 			PipelineBatch&        pipelines,
-			const DrawBucketMask& buckets);
+			const DrawBucketMask& demanded);
 
 		/**
 		 * Requests the one shared blend kernel the whole depth-sorted list draws through --
@@ -115,7 +115,7 @@ namespace bgl
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
 		MeshletKernel m_TransparentKernel;
 
-		const DrawBucketTable* m_DrawBuckets = nullptr;
+		const DrawBucketTable* m_DrawBucketTable = nullptr;
 
 		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
 		// is a phase of this pass rather than a pass of its own.

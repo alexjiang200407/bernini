@@ -25,8 +25,6 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
-#include "util/util.h"
-#include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
@@ -162,7 +160,7 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_DrawBuckets = &buckets;
+		m_DrawBucketTable = &buckets;
 		m_BlobShadows.Init(device, pipelines);
 	}
 
@@ -170,11 +168,11 @@ namespace bgl
 	ForwardPass::AddDrawBucketKernels(
 		IDevice*              device,
 		PipelineBatch&        pipelines,
-		const DrawBucketMask& buckets)
+		const DrawBucketMask& demanded)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		const uint32_t count = m_DrawBuckets->Count();
+		const uint32_t count = m_DrawBucketTable->Count();
 		if (m_Kernels.size() < count)
 		{
 			m_Kernels.resize(count);
@@ -182,14 +180,14 @@ namespace bgl
 
 		for (uint32_t bucket = 0; bucket < count; ++bucket)
 		{
-			if (buckets.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
+			if (demanded.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
 			{
 				gassert(
-					!m_DrawBuckets->Transparent(bucket),
+					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
 				pipelines.Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(device, ConfigFor(m_DrawBuckets->Desc(bucket))));
+					ForwardPipelineDesc(device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
 			}
 		}
 	}
@@ -385,9 +383,9 @@ namespace bgl
 		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
 		// table's live count. The transparent buckets are skipped here -- their order is depth,
 		// not bucket, so they draw below.
-		for (uint32_t bucket = 0, count = m_DrawBuckets->Count(); bucket < count; ++bucket)
+		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
 		{
-			if (m_DrawBuckets->Transparent(bucket))
+			if (m_DrawBucketTable->Transparent(bucket))
 			{
 				continue;
 			}
@@ -404,10 +402,8 @@ namespace bgl
 			{
 				(*expansionData)["drawBucketIndex"] = bucket;
 				(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
-				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
 				(*expansionData)["cullBackfaces"] =
-					DrawBucketCullMode(m_DrawBuckets->Desc(bucket)) == RasterCullMode::kNone ? 1u :
-																							   0u;
+					DrawBucketMeshStageCullsBackfaces(m_DrawBucketTable->Desc(bucket));
 			}
 
 			gfxState.kernel        = &kernel;

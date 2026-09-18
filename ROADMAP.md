@@ -226,7 +226,7 @@ and portability.
     organism; offset clip time and preserve it across state transitions.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
-  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — draw-bucketed by
+  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by
     mask alongside LOD. The *wardrobe* is not this: a swappable kit is a slot mesh of its own on the
     shared rig, which is what the crowd tier was built for.
   - [ ] Attachment variation as separate instanced draws off the rig's bone anim table, which is
@@ -418,7 +418,7 @@ and portability.
     memory.
 - [ ] Capacity policy — one table, with clamp-and-report behaviour defined for every entry.
   - [x] Draw buckets -- `cMaxDrawBuckets` (256); a key past it resolves to the unlit fallback,
-    reported once, and surfaces past what can draw in one frame are refused at registration.
+    reported once, and a surface past `cMaxDrawBuckets - 1` is refused at registration.
     Past 1024 the single-group bucket scan must be replaced first.
   - [ ] Max agents, max per cell, event buffer size, flow fields resident.
   - [ ] Top-K skinned budget.

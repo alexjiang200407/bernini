@@ -38,6 +38,18 @@ namespace bgl
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept;
 
 	/**
+	 * `expansionData.cullBackfaces` for the draw bucket: 1 where its pipeline culls nothing in
+	 * hardware, so the mesh stage honours the material's doubleSided; 0 where the pipeline already
+	 * culled and the mesh stage has nothing left to do.
+	 */
+	[[nodiscard]] uint32_t
+	DrawBucketMeshStageCullsBackfaces(const DrawBucketDesc& desc) noexcept;
+
+	/** Whether the static depth pass draws the bucket through a coverage twin of its own. */
+	[[nodiscard]] bool
+	DrawBucketHasCoverageTwin(const DrawBucketDesc& desc) noexcept;
+
+	/**
 	 * Where a draw bucket's command count sits when its own dispatch args are the count buffer: the
 	 * `threadCountX` that opens its entry -- first because every backend's indirect-argument layout
 	 * puts X first -- in uint32s. Zero exactly when the bucket is empty, and

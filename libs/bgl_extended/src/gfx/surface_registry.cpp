@@ -223,14 +223,14 @@ namespace bgl
 				continue;
 			}
 
-			// Every registered surface must be able to draw in the same frame (ADR-6's ceiling): a
-			// draw bucket each, beside the unlit fallback's.
+			// Past this not even one draw bucket each could exist beside the unlit fallback's.
 			if (types.size() == c_MaxSurfaces)
 			{
 				throw ApiError(
 					std::format(
-						"surfaceShaderDir '{}' holds more than {} surfaces, the most that can draw "
-						"in one frame; '{}' is past the last",
+						"surfaceShaderDir '{}' holds more than {} surfaces, the most the "
+						"draw-bucket "
+						"ceiling can give a bucket each; '{}' is past the last",
 						dir.generic_string(),
 						c_MaxSurfaces,
 						stem));

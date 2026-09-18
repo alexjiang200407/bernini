@@ -105,16 +105,25 @@ follow from that and are worth stating plainly:
   packed game reads its shaders off the loose directory beside it.
 
 Registration is in filename order, so which surface takes which slot is the directory's decision
-and not a document's. The count is bounded only by the draw-bucket ceiling: every registered
-surface must be able to draw in the same frame, a draw bucket each beside the unlit fallback's, so
-at most `cMaxDrawBuckets - 1` register and the next is refused by name at startup rather than
-ignored. A surface's programs -- its opaque, alpha-test and hashed colour
+and not a document's. The count is bounded only by the draw-bucket ceiling: past `cMaxDrawBuckets
+- 1` surfaces not even one draw bucket each could exist beside the unlit fallback's, so the next is
+refused by name at startup rather than ignored. Below that, what a frame draws is still subject to
+the ceiling per (tier, kind, layer) key, which clamps to the unlit fallback
+([Passes](passes.md)). A surface's programs -- its opaque, alpha-test and hashed colour
 programs, the static depth pass's coverage twins, and an arm in the shared blend program -- are
 generated at registration (`src/gfx/surface_registry.cpp`); each is one call into
 `lib/forward/GameSurface.slang`, and `programs/forward/GameSurfaceShapes.slang` instantiates every
 shape on the null surface so the build validates them. Only the slot bindings load into every Slang
-session; a generated program loads from its text the first time a pipeline names it.
+session; a generated program loads from its text the first time a pipeline names it. That is also
+when it first compiles: a surface is reflected, and so type-checked, in `CreateGraphics`, but a
+program of it that fails only for this backend -- a construct the Metal path accepts and DXC does
+not (see [Slang Shaders](slang_shaders.md)) -- fails the first `Draw` that uses that layer, and an
+error in its blend arm takes the shared blend program with it. Pipelines are built on demand, so
+this is the cost of not building every surface's every layer at startup.
 
+The colour and coverage programs are one per surface and layer rather than a switch, because a
+runtime surface switch makes every draw pay the costliest surface's register pressure and diverges
+inside a draw, and dynamic dispatch through witness tables is not portable across the backends.
 The shared blend program is the one runtime switch on the surface: a program has to name a
 surface's type, and the depth-sorted list draws in one dispatch through one pipeline so it can stay
 in depth order across surfaces. It costs one `ShadeGameBlended` instantiation per registered
@@ -243,6 +252,7 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
 | a file that will not compile, or a surface past `cMaxDrawBuckets - 1` | `CreateGraphics`, naming the file |
+| a surface that compiles but whose generated programs do not, for this backend | fatal, at the first `Draw` that uses that layer |
 
 ## Boundaries
 

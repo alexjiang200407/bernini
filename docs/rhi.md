@@ -129,7 +129,10 @@ doc and a header disagree, trust the header, then fix this doc.
   against the built kernels. Two batches exist: the always-on set in `RenderContext`'s
   constructor, and one per `Draw` that demands draw buckets with no kernels yet
   (`RenderContext::EnsureDrawBucketPipelinesExist`) — so a scene builds only the draw buckets it uses, and each
-  batch releases the Slang sessions when it is done. Pipeline creation is callable from any thread:
+  batch releases the Slang sessions when it is done. The demand batch runs at the top of `Draw`
+  rather than where a material resolves: `SceneView` has no reach into the passes, and one batch per
+  `Draw` gathers a load's many material creations into a single parallel build where per-creation
+  building would link serially. Pipeline creation is callable from any thread:
   each thread compiles on a Slang session of its own (see [Shader Cache](docs/shader_cache.md)),
   and the backend's `ShaderCache` serializes its driver pipeline library. A kernel created
   outside a batch is built on the calling thread — the batch is a parallelism device, not an

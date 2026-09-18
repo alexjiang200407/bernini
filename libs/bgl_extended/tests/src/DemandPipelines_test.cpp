@@ -172,8 +172,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 	// The perf shape at the table: buckets -- and so the dispatch loops, which run to the table's
 	// count -- scale with the distinct (tier, kind, layer) keys in use, never with the material
 	// count or a fixed grid. Six more materials, each on its own placement, across the two keys
-	// already drawn, allocate no bucket and build no kernel. Counting the commands themselves is
-	// the count-buffer task's recording-list check.
+	// already drawn, allocate no bucket and build no kernel.
 	const uint32_t bucketsBefore = table.Count();
 	for (uint32_t i = 0; i < 6; ++i)
 	{
