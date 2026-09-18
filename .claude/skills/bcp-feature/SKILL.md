@@ -1,6 +1,12 @@
 ---
 name: bcp-feature
-description: Use when a change is too large to land on master as one PR — cuts an empty integration branch feat/<name>, writes the plan on the artefacts branch, then lands the work one task at a time as small PRs into that branch, watching each one and revising until the user merges it. Only the finished feature is proposed to master. Also resumes an existing feature and reports its state. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
+description: >-
+  Use when a change is too large to land on master as one PR — cuts an empty integration branch
+  feat/NAME, writes the plan on the artefacts branch, then lands the work one task at a time as
+  small PRs into that branch, watching each one and revising until the user merges it. Only the
+  finished feature is proposed to master. Also resumes an existing feature and reports its state.
+  Triggers: "bcp-feature X PROMPT", "start a feature branch for X", "continue the feature",
+  "what's left on the feature", "land the feature".
 ---
 
 # Running a Bernini feature branch
@@ -176,9 +182,31 @@ first task with the plan in hand, exactly as the plan PR used to.
 The plan is still where a design finding is cheapest of all — it costs a paragraph here and a rewrite
 once the tasks have landed.
 
-Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
-measured against, and a decomposition reviewed after three tasks have landed is reviewed too late to
-change anything cheaply.
+Cut the first task under § 3, then watch its PR under § 4. **No later task branch is cut until the
+user merges that first PR** — its code and design notes are the first review gate, not a plan PR.
+
+### Public interfaces before implementation
+
+**When a feature adds or changes a public interface, make its first feature task a contract PR.**
+This includes interfaces between subsystems, backends, plugins and out-of-tree consumers. Put the
+actual types and signatures in public code, with ownership, lifetime, threading and error contracts
+where they matter. Derive the surface from the clients surveyed above; do not invent extension
+points for hypothetical clients.
+
+The PR contains compilable headers, a small compiled example or client against a fake host, and
+meaningful contract tests. Exercise what can be verified without the production implementation,
+such as registration, ownership and failure behavior; state what the fake cannot prove. Headers
+alone, prose signatures in the plan, or stubs that need the next task to compile do not satisfy this
+gate. Keep production implementation and client migration in later tasks.
+
+**Wait for the user to review and merge the contract PR before starting dependent implementation.**
+Use the ordinary § 3–§ 4 loop; no separate chat approval is needed. If a prerequisite refactor is
+needed to keep existing clients building, name it in the plan and land it separately before the
+contract PR. A later discovery that changes the reviewed contract gets a focused contract revision
+reviewed and merged before work depending on that revision.
+
+If the feature changes no public interface, say so in the plan and start with the first behavioral
+task. Do not manufacture an interface or a header-only PR to satisfy the sequence.
 
 ### What a task is
 
