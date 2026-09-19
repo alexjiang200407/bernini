@@ -1,10 +1,9 @@
 #pragma once
 
 #include <assetlib/IAssetPlugin.h>
+#include <core/str/str.h>
 #include <span>
-#include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace assetlib
@@ -29,8 +28,11 @@ namespace assetlib
 		}
 
 	private:
-		std::vector<AssetKindPtr>                          m_Kinds;
-		std::unordered_map<std::string, const IAssetKind*> m_ByExtension;
-		std::unordered_map<std::string, const IAssetKind*> m_ById;
+		[[nodiscard]] bool
+		HasCollision(const AssetKindDesc& desc) const;
+
+		std::vector<AssetKindPtr>                       m_Kinds;
+		core::str::unordered_str_map<const IAssetKind*> m_ByExtension;
+		core::str::unordered_str_map<const IAssetKind*> m_ById;
 	};
 }

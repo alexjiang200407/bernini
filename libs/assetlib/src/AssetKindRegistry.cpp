@@ -4,7 +4,6 @@
 #include <assetlib/IAssetPlugin.h>
 #include <cctype>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <utility>
 
@@ -49,9 +48,7 @@ namespace assetlib
 		const auto& desc = kind->GetDesc();
 		if (!validId(desc.id) || !validExtension(desc.extension))
 			throw std::runtime_error("assetlib: invalid asset kind descriptor");
-		if (containerKindForExtension(desc.extension).has_value() ||
-		    foreignKindForExtension(desc.extension).has_value() ||
-		    FindByExtension(desc.extension) || FindById(desc.id))
+		if (HasCollision(desc))
 			throw std::runtime_error("assetlib: asset kind descriptor collides");
 
 		const IAssetKind* added = kind.get();
@@ -76,17 +73,25 @@ namespace assetlib
 		}
 	}
 
+	bool
+	AssetKindRegistry::HasCollision(const AssetKindDesc& desc) const
+	{
+		return containerKindForExtension(desc.extension).has_value() ||
+		       foreignKindForExtension(desc.extension).has_value() ||
+		       FindByExtension(desc.extension) != nullptr || FindById(desc.id) != nullptr;
+	}
+
 	const IAssetKind*
 	AssetKindRegistry::FindByExtension(std::string_view extension) const noexcept
 	{
-		const auto found = m_ByExtension.find(std::string(extension));
+		const auto found = m_ByExtension.find(extension);
 		return found == m_ByExtension.end() ? nullptr : found->second;
 	}
 
 	const IAssetKind*
 	AssetKindRegistry::FindById(std::string_view id) const noexcept
 	{
-		const auto found = m_ById.find(std::string(id));
+		const auto found = m_ById.find(id);
 		return found == m_ById.end() ? nullptr : found->second;
 	}
 }
