@@ -378,6 +378,11 @@ def notify_codex(payload):
         raise NotificationError(f'Codex wake failed; event kept at {path}: {done.stderr.strip()}')
 
 
+def codex_notification_enabled(requested, once):
+    """Whether this watch belongs to a Codex thread that should be woken."""
+    return not once and (requested or bool(os.environ.get("CODEX_THREAD_ID")))
+
+
 def emit(payload):
     """Prints the one event, and re-arms the watch if the PR still needs answering.
 
@@ -416,7 +421,7 @@ def main():
     args = parser.parse_args()
     global NOTIFY_CODEX, NOTIFY_PR
     NOTIFY_PR = args.pr
-    NOTIFY_CODEX = args.notify_codex and not args.once
+    NOTIFY_CODEX = codex_notification_enabled(args.notify_codex, args.once)
     if NOTIFY_CODEX and not os.environ.get("CODEX_THREAD_ID"):
         parser.error("--notify-codex requires CODEX_THREAD_ID from a Codex session")
 
