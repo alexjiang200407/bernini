@@ -14,9 +14,12 @@ namespace
 	{
 		if (value.empty())
 			return false;
-		for (const unsigned char c : value)
+		for (const char raw : value)
+		{
+			const unsigned char c = static_cast<unsigned char>(raw);
 			if (!(std::isalnum(c) != 0 || c == '_' || c == '.'))
 				return false;
+		}
 		return true;
 	}
 
@@ -25,9 +28,12 @@ namespace
 	{
 		if (value.size() < 2 || value.front() != '.')
 			return false;
-		for (const unsigned char c : value.substr(1))
+		for (const char raw : value.substr(1))
+		{
+			const unsigned char c = static_cast<unsigned char>(raw);
 			if (!(std::islower(c) != 0 || std::isdigit(c) != 0 || c == '_'))
 				return false;
+		}
 		return true;
 	}
 }
