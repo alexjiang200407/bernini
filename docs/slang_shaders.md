@@ -189,6 +189,11 @@ This is worth knowing because the check that catches it runs in one place only:
 time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
 run, and a Windows build is what catches this class of bug.
 
+The DXC that validation runs is the `directx-dxc` port's — the one the runtime stages beside the
+executable — named to slangc with `-dxc-path`. Left to itself slangc loads whichever
+`dxcompiler.dll` PATH reaches first, and a developer prompt puts the Windows SDK's there: DXC 1.6,
+which predates `select`, so a shader the runtime compiles would fail the build.
+
 It used to be narrower still. The list of what to validate was written out by hand, so a shader
 nobody remembered to add was checked by nothing until it reached a Windows runtime — which is how
 `MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
