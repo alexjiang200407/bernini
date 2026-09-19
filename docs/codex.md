@@ -115,6 +115,11 @@ mkdir -p .claude/features
 just watch-pr 123 --notify-codex >.claude/features/pr-123.watch.log 2>&1 &
 ```
 
+`--notify-codex` is explicit here so the handoff is visible. A normal watcher also enables the
+same notification automatically when the Codex session provides `CODEX_THREAD_ID`. The workspace
+launcher separately supplies its process registry, so a generated worktree needs no
+watcher-specific configuration.
+
 In Windows PowerShell, start Python directly (the child inherits `CODEX_THREAD_ID`):
 
 ```powershell
