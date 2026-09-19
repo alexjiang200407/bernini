@@ -115,6 +115,25 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 	BGL_EXPORTS
 )
 
+# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
+# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
+# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so
+# both are copied by hand, for the same reason as the Agility SDK below. Found before the shaders
+# subdirectory, whose build-time validation compiles with the same DXC; the port's config cannot be
+# found twice.
+#
+# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
+# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
+# both from one directory also keeps the compiler and its validator a matched pair, which they
+# have to be: a validator older than the compiler rejects the container.
+if(WIN32)
+	find_package(directx-dxc CONFIG REQUIRED)
+	copy_to_target(bgl_extended ITEMS
+		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
+		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
+	)
+endif()
+
 # The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal backend
 # compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
@@ -170,23 +189,6 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
 	add_dependencies(bgl_metal_copy_shaders bgl_common_copy_shaders)
 	add_dependencies(bgl_extended bgl_metal_copy_shaders)
-endif()
-
-# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
-# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
-# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so
-# both are copied by hand, for the same reason as the Agility SDK above.
-#
-# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
-# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
-# both from one directory also keeps the compiler and its validator a matched pair, which they
-# have to be: a validator older than the compiler rejects the container.
-if(WIN32)
-	find_package(directx-dxc CONFIG REQUIRED)
-	copy_to_target(bgl_extended ITEMS
-		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
-		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
-	)
 endif()
 
 

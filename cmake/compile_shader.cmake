@@ -2,7 +2,8 @@ function(compile_shader)
     # Define the expected arguments for the function
     set(options "")
     
-    set(oneValueArgs FILE OUT_DIR TARGET STAGE) 
+    # DXC: the dxcompiler.dll to emit DXIL with; its directory must also hold the matching dxil.dll.
+    set(oneValueArgs FILE OUT_DIR TARGET STAGE DXC)
     
     # ENTRY_POINTS is now treated as an optional multi-value list
     set(multiValueArgs INCLUDES ENTRY_POINTS) 
@@ -80,6 +81,14 @@ function(compile_shader)
         set(OUT_FILE "${SHADER_OUT_DIR}/${SHADER_OUT_NAME}")
         set(DEP_FILE "${OUT_FILE}.d")
 
+        # Without -dxc-path slangc loads whichever dxcompiler.dll PATH reaches first, and a developer
+        # prompt puts the Windows SDK's there: a DXC older than the one the runtime stages, missing
+        # intrinsics such as `select`.
+        set(DXC_FLAGS "")
+        if(SHADER_DXC)
+            set(DXC_FLAGS -dxc-path "$<PATH:GET_PARENT_PATH,${SHADER_DXC}>")
+        endif()
+
         if (IS_DEBUG)
             # -g2: debug info. -D BERNINI_GPU_DEBUG: enables dbg_raise() bodies in
             # shaders; kept in lockstep with the C++/runtime-session define so the
@@ -99,7 +108,8 @@ function(compile_shader)
                 -depfile "${DEP_FILE}"
                 -o "${OUT_FILE}" "${SHADER_FILE}"
                 ${OTHER_FLAGS}
-            DEPENDS "${SHADER_FILE}"
+                ${DXC_FLAGS}
+            DEPENDS "${SHADER_FILE}" ${SHADER_DXC}
             DEPFILE "${DEP_FILE}"
             COMMENT "Compiling Slang Entry Point: ${SHADER_FILENAME} [${ENTRY}] -> ${SHADER_OUT_NAME}"
             VERBATIM

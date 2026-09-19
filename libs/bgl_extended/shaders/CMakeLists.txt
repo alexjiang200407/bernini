@@ -12,6 +12,10 @@ if(NOT SLANG_EXECUTABLE)
     message(FATAL_ERROR "Slang compiler not found. Please install Slang and put 'slang' or 'slangc' on PATH.")
 endif()
 
+# The DXC ../CMakeLists.txt found and stages beside the executable, so what validates here is what
+# compiles at runtime.
+set(SLANG_DXC "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>")
+
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # The shared tree: idl.* resolves from here, and nothing under it is this renderer's to compile.
@@ -53,6 +57,7 @@ foreach(SHADER ${SLANG_PROGRAM_SOURCES})
             OUT_DIR      "${SHADER_OUT_DIR}/${SHADER_REL_DIR}"
             TARGET       "dxil"
             STAGE        "${ENTRY_PROFILE}"
+            DXC          "${SLANG_DXC}"
             INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT}
             ENTRY_POINTS "${ENTRY_NAME}"
         )
@@ -83,6 +88,7 @@ if (BUILD_TESTS)
             FILE     "${SHADER}"
             OUT_DIR  "${SHADER_OUT_DIR}"
             TARGET   "dxil"
+            DXC      "${SLANG_DXC}"
             INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT}
         )
 
