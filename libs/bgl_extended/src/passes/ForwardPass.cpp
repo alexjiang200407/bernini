@@ -285,6 +285,8 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		DeclareMeshletCullBuffers(desc);
+
 		for (const auto& binding : c_MaterialBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -314,6 +316,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
+			BindMeshletCullBuffers(*foundExpansion, resources);
 		}
 
 		if (auto foundSkinnedData = kernel.FindUniforms("skinnedData"))

@@ -5,14 +5,13 @@ import lib.forward.static_vertex;
 
 // The static forward geometry stage. The shared expansion, one tier's vertex evaluation.
 
-[numthreads(cThreadsPerInstance, 1, 1)]
+[numthreads(cMeshletCullGroupSize, 1, 1)]
 [shader("amplification")]
-void ASMain(uint gid: SV_GroupID)
+void ASMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID)
 {
-    InstancedPayload payload;
-    let meshletCount = ResolveDispatch(gid, payload);
+    let meshletCount = CullMeshlets(gid, gtid);
 
-    DispatchMesh(meshletCount, 1, 1, payload);
+    DispatchMesh(meshletCount, 1, 1, gCulledPayload);
 }
 
 [shader("mesh")]
@@ -21,12 +20,24 @@ void ASMain(uint gid: SV_GroupID)
 void MSMain(
     uint gid: SV_GroupID,
     uint gtid: SV_GroupThreadID,
-    payload InstancedPayload payload,
+    payload CulledPayload payload,
     OutputVertices<ForwardVSOut, cMaxVerticesPerMeshlet> verts,
     OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
 )
 {
-    let ctx = PrepareMeshlet(payload.instance, gid);
+    uint meshletIdx = gid;
+    if (payload.compactedMeshletCount != 0u)
+    {
+        meshletIdx = CulledMeshletIndex(payload, gid);
+    }
+    let ctx = PrepareMeshlet(payload.instance, meshletIdx);
+
+    // A submesh too large to compact reaches here whole; its meshlets are culled one group at a time.
+    if (payload.compactedMeshletCount == 0u && !MeshletInCullFrustum(ctx.mesh, ctx.meshlet))
+    {
+        SetMeshOutputCounts(0, 0);
+        return;
+    }
 
     SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
 

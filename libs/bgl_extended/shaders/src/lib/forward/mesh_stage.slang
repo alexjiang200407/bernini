@@ -20,6 +20,7 @@ import lib.forward.ExpansionData;
 import lib.forward.ForwardData;
 import lib.forward.MaterialData;
 import lib.geom.vertexdecode;
+import lib.math.frustum;
 import lib.data.ViewData;
 import lib.data.SubmeshInstance;
 
@@ -93,7 +94,90 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     return submesh.GetMeshletCount();
 }
 
-public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
+// Whether any of `meshlet` can reach the draw's cull frustum. The sphere test is the one
+// CullInstances passes the instance by, against the same planes -- built from the jittered
+// view-projection the raster uses -- so it only ever rejects a meshlet the raster would clip whole.
+public bool MeshletInCullFrustum(MeshInstance mesh, Meshlet meshlet)
+{
+    let sphere = mesh.TransformSphere(meshlet.boundingSphere);
+    return SphereInFrustum(expansionData.cullView[0].frustumPlanes, sphere.xyz, sphere.w);
+}
+
+public groupshared CulledPayload gCulledPayload;
+groupshared uint gSurvivors;
+
+// The instance this amplification group covers, and how many meshlets it dispatches: those
+// MeshletInCullFrustum keeps, marked in gCulledPayload so the mesh stage draws them in meshlet order,
+// the order an unculled draw has. A submesh past cMaxCompactedMeshlets dispatches all of them, and
+// the mesh stage culls. Every lane of the group calls it.
+public uint CullMeshlets(uint gid, uint lane)
+{
+    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
+    let geom = forwardData.geomBuffer.Get(mesh.geom);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    let meshletCount = submesh.GetMeshletCount();
+    let compacted = meshletCount <= cMaxCompactedMeshlets;
+
+    if (lane == 0u)
+    {
+        gCulledPayload.instance = instance;
+        gCulledPayload.compactedMeshletCount = compacted ? meshletCount : 0u;
+    }
+
+    if (!compacted)
+    {
+        GroupMemoryBarrierWithGroupSync();
+        return meshletCount;
+    }
+
+    let maskWords = (meshletCount + 31u) / 32u;
+
+    for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
+    {
+        gCulledPayload.survivorMask[w] = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint meshletIdx = lane; meshletIdx < meshletCount; meshletIdx += cMeshletCullGroupSize)
+    {
+        if (MeshletInCullFrustum(mesh, forwardData.meshletBuffer.Get(submesh.meshlets, meshletIdx)))
+        {
+            InterlockedOr(gCulledPayload.survivorMask[meshletIdx / 32u], 1u << (meshletIdx % 32u));
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // A running count over at most 256 words, two to a packed word. One lane: the scan is serial and
+    // shorter than the barriers a parallel one would need.
+    if (lane == 0u)
+    {
+        uint survivors = 0u;
+        for (uint w = 0u; w < maskWords; w += 2u)
+        {
+            let second = survivors + countbits(gCulledPayload.survivorMask[w]);
+            gCulledPayload.survivorsBefore[w / 2u] = survivors | (second << 16u);
+            survivors = second + (w + 1u < maskWords ? countbits(gCulledPayload.survivorMask[w + 1u]) : 0u);
+        }
+        gSurvivors = survivors;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    let survivors = gSurvivors;
+
+#if defined(BERNINI_GPU_DEBUG)
+    if (lane == 0u)
+    {
+        expansionData.stats[0].meshletsTested.add(meshletCount);
+        expansionData.stats[0].meshletsCulled.add(meshletCount - survivors);
+    }
+#endif
+
+    return survivors;
+}
+
+public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)
 {
     MeshletContext ctx;
     ctx.mesh = forwardData.meshBuffer.Get(instance.meshInstance);
@@ -110,7 +194,11 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
     dbg_assert(
-        gid < ctx.submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex, gid, ctx.submesh.GetMeshletCount(), instance.submeshIndex
+        meshletIdx < ctx.submesh.GetMeshletCount(),
+        ErrorCode.kInvalidMeshletIndex,
+        meshletIdx,
+        ctx.submesh.GetMeshletCount(),
+        instance.submeshIndex
     );
     dbg_assert(ctx.submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout, ctx.submesh.layout.stride, 0, instance.submeshIndex);
     // Position is the only attribute a mesh cannot render without; every other decodes to a default.
@@ -127,7 +215,7 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     // everything past it.
     dbg_assert(!ctx.submesh.vertexData.Null(), ErrorCode.kNullRawDeref, 0, 0, instance.submeshIndex);
 
-    ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, gid);
+    ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, meshletIdx);
 
     // The material record is read only on a draw that culls here, and never for a submesh with no
     // material: the reserved null entry at offset zero must not be dereferenced, and an `||` would
@@ -144,14 +232,14 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
         ErrorCode.kMeshletVertexOverflow,
         ctx.meshlet.vertexCount,
         cMaxVerticesPerMeshlet,
-        gid
+        meshletIdx
     );
     dbg_assert(
         ctx.meshlet.triangleCount <= cMaxPrimsPerMeshlet,
         ErrorCode.kMeshletPrimitiveOverflow,
         ctx.meshlet.triangleCount,
         cMaxPrimsPerMeshlet,
-        gid
+        meshletIdx
     );
 
     return ctx;

@@ -15,6 +15,16 @@ public static const uint cMeshGroupSize = 64;
 // do -- it would re-read the same instance to agree on the same dispatch.
 public static const uint cThreadsPerInstance = 1;
 
+// Threads per amplification-shader group of the static tier, which frustum-culls its instance's
+// meshlets one per lane before it dispatches.
+public static const uint cMeshletCullGroupSize = 32;
+
+// The most meshlets the static tier's amplification group compacts into its payload, as a bit per
+// meshlet and a running count per 32 of them -- about 1.5 KiB. A submesh with more dispatches every
+// meshlet and each mesh group culls its own. The payload is copied out whole per group, on Metal once
+// per lane, so its size costs every instance drawn: 8 KiB measured +3 ms a pass in animal-run.
+public static const uint cMaxCompactedMeshlets = 8192;
+
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;
