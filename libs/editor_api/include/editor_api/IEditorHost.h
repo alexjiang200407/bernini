@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <assetlib/AssetStore.h>
 #include <editor_api/IEditorViewport.h>
+#include <editor_api/ILanguageResolver.h>
 #include <string_view>
 
 namespace editor
@@ -15,6 +16,10 @@ namespace editor
 
 		[[nodiscard]] virtual const assetlib::AssetStore&
 		GetStore() const noexcept = 0;
+
+		/** Host-owned and valid for this host lifetime; plugins cannot change its locale or catalogs. */
+		[[nodiscard]] virtual const ILanguageResolver&
+		GetLanguageResolver() const noexcept = 0;
 
 		/** Synchronous; exceptions return to the caller. No GUI waits or borrowed references escaping work. */
 		virtual void

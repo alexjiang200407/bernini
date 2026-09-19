@@ -2,6 +2,8 @@ add_library(editor_api INTERFACE)
 target_include_directories(editor_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(editor_api INTERFACE assetlib_plugin_api gamelib Qt6::Widgets)
 
+add_subdirectory(localization)
+
 file(GLOB_RECURSE EDITOR_API_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
 foreach(header IN LISTS EDITOR_API_HEADERS)

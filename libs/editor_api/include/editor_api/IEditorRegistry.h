@@ -6,6 +6,7 @@
 #include <editor_api/IEditorHost.h>
 #include <editor_api/LocalizedText.h>
 #include <editor_api/Thumbnail.h>
+#include <editor_api/TranslationCatalog.h>
 #include <filesystem>
 #include <functional>
 #include <span>
@@ -78,6 +79,10 @@ namespace editor
 	{
 	public:
 		virtual ~IEditorRegistry() = default;
+
+		/** Own the module catalog by value; one per context, rolled back with failed registration. */
+		virtual void
+		AddTranslations(TranslationCatalog catalog) = 0;
 
 		/** Parent must already exist; empty parent creates a root menu. Built-in menu IDs are reserved. */
 		virtual void

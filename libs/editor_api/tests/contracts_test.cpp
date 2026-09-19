@@ -12,9 +12,11 @@
 #include <editor_api/IEditorHost.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
+#include <editor_api/ILanguageResolver.h>
+#include <editor_api/LanguageResolver.h>
 #include <editor_api/LocalizedText.h>
+#include <editor_api/TranslationCatalog.h>
 #include <exception>
-#include <map>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
@@ -30,6 +32,7 @@ namespace
 		public assetlib::IAssetKindRegistry
 	{
 	public:
+		std::vector<editor::TranslationCatalog>    catalogs;
 		std::vector<editor::MenuDesc>              menus;
 		std::vector<editor::PanelDesc>             panels;
 		std::vector<editor::AssetEditorDesc>       editors;
@@ -37,6 +40,12 @@ namespace
 		std::vector<editor::ImporterDesc>          importers;
 		std::vector<editor::ThumbnailProviderDesc> thumbnails;
 		std::vector<assetlib::AssetKindPtr>        kinds;
+
+		void
+		AddTranslations(editor::TranslationCatalog catalog) override
+		{
+			catalogs.push_back(std::move(catalog));
+		}
 
 		void
 		AddMenu(editor::MenuDesc desc) override
@@ -79,6 +88,13 @@ namespace
 	{
 	public:
 		std::vector<std::string> shown;
+		editor::LanguageResolver language;
+
+		const editor::ILanguageResolver&
+		GetLanguageResolver() const noexcept override
+		{
+			return language;
+		}
 
 		const assetlib::AssetStore&
 		GetStore() const noexcept override
@@ -250,19 +266,20 @@ TEST_CASE("Translated labels preserve menu routing and action identity", "[plugi
 	auto              plugin = sample::CreateEditorPlugin();
 	RecordingRegistry registry;
 	plugin->Register(registry);
-	std::map<std::pair<std::string, std::string>, QString> catalog;
-	const auto resolve = [&catalog](const editor::LocalizedText& text) {
-		const auto found = catalog.find({ text.context, text.key });
-		return found == catalog.end() ? text.fallback : found->second;
+	RecordingHost host;
+	REQUIRE(registry.catalogs.size() == 1);
+	host.language.RegisterCatalog(registry.catalogs.front());
+	const auto resolve = [&host](const editor::LocalizedText& text) {
+		return text.Resolve(host.GetLanguageResolver());
 	};
 	const auto& menu   = registry.menus.front();
 	const auto& action = registry.actions.front();
 	const auto& panel  = registry.panels.front();
 	REQUIRE(resolve(menu.title) == "Sample tools");
 	REQUIRE(resolve(action.title) == "Project tools");
-	catalog = { { { "sample.editor", "tools" }, QString::fromUtf8("示例工具") },
-		        { { "sample.editor", "overview" }, QString::fromUtf8("项目工具") },
-		        { { "other.editor", "document" }, "Unrelated translation" } };
+	host.language.RegisterCatalog(
+		{ "other.editor", { { "document", "zh_CN", "Unrelated translation" } } });
+	host.language.SetLocale("zh_CN");
 	REQUIRE(resolve(menu.title) == QString::fromUtf8("示例工具"));
 	REQUIRE(resolve(action.title) == QString::fromUtf8("项目工具"));
 	REQUIRE(resolve(panel.title) == resolve(action.title));
@@ -270,10 +287,12 @@ TEST_CASE("Translated labels preserve menu routing and action identity", "[plugi
 	REQUIRE(action.menuId == menu.id);
 	REQUIRE(menu.parentId == editor::c_ToolsMenuId);
 	REQUIRE(action.id == "sample.show-overview");
-	RecordingHost host;
 	action.invoke(host, {});
 	REQUIRE(host.shown == std::vector<std::string>{ panel.id });
-	catalog.clear();
+	QWidget     root;
+	const auto* widget = panel.create(host, &root);
+	REQUIRE(widget->findChild<QLabel*>()->text() == resolve(panel.title));
+	host.language.SetLocale("en");
 	REQUIRE(resolve(action.title) == "Project tools");
 	REQUIRE(action.menuId == menu.id);
 }

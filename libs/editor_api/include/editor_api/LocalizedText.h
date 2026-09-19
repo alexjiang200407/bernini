@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <editor_api/ILanguageResolver.h>
 #include <string>
 
 namespace editor
@@ -11,5 +12,11 @@ namespace editor
 		std::string context;
 		std::string key;
 		QString     fallback;
+
+		[[nodiscard]] QString
+		Resolve(const ILanguageResolver& resolver) const
+		{
+			return resolver.Resolve(*this);
+		}
 	};
 }

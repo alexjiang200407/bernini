@@ -11,6 +11,7 @@
 #include <editor_api/IEditorHost.h>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
+#include <editor_api/LocalizedText.h>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
@@ -112,10 +113,11 @@ namespace
 	class OverviewPanel final : public editor::EditorPanel
 	{
 	public:
-		explicit OverviewPanel(QWidget* parent) : EditorPanel(parent)
+		explicit OverviewPanel(editor::IEditorHost& host, QWidget* parent) : EditorPanel(parent)
 		{
-			auto* layout = new QVBoxLayout(this);
-			layout->addWidget(new QLabel("Project tools", this));
+			auto*                       layout = new QVBoxLayout(this);
+			const editor::LocalizedText title{ "sample.editor", "overview", "Project tools" };
+			layout->addWidget(new QLabel(title.Resolve(host.GetLanguageResolver()), this));
 		}
 
 		std::vector<std::string>
@@ -183,6 +185,10 @@ namespace
 		void
 		Register(editor::IEditorRegistry& registry) override
 		{
+			registry.AddTranslations(
+				{ "sample.editor",
+			      { { "overview", "zh_CN", QString::fromUtf8("项目工具") },
+			        { "tools", "zh_CN", QString::fromUtf8("示例工具") } } });
 			registry.AddMenu(
 				{ "sample.tools",
 			      std::string(editor::c_ToolsMenuId),
@@ -190,8 +196,8 @@ namespace
 			registry.AddPanel(
 				{ "sample.overview",
 			      { "sample.editor", "overview", "Project tools" },
-			      [](editor::IEditorHost&, QWidget* parent) {
-					  return new OverviewPanel(parent);
+			      [](editor::IEditorHost& host, QWidget* parent) {
+					  return new OverviewPanel(host, parent);
 				  } });
 			registry.AddAssetEditor(
 				{ "sample.document",

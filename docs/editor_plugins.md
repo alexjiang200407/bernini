@@ -22,8 +22,10 @@ header and fix the map.
   A scene thumbnail names geometry (a mesh key or the built-in sphere), optional material override
   and optional camera; no camera means automatic framing. Plugins never advance the frame loop.
 - **Identity is independent of language.** Panel, action and menu IDs are stable; labels retain
-  translation context/key and fallback text. The host can resolve them again without registering
-  contributions again. Translation catalogs and language switching are not implemented here.
+  translation context/key and fallback text. The host resolves them through a borrowed
+  `ILanguageResolver` without registering contributions again. Each host owns its locale and copies
+  module catalogs; there is no singleton. The resolver and CSV reader are implemented, but the
+  production editor does not yet use them.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions; the future loader must verify compatibility before calling them.
@@ -39,6 +41,8 @@ header and fix the map.
 | `IEditorPlugin` | [IEditorPlugin.h](libs/editor_api/include/editor_api/IEditorPlugin.h) | Register editor contributions at startup |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
 | `LocalizedText` | [LocalizedText.h](libs/editor_api/include/editor_api/LocalizedText.h) | Deferred label lookup with fallback |
+| `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_api/include/editor_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_api/include/editor_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
+| `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_api/include/editor_api/TranslationCatalog.h), [translation_csv.h](libs/editor_api/include/editor_api/translation_csv.h) | Module data and optional CSV ingestion |
 | `MenuDesc` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
 | `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_api/include/editor_api/EditorPanel.h) | Project-scoped widgets, close veto and held assets |
 | `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
@@ -59,14 +63,17 @@ flowchart TD
     Editor[Editor plugin] -->|Register| Registry[IEditorRegistry]
     Registry -->|deferred factory| Panel[Project panel]
     Panel -->|borrows| Host[IEditorHost]
+    Host -->|GetLanguageResolver| Language[Host-owned language resolver]
+    Editor -->|AddTranslations| Registry
+    Registry -->|copies catalogs| Language
     Host -->|GetStore| Store[AssetStore]
     Host -->|InvokeRender| Render[RenderContext]
     Host -->|CreateViewport| Viewport[IEditorViewport]
     Kinds -->|owns| Kind[IAssetKind]
 ```
 
-The diagram is the contract's ownership/call topology; only the sample's recording host currently
-implements its registration side. There is no production registry or loader in this milestone.
+The diagram is the contract ownership/call topology. The recording host supplies registration and
+uses the concrete language resolver; there is no production registry or loader in this milestone.
 
 ## Threading and lifetime
 
@@ -97,12 +104,30 @@ new panels against a new host; do not silently retarget stored references to old
 - **Factories:** @pre a non-null parent and live project host. @post return a non-null widget
   parented to that parent, transferring Qt ownership to the host. Each registered panel/editor is
   one reusable tab per project. Factories are lazy; registration cannot access a project.
-- **Labels:** context and key are nonempty, case-sensitive UTF-8 identifiers; context is
-  plugin-qualified. Fallback is nonempty display text. Lookup uses the pair in the active locale;
-  a missing entry uses fallback, never the key. IDs, extensions and stored asset keys are never
-  translated. The host retains descriptors and re-resolves its menu, action and tab labels when
-  locale changes, on the GUI thread. Plugin-owned widget text remains the plugin's responsibility;
-  catalog discovery, notifications, pluralization and formatting are future localization work.
+- **Labels:** keys match `[a-z][a-z0-9_]*`; contexts are dot-separated components of that form,
+  qualified by the plugin. Fallback is nonempty display text. `LocalizedText::Resolve` calls the
+  explicitly supplied resolver every time; it neither caches a string nor locates global state.
+  IDs, extensions and stored asset keys are never translated. Lookup uses an exact context/key/locale
+  match; unknown context, key or locale returns the descriptor fallback. The initial locale is `en`.
+  Locale tokens begin with an ASCII letter and contain only ASCII letters, digits, `_` or `-`;
+  matching is case-sensitive, without normalization or regional fallback.
+- **Resolver ownership:** link the static `editor_localization` target in the host. It depends only
+  on Qt Core; `editor_api` does not link its implementation into every client. Plugins borrow the
+  const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
+  through that interface. All calls, including catalog registration and locale changes, run on the
+  GUI thread. The resolver outlives its borrowers; independent hosts may choose different locales.
+  This Qt editor service does not implement the game runtime localization system.
+- **Catalogs:** `AddTranslations` transfers a module catalog by value, with one catalog per context.
+  The host copies strings and owns them beyond registration. `LanguageResolver::RegisterCatalog`
+  rejects invalid contexts, keys, locales, empty translations, duplicate key/locale pairs and existing
+  contexts, leaving the previous state intact. Omit missing translations instead of storing empty
+  strings. A production registry must roll back catalogs with every other contribution if a module
+  fails; the recording registry does not implement that transaction. Collect and validate a module
+  before exposing its contributions.
+- **Language changes:** changing the resolver locale affects the next lookup, not already displayed
+  strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
+  on the GUI thread. The sample resolves its widget title when constructed; live widget refresh,
+  catalog discovery, pluralization and parameter formatting are not implemented.
 - **Menus:** the host supplies `c_FileMenuId` and `c_ToolsMenuId` before plugin registration.
   `AddMenu` creates a plugin-qualified ID with a localized label; empty parent means a root menu,
   otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
@@ -151,5 +176,26 @@ Each public editor header is also compiled alone, with no PCH. The asset plugin 
 against its Qt-free target alone. Renderer scheduling, DLL ABI checks, registry validation and real
 store/pack behavior require later integration tests; the fake host does not establish them.
 
-The localization fixture uses an in-memory catalog to exercise the descriptor contract; it does
-not test a production translator, catalog loading, live widget retranslation or registry validation.
+The localization tests use the concrete resolver through the fake host. They cover host isolation,
+owned catalog copies, CSV decoding, invalid-input refusal, fallback and unchanged routing. They do
+not establish production registry transactions or live widget retranslation.
+
+## CSV authoring
+
+`ReadTranslationCsv` parses supplied UTF-8 bytes into the same catalog data plugins register;
+it performs no file I/O. The caller supplies the module context separately, so every row belongs to
+one namespace. CSV is an optional input format, not part of `ILanguageResolver` or registration.
+
+```csv
+key,en,zh_CN
+open_file,Open file,打开文件
+save_file,Save file,保存文件
+```
+
+The first column must be `key`, followed by one or more distinct locale columns. Rows must have the
+same width and unique keys. Empty cells are missing translations. UTF-8 BOM, LF/CRLF records,
+quoted commas/newlines and doubled quotes are supported; malformed UTF-8, NUL bytes, bad quoting,
+duplicate keys/locales and invalid identifiers throw. Whitespace is preserved rather than trimmed.
+Placeholders remain literal text; this importer supplies neither interpolation nor plural selection.
+Resolve the returned catalog through `LanguageResolver` after registering it; plugins may instead
+construct `TranslationCatalog` directly, as the sample does.

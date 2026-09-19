@@ -22,5 +22,6 @@ in later feature tasks.
 
 Menu registration uses stable IDs and context/key/fallback labels. The sample contributes a
 submenu beneath `editor.tools`; its action targets that submenu ID regardless of displayed language.
-The contract test resolves labels with a fake catalog. Production catalog loading and translation of
-widget contents are not implemented by this sample.
+The sample registers its own catalog and resolves its widget title using the host-provided
+`ILanguageResolver`. The fake host owns a concrete `LanguageResolver`; the tests also exercise the
+optional CSV reader. Widget titles resolve at construction, with live refresh still deferred.
