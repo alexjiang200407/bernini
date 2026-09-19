@@ -33,13 +33,13 @@ void MSMain(
     let ctx = PrepareMeshlet(payload.instance, meshletIdx);
 
     // A submesh too large to compact reaches here whole; its meshlets are culled one group at a time.
-    if (payload.compactedMeshletCount == 0u && !MeshletInCullFrustum(ctx.mesh, ctx.meshlet))
+    // One call site for the counts, whichever way that goes: DXC refuses a second.
+    let visible = payload.compactedMeshletCount != 0u || MeshletInCullFrustum(ctx.mesh, ctx.meshlet);
+    SetMeshOutputCounts(visible ? ctx.meshlet.vertexCount : 0u, visible ? ctx.meshlet.triangleCount : 0u);
+    if (!visible)
     {
-        SetMeshOutputCounts(0, 0);
         return;
     }
-
-    SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
 
     // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
     // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
