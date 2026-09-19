@@ -691,14 +691,15 @@ and why the resolve writes history rather than the backbuffer.
 `depth` are on the render grid; the history it writes is on the output one, and it rasterizes over
 the latter. So a render scale is *reconstructed* here rather than stretched at present: each output
 pixel takes the render sample whose jitter landed nearest it, weighted by how near, while the
-neighbourhood clamp and both motion discriminators stay on the render 3x3 around that sample. Where
+neighbourhood clamp, the dilation and the own-motion test stay on the render 3x3 around that sample. Where
 the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
 has always been.
 
 * **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
   point sampler for the three read at their own texel centres and a linear one for the reprojected
-  history, both owned by `RenderContext`. Depth is read for one thing: what the camera alone would
-  move each pixel by, which is subtracted from the written velocity to find a surface's own motion
+  history, both owned by `RenderContext`. Depth is read for the nearest surface in the 3x3, whose
+  vector the pixel reprojects by, and for the view depth history keeps for disocclusion. The
+  velocity buffer's own-motion half is what keeps an animating surface out of that test
   ([Temporal Antialiasing](docs/taa.md)).
 * **Out:** the current history, at the target's output size. `PostProcess` is then pointed at it
   instead of `sceneColor`.

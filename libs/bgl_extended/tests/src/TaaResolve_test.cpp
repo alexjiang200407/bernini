@@ -1057,8 +1057,8 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][s
 		"quad box delta under a drifting camera, animating against held: raw = "
 		<< driftPose << ", resolved = " << driftOutline);
 
-	// Measured 8.8e-4 reprojecting by each pixel's own vector and 1.8e-4 by the neighbour that
-	// moves most on its own.
+	// Measured 8.8e-4 reprojecting by each pixel's own vector, 2.9e-4 by the neighbour that moves
+	// most on its own, and 5.2e-5 by the nearest one.
 	REQUIRE(driftPose == 0.0f);
 	CHECK(driftOutline < 5.0e-4f);
 

@@ -46,7 +46,7 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	constexpr uint32_t c_Count = 19;
+	constexpr uint32_t c_Count = 21;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
 	bufDesc.SetElement<glm::vec2>().SetInitialCount(c_Count).SetDebugName("Compute Out Buffer");
@@ -110,13 +110,16 @@ TEST_CASE(
 		  "offscreen history",
 		  "upscaled disocclusion",
 		  "bounded reconstruction weight",
-		  "rounded camera velocity",
-		  "object motion above quantisation" }
+		  "fast camera-only motion",
+		  "fast own motion",
+		  "a nearer neighbour lends its vector",
+		  "a farther neighbour does not" }
 	};
 	for (uint32_t i = 0; i < c_Count; ++i)
 	{
 		INFO(c_Scenarios[i]);
-		const bool reset = i == 0 || i == 6 || i == 12 || i == 14 || i == 15 || i == 16 || i == 17;
+		const bool reset =
+			i == 0 || i == 6 || i == 12 || i == 14 || i == 15 || i == 16 || i == 17 || i == 19;
 		CHECK(mapped[i].x == Catch::Approx(reset ? 0.2f : 0.77f).margin(1e-5f));
 		const bool unavailable = i == 2 || i == 7 || i == 10;
 		CHECK(mapped[i].y == Catch::Approx(unavailable ? 0.0f : 0.6f).margin(1e-5f));

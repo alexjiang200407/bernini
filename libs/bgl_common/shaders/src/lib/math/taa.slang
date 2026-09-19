@@ -72,20 +72,6 @@ public float PhaseWeight(float offset, float jitterTexel, float subPixels, float
     return exp(-k * offset * offset) * subPixels / sum;
 }
 
-// The motion the camera alone gives a surface at `depth` behind `uv`, in the velocity buffer's
-// convention; a written vector less this is the surface's own motion (docs/taa.md).
-public float2 CameraMotion(float2 uv, float depth, float2 jitter, float4x4 clipToView, float4x4 viewToPrevClip)
-{
-    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0) - jitter;
-    float4 view = mul(clipToView, float4(ndc, depth, 1.0));
-    view /= view.w;
-
-    float4 prevClip = mul(viewToPrevClip, view);
-    float2 prevNdc = prevClip.xy / prevClip.w;
-
-    return (ndc - prevNdc) * float2(0.5, -0.5);
-}
-
 // Catmull-Rom over the 4x4 around `uv`, folded to five bilinear fetches by pairing the two inner
 // taps per axis and dropping the four corners, whose weights are near zero (renormalised out).
 //
@@ -125,35 +111,10 @@ float3 SampleHistoryCatmullRom<I : IResolveInputs>(I inputs, float2 uv, float2 t
     return sum / weight;
 }
 
-// How far the surface at `uv` moved on its own, in render texels: the written vector less what the
-// camera alone accounts for at the surface's depth.
-float ObjectTexels<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv, float2 motion, float2 texel)
-{
-    if (p.cameraPairValid == 0.0)
-    {
-        return 0.0;
-    }
-
-    // The far plane is the sky or nothing: neither animates, and at infinity a translation's
-    // parallax and an emptied pixel's zero would both read as motion of their own.
-    const float c_FarPlane = 0.99999;
-
-    float depth = inputs.Depth(uv);
-    if (depth >= c_FarPlane)
-    {
-        return 0.0;
-    }
-
-    float2 cameraMotion = CameraMotion(uv, depth, p.jitter, p.clipToView, p.viewToPrevClip);
-    // Binary16 velocity rounding grows with speed; it is not independent object motion.
-    float2 rounding = abs(cameraMotion) / 2048.0 + 1.0 / 33554432.0;
-    return length(max(abs(motion - cameraMotion) - rounding, 0.0) / texel);
-}
-
 /**
  * The resolve for the output pixel at `uv`: the render 3x3 bounds the history admitted, the
- * neighbour moving most on its own lends its vector, and this frame is blended in by how near its
- * jittered sample landed. docs/taa.md is the recipe and the measurement behind each choice.
+ * nearest surface in it lends its vector, and this frame is blended in by how near its jittered
+ * sample landed. docs/taa.md is the recipe and the measurement behind each choice.
  *
  * @return The new colour history and unaccumulated view depth; zero depth means unavailable.
  */
@@ -178,7 +139,8 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
     float4 current = inputs.Scene(sampleUv);
 
-    float2 motion = inputs.Motion(sampleUv);
+    float4 velocity = inputs.Motion(sampleUv);
+    float2 motion = velocity.xy;
     float depth = inputs.Depth(sampleUv);
     float2 ndc = float2(sampleUv.x * 2.0 - 1.0, 1.0 - sampleUv.y * 2.0) - p.jitter;
     float4 view = mul(p.clipToView, float4(ndc, depth, 1.0));
@@ -187,9 +149,8 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // Scene alpha marks opaque coverage; stochastic and composited depth cannot validate history.
     float historyDepth = p.cameraPairValid != 0.0 && current.a >= 1.0 && viewDepth <= 65504.0 ? viewDepth : 0.0;
 
-    // What a surface must move by on its own before a neighbour's vector is worth borrowing: a
-    // twentieth of a texel doubles no edge, and clears the reconstruction's residue on a static
-    // surface -- measured bit-identical under an orbit -- by an order of magnitude.
+    // What a surface must move by, in render texels, before it counts as moving: a twentieth of a
+    // texel doubles no edge.
     const float c_ObjectTexels = 0.05;
 
     // The 3x3 the history is admitted from: variance bounds, always. On stochastic coverage a
@@ -197,15 +158,17 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // hashed surface trails at a distance -- where the sigma box recentres on the majority.
     // The trade-off history is in docs/taa.md.
     //
-    // The same 3x3 yields the vector of whichever neighbour moves most on its own, which stands in
-    // for the surface at a silhouette (docs/taa.md).
+    // The same 3x3 yields the vector of its nearest surface, which stands in for the foreground at a
+    // silhouette, the centre winning a tie; and the most any of it moved on its own, which is what
+    // tells an animating surface from one the camera drags past (docs/taa.md).
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
     float3 m1 = centre;
     float3 m2 = centre * centre;
     float2 dilatedMotion = motion;
-    float dilatedObjectTexels = max(ObjectTexels(inputs, p, sampleUv, motion, texel), c_ObjectTexels);
+    float closestDepth = depth;
+    float ownTexels = length(velocity.zw / texel);
 
     for (int y = -1; y <= 1; ++y)
     {
@@ -224,14 +187,15 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
             m1 += tap;
             m2 += tap * tap;
 
-            float2 tapMotion = inputs.Motion(tapUv);
-
-            float tapObjectTexels = ObjectTexels(inputs, p, tapUv, tapMotion, texel);
-            if (tapObjectTexels > dilatedObjectTexels)
+            float4 tapVelocity = inputs.Motion(tapUv);
+            float tapDepth = inputs.Depth(tapUv);
+            if (tapDepth < closestDepth)
             {
-                dilatedObjectTexels = tapObjectTexels;
-                dilatedMotion = tapMotion;
+                closestDepth = tapDepth;
+                dilatedMotion = tapVelocity.xy;
             }
+
+            ownTexels = max(ownTexels, length(tapVelocity.zw / texel));
         }
     }
 
@@ -254,7 +218,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // accumulation stays there for the life of the target.
     bool occluded = false;
     if (onScreen && p.historyValid != 0.0 && p.cameraPairValid != 0.0 && historyDepth > 0.0 && depth < 0.99999 &&
-        length(motion / texel) > c_ObjectTexels && dilatedObjectTexels <= c_ObjectTexels)
+        length(motion / texel) > c_ObjectTexels && ownTexels <= c_ObjectTexels)
     {
         float previousDepth = abs(mul(p.viewToPrevView, view).z);
         // A nearer footprint must be complete: one uncertain tap preserves stochastic accumulation.

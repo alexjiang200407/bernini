@@ -12,7 +12,6 @@ struct TaaResolveData : IResolveInputs
     Texture2D.Handle depth;
 
     float4x4 clipToView;
-    float4x4 viewToPrevClip;
     float4x4 viewToPrevView;
     float cameraPairValid;
     float2 jitter;
@@ -38,14 +37,13 @@ struct TaaResolveData : IResolveInputs
     float HistoryDepth(float2 uv) { return history.SampleLevel(pointSampler, uv, 0.0).a; }
     float4 Scene(float2 uv) { return sceneColor.SampleLevel(pointSampler, uv, 0.0); }
     float3 SceneLinear(float2 uv) { return sceneColor.SampleLevel(linearSampler, uv, 0.0).rgb; }
-    float2 Motion(float2 uv) { return motionVectors.SampleLevel(pointSampler, uv, 0.0).xy; }
+    float4 Motion(float2 uv) { return motionVectors.SampleLevel(pointSampler, uv, 0.0); }
     float Depth(float2 uv) { return depth.SampleLevel(pointSampler, uv, 0.0).r; }
 
     ResolveParams Params()
     {
         ResolveParams p;
         p.clipToView = clipToView;
-        p.viewToPrevClip = viewToPrevClip;
         p.viewToPrevView = viewToPrevView;
         p.cameraPairValid = cameraPairValid;
         p.jitter = jitter;

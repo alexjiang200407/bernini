@@ -1017,15 +1017,13 @@ TEST_CASE("A pan does not flicker a converged hashed patch", "[hashedalpha][rend
 	// The floor has to be small, or the bound below hides the flicker inside legitimate motion.
 	REQUIRE(opaque < 1e-5f);
 
-	// Measured 0.0029 on Apple silicon and 0.0040 on NVIDIA Ada, about two to four times the still
-	// figure -- motion adds sub-pixel reprojection phase the still case never sees, and each
-	// vendor's filtering pays a different price for it. The gap is not a defect: at rest the two
-	// agree (0.0010 Ada, 0.0013 Apple), the opaque floor above reads zero, and a vertical pan
-	// measures the same as a horizontal one. What the bound guards against is reprojection changes
-	// that shake the accumulation: dilating the motion vector to the longest in the 3x3 measured
-	// 0.0040-0.0073 on Apple silicon, because on stochastic coverage it re-samples the noise field
-	// at a fresh fractional offset every frame. The bound sits above both healthy vendors with the
-	// spread as its margin.
+	// Measured 0.0042 on Apple silicon under closest-depth dilation. A discarded fragment borrows
+	// the plane's vector, so its history is fetched at a fresh fractional offset every frame.
+	// Dilating by own motion instead read 0.0020 (Apple) and 0.0040 (NVIDIA Ada): it reprojected a
+	// discard by the empty background's zero vector, pinning the noise to the screen. On this
+	// featureless patch pinned history is indistinguishable from the right history, so this figure
+	// favours that rule; the ramp smear tests, measured against the converged still, favour
+	// closest-depth by 4-22%. What the bound guards is the noise growing further.
 	CHECK(hashed < 4.5e-3f);
 }
 

@@ -763,10 +763,9 @@ namespace bgl
 
 		const glm::mat4 invView = glm::inverse(job.camera.GetView());
 
-		// What the resolve tells a surface's own motion from the camera's with. One camera stands
-		// for the target, so a frame of several draws disables it rather than choosing.
+		// What the resolve validates history depth with. One camera stands for the target, so a
+		// frame of several draws disables it rather than choosing.
 		m_TaaClipToView     = glm::inverse(job.camera.GetProjection());
-		m_TaaViewToPrevClip = prevCamera.unjitteredViewProj * invView;
 		m_TaaViewToPrevView = prevCamera.view * invView;
 		m_TaaJitter         = jitter;
 
@@ -1047,7 +1046,6 @@ namespace bgl
 			taaArgs.reconstructionWidth = rt.GetTaaReconstructionWidth();
 			taaArgs.depth               = rt.GetDepthSrv();
 			taaArgs.clipToView          = m_TaaClipToView;
-			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
 			taaArgs.viewToPrevView      = m_TaaViewToPrevView;
 			taaArgs.jitter              = m_TaaJitter;
 			taaArgs.cameraPairValid     = m_DrawCount == 1;
