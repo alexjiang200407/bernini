@@ -195,7 +195,7 @@ namespace
 		sd.initialGeom                 = 4;
 		sd.initialSubmeshes            = 4;
 		sd.initialMeshlets             = static_cast<uint32_t>(mesh.meshlets.size()) + 16u;
-		sd.initialVertexBufferByteSize = mesh.vertexData.size() + 4096u;
+		sd.initialVertexBufferByteSize = static_cast<uint32_t>(mesh.vertexData.size()) + 4096u;
 		sd.initialIndices              = static_cast<uint32_t>(mesh.meshletTriangles.size()) + 64u;
 		sd.initialPbrMaterials         = 4;
 		return sd;
