@@ -18,6 +18,7 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/assetlib" PREFIX "Shared 
 
 add_library(assetlib_plugin_api INTERFACE)
 target_include_directories(assetlib_plugin_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(assetlib_plugin_api INTERFACE core)
 
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/plugin_api_selfcheck.cpp
     CONTENT "#include <assetlib/IAssetPlugin.h>\n#include <assetlib/AssetKindRegistry.h>\n")
@@ -25,11 +26,20 @@ add_library(assetlib_plugin_api_selfcheck STATIC ${CMAKE_CURRENT_BINARY_DIR}/plu
 target_link_libraries(assetlib_plugin_api_selfcheck PRIVATE assetlib_plugin_api)
 set_target_properties(assetlib_plugin_api_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 
-add_library(assetlib STATIC
+set(ASSETLIB_LIBRARY_TYPE STATIC)
+if (BERNINI_EDITOR_SDK)
+	set(ASSETLIB_LIBRARY_TYPE SHARED)
+endif()
+
+add_library(assetlib ${ASSETLIB_LIBRARY_TYPE}
 	${ASSETLIB_SOURCES}
 	${ASSETLIB_SHARED_HEADERS}
 	${ASSETLIB_INTERNAL_HEADERS}
 )
+
+if (BERNINI_EDITOR_SDK)
+	set_target_properties(assetlib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 target_include_directories(assetlib
 	PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -37,8 +47,9 @@ target_include_directories(assetlib
 )
 
 target_precompile_headers(assetlib
-	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
-	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+	PRIVATE
+		${BERNINI_ROOT}/PCH/pch.h
+		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
 find_package(nlohmann_json CONFIG REQUIRED)     # the project file, and tinygltf
@@ -100,6 +111,15 @@ set_target_properties(assetlib_cli PROPERTIES
 get_target_property(CORE_PROCESS_TYPE core_process TYPE)
 if (CORE_PROCESS_TYPE STREQUAL "SHARED_LIBRARY")
 	install(TARGETS core_process
+		COMPONENT tools
+		RUNTIME DESTINATION .
+		LIBRARY DESTINATION .
+	)
+endif()
+
+get_target_property(ASSETLIB_TYPE assetlib TYPE)
+if (ASSETLIB_TYPE STREQUAL "SHARED_LIBRARY")
+	install(TARGETS assetlib
 		COMPONENT tools
 		RUNTIME DESTINATION .
 		LIBRARY DESTINATION .

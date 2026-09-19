@@ -98,10 +98,9 @@ enable_strict_compiler(core)
 enable_coverage(core)
 
 target_precompile_headers(core
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include/core/pch.h
-    PUBLIC
-        ${BERNINI_ROOT}/PCH/pch.h
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/include/core/pch.h
+		${BERNINI_ROOT}/PCH/pch.h
 )
 
 target_include_directories(core

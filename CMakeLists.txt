@@ -68,6 +68,15 @@ set(IS_DEBUG ${_bernini_is_debug} CACHE BOOL "Compile shaders with debug info an
 # build that asked for no preset carries none of it. See docs/profiling.md.
 option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" OFF)
 
+# A top-level editor build owns one copy of every implementation a native plugin calls. Games
+# embedded with add_subdirectory and renderer-free tools remain one-binary static builds.
+set(_bernini_editor_sdk_default OFF)
+if (PROJECT_IS_TOP_LEVEL AND NOT RENDERER_BACKEND STREQUAL "NONE")
+    set(_bernini_editor_sdk_default ON)
+endif()
+option(BERNINI_EDITOR_SDK "Build the shared libraries and build-tree package for editor plugins"
+    ${_bernini_editor_sdk_default})
+
 # Before any add_subdirectory: a compiler launcher is read when a target is created.
 enable_compiler_cache()
 
