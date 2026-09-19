@@ -20,7 +20,7 @@ add_library(assetlib_plugin_api INTERFACE)
 target_include_directories(assetlib_plugin_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/plugin_api_selfcheck.cpp
-    CONTENT "#include <assetlib/IAssetPlugin.h>\n")
+    CONTENT "#include <assetlib/IAssetPlugin.h>\n#include <assetlib/AssetKindRegistry.h>\n")
 add_library(assetlib_plugin_api_selfcheck STATIC ${CMAKE_CURRENT_BINARY_DIR}/plugin_api_selfcheck.cpp)
 target_link_libraries(assetlib_plugin_api_selfcheck PRIVATE assetlib_plugin_api)
 set_target_properties(assetlib_plugin_api_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
