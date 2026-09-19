@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <ios>
 #include <memory>
 #include <span>
 #include <string>
@@ -59,6 +60,17 @@ namespace
 		{
 			return { { "Target.bexample", "target" } };
 		}
+
+		std::vector<std::byte>
+		RewriteReferences(
+			std::span<const std::byte>,
+			std::span<const assetlib::DocumentReference> replacements) const override
+		{
+			const std::string value =
+				replacements.empty() ? std::string() : replacements.front().target;
+			return { reinterpret_cast<const std::byte*>(value.data()),
+				     reinterpret_cast<const std::byte*>(value.data() + value.size()) };
+		}
 	};
 }
 
@@ -73,6 +85,34 @@ TEST_CASE("Asset kind registry owns valid custom kinds", "[plugins][assetkind]")
 	std::filesystem::create_directories(root);
 	assetlib::AssetStore store(root, &registry);
 	REQUIRE(store.GetKindRegistry() == &registry);
+	std::filesystem::remove_all(root);
+}
+
+TEST_CASE(
+	"Asset kind registry rewrites custom references from execution bytes",
+	"[plugins][assetkind]")
+{
+	const auto root = std::filesystem::temp_directory_path() / "bernini_asset_kind_rename";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root);
+	std::ofstream(root / "Target.bexample") << "target";
+	std::ofstream(root / "Holder.bref") << "Target.bexample";
+
+	assetlib::AssetKindRegistry registry;
+	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+	registry.Add(std::make_unique<ReferencingKind>());
+	assetlib::AssetStore store(root, &registry);
+	auto                 plan = assetlib::planRename(
+		assetlib::AssetRefGraph::Scan(store),
+		"Target.bexample",
+		"Renamed.bexample");
+	std::ofstream(root / "Holder.bref", std::ios::trunc) << "Target.bexample";
+	REQUIRE(store.RenameAsset(plan).status == assetlib::RenameStatus::kRenamed);
+	std::ifstream holder(root / "Holder.bref");
+	std::string   value;
+	holder >> value;
+	REQUIRE(value == "Renamed.bexample");
+
 	std::filesystem::remove_all(root);
 }
 
