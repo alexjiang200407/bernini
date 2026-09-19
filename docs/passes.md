@@ -252,8 +252,13 @@ coverage. **A single frame of this is noise by design**; it is only correct once
 
 The forward pass writes a screen-space velocity buffer alongside colour, as MRT slot 1: for each
 pixel, the UV displacement from where its surface sat last frame to where it sits now, so a consumer
-samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
-buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
+samples history at `uv - motion`. Beside it, in BA, is the part of that displacement the surface
+made on its own: the velocity less the one the camera alone gives this frame's world position, from
+a third clip position (`cameraPrevClip`, the current world position under `prevViewProj`). The two
+clip positions are projected by identical math, so anything nobody moved reports an own motion of
+exactly zero under any camera, and the sky writes zero outright. The format is `RGBA16_FLOAT`
+(`c_MotionVectorFormat`, in `constants/constants.h`). The texture is owned by the render target
+beside the depth buffer and cleared to zero each frame, so a pixel nothing drew reads as static.
 
 A placement carries the transform the previous frame drew it with as well as its current one
 (`ISceneView::SetInstanceTransform` writes the second and rolls the first), so the mesh shader

@@ -191,5 +191,8 @@ public void ProjectVertex(inout ForwardVSOut vertexOut, float4 worldPos, float4 
     vertexOut.prevClip = mul(viewData.prevViewProj, prevWorldPos);
     vertexOut.prevClip.xy -= viewData.prevJitter * vertexOut.prevClip.w;
 
+    vertexOut.cameraPrevClip = mul(viewData.prevViewProj, worldPos);
+    vertexOut.cameraPrevClip.xy -= viewData.prevJitter * vertexOut.cameraPrevClip.w;
+
     vertexOut.worldPos = worldPos.xyz;
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "types/Format.h"
 
 namespace bgl
 {
@@ -18,8 +19,13 @@ namespace bgl
 	constexpr std::string_view c_DepthName         = "depth"sv;
 	constexpr std::string_view c_StaticDepthName   = "staticDepth"sv;
 
-	constexpr std::string_view c_HistoryName     = "taaHistory"sv;
-	constexpr std::string_view c_OutlineMaskName = "outlineMask"sv;
+	constexpr std::string_view c_HistoryName = "taaHistory"sv;
+
+	// The velocity buffer: RG is where the surface was last frame as a UV displacement, BA the part
+	// of it the surface moved on its own -- the velocity less what the camera alone gives the same
+	// world position.
+	constexpr Format           c_MotionVectorFormat = Format::RGBA16_FLOAT;
+	constexpr std::string_view c_OutlineMaskName    = "outlineMask"sv;
 
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
 	// sizes, ...) now live in the IDL module bgl_common/shaders/src/idl/Constants.slang and are

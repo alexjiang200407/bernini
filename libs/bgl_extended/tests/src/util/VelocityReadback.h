@@ -19,14 +19,15 @@
 namespace bgl::test
 {
 	/**
-	 * The target's velocity buffer as one float2 per pixel, row-major and tightly packed.
+	 * The target's velocity buffer as one float4 per pixel, row-major and tightly packed: the
+	 * velocity in xy and the surface's own motion in zw.
 	 *
 	 * Drains the renderer first -- the copy rides its own queue, which nothing orders against --
 	 * and returns the texture to the layout the frame left it in, which is what the next frame's
 	 * import resumes from.
 	 */
-	inline std::vector<glm::vec2>
-	ReadMotionVectors(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
+	inline std::vector<glm::vec4>
+	ReadVelocityTexels(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
 	{
 		auto* gfxBase    = gfx->As<GraphicsBase>();
 		auto* targetBase = target->As<RenderTargetBase>();
@@ -92,7 +93,7 @@ namespace bgl::test
 
 		const auto* base = static_cast<const uint8_t*>(resourceManager->MapReadback(readback));
 
-		auto motion = std::vector<glm::vec2>(static_cast<size_t>(width) * height);
+		auto texels = std::vector<glm::vec4>(static_cast<size_t>(width) * height);
 		for (uint32_t y = 0; y < height; ++y)
 		{
 			const auto* row =
@@ -100,14 +101,41 @@ namespace bgl::test
 
 			for (uint32_t x = 0; x < width; ++x)
 			{
-				motion[static_cast<size_t>(y) * width + x] =
-					glm::vec2(HalfToFloat(row[x * 2]), HalfToFloat(row[x * 2 + 1]));
+				texels[static_cast<size_t>(y) * width + x] = glm::vec4(
+					HalfToFloat(row[x * 4]),
+					HalfToFloat(row[x * 4 + 1]),
+					HalfToFloat(row[x * 4 + 2]),
+					HalfToFloat(row[x * 4 + 3]));
 			}
 		}
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
 
+		return texels;
+	}
+
+	/** The velocity half of ReadVelocityTexels: where each pixel's surface sat last frame. */
+	inline std::vector<glm::vec2>
+	ReadMotionVectors(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
+	{
+		auto motion = std::vector<glm::vec2>();
+		for (const glm::vec4& texel : ReadVelocityTexels(gfx, target, width, height))
+		{
+			motion.emplace_back(texel.x, texel.y);
+		}
+		return motion;
+	}
+
+	/** The other half: the part of each pixel's velocity its surface moved by on its own. */
+	inline std::vector<glm::vec2>
+	ReadOwnMotion(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
+	{
+		auto motion = std::vector<glm::vec2>();
+		for (const glm::vec4& texel : ReadVelocityTexels(gfx, target, width, height))
+		{
+			motion.emplace_back(texel.z, texel.w);
+		}
 		return motion;
 	}
 }

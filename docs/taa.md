@@ -291,7 +291,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 ```mermaid
 flowchart TD
     FWD["Forward + Skybox<br/>(jittered projection)"] --> SC["sceneColor<br/>RGB radiance, A depth validity"]
-    FWD --> MV["motionVectors<br/>RG16F, de-jittered"]
+    FWD --> MV["motionVectors<br/>RGBA16F: velocity, own motion; de-jittered"]
     FWD --> D["depth"]
 
     SC --> RES["TaaResolve"]
