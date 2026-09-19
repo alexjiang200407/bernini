@@ -112,7 +112,7 @@ new panels against a new host; do not silently retarget stored references to old
   Locale tokens begin with an ASCII letter and contain only ASCII letters, digits, `_` or `-`;
   matching is case-sensitive, without normalization or regional fallback.
 - **Resolver ownership:** link the static `editor_localization` target in the host. It depends only
-  on Qt Core; `editor_api` does not link its implementation into every client. Plugins borrow the
+  on core and Qt Core; `editor_api` does not link its implementation into every client. Plugins borrow the
   const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
   through that interface. All calls, including catalog registration and locale changes, run on the
   GUI thread. The resolver outlives its borrowers; independent hosts may choose different locales.
@@ -124,6 +124,9 @@ new panels against a new host; do not silently retarget stored references to old
   strings. A production registry must roll back catalogs with every other contribution if a module
   fails; the recording registry does not implement that transaction. Collect and validate a module
   before exposing its contributions.
+  Catalog and entry lookup use `core::str::unordered_str_map`; entries are addressed by `locale/key`.
+  The separator cannot occur in either component. Contexts remain separate registration units,
+  allowing an entire catalog to be validated before it becomes visible.
 - **Language changes:** changing the resolver locale affects the next lookup, not already displayed
   strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
   on the GUI thread. The sample resolves its widget title when constructed; live widget refresh,
@@ -150,8 +153,8 @@ new panels against a new host; do not silently retarget stored references to old
   unknown fields and never writes to disk. The host alone commits or rolls back the resulting bytes.
   Input spans borrow the original bytes without copying them. A returned vector owns the encoded
   result; keeping the original unchanged permits rollback if another document's rewrite fails.
-- **Packing/migration:** registered kinds are authored documents, with an explicit include/exclude
-  policy. `Migrate` validates and returns current-schema bytes even for a kind with no older schema.
+- **Packing/migration:** registered kinds are authored documents; `includeInPack` defaults to true.
+  `Migrate` validates and returns current-schema bytes even for a kind with no older schema.
   Custom derived cache formats are outside this initial contract. Existing typed codecs and store
   operations remain the only project I/O seam; their registration integration is still pending.
 

@@ -9,17 +9,11 @@
 
 namespace assetlib
 {
-	enum class DocumentPacking
-	{
-		kInclude,
-		kExclude,
-	};
-
 	struct AssetKindDesc
 	{
-		std::string     id;
-		std::string     extension;
-		DocumentPacking packing = DocumentPacking::kInclude;
+		std::string id;
+		std::string extension;
+		bool        includeInPack = true;
 	};
 
 	struct DocumentReference

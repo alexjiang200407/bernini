@@ -1,12 +1,11 @@
 #pragma once
 
 #include <QString>
+#include <core/str/str.h>
 #include <editor_api/ILanguageResolver.h>
 #include <editor_api/LocalizedText.h>
 #include <editor_api/TranslationCatalog.h>
-#include <map>
 #include <string>
-#include <utility>
 
 namespace editor
 {
@@ -26,8 +25,8 @@ namespace editor
 		Resolve(const LocalizedText& text) const override;
 
 	private:
-		using Entries = std::map<std::pair<std::string, std::string>, QString>;
-		std::map<std::string, Entries> m_Catalogs;
-		std::string                    m_Locale = "en";
+		using Entries = core::str::unordered_str_map<QString>;
+		core::str::unordered_str_map<Entries> m_Catalogs;
+		std::string                           m_Locale = "en";
 	};
 }

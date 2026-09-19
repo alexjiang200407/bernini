@@ -7,6 +7,27 @@
 #include <editor_api/translation_csv.h>
 #include <string>
 
+TEST_CASE(
+	"Flattened translation keys preserve locale and context boundaries",
+	"[plugin][localization]")
+{
+	editor::LanguageResolver resolver;
+	resolver.RegisterCatalog(
+		{ "sample.editor",
+	      { { "open_file", "en", "Open file" }, { "file", "en_open", "Other locale" } } });
+	resolver.RegisterCatalog({ "other.editor", { { "open_file", "en", "Other module" } } });
+	const editor::LocalizedText open{ "sample.editor", "open_file", "Missing" };
+	const editor::LocalizedText file{ "sample.editor", "file", "Missing" };
+	const editor::LocalizedText other{ "other.editor", "open_file", "Missing" };
+	REQUIRE(open.Resolve(resolver) == "Open file");
+	REQUIRE(file.Resolve(resolver) == "Missing");
+	REQUIRE(other.Resolve(resolver) == "Other module");
+	resolver.SetLocale("en_open");
+	REQUIRE(open.Resolve(resolver) == "Missing");
+	REQUIRE(file.Resolve(resolver) == "Other locale");
+	REQUIRE(other.Resolve(resolver) == "Missing");
+}
+
 TEST_CASE("Hosts own independent languages and copied module catalogs", "[plugin][localization]")
 {
 	editor::LanguageResolver    editorHost;

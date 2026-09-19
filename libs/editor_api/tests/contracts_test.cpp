@@ -218,7 +218,7 @@ TEST_CASE(
 	const auto& kind = *registry.kinds.front();
 	REQUIRE(kind.GetDesc().id == "sample.document");
 	REQUIRE(kind.GetDesc().extension == ".bexample");
-	REQUIRE(kind.GetDesc().packing == assetlib::DocumentPacking::kInclude);
+	REQUIRE(kind.GetDesc().includeInPack);
 	const auto document = Bytes(
 		R"({"references":["Authored/a.bexample","Authored/a.bexample"],"future":{"keep":42}})");
 	const auto references = kind.ReadReferences(document);

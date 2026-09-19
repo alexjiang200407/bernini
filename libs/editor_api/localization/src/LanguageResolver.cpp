@@ -7,7 +7,20 @@
 #include <editor_api/TranslationCatalog.h>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
+
+namespace
+{
+	std::string
+	TranslationKey(std::string_view locale, std::string_view key)
+	{
+		std::string result;
+		result.reserve(locale.size() + 1 + key.size());
+		result.append(locale).append("/").append(key);
+		return result;
+	}
+}
 
 namespace editor
 {
@@ -25,7 +38,7 @@ namespace editor
 			detail::ValidateLocale(entry.locale);
 			if (entry.text.isEmpty())
 				throw std::runtime_error("Empty translation; omit missing entries");
-			if (!entries.emplace(std::make_pair(entry.key, entry.locale), entry.text).second)
+			if (!entries.emplace(TranslationKey(entry.locale, entry.key), entry.text).second)
 				throw std::runtime_error("Duplicate translation key and locale");
 		}
 		m_Catalogs.emplace(catalog.context, std::move(entries));
@@ -44,7 +57,7 @@ namespace editor
 		const auto catalog = m_Catalogs.find(text.context);
 		if (catalog == m_Catalogs.end())
 			return text.fallback;
-		const auto entry = catalog->second.find({ text.key, m_Locale });
+		const auto entry = catalog->second.find(TranslationKey(m_Locale, text.key));
 		return entry == catalog->second.end() ? text.fallback : entry->second;
 	}
 }

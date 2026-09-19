@@ -95,9 +95,7 @@ namespace
 		}
 
 	private:
-		assetlib::AssetKindDesc m_Desc{ "sample.document",
-			                            ".bexample",
-			                            assetlib::DocumentPacking::kInclude };
+		assetlib::AssetKindDesc m_Desc{ "sample.document", ".bexample", true };
 	};
 
 	class SampleAssetPlugin final : public assetlib::IAssetPlugin
