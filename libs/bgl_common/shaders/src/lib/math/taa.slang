@@ -112,7 +112,7 @@ float3 SampleHistoryCatmullRom<I : IResolveInputs>(I inputs, float2 uv, float2 t
 }
 
 /**
- * The resolve for the output pixel at `uv`: the render cross bounds the history admitted, the
+ * The resolve for the output pixel at `uv`: the render 3x3 bounds the history admitted, the
  * nearest surface in it lends its vector, and this frame is blended in by how near its jittered
  * sample landed. docs/taa.md is the recipe and the measurement behind each choice.
  *
@@ -153,14 +153,15 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // texel doubles no edge.
     const float c_ObjectTexels = 0.05;
 
-    // The cross -- the centre and its four edge neighbours -- is what the history is admitted from:
-    // variance bounds, always. On stochastic coverage a min/max box spans both populations whole and
-    // admits every dragged mixture -- the smear a hashed surface trails at a distance -- where the
-    // sigma box recentres on the majority. The trade-off history is in docs/taa.md.
+    // The 3x3 the history is admitted from: variance bounds, always. On stochastic coverage a
+    // min/max box spans both populations whole and admits every dragged mixture -- the smear a
+    // hashed surface trails at a distance -- where the sigma box recentres on the majority.
+    // The trade-off history is in docs/taa.md.
     //
-    // The same cross yields the vector of the nearest surface, which stands in for the foreground at
-    // a silhouette, the centre winning a tie; and the most any of it moved on its own, which is what
-    // tells an animating surface from one the camera drags past (docs/taa.md).
+    // Its cross -- the centre and its four edge neighbours -- yields the vector of the nearest
+    // surface, which stands in for the foreground at a silhouette, the centre winning a tie; and the
+    // most any of it moved on its own, which is what tells an animating surface from one the camera
+    // drags past (docs/taa.md).
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
@@ -177,8 +178,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     {
         for (int x = -1; x <= 1; ++x)
         {
-            // The cross: the centre is already counted, and the diagonals are not read.
-            if ((x == 0) == (y == 0))
+            if (x == 0 && y == 0)
             {
                 continue;
             }
@@ -190,6 +190,11 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
             boxMax = max(boxMax, tap);
             m1 += tap;
             m2 += tap * tap;
+
+            if (x != 0 && y != 0)
+            {
+                continue;
+            }
 
             float4 tapVelocity = inputs.Motion(tapUv);
             float tapDepth = inputs.Depth(tapUv);
@@ -206,9 +211,9 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
     float2 historyUv = uv - dilatedMotion;
 
-    // The sigma box is kept inside the min/max box: five bounded samples can put mu +/- sigma
+    // The sigma box is kept inside the min/max box: nine bounded samples can put mu +/- sigma
     // outside it, and outside it the clamp would admit colours the neighbourhood never produced.
-    const float c_InvTaps = 1.0 / 5.0;
+    const float c_InvTaps = 1.0 / 9.0;
     float3 mu = m1 * c_InvTaps;
     float3 sigma = sqrt(max(m2 * c_InvTaps - mu * mu, 0.0));
     boxMin = clamp(mu - sigma, boxMin, boxMax);

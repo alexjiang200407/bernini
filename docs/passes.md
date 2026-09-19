@@ -679,7 +679,7 @@ contours the pose it is drawn in.
 ### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl_extended/src/passes/TaaResolvePass.cpp)
 
 Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
-through the velocity buffer, clamps it to the neighbourhood cross in YCoCg, and blends. A single
+through the velocity buffer, clamps it to the 3x3 neighbourhood in YCoCg, and blends. A single
 full-screen triangle from the `programs.screen.TaaResolve` module, depth test off. Added in `EndFrame`, before
 `PostProcess`, and **only when the target has `taaEnabled`** — a target without it allocates no
 history and the pass is never attached.
@@ -691,7 +691,7 @@ and why the resolve writes history rather than the backbuffer.
 `depth` are on the render grid; the history it writes is on the output one, and it rasterizes over
 the latter. So a render scale is *reconstructed* here rather than stretched at present: each output
 pixel takes the render sample whose jitter landed nearest it, weighted by how near, while the
-neighbourhood clamp and the dilation stay on the render grid, on the cross around that sample. Where
+neighbourhood clamp's 3x3 and the dilation's cross stay on the render grid around that sample. Where
 the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
 has always been.
 
