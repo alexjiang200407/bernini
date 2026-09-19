@@ -168,7 +168,10 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     float3 m2 = centre * centre;
     float2 dilatedMotion = motion;
     float closestDepth = depth;
-    float ownTexels = length(velocity.zw / texel);
+    // Squared, against a squared threshold: a comparison needs no square root.
+    float2 texelsPerUv = p.renderSize;
+    float2 ownMotion = velocity.zw * texelsPerUv;
+    float ownTexelsSq = dot(ownMotion, ownMotion);
 
     for (int y = -1; y <= 1; ++y)
     {
@@ -195,7 +198,8 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
                 dilatedMotion = tapVelocity.xy;
             }
 
-            ownTexels = max(ownTexels, length(tapVelocity.zw / texel));
+            float2 tapOwnMotion = tapVelocity.zw * texelsPerUv;
+            ownTexelsSq = max(ownTexelsSq, dot(tapOwnMotion, tapOwnMotion));
         }
     }
 
@@ -203,8 +207,9 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
     // The sigma box is kept inside the min/max box: nine bounded samples can put mu +/- sigma
     // outside it, and outside it the clamp would admit colours the neighbourhood never produced.
-    float3 mu = m1 / 9.0;
-    float3 sigma = sqrt(max(m2 / 9.0 - mu * mu, 0.0));
+    const float c_InvTaps = 1.0 / 9.0;
+    float3 mu = m1 * c_InvTaps;
+    float3 sigma = sqrt(max(m2 * c_InvTaps - mu * mu, 0.0));
     boxMin = clamp(mu - sigma, boxMin, boxMax);
     boxMax = clamp(mu + sigma, boxMin, boxMax);
 
@@ -218,7 +223,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // accumulation stays there for the life of the target.
     bool occluded = false;
     if (onScreen && p.historyValid != 0.0 && p.cameraPairValid != 0.0 && historyDepth > 0.0 && depth < 0.99999 &&
-        length(motion / texel) > c_ObjectTexels && ownTexels <= c_ObjectTexels)
+        dot(motion * texelsPerUv, motion * texelsPerUv) > c_ObjectTexels * c_ObjectTexels && ownTexelsSq <= c_ObjectTexels * c_ObjectTexels)
     {
         float previousDepth = abs(mul(p.viewToPrevView, view).z);
         // A nearer footprint must be complete: one uncertain tap preserves stochastic accumulation.
