@@ -42,11 +42,9 @@ namespace bgl
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
 		};
 
-		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
-			"drawBucketIndex"sv,
-			"baseTable"sv,
-			"compactedInstances"sv,
-			"cullBackfaces"sv,
+		constexpr std::array<std::string_view, 5> c_ExpansionDataFields = {
+			"drawBucketIndex"sv, "baseTable"sv, "compactedInstances"sv,
+			"cullBackfaces"sv,   "cullView"sv,
 		};
 
 		// What a discard-only coverage stage actually reads of MaterialData: the arena's samplers
@@ -215,6 +213,8 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		DeclareMeshletCullBuffers(desc);
+
 		// The material arena, for doubleSided and the coverage stages' records and textures.
 		// Declared so its barriers are placed; the typed view itself is bound off the draw (see
 		// ForwardPass).
@@ -253,6 +253,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
+			BindMeshletCullBuffers(*foundExpansion, resources);
 			(*foundExpansion)["baseTable"] = idl::BaseTable::kDrawBucketed;
 		}
 

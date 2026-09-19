@@ -106,6 +106,36 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
+	/**
+	 * Declares what the static tier's amplification stage culls meshlets with: the frustum the draw's
+	 * instances were culled against, and the cull counters.
+	 * @pre recorded under the cull scope whose compaction the pass draws, where `cull.view` resolves.
+	 */
+	inline void
+	DeclareMeshletCullBuffers(PassDesc& desc)
+	{
+		desc.AddBufferArg(
+			c_CullViewName,
+			BarrierSyncFlag::kVertexShader,
+			BarrierAccessFlag::kShaderResource);
+		desc.AddBufferArg(
+			c_CullStatsName,
+			BarrierSyncFlag::kVertexShader,
+			BarrierAccessFlag::kUnorderedAccess);
+	}
+
+	/**
+	 * Binds DeclareMeshletCullBuffers' buffers into an `expansionData` that reads them. Only the
+	 * static tier's programs do, and the counters only under BERNINI_GPU_DEBUG, so either may be
+	 * absent from a kernel's reflection.
+	 */
+	inline void
+	BindMeshletCullBuffers(Uniforms& expansion, const PassContext& resources)
+	{
+		expansion["cullView"].SetIfValid(resources.GetBuffer(c_CullViewName));
+		expansion["stats"].SetIfValid(resources.GetBuffer(c_CullStatsName));
+	}
+
 	inline void
 	BindSceneBuffers(
 		Uniforms&                    uniforms,

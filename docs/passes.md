@@ -173,6 +173,35 @@ sort: the fix is `doubleSided = false` where a translucent solid has no inside w
 
 ---
 
+## Meshlet culling
+
+Below the instance, the static tier culls meshlets. `CullInstances` keeps an instance whose sphere
+meets the frustum; `programs.forward.StaticMesh`'s amplification stage then tests each of that
+instance's meshlets against the **same** `cull.view` planes -- built from the jittered
+view-projection the raster draws with -- using the meshlet's cooked sphere placed by the same
+`MeshInstance::TransformSphere`. A sphere test only rejects geometry wholly outside a plane, so a
+meshlet with any pixel in view survives, jitter included, and so does every receiver a blob-shadow
+decal reads out of Static Depth, which draws from the same camera. Both Forward's static buckets and
+Static Depth dispatch through it; the skinned tier and `AnyMesh` (the transparent list, the outline
+mask) cull nothing below the instance, since a posed meshlet leaves its bind-pose sphere.
+
+The survivors are **compacted** in the amplification group (`CullMeshlets` in
+[lib/forward/mesh_stage.slang](libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang)): one
+lane per meshlet marks a bit, one lane writes a running count per mask word, and the group dispatches
+only the survivors, each mesh group finding its meshlet by a binary search over the counts. They are
+dispatched in meshlet order, the order an unculled draw has.
+
+**The payload is kept small on purpose.** It is copied out whole for every instance drawn -- on Metal,
+Slang lowers `DispatchMesh` to a copy from groupshared memory by every lane -- so its size is paid by
+every static instance, visible or not: a 16 KiB list of indices made animal-run six times slower, an
+8 KiB one cost 3 ms a pass, 2 KiB nothing. At a bit and a half per meshlet it covers
+`cMaxCompactedMeshlets` (8192). A submesh with more dispatches every meshlet, and each mesh group
+runs the same test on its own meshlet and emits nothing when it fails: the vertex work and the
+raster setup are saved, the mesh-group launch is not.
+
+In `BERNINI_GPU_DEBUG` builds the compacting path adds to `cull.stats`' `meshletsTested` and
+`meshletsCulled`; the mesh stage's own test counts nothing.
+
 ## Blended surfaces
 
 `LayerType::kBlend` resolves to a transparent draw bucket — one per (tier, material kind) pair that
@@ -344,7 +373,9 @@ dense from 0 in first-use order; nothing in this chain derives or assumes one. O
 under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
 `CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
-in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
+in `BERNINI_GPU_DEBUG` builds -- here per instance, and per meshlet by the static tier's
+amplification stage in Static Depth and Forward ([Meshlet culling](#meshlet-culling)) -- and read by
+nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
@@ -523,8 +554,9 @@ beneath its caster — and statics are therefore drawn twice per frame, a cost t
 repays when this is promoted into the shared depth prepass the roadmap already assumes.
 
 * **In:** `compactDispatchArgs` as indirect args; the `c_ForwardDataBuffers` scene buffers, the
-  two `c_ExpansionBuffers`, and the material arena (`c_MaterialBuffers`) for `doubleSided` and the
-  coverage stages.
+  two `c_ExpansionBuffers`, `cull.view` and `cull.stats` for [meshlet culling](#meshlet-culling)
+  (`DeclareMeshletCullBuffers`), and the material arena (`c_MaterialBuffers`) for `doubleSided` and
+  the coverage stages.
 * **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
   `BlobShadowPhase`).
 * **Skipped** when the view's instance count is 0.
@@ -644,8 +676,8 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`,
-  `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
+  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`, `cull.view` and
+  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
   one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
