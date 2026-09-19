@@ -487,8 +487,8 @@ namespace assetlib
 
 			reportStep(
 				sink,
-				*type == AssetType::kMaterial ? ProgressPhase::kBakingMaterials :
-												ProgressPhase::kResaving,
+				type && *type == AssetType::kMaterial ? ProgressPhase::kBakingMaterials :
+														ProgressPhase::kResaving,
 				key,
 				done.fetch_add(1),
 				resavable);
