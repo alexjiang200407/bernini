@@ -1,10 +1,12 @@
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
+#include <assetlib/asset_refs.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <span>
 #include <string>
@@ -13,7 +15,7 @@
 
 namespace
 {
-	class TestKind final : public assetlib::IAssetKind
+	class TestKind : public assetlib::IAssetKind
 	{
 	public:
 		explicit TestKind(std::string id, std::string extension) :
@@ -46,6 +48,18 @@ namespace
 	private:
 		assetlib::AssetKindDesc m_Desc;
 	};
+
+	class ReferencingKind final : public TestKind
+	{
+	public:
+		ReferencingKind() : TestKind("sample.reference", ".bref") {}
+
+		std::vector<assetlib::DocumentReference>
+		ReadReferences(std::span<const std::byte>) const override
+		{
+			return { { "Target.bexample", "target" } };
+		}
+	};
 }
 
 TEST_CASE("Asset kind registry owns valid custom kinds", "[plugins][assetkind]")
@@ -59,6 +73,28 @@ TEST_CASE("Asset kind registry owns valid custom kinds", "[plugins][assetkind]")
 	std::filesystem::create_directories(root);
 	assetlib::AssetStore store(root, &registry);
 	REQUIRE(store.GetKindRegistry() == &registry);
+	std::filesystem::remove_all(root);
+}
+
+TEST_CASE(
+	"Asset kind registry feeds custom references into the asset graph",
+	"[plugins][assetkind]")
+{
+	const auto root = std::filesystem::temp_directory_path() / "bernini_asset_kind_graph";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root);
+	std::ofstream(root / "Target.bexample") << "target";
+	std::ofstream(root / "Holder.bref") << "holder";
+
+	assetlib::AssetKindRegistry registry;
+	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+	registry.Add(std::make_unique<ReferencingKind>());
+	assetlib::AssetStore          store(root, &registry);
+	const assetlib::AssetRefGraph graph = assetlib::AssetRefGraph::Scan(store);
+	REQUIRE(graph.ReferrersOf("Target.bexample").size() == 1);
+	REQUIRE(graph.ReferrersOf("Target.bexample").front().kind == assetlib::RefKind::kCustom);
+	REQUIRE_FALSE(assetlib::planDeletion(graph, "Target.bexample").Allowed());
+
 	std::filesystem::remove_all(root);
 }
 

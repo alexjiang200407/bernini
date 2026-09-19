@@ -1,7 +1,9 @@
 #pragma once
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <cassert>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -106,6 +108,12 @@ namespace assetlib
 			return *m_Store;
 		}
 
+		[[nodiscard]] AssetKindRegistry&
+		GetKindRegistry() noexcept
+		{
+			return *m_Registry;
+		}
+
 		/** Re-points the store at the data directory. */
 		void
 		ReloadStore();
@@ -119,7 +127,8 @@ namespace assetlib
 		// Held rather than built per call: GetStore hands out a reference and is noexcept, and the
 		// constructor throws on a data root that has gone. optional because a Project is
 		// default-constructed before Open fills it in.
-		std::optional<AssetStore> m_Store;
+		std::optional<AssetStore>          m_Store;
+		std::shared_ptr<AssetKindRegistry> m_Registry = std::make_shared<AssetKindRegistry>();
 
 		std::string           m_Name;
 		std::filesystem::path m_ProjectFile;

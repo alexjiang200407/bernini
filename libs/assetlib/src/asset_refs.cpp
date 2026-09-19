@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/IAssetPlugin.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
@@ -291,6 +292,30 @@ namespace assetlib
 		return std::ranges::binary_search(m_Files, normalizeRef(path));
 	}
 
+	bool
+	AssetRefGraph::IsKnownAsset(std::string_view path) const
+	{
+		const std::string extension = extensionOf(normalizeRef(path));
+		return assetTypeFromExtension(path).has_value() ||
+		       (m_Registry != nullptr && m_Registry->FindByExtension(extension) != nullptr);
+	}
+
+	std::span<const DocumentReference>
+	AssetRefGraph::CustomReferencesOf(std::string_view referrer) const
+	{
+		const auto found = m_CustomReferences.find(normalizeRef(referrer));
+		return found == m_CustomReferences.end() ? std::span<const DocumentReference>() :
+		                                           found->second;
+	}
+
+	const IAssetKind*
+	AssetRefGraph::CustomKindOf(std::string_view referrer) const
+	{
+		if (m_Registry == nullptr)
+			return nullptr;
+		return m_Registry->FindByExtension(extensionOf(normalizeRef(referrer)));
+	}
+
 	std::vector<std::string>
 	AssetRefGraph::GetFilesUnder(std::string_view directory) const
 	{
@@ -315,6 +340,7 @@ namespace assetlib
 
 		auto graph       = AssetRefGraph();
 		graph.m_DataRoot = store.GetDataRoot();
+		graph.m_Registry = store.GetKindRegistry();
 		graph.m_Files    = files.Enumerate();
 		std::ranges::sort(graph.m_Files);
 
@@ -372,6 +398,22 @@ namespace assetlib
 			{
 				collectBlendEdges(edges, files, referrer);
 				++graph.blendSetsScanned;
+			}
+			else if (graph.m_Registry != nullptr)
+			{
+				const IAssetKind* custom = graph.m_Registry->FindByExtension(kind);
+				if (custom != nullptr)
+				{
+					std::vector<std::byte>         bytes      = files.Read(referrer);
+					std::vector<DocumentReference> references = custom->ReadReferences(bytes);
+					for (DocumentReference& reference : references)
+					{
+						reference.target = normalizeRef(reference.target);
+						edges.push_back(
+							{ referrer, normalizeRef(reference.target), RefKind::kCustom });
+					}
+					graph.m_CustomReferences.emplace(referrer, std::move(references));
+				}
 			}
 		}
 
@@ -521,7 +563,7 @@ namespace assetlib
 		else
 		{
 			plan.assetType = assetTypeFromExtension(plan.target);
-			if (!plan.assetType)
+			if (!plan.assetType && !graph.IsKnownAsset(plan.target))
 				throw std::runtime_error(
 					"assetlib::planDeletion: '" + plan.target +
 					"' is not an asset this project stores anything about");

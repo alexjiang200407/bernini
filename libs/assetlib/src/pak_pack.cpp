@@ -249,7 +249,16 @@ namespace assetlib
 				continue;
 
 			const std::optional<AssetType> type = assetTypeFromExtension(file);
-			if (!type.has_value())
+			const IAssetKind*              custom =
+				GetKindRegistry() == nullptr ?
+					nullptr :
+					GetKindRegistry()->FindByExtension(file.extension().generic_string());
+			if (!type.has_value() && custom == nullptr)
+			{
+				++report.skippedByExtension[file.extension().generic_string()];
+				continue;
+			}
+			if (custom != nullptr && !custom->GetDesc().includeInPack)
 			{
 				++report.skippedByExtension[file.extension().generic_string()];
 				continue;
@@ -270,32 +279,34 @@ namespace assetlib
 			// Empty means "pack the disk bytes verbatim".
 			auto regenerated = std::optional<std::vector<std::byte>>();
 
-			switch (*type)
-			{
-			// Geometry carries what the seam answers; a group it cannot serve fails the pack.
-			case AssetType::kMesh:
-			case AssetType::kSkeleton:
-			case AssetType::kAnimation:
-				regenerated = archived.BytesFor(*type, key);
-				break;
+			if (type)
+				switch (*type)
+				{
+				// Geometry carries what the seam answers; a group it cannot serve fails the pack.
+				case AssetType::kMesh:
+				case AssetType::kSkeleton:
+				case AssetType::kAnimation:
+					regenerated = archived.BytesFor(*type, key);
+					break;
 
-			// Packed verbatim: a bake produces none of them, so the disk bytes are the answer.
-			case AssetType::kMaterial:
-			case AssetType::kTexture:
-			case AssetType::kSky:
-			case AssetType::kEnvLighting:
-			case AssetType::kEnvironment:
-			case AssetType::kImportDocument:
-			case AssetType::kUiDocument:
-			case AssetType::kUiStyle:
-			case AssetType::kFont:
-			case AssetType::kAvatar:
-			case AssetType::kBlend:
-			case AssetType::kCount:
-				break;
-			}
+				// Packed verbatim: a bake produces none of them, so the disk bytes are the answer.
+				case AssetType::kMaterial:
+				case AssetType::kTexture:
+				case AssetType::kSky:
+				case AssetType::kEnvLighting:
+				case AssetType::kEnvironment:
+				case AssetType::kImportDocument:
+				case AssetType::kUiDocument:
+				case AssetType::kUiStyle:
+				case AssetType::kFont:
+				case AssetType::kAvatar:
+				case AssetType::kBlend:
+				case AssetType::kCount:
+					break;
+				}
 
-			if (isGeometryContainer(*type) && regenerated.has_value() && *regenerated != diskBytes)
+			if (type && isGeometryContainer(*type) && regenerated.has_value() &&
+			    *regenerated != diskBytes)
 				++report.geometryRebaked;
 
 			const std::vector<std::byte> bytes =

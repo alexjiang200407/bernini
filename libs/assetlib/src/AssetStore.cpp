@@ -32,6 +32,8 @@ namespace assetlib
 	AssetStore::AssetStore(std::filesystem::path dataRoot, const AssetKindRegistry* registry) :
 		AssetStore(std::move(dataRoot))
 	{
+		if (registry == nullptr)
+			core::throw_runtime_error("assetlib::AssetStore: a registry must not be null");
 		m_Registry = registry;
 	}
 

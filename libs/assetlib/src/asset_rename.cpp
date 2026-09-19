@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/IAssetPlugin.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
@@ -213,9 +214,10 @@ namespace assetlib
 		/** One referrer file: where it is now, and the bytes that can undo its rewrite. */
 		struct PendingReferrer
 		{
-			std::filesystem::path  path;
-			AssetType              type = AssetType::kMesh;
-			std::vector<std::byte> original;
+			std::filesystem::path    path;
+			std::optional<AssetType> type;
+			const IAssetKind*        custom = nullptr;
+			std::vector<std::byte>   original;
 		};
 
 		std::vector<std::byte>
@@ -310,6 +312,20 @@ namespace assetlib
 				"assetlib::renameAsset: a referrer of no kind that stores references");
 		}
 
+		std::vector<std::byte>
+		rewriteCustomReferrer(
+			const RenamePlan&                  plan,
+			const IAssetKind&                  kind,
+			std::span<const DocumentReference> references,
+			std::span<const std::byte>         bytes)
+		{
+			auto replacements = std::vector<DocumentReference>();
+			replacements.reserve(references.size());
+			for (const DocumentReference& reference : references)
+				replacements.push_back({ mapTarget(plan, reference.target), reference.field });
+			return kind.RewriteReferences(bytes, replacements);
+		}
+
 	}
 
 	RenamePlan
@@ -318,6 +334,7 @@ namespace assetlib
 		auto plan         = RenamePlan();
 		plan.subject.from = normalizeRef(from);
 		plan.subject.to   = normalizeRef(to);
+		plan.registry     = graph.GetKindRegistry();
 
 		// A source and its `.bimport` are one asset under two names, and the document is what says
 		// which containers move -- so a source named on either side plans as its document, and the
@@ -393,13 +410,15 @@ namespace assetlib
 		}
 		else
 		{
-			plan.assetType = assetTypeFromExtension(plan.subject.from);
-			if (!plan.assetType)
+			plan.assetType           = assetTypeFromExtension(plan.subject.from);
+			const IAssetKind* custom = graph.CustomKindOf(plan.subject.from);
+			if (!plan.assetType && custom == nullptr)
 				throw std::runtime_error(
 					"assetlib::planRename: '" + plan.subject.from +
 					"' is not an asset this project stores anything about");
 
-			if (assetTypeFromExtension(plan.subject.to) != plan.assetType)
+			const IAssetKind* targetCustom = graph.CustomKindOf(plan.subject.to);
+			if (assetTypeFromExtension(plan.subject.to) != plan.assetType || targetCustom != custom)
 				throw std::runtime_error(
 					"assetlib::planRename: renaming '" + plan.subject.from + "' to '" +
 					plan.subject.to + "' would change what kind of asset it is");
@@ -438,6 +457,14 @@ namespace assetlib
 				follow(plan.source->from);
 			for (const RenameMove& move : plan.outputs) follow(move.from);
 		}
+
+		for (const AssetRef& referrer : plan.referrers)
+			if (referrer.kind == RefKind::kCustom)
+				plan.customReferences.emplace(
+					referrer.referrer,
+					std::vector<DocumentReference>(
+						graph.CustomReferencesOf(referrer.referrer).begin(),
+						graph.CustomReferencesOf(referrer.referrer).end()));
 
 		// equivalent() is what tells a real collision from a case-only rename on a case-insensitive
 		// filesystem, where the destination "exists" because it is the file being renamed.
@@ -547,14 +574,18 @@ namespace assetlib
 		for (const std::string& referrer : referrers)
 		{
 			const std::optional<AssetType> type = assetTypeFromExtension(referrer);
-			if (!type || *type == AssetType::kTexture)
+			const IAssetKind* custom = plan.registry == nullptr ?
+			                               nullptr :
+			                               plan.registry->FindByExtension(extensionOf(referrer));
+			if ((!type && custom == nullptr) || (type && *type == AssetType::kTexture))
 				throw std::runtime_error(
 					"assetlib::renameAsset: '" + referrer +
 					"' is not a container that stores references");
 
-			auto file = PendingReferrer();
-			file.path = GetDataRoot() / referrer;
-			file.type = *type;
+			auto file   = PendingReferrer();
+			file.path   = GetDataRoot() / referrer;
+			file.type   = type;
+			file.custom = custom;
 
 			// Ordinary weather, not a caller error: the file may be locked, gone since the scan, or --
 			// the scan reads a mesh's material chunk alone -- malformed past the part the scan saw.
@@ -563,7 +594,14 @@ namespace assetlib
 			try
 			{
 				file.original = core::file::read_file_bytes(file.path.string());
-				(void)rewriteReferrer(plan, *type, file.original);
+				if (file.type)
+					(void)rewriteReferrer(plan, *file.type, file.original);
+				else
+					(void)rewriteCustomReferrer(
+						plan,
+						*file.custom,
+						plan.customReferences.at(referrer),
+						file.original);
 			}
 			catch (const std::exception& e)
 			{
@@ -591,10 +629,20 @@ namespace assetlib
 		try
 		{
 			for (; written < files.size(); ++written)
-				writeFileBytes(
-					files[written].path,
-					rewriteReferrer(plan, files[written].type, files[written].original),
-					"rename");
+			{
+				const auto rewritten =
+					files[written].type ?
+						rewriteReferrer(plan, *files[written].type, files[written].original) :
+						rewriteCustomReferrer(
+							plan,
+							*files[written].custom,
+							plan.customReferences.at(
+								files[written]
+									.path.lexically_relative(GetDataRoot())
+									.generic_string()),
+							files[written].original);
+				writeFileBytes(files[written].path, rewritten, "rename");
+			}
 		}
 		catch (const std::exception& e)
 		{
