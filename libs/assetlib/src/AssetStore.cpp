@@ -1,3 +1,4 @@
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>  // requireInsideDataRoot
 
@@ -28,10 +29,17 @@ namespace assetlib
 				m_DataRoot.string());
 	}
 
+	AssetStore::AssetStore(std::filesystem::path dataRoot, const AssetKindRegistry* registry) :
+		AssetStore(std::move(dataRoot))
+	{
+		m_Registry = registry;
+	}
+
 	AssetStore::AssetStore(
 		std::filesystem::path                          dataRoot,
-		std::shared_ptr<const core::file::IFileSystem> files) :
-		m_DataRoot(std::move(dataRoot)), m_Files(std::move(files))
+		std::shared_ptr<const core::file::IFileSystem> files,
+		const AssetKindRegistry*                       registry) :
+		m_DataRoot(std::move(dataRoot)), m_Registry(registry), m_Files(std::move(files))
 	{
 		if (!m_Files)
 			core::throw_runtime_error("assetlib::AssetStore: a source must have somewhere to read");

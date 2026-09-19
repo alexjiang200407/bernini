@@ -1,8 +1,10 @@
 #include <assetlib/AssetKindRegistry.h>
+#include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -53,6 +55,11 @@ TEST_CASE("Asset kind registry owns valid custom kinds", "[plugins][assetkind]")
 	REQUIRE(registry.Kinds().size() == 1);
 	REQUIRE(registry.FindById("sample.document") != nullptr);
 	REQUIRE(registry.FindByExtension(".bexample") == registry.FindById("sample.document"));
+	const auto root = std::filesystem::temp_directory_path() / "bernini_asset_kind_registry";
+	std::filesystem::create_directories(root);
+	assetlib::AssetStore store(root, &registry);
+	REQUIRE(store.GetKindRegistry() == &registry);
+	std::filesystem::remove_all(root);
 }
 
 TEST_CASE(

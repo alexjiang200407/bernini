@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetCodec.h>
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
 #include <assetlib/progress.h>
@@ -82,6 +83,9 @@ namespace assetlib
 		 */
 		explicit AssetStore(std::filesystem::path dataRoot);
 
+		/** Uses the supplied registry for custom authored kinds; the registry must outlive this store. */
+		explicit AssetStore(std::filesystem::path dataRoot, const AssetKindRegistry* registry);
+
 		/**
 		 * Reads resolve through `files`, writes land on `dataRoot`.
 		 *
@@ -93,7 +97,14 @@ namespace assetlib
 		 */
 		AssetStore(
 			std::filesystem::path                          dataRoot,
-			std::shared_ptr<const core::file::IFileSystem> files);
+			std::shared_ptr<const core::file::IFileSystem> files,
+			const AssetKindRegistry*                       registry = nullptr);
+
+		[[nodiscard]] const AssetKindRegistry*
+		GetKindRegistry() const noexcept
+		{
+			return m_Registry;
+		}
 
 		/** What reads resolve through. */
 		[[nodiscard]] const core::file::IFileSystem&
@@ -912,6 +923,7 @@ namespace assetlib
 			const;
 
 		std::filesystem::path                          m_DataRoot;
+		const AssetKindRegistry*                       m_Registry = nullptr;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;
 	};
 }
