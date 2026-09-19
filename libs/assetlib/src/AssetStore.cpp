@@ -29,18 +29,10 @@ namespace assetlib
 				m_DataRoot.string());
 	}
 
-	AssetStore::AssetStore(std::filesystem::path dataRoot, const AssetKindRegistry* registry) :
-		AssetStore(std::move(dataRoot))
-	{
-		if (registry == nullptr)
-			core::throw_runtime_error("assetlib::AssetStore: a registry must not be null");
-		m_Registry = registry;
-	}
-
 	AssetStore::AssetStore(
 		std::filesystem::path                          dataRoot,
 		std::shared_ptr<const core::file::IFileSystem> files,
-		const AssetKindRegistry*                       registry) :
+		std::shared_ptr<const AssetKindRegistry>       registry) :
 		m_DataRoot(std::move(dataRoot)), m_Registry(registry), m_Files(std::move(files))
 	{
 		if (!m_Files)

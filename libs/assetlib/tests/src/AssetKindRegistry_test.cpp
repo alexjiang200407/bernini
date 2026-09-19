@@ -4,6 +4,7 @@
 #include <assetlib/asset_refs.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <core/file/LooseFileSystem.h>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -72,19 +73,30 @@ namespace
 				     reinterpret_cast<const std::byte*>(value.data() + value.size()) };
 		}
 	};
+
+	assetlib::AssetStore
+	MakeStore(
+		const std::filesystem::path&                              root,
+		const std::shared_ptr<const assetlib::AssetKindRegistry>& registry)
+	{
+		return assetlib::AssetStore(
+			root,
+			std::make_shared<const core::file::LooseFileSystem>(root),
+			registry);
+	}
 }
 
 TEST_CASE("Asset kind registry owns valid custom kinds", "[plugins][assetkind]")
 {
-	assetlib::AssetKindRegistry registry;
-	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
-	REQUIRE(registry.Kinds().size() == 1);
-	REQUIRE(registry.FindById("sample.document") != nullptr);
-	REQUIRE(registry.FindByExtension(".bexample") == registry.FindById("sample.document"));
+	auto registry = std::make_shared<assetlib::AssetKindRegistry>();
+	registry->Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+	REQUIRE(registry->Kinds().size() == 1);
+	REQUIRE(registry->FindById("sample.document") != nullptr);
+	REQUIRE(registry->FindByExtension(".bexample") == registry->FindById("sample.document"));
 	const auto root = std::filesystem::temp_directory_path() / "bernini_asset_kind_registry";
 	std::filesystem::create_directories(root);
-	assetlib::AssetStore store(root, &registry);
-	REQUIRE(store.GetKindRegistry() == &registry);
+	assetlib::AssetStore store = MakeStore(root, registry);
+	REQUIRE(store.GetKindRegistry() == registry);
 	std::filesystem::remove_all(root);
 }
 
@@ -98,11 +110,11 @@ TEST_CASE(
 	std::ofstream(root / "Target.bexample") << "target";
 	std::ofstream(root / "Holder.bref") << "Target.bexample";
 
-	assetlib::AssetKindRegistry registry;
-	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
-	registry.Add(std::make_unique<ReferencingKind>());
-	assetlib::AssetStore store(root, &registry);
-	auto                 plan = assetlib::planRename(
+	auto registry = std::make_shared<assetlib::AssetKindRegistry>();
+	registry->Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+	registry->Add(std::make_unique<ReferencingKind>());
+	assetlib::AssetStore store = MakeStore(root, registry);
+	auto                 plan  = assetlib::planRename(
 		assetlib::AssetRefGraph::Scan(store),
 		"Target.bexample",
 		"Renamed.bexample");
@@ -126,10 +138,10 @@ TEST_CASE(
 	std::ofstream(root / "Target.bexample") << "target";
 	std::ofstream(root / "Holder.bref") << "holder";
 
-	assetlib::AssetKindRegistry registry;
-	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
-	registry.Add(std::make_unique<ReferencingKind>());
-	assetlib::AssetStore          store(root, &registry);
+	auto registry = std::make_shared<assetlib::AssetKindRegistry>();
+	registry->Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+	registry->Add(std::make_unique<ReferencingKind>());
+	assetlib::AssetStore          store = MakeStore(root, registry);
 	const assetlib::AssetRefGraph graph = assetlib::AssetRefGraph::Scan(store);
 	REQUIRE(graph.ReferrersOf("Target.bexample").size() == 1);
 	REQUIRE(graph.ReferrersOf("Target.bexample").front().kind == assetlib::RefKind::kPlugin);

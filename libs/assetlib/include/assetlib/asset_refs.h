@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -187,9 +188,9 @@ namespace assetlib
 		IsKnownAsset(std::string_view path) const;
 
 		[[nodiscard]] const IAssetKind*
-		PluginKindOf(std::string_view referrer) const;
+		PluginKindForPath(std::string_view path) const;
 
-		[[nodiscard]] const AssetKindRegistry*
+		[[nodiscard]] const std::shared_ptr<const AssetKindRegistry>&
 		GetKindRegistry() const noexcept
 		{
 			return m_Registry;
@@ -226,8 +227,8 @@ namespace assetlib
 		std::vector<AssetRef>               m_Edges;
 		core::str::unordered_str_map<Range> m_ByTarget;
 
-		std::filesystem::path    m_DataRoot;
-		const AssetKindRegistry* m_Registry = nullptr;
+		std::filesystem::path                    m_DataRoot;
+		std::shared_ptr<const AssetKindRegistry> m_Registry;
 
 		// Every file the scan enumerated, sorted: what Contains and GetFilesUnder answer from.
 		std::vector<std::string> m_Files;
@@ -342,8 +343,8 @@ namespace assetlib
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
 	{
-		RenameMove               subject;  // an asset file, or a directory
-		const AssetKindRegistry* registry = nullptr;
+		RenameMove                               subject;  // an asset file, or a directory
+		std::shared_ptr<const AssetKindRegistry> registry;
 
 		/** What `subject` is, or nullopt when it is a directory -- which is not an asset. */
 		std::optional<AssetType> assetType;

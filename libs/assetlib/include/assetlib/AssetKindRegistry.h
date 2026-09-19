@@ -2,7 +2,9 @@
 
 #include <assetlib/IAssetPlugin.h>
 #include <span>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace assetlib
@@ -27,6 +29,8 @@ namespace assetlib
 		}
 
 	private:
-		std::vector<AssetKindPtr> m_Kinds;
+		std::vector<AssetKindPtr>                          m_Kinds;
+		std::unordered_map<std::string, const IAssetKind*> m_ByExtension;
+		std::unordered_map<std::string, const IAssetKind*> m_ById;
 	};
 }

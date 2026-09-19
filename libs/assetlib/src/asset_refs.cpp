@@ -301,11 +301,11 @@ namespace assetlib
 	}
 
 	const IAssetKind*
-	AssetRefGraph::PluginKindOf(std::string_view referrer) const
+	AssetRefGraph::PluginKindForPath(std::string_view path) const
 	{
 		if (m_Registry == nullptr)
 			return nullptr;
-		return m_Registry->FindByExtension(extensionOf(normalizeRef(referrer)));
+		return m_Registry->FindByExtension(extensionOf(normalizeRef(path)));
 	}
 
 	std::vector<std::string>
