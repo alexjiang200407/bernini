@@ -33,7 +33,7 @@ struct VSOut
 struct SkyboxPSOut
 {
     float4 color : SV_Target0;
-    float2 motion : SV_Target1;
+    float4 motion : SV_Target1;
 };
 
 [shader("mesh")]
@@ -79,6 +79,7 @@ SkyboxPSOut PSMain(VSOut input)
 
     SkyboxPSOut output;
     output.color = float4(color, 1.0);
-    output.motion = MotionFromNdc(input.ndc - gSkyboxData.jitter, prevNdc);
+    // Nothing moves the sky but the camera.
+    output.motion = float4(MotionFromNdc(input.ndc - gSkyboxData.jitter, prevNdc), 0.0, 0.0);
     return output;
 }

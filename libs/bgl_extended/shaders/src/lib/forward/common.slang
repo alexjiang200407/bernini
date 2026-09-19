@@ -25,6 +25,11 @@ public struct ForwardVSOut
     // can substitute its own previous-frame position without touching the pixel stage.
     public float4 clip : CLIPPOSITION;
     public float4 prevClip : PREVCLIPPOSITION;
+
+    // This frame's world position under last frame's camera: where the surface would have been had
+    // only the camera moved. Projected by the same math as prevClip, so a surface that did not move
+    // carries the same value bit for bit.
+    public float4 cameraPrevClip : CAMERAPREVCLIPPOSITION;
 };
 
 // Colour plus the screen-space velocity MRT slot. The transparent pipelines bind one render target
@@ -32,11 +37,14 @@ public struct ForwardVSOut
 public struct ForwardPSOut
 {
     public float4 color : SV_Target0;
-    public float2 motion : SV_Target1;
+    public float4 motion : SV_Target1;
 };
 
-// Where this pixel's surface sat last frame; the arithmetic is lib.math.motion_vector's.
-public float2 ComputeMotionVector(ForwardVSOut input)
+// Where this pixel's surface sat last frame (xy), and the part of that it moved on its own (zw) --
+// exactly zero for a surface nothing moved. The arithmetic is lib.math.motion_vector's.
+public float4 ComputeMotionVector(ForwardVSOut input)
 {
-    return ComputeMotionVector(input.clip, input.prevClip);
+    float2 motion = ComputeMotionVector(input.clip, input.prevClip);
+    float2 cameraMotion = ComputeMotionVector(input.clip, input.cameraPrevClip);
+    return float4(motion, motion - cameraMotion);
 }

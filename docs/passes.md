@@ -252,8 +252,13 @@ coverage. **A single frame of this is noise by design**; it is only correct once
 
 The forward pass writes a screen-space velocity buffer alongside colour, as MRT slot 1: for each
 pixel, the UV displacement from where its surface sat last frame to where it sits now, so a consumer
-samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
-buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
+samples history at `uv - motion`. Beside it, in BA, is the part of that displacement the surface
+made on its own: the velocity less the one the camera alone gives this frame's world position, from
+a third clip position (`cameraPrevClip`, the current world position under `prevViewProj`). The two
+clip positions are projected by identical math, so anything nobody moved reports an own motion of
+exactly zero under any camera, and the sky writes zero outright. The format is `RGBA16_FLOAT`
+(`c_MotionVectorFormat`, in `constants/constants.h`). The texture is owned by the render target
+beside the depth buffer and cleared to zero each frame, so a pixel nothing drew reads as static.
 
 A placement carries the transform the previous frame drew it with as well as its current one
 (`ISceneView::SetInstanceTransform` writes the second and rolls the first), so the mesh shader
@@ -686,14 +691,15 @@ and why the resolve writes history rather than the backbuffer.
 `depth` are on the render grid; the history it writes is on the output one, and it rasterizes over
 the latter. So a render scale is *reconstructed* here rather than stretched at present: each output
 pixel takes the render sample whose jitter landed nearest it, weighted by how near, while the
-neighbourhood clamp and both motion discriminators stay on the render 3x3 around that sample. Where
+neighbourhood clamp's 3x3 and the dilation's cross stay on the render grid around that sample. Where
 the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
 has always been.
 
 * **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
   point sampler for the three read at their own texel centres and a linear one for the reprojected
-  history, both owned by `RenderContext`. Depth is read for one thing: what the camera alone would
-  move each pixel by, which is subtracted from the written velocity to find a surface's own motion
+  history, both owned by `RenderContext`. Depth is read for the nearest surface in the cross, whose
+  vector the pixel reprojects by, and for the view depth history keeps for disocclusion. The
+  velocity buffer's own-motion half is what keeps an animating surface out of that test
   ([Temporal Antialiasing](docs/taa.md)).
 * **Out:** the current history, at the target's output size. `PostProcess` is then pointed at it
   instead of `sceneColor`.

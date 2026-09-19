@@ -69,8 +69,7 @@ namespace bgl
 			"cullBackfaces"sv,
 		};
 
-		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
-		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
+		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
 
 		// The shared blend kernel's programs: the whole depth-sorted list draws through this one
 		// pipeline, and AnyMesh branches tier per instance, so no bucket needs a blend kernel of

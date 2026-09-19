@@ -25,7 +25,6 @@ namespace bgl
 	{
 		constexpr Format c_BackbufferFormat = Format::SBGRA8_UNORM;
 		constexpr Format c_DepthFormat      = Format::D24S8;
-		constexpr Format c_MotionFormat     = Format::RG16_FLOAT;
 
 		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
 		// Alpha is carried because the blend state writes destination alpha and the capture path
@@ -215,7 +214,7 @@ namespace bgl
 		auto motionDesc   = TextureDesc();
 		motionDesc.width  = GetRenderWidth();
 		motionDesc.height = GetRenderHeight();
-		motionDesc.format = c_MotionFormat;
+		motionDesc.format = c_MotionVectorFormat;
 		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
 		// into the texture at creation rather than deriving it from how it is bound.
 		motionDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
@@ -226,7 +225,7 @@ namespace bgl
 		m_MotionTexture = m_ResourceManager->CreateTexture(motionDesc);
 
 		auto motionRtvDesc      = RtvDesc();
-		motionRtvDesc.format    = c_MotionFormat;
+		motionRtvDesc.format    = c_MotionVectorFormat;
 		motionRtvDesc.debugName = "Motion Vectors RTV";
 
 		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
@@ -256,7 +255,7 @@ namespace bgl
 		m_SceneColorSrv = m_ResourceManager->CreateSrv(m_SceneColorTexture, sceneColorSrvDesc);
 
 		auto motionSrvDesc      = SrvDesc();
-		motionSrvDesc.format    = c_MotionFormat;
+		motionSrvDesc.format    = c_MotionVectorFormat;
 		motionSrvDesc.debugName = "Motion Vectors SRV";
 
 		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);

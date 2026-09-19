@@ -40,11 +40,10 @@ namespace bgl
 			SrvHandle depth;
 
 			// The unjittered camera this frame and last -- this frame's inverse projection, and
-			// this frame's view space into last frame's clip -- so the resolve can tell a surface's
-			// own motion from the camera's at each pixel's depth. One camera stands for the frame,
-			// so a frame of several draws leaves the pair invalid.
+			// this frame's view space into last frame's -- so the resolve can tell whether a pixel's
+			// surface was hidden last frame. One camera stands for the frame, so a frame of several
+			// draws leaves the pair invalid.
 			glm::mat4 clipToView{ 1.0f };
-			glm::mat4 viewToPrevClip{ 1.0f };
 			glm::mat4 viewToPrevView{ 1.0f };
 			glm::vec2 jitter{ 0.0f };
 			bool      cameraPairValid = false;

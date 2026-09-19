@@ -12,8 +12,9 @@ public interface IResolveInputs
     float4 Scene(float2 uv);
     /// The same colour filtered onto the output grid; only a frame with no history reads it.
     float3 SceneLinear(float2 uv);
-    /// The velocity buffer at a texel centre, unfiltered.
-    float2 Motion(float2 uv);
+    /// The velocity buffer at a texel centre, unfiltered: the velocity in xy, and in zw the part of
+    /// it the surface moved by on its own, exactly zero for anything only the camera moved.
+    float4 Motion(float2 uv);
     /// The depth buffer at a texel centre, unfiltered.
     float Depth(float2 uv);
 };
@@ -21,13 +22,10 @@ public interface IResolveInputs
 // The plain half of the same inputs, which needs no lookup and so no interface.
 public struct ResolveParams
 {
-    // The unjittered camera this frame and last -- this frame's inverse projection, and its view
-    // space into last frame's clip -- for what the camera alone moves a surface by at a pixel's
-    // depth. Not the inverse view-projection: docs/taa.md has why. Not valid when more than one
-    // draw fed the frame.
+    // The unjittered camera this frame and last, for the depth validation of history: this frame's
+    // inverse projection, and its view space into last frame's. Not valid when more than one draw
+    // fed the frame.
     public float4x4 clipToView;
-    public float4x4 viewToPrevClip;
-    // Current view space into previous view space, for depth validation.
     public float4x4 viewToPrevView;
     public float cameraPairValid;
 
