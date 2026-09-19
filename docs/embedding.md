@@ -13,8 +13,10 @@ add_subdirectory(${BERNINI_DIR} ${CMAKE_BINARY_DIR}/bernini)
 ```
 
 Nothing is vendored and nothing is installed: the consumer has the checkout, compiles it into its own
-build tree, and links the targets by name. `install()` / `export()` / `find_package(Bernini)` is the
-other version of this problem — consuming the engine as a *binary* — and does not exist.
+build tree, and links the targets by name. A general `find_package(Bernini)` binary engine package
+does not exist. The editor plugin SDK is narrower: a top-level renderer build exports only the
+matched-build targets plugins use into its own `editor_sdk` directory; see
+[Editor plugin contracts](editor_plugins.md).
 
 [tests/embed](../tests/embed) is that block with a `main()` under it, and `just embed` builds it.
 It is the only consumer in the repository; everything else here is the engine building itself.
@@ -57,6 +59,7 @@ Everything else has a host-derived default and is only worth naming to change it
 | `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_extended_objects` alone with no runtime, shaders or tests. Defaults from the host. |
 | `IS_DEBUG` | Shader debug info and the `dbg_raise()` bodies. Defaults from `CMAKE_BUILD_TYPE`; a multi-config generator has none, so there it is a choice. |
 | `BERNINI_PROFILING` | Tracy zones and the client that opens a socket. `OFF`. |
+| `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level build with a renderer; embedded and renderer-free builds stay static. |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 

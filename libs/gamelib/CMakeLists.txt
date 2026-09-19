@@ -13,11 +13,20 @@ file(GLOB_RECURSE GAMELIB_INTERNAL_HEADERS CONFIGURE_DEPENDS
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${GAMELIB_SOURCES} ${GAMELIB_INTERNAL_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/gamelib" PREFIX "Shared Header Files" FILES ${GAMELIB_SHARED_HEADERS})
 
-add_library(gamelib STATIC
+set(GAMELIB_LIBRARY_TYPE STATIC)
+if (BERNINI_EDITOR_SDK)
+	set(GAMELIB_LIBRARY_TYPE SHARED)
+endif()
+
+add_library(gamelib ${GAMELIB_LIBRARY_TYPE}
 	${GAMELIB_SOURCES}
 	${GAMELIB_SHARED_HEADERS}
 	${GAMELIB_INTERNAL_HEADERS}
 )
+
+if (BERNINI_EDITOR_SDK)
+	set_target_properties(gamelib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 target_include_directories(gamelib
 	PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -25,8 +34,9 @@ target_include_directories(gamelib
 )
 
 target_precompile_headers(gamelib
-	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
-	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+	PRIVATE
+		${BERNINI_ROOT}/PCH/pch.h
+		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
 # bgl for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
@@ -34,17 +44,34 @@ target_precompile_headers(gamelib
 #
 # RmlUi is PUBLIC because a client drives Rml::Context itself (ADR-7); its include directories are
 # imported as SYSTEM, so enable_strict_compiler's warnings-as-errors never compile its headers.
-target_link_libraries(gamelib
-	PUBLIC
-		core
-		bgl
-		bgl_extended
-		assetlib
-		RmlUi::RmlUi
-		# The stock Lua plugin: one Initialise call behind UiRuntimeOptions::scripting. PUBLIC with
-		# the core for the same reason -- a game's own <script> bindings are its business.
-		RmlUi::Lua
-)
+target_link_libraries(gamelib PUBLIC core bgl assetlib)
+
+if (BERNINI_EDITOR_SDK)
+	add_dependencies(gamelib bgl_extended)
+	target_link_libraries(gamelib PRIVATE "$<TARGET_LINKER_FILE:bgl_extended>")
+	target_include_directories(gamelib PRIVATE
+		$<TARGET_PROPERTY:bgl_common,INTERFACE_INCLUDE_DIRECTORIES>)
+
+	# RmlUi and its Lua plugin hold process-wide state. Pull every object into gamelib, which owns
+	# UiRuntime's one-per-process guard, and pass only their headers to plugin clients.
+	foreach(RMLUI_TARGET RmlUi::Core RmlUi::Debugger RmlUi::Lua)
+		get_target_property(RMLUI_TARGET_TYPE ${RMLUI_TARGET} TYPE)
+		if (WIN32 AND NOT RMLUI_TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+			message(FATAL_ERROR
+				"BERNINI_EDITOR_SDK requires shared ${RMLUI_TARGET} on Windows")
+		endif()
+		if (RMLUI_TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+			target_link_libraries(gamelib PUBLIC ${RMLUI_TARGET})
+		else()
+			target_link_libraries(gamelib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${RMLUI_TARGET}>")
+		endif()
+	endforeach()
+	target_include_directories(gamelib SYSTEM PUBLIC
+		$<TARGET_PROPERTY:RmlUi::Core,INTERFACE_INCLUDE_DIRECTORIES>)
+else()
+	# A static game build has one final binary, so its client may link the archives directly.
+	target_link_libraries(gamelib PUBLIC bgl_extended RmlUi::RmlUi RmlUi::Lua)
+endif()
 
 enable_strict_compiler(gamelib)
 enable_coverage(gamelib)
@@ -88,6 +115,8 @@ if (BUILD_TESTS)
 	target_link_libraries(gamelib_tests
 		PRIVATE
 			gamelib
+			bgl_common
+			bgl_extended
 			core
 			Catch2::Catch2
 			Catch2::Catch2WithMain

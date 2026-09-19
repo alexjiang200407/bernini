@@ -86,7 +86,8 @@ case writes one in a temp directory and names it. That is also how a test opens 
 
 `editor_api` is the separate public plugin contract, held to the library bar. Its headers expose
 no `apps/editor/src` types. The editor does not consume it yet; `editor_plugin_tests` exercises a
-compiled sample against a fake host. See [Editor plugin contracts](../../docs/editor_plugins.md).
+compiled sample against a fake host and a separately configured SDK fixture. See
+[Editor plugin contracts](../../docs/editor_plugins.md).
 
 Every editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
 `editor` and `editor_tests` both link. `main.cpp` is held out because it owns `main()`,
