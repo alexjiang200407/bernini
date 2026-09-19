@@ -10,6 +10,10 @@ draw. `gamelib` is the seam that links both.
 non-obvious contracts — not signatures. The header at each linked path is the source of truth;
 when this doc disagrees, trust the header, then fix this doc.
 
+The Qt-free [IAssetPlugin contract](libs/assetlib/include/assetlib/IAssetPlugin.h) is available for
+early plugin API review. It does not yet extend `AssetStore`, codecs, the reference graph or pack;
+see [Editor plugin contracts](docs/editor_plugins.md) for its current test-only use.
+
 ---
 
 ## Design Choices

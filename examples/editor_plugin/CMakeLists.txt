@@ -1,0 +1,5 @@
+find_package(nlohmann_json CONFIG REQUIRED)
+add_library(editor_plugin_example STATIC sample.cpp)
+target_include_directories(editor_plugin_example PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(editor_plugin_example PUBLIC editor_api PRIVATE nlohmann_json::nlohmann_json)
+set_target_properties(editor_plugin_example PROPERTIES AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
