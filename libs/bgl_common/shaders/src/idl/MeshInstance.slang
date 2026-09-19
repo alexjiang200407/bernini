@@ -59,6 +59,18 @@ public struct MeshInstance
     {
         return float3(dot(transform[0].xyz, d), dot(transform[1].xyz, d), dot(transform[2].xyz, d));
     }
+
+    // A bounding sphere (xyz centre, w radius) placed in world space. The radius scales by the
+    // largest transformed basis length, the exact max axis scale of a TRS transform; a sheared one
+    // could under-scale it, but placements are TRS.
+    public float4 TransformSphere(float4 sphere)
+    {
+        let ax = TransformDirection(float3(1.0, 0.0, 0.0));
+        let ay = TransformDirection(float3(0.0, 1.0, 0.0));
+        let az = TransformDirection(float3(0.0, 0.0, 1.0));
+        let maxScaleSq = max(dot(ax, ax), max(dot(ay, ay), dot(az, az)));
+        return float4(TransformPoint(sphere.xyz), sphere.w * sqrt(maxScaleSq));
+    }
 };
 
 // Whether `flag`'s bit is set in the placement's flags word. The C++ twin is bgl::HasMeshInstanceFlag.
