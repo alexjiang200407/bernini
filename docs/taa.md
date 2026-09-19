@@ -115,9 +115,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   costs is the frames a moving pixel waits for the phase that serves it, which no still measurement
   can see.
 
-* **The clamp box, the dilation and the own-motion test all stay on the render grid.** The clamp
-  reads its 3×3, and the dilation and the own-motion test read its cross.
-  A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
+* **The clamp box, the dilation and the own-motion test all stay on the render grid**, and all read
+  the same cross of it: the centre and its four edge neighbours. A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
   neighbourhood did not already contain. Only the history fetch and its Catmull-Rom taps are in
   output texels.
 
@@ -246,14 +245,25 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   blind spot that is exactly the visible artifact — on hashed coverage at a distance one strand
   texel and one backdrop texel put the corners at the extremes, so under a pan every dragged
   mixture is admitted, and hair trails a smear. The σ box tightens with the mixture and recentres
-  on the majority population. It stays clamped inside the min/max box, which nine bounded samples
+  on the majority population. It stays clamped inside the min/max box, which the bounded samples
   can otherwise escape. What always-on tightness costs is the other blind spot's shelter: on the
-  frames where none of a sparse strand's 3×3 wins its coin flip, the box collapses onto the
+  frames where none of a sparse strand's neighbourhood wins its coin flip, the box collapses onto the
   backdrop and wipes the accumulated mixture — a rebuild cycle that reads as resting flicker and
   converges distant coverage below an alpha-blended reference (survived ratio ~0.4 at the mid
   rung). That is the trade the standard-recipe note above records: the resting shelter that once
   bridged those frames also ghosted on any surface that rested and then left faster than a 3×3
   witnesses, and its correctness cost more machinery than the resting quality bought.
+
+* **The clamp reads the cross rather than the 3×3, and this is under A/B.** The cross is five
+  samples instead of nine: the pass is 21–23% cheaper on the M3 Pro, at 1080p and 4K. On opaque edges it is
+  tighter, so the pan trail shortens (background bleed 0.0065 → 0.0037) and the animating outline
+  sharpens (still camera 2.2e-4 → 1.6e-4). On stochastic coverage five samples of a two-population
+  field give a far noisier σ. Measured on one build, a converged hashed patch flickers about 13× as
+  much: 0.0016 → 0.0205
+  at rest, 0.0037 → 0.044 under a pan, and 0.0020 → 0.026 at grazing angles. The hashed ramp's
+  smear triples (trail 0.0021 → 0.0067), and its resting floor rises about 4.5× (5.6e-4 → 2.6e-3).
+  The `[hashedalpha]` bounds are set 1.3× over those figures. Reverting the commit that made the change
+  restores the 3×3 and the bounds that went with it.
 
 ---
 
@@ -322,8 +332,8 @@ Two couplings worth knowing:
   averaging eight binary masks converges to nine grey levels rather than to smooth coverage. It
   advances on its own longer cycle, which only has to outrun the history's memory.
 * **The hash cell must be sub-pixel, and that is the clamp's requirement rather than the hash's.**
-  The neighbourhood clamp admits history only within the range of a 3×3 of the current frame. A hash
-  cell wider than a pixel makes those nine samples share a value, the range collapses towards a
+  The neighbourhood clamp admits history only within the range of the current frame's cross around
+  the pixel. A hash cell wider than a pixel makes those samples share a value, the range collapses towards a
   point, and the clamp snaps the accumulation back onto the noise every frame — which reads as
   flicker, and on a surface that self-occludes as seeing through it, because the resolve is then
   showing a single stochastic frame rather than the average of many. `c_HashScale` is the *lower*
