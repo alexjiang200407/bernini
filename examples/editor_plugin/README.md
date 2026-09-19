@@ -19,3 +19,8 @@ is `editor_api`; nlohmann JSON is private. The suite supplies the recording regi
 no storage or rendering implementation. See [the contracts](../../docs/editor_plugins.md) for the
 ownership and threading rules. Local DLL loading and a separately configured SDK consumer follow
 in later feature tasks.
+
+Menu registration uses stable IDs and context/key/fallback labels. The sample contributes a
+submenu beneath `editor.tools`; its action targets that submenu ID regardless of displayed language.
+The contract test resolves labels with a fake catalog. Production catalog loading and translation of
+widget contents are not implemented by this sample.

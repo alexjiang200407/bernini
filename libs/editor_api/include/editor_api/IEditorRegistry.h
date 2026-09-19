@@ -1,11 +1,10 @@
 #pragma once
 
-#include <QString>
-#include <QStringList>
 #include <QWidget>
 #include <assetlib/AssetStore.h>
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/LocalizedText.h>
 #include <editor_api/Thumbnail.h>
 #include <filesystem>
 #include <functional>
@@ -25,17 +24,27 @@ namespace editor
 	using ThumbnailCallback =
 		std::function<Thumbnail(const assetlib::AssetStore&, std::string_view)>;
 
+	inline constexpr std::string_view c_FileMenuId  = "editor.file";
+	inline constexpr std::string_view c_ToolsMenuId = "editor.tools";
+
+	struct MenuDesc
+	{
+		std::string   id;
+		std::string   parentId;
+		LocalizedText title;
+	};
+
 	struct PanelDesc
 	{
-		std::string  id;
-		QString      title;
-		PanelFactory create;
+		std::string   id;
+		LocalizedText title;
+		PanelFactory  create;
 	};
 
 	struct AssetEditorDesc
 	{
 		std::string              id;
-		QString                  title;
+		LocalizedText            title;
 		std::vector<std::string> extensions;
 		AssetEditorFactory       create;
 	};
@@ -43,8 +52,8 @@ namespace editor
 	struct ActionDesc
 	{
 		std::string              id;
-		QString                  title;
-		QStringList              menu;
+		LocalizedText            title;
+		std::string              menuId;
 		std::vector<std::string> extensions;
 		ActionPredicate          enabled;
 		ActionCallback           invoke;
@@ -69,6 +78,10 @@ namespace editor
 	{
 	public:
 		virtual ~IEditorRegistry() = default;
+
+		/** Parent must already exist; empty parent creates a root menu. Built-in menu IDs are reserved. */
+		virtual void
+		AddMenu(MenuDesc desc) = 0;
 
 		/** Factories run lazily on the GUI thread; return a non-null child of the supplied parent. */
 		virtual void

@@ -183,21 +183,27 @@ namespace
 		void
 		Register(editor::IEditorRegistry& registry) override
 		{
+			registry.AddMenu(
+				{ "sample.tools",
+			      std::string(editor::c_ToolsMenuId),
+			      { "sample.editor", "tools", "Sample tools" } });
 			registry.AddPanel(
-				{ "sample.overview", "Project tools", [](editor::IEditorHost&, QWidget* parent) {
-					 return new OverviewPanel(parent);
-				 } });
+				{ "sample.overview",
+			      { "sample.editor", "overview", "Project tools" },
+			      [](editor::IEditorHost&, QWidget* parent) {
+					  return new OverviewPanel(parent);
+				  } });
 			registry.AddAssetEditor(
 				{ "sample.document",
-			      "Sample document",
+			      { "sample.editor", "document", "Sample document" },
 			      { ".bexample" },
 			      [](editor::IEditorHost&, QWidget* parent) {
 					  return new DocumentPanel(parent);
 				  } });
 			registry.AddAction(
 				{ "sample.show-overview",
-			      "Project tools",
-			      { "Tools" },
+			      { "sample.editor", "overview", "Project tools" },
+			      "sample.tools",
 			      {},
 			      [](editor::IEditorHost&, std::span<const std::string>) { return true; },
 			      [](editor::IEditorHost& host, std::span<const std::string>) {

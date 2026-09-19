@@ -3,7 +3,6 @@
 #include <QLabel>
 #include <QPointer>
 #include <QString>
-#include <QStringList>
 #include <QWidget>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
@@ -13,7 +12,9 @@
 #include <editor_api/IEditorHost.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
+#include <editor_api/LocalizedText.h>
 #include <exception>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
@@ -29,6 +30,7 @@ namespace
 		public assetlib::IAssetKindRegistry
 	{
 	public:
+		std::vector<editor::MenuDesc>              menus;
 		std::vector<editor::PanelDesc>             panels;
 		std::vector<editor::AssetEditorDesc>       editors;
 		std::vector<editor::ActionDesc>            actions;
@@ -36,6 +38,11 @@ namespace
 		std::vector<editor::ThumbnailProviderDesc> thumbnails;
 		std::vector<assetlib::AssetKindPtr>        kinds;
 
+		void
+		AddMenu(editor::MenuDesc desc) override
+		{
+			menus.push_back(std::move(desc));
+		}
 		void
 		AddPanel(editor::PanelDesc desc) override
 		{
@@ -124,7 +131,9 @@ TEST_CASE(
 	REQUIRE(registry.panels.front().id == "sample.overview");
 	REQUIRE(registry.actions.size() == 1);
 	REQUIRE(registry.actions.front().extensions.empty());
-	REQUIRE(registry.actions.front().menu == QStringList{ "Tools" });
+	REQUIRE(registry.actions.front().menuId == "sample.tools");
+	REQUIRE(registry.menus.size() == 1);
+	REQUIRE(registry.menus.front().parentId == editor::c_ToolsMenuId);
 
 	RecordingHost host;
 	QWidget       root;
@@ -234,4 +243,37 @@ TEST_CASE("Unreadable referrers fail instead of appearing unreferenced", "[plugi
 		                                                              "missing" } };
 	REQUIRE_THROWS(kind.RewriteReferences(valid, replacements));
 	REQUIRE(kind.ReadReferences(valid).front().target == "Authored/a.bexample");
+}
+
+TEST_CASE("Translated labels preserve menu routing and action identity", "[plugin][localization]")
+{
+	auto              plugin = sample::CreateEditorPlugin();
+	RecordingRegistry registry;
+	plugin->Register(registry);
+	std::map<std::pair<std::string, std::string>, QString> catalog;
+	const auto resolve = [&catalog](const editor::LocalizedText& text) {
+		const auto found = catalog.find({ text.context, text.key });
+		return found == catalog.end() ? text.fallback : found->second;
+	};
+	const auto& menu   = registry.menus.front();
+	const auto& action = registry.actions.front();
+	const auto& panel  = registry.panels.front();
+	REQUIRE(resolve(menu.title) == "Sample tools");
+	REQUIRE(resolve(action.title) == "Project tools");
+	catalog = { { { "sample.editor", "tools" }, QString::fromUtf8("示例工具") },
+		        { { "sample.editor", "overview" }, QString::fromUtf8("项目工具") },
+		        { { "other.editor", "document" }, "Unrelated translation" } };
+	REQUIRE(resolve(menu.title) == QString::fromUtf8("示例工具"));
+	REQUIRE(resolve(action.title) == QString::fromUtf8("项目工具"));
+	REQUIRE(resolve(panel.title) == resolve(action.title));
+	REQUIRE(resolve(registry.editors.front().title) == "Sample document");
+	REQUIRE(action.menuId == menu.id);
+	REQUIRE(menu.parentId == editor::c_ToolsMenuId);
+	REQUIRE(action.id == "sample.show-overview");
+	RecordingHost host;
+	action.invoke(host, {});
+	REQUIRE(host.shown == std::vector<std::string>{ panel.id });
+	catalog.clear();
+	REQUIRE(resolve(action.title) == "Project tools");
+	REQUIRE(action.menuId == menu.id);
 }

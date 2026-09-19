@@ -21,6 +21,9 @@ header and fix the map.
 - **The host owns presentation.** Plugins populate host-created viewports and describe thumbnails.
   A scene thumbnail names geometry (a mesh key or the built-in sphere), optional material override
   and optional camera; no camera means automatic framing. Plugins never advance the frame loop.
+- **Identity is independent of language.** Panel, action and menu IDs are stable; labels retain
+  translation context/key and fallback text. The host can resolve them again without registering
+  contributions again. Translation catalogs and language switching are not implemented here.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions; the future loader must verify compatibility before calling them.
@@ -35,6 +38,8 @@ header and fix the map.
 | `IAssetPlugin`, `IAssetKindRegistry`, `IAssetKind` | [IAssetPlugin.h](libs/assetlib/include/assetlib/IAssetPlugin.h) | Qt-free authored-kind registration and document operations |
 | `IEditorPlugin` | [IEditorPlugin.h](libs/editor_api/include/editor_api/IEditorPlugin.h) | Register editor contributions at startup |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
+| `LocalizedText` | [LocalizedText.h](libs/editor_api/include/editor_api/LocalizedText.h) | Deferred label lookup with fallback |
+| `MenuDesc` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
 | `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_api/include/editor_api/EditorPanel.h) | Project-scoped widgets, close veto and held assets |
 | `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_api/include/editor_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
@@ -92,10 +97,22 @@ new panels against a new host; do not silently retarget stored references to old
 - **Factories:** @pre a non-null parent and live project host. @post return a non-null widget
   parented to that parent, transferring Qt ownership to the host. Each registered panel/editor is
   one reusable tab per project. Factories are lazy; registration cannot access a project.
+- **Labels:** context and key are nonempty, case-sensitive UTF-8 identifiers; context is
+  plugin-qualified. Fallback is nonempty display text. Lookup uses the pair in the active locale;
+  a missing entry uses fallback, never the key. IDs, extensions and stored asset keys are never
+  translated. The host retains descriptors and re-resolves its menu, action and tab labels when
+  locale changes, on the GUI thread. Plugin-owned widget text remains the plugin's responsibility;
+  catalog discovery, notifications, pluralization and formatting are future localization work.
+- **Menus:** the host supplies `c_FileMenuId` and `c_ToolsMenuId` before plugin registration.
+  `AddMenu` creates a plugin-qualified ID with a localized label; empty parent means a root menu,
+  otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
+  reserved `editor.` IDs and missing parents; never find, merge or create menus by their labels.
+  Menu IDs have their own namespace. Failed registration rolls back menus with other contributions.
 - **Actions:** both callbacks are required. Empty extensions means a menu action with an empty
   selection; otherwise the action is a content-menu contribution, offered only when every selected
-  key matches. Menu components identify a menu path; the host owns the actual actions and menus.
-  A plugin can contribute to `File` or another menu, but its actions are disabled without an open
+  key matches. A menu action requires an existing `menuId`; a content-menu action requires an
+  empty `menuId`. The host owns the actual actions and menus.
+  A plugin can target `c_FileMenuId` or another registered menu, but its actions are disabled without an open
   project because they borrow `IEditorHost`. Shell commands such as `File → Open Project` stay
   host-owned and available before a project opens; this API does not expose project switching to
   plugins. `AddAction` is a menu-bar/content-menu contract, not a toolbar-button contract.
@@ -129,7 +146,10 @@ it has no editor implementation include path. It currently displays a selected d
 a working document editor. The fake host deliberately fails if it is asked for storage or graphics.
 
 `just test editor_plugin` exercises deferred registration, Qt ownership, tab activation, held asset
-replacement, malformed-document refusal, reference rewriting and preservation of unknown fields.
+replacement, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
 against its Qt-free target alone. Renderer scheduling, DLL ABI checks, registry validation and real
 store/pack behavior require later integration tests; the fake host does not establish them.
+
+The localization fixture uses an in-memory catalog to exercise the descriptor contract; it does
+not test a production translator, catalog loading, live widget retranslation or registry validation.
