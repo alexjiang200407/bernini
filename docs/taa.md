@@ -115,7 +115,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   costs is the frames a moving pixel waits for the phase that serves it, which no still measurement
   can see.
 
-* **The clamp box, the dilation and the own-motion test all stay on the render 3×3.**
+* **The clamp box, the dilation and the own-motion test all stay on the render grid.** The clamp
+  reads its 3×3, and the dilation and the own-motion test read its cross.
   A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
   neighbourhood did not already contain. Only the history fetch and its Catmull-Rom taps are in
   output texels.
@@ -199,7 +200,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   filtered when reconstructing a different output grid. Valid history keeps the 5% blend, with
   reconstruction weights bounded to a convex blend.
 
-  Rejection requires motion above the noise floor and no own motion anywhere in the 3×3, because
+  Rejection requires motion above the noise floor and no own motion anywhere in the cross, because
   camera matrices do not describe an object's previous depth. Resting accumulation is unchanged.
   Own motion is the velocity buffer's BA, written by the forward pass ([Passes Overview](passes.md)
   § Motion vectors). Its two projections share their math, so a static surface reads exactly zero
@@ -216,11 +217,14 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   [TaaHistory_test.cpp](libs/bgl_extended/tests/src/TaaHistory_test.cpp). The depth SRV and history
   resources retain their existing frame-graph tracking; see [Passes Overview](passes.md).
 
-* **Velocity-dilated by the nearest surface in the 3×3.** This is the standard rule: UE4
+* **Velocity-dilated by the nearest surface in the cross.** This is the standard rule: UE4
   `TemporalAA.usf`, UE5 TSR's velocity dilation and Unity's `GetClosestFragment`. The pixel reprojects
-  by the vector of whichever tap has the smallest depth, and the centre wins a tie. A silhouette
-  pixel whose centre the backdrop won still carries the foreground's motion, so the edge mixture
-  reprojects with the surface that made it and the outline of an animating mesh does not double.
+  by the vector of whichever of the centre and its four edge neighbours has the smallest depth, and
+  the centre wins a tie. A silhouette pixel whose centre the backdrop won still carries the
+  foreground's motion, so the edge mixture reprojects with the surface that made it and the outline
+  of an animating mesh does not double. The diagonals are left out: that saves 4% of the pass on the
+  M3 Pro, at a longer pan trail (background bleed 0.0045 → 0.0065) and a softer animating outline
+  (drifting camera 5.2e-5 → 8.6e-5) than the full 3×3.
 
   It replaced a bespoke rule: borrow the vector of the neighbour moving most *on its own*. That rule
   rebuilt the camera's share of every tap from depth, which PIX put at 40% of the pass on an
@@ -228,11 +232,12 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   background's vector. Measured on one build, old rule → closest-depth:
 
   - The skinned quad sweeping over a backdrop, animating against held: 1.8e-4 → 1.8e-4 under a still
-    camera, and 2.9e-4 → 5.2e-5 under a drifting one.
+    camera, and 2.9e-4 → 5.2e-5 under a drifting one (over the 3×3; over the cross, 2.2e-4 and
+    8.6e-5).
   - The hashed-ramp smear against the converged still: 4–22% lower across render scales and
     reconstruction widths.
-  - A converged hashed patch under a pan, frame to frame: 0.0020 → 0.0042. This is the one figure
-    that rises. The old rule's exact-texel fetch pinned the noise to the screen, and the patch is
+  - A converged hashed patch under a pan, frame to frame: 0.0020 → 0.0042 (0.0037 over the cross).
+    This is the one figure that rises. The old rule's exact-texel fetch pinned the noise to the screen, and the patch is
     featureless, so it cannot show that the pinned history came from the wrong place; the ramp does.
 
   By eye, a hashed hair asset showed no visible difference, if anything an improvement.

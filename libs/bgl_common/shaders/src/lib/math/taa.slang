@@ -158,9 +158,10 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // hashed surface trails at a distance -- where the sigma box recentres on the majority.
     // The trade-off history is in docs/taa.md.
     //
-    // The same 3x3 yields the vector of its nearest surface, which stands in for the foreground at a
-    // silhouette, the centre winning a tie; and the most any of it moved on its own, which is what
-    // tells an animating surface from one the camera drags past (docs/taa.md).
+    // Its cross -- the centre and its four edge neighbours -- yields the vector of the nearest
+    // surface, which stands in for the foreground at a silhouette, the centre winning a tie; and the
+    // most any of it moved on its own, which is what tells an animating surface from one the camera
+    // drags past (docs/taa.md).
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
@@ -189,6 +190,11 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
             boxMax = max(boxMax, tap);
             m1 += tap;
             m2 += tap * tap;
+
+            if (x != 0 && y != 0)
+            {
+                continue;
+            }
 
             float4 tapVelocity = inputs.Motion(tapUv);
             float tapDepth = inputs.Depth(tapUv);

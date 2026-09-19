@@ -1017,8 +1017,9 @@ TEST_CASE("A pan does not flicker a converged hashed patch", "[hashedalpha][rend
 	// The floor has to be small, or the bound below hides the flicker inside legitimate motion.
 	REQUIRE(opaque < 1e-5f);
 
-	// Measured 0.0042 on Apple silicon under closest-depth dilation. A discarded fragment borrows
-	// the plane's vector, so its history is fetched at a fresh fractional offset every frame.
+	// Measured 0.0037 on Apple silicon under closest-depth dilation over the cross (0.0042 over the
+	// 3x3). A discarded fragment borrows the plane's vector, so its history is fetched at a fresh
+	// fractional offset every frame.
 	// Dilating by own motion instead read 0.0020 (Apple) and 0.0040 (NVIDIA Ada): it reprojected a
 	// discard by the empty background's zero vector, pinning the noise to the screen. On this
 	// featureless patch pinned history is indistinguishable from the right history, so this figure

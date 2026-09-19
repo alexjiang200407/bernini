@@ -30,9 +30,12 @@ struct Occlusion : IResolveInputs
         return 0.3;
     }
     int2 Offset(float2 uv) { return int2(round((uv - sampleCentre) * renderSize)); }
-    // Scenarios 19 and 20 put one neighbour, moving far enough to reproject off-screen, nearer and
-    // farther than the centre.
-    bool Neighbour(float2 uv) { return (scenario == 19 || scenario == 20) && all(Offset(uv) == int2(1, 0)); }
+    // Scenarios 19 and 20 put one edge neighbour, moving far enough to reproject off-screen, nearer
+    // and farther than the centre; 21 puts it on a diagonal, nearer.
+    bool Neighbour(float2 uv)
+    {
+        return ((scenario == 19 || scenario == 20) && all(Offset(uv) == int2(1, 0))) || (scenario == 21 && all(Offset(uv) == int2(1, 1)));
+    }
 
     float4 Scene(float2 uv)
     {
@@ -42,11 +45,11 @@ struct Occlusion : IResolveInputs
     }
     float3 SceneLinear(float2 uv) { return float3(0.2); }
     float4 Motion(float2 uv) { return Neighbour(uv) ? float4(0.6, 0.0, 0.0, 0.0) : float4(motion, ownMotion); }
-    float Depth(float2 uv) { return Neighbour(uv) ? (scenario == 19 ? 0.3 : 0.9) : 0.6; }
+    float Depth(float2 uv) { return Neighbour(uv) ? (scenario == 20 ? 0.9 : 0.3) : 0.6; }
 };
 
 [shader("compute")]
-[numthreads(21, 1, 1)]
+[numthreads(22, 1, 1)]
 void main(uint index: SV_DispatchThreadID)
 {
     ResolveParams p = {};
@@ -71,7 +74,7 @@ void main(uint index: SV_DispatchThreadID)
         p.historyValid = 0.0;
     if (index == 7)
         p.cameraPairValid = 0.0;
-    if (index == 8 || index == 19 || index == 20)
+    if (index == 8 || index >= 19)
         inputs.motion = 0.0;
     if (index == 9)
     {

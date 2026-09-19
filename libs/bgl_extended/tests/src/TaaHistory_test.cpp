@@ -46,7 +46,7 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	constexpr uint32_t c_Count = 21;
+	constexpr uint32_t c_Count = 22;
 
 	auto bufDesc = bgl::ComputeBufferDesc();
 	bufDesc.SetElement<glm::vec2>().SetInitialCount(c_Count).SetDebugName("Compute Out Buffer");
@@ -113,7 +113,8 @@ TEST_CASE(
 		  "fast camera-only motion",
 		  "fast own motion",
 		  "a nearer neighbour lends its vector",
-		  "a farther neighbour does not" }
+		  "a farther neighbour does not",
+		  "a nearer diagonal does not" }
 	};
 	for (uint32_t i = 0; i < c_Count; ++i)
 	{
