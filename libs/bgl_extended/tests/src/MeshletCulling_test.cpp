@@ -25,6 +25,7 @@
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <array>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <bgl/Camera.h>
