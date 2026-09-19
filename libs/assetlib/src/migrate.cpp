@@ -467,7 +467,7 @@ namespace assetlib
 			std::ranges::count_if(paths, [this](const std::filesystem::path& path) {
 				return assetTypeFromExtension(path).has_value() ||
 			           (GetKindRegistry() != nullptr &&
-			            GetKindRegistry()->FindByExtension(path.extension().generic_string()) !=
+			            GetKindRegistry()->FindByExtension(extensionOf(path.generic_string())) !=
 			                nullptr);
 			}));
 
@@ -478,7 +478,7 @@ namespace assetlib
 			const IAssetKind* custom =
 				GetKindRegistry() == nullptr ?
 					nullptr :
-					GetKindRegistry()->FindByExtension(path.extension().generic_string());
+					GetKindRegistry()->FindByExtension(extensionOf(path.generic_string()));
 			if (!type && custom == nullptr)
 				return;
 

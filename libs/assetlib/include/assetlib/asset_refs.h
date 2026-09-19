@@ -8,7 +8,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace assetlib
@@ -187,9 +186,6 @@ namespace assetlib
 		[[nodiscard]] bool
 		IsKnownAsset(std::string_view path) const;
 
-		[[nodiscard]] std::span<const DocumentReference>
-		CustomReferencesOf(std::string_view referrer) const;
-
 		[[nodiscard]] const IAssetKind*
 		CustomKindOf(std::string_view referrer) const;
 
@@ -230,9 +226,8 @@ namespace assetlib
 		std::vector<AssetRef>               m_Edges;
 		core::str::unordered_str_map<Range> m_ByTarget;
 
-		std::filesystem::path                                           m_DataRoot;
-		const AssetKindRegistry*                                        m_Registry = nullptr;
-		std::unordered_map<std::string, std::vector<DocumentReference>> m_CustomReferences;
+		std::filesystem::path    m_DataRoot;
+		const AssetKindRegistry* m_Registry = nullptr;
 
 		// Every file the scan enumerated, sorted: what Contains and GetFilesUnder answer from.
 		std::vector<std::string> m_Files;
@@ -349,7 +344,6 @@ namespace assetlib
 	{
 		RenameMove               subject;  // an asset file, or a directory
 		const AssetKindRegistry* registry = nullptr;
-		std::unordered_map<std::string, std::vector<DocumentReference>> customReferences;
 
 		/** What `subject` is, or nullopt when it is a directory -- which is not an asset. */
 		std::optional<AssetType> assetType;

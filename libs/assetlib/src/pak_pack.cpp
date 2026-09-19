@@ -248,19 +248,19 @@ namespace assetlib
 			if (isAuthoringSource(relative))
 				continue;
 
-			const std::optional<AssetType> type = assetTypeFromExtension(file);
-			const IAssetKind*              custom =
-				GetKindRegistry() == nullptr ?
-					nullptr :
-					GetKindRegistry()->FindByExtension(file.extension().generic_string());
+			const std::optional<AssetType> type      = assetTypeFromExtension(file);
+			const std::string              extension = extensionOf(relative.generic_string());
+			const IAssetKind* custom = GetKindRegistry() == nullptr ?
+			                               nullptr :
+			                               GetKindRegistry()->FindByExtension(extension);
 			if (!type.has_value() && custom == nullptr)
 			{
-				++report.skippedByExtension[file.extension().generic_string()];
+				++report.skippedByExtension[extension];
 				continue;
 			}
 			if (custom != nullptr && !custom->GetDesc().includeInPack)
 			{
-				++report.skippedByExtension[file.extension().generic_string()];
+				++report.skippedByExtension[extension];
 				continue;
 			}
 			// Authored, and the game never reads it: a read-only store uses the baked-in bindings.

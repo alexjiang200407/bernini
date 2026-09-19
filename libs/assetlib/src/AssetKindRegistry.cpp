@@ -26,7 +26,7 @@ namespace
 		if (value.size() < 2 || value.front() != '.')
 			return false;
 		for (const unsigned char c : value.substr(1))
-			if (!(std::isalnum(c) != 0 || c == '_'))
+			if (!(std::islower(c) != 0 || std::isdigit(c) != 0 || c == '_'))
 				return false;
 		return true;
 	}

@@ -314,15 +314,18 @@ namespace assetlib
 
 		std::vector<std::byte>
 		rewriteCustomReferrer(
-			const RenamePlan&                  plan,
-			const IAssetKind&                  kind,
-			std::span<const DocumentReference> references,
-			std::span<const std::byte>         bytes)
+			const RenamePlan&          plan,
+			const IAssetKind&          kind,
+			std::span<const std::byte> bytes)
 		{
+			auto references   = kind.ReadReferences(bytes);
 			auto replacements = std::vector<DocumentReference>();
 			replacements.reserve(references.size());
-			for (const DocumentReference& reference : references)
+			for (DocumentReference& reference : references)
+			{
+				reference.target = normalizeRef(reference.target);
 				replacements.push_back({ mapTarget(plan, reference.target), reference.field });
+			}
 			return kind.RewriteReferences(bytes, replacements);
 		}
 
@@ -458,14 +461,6 @@ namespace assetlib
 			for (const RenameMove& move : plan.outputs) follow(move.from);
 		}
 
-		for (const AssetRef& referrer : plan.referrers)
-			if (referrer.kind == RefKind::kCustom)
-				plan.customReferences.emplace(
-					referrer.referrer,
-					std::vector<DocumentReference>(
-						graph.CustomReferencesOf(referrer.referrer).begin(),
-						graph.CustomReferencesOf(referrer.referrer).end()));
-
 		// equivalent() is what tells a real collision from a case-only rename on a case-insensitive
 		// filesystem, where the destination "exists" because it is the file being renamed.
 		std::error_code ec;
@@ -597,11 +592,7 @@ namespace assetlib
 				if (file.type)
 					(void)rewriteReferrer(plan, *file.type, file.original);
 				else
-					(void)rewriteCustomReferrer(
-						plan,
-						*file.custom,
-						plan.customReferences.at(referrer),
-						file.original);
+					(void)rewriteCustomReferrer(plan, *file.custom, file.original);
 			}
 			catch (const std::exception& e)
 			{
@@ -636,10 +627,6 @@ namespace assetlib
 						rewriteCustomReferrer(
 							plan,
 							*files[written].custom,
-							plan.customReferences.at(
-								files[written]
-									.path.lexically_relative(GetDataRoot())
-									.generic_string()),
 							files[written].original);
 				writeFileBytes(files[written].path, rewritten, "rename");
 			}

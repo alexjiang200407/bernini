@@ -105,6 +105,7 @@ TEST_CASE(
 	assetlib::AssetKindRegistry registry;
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("", ".bexample")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("bad key", ".custom")));
+	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("upper.extension", ".BEXAMPLE")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("bad.extension", "custom")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("bad.extension", ".bad-ext")));
 	REQUIRE_THROWS(registry.Add(nullptr));

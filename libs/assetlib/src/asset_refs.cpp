@@ -300,14 +300,6 @@ namespace assetlib
 		       (m_Registry != nullptr && m_Registry->FindByExtension(extension) != nullptr);
 	}
 
-	std::span<const DocumentReference>
-	AssetRefGraph::CustomReferencesOf(std::string_view referrer) const
-	{
-		const auto found = m_CustomReferences.find(normalizeRef(referrer));
-		return found == m_CustomReferences.end() ? std::span<const DocumentReference>() :
-		                                           found->second;
-	}
-
 	const IAssetKind*
 	AssetRefGraph::CustomKindOf(std::string_view referrer) const
 	{
@@ -412,7 +404,6 @@ namespace assetlib
 						edges.push_back(
 							{ referrer, normalizeRef(reference.target), RefKind::kCustom });
 					}
-					graph.m_CustomReferences.emplace(referrer, std::move(references));
 				}
 			}
 		}
