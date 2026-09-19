@@ -65,7 +65,7 @@ namespace assetlib
 		kDocumentOutput,    // a .bimport names a container its source produced
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
-		kCustom,          // a registered authored kind reports an opaque field token
+		kPlugin,          // a plugin-registered authored kind reports an opaque field token
 	};
 
 	/**
@@ -187,7 +187,7 @@ namespace assetlib
 		IsKnownAsset(std::string_view path) const;
 
 		[[nodiscard]] const IAssetKind*
-		CustomKindOf(std::string_view referrer) const;
+		PluginKindOf(std::string_view referrer) const;
 
 		[[nodiscard]] const AssetKindRegistry*
 		GetKindRegistry() const noexcept

@@ -301,7 +301,7 @@ namespace assetlib
 	}
 
 	const IAssetKind*
-	AssetRefGraph::CustomKindOf(std::string_view referrer) const
+	AssetRefGraph::PluginKindOf(std::string_view referrer) const
 	{
 		if (m_Registry == nullptr)
 			return nullptr;
@@ -402,7 +402,7 @@ namespace assetlib
 					{
 						reference.target = normalizeRef(reference.target);
 						edges.push_back(
-							{ referrer, normalizeRef(reference.target), RefKind::kCustom });
+							{ referrer, normalizeRef(reference.target), RefKind::kPlugin });
 					}
 				}
 			}

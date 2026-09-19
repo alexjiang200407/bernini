@@ -132,7 +132,7 @@ TEST_CASE(
 	assetlib::AssetStore          store(root, &registry);
 	const assetlib::AssetRefGraph graph = assetlib::AssetRefGraph::Scan(store);
 	REQUIRE(graph.ReferrersOf("Target.bexample").size() == 1);
-	REQUIRE(graph.ReferrersOf("Target.bexample").front().kind == assetlib::RefKind::kCustom);
+	REQUIRE(graph.ReferrersOf("Target.bexample").front().kind == assetlib::RefKind::kPlugin);
 	REQUIRE_FALSE(assetlib::planDeletion(graph, "Target.bexample").Allowed());
 
 	std::filesystem::remove_all(root);

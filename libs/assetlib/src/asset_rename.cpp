@@ -414,13 +414,13 @@ namespace assetlib
 		else
 		{
 			plan.assetType           = assetTypeFromExtension(plan.subject.from);
-			const IAssetKind* custom = graph.CustomKindOf(plan.subject.from);
+			const IAssetKind* custom = graph.PluginKindOf(plan.subject.from);
 			if (!plan.assetType && custom == nullptr)
 				throw std::runtime_error(
 					"assetlib::planRename: '" + plan.subject.from +
 					"' is not an asset this project stores anything about");
 
-			const IAssetKind* targetCustom = graph.CustomKindOf(plan.subject.to);
+			const IAssetKind* targetCustom = graph.PluginKindOf(plan.subject.to);
 			if (assetTypeFromExtension(plan.subject.to) != plan.assetType || targetCustom != custom)
 				throw std::runtime_error(
 					"assetlib::planRename: renaming '" + plan.subject.from + "' to '" +
