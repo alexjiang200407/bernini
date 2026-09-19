@@ -463,16 +463,23 @@ namespace assetlib
 
 		// The copied sources are in `paths` too and are not containers, so counting every path
 		// would leave the bar short of its own total by however many a project has.
-		const size_t resavable =
-			static_cast<size_t>(std::ranges::count_if(paths, [](const std::filesystem::path& path) {
-				return assetTypeFromExtension(path).has_value();
+		const size_t resavable = static_cast<size_t>(
+			std::ranges::count_if(paths, [this](const std::filesystem::path& path) {
+				return assetTypeFromExtension(path).has_value() ||
+			           (GetKindRegistry() != nullptr &&
+			            GetKindRegistry()->FindByExtension(extensionOf(path.generic_string())) !=
+			                nullptr);
 			}));
 
 		const auto resaveOne = [&](size_t index) {
 			const std::filesystem::path& path = paths[index];
 
-			const auto type = assetTypeFromExtension(path);
-			if (!type)
+			const auto        type = assetTypeFromExtension(path);
+			const IAssetKind* custom =
+				GetKindRegistry() == nullptr ?
+					nullptr :
+					GetKindRegistry()->FindByExtension(extensionOf(path.generic_string()));
+			if (!type && custom == nullptr)
 				return;
 
 			const std::string key =
@@ -480,8 +487,8 @@ namespace assetlib
 
 			reportStep(
 				sink,
-				*type == AssetType::kMaterial ? ProgressPhase::kBakingMaterials :
-												ProgressPhase::kResaving,
+				type && *type == AssetType::kMaterial ? ProgressPhase::kBakingMaterials :
+														ProgressPhase::kResaving,
 				key,
 				done.fetch_add(1),
 				resavable);
@@ -489,8 +496,10 @@ namespace assetlib
 			MigratedFile file{ path, MigratedFile::Outcome::kUnchanged, {} };
 			try
 			{
-				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(*this, rigs, *type, key, bytes, dryRun);
+				const auto bytes = core::file::read_file_bytes(path.string());
+				const auto current =
+					type ? resave(*this, rigs, *type, key, bytes, dryRun) :
+						   std::optional<std::vector<std::byte>>(custom->Migrate(bytes));
 				if (!current)
 					return;
 				if (*current != bytes)

@@ -108,6 +108,8 @@ namespace
 			return "authors the legs of";
 		case assetlib::RefKind::kBlendClips:
 			return "blends clips of";
+		case assetlib::RefKind::kPlugin:
+			return "references";
 		}
 
 		return "references";

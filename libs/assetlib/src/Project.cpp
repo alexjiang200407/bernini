@@ -1,10 +1,12 @@
 #include <algorithm>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
+#include <core/file/LooseFileSystem.h>
 
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -136,6 +138,9 @@ namespace assetlib
 		// separate files, and one packed blob is the wrong unit for that. An archive is what `pack`
 		// makes from this tree to ship, and what a shipped game mounts -- it is never read back here,
 		// so an asset the editor lists is always an asset the editor can write.
-		m_Store.emplace(GetDataDirectory());
+		m_Store.emplace(
+			GetDataDirectory(),
+			std::make_shared<const core::file::LooseFileSystem>(GetDataDirectory()),
+			m_Registry);
 	}
 }

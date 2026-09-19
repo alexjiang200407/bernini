@@ -1,8 +1,10 @@
 #pragma once
+#include <assetlib/IAssetPlugin.h>
 #include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -12,6 +14,8 @@
 namespace assetlib
 {
 	class AssetStore;
+	class AssetKindRegistry;
+	class IAssetKind;
 
 	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
@@ -62,6 +66,7 @@ namespace assetlib
 		kDocumentOutput,    // a .bimport names a container its source produced
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
+		kPlugin,          // a plugin-registered authored kind reports an opaque field token
 	};
 
 	/**
@@ -179,6 +184,18 @@ namespace assetlib
 		[[nodiscard]] bool
 		Contains(std::string_view path) const;
 
+		[[nodiscard]] bool
+		IsKnownAsset(std::string_view path) const;
+
+		[[nodiscard]] const IAssetKind*
+		PluginKindForPath(std::string_view path) const;
+
+		[[nodiscard]] const std::shared_ptr<const AssetKindRegistry>&
+		GetKindRegistry() const noexcept
+		{
+			return m_Registry;
+		}
+
 		/**
 		 * Every file the scan saw beneath `directory`, sorted, and empty when there are none.
 		 *
@@ -210,7 +227,8 @@ namespace assetlib
 		std::vector<AssetRef>               m_Edges;
 		core::str::unordered_str_map<Range> m_ByTarget;
 
-		std::filesystem::path m_DataRoot;
+		std::filesystem::path                    m_DataRoot;
+		std::shared_ptr<const AssetKindRegistry> m_Registry;
 
 		// Every file the scan enumerated, sorted: what Contains and GetFilesUnder answer from.
 		std::vector<std::string> m_Files;
@@ -325,7 +343,8 @@ namespace assetlib
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
 	{
-		RenameMove subject;  // an asset file, or a directory
+		RenameMove                               subject;  // an asset file, or a directory
+		std::shared_ptr<const AssetKindRegistry> registry;
 
 		/** What `subject` is, or nullopt when it is a directory -- which is not an asset. */
 		std::optional<AssetType> assetType;

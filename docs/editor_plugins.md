@@ -2,9 +2,10 @@
 
 `editor_api` defines the public C++ contracts for native editor extensions. This is an interface
 review milestone: the compiled sample and recording host exercise the contracts, but the editor
-does not yet load plugins or dispatch through them. `AssetStore` does not yet consume registered
-kinds. The headers at the linked paths are the source of truth; when this map disagrees, trust the
-header and fix the map.
+does not yet load plugins or dispatch through them. Local runtime plugins can register authored
+kinds before a project's store opens; the store, graph, rename, migrate and pack paths then use
+that registry. The headers at the linked paths are the source of truth; when this map disagrees,
+trust the header and fix the map.
 
 ## Design choices
 
@@ -156,7 +157,8 @@ new panels against a new host; do not silently retarget stored references to old
 - **Packing/migration:** registered kinds are authored documents; `includeInPack` defaults to true.
   `Migrate` validates and returns current-schema bytes even for a kind with no older schema.
   Custom derived cache formats are outside this initial contract. Existing typed codecs and store
-  operations remain the only project I/O seam; their registration integration is still pending.
+  operations remain the project I/O seam; custom bytes are read through the host filesystem and
+  written by host-owned rename, migrate and pack transactions.
 
 ## Usage sketch
 
