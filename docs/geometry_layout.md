@@ -56,8 +56,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
   [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) and consumed by both the CPU (generated
   `<build>/generated/bgl_common/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
-  carries a bounding sphere, written by the scene but read by nothing yet: culling today is
-  per-instance, against the submesh's sphere
+  carries a bounding sphere, and every run of `idl::cMeshletsPerGroup` (8) of them carries a second
+  one in `MeshletGroup`, enclosing every vertex under it. The static tier culls by the group's sphere
+  and then by the meshlet's ([Passes § Meshlet culling](docs/passes.md#meshlet-culling));
+  instance-level culling is against the submesh's
   ([CullInstances.slang](libs/bgl_extended/shaders/src/programs/culling/CullInstances.slang)).
 
   This model draws from the meshopt pools — `meshletVertices` and `meshletTriangles` — and **never
@@ -72,8 +74,9 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   its meshlet/vertex/index ranges, and a local-space bounding sphere — and *nothing about shading*.
   The sphere circumscribes the submesh's AABB: the cooked `assetlib::Submesh` AABB for an asset, a
   fold over the generated vertices for a procedural geom. `Scene::AddStaticMeshGeom` emits
-  exactly one per source submesh, in source order. Its meshlet count is *unbounded* — up to the 65535
-  thread groups a `DispatchMesh` can launch — and is a dispatch dimension, never a partitioning
+  exactly one per source submesh, in source order. Its meshlet count is *unbounded* — up to the
+  largest multiple of `cMeshletsPerGroup` under the 65535 thread groups a `DispatchMesh` can launch,
+  since the static tier dispatches whole groups — and is a dispatch dimension, never a partitioning
   criterion. Nothing may split a submesh on meshlet count: doing so duplicates the partition's
   identity across the pieces and breaks source-index addressing (see the contract below).
 
@@ -161,8 +164,9 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | `MeshInstance` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform and of the transform the previous frame drew it with, an `Entry<Geom>` naming what it was placed from, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh, and a `uint flags` word of `MeshInstanceFlag` bits, zero by default. |
 | `Geom` | [Geom.slang](libs/bgl_common/shaders/src/idl/Geom.slang) | What a geometry-creating method produced and every placement from it shares: its `RangeWithCount<Submesh>`. Owned by the `Scene`, one per live geom, freed by `DeleteGeom`, and named by every `MeshInstance` placed from it. |
 | `Clip` | [Clip.slang](libs/bgl_common/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
-| `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
-| `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, local bounding sphere -- what the static tier frustum-culls it by ([Passes § Meshlet culling](docs/passes.md#meshlet-culling)). |
+| `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere, and its `MeshletGroup` range -- whose length follows from the meshlet count, so it carries no count of its own. No material, no PSO — those are per-instance. |
+| `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, local bounding sphere -- what the mesh stage frustum-culls it by ([Passes § Meshlet culling](docs/passes.md#meshlet-culling)). |
+| `MeshletGroup` | [MeshletGroup.slang](libs/bgl_common/shaders/src/idl/MeshletGroup.slang) | One local bounding sphere over a run of `cMeshletsPerGroup` consecutive meshlets, enclosing every vertex they draw -- what the amplification stage frustum-culls in, so it reads an eighth as many spheres as there are meshlets. Cooked into the `.bmesh`; folded out of the meshlet spheres for geometry that has no cook. |
 | `DecodedVertex` | [vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
@@ -195,7 +199,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 
 | Type | File | Role |
 |---|---|---|
-| `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl_extended/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the index, meshlet and submesh buffers; the vertex arena reaches it through `RawBuffer`. |
+| `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl_extended/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the index, meshlet, meshlet-group and submesh buffers; the vertex arena reaches it through `RawBuffer`. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl_extended/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl_extended/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
 | `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl_extended/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. Declaring a `handleStride` gives it the typed view above, which it re-issues inside its own growth. |

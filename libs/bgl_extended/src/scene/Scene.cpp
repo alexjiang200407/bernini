@@ -88,6 +88,67 @@ namespace bgl
 	{
 		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
 
+		// The static tier dispatches whole meshlet groups, so what it can launch is the largest
+		// multiple of the group size that fits. A submesh past it would round its last group up over
+		// the ceiling.
+		constexpr uint32_t c_MaxSubmeshMeshlets =
+			c_MaxDispatchMeshGroups - (c_MaxDispatchMeshGroups % idl::cMeshletsPerGroup);
+
+		// One number declared twice, because bgl does not link assetlib: the cook groups by its
+		// constant and everything below reads by this one. A drift would have a submesh read bounds
+		// fitted to another submesh's meshlets, which is geometry dropped with pixels on screen --
+		// so it is a compile error here rather than anything a container could carry past.
+		static_assert(assetlib::c_MeshletsPerGroup == idl::cMeshletsPerGroup);
+
+		/**
+		 * The bound each run of `idl::cMeshletsPerGroup` meshlets is culled by, folded out of the
+		 * meshlet spheres.
+		 *
+		 * What a submesh with no cooked bounds gets: a procedural primitive, whose meshlets are built
+		 * here and never pass through a cook, or a `BMesh` assembled in memory. It encloses the same
+		 * geometry the cook's fit does, just less tightly -- a sphere over spheres carries a meshlet
+		 * radius of slack at every extreme.
+		 */
+		std::vector<idl::MeshletGroup>
+		FoldMeshletGroups(std::span<const idl::Meshlet> meshlets)
+		{
+			std::vector<idl::MeshletGroup> groups;
+			groups.reserve((meshlets.size() + idl::cMeshletsPerGroup - 1) / idl::cMeshletsPerGroup);
+
+			for (size_t first = 0; first < meshlets.size(); first += idl::cMeshletsPerGroup)
+			{
+				const std::span<const idl::Meshlet> run = meshlets.subspan(
+					first,
+					std::min<size_t>(idl::cMeshletsPerGroup, meshlets.size() - first));
+
+				auto lo = glm::vec3(std::numeric_limits<float>::max());
+				auto hi = glm::vec3(std::numeric_limits<float>::lowest());
+				for (const idl::Meshlet& meshlet : run)
+				{
+					const auto centre = glm::vec3(meshlet.boundingSphere);
+					lo                = glm::min(lo, centre - meshlet.boundingSphere.w);
+					hi                = glm::max(hi, centre + meshlet.boundingSphere.w);
+				}
+
+				const glm::vec3 centre = (lo + hi) * 0.5f;
+
+				float radius = 0.0f;
+				for (const idl::Meshlet& meshlet : run)
+				{
+					radius = std::max(
+						radius,
+						glm::distance(centre, glm::vec3(meshlet.boundingSphere)) +
+							meshlet.boundingSphere.w);
+				}
+
+				auto group           = idl::MeshletGroup();
+				group.boundingSphere = glm::vec4(centre, radius);
+				groups.emplace_back(group);
+			}
+
+			return groups;
+		}
+
 		// assetlib_structs is data by rule, so a question about a layout is answered in assetlib,
 		// which this does not link. The layout is a small fixed array and this is the whole of it.
 		bool
@@ -433,6 +494,15 @@ namespace bgl
 		}
 
 		{
+			auto groupBufferDesc = RangeBufferDesc();
+			groupBufferDesc.initialCount =
+				atLeastOne(m_Desc.initialMeshlets / idl::cMeshletsPerGroup);
+			groupBufferDesc.debugName = "Meshlet Group Buffer";
+
+			m_MeshletGroupBuffer.Init(std::move(groupBufferDesc), m_ResourceManager);
+		}
+
+		{
 			auto vertexMapBufferDesc         = RangeBufferDesc();
 			vertexMapBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
 			vertexMapBufferDesc.debugName    = "Vertex Map Buffer";
@@ -641,14 +711,14 @@ namespace bgl
 	{
 		const auto build = BuildMeshlets(verts, indices);
 
-		// One DispatchMesh can launch at most this many thread groups, and a procedural primitive is
-		// one submesh, so its meshlets all have to fit in a single dispatch.
-		if (build.meshlets.size() > c_MaxDispatchMeshGroups)
+		// A procedural primitive is one submesh, so its meshlets all have to fit in a single
+		// dispatch.
+		if (build.meshlets.size() > c_MaxSubmeshMeshlets)
 		{
 			throw SceneError(
 				"Scene::AddProceduralGeom: the primitive needs " +
 				std::to_string(build.meshlets.size()) + " meshlets, over the " +
-				std::to_string(c_MaxDispatchMeshGroups) + " a single dispatch can launch");
+				std::to_string(c_MaxSubmeshMeshlets) + " a single dispatch can launch");
 		}
 
 		try
@@ -668,13 +738,18 @@ namespace bgl
 			const auto baseMeshletGlobal =
 				rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(build.meshlets));
 
-			auto submesh        = idl::Submesh();
-			submesh.layout      = MakeProceduralLayout();
-			submesh.meshlets    = baseMeshletGlobal;
-			submesh.vertexMap   = baseMapGlobal;
-			submesh.vertexData  = baseVertexGlobal;
-			submesh.indices     = baseIndexGlobal;
-			submesh.vertexCount = static_cast<uint32_t>(verts.size());
+			const std::vector<idl::MeshletGroup> groups = FoldMeshletGroups(build.meshlets);
+			const auto                           baseGroupGlobal =
+				rollback.Track(m_MeshletGroupBuffer, m_MeshletGroupBuffer.Add(groups));
+
+			auto submesh          = idl::Submesh();
+			submesh.layout        = MakeProceduralLayout();
+			submesh.meshlets      = baseMeshletGlobal;
+			submesh.meshletGroups = baseGroupGlobal;
+			submesh.vertexMap     = baseMapGlobal;
+			submesh.vertexData    = baseVertexGlobal;
+			submesh.indices       = baseIndexGlobal;
+			submesh.vertexCount   = static_cast<uint32_t>(verts.size());
 
 			// An animated geom overrides the fold: its vertices move every frame, so the sphere must
 			// come from the clip set's posed bounds rather than the bind pose uploaded here.
@@ -1579,14 +1654,15 @@ namespace bgl
 	{
 		struct Submesh
 		{
-			std::vector<std::byte>    vertexBytes;
-			std::vector<uint32_t>     vertexMap;
-			std::vector<uint32_t>     localIndices;
-			std::vector<idl::Meshlet> meshlets;
-			assetlib::VertexLayout    layout;
-			uint32_t                  vertexCount    = 0;
-			uint32_t                  material       = 0;
-			glm::vec4                 boundingSphere = glm::vec4(0.0f);
+			std::vector<std::byte>         vertexBytes;
+			std::vector<uint32_t>          vertexMap;
+			std::vector<uint32_t>          localIndices;
+			std::vector<idl::Meshlet>      meshlets;
+			std::vector<idl::MeshletGroup> meshletGroups;
+			assetlib::VertexLayout         layout;
+			uint32_t                       vertexCount    = 0;
+			uint32_t                       material       = 0;
+			glm::vec4                      boundingSphere = glm::vec4(0.0f);
 		};
 
 		std::vector<Submesh> submeshes;
@@ -1620,7 +1696,7 @@ namespace bgl
 				throw SceneError(std::format("CookStaticMesh: submesh {} has no geometry", s));
 			}
 
-			if (src.meshletCount > c_MaxDispatchMeshGroups)
+			if (src.meshletCount > c_MaxSubmeshMeshlets)
 			{
 				throw SceneError(
 					std::format(
@@ -1628,7 +1704,7 @@ namespace bgl
 						"groups a mesh dispatch can launch",
 						s,
 						src.meshletCount,
-						c_MaxDispatchMeshGroups));
+						c_MaxSubmeshMeshlets));
 			}
 
 			const uint64_t vertexByteCount =
@@ -1689,9 +1765,30 @@ namespace bgl
 				indexCount += ml.triangleCount * 3u;
 			}
 
+			const uint32_t groupCount =
+				(src.meshletCount + idl::cMeshletsPerGroup - 1u) / idl::cMeshletsPerGroup;
+
+			// A mesh assembled in memory rather than baked carries none, and gets the fold below.
+			const bool cooked = !mesh.meshletGroups.empty();
+
+			// The offset and the count come from the file, like the vertex ranges above.
+			if (cooked && static_cast<uint64_t>(src.firstMeshletGroup) + groupCount >
+			                  mesh.meshletGroups.size())
+			{
+				throw SceneError(
+					std::format(
+						"CookStaticMesh: submesh {} claims {} meshlet group bounds at offset {}, "
+						"past the end of the mesh's {} of them",
+						s,
+						groupCount,
+						src.firstMeshletGroup,
+						mesh.meshletGroups.size()));
+			}
+
 			out.vertexMap.reserve(mapCount);
 			out.localIndices.reserve(indexCount);
 			out.meshlets.reserve(src.meshletCount);
+			out.meshletGroups.reserve(groupCount);
 
 			for (uint32_t m = 0; m < src.meshletCount; ++m)
 			{
@@ -1716,6 +1813,23 @@ namespace bgl
 				{
 					out.localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
 				}
+			}
+
+			if (cooked)
+			{
+				for (uint32_t g = 0; g < groupCount; ++g)
+				{
+					const assetlib::MeshletGroup& bound =
+						mesh.meshletGroups[src.firstMeshletGroup + g];
+
+					auto group           = idl::MeshletGroup();
+					group.boundingSphere = glm::vec4(bound.boundingCenter, bound.boundingRadius);
+					out.meshletGroups.emplace_back(group);
+				}
+			}
+			else
+			{
+				out.meshletGroups = FoldMeshletGroups(out.meshlets);
 			}
 		}
 
@@ -1771,6 +1885,9 @@ namespace bgl
 				submesh.layout = ConvertLayout(src.layout);
 				submesh.meshlets =
 					rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(src.meshlets));
+				submesh.meshletGroups = rollback.Track(
+					m_MeshletGroupBuffer,
+					m_MeshletGroupBuffer.Add(src.meshletGroups));
 				submesh.vertexMap =
 					rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(src.vertexMap));
 				submesh.vertexData = rollback.Track(
@@ -2454,6 +2571,7 @@ namespace bgl
 			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
 			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
 			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);
+			m_MeshletGroupBuffer.EraseByIndex(submesh.meshletGroups.offsetStart);
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);

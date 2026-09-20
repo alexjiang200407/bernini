@@ -338,8 +338,18 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
-* **A submesh's meshlet count is unbounded**, up to the 65535 thread groups one `DispatchMesh` can
-  launch. `Scene::AddStaticMeshGeom`
+* **One bounding sphere per run of `c_MeshletsPerGroup` (8) meshlets**, fitted to the vertices of
+  the whole run and stored in `BMesh::meshletGroups`, which each submesh names by
+  `firstMeshletGroup` — the count follows from its meshlet count. This is what the static tier's
+  amplification stage frustum-culls in ([Passes § Meshlet culling](docs/passes.md#meshlet-culling)),
+  so the fit must enclose every vertex every meshlet under it draws or the renderer drops geometry
+  that is on screen. `assetlib::c_MeshletsPerGroup` and `idl::cMeshletsPerGroup` are separate
+  constants — `bgl` does not link `assetlib` — and a `static_assert` in
+  [Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), the one file that sees both, holds them
+  equal.
+* **A submesh's meshlet count is unbounded**, up to the largest multiple of `c_MeshletsPerGroup`
+  under the 65535 thread groups one `DispatchMesh` can launch, since the tier dispatches whole
+  groups. `Scene::AddStaticMeshGeom`
   ([libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp)) emits one GPU submesh per source
   submesh and rejects anything past that limit; it never splits a submesh.
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and

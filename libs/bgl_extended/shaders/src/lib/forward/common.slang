@@ -7,30 +7,36 @@ public struct InstancedPayload
     public SubmeshInstance instance;
 }
 
-// The static tier's payload: its instance, and which of its meshlets survived the frustum -- a bit
-// per meshlet, and before each mask word how many survivors the earlier words hold, two 16-bit counts
-// a word -- unless `compactedMeshletCount` is zero, when the submesh had more than fit and every
-// meshlet is dispatched.
+// The static tier's payload: its instance, its submesh's meshlet count, and which of its meshlet
+// groups survived the frustum -- a bit per group of cMeshletsPerGroup meshlets, and before each mask
+// word how many survivors the earlier words hold, two 16-bit counts a word.
 public struct CulledPayload
 {
     public SubmeshInstance instance;
-    public uint compactedMeshletCount;
-    public uint survivorMask[cMaxCompactedMeshlets / 32];
-    public uint survivorsBefore[cMaxCompactedMeshlets / 64];
+    public uint meshletCount;
+    public uint survivorMask[cMaxCompactedGroups / 32];
+    public uint survivorsBefore[cMaxCompactedGroups / 64];
 }
 
-// The meshlet mesh group `gid` of the static tier draws: the `gid`-th survivor, in meshlet order.
-// @pre the payload is compacted, and `gid` is below its survivor count.
-public uint CulledMeshletIndex(CulledPayload payload, uint gid)
+// Groups the submesh is cut into. The last one is short unless cMeshletsPerGroup divides the count,
+// and the mesh groups standing for its missing meshlets emit nothing.
+public uint MeshletGroupCount(uint meshletCount)
 {
-    // The last mask word whose earlier survivors number no more than `gid` holds it.
+    return (meshletCount + cMeshletsPerGroup - 1u) / cMeshletsPerGroup;
+}
+
+// The meshlet group the `ordinal`-th survivor is, in group order.
+// @pre `ordinal` is below the payload's survivor count.
+public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
+{
+    // The last mask word whose earlier survivors number no more than `ordinal` holds it.
     uint lo = 0u;
-    uint hi = (payload.compactedMeshletCount + 31u) / 32u;
+    uint hi = (MeshletGroupCount(payload.meshletCount) + 31u) / 32u;
     while (hi - lo > 1u)
     {
         let mid = (lo + hi) / 2u;
         let before = (payload.survivorsBefore[mid / 2u] >> ((mid & 1u) * 16u)) & 0xFFFFu;
-        if (before <= gid)
+        if (before <= ordinal)
         {
             lo = mid;
         }
@@ -42,11 +48,19 @@ public uint CulledMeshletIndex(CulledPayload payload, uint gid)
 
     uint mask = payload.survivorMask[lo];
     let before = (payload.survivorsBefore[lo / 2u] >> ((lo & 1u) * 16u)) & 0xFFFFu;
-    for (uint skip = gid - before; skip > 0u; --skip)
+    for (uint skip = ordinal - before; skip > 0u; --skip)
     {
         mask &= mask - 1u;
     }
     return lo * 32u + firstbitlow(mask);
+}
+
+// The meshlet mesh group `gid` of the static tier draws: the group it falls in is the (gid /
+// cMeshletsPerGroup)-th survivor, and its place within that group is the remainder. Past the
+// submesh's meshlet count where the last group is short.
+public uint CulledMeshletIndex(CulledPayload payload, uint gid)
+{
+    return CulledGroupIndex(payload, gid / cMeshletsPerGroup) * cMeshletsPerGroup + (gid % cMeshletsPerGroup);
 }
 
 public struct ForwardVSOut

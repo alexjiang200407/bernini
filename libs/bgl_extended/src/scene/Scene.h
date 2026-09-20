@@ -42,6 +42,7 @@
 #include <bgl_common/idl/Geom.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
+#include <bgl_common/idl/MeshletGroup.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/Rig.h>
 #include <bgl_common/idl/SkinnedBone.h>
@@ -169,6 +170,12 @@ namespace bgl
 		GetMeshletBuffer() noexcept
 		{
 			return m_MeshletBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetMeshletGroupBuffer() noexcept
+		{
+			return m_MeshletGroupBuffer;
 		}
 
 		[[nodiscard]] auto&
@@ -672,6 +679,7 @@ namespace bgl
 
 		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
 		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
+		RangeBuffer<idl::MeshletGroup>             m_MeshletGroupBuffer;
 		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
 		RawBuffer<>                                m_VertexDataBuffer;
 		RangeBuffer<uint32_t>                      m_IndexBuffer;
@@ -723,6 +731,7 @@ namespace bgl
 			NamedBuffer{ c_GeomBufferName, &Scene::m_GeomBuffer },
 			NamedBuffer{ c_SubmeshBufferName, &Scene::m_SubmeshBuffer },
 			NamedBuffer{ c_MeshletBufferName, &Scene::m_MeshletBuffer },
+			NamedBuffer{ c_MeshletGroupBufferName, &Scene::m_MeshletGroupBuffer },
 			NamedBuffer{ c_VertexMapBufferName, &Scene::m_VertexMapBuffer },
 			NamedBuffer{ c_VertexDataBufferName, &Scene::m_VertexDataBuffer },
 			NamedBuffer{ c_IndexBufferName, &Scene::m_IndexBuffer },

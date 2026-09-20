@@ -46,6 +46,7 @@
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/Meshlet.h>
+#include <bgl_common/idl/MeshletGroup.h>
 #include <bgl_common/idl/Submesh.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -57,10 +58,10 @@
 #include <vector>
 
 // Meshlet culling may only ever drop what the raster would have clipped whole. The first case pins
-// that against the same floor drawn with nothing culled -- too many meshlets to compact, each sphere
-// inflated past the whole scene, so the same shaders dispatch and keep every one -- through both
-// culling paths: the amplification group's compaction, and the mesh stage's own test for a submesh
-// too large to compact. The second pins that culling happens at all, which an image cannot show.
+// that against the same floor drawn with nothing culled -- every sphere inflated past the whole
+// scene, so the same shaders dispatch and keep every group -- through both halves of the cull: the
+// amplification group's per-group test, and the mesh stage's own test of the meshlet it draws. The
+// second pins that culling happens at all, which an image cannot show.
 
 namespace
 {
@@ -69,7 +70,10 @@ namespace
 
 	// Wider than the frustum on every side and deeper than its far plane, and behind the camera too,
 	// so every plane of the frustum cuts it.
-	constexpr uint32_t c_FloorSegments = 96;
+	// Odd on purpose: at c_QuadsPerMeshlet a column is 97 meshlets and there are 14 of them, so the
+	// floor is 1358 -- not a multiple of cMeshletsPerGroup, which is what puts a short last group in
+	// every case below.
+	constexpr uint32_t c_FloorSegments = 97;
 	constexpr float    c_FloorSize     = 400.0f;
 
 	struct FloorVertex
@@ -80,14 +84,17 @@ namespace
 
 	constexpr uint16_t c_Stride = sizeof(FloorVertex);
 
-	// A row of up to this many quads is one meshlet: its two rows of vertices fill the 64 a meshlet
-	// holds.
-	constexpr uint32_t c_QuadsPerMeshlet = 31;
+	// A strip of up to this many quads is one meshlet -- far short of the 64 vertices one holds,
+	// because the meshlets below are emitted a column at a time, so a run of cMeshletsPerGroup of
+	// them is a compact block the way a cook's clusters are. A meshlet spanning a whole row would
+	// give its group a bound reaching the frustum wherever the camera looked.
+	constexpr uint32_t c_QuadsPerMeshlet = 7;
 
 	/**
 	 * Appends a horizontal grid facing +Y, centred on `centre`, to `mesh`'s one submesh, cut into
-	 * meshlets a row strip at a time with bounds measured the way the cook's are -- enclosing every
-	 * vertex -- and appended after the meshlets already there.
+	 * meshlets a row strip at a time -- a column of strips before the next column, so consecutive
+	 * meshlets are neighbours -- with bounds measured the way the cook's are, enclosing every vertex,
+	 * and appended after the meshlets already there.
 	 */
 	void
 	AppendFloor(
@@ -121,9 +128,9 @@ namespace
 		}
 		submesh.vertexCount += rowStride * (zSegments + 1u);
 
-		for (uint32_t z = 0u; z < zSegments; ++z)
+		for (uint32_t x0 = 0u; x0 < xSegments; x0 += c_QuadsPerMeshlet)
 		{
-			for (uint32_t x0 = 0u; x0 < xSegments; x0 += c_QuadsPerMeshlet)
+			for (uint32_t z = 0u; z < zSegments; ++z)
 			{
 				const uint32_t quads = std::min(c_QuadsPerMeshlet, xSegments - x0);
 
@@ -163,6 +170,50 @@ namespace
 		}
 	}
 
+	/**
+	 * Fills the mesh's cooked group bounds from the meshlet spheres as they now stand, one per run
+	 * of `cMeshletsPerGroup`. Run last, so a case that has moved a meshlet's sphere moves the bound
+	 * over it too.
+	 */
+	void
+	FillMeshletGroups(assetlib::BMesh& mesh)
+	{
+		assetlib::Submesh& submesh = mesh.submeshes.front();
+
+		submesh.firstMeshletGroup = 0;
+		mesh.meshletGroups.clear();
+
+		for (uint32_t first = 0; first < submesh.meshletCount;
+		     first += assetlib::c_MeshletsPerGroup)
+		{
+			const uint32_t last =
+				std::min(first + assetlib::c_MeshletsPerGroup, submesh.meshletCount);
+
+			auto lo = glm::vec3(std::numeric_limits<float>::max());
+			auto hi = glm::vec3(std::numeric_limits<float>::lowest());
+			for (uint32_t m = first; m < last; ++m)
+			{
+				const assetlib::Meshlet& meshlet = mesh.meshlets[submesh.firstMeshlet + m];
+				lo = glm::min(lo, meshlet.boundingCenter - meshlet.boundingRadius);
+				hi = glm::max(hi, meshlet.boundingCenter + meshlet.boundingRadius);
+			}
+
+			auto group           = assetlib::MeshletGroup();
+			group.boundingCenter = (lo + hi) * 0.5f;
+			group.boundingRadius = 0.0f;
+			for (uint32_t m = first; m < last; ++m)
+			{
+				const assetlib::Meshlet& meshlet = mesh.meshlets[submesh.firstMeshlet + m];
+				group.boundingRadius             = std::max(
+					group.boundingRadius,
+					glm::distance(group.boundingCenter, meshlet.boundingCenter) +
+						meshlet.boundingRadius);
+			}
+
+			mesh.meshletGroups.push_back(group);
+		}
+	}
+
 	assetlib::BMesh
 	MakeFloorMesh()
 	{
@@ -186,6 +237,7 @@ namespace
 		mesh.meshes.push_back(entry);
 
 		AppendFloor(mesh, glm::vec3(0.0f), c_FloorSize, c_FloorSegments, c_FloorSegments);
+		FillMeshletGroups(mesh);
 		return mesh;
 	}
 
@@ -226,9 +278,10 @@ namespace
 	{
 		kCompacted,
 		// Geometry the camera never sees, appended until the submesh has more meshlets than the
-		// amplification group compacts, so the mesh stage culls instead.
-		kOversize,
-		// Oversize, so nothing is compacted, with every meshlet's sphere past the whole scene.
+		// payload once held bits for, so the group bound is what makes it compact at all.
+		kLarge,
+		// Large, with every sphere -- the meshlets' and the groups' over them -- past the whole
+		// scene, so nothing is culled at either level.
 		kNothing,
 	};
 
@@ -256,8 +309,9 @@ namespace
 		auto mesh = MakeFloorMesh();
 		if (cull != FloorCull::kCompacted)
 		{
-			// 248 quads a row is eight full meshlets, so 1024 rows is 8192 of them.
-			AppendFloor(mesh, glm::vec3(0.0f, -40.0f, 900.0f), 200.0f, 248u, 1024u);
+			// 252 quads a row is 36 full meshlets, so 200 rows is 7200 of them -- enough that the
+			// submesh holds more meshlets than the payload has bits for groups.
+			AppendFloor(mesh, glm::vec3(0.0f, -40.0f, 900.0f), 200.0f, 252u, 200u);
 		}
 		if (cull == FloorCull::kNothing)
 		{
@@ -266,6 +320,7 @@ namespace
 				meshlet.boundingRadius = 1.0e6f;
 			}
 		}
+		FillMeshletGroups(mesh);
 
 		auto sceneRef = gfx->CreateScene(FloorSceneDesc(mesh));
 		auto view     = gfx->CreateSceneView(sceneRef, 8);
@@ -288,10 +343,17 @@ namespace
 		REQUIRE(floor.IsValid());
 
 		const uint32_t meshlets = OnlySubmesh(*scene, floor).meshlets.count;
-		INFO("meshlets " << meshlets);
-		REQUIRE((meshlets > bgl::idl::cMaxCompactedMeshlets) == (cull != FloorCull::kCompacted));
+		const uint32_t groups =
+			(meshlets + bgl::idl::cMeshletsPerGroup - 1u) / bgl::idl::cMeshletsPerGroup;
+
+		INFO("meshlets " << meshlets << ", groups " << groups);
+		// The large cases hold more meshlets than the payload has bits, so only the group bound
+		// makes them compact -- and every case has a last group the submesh does not fill.
+		REQUIRE((meshlets > bgl::idl::cMaxCompactedGroups) == (cull != FloorCull::kCompacted));
+		REQUIRE(groups <= bgl::idl::cMaxCompactedGroups);
+		REQUIRE(meshlets % bgl::idl::cMeshletsPerGroup != 0u);
 		// Enough that the culling loop runs many chunks, and an odd survivor count straddles a word.
-		REQUIRE(meshlets > 4u * bgl::idl::cMeshletCullGroupSize);
+		REQUIRE(groups > 2u * bgl::idl::cMeshletCullGroupSize);
 
 		view->CreateStaticMeshInstance(floor, glm::mat4(1.0f));
 
@@ -322,24 +384,25 @@ TEST_CASE("Culling meshlets draws exactly what drawing every meshlet draws", "[c
 {
 	const std::string unculled  = "meshlet_culling_unculled.png";
 	const std::string compacted = "meshlet_culling_compacted.png";
-	const std::string oversize  = "meshlet_culling_oversize.png";
+	const std::string large     = "meshlet_culling_large.png";
 
 	RenderFloor(unculled, FloorCull::kNothing);
 	RenderFloor(compacted, FloorCull::kCompacted);
-	RenderFloor(oversize, FloorCull::kOversize);
+	RenderFloor(large, FloorCull::kLarge);
 
 	// The premise: the floor is on screen, and so is the shadow on it.
 	const bgl::test::Rgba ground = bgl::test::MeanColor(unculled, 0, c_H - 40, c_W, 40);
 	CHECK(ground.Luma() > 0.05f);
 
 	CHECK(bgl::test::MaxChannelDelta(compacted, unculled) == 0.0f);
-	CHECK(bgl::test::MaxChannelDelta(oversize, unculled) == 0.0f);
+	CHECK(bgl::test::MaxChannelDelta(large, unculled) == 0.0f);
 }
 
 #if defined(BERNINI_GPU_DEBUG)
 
 TEST_CASE(
-	"The static tier tests every meshlet of a visible instance and culls exactly those outside",
+	"The static tier tests every meshlet group of a visible instance and culls exactly those "
+	"outside",
 	"[culling][view]")
 {
 	auto opts                     = bgl::GraphicsOptions();
@@ -391,17 +454,21 @@ TEST_CASE(
 
 	const glm::mat4 viewProj = FloorCamera().GetViewProjection();
 
-	// The reference cull, over the spheres the scene cooked. A sphere within a hair of a plane is
-	// one the GPU may round either way, so it is counted as neither.
-	const bgl::idl::Submesh& submesh      = OnlySubmesh(*scene, floor);
+	// The reference cull, over the group bounds the scene holds -- what the amplification stage
+	// tests, one per cMeshletsPerGroup meshlets. A sphere within a hair of a plane is one the GPU
+	// may round either way, so it is counted as neither.
+	const bgl::idl::Submesh& submesh = OnlySubmesh(*scene, floor);
+	const uint32_t           groups =
+		(submesh.meshlets.count + bgl::idl::cMeshletsPerGroup - 1u) / bgl::idl::cMeshletsPerGroup;
+
 	const bgl::FrustumPlanes planes       = bgl::ExtractFrustumPlanes(viewProj);
 	const float              scale        = 1.5f;
 	uint32_t                 surelyCulled = 0u;
 	uint32_t                 borderline   = 0u;
-	for (uint32_t m = 0u; m < submesh.meshlets.count; ++m)
+	for (uint32_t g = 0u; g < groups; ++g)
 	{
-		const glm::vec4 local  = scene->GetMeshletBuffer()
-		                             .AtIndex(submesh.meshlets.range.offsetStart + m)
+		const glm::vec4 local  = scene->GetMeshletGroupBuffer()
+		                             .AtIndex(submesh.meshletGroups.offsetStart + g)
 		                             .boundingSphere;
 		const glm::vec3 centre = glm::vec3(transform * glm::vec4(glm::vec3(local), 1.0f));
 		const float     radius = local.w * scale;
@@ -412,11 +479,11 @@ TEST_CASE(
 		borderline += (!outside && !inside) ? 1u : 0u;
 	}
 
-	INFO("meshlets " << submesh.meshlets.count << ", surely culled " << surelyCulled);
-	REQUIRE(submesh.meshlets.count <= bgl::idl::cMaxCompactedMeshlets);
+	INFO("groups " << groups << ", surely culled " << surelyCulled);
+	REQUIRE(groups <= bgl::idl::cMaxCompactedGroups);
 	// The premise: most of the floor is off screen, and some of it is not.
-	REQUIRE(surelyCulled > submesh.meshlets.count / 2u);
-	REQUIRE(surelyCulled < submesh.meshlets.count);
+	REQUIRE(surelyCulled > groups / 2u);
+	REQUIRE(surelyCulled < groups);
 
 	auto compactPass = bgl::CompactInstancesPass();
 	auto depthPass   = bgl::StaticDepthPass();
@@ -492,12 +559,12 @@ TEST_CASE(
 		static_cast<const bgl::idl::CullStats*>(resourceManager->MapReadback(rbStats));
 	REQUIRE(stats != nullptr);
 
-	INFO("tested " << stats->meshletsTested << ", culled " << stats->meshletsCulled);
+	INFO("tested " << stats->meshletGroupsTested << ", culled " << stats->meshletGroupsCulled);
 	CHECK(stats->tested == 1u);
 	CHECK(stats->frustumCulled == 0u);
-	CHECK(stats->meshletsTested == submesh.meshlets.count);
-	CHECK(stats->meshletsCulled >= surelyCulled);
-	CHECK(stats->meshletsCulled <= surelyCulled + borderline);
+	CHECK(stats->meshletGroupsTested == groups);
+	CHECK(stats->meshletGroupsCulled >= surelyCulled);
+	CHECK(stats->meshletGroupsCulled <= surelyCulled + borderline);
 
 	resourceManager->UnmapReadback(rbStats);
 	compactPass.Release(false);

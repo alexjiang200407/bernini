@@ -25,17 +25,26 @@ void MSMain(
     OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
 )
 {
-    uint meshletIdx = gid;
-    if (payload.compactedMeshletCount != 0u)
-    {
-        meshletIdx = CulledMeshletIndex(payload, gid);
-    }
-    let ctx = PrepareMeshlet(payload.instance, meshletIdx);
+    // The amplification stage keeps whole groups, so this group's meshlet is one the group's bound
+    // reached the frustum for rather than one this meshlet did -- and the last group of a submesh
+    // whose meshlet count does not divide stands for meshlets that do not exist.
+    let meshletIdx = CulledMeshletIndex(payload, gid);
 
-    // A submesh too large to compact reaches here whole; its meshlets are culled one group at a time.
+    uint vertexCount = 0u;
+    uint triangleCount = 0u;
+    MeshletContext ctx;
+    bool visible = meshletIdx < payload.meshletCount;
+
+    if (visible)
+    {
+        ctx = PrepareMeshlet(payload.instance, meshletIdx);
+        visible = LocalSphereInCullFrustum(ctx.mesh, ctx.meshlet.boundingSphere);
+        vertexCount = visible ? ctx.meshlet.vertexCount : 0u;
+        triangleCount = visible ? ctx.meshlet.triangleCount : 0u;
+    }
+
     // One call site for the counts, whichever way that goes: DXC refuses a second.
-    let visible = payload.compactedMeshletCount != 0u || MeshletInCullFrustum(ctx.mesh, ctx.meshlet);
-    SetMeshOutputCounts(visible ? ctx.meshlet.vertexCount : 0u, visible ? ctx.meshlet.triangleCount : 0u);
+    SetMeshOutputCounts(vertexCount, triangleCount);
     if (!visible)
     {
         return;

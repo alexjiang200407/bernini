@@ -26,6 +26,29 @@ namespace assetlib
 	static_assert(sizeof(Meshlet) == 32);
 
 	/**
+	 * Meshlets one cooked group bound covers. A run of this many consecutive meshlets of one
+	 * submesh, so a submesh's last group is short when its meshlet count is not a multiple.
+	 *
+	 * The renderer names the same number as `idl::cMeshletsPerGroup`, and reads a submesh's group
+	 * count off it -- `bgl` does not link `assetlib`, so the two cannot be shared; a static_assert
+	 * in `Scene.cpp`, the one file that sees both, holds them equal.
+	 */
+	constexpr uint32_t c_MeshletsPerGroup = 8;
+
+	/**
+	 * A bounding sphere over one run of `c_MeshletsPerGroup` meshlets, enclosing every vertex every
+	 * one of them draws. The static tier's amplification stage tests these instead of the meshlet
+	 * spheres, so it reads an eighth as many.
+	 */
+	struct MeshletGroup
+	{
+		glm::vec3 boundingCenter;
+		float     boundingRadius;
+	};
+
+	static_assert(sizeof(MeshletGroup) == 16);
+
+	/**
 	 * One drawable primitive. Vertex/index bytes live in the document pools; ranges reference them.
 	 *
 	 * The triangles are stored twice. `firstMeshlet`/`meshletCount` is what bgl draws; the plain
@@ -46,13 +69,16 @@ namespace assetlib
 		IndexType    indexType;
 		uint32_t     firstMeshlet;  // range into BMeshImport::meshlets
 		uint32_t     meshletCount;
-		uint32_t     material;
-		glm::vec3    aabbMin;
-		glm::vec3    aabbMax;
-		uint32_t     nameOffset;
+		// Range into BMeshImport::meshletGroups; its length is meshletCount / c_MeshletsPerGroup,
+		// rounded up.
+		uint32_t  firstMeshletGroup;
+		uint32_t  material;
+		glm::vec3 aabbMin;
+		glm::vec3 aabbMax;
+		uint32_t  nameOffset;
 	};
 
-	static_assert(sizeof(Submesh) == 96);
+	static_assert(sizeof(Submesh) == 100);
 
 	struct Mesh
 	{
