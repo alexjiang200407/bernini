@@ -18,11 +18,9 @@ namespace editor::plugins
 {
 	struct EditorHostDispatch
 	{
-		using Callback = std::function<void(std::string_view)>;
-
-		Callback showPanel;
-		Callback openAsset;
-		Callback assetChanged;
+		std::function<void(std::string_view)> showPanel;
+		std::function<void(std::string_view)> openAsset;
+		std::function<void(std::string_view)> assetChanged;
 	};
 
 	class EditorHost final : public IEditorHost
