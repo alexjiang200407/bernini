@@ -100,15 +100,16 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 		std::vector<std::string>{ "sample.valid" },
 		std::vector<fs::path>{ plugin },
 		build,
-		sandbox.root / "shadow",
-		editor::plugins::ShadowCopy::kAlways);
+		sandbox.root / "plugin-copies",
+		editor::plugins::PluginBinaryCopyMode::kAlways);
 
 	CHECK(session.Ids() == std::vector<std::string>{ "sample.valid" });
-	CHECK(session.Kinds()->FindById("sample.fixture") != nullptr);
+	CHECK(session.KindRegistry()->FindById("sample.fixture") != nullptr);
 	CHECK(session.EditorPlugins().size() == 1);
 	CHECK(
 		fs::is_regular_file(
-			sandbox.root / "shadow" / "sample.valid" / fs::path(EDITOR_PLUGIN_FIXTURE).filename()));
+			sandbox.root / "plugin-copies" / "sample.valid" /
+			fs::path(EDITOR_PLUGIN_FIXTURE).filename()));
 }
 
 TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins][loader]")
@@ -136,7 +137,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
-				sandbox.root / "shadow"),
+				sandbox.root / "plugin-copies"),
 			Catch::Matchers::ContainsSubstring("another-build"));
 	}
 
@@ -148,7 +149,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
-				sandbox.root / "shadow"),
+				sandbox.root / "plugin-copies"),
 			Catch::Matchers::ContainsSubstring("older"));
 	}
 
@@ -163,7 +164,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
-				sandbox.root / "shadow"),
+				sandbox.root / "plugin-copies"),
 			Catch::Matchers::ContainsSubstring("missing"));
 	}
 
@@ -189,8 +190,8 @@ TEST_CASE("A colliding module rejects the plugin session", "[plugins][loader]")
 			std::vector<std::string>{ "sample.first", "sample.second" },
 			std::vector<fs::path>{ first, second },
 			build,
-			sandbox.root / "shadow",
-			editor::plugins::ShadowCopy::kNever),
+			sandbox.root / "plugin-copies",
+			editor::plugins::PluginBinaryCopyMode::kNever),
 		Catch::Matchers::ContainsSubstring("collides"));
 }
 #endif

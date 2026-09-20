@@ -120,9 +120,9 @@ before any module is loaded. Kind registration happens in a private registry and
 project registry only after the whole module registers without a collision.
 
 On Windows the loader copies both modules and every declared private dependency to a per-process
-temporary directory before loading; the originals remain writable by the linker. Other platforms
-load the build output in place. Every loaded image remains in the process through shutdown; plugin
-objects and registered kinds are destroyed before their image.
+plugin binary directory before loading; the originals remain writable by the linker. Other
+platforms load the build output in place. Every loaded image remains in the process through
+shutdown; plugin objects and registered kinds are destroyed before their image.
 
 ## Threading and lifetime
 
@@ -231,7 +231,7 @@ against its Qt-free target alone. A separately configured project builds a real 
 `Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
 logger, allocation-id sequence and RmlUi lifetime are the host's. `editor_tests` refuses mismatched
 and stale modules and missing declared dependencies before factory invocation, checks duplicate kind
-batches, and forces the shadow-copy path. Renderer scheduling and editor contribution dispatch
+batches, and forces the plugin binary copy path. Renderer scheduling and editor contribution dispatch
 require later integration tests.
 
 The localization tests use the concrete resolver through the fake host. They cover host isolation,

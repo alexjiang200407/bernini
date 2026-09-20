@@ -132,7 +132,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 				requiredPlugins,
 				editor::plugins::ConfiguredPluginDirectories(configPath),
 				editor::plugins::CurrentBuildIdentity(),
-				editor::plugins::DefaultShadowRoot()));
+				editor::plugins::DefaultPluginCopyRoot()));
 
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
@@ -739,7 +739,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 	{
 		ZoneScopedN("editor open project");
 
-		SetActiveProject(assetlib::Project::Open(path, m_Plugins->Kinds()));
+		SetActiveProject(assetlib::Project::Open(path, m_Plugins->KindRegistry()));
 		return true;
 	}
 	catch (const std::exception& e)

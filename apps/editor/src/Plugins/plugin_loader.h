@@ -17,7 +17,7 @@ namespace editor::plugins
 		std::filesystem::path sdkStamp;
 	};
 
-	enum class ShadowCopy
+	enum class PluginBinaryCopyMode
 	{
 		kPlatformDefault,
 		kAlways,
@@ -41,7 +41,7 @@ namespace editor::plugins
 		Ids() const noexcept;
 
 		[[nodiscard]] const std::shared_ptr<assetlib::AssetKindRegistry>&
-		Kinds() const noexcept;
+		KindRegistry() const noexcept;
 
 		[[nodiscard]] std::span<const editor::EditorPluginPtr>
 		EditorPlugins() const noexcept;
@@ -56,14 +56,14 @@ namespace editor::plugins
 			std::span<const std::filesystem::path>,
 			const BuildIdentity&,
 			const std::filesystem::path&,
-			ShadowCopy);
+			PluginBinaryCopyMode);
 	};
 
 	[[nodiscard]] BuildIdentity
 	CurrentBuildIdentity();
 
 	[[nodiscard]] std::filesystem::path
-	DefaultShadowRoot();
+	DefaultPluginCopyRoot();
 
 	[[nodiscard]] std::vector<std::filesystem::path>
 	ConfiguredPluginDirectories(const std::filesystem::path& configPath);
@@ -73,8 +73,8 @@ namespace editor::plugins
 		std::span<const std::string>           requiredIds,
 		std::span<const std::filesystem::path> configuredDirectories,
 		const BuildIdentity&                   build,
-		const std::filesystem::path&           shadowRoot,
-		ShadowCopy                             shadowCopy = ShadowCopy::kPlatformDefault);
+		const std::filesystem::path&           pluginCopyRoot,
+		PluginBinaryCopyMode                   copyMode = PluginBinaryCopyMode::kPlatformDefault);
 
 	[[nodiscard]] bool
 	OpeningNeedsPluginRelaunch(
