@@ -1,9 +1,52 @@
+import idl.Constants;
 import lib.data.SubmeshInstance;
 import lib.math.motion_vector;
 
 public struct InstancedPayload
 {
     public SubmeshInstance instance;
+}
+
+// The static tier's payload: its instance, and which of its meshlets survived the frustum -- a bit
+// per meshlet, and before each mask word how many survivors the earlier words hold, two 16-bit counts
+// a word -- unless `compactedMeshletCount` is zero, when the submesh had more than fit and every
+// meshlet is dispatched.
+public struct CulledPayload
+{
+    public SubmeshInstance instance;
+    public uint compactedMeshletCount;
+    public uint survivorMask[cMaxCompactedMeshlets / 32];
+    public uint survivorsBefore[cMaxCompactedMeshlets / 64];
+}
+
+// The meshlet mesh group `gid` of the static tier draws: the `gid`-th survivor, in meshlet order.
+// @pre the payload is compacted, and `gid` is below its survivor count.
+public uint CulledMeshletIndex(CulledPayload payload, uint gid)
+{
+    // The last mask word whose earlier survivors number no more than `gid` holds it.
+    uint lo = 0u;
+    uint hi = (payload.compactedMeshletCount + 31u) / 32u;
+    while (hi - lo > 1u)
+    {
+        let mid = (lo + hi) / 2u;
+        let before = (payload.survivorsBefore[mid / 2u] >> ((mid & 1u) * 16u)) & 0xFFFFu;
+        if (before <= gid)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
+
+    uint mask = payload.survivorMask[lo];
+    let before = (payload.survivorsBefore[lo / 2u] >> ((lo & 1u) * 16u)) & 0xFFFFu;
+    for (uint skip = gid - before; skip > 0u; --skip)
+    {
+        mask &= mask - 1u;
+    }
+    return lo * 32u + firstbitlow(mask);
 }
 
 public struct ForwardVSOut

@@ -1,5 +1,8 @@
 import idl.BaseTable;
+import idl.CullStats;
+import idl.CullView;
 import lib.types.ComputeBuffer;
+import lib.types.UploadBuffer;
 
 // Which slice of the compacted instance list one dispatch covers.
 public struct ExpansionData
@@ -17,6 +20,13 @@ public struct ExpansionData
     // are the mesh stage's to cull; zero where the pipeline culls in hardware, and on a draw that
     // wants the whole silhouette whichever way its triangles face.
     public uint cullBackfaces;
+
+    // The frustum the compacted instances survived, which the static tier culls their meshlets
+    // against in turn.
+    public UploadBuffer<CullView> cullView;
+
+    // Written only under BERNINI_GPU_DEBUG, so a release build drops the handle.
+    public ComputeBuffer<CullStats> stats;
 };
 
 public ConstantBuffer<ExpansionData> expansionData;
