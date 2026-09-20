@@ -301,8 +301,9 @@ namespace assetlib
 				c_MeshletMaxTriangles,
 				c_MeshletConeWeight);
 
-			submesh.firstMeshlet = static_cast<uint32_t>(mesh.meshlets.size());
-			submesh.meshletCount = static_cast<uint32_t>(count);
+			submesh.firstMeshlet      = static_cast<uint32_t>(mesh.meshlets.size());
+			submesh.meshletCount      = static_cast<uint32_t>(count);
+			submesh.firstMeshletGroup = static_cast<uint32_t>(mesh.meshletGroups.size());
 			if (count == 0)
 				return;
 
@@ -342,6 +343,44 @@ namespace assetlib
 					glm::vec3(bounds.center[0], bounds.center[1], bounds.center[2]);
 				meshlet.boundingRadius = bounds.radius;
 				mesh.meshlets.push_back(meshlet);
+			}
+
+			// A group's sphere is fitted to the vertices themselves rather than to the eight meshlet
+			// spheres it spans: a sphere over spheres carries a meshlet radius of slack at every
+			// extreme, and how tightly this bounds the geometry is the whole of what the static
+			// tier's group cull saves.
+			std::vector<glm::vec3> groupPoints;
+			groupPoints.reserve(c_MeshletsPerGroup * c_MeshletMaxVertices);
+
+			for (size_t first = 0; first < count; first += c_MeshletsPerGroup)
+			{
+				groupPoints.clear();
+
+				const size_t groupEnd = std::min(first + c_MeshletsPerGroup, count);
+				for (size_t i = first; i < groupEnd; ++i)
+				{
+					const auto& mo = moMeshlets[i];
+					for (uint32_t v = 0; v < mo.vertex_count; ++v)
+					{
+						const auto* position = reinterpret_cast<const float*>(
+							reinterpret_cast<const std::byte*>(positions) +
+							static_cast<size_t>(moVertices[mo.vertex_offset + v]) * stride);
+						groupPoints.emplace_back(position[0], position[1], position[2]);
+					}
+				}
+
+				const auto bounds = meshopt_computeSphereBounds(
+					&groupPoints.front().x,
+					groupPoints.size(),
+					sizeof(glm::vec3),
+					nullptr,
+					0);
+
+				auto group = MeshletGroup();
+				group.boundingCenter =
+					glm::vec3(bounds.center[0], bounds.center[1], bounds.center[2]);
+				group.boundingRadius = bounds.radius;
+				mesh.meshletGroups.emplace_back(group);
 			}
 		}
 

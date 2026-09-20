@@ -8,5 +8,6 @@
 	],
 	"parameters": {
 		"sampleRate": 30.0
-	}
+	},
+	"source": "Authored/Meshes/apples.glb"
 }

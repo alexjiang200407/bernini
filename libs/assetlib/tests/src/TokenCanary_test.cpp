@@ -134,6 +134,7 @@ namespace
 		submesh.indexType             = IndexType::kUint16;
 		submesh.firstMeshlet          = 0x22;
 		submesh.meshletCount          = 0x23;
+		submesh.firstMeshletGroup     = 0x25;
 		submesh.material              = 0x24;
 		submesh.aabbMin               = glm::vec3(7.0f, 8.0f, 9.0f);
 		submesh.aabbMax               = glm::vec3(10.0f, 11.0f, 12.0f);
@@ -150,8 +151,13 @@ namespace
 		meshlet.boundingCenter = glm::vec3(13.0f, 14.0f, 15.0f);
 		meshlet.boundingRadius = 16.0f;
 		mesh.meshlets          = { meshlet };
-		mesh.meshletVertices   = { 5, 6, 7 };
-		mesh.meshletTriangles  = { 8, 9, 10 };
+
+		MeshletGroup group{};
+		group.boundingCenter  = glm::vec3(17.0f, 18.0f, 19.0f);
+		group.boundingRadius  = 20.0f;
+		mesh.meshletGroups    = { group };
+		mesh.meshletVertices  = { 5, 6, 7 };
+		mesh.meshletTriangles = { 8, 9, 10 };
 
 		mesh.vertexData.resize(3 * 48);
 		for (size_t i = 0; i < mesh.vertexData.size(); ++i)
@@ -290,7 +296,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0x9e3cad8f352072e9ull, .hash = 0x30f92bf7f85ad992ull },
+			Pin{ .token = 0x4b71f60ce9a3825dull, .hash = 0x856317475ab9d700ull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
