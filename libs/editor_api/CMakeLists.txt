@@ -18,6 +18,20 @@ target_link_libraries(editor_api_selfcheck PRIVATE editor_api)
 set_target_properties(editor_api_selfcheck PROPERTIES
     AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
 
+if(BERNINI_EDITOR_SDK)
+    set(BERNINI_EDITOR_SDK_DIR "${CMAKE_BINARY_DIR}/editor_sdk" CACHE INTERNAL
+        "Build-tree package directory for native editor plugins")
+    file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
+    export(TARGETS
+        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_api
+        NAMESPACE Bernini::
+        FILE "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKTargets.cmake")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/BerniniEditorSDKConfig.cmake.in"
+        "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKConfig.cmake"
+        @ONLY)
+endif()
+
 if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()

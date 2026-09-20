@@ -1,11 +1,11 @@
 # Editor plugin contracts
 
-`editor_api` defines the public C++ contracts for native editor extensions. This is an interface
-review milestone: the compiled sample and recording host exercise the contracts, but the editor
-does not yet load plugins or dispatch through them. Local runtime plugins can register authored
-kinds before a project's store opens; the store, graph, rename, migrate and pack paths then use
-that registry. The headers at the linked paths are the source of truth; when this map disagrees,
-trust the header and fix the map.
+`editor_api` defines the public C++ contracts for native editor extensions. A top-level renderer
+build also writes a build-tree `BerniniEditorSDK` CMake package whose `Bernini::editor_api` target
+is consumed by a separately configured plugin project. The editor does not yet load plugins or
+dispatch through them. Local runtime plugins can register authored kinds before a project's store
+opens; the store, graph, rename, migrate and pack paths then use that registry. The headers at the
+linked paths are the source of truth; when this map disagrees, trust the header and fix the map.
 
 ## Design choices
 
@@ -30,9 +30,17 @@ trust the header and fix the map.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions; the future loader must verify compatibility before calling them.
-  `editor_api` currently carries gamelib's public dependencies so clients can use the borrowed
-  manager and store. Those libraries still use their existing linkage: do not build a production
-  plugin DLL against this milestone until the shared SDK establishes their single ownership.
+  `editor_api` carries gamelib's public dependencies so clients can use the borrowed manager and
+  store. In SDK builds, assetlib and gamelib are shared and RmlUi/Lua live inside gamelib rather
+  than being linked into every plugin. `core` remains static; its process state is already owned by
+  shared `core_process`. Windows SDK builds require shared RmlUi targets, because a DLL cannot
+  re-export every symbol from an imported static archive automatically.
+- **The SDK is a build-tree package.** Configure a plugin with
+  `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_api`. This package
+  names the exact libraries and dependency tree of that engine build; it is not an installed,
+  version-independent engine package. Top-level editor builds enable it by default. Builds without
+  Qt/editor, embedded games and `RENDERER_BACKEND=NONE` keep assetlib and gamelib static and produce
+  no package.
 
 ## Interface index
 
@@ -74,7 +82,7 @@ flowchart TD
 ```
 
 The diagram is the contract ownership/call topology. The recording host supplies registration and
-uses the concrete language resolver; there is no production registry or loader in this milestone.
+uses the concrete language resolver; there is no production registry or loader yet.
 
 ## Threading and lifetime
 
@@ -178,8 +186,10 @@ a working document editor. The fake host deliberately fails if it is asked for s
 `just test editor_plugin` exercises deferred registration, Qt ownership, tab activation, held asset
 replacement, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
-against its Qt-free target alone. Renderer scheduling, DLL ABI checks, registry validation and real
-store/pack behavior require later integration tests; the fake host does not establish them.
+against its Qt-free target alone. A separately configured project builds a real shared fixture from
+`Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
+logger, allocation-id sequence and RmlUi lifetime are the host's. Renderer scheduling, build-ID
+checks, registry validation and real store/pack behavior require later integration tests.
 
 The localization tests use the concrete resolver through the fake host. They cover host isolation,
 owned catalog copies, CSV decoding, invalid-input refusal, fallback and unchanged routing. They do
