@@ -27,7 +27,6 @@ namespace editor::plugins
 	class PluginSession
 	{
 	public:
-		PluginSession();
 		~PluginSession();
 		PluginSession(PluginSession&&) noexcept;
 		PluginSession&
@@ -36,6 +35,14 @@ namespace editor::plugins
 		PluginSession(const PluginSession&) = delete;
 		PluginSession&
 		operator=(const PluginSession&) = delete;
+
+		[[nodiscard]] static PluginSession
+		Load(
+			std::span<const std::string>           requiredIds,
+			std::span<const std::filesystem::path> configuredDirectories,
+			const BuildIdentity&                   build,
+			const std::filesystem::path&           pluginCopyRoot,
+			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault);
 
 		[[nodiscard]] const std::vector<std::string>&
 		Ids() const noexcept;
@@ -47,16 +54,10 @@ namespace editor::plugins
 		EditorPlugins() const noexcept;
 
 	private:
+		PluginSession();
+
 		struct Impl;
 		std::unique_ptr<Impl> m_Impl;
-
-		friend PluginSession
-		LoadPluginSession(
-			std::span<const std::string>,
-			std::span<const std::filesystem::path>,
-			const BuildIdentity&,
-			const std::filesystem::path&,
-			PluginBinaryCopyMode);
 	};
 
 	[[nodiscard]] BuildIdentity
@@ -67,14 +68,6 @@ namespace editor::plugins
 
 	[[nodiscard]] std::vector<std::filesystem::path>
 	ConfiguredPluginDirectories(const std::filesystem::path& configPath);
-
-	[[nodiscard]] PluginSession
-	LoadPluginSession(
-		std::span<const std::string>           requiredIds,
-		std::span<const std::filesystem::path> configuredDirectories,
-		const BuildIdentity&                   build,
-		const std::filesystem::path&           pluginCopyRoot,
-		PluginBinaryCopyMode                   copyMode = PluginBinaryCopyMode::kPlatformDefault);
 
 	[[nodiscard]] bool
 	OpeningNeedsPluginRelaunch(

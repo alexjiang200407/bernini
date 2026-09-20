@@ -300,7 +300,7 @@ namespace editor::plugins
 	}
 
 	PluginSession
-	LoadPluginSession(
+	PluginSession::Load(
 		std::span<const std::string>           requiredIds,
 		std::span<const std::filesystem::path> configuredDirectories,
 		const BuildIdentity&                   build,

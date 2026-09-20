@@ -96,7 +96,7 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 	const fs::path plugin =
 		WriteDescriptor(sandbox.root / "valid", "sample.valid", EDITOR_PLUGIN_FIXTURE, build);
 
-	const editor::plugins::PluginSession session = editor::plugins::LoadPluginSession(
+	const editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
 		std::vector<std::string>{ "sample.valid" },
 		std::vector<fs::path>{ plugin },
 		build,
@@ -133,7 +133,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 		json["engineBuildId"] = "another-build";
 		std::ofstream(plugin / editor::c_PluginDescriptorFileName) << json.dump(2);
 		CHECK_THROWS_WITH(
-			editor::plugins::LoadPluginSession(
+			editor::plugins::PluginSession::Load(
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
@@ -145,7 +145,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 	{
 		SetSdkStamp(build, fs::file_time_type::clock::now() + std::chrono::hours(1));
 		CHECK_THROWS_WITH(
-			editor::plugins::LoadPluginSession(
+			editor::plugins::PluginSession::Load(
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
@@ -160,7 +160,7 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 		json["dependencies"] = { "missing-library" };
 		std::ofstream(plugin / editor::c_PluginDescriptorFileName) << json.dump(2);
 		CHECK_THROWS_WITH(
-			editor::plugins::LoadPluginSession(
+			editor::plugins::PluginSession::Load(
 				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
@@ -186,7 +186,7 @@ TEST_CASE("A colliding module rejects the plugin session", "[plugins][loader]")
 		build);
 
 	CHECK_THROWS_WITH(
-		editor::plugins::LoadPluginSession(
+		editor::plugins::PluginSession::Load(
 			std::vector<std::string>{ "sample.first", "sample.second" },
 			std::vector<fs::path>{ first, second },
 			build,

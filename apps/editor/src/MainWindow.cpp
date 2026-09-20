@@ -128,7 +128,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (!startupProject.empty() && std::filesystem::is_regular_file(startupProject))
 			requiredPlugins = assetlib::Project::PluginIdsOf(startupProject);
 		m_Plugins =
-			std::make_unique<editor::plugins::PluginSession>(editor::plugins::LoadPluginSession(
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
 				requiredPlugins,
 				editor::plugins::ConfiguredPluginDirectories(configPath),
 				editor::plugins::CurrentBuildIdentity(),
