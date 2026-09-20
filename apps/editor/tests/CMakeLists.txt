@@ -37,6 +37,14 @@ target_link_libraries(editor_tests PRIVATE
 	Qt6::Test
 )
 
+if(BERNINI_EDITOR_SDK)
+	add_dependencies(editor_tests editor_sdk_consumer)
+	target_compile_definitions(editor_tests PRIVATE
+		EDITOR_PLUGIN_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
+		EDITOR_PLUGIN_COLLISION_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_collision_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
+		EDITOR_PLUGIN_REJECTED_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_rejected_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
+endif()
+
 if(RENDERER_BACKEND STREQUAL "DX12")
 	target_link_libraries(editor_tests PRIVATE bgl_d3d12_agility)
 endif()

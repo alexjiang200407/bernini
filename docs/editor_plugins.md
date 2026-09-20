@@ -2,10 +2,11 @@
 
 `editor_api` defines the public C++ contracts for native editor extensions. A top-level renderer
 build also writes a build-tree `BerniniEditorSDK` CMake package whose `Bernini::editor_api` target
-is consumed by a separately configured plugin project. The editor does not yet load plugins or
-dispatch through them. Local runtime plugins can register authored kinds before a project's store
-opens; the store, graph, rename, migrate and pack paths then use that registry. The headers at the
-linked paths are the source of truth; when this map disagrees, trust the header and fix the map.
+is consumed by a separately configured plugin project. The editor loads the local modules required
+by its startup project before that project's store opens. Runtime kinds already participate in the
+store, graph, rename, migrate and pack paths; editor contribution dispatch lands in the next slice.
+The headers at the linked paths are the source of truth; when this map disagrees, trust the header
+and fix the map.
 
 ## Design choices
 
@@ -29,7 +30,8 @@ linked paths are the source of truth; when this map disagrees, trust the header 
   production editor does not yet use them.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
-  implemented loader functions; the future loader must verify compatibility before calling them.
+  implemented loader functions. The loader checks the engine build ID, configuration, dependency
+  files and SDK freshness before loading a module or calling either factory.
   `editor_api` carries gamelib's public dependencies so clients can use the borrowed manager and
   store. In SDK builds, assetlib and gamelib are shared and RmlUi/Lua live inside gamelib rather
   than being linked into every plugin. `core` remains static; its process state is already owned by
@@ -48,6 +50,7 @@ linked paths are the source of truth; when this map disagrees, trust the header 
 |---|---|---|
 | `IAssetPlugin`, `IAssetKindRegistry`, `IAssetKind` | [IAssetPlugin.h](libs/assetlib/include/assetlib/IAssetPlugin.h) | Qt-free authored-kind registration and document operations |
 | `IEditorPlugin` | [IEditorPlugin.h](libs/editor_api/include/editor_api/IEditorPlugin.h) | Register editor contributions at startup |
+| Descriptor constants | [PluginDescriptor.h](libs/editor_api/include/editor_api/PluginDescriptor.h) | Descriptor filename and schema version |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
 | `LocalizedText` | [LocalizedText.h](libs/editor_api/include/editor_api/LocalizedText.h) | Deferred label lookup with fallback |
 | `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_api/include/editor_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_api/include/editor_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
@@ -81,8 +84,45 @@ flowchart TD
     Kinds -->|owns| Kind[IAssetKind]
 ```
 
-The diagram is the contract ownership/call topology. The recording host supplies registration and
-uses the concrete language resolver; there is no production registry or loader yet.
+The diagram is the contract ownership/call topology. The production loader supplies the runtime
+registry; the recording host still supplies editor registration until the host-services slice.
+
+## Local loading
+
+A `.bproj` names its required plugin IDs in `plugins`. Machine-local `config.json` names candidate
+output directories in `pluginDirectories`; each directory contains `bernini-plugin.json` and the
+binaries it names. Opening a project with a different ordered plugin list restarts the editor, just
+as changing its surface shaders does. Missing, malformed or incompatible requirements stop startup
+with the plugin named in the error.
+
+```json
+{
+  "version": 1,
+  "id": "studio.ai",
+  "engineBuildId": "<BerniniEditorSDK_BUILD_ID>",
+  "configuration": "Debug",
+  "runtime": "studio_ai_runtime.dylib",
+  "editor": "studio_ai_editor.dylib",
+  "dependencies": []
+}
+```
+
+`runtime` and `editor` are each optional, but at least one is present. Every file path is relative
+to the descriptor directory and may not escape it. Plugin IDs are lower-case, dot-qualified
+components. A plugin CMake project gets the exact build-tree ID from
+`BerniniEditorSDK_BUILD_ID` after `find_package(BerniniEditorSDK CONFIG REQUIRED)` and records its
+active build configuration beside it.
+
+The SDK stamp moves when a public contract header changes or a shared library exposed by that
+package rebuilds. A module or declared dependency older than the stamp is refused so a developer
+rebuilds the plugin against the current SDK. All descriptors needed by the project are checked
+before any module is loaded. Kind registration happens in a private registry and reaches the
+project registry only after the whole module registers without a collision.
+
+On Windows the loader copies both modules and every declared private dependency to a per-process
+plugin binary directory before loading; the originals remain writable by the linker. Other
+platforms load the build output in place. Every loaded image remains in the process through
+shutdown; plugin objects and registered kinds are destroyed before their image.
 
 ## Threading and lifetime
 
@@ -109,7 +149,8 @@ new panels against a new host; do not silently retarget stored references to old
   leading dot. Missing required callbacks, null kinds, duplicate IDs or conflicting extension claims
   are errors, including conflicts with built-ins. Registry implementations must discard all of a
   failed module's contributions. Panel/editor IDs share one namespace; other categories have their
-  own ID namespaces. These requirements are not implemented by the recording test host.
+  own ID namespaces. Runtime kind batches enforce collision rollback now; these requirements are
+  not yet implemented by the recording editor host.
 - **Factories:** @pre a non-null parent and live project host. @post return a non-null widget
   parented to that parent, transferring Qt ownership to the host. Each registered panel/editor is
   one reusable tab per project. Factories are lazy; registration cannot access a project.
@@ -188,8 +229,10 @@ replacement, deferred label lookup/fallback with unchanged menu routing, malform
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
 against its Qt-free target alone. A separately configured project builds a real shared fixture from
 `Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
-logger, allocation-id sequence and RmlUi lifetime are the host's. Renderer scheduling, build-ID
-checks, registry validation and real store/pack behavior require later integration tests.
+logger, allocation-id sequence and RmlUi lifetime are the host's. `editor_tests` refuses mismatched
+and stale modules and missing declared dependencies before factory invocation, checks duplicate kind
+batches, and forces the plugin binary copy path. Renderer scheduling and editor contribution dispatch
+require later integration tests.
 
 The localization tests use the concrete resolver through the fake host. They cover host isolation,
 owned catalog copies, CSV decoding, invalid-input refusal, fallback and unchanged routing. They do

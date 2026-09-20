@@ -1,3 +1,4 @@
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/pak.h>
@@ -10,6 +11,7 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <nlohmann/json.hpp>
 
 #include "RefsSandbox.h"
@@ -20,6 +22,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace assetlib;
 
@@ -139,6 +142,25 @@ TEST_CASE("Opening a project round-trips what creating it wrote", "[project]")
 	REQUIRE(opened.GetName() == created.GetName());
 	REQUIRE(opened.GetProjectFile() == created.GetProjectFile());
 	REQUIRE(opened.GetDataDirectory() == created.GetDataDirectory());
+}
+
+TEST_CASE("A project exposes its required plugins before opening its store", "[project][plugins]")
+{
+	const Sandbox sandbox("bernini_project_plugins_before_store");
+	WriteText(
+		sandbox.ProjectFile(),
+		R"({ "name": "MyGame", "version": 1, "plugins": ["studio.ai", "studio.quest"] })");
+
+	CHECK(
+		Project::PluginIdsOf(sandbox.ProjectFile()) ==
+		std::vector<std::string>{ "studio.ai", "studio.quest" });
+	auto          registry = std::make_shared<AssetKindRegistry>();
+	const Project project  = Project::Open(sandbox.ProjectFile(), registry);
+	CHECK(project.GetPluginIds() == std::vector<std::string>{ "studio.ai", "studio.quest" });
+	CHECK(project.GetStore().GetKindRegistry() == registry);
+
+	project.Save();
+	CHECK(Project::PluginIdsOf(sandbox.ProjectFile()) == project.GetPluginIds());
 }
 
 TEST_CASE("An unnamed project falls back to its file name", "[project]")

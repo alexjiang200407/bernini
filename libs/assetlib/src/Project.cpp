@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
 #include <core/file/LooseFileSystem.h>
@@ -12,9 +13,44 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {
+	namespace
+	{
+		struct ProjectMetadata
+		{
+			std::string              name;
+			std::vector<std::string> plugins;
+			int                      version = 1;
+		};
+
+		ProjectMetadata
+		readMetadata(const std::filesystem::path& projectFile, const int currentVersion)
+		{
+			std::ifstream stream(projectFile);
+			if (!stream)
+				throw std::runtime_error("Cannot open project file: " + projectFile.string());
+
+			nlohmann::json json;
+			try
+			{
+				stream >> json;
+				ProjectMetadata metadata;
+				metadata.name    = json.value("name", projectFile.stem().string());
+				metadata.version = json.value("version", currentVersion);
+				metadata.plugins = json.value("plugins", std::vector<std::string>());
+				return metadata;
+			}
+			catch (const nlohmann::json::exception& e)
+			{
+				throw std::runtime_error("Malformed project file: " + std::string(e.what()));
+			}
+		}
+	}
+
 	bool
 	Project::IsRequiredDirectory(const std::filesystem::path& relativeToData)
 	{
@@ -64,26 +100,19 @@ namespace assetlib
 	}
 
 	Project
-	Project::Open(const std::filesystem::path& projectFile)
+	Project::Open(
+		const std::filesystem::path&       projectFile,
+		std::shared_ptr<AssetKindRegistry> registry)
 	{
-		std::ifstream stream(projectFile);
-		if (!stream)
-			throw std::runtime_error("Cannot open project file: " + projectFile.string());
-
-		nlohmann::json json;
-		try
-		{
-			stream >> json;
-		}
-		catch (const nlohmann::json::exception& e)
-		{
-			throw std::runtime_error("Malformed project file: " + std::string(e.what()));
-		}
+		const ProjectMetadata metadata = readMetadata(projectFile, c_FormatVersion);
 
 		Project project;
 		project.m_ProjectFile   = projectFile;
-		project.m_Name          = json.value("name", projectFile.stem().string());
-		project.m_FormatVersion = json.value("version", static_cast<int>(c_FormatVersion));
+		project.m_Name          = metadata.name;
+		project.m_PluginIds     = metadata.plugins;
+		project.m_FormatVersion = metadata.version;
+		if (registry != nullptr)
+			project.m_Registry = std::move(registry);
 
 		const auto root = projectFile.parent_path();
 		for (const auto category : c_RequiredDirectories)
@@ -115,6 +144,12 @@ namespace assetlib
 		return project;
 	}
 
+	std::vector<std::string>
+	Project::PluginIdsOf(const std::filesystem::path& projectFile)
+	{
+		return readMetadata(projectFile, c_FormatVersion).plugins;
+	}
+
 	void
 	Project::Save() const
 	{
@@ -122,6 +157,7 @@ namespace assetlib
 			{ "name", m_Name },
 			{ "version", m_FormatVersion },
 			{ "dataDirectory", c_DataDirectoryName },
+			{ "plugins", m_PluginIds },
 		};
 
 		std::ofstream stream(m_ProjectFile);

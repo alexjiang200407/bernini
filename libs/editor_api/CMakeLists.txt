@@ -19,6 +19,13 @@ set_target_properties(editor_api_selfcheck PROPERTIES
     AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
 
 if(BERNINI_EDITOR_SDK)
+    file(GLOB_RECURSE BERNINI_EDITOR_SDK_PUBLIC_HEADERS CONFIGURE_DEPENDS
+        "${BERNINI_ROOT}/libs/core/include/*.h"
+        "${BERNINI_ROOT}/libs/assetlib_structs/include/*.h"
+        "${BERNINI_ROOT}/libs/bgl/include/*.h"
+        "${BERNINI_ROOT}/libs/assetlib/include/*.h"
+        "${BERNINI_ROOT}/libs/gamelib/include/*.h"
+        "${BERNINI_ROOT}/libs/editor_api/include/*.h")
     set(BERNINI_EDITOR_SDK_DIR "${CMAKE_BINARY_DIR}/editor_sdk" CACHE INTERNAL
         "Build-tree package directory for native editor plugins")
     file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
@@ -30,6 +37,15 @@ if(BERNINI_EDITOR_SDK)
         "${CMAKE_CURRENT_SOURCE_DIR}/BerniniEditorSDKConfig.cmake.in"
         "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKConfig.cmake"
         @ONLY)
+
+    set(BERNINI_EDITOR_SDK_STAMP "${BERNINI_EDITOR_SDK_DIR}/bernini-sdk.stamp"
+        CACHE INTERNAL "Newest build of the libraries exposed by the editor SDK")
+    add_custom_command(
+        OUTPUT "${BERNINI_EDITOR_SDK_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${BERNINI_EDITOR_SDK_STAMP}"
+        DEPENDS core_process assetlib gamelib ${BERNINI_EDITOR_SDK_PUBLIC_HEADERS}
+        VERBATIM)
+    add_custom_target(editor_sdk_stamp DEPENDS "${BERNINI_EDITOR_SDK_STAMP}")
 endif()
 
 if(BUILD_TESTS)

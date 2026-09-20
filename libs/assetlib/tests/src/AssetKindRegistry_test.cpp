@@ -166,3 +166,17 @@ TEST_CASE(
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("sample.document", ".other")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("mesh.document", ".bmesh")));
 }
+
+TEST_CASE("Merging asset kind registrations is atomic", "[plugins][assetkind]")
+{
+	assetlib::AssetKindRegistry registry;
+	registry.Add(std::make_unique<TestKind>("sample.document", ".bexample"));
+
+	assetlib::AssetKindRegistry staged;
+	staged.Add(std::make_unique<TestKind>("sample.other", ".bother"));
+	staged.Add(std::make_unique<TestKind>("sample.document", ".bcollision"));
+
+	REQUIRE_THROWS(registry.Merge(std::move(staged)));
+	CHECK(registry.FindByExtension(".bother") == nullptr);
+	CHECK(registry.FindById("sample.document") != nullptr);
+}

@@ -10,9 +10,10 @@ draw. `gamelib` is the seam that links both.
 non-obvious contracts — not signatures. The header at each linked path is the source of truth;
 when this doc disagrees, trust the header, then fix this doc.
 
-The Qt-free [IAssetPlugin contract](libs/assetlib/include/assetlib/IAssetPlugin.h) is available for
-early plugin API review. It does not yet extend `AssetStore`, codecs, the reference graph or pack;
-see [Editor plugin contracts](docs/editor_plugins.md) for its current test-only use.
+The Qt-free [IAssetPlugin contract](libs/assetlib/include/assetlib/IAssetPlugin.h) registers custom
+authored kinds before a project store opens. Those kinds extend `AssetStore`, the reference graph,
+rename, migrate and pack without entering the closed built-in `AssetType`; see
+[Editor plugin contracts](docs/editor_plugins.md) for loading and lifetime rules.
 
 ---
 
@@ -118,7 +119,7 @@ see [Editor plugin contracts](docs/editor_plugins.md) for its current test-only 
 |---|---|---|
 | `AssetStore` | [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The project: the read mount and the writable root as one. Loads every container by key, answers staleness, describes against disk. |
 | `AssetKindRegistry` | [AssetKindRegistry.h](libs/assetlib/include/assetlib/AssetKindRegistry.h) | Project-owned custom authored kinds, propagated into stores and transactions. |
-| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: the metadata file, the scaffolded `Data/` tree, and the `AssetStore` over it. |
+| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: metadata including required plugin IDs, the scaffolded `Data/` tree, and the `AssetStore` over it. |
 | `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
 | `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
 
