@@ -7,24 +7,22 @@
 #include <editor_api/LanguageResolver.h>
 #include <editor_api/TranslationCatalog.h>
 #include <functional>
+#include <gamelib/AssetManager.h>
 #include <qwidget.h>
 #include <span>
 #include <string_view>
 
 class Renderer;
 
-namespace game
-{
-	class AssetManager;
-}
-
 namespace editor::plugins
 {
 	struct EditorHostDispatch
 	{
-		std::function<void(std::string_view)> showPanel;
-		std::function<void(std::string_view)> openAsset;
-		std::function<void(std::string_view)> assetChanged;
+		using Callback = std::function<void(std::string_view)>;
+
+		Callback showPanel;
+		Callback openAsset;
+		Callback assetChanged;
 	};
 
 	class EditorHost final : public IEditorHost
