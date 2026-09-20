@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string_view>
+
+namespace editor::plugins
+{
+	inline constexpr std::string_view c_EditorBuildId            = "@EDITOR_BUILD_ID@";
+	inline constexpr std::string_view c_EditorBuildConfiguration = "$<CONFIG>";
+	inline constexpr std::string_view c_EditorSdkStamp           = "@EDITOR_SDK_STAMP@";
+}

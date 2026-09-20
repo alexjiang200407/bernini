@@ -86,16 +86,22 @@ target_link_libraries(editor_lib
 
 if(BERNINI_EDITOR_SDK)
 	add_dependencies(editor_lib editor_sdk_stamp)
-	target_compile_definitions(editor_lib PRIVATE
-		BERNINI_EDITOR_BUILD_ID="${BERNINI_EDITOR_BUILD_ID}"
-		BERNINI_EDITOR_BUILD_CONFIGURATION="$<CONFIG>"
-		BERNINI_EDITOR_SDK_STAMP="${BERNINI_EDITOR_SDK_STAMP}")
+	set(EDITOR_BUILD_ID "${BERNINI_EDITOR_BUILD_ID}")
+	set(EDITOR_SDK_STAMP "${BERNINI_EDITOR_SDK_STAMP}")
 else()
-	target_compile_definitions(editor_lib PRIVATE
-		BERNINI_EDITOR_BUILD_ID=""
-		BERNINI_EDITOR_BUILD_CONFIGURATION="$<CONFIG>"
-		BERNINI_EDITOR_SDK_STAMP="")
+	set(EDITOR_BUILD_ID "")
+	set(EDITOR_SDK_STAMP "")
 endif()
+
+set(EDITOR_BUILD_CONFIG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include/$<CONFIG>")
+configure_file(
+	${CMAKE_CURRENT_SOURCE_DIR}/src/Plugins/plugin_build_config.h.in
+	${CMAKE_CURRENT_BINARY_DIR}/plugin_build_config.h.in
+	@ONLY)
+file(GENERATE
+	OUTPUT "${EDITOR_BUILD_CONFIG_INCLUDE_DIR}/plugin_build_config.h"
+	INPUT "${CMAKE_CURRENT_BINARY_DIR}/plugin_build_config.h.in")
+target_include_directories(editor_lib PRIVATE "${EDITOR_BUILD_CONFIG_INCLUDE_DIR}")
 
 
 target_precompile_headers(editor_lib

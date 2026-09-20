@@ -1,4 +1,5 @@
 #include "Plugins/plugin_loader.h"
+#include "plugin_build_config.h"
 
 #include <QCoreApplication>
 #include <QLibrary>
@@ -31,10 +32,6 @@ namespace editor::plugins
 {
 	namespace
 	{
-		constexpr std::string_view c_EditorBuildId            = BERNINI_EDITOR_BUILD_ID;
-		constexpr std::string_view c_EditorBuildConfiguration = BERNINI_EDITOR_BUILD_CONFIGURATION;
-		constexpr std::string_view c_EditorSdkStamp           = BERNINI_EDITOR_SDK_STAMP;
-
 		struct Descriptor
 		{
 			std::string                        id;
