@@ -68,15 +68,6 @@ set(IS_DEBUG ${_bernini_is_debug} CACHE BOOL "Compile shaders with debug info an
 # build that asked for no preset carries none of it. See docs/profiling.md.
 option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" OFF)
 
-# A top-level editor build owns one copy of every implementation a native plugin calls. Games
-# embedded with add_subdirectory and renderer-free tools remain one-binary static builds.
-set(_bernini_editor_sdk_default OFF)
-if (PROJECT_IS_TOP_LEVEL AND NOT RENDERER_BACKEND STREQUAL "NONE")
-    set(_bernini_editor_sdk_default ON)
-endif()
-option(BERNINI_EDITOR_SDK "Build the shared libraries and build-tree package for editor plugins"
-    ${_bernini_editor_sdk_default})
-
 # Before any add_subdirectory: a compiler launcher is read when a target is created.
 enable_compiler_cache()
 
@@ -133,6 +124,25 @@ add_custom_target(copy_assets DEPENDS "${ASSET_STAMP}")
 # deployed next to the executable hides that at runtime; where it is static (macOS) the debug
 # code is linked in, and a texture bake runs an order of magnitude slower.
 set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+
+if (PROJECT_IS_TOP_LEVEL AND NOT RENDERER_BACKEND STREQUAL "NONE")
+    find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
+endif()
+
+# A top-level editor build owns one copy of every implementation a native plugin calls. Games
+# embedded with add_subdirectory, renderer-free tools and builds without the editor stay static.
+set(_bernini_editor_sdk_default OFF)
+set(_bernini_editor_sdk_eligible OFF)
+if (PROJECT_IS_TOP_LEVEL AND NOT RENDERER_BACKEND STREQUAL "NONE" AND Qt6_FOUND)
+    set(_bernini_editor_sdk_default ON)
+    set(_bernini_editor_sdk_eligible ON)
+endif()
+option(BERNINI_EDITOR_SDK "Build the shared libraries and build-tree package for editor plugins"
+    ${_bernini_editor_sdk_default})
+if (BERNINI_EDITOR_SDK AND NOT _bernini_editor_sdk_eligible)
+    message(FATAL_ERROR "BERNINI_EDITOR_SDK requires a top-level editor build with Qt6")
+endif()
+
 find_package(ktx CONFIG REQUIRED)
 set_target_properties(KTX::ktx PROPERTIES
     MAP_IMPORTED_CONFIG_DEBUG          Release
@@ -171,7 +181,6 @@ endif()
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
 # for and occasionally find it.
 if (PROJECT_IS_TOP_LEVEL)
-    find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
     if (Qt6_FOUND AND TARGET bgl_extended)
         add_subdirectory(apps/editor)
     elseif (NOT Qt6_FOUND)

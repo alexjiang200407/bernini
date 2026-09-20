@@ -38,8 +38,9 @@ linked paths are the source of truth; when this map disagrees, trust the header 
 - **The SDK is a build-tree package.** Configure a plugin with
   `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_api`. This package
   names the exact libraries and dependency tree of that engine build; it is not an installed,
-  version-independent engine package. Top-level renderer builds enable it by default. Embedded game
-  builds and `RENDERER_BACKEND=NONE` keep assetlib and gamelib static and produce no package.
+  version-independent engine package. Top-level editor builds enable it by default. Builds without
+  Qt/editor, embedded games and `RENDERER_BACKEND=NONE` keep assetlib and gamelib static and produce
+  no package.
 
 ## Interface index
 

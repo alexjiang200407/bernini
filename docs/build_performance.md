@@ -76,6 +76,10 @@ The exception is a name a PCH *defines* rather than includes, which no `#include
 `libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every bgl_extended source logs through
 ([docs/gfx_debug.md](gfx_debug.md)). That is why `MetalImpl.cpp`, which skips the PCH, does not log.
 
+MSVC editor SDK builds disable the PCH for `core`, `assetlib` and `gamelib`. CMake's automatic DLL
+export scan otherwise mistakes MSVC's `__@@_PchSym` bookkeeping records for an export named `__`;
+the scan reaches `core` through the static archive as well as the two DLLs' own object files.
+
 ### A PCH is not free per translation unit
 
 **The trap, and the reason to measure rather than reason about it.** A precompiled header is

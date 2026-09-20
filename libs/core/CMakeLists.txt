@@ -97,11 +97,13 @@ target_link_libraries(
 enable_strict_compiler(core)
 enable_coverage(core)
 
-target_precompile_headers(core
-	PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/include/core/pch.h
-		${BERNINI_ROOT}/PCH/pch.h
-)
+if (NOT (BERNINI_EDITOR_SDK AND MSVC))
+	target_precompile_headers(core
+		PRIVATE
+			${CMAKE_CURRENT_SOURCE_DIR}/include/core/pch.h
+			${BERNINI_ROOT}/PCH/pch.h
+	)
+endif()
 
 target_include_directories(core
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include

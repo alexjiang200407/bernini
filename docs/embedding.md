@@ -59,7 +59,7 @@ Everything else has a host-derived default and is only worth naming to change it
 | `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_extended_objects` alone with no runtime, shaders or tests. Defaults from the host. |
 | `IS_DEBUG` | Shader debug info and the `dbg_raise()` bodies. Defaults from `CMAKE_BUILD_TYPE`; a multi-config generator has none, so there it is a choice. |
 | `BERNINI_PROFILING` | Tracy zones and the client that opens a socket. `OFF`. |
-| `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level build with a renderer; embedded and renderer-free builds stay static. |
+| `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 

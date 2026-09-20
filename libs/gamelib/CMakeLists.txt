@@ -33,11 +33,13 @@ target_include_directories(gamelib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_precompile_headers(gamelib
-	PRIVATE
-		${BERNINI_ROOT}/PCH/pch.h
-		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
-)
+if (NOT (BERNINI_EDITOR_SDK AND MSVC))
+	target_precompile_headers(gamelib
+		PRIVATE
+			${BERNINI_ROOT}/PCH/pch.h
+			${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+	)
+endif()
 
 # bgl for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
 # compiles against rather than assuming one renderer provides it.

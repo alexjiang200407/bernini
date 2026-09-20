@@ -46,11 +46,13 @@ target_include_directories(assetlib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_precompile_headers(assetlib
-	PRIVATE
-		${BERNINI_ROOT}/PCH/pch.h
-		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
-)
+if (NOT (BERNINI_EDITOR_SDK AND MSVC))
+	target_precompile_headers(assetlib
+		PRIVATE
+			${BERNINI_ROOT}/PCH/pch.h
+			${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+	)
+endif()
 
 find_package(nlohmann_json CONFIG REQUIRED)     # the project file, and tinygltf
 find_package(Stb REQUIRED)                      # image decoding used by tinygltf
