@@ -15,6 +15,10 @@ namespace assetlib
 		void
 		Add(AssetKindPtr kind) override;
 
+		/** Adds every kind after checking the whole batch; a collision leaves both unchanged. */
+		void
+		Merge(AssetKindRegistry&& other);
+
 		[[nodiscard]] const IAssetKind*
 		FindByExtension(std::string_view extension) const noexcept;
 

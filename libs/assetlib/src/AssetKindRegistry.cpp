@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -71,6 +72,36 @@ namespace assetlib
 			m_Kinds.pop_back();
 			throw;
 		}
+	}
+
+	void
+	AssetKindRegistry::Merge(AssetKindRegistry&& other)
+	{
+		for (const AssetKindPtr& kind : other.m_Kinds)
+		{
+			if (kind == nullptr || HasCollision(kind->GetDesc()))
+				throw std::runtime_error("assetlib: asset kind descriptor collides");
+		}
+
+		auto byExtension = m_ByExtension;
+		auto byId        = m_ById;
+		for (const AssetKindPtr& kind : other.m_Kinds)
+		{
+			byExtension.emplace(kind->GetDesc().extension, kind.get());
+			byId.emplace(kind->GetDesc().id, kind.get());
+		}
+
+		std::vector<AssetKindPtr> kinds;
+		kinds.reserve(m_Kinds.size() + other.m_Kinds.size());
+		for (AssetKindPtr& kind : m_Kinds) kinds.push_back(std::move(kind));
+		for (AssetKindPtr& kind : other.m_Kinds) kinds.push_back(std::move(kind));
+
+		m_Kinds.swap(kinds);
+		m_ByExtension.swap(byExtension);
+		m_ById.swap(byId);
+		other.m_Kinds.clear();
+		other.m_ByExtension.clear();
+		other.m_ById.clear();
 	}
 
 	bool
