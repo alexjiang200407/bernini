@@ -59,7 +59,8 @@ open the project's own assets.
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
 `startupProject` names the project to open on launch, `instanceName` names *this* editor, `headless`
-builds every viewport offscreen, and `memoryReport` (default true) decides whether the run's memory
+builds every viewport offscreen, `pluginDirectories` lists local plugin build outputs, and
+`memoryReport` (default true) decides whether the run's memory
 table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
 § Memory. `MainWindow::Build` reads it for everything but the last: the report is armed in `main`
 before the window exists, so that building the window is inside what it measures, and
@@ -68,12 +69,18 @@ before the window exists, so that building the window is inside what it measures
 side by side for an A/B comparison can be told apart where every other part of the title is
 identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.
 
+A project's `.bproj` names the plugin IDs it requires. Each `pluginDirectories` entry contains a
+`bernini-plugin.json`; the loader selects the required IDs, checks their build identity and age,
+then registers runtime kinds before opening the project's store. A project with a different plugin
+list restarts the editor. Windows loads a per-process shadow copy so rebuilding the original DLL
+does not wait for the editor to exit.
+
 The editor never writes the file — `ws` seeds it and a person edits it. **`--project <path>`**
-outranks `startupProject` for one launch, and it is how the editor restarts itself: surfaces are
-registered once, as the renderer is built, so New or Open Project on a project whose shaders are not
-the ones this session registered asks to restart, and `main` starts the new process with the project
-once the window is gone. When that is needed is `editor::OpeningNeedsRelaunch`
-(`src/util/surface_relaunch.h`); see [docs/game_defined_surfaces.md](../../docs/game_defined_surfaces.md).
+outranks `startupProject` for one launch, and it is how the editor restarts itself: plugins and
+surfaces are registered once, so New or Open Project on a project whose set differs asks to restart,
+and `main` starts the new process with the project once the window is gone. Shader comparison lives
+in `editor::OpeningNeedsRelaunch` (`src/util/surface_relaunch.h`); see
+[docs/game_defined_surfaces.md](../../docs/game_defined_surfaces.md).
 
 **`MainWindow` reads the config it is given**, defaulting to the deployed one when handed nothing —
 which is what `main.cpp` does. `editor_tests` runs from the directory that file is deployed into, so

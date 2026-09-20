@@ -14,6 +14,7 @@
 #include <QTabWidget>
 
 #include "Async/BackgroundTask.h"
+#include "Plugins/plugin_loader.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Thumbnails/AssetThumbnailCache.h"
@@ -122,6 +123,16 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		}
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
+
+		std::vector<std::string> requiredPlugins;
+		if (!startupProject.empty() && std::filesystem::is_regular_file(startupProject))
+			requiredPlugins = assetlib::Project::PluginIdsOf(startupProject);
+		m_Plugins =
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::LoadPluginSession(
+				requiredPlugins,
+				editor::plugins::ConfiguredPluginDirectories(configPath),
+				editor::plugins::CurrentBuildIdentity(),
+				editor::plugins::DefaultShadowRoot()));
 
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
@@ -671,10 +682,25 @@ MainWindow::OpenProject()
 MainWindow::ProjectOpening
 MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& projectFile)
 {
-	if (!editor::OpeningNeedsRelaunch(
-			m_SurfaceShaderDir,
-			m_SurfaceCount,
-			editor::ShadersDirectoryOf(projectFile)))
+	std::vector<std::string> requestedPlugins;
+	try
+	{
+		if (std::filesystem::is_regular_file(projectFile))
+			requestedPlugins = assetlib::Project::PluginIdsOf(projectFile);
+	}
+	catch (const std::exception& error)
+	{
+		QMessageBox::warning(this, title, error.what());
+		return ProjectOpening::kCancelled;
+	}
+
+	const bool pluginsDiffer =
+		editor::plugins::OpeningNeedsPluginRelaunch(m_Plugins->Ids(), requestedPlugins);
+	const bool shadersDiffer = editor::OpeningNeedsRelaunch(
+		m_SurfaceShaderDir,
+		m_SurfaceCount,
+		editor::ShadersDirectoryOf(projectFile));
+	if (!pluginsDiffer && !shadersDiffer)
 	{
 		return ProjectOpening::kHere;
 	}
@@ -683,8 +709,8 @@ MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& proj
 		this,
 		title,
 		QString(
-			"%1 has different shaders from the ones this editor loaded at startup. The editor "
-			"will restart to open it.")
+			"%1 requires different plugins or shaders from the ones this editor loaded at "
+			"startup. The editor will restart to open it.")
 			.arg(QString::fromStdWString(projectFile.stem().wstring())),
 		QMessageBox::Ok | QMessageBox::Cancel,
 		QMessageBox::Ok);
@@ -713,7 +739,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 	{
 		ZoneScopedN("editor open project");
 
-		SetActiveProject(assetlib::Project::Open(path));
+		SetActiveProject(assetlib::Project::Open(path, m_Plugins->Kinds()));
 		return true;
 	}
 	catch (const std::exception& e)

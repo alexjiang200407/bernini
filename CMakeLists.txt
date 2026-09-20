@@ -143,6 +143,17 @@ if (BERNINI_EDITOR_SDK AND NOT _bernini_editor_sdk_eligible)
     message(FATAL_ERROR "BERNINI_EDITOR_SDK requires a top-level editor build with Qt6")
 endif()
 
+if (BERNINI_EDITOR_SDK)
+    set(_bernini_build_id_file "${CMAKE_BINARY_DIR}/bernini-editor-build-id.txt")
+    if (NOT EXISTS "${_bernini_build_id_file}")
+        string(RANDOM LENGTH 32 ALPHABET 0123456789abcdef BERNINI_EDITOR_BUILD_ID)
+        file(WRITE "${_bernini_build_id_file}" "${BERNINI_EDITOR_BUILD_ID}\n")
+    else()
+        file(READ "${_bernini_build_id_file}" BERNINI_EDITOR_BUILD_ID)
+        string(STRIP "${BERNINI_EDITOR_BUILD_ID}" BERNINI_EDITOR_BUILD_ID)
+    endif()
+endif()
+
 find_package(ktx CONFIG REQUIRED)
 set_target_properties(KTX::ktx PROPERTIES
     MAP_IMPORTED_CONFIG_DEBUG          Release

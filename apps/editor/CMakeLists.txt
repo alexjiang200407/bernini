@@ -78,10 +78,24 @@ target_link_libraries(editor_lib
 		bgl_extended
 		assetlib
 		gamelib
+		editor_api
 		Qt6::Widgets
 		QtNodes::QtNodes
 		nlohmann_json::nlohmann_json
 )
+
+if(BERNINI_EDITOR_SDK)
+	add_dependencies(editor_lib editor_sdk_stamp)
+	target_compile_definitions(editor_lib PRIVATE
+		BERNINI_EDITOR_BUILD_ID="${BERNINI_EDITOR_BUILD_ID}"
+		BERNINI_EDITOR_BUILD_CONFIGURATION="$<CONFIG>"
+		BERNINI_EDITOR_SDK_STAMP="${BERNINI_EDITOR_SDK_STAMP}")
+else()
+	target_compile_definitions(editor_lib PRIVATE
+		BERNINI_EDITOR_BUILD_ID=""
+		BERNINI_EDITOR_BUILD_CONFIGURATION="$<CONFIG>"
+		BERNINI_EDITOR_SDK_STAMP="")
+endif()
 
 
 target_precompile_headers(editor_lib

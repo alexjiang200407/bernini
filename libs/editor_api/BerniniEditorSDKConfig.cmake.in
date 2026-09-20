@@ -1,5 +1,7 @@
 include(CMakeFindDependencyMacro)
 
+set(BerniniEditorSDK_BUILD_ID "@BERNINI_EDITOR_BUILD_ID@")
+
 find_dependency(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets)
 find_dependency(glm CONFIG REQUIRED)
 find_dependency(spdlog CONFIG REQUIRED)
