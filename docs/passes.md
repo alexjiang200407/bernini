@@ -175,32 +175,49 @@ sort: the fix is `doubleSided = false` where a translucent solid has no inside w
 
 ## Meshlet culling
 
-Below the instance, the static tier culls meshlets. `CullInstances` keeps an instance whose sphere
-meets the frustum; `programs.forward.StaticMesh`'s amplification stage then tests each of that
-instance's meshlets against the **same** `cull.view` planes -- built from the jittered
-view-projection the raster draws with -- using the meshlet's cooked sphere placed by the same
-`MeshInstance::TransformSphere`. A sphere test only rejects geometry wholly outside a plane, so a
-meshlet with any pixel in view survives, jitter included, and so does every receiver a blob-shadow
-decal reads out of Static Depth, which draws from the same camera. Both Forward's static buckets and
-Static Depth dispatch through it; the skinned tier and `AnyMesh` (the transparent list, the outline
-mask) cull nothing below the instance, since a posed meshlet leaves its bind-pose sphere.
+Below the instance, the static tier culls meshlets, and the unit it culls in is a **group** of
+`cMeshletsPerGroup` (8) consecutive ones. `CullInstances` keeps an instance whose sphere meets the
+frustum; `programs.forward.StaticMesh`'s amplification stage then tests each of that instance's
+meshlet groups against the **same** `cull.view` planes -- built from the jittered view-projection
+the raster draws with -- using the group's cooked sphere placed by the same
+`MeshInstance::TransformSphere`. A sphere test only rejects geometry wholly outside a plane, and a
+group's sphere encloses every vertex under it, so a meshlet with any pixel in view survives, jitter
+included, and so does every receiver a blob-shadow decal reads out of Static Depth, which draws from
+the same camera. Both Forward's static buckets and Static Depth dispatch through it; the skinned tier
+and `AnyMesh` (the transparent list, the outline mask) cull nothing below the instance, since a posed
+meshlet leaves its bind-pose sphere.
 
 The survivors are **compacted** in the amplification group (`CullMeshlets` in
 [lib/forward/mesh_stage.slang](libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang)): one
-lane per meshlet marks a bit, one lane writes a running count per mask word, and the group dispatches
-only the survivors, each mesh group finding its meshlet by a binary search over the counts. They are
-dispatched in meshlet order, the order an unculled draw has.
+lane per group marks a bit, one lane writes a running count per mask word, and the group dispatches
+`cMeshletsPerGroup` mesh groups per survivor, each finding its group by a binary search over the
+counts and its meshlet within that group by the remainder. They are dispatched in meshlet order, the
+order an unculled draw has, and the last group of a submesh whose meshlet count does not divide
+stands for meshlets that do not exist -- those mesh groups emit nothing.
+
+**The mesh stage then tests the meshlet it draws**, against the same planes and its own cooked
+sphere, and emits nothing when it fails: a kept group is launched whole, so the meshlets of it that
+are off screen are rejected here. The vertex work and the raster setup are saved; the mesh-group
+launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
+spheres, and pays for it in launches that draw nothing.
 
 **The payload is kept small on purpose.** It is copied out whole for every instance drawn -- on Metal,
 Slang lowers `DispatchMesh` to a copy from groupshared memory by every lane -- so its size is paid by
 every static instance, visible or not: a 16 KiB list of indices made animal-run six times slower, an
-8 KiB one cost 3 ms a pass, 2 KiB nothing. At a bit and a half per meshlet it covers
-`cMaxCompactedMeshlets` (8192). A submesh with more dispatches every meshlet, and each mesh group
-runs the same test on its own meshlet and emits nothing when it fails: the vertex work and the
-raster setup are saved, the mesh-group launch is not.
+8 KiB one cost 3 ms a pass, 2 KiB nothing. At a bit and a half per *group* it covers
+`cMaxCompactedGroups` (8192) of them, which is 65536 meshlets -- more than the 65535 thread groups
+one `DispatchMesh` can launch. So every submesh a scene will hold compacts, and there is no
+dispatch-everything path: `Scene` refuses a submesh past the largest multiple of the group size a
+dispatch can reach.
 
-In `BERNINI_GPU_DEBUG` builds the compacting path adds to `cull.stats`' `meshletsTested` and
-`meshletsCulled`; the mesh stage's own test counts nothing.
+In `BERNINI_GPU_DEBUG` builds the amplification stage adds to `cull.stats`' `meshletGroupsTested` and
+`meshletGroupsCulled`; the mesh stage's own test counts nothing.
+
+The group bounds come from the cook (`buildMeshlets` in
+[assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), fitted to the vertices themselves
+and stored in the `.bmesh` beside the meshlets. Geometry that never passed through a cook -- a
+procedural primitive, a `BMesh` built in memory -- has `Scene` fold a bound out of the meshlet
+spheres instead, which encloses the same geometry a little less tightly.
 
 ## Blended surfaces
 

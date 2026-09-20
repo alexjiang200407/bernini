@@ -12,6 +12,7 @@ import idl.Constants;
 import idl.Geom;
 import idl.MeshInstance;
 import idl.Meshlet;
+import idl.MeshletGroup;
 import idl.Submesh;
 import idl.VertexLayout;
 import lib.debug.dbg;
@@ -94,22 +95,26 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     return submesh.GetMeshletCount();
 }
 
-// Whether any of `meshlet` can reach the draw's cull frustum. The sphere test is the one
-// CullInstances passes the instance by, against the same planes -- built from the jittered
-// view-projection the raster uses -- so it only ever rejects a meshlet the raster would clip whole.
-public bool MeshletInCullFrustum(MeshInstance mesh, Meshlet meshlet)
+// Whether any of `sphere`, in the placement's local space, can reach the draw's cull frustum. The
+// test is the one CullInstances passes the instance by, against the same planes -- built from the
+// jittered view-projection the raster uses -- so it only ever rejects geometry the raster would clip
+// whole. Shared by the meshlet group the amplification stage keeps and the meshlet the mesh stage
+// draws.
+public bool LocalSphereInCullFrustum(MeshInstance mesh, float4 sphere)
 {
-    let sphere = mesh.TransformSphere(meshlet.boundingSphere);
-    return SphereInFrustum(expansionData.cullView[0].frustumPlanes, sphere.xyz, sphere.w);
+    let world = mesh.TransformSphere(sphere);
+    return SphereInFrustum(expansionData.cullView[0].frustumPlanes, world.xyz, world.w);
 }
 
 public groupshared CulledPayload gCulledPayload;
 groupshared uint gSurvivors;
 
-// The instance this amplification group covers, and how many meshlets it dispatches: those
-// MeshletInCullFrustum keeps, marked in gCulledPayload so the mesh stage draws them in meshlet order,
-// the order an unculled draw has. A submesh past cMaxCompactedMeshlets dispatches all of them, and
-// the mesh stage culls. Every lane of the group calls it.
+// The instance this amplification group covers, and how many meshlets it dispatches: every meshlet
+// of every group whose cooked sphere LocalSphereInCullFrustum keeps, marked in gCulledPayload so the
+// mesh stage draws them in meshlet order, the order an unculled draw has. A kept group dispatches
+// all cMeshletsPerGroup of its meshlets and the mesh stage tests each on its own, so a group is
+// tested once where a meshlet list would have been read cMeshletsPerGroup times. Every lane of the
+// group calls it.
 public uint CullMeshlets(uint gid, uint lane)
 {
     uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
@@ -118,21 +123,15 @@ public uint CullMeshlets(uint gid, uint lane)
     let geom = forwardData.geomBuffer.Get(mesh.geom);
     let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
     let meshletCount = submesh.GetMeshletCount();
-    let compacted = meshletCount <= cMaxCompactedMeshlets;
+    let groupCount = MeshletGroupCount(meshletCount);
 
     if (lane == 0u)
     {
         gCulledPayload.instance = instance;
-        gCulledPayload.compactedMeshletCount = compacted ? meshletCount : 0u;
+        gCulledPayload.meshletCount = meshletCount;
     }
 
-    if (!compacted)
-    {
-        GroupMemoryBarrierWithGroupSync();
-        return meshletCount;
-    }
-
-    let maskWords = (meshletCount + 31u) / 32u;
+    let maskWords = (groupCount + 31u) / 32u;
 
     for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
     {
@@ -140,11 +139,12 @@ public uint CullMeshlets(uint gid, uint lane)
     }
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint meshletIdx = lane; meshletIdx < meshletCount; meshletIdx += cMeshletCullGroupSize)
+    for (uint groupIdx = lane; groupIdx < groupCount; groupIdx += cMeshletCullGroupSize)
     {
-        if (MeshletInCullFrustum(mesh, forwardData.meshletBuffer.Get(submesh.meshlets, meshletIdx)))
+        let bound = forwardData.meshletGroupBuffer.Get(submesh.meshletGroups, groupIdx);
+        if (LocalSphereInCullFrustum(mesh, bound.boundingSphere))
         {
-            InterlockedOr(gCulledPayload.survivorMask[meshletIdx / 32u], 1u << (meshletIdx % 32u));
+            InterlockedOr(gCulledPayload.survivorMask[groupIdx / 32u], 1u << (groupIdx % 32u));
         }
     }
     GroupMemoryBarrierWithGroupSync();
@@ -169,12 +169,12 @@ public uint CullMeshlets(uint gid, uint lane)
 #if defined(BERNINI_GPU_DEBUG)
     if (lane == 0u)
     {
-        expansionData.stats[0].meshletsTested.add(meshletCount);
-        expansionData.stats[0].meshletsCulled.add(meshletCount - survivors);
+        expansionData.stats[0].meshletGroupsTested.add(groupCount);
+        expansionData.stats[0].meshletGroupsCulled.add(groupCount - survivors);
     }
 #endif
 
-    return survivors;
+    return survivors * cMeshletsPerGroup;
 }
 
 public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)

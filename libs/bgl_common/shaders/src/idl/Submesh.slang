@@ -2,6 +2,7 @@ import Range;
 import RangeWithCount;
 import RawRange;
 import Meshlet;
+import MeshletGroup;
 import VertexLayout;
 
 public struct Submesh
@@ -17,6 +18,11 @@ public struct Submesh
     // transform.
     // xyz is the centre, w the radius.
     public float4 boundingSphere;
+
+    // One bound per cMeshletsPerGroup meshlets; the count follows from the meshlet count, so the
+    // range carries none of its own. Last because a float4 is 16-byte aligned under MSL and a word
+    // ahead of it would move it off that.
+    public Range<MeshletGroup> meshletGroups;
 
     public uint GetMeshletCount() { return meshlets.count; }
 };
