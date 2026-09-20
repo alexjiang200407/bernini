@@ -102,10 +102,12 @@ TEST_CASE("An independent SDK plugin shares process services with its host", "[e
 {
 	const Fixture& fixture = SdkFixture();
 
-	CHECK(fixture.Find<const void*()>("EditorSdkDefaultLogger")() == spdlog::default_logger_raw());
+	CHECK(
+		fixture.Find<const void*()>("BerniniEditorSdkTestDefaultLogger")() ==
+		spdlog::default_logger_raw());
 
 	const uint64_t before = core::profiling::detail::mint_allocation_id();
-	const uint64_t plugin = fixture.Find<uint64_t()>("EditorSdkMintAllocationId")();
+	const uint64_t plugin = fixture.Find<uint64_t()>("BerniniEditorSdkTestMintAllocationId")();
 	const uint64_t after  = core::profiling::detail::mint_allocation_id();
 	CHECK(before < plugin);
 	CHECK(plugin < after);
@@ -127,11 +129,13 @@ TEST_CASE("An independent SDK plugin observes the host UI runtime", "[editor_plu
 	game::UiRuntime            runtime(store, renderer);
 	auto                       context = runtime.CreateContext("sdk-fixture", 1, 1);
 
-	CHECK(SdkFixture().Find<bool(Rml::Context*)>("EditorSdkUpdateContext")(&context->Get()));
+	CHECK(
+		SdkFixture().Find<bool(Rml::Context*)>("BerniniEditorSdkTestUpdateContext")(
+			&context->Get()));
 
 	CHECK_FALSE(
 		SdkFixture().Find<bool(const assetlib::AssetStore*, Rml::RenderInterface*)>(
-			"EditorSdkTrySecondUiRuntime")(&store, &renderer));
+			"BerniniEditorSdkTestTrySecondUiRuntime")(&store, &renderer));
 
 	std::filesystem::remove_all(root);
 }

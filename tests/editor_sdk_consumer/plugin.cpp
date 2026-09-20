@@ -6,6 +6,7 @@
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <gamelib/ui/UiRuntime.h>
+#include <memory>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -37,35 +38,35 @@ namespace
 extern "C" SDK_FIXTURE_EXPORT editor::IEditorPlugin*
 							  BerniniCreateEditorPlugin()
 							  {
-								  return new Plugin();
+								  return std::make_unique<Plugin>().release();
 							  }
 
 extern "C" SDK_FIXTURE_EXPORT assetlib::IAssetPlugin*
 							  BerniniCreateAssetPlugin()
 							  {
-								  return new AssetPlugin();
+								  return std::make_unique<AssetPlugin>().release();
 							  }
 
 extern "C" SDK_FIXTURE_EXPORT const void*
-EditorSdkDefaultLogger()
+BerniniEditorSdkTestDefaultLogger()
 {
 	return spdlog::default_logger_raw();
 }
 
 extern "C" SDK_FIXTURE_EXPORT uint64_t
-EditorSdkMintAllocationId()
+BerniniEditorSdkTestMintAllocationId()
 {
 	return core::profiling::detail::mint_allocation_id();
 }
 
 extern "C" SDK_FIXTURE_EXPORT bool
-EditorSdkUpdateContext(Rml::Context* const context)
+BerniniEditorSdkTestUpdateContext(Rml::Context* const context)
 {
 	return context->Update();
 }
 
 extern "C" SDK_FIXTURE_EXPORT bool
-EditorSdkTrySecondUiRuntime(
+BerniniEditorSdkTestTrySecondUiRuntime(
 	const assetlib::AssetStore* const store,
 	Rml::RenderInterface* const       renderer)
 {
