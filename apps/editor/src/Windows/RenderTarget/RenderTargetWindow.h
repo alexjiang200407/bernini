@@ -8,6 +8,7 @@
 #include <bgl/PassTiming.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_api/IEditorViewport.h>
 #include <qcoreevent.h>
 #include <qpaintdevice.h>
 #include <qtmetamacros.h>
@@ -15,6 +16,11 @@
 #include <vector>
 
 class QTimer;
+
+namespace game
+{
+	class AssetManager;
+}
 
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -24,8 +30,9 @@ class QTimer;
 
 struct RenderTargetWindowDesc
 {
-	Renderer* renderer         = nullptr;
-	uint32_t  initialInstances = 0;
+	Renderer*           renderer         = nullptr;
+	game::AssetManager* assets           = nullptr;
+	uint32_t            initialInstances = 0;
 
 	// Whether this viewport allocates temporal-AA resources and starts with it running. False also
 	// frees the history buffers and their RTVs, which a runtime toggle cannot.
@@ -55,7 +62,7 @@ struct RenderTargetWindowDesc
 	uint32_t headlessHeight = 256;
 };
 
-class RenderTargetWindow : public QWidget
+class RenderTargetWindow : public editor::IEditorViewport
 {
 	Q_OBJECT
 
@@ -70,7 +77,13 @@ public:
 	 * QDockWidget::visibilityChanged.
 	 */
 	void
-	SetRenderingEnabled(bool enabled);
+	SetRenderingEnabled(bool enabled) override;
+
+	void
+	Invoke(const editor::ViewportRenderWork& work) override;
+
+	void
+	SetCamera(const bgl::Camera& cam) override;
 
 	// Turns temporal AA on or off for this viewport, so it can be compared against itself without
 	// restarting the editor. A no-op on a viewport configured without it -- there is no history to
@@ -114,7 +127,7 @@ public:
 	// not the viewport's -- the Animation panel's transport drives its preview from outside. A
 	// window nobody clocks draws at time zero, which freezes animated instances on their phase.
 	void
-	SetTime(float seconds);
+	SetTime(float seconds) override;
 
 	[[nodiscard]] float
 	GetRenderScale() const noexcept
@@ -186,11 +199,6 @@ protected:
 	{
 		return m_Desc.renderer;
 	}
-
-	// Hands the camera to the render thread, which is the only one that reads it. Returns before the
-	// next frame necessarily sees it.
-	void
-	SetCamera(const bgl::Camera& cam);
 
 Q_SIGNALS:
 	/**

@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Plugins/plugin_loader.h"
 
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/GroundControls.h"
@@ -17,8 +18,11 @@
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
+#include <editor_api/EditorPanel.h>
+#include <editor_api/PluginDescriptor.h>
 
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
@@ -30,6 +34,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QModelIndex>
 #include <QPointer>
 #include <QPushButton>
@@ -38,12 +43,15 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <qlist.h>
 #include <qmainwindow.h>
 #include <qobject.h>
@@ -127,6 +135,47 @@ namespace
 		}
 	};
 
+#if defined(EDITOR_PLUGIN_FIXTURE)
+	struct PluginHeadlessEditor : HeadlessEditor
+	{
+		PluginHeadlessEditor()
+		{
+			const fs::path pluginDirectory = temp.path().toStdString() / fs::path("fixture-plugin");
+			fs::create_directories(pluginDirectory);
+			const fs::path source(EDITOR_PLUGIN_FIXTURE);
+			const fs::path module = source.filename();
+			fs::copy_file(source, pluginDirectory / module, fs::copy_options::overwrite_existing);
+			const editor::plugins::BuildIdentity build = editor::plugins::CurrentBuildIdentity();
+			std::ofstream(pluginDirectory / editor::c_PluginDescriptorFileName)
+				<< nlohmann::json{
+					   { "version", editor::c_PluginDescriptorVersion },
+					   { "id", "sample.fixture" },
+					   { "engineBuildId", build.id },
+					   { "configuration", build.configuration },
+					   { "editor", module.generic_string() },
+					   { "dependencies", nlohmann::json::array() },
+				   }
+					   .dump(2);
+			std::ofstream(ProjectFile())
+				<< nlohmann::json{
+					   { "name", "MyGame" },
+					   { "version", 1 },
+					   { "plugins", { "sample.fixture" } },
+				   }
+					   .dump(2);
+			std::ofstream(ConfigFile())
+				<< nlohmann::json{
+					   { "headless", true },
+					   { "startupProject", ProjectFile().string() },
+					   { "pluginDirectories", { pluginDirectory.string() } },
+					   { "materialEditor", { { "temporalAA", false } } },
+					   { "animationEditor", { { "temporalAA", false } } },
+				   }
+					   .dump(2);
+		}
+	};
+#endif
+
 	[[nodiscard]] QAction*
 	ActionNamed(const MainWindow& window, const QString& text)
 	{
@@ -154,6 +203,49 @@ namespace
 		int     calls = 0;
 	};
 }
+
+#if defined(EDITOR_PLUGIN_FIXTURE)
+TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][plugins][render]")
+{
+	const PluginHeadlessEditor    editor;
+	QPointer<editor::EditorPanel> panel;
+	{
+		auto   window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+		QMenu* tools  = nullptr;
+		for (QAction* action : window->menuBar()->actions())
+			if (action->menu() != nullptr && action->text() == "Tools")
+				tools = action->menu();
+		REQUIRE(tools != nullptr);
+		Q_EMIT tools->aboutToShow();
+		QAction* show = ActionNamed(*window, "Fixture Panel");
+		REQUIRE(show != nullptr);
+		REQUIRE(show->isEnabled());
+		show->trigger();
+		for (QWidget* widget : window->findChildren<QWidget*>())
+			if (auto* candidate = dynamic_cast<editor::EditorPanel*>(widget))
+				panel = candidate;
+		REQUIRE(panel != nullptr);
+		CHECK(panel->parentWidget()->objectName() == "sample.fixture_panel");
+	}
+	CHECK(panel.isNull());
+}
+
+TEST_CASE("A plugin editor failure stays inside the GUI boundary", "[mainwindow][plugins]")
+{
+	const PluginHeadlessEditor editor;
+	auto                       window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+	auto*                      explorer = window->findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+
+	QTimer::singleShot(0, [] {
+		for (QWidget* widget : QApplication::topLevelWidgets())
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->accept();
+	});
+	CHECK_NOTHROW(Q_EMIT explorer->AssetOpenRequested("Authored/failure.bfixture"));
+	CHECK(window->findChild<QWidget*>("sample.throwing_editor_child") == nullptr);
+}
+#endif
 
 TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][render]")
 {

@@ -25,13 +25,17 @@
 #include <QMenu>
 
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QSplitter>
 #include <QStringList>
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
+#include <QUrl>
 #include <algorithm>
+#include <filesystem>
+#include <functional>
 
 #include <memory>
 #include <qabstractitemmodel.h>
@@ -40,8 +44,12 @@
 #include <qobject.h>
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
+#include <string>
+#include <string_view>
+#include <system_error>
 #include <tracy/Tracy.hpp>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -163,6 +171,22 @@ void
 ContentExplorerWindow::SetThumbnails(AssetThumbnailCache* thumbnails)
 {
 	m_FileModel->SetThumbnails(thumbnails);
+}
+
+void
+ContentExplorerWindow::SetPluginImporter(
+	std::function<bool(const std::filesystem::path&)>                   accepts,
+	std::function<void(const std::filesystem::path&, std::string_view)> import)
+{
+	m_AcceptsPluginImport = std::move(accepts);
+	m_PluginImport        = std::move(import);
+}
+
+void
+ContentExplorerWindow::SetPluginActions(
+	std::function<void(QMenu&, const std::vector<std::string>&)> append)
+{
+	m_AppendPluginActions = std::move(append);
 }
 
 void
@@ -371,8 +395,7 @@ ContentExplorerWindow::AttachModels()
 			NavigateTo(m_HierarchyModel->filePath(folder));
 		});
 
-	// Double-clicking a folder on the right opens it, and a blend set is announced for its editor.
-	// Nothing else opens this way.
+	// Double-clicking a folder on the right opens it; files are announced for the host to dispatch.
 	connect(
 		m_Ui.currentDirectory,
 		&QAbstractItemView::doubleClicked,
@@ -387,6 +410,8 @@ ContentExplorerWindow::AttachModels()
 			const QString asset = editor::AssetAt(*m_FileModel, index, m_RootPath);
 			if (editor::IsBlendSetFile(asset))
 				Q_EMIT BlendSetOpenRequested(asset);
+			else
+				Q_EMIT AssetOpenRequested(asset);
 		});
 
 	// The model populates directories asynchronously and mutates as folders are added or
@@ -522,6 +547,8 @@ ContentExplorerWindow::ShowAssetMenu(
 			removeCascade = menu.addAction("Delete Cascade");
 		}
 	}
+	if (m_AppendPluginActions && !asset.isEmpty())
+		m_AppendPluginActions(menu, { asset.toStdString() });
 
 	QAction* const chosen = menu.exec(view.viewport()->mapToGlobal(pos));
 
@@ -542,7 +569,13 @@ ContentExplorerWindow::ShowAssetMenu(
 void
 ContentExplorerWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
+	const bool plugin =
+		m_AcceptsPluginImport &&
+		std::ranges::any_of(event->mimeData()->urls(), [this](const QUrl& url) {
+			return url.isLocalFile() &&
+		           m_AcceptsPluginImport(std::filesystem::path(url.toLocalFile().toStdWString()));
+		});
+	if (editor::IsEditableMode(m_Mode) && (editor::AcceptsImportDrop(*event->mimeData()) || plugin))
 		event->acceptProposedAction();
 }
 
@@ -550,7 +583,13 @@ void
 ContentExplorerWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
+	const bool plugin =
+		m_AcceptsPluginImport &&
+		std::ranges::any_of(event->mimeData()->urls(), [this](const QUrl& url) {
+			return url.isLocalFile() &&
+		           m_AcceptsPluginImport(std::filesystem::path(url.toLocalFile().toStdWString()));
+		});
+	if (editor::IsEditableMode(m_Mode) && (editor::AcceptsImportDrop(*event->mimeData()) || plugin))
 		event->acceptProposedAction();
 }
 
@@ -561,6 +600,27 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 		return;
 
 	editor::RunImportDrop(this, m_RootPath, *event->mimeData());
+	if (m_PluginImport)
+	{
+		std::error_code             error;
+		const std::filesystem::path shown(
+			m_FileModel->filePath(m_Ui.currentDirectory->rootIndex()).toStdWString());
+		const std::filesystem::path target = std::filesystem::relative(
+			shown,
+			std::filesystem::path(m_RootPath.toStdWString()),
+			error);
+		if (!error)
+		{
+			const std::string targetKey = target == "." ? std::string() : target.generic_string();
+			for (const QUrl& url : event->mimeData()->urls())
+				if (url.isLocalFile())
+				{
+					const std::filesystem::path source(url.toLocalFile().toStdWString());
+					if (m_AcceptsPluginImport && m_AcceptsPluginImport(source))
+						m_PluginImport(source, targetKey);
+				}
+		}
+	}
 	event->acceptProposedAction();
 }
 

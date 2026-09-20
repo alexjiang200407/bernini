@@ -13,6 +13,9 @@
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "Async/BackgroundTask.h"
@@ -32,9 +35,11 @@ class Renderer;
 
 namespace editor
 {
+	class EditorPanel;
 	class GpuTimingWindow;
 	namespace plugins
 	{
+		class EditorHost;
 		class PluginSession;
 	}
 }
@@ -194,6 +199,21 @@ private:
 	void
 	SetUpReconstructionWidthMenu(QMenu* render);
 
+	void
+	SetUpPluginContributions();
+
+	void
+	ShowPluginPanel(std::string_view id);
+
+	void
+	OpenPluginAsset(std::string_view key);
+
+	[[nodiscard]] bool
+	CanClosePluginPanels();
+
+	void
+	ClearPluginPanels();
+
 	editor::MainWindowWidgets m_Ui;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
@@ -209,6 +229,8 @@ private:
 	std::filesystem::path m_RelaunchProject;
 
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
+	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
+	std::unordered_map<std::string, QDockWidget*>   m_PluginDocks;
 	std::unique_ptr<assetlib::Project>              m_Project;
 	ContentExplorerWindow*                          m_ContentExplorer      = nullptr;
 	MaterialEditorWindow*                           m_MaterialEditor       = nullptr;
@@ -236,6 +258,7 @@ private:
 	bool                     m_GpuTimingWasOn  = false;
 
 	std::unique_ptr<Renderer> m_Renderer;
+	bool                      m_Headless = false;
 
 	// The dock-visibility connections, held so the destructor can cut them before the windows they
 	// reach go away.

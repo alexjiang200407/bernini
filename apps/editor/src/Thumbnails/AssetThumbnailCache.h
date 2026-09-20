@@ -7,7 +7,9 @@
 #include "Render/environment.h"
 #include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/Camera.h>
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
@@ -17,7 +19,9 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RenderJob.h>
 #include <cstdint>
+#include <editor_api/IEditorRegistry.h>
 #include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <optional>
@@ -42,6 +46,8 @@ struct AssetThumbnailDesc
 	// The same block the material preview takes, defaults included, so a thumbnail and the preview
 	// it was generated from cannot stand against different backdrops.
 	editor::EnvironmentApplyDesc env;
+
+	std::function<const editor::ThumbnailProviderDesc*(std::string_view)> pluginProvider;
 };
 
 /**
@@ -88,11 +94,18 @@ public:
 	 * against the manager being replaced.
 	 */
 	void
-	SetAssets(game::AssetManager* assets);
+	SetAssets(game::AssetManager* assets, const assetlib::AssetStore* store = nullptr);
+
+	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
+	void
+	Invalidate();
 
 	// Whether `path` names an asset this cache knows how to draw.
 	[[nodiscard]] static bool
 	CanThumbnail(const QString& path);
+
+	[[nodiscard]] bool
+	CanRequest(const QString& path) const;
 
 	// Renders `path` unless a current copy is cached or one is already being rendered. Emits Ready on
 	// success.
@@ -137,6 +150,9 @@ private:
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
 		QString                                failure;
+		std::string                            material;
+		std::optional<bgl::Camera>             camera;
+		uint64_t                               epoch = 0;
 	};
 
 	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
@@ -275,7 +291,8 @@ private:
 	bgl::MaterialHandle  m_DefaultMaterial;
 
 	// The project's manager, kept for its data root -- see SetAssets. Null until a project is open.
-	game::AssetManager* m_Assets = nullptr;
+	game::AssetManager*         m_Assets = nullptr;
+	const assetlib::AssetStore* m_Store  = nullptr;
 
 	// What the cache actually acquires through: a manager of its own over the shared scene, so its
 	// mip-capped texture uploads never sit in the shared cache under the path a viewport would ask

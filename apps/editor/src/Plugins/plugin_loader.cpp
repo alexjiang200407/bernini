@@ -1,5 +1,6 @@
 #include "Plugins/plugin_loader.h"
-#include "plugin_build_config.h"
+#include "Plugins/EditorRegistry.h"
+#include <plugin_build_config.h>
 
 #include <QCoreApplication>
 #include <QLibrary>
@@ -232,6 +233,7 @@ namespace editor::plugins
 		std::vector<std::unique_ptr<QLibrary>>       modules;
 		std::vector<assetlib::AssetPluginPtr>        assetPlugins;
 		std::vector<editor::EditorPluginPtr>         editorPlugins;
+		EditorRegistry                               contributions;
 		std::shared_ptr<assetlib::AssetKindRegistry> kinds =
 			std::make_shared<assetlib::AssetKindRegistry>();
 		std::vector<std::string> ids;
@@ -259,6 +261,12 @@ namespace editor::plugins
 	PluginSession::EditorPlugins() const noexcept
 	{
 		return m_Impl->editorPlugins;
+	}
+
+	const EditorRegistry&
+	PluginSession::Contributions() const noexcept
+	{
+		return m_Impl->contributions;
 	}
 
 	BuildIdentity
@@ -387,6 +395,9 @@ namespace editor::plugins
 					core::throw_runtime_error(
 						"Editor plugin factory returned null: {}",
 						descriptor.id);
+				EditorRegistry staged = session.m_Impl->contributions;
+				plugin->Register(staged);
+				session.m_Impl->contributions = std::move(staged);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
 			}
 			session.m_Impl->ids.push_back(descriptor.id);

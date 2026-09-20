@@ -12,6 +12,10 @@
 #include <bgl/ISceneView.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <cctype>
+#include <cstddef>
+#include <editor_api/IEditorRegistry.h>
+#include <editor_api/Thumbnail.h>
 #include <gamelib/AssetManager.h>
 
 #include <QDateTime>
@@ -53,6 +57,7 @@
 #include <tracy/Tracy.hpp>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace
@@ -154,11 +159,13 @@ namespace
 			QString               path,
 			std::string           relPath,
 			bool                  isMaterial,
+			std::string           materialOverride,
 			std::filesystem::path dataRoot,
 			uint32_t              textureMaxDim,
 			Sink                  sink) :
 			m_Path(std::move(path)), m_RelPath(std::move(relPath)), m_IsMaterial(isMaterial),
-			m_DataRoot(std::move(dataRoot)), m_TextureMaxDim(textureMaxDim), m_Sink(std::move(sink))
+			m_MaterialOverride(std::move(materialOverride)), m_DataRoot(std::move(dataRoot)),
+			m_TextureMaxDim(textureMaxDim), m_Sink(std::move(sink))
 		{
 			setAutoDelete(true);
 		}
@@ -211,6 +218,8 @@ namespace
 							PrefetchMaterial(m_DataRoot, relPath, m_TextureMaxDim, *prefetch);
 					}
 				}
+				if (!m_MaterialOverride.empty())
+					PrefetchMaterial(m_DataRoot, m_MaterialOverride, m_TextureMaxDim, *prefetch);
 			}
 			catch (const std::exception& e)
 			{
@@ -227,6 +236,7 @@ namespace
 		QString               m_Path;
 		std::string           m_RelPath;
 		bool                  m_IsMaterial = false;
+		std::string           m_MaterialOverride;
 		std::filesystem::path m_DataRoot;
 		uint32_t              m_TextureMaxDim = 0;
 		Sink                  m_Sink;
@@ -293,6 +303,8 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 AssetThumbnailCache::~AssetThumbnailCache()
 {
+	m_Pool.waitForDone();
+	m_ScalePool.waitForDone();
 	CancelShot();
 	ReleaseGeometry();
 	ReleaseMaterials();
@@ -324,10 +336,12 @@ AssetThumbnailCache::~AssetThumbnailCache()
 }
 
 void
-AssetThumbnailCache::SetAssets(game::AssetManager* assets)
+AssetThumbnailCache::SetAssets(game::AssetManager* assets, const assetlib::AssetStore* store)
 {
-	if (m_Assets == assets)
+	if (m_Assets == assets && m_Store == store)
 		return;
+
+	m_Pool.waitForDone();
 
 	// Hand the old project's assets back through the manager that acquired them, before it goes.
 	CancelShot();
@@ -335,6 +349,7 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 	ReleaseMaterials();
 
 	m_Assets = assets;
+	m_Store  = store;
 
 	if (IsReady())
 	{
@@ -354,6 +369,28 @@ AssetThumbnailCache::SetAssets(game::AssetManager* assets)
 	m_Queue.clear();
 }
 
+void
+AssetThumbnailCache::Invalidate()
+{
+	CancelShot();
+	ReleaseGeometry();
+	ReleaseMaterials();
+	m_Queue.clear();
+	Clear();
+
+	if (!IsReady())
+		return;
+
+	m_Desc.renderer->Invoke([&] {
+		m_ThumbAssets.reset();
+		if (m_Assets != nullptr)
+			m_ThumbAssets = std::make_unique<game::AssetManager>(
+				m_Desc.renderer->GetScene(),
+				m_Assets->DataRoot(),
+				game::AssetManagerOptions{ .hashedAsBlend = true });
+	});
+}
+
 std::filesystem::path
 AssetThumbnailCache::DataRoot() const
 {
@@ -365,6 +402,20 @@ AssetThumbnailCache::CanThumbnail(const QString& path)
 {
 	return path.endsWith(c_MeshSuffix, Qt::CaseInsensitive) ||
 	       path.endsWith(c_MaterialSuffix, Qt::CaseInsensitive);
+}
+
+bool
+AssetThumbnailCache::CanRequest(const QString& path) const
+{
+	if (CanThumbnail(path))
+		return true;
+	if (!m_Desc.pluginProvider)
+		return false;
+	std::string extension = std::filesystem::path(path.toStdWString()).extension().string();
+	std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+		return static_cast<char>(std::tolower(c));
+	});
+	return m_Desc.pluginProvider(extension) != nullptr;
 }
 
 std::string
@@ -387,8 +438,142 @@ AssetThumbnailCache::ToRelative(const QString& path) const
 void
 AssetThumbnailCache::Request(const QString& path)
 {
-	if (!IsReady() || !CanThumbnail(path))
+	if (!IsReady() || !CanRequest(path))
 		return;
+
+	std::string extension = std::filesystem::path(path.toStdWString()).extension().string();
+	std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+		return static_cast<char>(std::tolower(c));
+	});
+	const editor::ThumbnailProviderDesc* provider =
+		m_Desc.pluginProvider ? m_Desc.pluginProvider(extension) : nullptr;
+	if (provider != nullptr)
+	{
+		if (m_Store == nullptr)
+			return;
+		const std::optional<qint64> claimed = BeginRequest(path);
+		if (!claimed)
+			return;
+		const std::string key = ToRelative(path);
+		if (key.empty())
+		{
+			Abandon(path);
+			return;
+		}
+		const qint64   stamp = *claimed;
+		const uint64_t epoch = m_Epoch;
+		m_Pool.start(QRunnable::create([this, path, key, provider, stamp, epoch, store = m_Store] {
+			editor::Thumbnail thumbnail;
+			QString           failure;
+			try
+			{
+				thumbnail = provider->describe(*store, key);
+			}
+			catch (const std::exception& error)
+			{
+				failure = QString::fromUtf8(error.what());
+			}
+			QMetaObject::invokeMethod(
+				this,
+				[this, path, stamp, epoch, thumbnail = std::move(thumbnail), failure]() mutable {
+					if (epoch != m_Epoch || !IsClaimed(path))
+						return;
+					if (!failure.isEmpty())
+					{
+						Reject(path, stamp, failure);
+						return;
+					}
+					if (auto* image = std::get_if<QImage>(&thumbnail))
+					{
+						Store(path, QPixmap::fromImage(*image), stamp);
+						return;
+					}
+					const auto* scene = std::get_if<editor::ThumbnailScene>(&thumbnail);
+					if (scene == nullptr)
+					{
+						Reject(path, stamp);
+						return;
+					}
+
+					bool        material = false;
+					std::string geometry;
+					if (const auto* key = std::get_if<std::string>(&scene->geometry))
+						geometry = *key;
+					else
+						material = true;
+					if (material && !scene->material.has_value())
+					{
+						Reject(path, stamp, "A primitive thumbnail requires a material");
+						return;
+					}
+
+					auto sink = [this,
+				                 path,
+				                 material,
+				                 stamp,
+				                 epoch,
+				                 materialKey = scene->material.value_or(std::string()),
+				                 camera      = scene->camera](
+									std::shared_ptr<assetlib::BMesh>       mesh,
+									std::shared_ptr<CookedMeshes>          cooked,
+									std::shared_ptr<game::TexturePrefetch> prefetch,
+									std::string                            error) {
+						QMetaObject::invokeMethod(
+							this,
+							[this,
+					         path,
+					         material,
+					         stamp,
+					         epoch,
+					         materialKey,
+					         camera,
+					         mesh     = std::move(mesh),
+					         cooked   = std::move(cooked),
+					         prefetch = std::move(prefetch),
+					         error    = std::move(error)]() mutable {
+								auto pending = PendingRender();
+								pending.path = path;
+								pending.type =
+									material ? ThumbnailType::kMaterial : ThumbnailType::kMesh;
+								pending.mesh     = std::move(mesh);
+								pending.cooked   = std::move(cooked);
+								pending.prefetch = std::move(prefetch);
+								pending.stamp    = stamp;
+								pending.failure  = QString::fromStdString(error);
+								pending.material = materialKey;
+								pending.camera   = camera;
+								pending.epoch    = epoch;
+								Enqueue(path, pending.type, std::move(pending));
+							},
+							Qt::QueuedConnection);
+					};
+					const std::string     materialKey = scene->material.value_or(std::string());
+					std::filesystem::path geometryPath(path.toStdWString());
+					try
+					{
+						if (!material)
+							geometryPath = m_Store->ResolveWritePath(geometry);
+						if (!materialKey.empty())
+							static_cast<void>(m_Store->ResolveWritePath(materialKey));
+					}
+					catch (const std::exception& error)
+					{
+						Reject(path, stamp, QString::fromUtf8(error.what()));
+						return;
+					}
+					m_Pool.start(new LoadTask(
+						QString::fromStdWString(geometryPath.wstring()),
+						material ? materialKey : geometry,
+						material,
+						materialKey,
+						DataRoot(),
+						m_Desc.dimension * c_TextureSupersample,
+						std::move(sink)));
+				},
+				Qt::QueuedConnection);
+		}));
+		return;
+	}
 
 	const bool material = path.endsWith(c_MaterialSuffix, Qt::CaseInsensitive);
 
@@ -401,9 +586,10 @@ AssetThumbnailCache::Request(const QString& path)
 	if (!claimed)
 		return;
 
-	const qint64 stamp = *claimed;
+	const qint64   stamp = *claimed;
+	const uint64_t epoch = m_Epoch;
 
-	auto sink = [this, path, material, stamp](
+	auto sink = [this, path, material, stamp, epoch](
 					std::shared_ptr<assetlib::BMesh>       mesh,
 					std::shared_ptr<CookedMeshes>          cooked,
 					std::shared_ptr<game::TexturePrefetch> prefetch,
@@ -417,7 +603,8 @@ AssetThumbnailCache::Request(const QString& path)
 		     cooked   = std::move(cooked),
 		     prefetch = std::move(prefetch),
 		     failure  = std::move(failure),
-		     stamp]() mutable {
+		     stamp,
+		     epoch]() mutable {
 				auto pending     = PendingRender();
 				pending.path     = path;
 				pending.type     = material ? ThumbnailType::kMaterial : ThumbnailType::kMesh;
@@ -426,6 +613,7 @@ AssetThumbnailCache::Request(const QString& path)
 				pending.prefetch = std::move(prefetch);
 				pending.stamp    = stamp;
 				pending.failure  = QString::fromStdString(failure);
+				pending.epoch    = epoch;
 
 				Enqueue(path, pending.type, std::move(pending));
 			},
@@ -436,6 +624,7 @@ AssetThumbnailCache::Request(const QString& path)
 		path,
 		ToRelative(path),
 		material,
+		{},
 		DataRoot(),
 		m_Desc.dimension * c_TextureSupersample,
 		std::move(sink)));
@@ -446,7 +635,7 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 {
 	// The claim can be gone by the time the read lands: a project switch cleared it, and this asset
 	// was read against the project that closed.
-	if (!IsClaimed(path))
+	if (pending.epoch != m_Epoch || !IsClaimed(path))
 		return;
 
 	// The worker failed: no prefetch, and for a mesh no mesh or cook either. A failure on the
@@ -490,7 +679,9 @@ AssetThumbnailCache::PumpQueue()
 	m_ShotInFlight = true;
 	AttachToFrameLoop();
 
-	m_Desc.renderer->Post([this, pending = m_Queue.dequeue(), epoch = m_Epoch]() mutable {
+	PendingRender  pending = m_Queue.dequeue();
+	const uint64_t epoch   = pending.epoch;
+	m_Desc.renderer->Post([this, pending = std::move(pending), epoch]() mutable {
 		m_Shot.emplace();
 		m_Shot->item  = std::move(pending);
 		m_Shot->epoch = epoch;
@@ -647,11 +838,10 @@ AssetThumbnailCache::FinishShot(const Shot& shot, QImage image)
 void
 AssetThumbnailCache::CancelShot()
 {
+	++m_Epoch;
+
 	if (!IsReady())
 		return;
-
-	// A completion already queued to the UI thread carries the old epoch and is dropped on arrival.
-	++m_Epoch;
 
 	if (m_ShotInFlight)
 	{
@@ -719,6 +909,8 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 		BuildMesh(shot);
 	else
 		BuildMaterial(shot);
+	if (shot.item.camera.has_value())
+		shot.job.camera = *shot.item.camera;
 }
 
 void
@@ -730,9 +922,18 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 	bgl::ISceneView* view  = m_SceneView.Get();
 
 	auto materials = std::vector<bgl::MaterialHandle>();
-	materials.reserve(mesh.materials.size());
-	for (const std::string& relPath : mesh.materials)
-		materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
+	if (!shot.item.material.empty())
+	{
+		materials.assign(
+			std::max<std::size_t>(1, mesh.materials.size()),
+			AcquireMaterial(shot.item.material, shot.item.prefetch.get()));
+	}
+	else
+	{
+		materials.reserve(mesh.materials.size());
+		for (const std::string& relPath : mesh.materials)
+			materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
+	}
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -781,7 +982,8 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 void
 AssetThumbnailCache::BuildMaterial(Shot& shot)
 {
-	const std::string relPath = ToRelative(shot.item.path);
+	const std::string relPath =
+		shot.item.material.empty() ? ToRelative(shot.item.path) : shot.item.material;
 	if (relPath.empty())
 		throw std::runtime_error("material does not lie under the project's data root");
 

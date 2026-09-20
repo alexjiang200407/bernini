@@ -1,3 +1,4 @@
+#include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
 
 #include <QLibrary>
@@ -106,6 +107,7 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 	CHECK(session.Ids() == std::vector<std::string>{ "sample.valid" });
 	CHECK(session.KindRegistry()->FindById("sample.fixture") != nullptr);
 	CHECK(session.EditorPlugins().size() == 1);
+	CHECK(session.Contributions().FindPanel("sample.fixture_panel") != nullptr);
 	CHECK(
 		fs::is_regular_file(
 			sandbox.root / "plugin-copies" / "sample.valid" /
@@ -184,6 +186,37 @@ TEST_CASE("A colliding module rejects the plugin session", "[plugins][loader]")
 		"sample.second",
 		EDITOR_PLUGIN_COLLISION_FIXTURE,
 		build);
+
+	CHECK_THROWS_WITH(
+		editor::plugins::PluginSession::Load(
+			std::vector<std::string>{ "sample.first", "sample.second" },
+			std::vector<fs::path>{ first, second },
+			build,
+			sandbox.root / "plugin-copies",
+			editor::plugins::PluginBinaryCopyMode::kNever),
+		Catch::Matchers::ContainsSubstring("collides"));
+}
+
+TEST_CASE("Editor contribution collisions reject the private session", "[plugins][loader]")
+{
+	Sandbox sandbox;
+	auto    build  = editor::plugins::CurrentBuildIdentity();
+	build.sdkStamp = sandbox.root / "sdk.stamp";
+	SetSdkStamp(build, fs::file_time_type::clock::now() - std::chrono::hours(1));
+	const fs::path first =
+		WriteDescriptor(sandbox.root / "first", "sample.first", EDITOR_PLUGIN_FIXTURE, build);
+	const fs::path second = WriteDescriptor(
+		sandbox.root / "second",
+		"sample.second",
+		EDITOR_PLUGIN_COLLISION_FIXTURE,
+		build);
+	for (const fs::path& directory : { first, second })
+	{
+		auto json =
+			nlohmann::json::parse(std::ifstream(directory / editor::c_PluginDescriptorFileName));
+		json["runtime"] = "";
+		std::ofstream(directory / editor::c_PluginDescriptorFileName) << json.dump(2);
+	}
 
 	CHECK_THROWS_WITH(
 		editor::plugins::PluginSession::Load(

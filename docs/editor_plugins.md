@@ -4,7 +4,8 @@
 build also writes a build-tree `BerniniEditorSDK` CMake package whose `Bernini::editor_api` target
 is consumed by a separately configured plugin project. The editor loads the local modules required
 by its startup project before that project's store opens. Runtime kinds already participate in the
-store, graph, rename, migrate and pack paths; editor contribution dispatch lands in the next slice.
+store, graph, rename, migrate and pack paths. The editor validates and owns presentation
+contributions in the same process session, then creates one host for each open project.
 The headers at the linked paths are the source of truth; when this map disagrees, trust the header
 and fix the map.
 
@@ -27,7 +28,7 @@ and fix the map.
   translation context/key and fallback text. The host resolves them through a borrowed
   `ILanguageResolver` without registering contributions again. Each host owns its locale and copies
   module catalogs; there is no singleton. The resolver and CSV reader are implemented, but the
-  production editor does not yet use them.
+  production editor uses the resolver for plugin menus, actions, tabs and widgets.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions. The loader checks the engine build ID, configuration, dependency
@@ -84,8 +85,8 @@ flowchart TD
     Kinds -->|owns| Kind[IAssetKind]
 ```
 
-The diagram is the contract ownership/call topology. The production loader supplies the runtime
-registry; the recording host still supplies editor registration until the host-services slice.
+The diagram is the contract ownership/call topology. The production loader owns both registries.
+Each project host borrows its store, renderer and asset manager while project panels exist.
 
 ## Local loading
 
@@ -117,7 +118,8 @@ The SDK stamp moves when a public contract header changes or a shared library ex
 package rebuilds. A module or declared dependency older than the stamp is refused so a developer
 rebuilds the plugin against the current SDK. All descriptors needed by the project are checked
 before any module is loaded. Kind registration happens in a private registry and reaches the
-project registry only after the whole module registers without a collision.
+project registry only after the whole module registers without a collision. Editor registration
+likewise runs against a staged copy; menus, callbacks and factories become visible together.
 
 On Windows the loader copies both modules and every declared private dependency to a per-process
 plugin binary directory before loading; the originals remain writable by the linker. Other
@@ -129,7 +131,9 @@ shutdown; plugin objects and registered kinds are destroyed before their image.
 Registration, factories, panels, actions, importers and host navigation run on the GUI thread.
 An importer may arrange background CPU work, but must finish or join it before returning; these
 callbacks do not grant a background task permission to outlive the project. Thumbnail descriptions
-and document callbacks may run concurrently and must not access widgets or mutate shared state.
+and document callbacks may run concurrently and must not access widgets or mutate shared state. The
+host tags every thumbnail stage with its project generation, so a queued result from a closed
+project cannot satisfy the same path in its replacement.
 
 `InvokeRender` and viewport `Invoke` run synchronously on the render thread and propagate
 exceptions to the caller. A closure must never wait on the GUI thread or retain the borrowed
@@ -149,8 +153,8 @@ new panels against a new host; do not silently retarget stored references to old
   leading dot. Missing required callbacks, null kinds, duplicate IDs or conflicting extension claims
   are errors, including conflicts with built-ins. Registry implementations must discard all of a
   failed module's contributions. Panel/editor IDs share one namespace; other categories have their
-  own ID namespaces. Runtime kind batches enforce collision rollback now; these requirements are
-  not yet implemented by the recording editor host.
+  own ID namespaces. Runtime kind batches and editor contribution batches both enforce collision
+  rollback.
 - **Factories:** @pre a non-null parent and live project host. @post return a non-null widget
   parented to that parent, transferring Qt ownership to the host. Each registered panel/editor is
   one reusable tab per project. Factories are lazy; registration cannot access a project.
@@ -171,9 +175,8 @@ new panels against a new host; do not silently retarget stored references to old
   The host copies strings and owns them beyond registration. `LanguageResolver::RegisterCatalog`
   rejects invalid contexts, keys, locales, empty translations, duplicate key/locale pairs and existing
   contexts, leaving the previous state intact. Omit missing translations instead of storing empty
-  strings. A production registry must roll back catalogs with every other contribution if a module
-  fails; the recording registry does not implement that transaction. Collect and validate a module
-  before exposing its contributions.
+  strings. The production registry rolls catalogs back with every other contribution if a module
+  fails.
   Catalog and entry lookup use `core::str::unordered_str_map`; entries are addressed by `locale/key`.
   The separator cannot occur in either component. Contexts remain separate registration units,
   allowing an entire catalog to be validated before it becomes visible.
@@ -195,7 +198,8 @@ new panels against a new host; do not silently retarget stored references to old
   host-owned and available before a project opens; this API does not expose project switching to
   plugins. `AddAction` is a menu-bar/content-menu contract, not a toolbar-button contract.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
-  own writes. The host reports thrown errors; a successful write calls `AssetChanged`.
+  own writes. The host reports thrown errors; a successful write calls `AssetChanged`, which drops
+  cached previews and their render assets because another document may reference the changed key.
 - **References:** `ReadReferences` must validate the document and report every reference, even
   one whose target is absent. Each field token uniquely identifies an occurrence; the host treats
   tokens as opaque, normalizes targets through assetlib and expands directory moves. A rewrite
@@ -215,14 +219,15 @@ new panels against a new host; do not silently retarget stored references to old
 auto plugin = sample::CreateEditorPlugin();
 plugin->Register(registry);
 // Later, while the plugin and registry still live:
-auto* panel = registry.panels.front().create(host, &projectRoot);
+auto* panel = registry.FindPanel("sample.overview")->create(host, &projectRoot);
 panel->SetActive(true);
 ```
 
 See the compiled [sample](examples/editor_plugin/sample.cpp) and its
 [README](examples/editor_plugin/README.md). It links only the public API and a private JSON parser;
 it has no editor implementation include path. It currently displays a selected document key, not
-a working document editor. The fake host deliberately fails if it is asked for storage or graphics.
+a working document editor. Its contracts still use a fake host; `editor_tests` exercises the same
+plugin through the production registry and project host.
 
 `just test editor_plugin` exercises deferred registration, Qt ownership, tab activation, held asset
 replacement, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
@@ -231,12 +236,14 @@ against its Qt-free target alone. A separately configured project builds a real 
 `Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
 logger, allocation-id sequence and RmlUi lifetime are the host's. `editor_tests` refuses mismatched
 and stale modules and missing declared dependencies before factory invocation, checks duplicate kind
-batches, and forces the plugin binary copy path. Renderer scheduling and editor contribution dispatch
-require later integration tests.
+batches, and forces the plugin binary copy path. Headless tests cover host viewport and thumbnail
+rendering. The editor dispatches menu and content actions, dropped source files, document opens and
+panel navigation through the active project host. Project replacement drains thumbnail description
+work and destroys plugin panels before replacing the store or render services.
 
 The localization tests use the concrete resolver through the fake host. They cover host isolation,
 owned catalog copies, CSV decoding, invalid-input refusal, fallback and unchanged routing. They do
-not establish production registry transactions or live widget retranslation.
+not establish live widget retranslation.
 
 ## CSV authoring
 

@@ -1,10 +1,14 @@
 #include "util/held_open_assets.h"
 
 #include <QObject>
+#include <editor_api/EditorPanel.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <qcontainerfwd.h>
+#include <qwidget.h>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -24,6 +28,35 @@ namespace
 	private:
 		QStringList m_Held;
 	};
+
+	class PluginPanel final : public editor::EditorPanel
+	{
+	public:
+		using EditorPanel::EditorPanel;
+
+		std::vector<std::string>
+		GetHeldAssets() const override
+		{
+			return { "Authored/AI/behavior.bexample" };
+		}
+
+		bool
+		CanClose() override
+		{
+			return true;
+		}
+		void
+		SetActive(bool) override
+		{}
+	};
+}
+
+TEST_CASE("A plugin panel participates in held asset protection", "[heldopen][plugins]")
+{
+	QWidget root;
+	static_cast<void>(new PluginPanel(&root));
+
+	CHECK(editor::GetAssetsHeldOpen(&root) == QStringList{ "Authored/AI/behavior.bexample" });
 }
 
 // The bug this closes: MainWindow named two of the six panels that hold assets, and the four it

@@ -65,7 +65,7 @@ AssetFileModel::Rebind(Cache*& member, Cache* to)
 StampedPixmapCache*
 AssetFileModel::CacheFor(const QString& path) const
 {
-	if (m_Thumbnails != nullptr && AssetThumbnailCache::CanThumbnail(path))
+	if (m_Thumbnails != nullptr && m_Thumbnails->CanRequest(path))
 		return m_Thumbnails;
 
 	if (m_TexturePreviews != nullptr && editor::IsTextureFile(path))

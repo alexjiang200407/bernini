@@ -1,21 +1,27 @@
+#include "Plugins/EditorHost.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <bgl/ISceneView.h>
 #include <bgl/types/SceneDesc.h>
+#include <editor_api/IEditorViewport.h>
 
 #include "util/QtSupport.h"
 
 #include <QImage>
+#include <QPointer>
 #include <QSignalSpy>
 
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_message.hpp>
+#include <condition_variable>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
 #include <cstddef>
@@ -25,13 +31,19 @@
 
 #include "StoreAt.h"
 #include <catch2/catch_test_macros.hpp>
+#include <editor_api/IEditorRegistry.h>
+#include <editor_api/Thumbnail.h>
 #include <ios>
+#include <mutex>
 #include <optional>
 #include <qcolor.h>
+#include <qnamespace.h>
 #include <qobject.h>
 #include <qrgb.h>
 #include <set>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 using editor::test::WaitFor;
@@ -197,6 +209,30 @@ TEST_CASE("A live environment is held by the cache lit from it", "[thumbnails][r
 	CHECK(editor::GetAssetsHeldOpen(&root) == QStringList{ environment });
 }
 
+TEST_CASE("The plugin host owns headless viewport rendering", "[plugins][viewport][render]")
+{
+	Fixture                     fixture;
+	assetlib::AssetStore        store(c_DataRoot);
+	editor::plugins::EditorHost host(store, {}, &*fixture.renderer, &*fixture.assets, true, {});
+	QPointer<editor::IEditorViewport> observed;
+	{
+		QWidget root;
+		observed = host.CreateViewport(&root, { .initialInstances = 4, .taaEnabled = false });
+		REQUIRE(observed != nullptr);
+		CHECK(observed->parentWidget() == &root);
+		bool invoked = false;
+		observed->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+			invoked = true;
+			CHECK(&context.scene == fixture.renderer->GetScene().Get());
+			CHECK(&context.assets == &*fixture.assets);
+			CHECK(view.Get() != nullptr);
+		});
+		CHECK(invoked);
+		observed->SetRenderingEnabled(false);
+	}
+	CHECK(observed.isNull());
+}
+
 TEST_CASE("Only the assets the editor can draw are thumbnailed", "[thumbnails]")
 {
 	REQUIRE(AssetThumbnailCache::CanThumbnail("Derived/Meshes/tree.bmesh"));
@@ -209,6 +245,151 @@ TEST_CASE("Only the assets the editor can draw are thumbnailed", "[thumbnails]")
 	REQUIRE(!AssetThumbnailCache::CanThumbnail("Textures/bark.ktx2"));
 	REQUIRE(!AssetThumbnailCache::CanThumbnail("Levels/main.blevel"));
 	REQUIRE(!AssetThumbnailCache::CanThumbnail("Meshes"));
+}
+
+TEST_CASE("A plugin thumbnail is resolved before the built-in renderer", "[thumbnails][plugins]")
+{
+	Fixture                             fixture;
+	assetlib::AssetStore                store(c_DataRoot);
+	const editor::ThumbnailProviderDesc provider{
+		"sample.thumbnail",
+		{ ".bmaterial" },
+		[](const assetlib::AssetStore&, std::string_view) {
+			return editor::Thumbnail(QImage(24, 24, QImage::Format_RGBA8888));
+		},
+	};
+	auto desc           = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
+		return extension == ".bmaterial" ? &provider : nullptr;
+	};
+	AssetThumbnailCache cache(std::move(desc));
+	cache.SetAssets(&*fixture.assets, &store);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	cache.Request(c_MaterialPath);
+
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK_FALSE(cache.Lookup(c_MaterialPath).isNull());
+}
+
+TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugins][lifetime]")
+{
+	Fixture                             fixture;
+	assetlib::AssetStore                store(c_DataRoot);
+	std::mutex                          mutex;
+	std::condition_variable             changed;
+	bool                                entered   = false;
+	bool                                released  = false;
+	bool                                completed = false;
+	int                                 calls     = 0;
+	const editor::ThumbnailProviderDesc provider{
+		"sample.thumbnail",
+		{ ".bmaterial" },
+		[&](const assetlib::AssetStore&, std::string_view) {
+			std::unique_lock lock(mutex);
+			if (calls == 0)
+			{
+				entered = true;
+				changed.notify_all();
+				changed.wait(lock, [&] { return released; });
+			}
+			QImage image(8, 8, QImage::Format_RGBA8888);
+			image.fill(calls++ == 0 ? Qt::red : Qt::blue);
+			completed = true;
+			return editor::Thumbnail(std::move(image));
+		},
+	};
+	auto desc           = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
+		return extension == ".bmaterial" ? &provider : nullptr;
+	};
+	AssetThumbnailCache cache(std::move(desc));
+	cache.SetAssets(&*fixture.assets, &store);
+	cache.Request(c_MaterialPath);
+
+	std::jthread release([&] {
+		std::unique_lock lock(mutex);
+		changed.wait(lock, [&] { return entered; });
+		released = true;
+		changed.notify_all();
+	});
+	cache.SetAssets(nullptr);
+	cache.SetAssets(&*fixture.assets, &store);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	cache.Request(c_MaterialPath);
+
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK(completed);
+	CHECK(calls == 2);
+	CHECK(cache.Lookup(c_MaterialPath).toImage().pixelColor(0, 0) == QColor(Qt::blue));
+}
+
+TEST_CASE(
+	"Invalidation regenerates unchanged plugin thumbnails with external dependencies",
+	"[thumbnails][plugins]")
+{
+	Fixture                             fixture;
+	assetlib::AssetStore                store(c_DataRoot);
+	QColor                              sourceColour(Qt::red);
+	int                                 calls = 0;
+	const editor::ThumbnailProviderDesc provider{
+		"sample.thumbnail",
+		{ ".bmesh" },
+		[&](const assetlib::AssetStore&, std::string_view) {
+			QImage image(8, 8, QImage::Format_RGBA8888);
+			image.fill(sourceColour);
+			++calls;
+			return editor::Thumbnail(std::move(image));
+		},
+	};
+	auto desc           = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
+		return extension == ".bmesh" ? &provider : nullptr;
+	};
+	AssetThumbnailCache cache(std::move(desc));
+	cache.SetAssets(&*fixture.assets, &store);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	cache.Request(c_MeshPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::red));
+
+	sourceColour = Qt::blue;
+	cache.Invalidate();
+	CHECK(cache.Lookup(c_MeshPath).isNull());
+	cache.Request(c_MeshPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+	CHECK(calls == 2);
+	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::blue));
+}
+
+TEST_CASE("A plugin scene thumbnail releases its preview geometry", "[thumbnails][plugins][render]")
+{
+	Fixture                             fixture;
+	assetlib::AssetStore                store(c_DataRoot);
+	const editor::ThumbnailProviderDesc provider{
+		"sample.thumbnail",
+		{ ".bmaterial" },
+		[](const assetlib::AssetStore&, const std::string_view key) {
+			return editor::Thumbnail(
+				editor::ThumbnailScene{
+					.geometry = editor::ThumbnailPrimitive::kSphere,
+					.material = std::string(key),
+				});
+		},
+	};
+	auto desc           = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
+		return extension == ".bmaterial" ? &provider : nullptr;
+	};
+	AssetThumbnailCache cache(std::move(desc));
+	cache.SetAssets(&*fixture.assets, &store);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	cache.Request(c_MaterialPath);
+
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK_FALSE(cache.Lookup(c_MaterialPath).isNull());
 }
 
 TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbnails][render]")
