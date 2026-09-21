@@ -223,6 +223,18 @@ namespace bgl
 				continue;
 			}
 
+			// The lit contract reflects but nothing draws it yet: refused here so the failure is
+			// this message, not a compile error inside a generated program calling Evaluate on a
+			// struct that declared Shade.
+			if (reflected->type.shading == SurfaceShading::kLit)
+			{
+				throw ApiError(
+					std::format(
+						"surface '{}' owns its lighting (ILitSurfaceSource), which this renderer "
+						"cannot draw yet",
+						stem));
+			}
+
 			// Past this not even one draw bucket each could exist beside the unlit fallback's.
 			if (types.size() == c_MaxSurfaces)
 			{

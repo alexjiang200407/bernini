@@ -67,6 +67,27 @@ struct FillerSurface : ISurfaceSource
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, FillerParams params) { return PbrSurface(); }
 };
 )";
+
+	void
+	WriteLitSurface(const std::filesystem::path& path, std::string_view body)
+	{
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		REQUIRE(out.is_open());
+		out << "import bgl.MaterialReader;\nimport bgl.SurfaceLight;\nimport "
+			   "bgl.LitSurfaceSource;\n"
+			<< body;
+	}
+
+	// A surface on the lit contract, which reflects but does not draw yet.
+	constexpr std::string_view c_TrivialLit = R"(struct LitFillerParams { float unused; };
+
+struct LitFillerSurface : ILitSurfaceSource
+{
+    typealias MaterialParams = LitFillerParams;
+    static float Coverage<R : IMaterialReader>(R reader, LitFillerParams params) { return 1.0; }
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, LitFillerParams params) { return float4(0.0); }
+};
+)";
 }
 
 // The whole registration path: each surface is reflected, bound to a slot and given the programs
@@ -169,6 +190,19 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 			ApiError,
 			MessageMatches(ContainsSubstring(
 				std::format("'S{:03}' is past the last", idl::cMaxDrawBuckets - 1))));
+	}
+
+	// The failure is this message, not a compile error inside a generated program calling
+	// Evaluate on a struct that declared Shade.
+	SECTION("a surface that owns its lighting, which nothing draws yet")
+	{
+		const std::filesystem::path dir = FreshDir("bernini_surfaces_lit");
+		WriteLitSurface(dir / "Lit.slang", c_TrivialLit);
+
+		CHECK_THROWS_MATCHES(
+			bgl::CreateGraphics(SurfaceOptions(dir)),
+			ApiError,
+			MessageMatches(ContainsSubstring("surface 'Lit' owns its lighting")));
 	}
 
 	SECTION("a file that means to be a surface and is not one")
