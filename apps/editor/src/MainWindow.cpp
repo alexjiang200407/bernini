@@ -73,6 +73,7 @@
 #include <QDebug>
 #include <QKeySequence>
 #include <bgl/PassTiming.h>
+#include <core/str/str.h>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -87,7 +88,6 @@
 #include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1335,7 +1335,7 @@ MainWindow::SetUpPluginContributions()
 	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
 		language.RegisterCatalog(catalog);
 
-	std::unordered_map<std::string, QMenu*> menus;
+	core::str::unordered_str_map<QMenu*> menus;
 	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);
 	const auto toolsMenu = [&]() {
 		if (m_Ui.toolsMenu == nullptr)
@@ -1405,7 +1405,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 {
 	if (m_EditorHost == nullptr)
 		return;
-	if (const auto found = m_PluginDocks.find(std::string(id)); found != m_PluginDocks.end())
+	if (const auto found = m_PluginDocks.find(id); found != m_PluginDocks.end())
 	{
 		found->second.dock->show();
 		found->second.dock->raise();

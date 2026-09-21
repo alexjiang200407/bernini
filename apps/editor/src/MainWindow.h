@@ -5,6 +5,7 @@
 #include <QString>
 
 #include <assetlib/Project.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
@@ -17,7 +18,6 @@
 #include <qwidget.h>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "Async/BackgroundTask.h"
@@ -242,7 +242,7 @@ private:
 
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
-	std::unordered_map<std::string, PluginDock>     m_PluginDocks;
+	core::str::unordered_str_map<PluginDock>        m_PluginDocks;
 	std::unique_ptr<assetlib::Project>              m_Project;
 	ContentExplorerWindow*                          m_ContentExplorer      = nullptr;
 	MaterialEditorWindow*                           m_MaterialEditor       = nullptr;
