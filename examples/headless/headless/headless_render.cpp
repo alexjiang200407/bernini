@@ -1,3 +1,4 @@
+#include <assetlib/project_layout.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -7,6 +8,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <format>
 #include <gamelib/AssetManager.h>
 #include <headless/headless_render.h>
@@ -17,7 +19,7 @@
 namespace headless
 {
 	bgl::GraphicsRef
-	CreateHeadlessGraphics()
+	CreateHeadlessGraphics(const std::filesystem::path& dataRoot)
 	{
 		auto opts           = bgl::GraphicsOptions();
 		opts.logLevel       = bgl::GraphicsOptions::LogLevel::kError;
@@ -25,6 +27,10 @@ namespace headless
 		opts.maxTextures    = 512;
 		opts.maxSrvs        = 1024;
 		opts.maxCbvSrvUavs  = 4096;
+
+		const auto surfaceDir = dataRoot / assetlib::c_ShadersDirectoryName;
+		if (std::filesystem::is_directory(surfaceDir))
+			opts.surfaceShaderDir = surfaceDir;
 		return bgl::CreateGraphics(opts);
 	}
 

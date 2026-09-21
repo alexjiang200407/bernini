@@ -69,6 +69,10 @@ namespace
 		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
 		bool bloom = false;
 
+		// The camera frames the box every clip's poses fill unless asked for the playing clip's
+		// alone: a clip set with root motion walks that box far past any one pose.
+		bool frameClip = false;
+
 		// The sun is off unless asked for, as bgl's own default is: every render this tool made
 		// before there was one stays the render it made.
 		float              sunAzimuth   = 35.0f;
@@ -227,6 +231,10 @@ try
 		app.add_option("-h,--height", opts.height, "Render height")->check(CLI::PositiveNumber);
 		app.add_option("--taa", opts.taa, "Render with temporal antialiasing, as a viewport does");
 		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
+		app.add_flag(
+			"--frame-clip",
+			opts.frameClip,
+			"Frame the camera on the playing clip's poses rather than every clip's");
 		app.add_option(
 			   "--sun",
 			   opts.sunIntensity,
@@ -290,7 +298,7 @@ try
 		posedBounds = assetlib::findPosedBounds(*animations, model, *skeleton);
 	}
 
-	auto graphics = headless::CreateHeadlessGraphics();
+	auto graphics = headless::CreateHeadlessGraphics(dataRoot);
 	auto target   = headless::CreateHeadlessTarget(graphics, opts.width, opts.height, opts.taa);
 	target->SetBloomEnabled(opts.bloom);
 
@@ -321,6 +329,7 @@ try
 	{
 		bgl::GeomHandle geom;
 		glm::mat4       world;
+		uint32_t        meshIndex;
 	};
 
 	auto                          bounds = headless::EmptyBounds();
@@ -348,12 +357,37 @@ try
 
 		game::AssetManager::SkinnedMesh acquired =
 			assets.AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
-		skinned.emplace_back(acquired.geom, world);
+		skinned.emplace_back(acquired.geom, world, meshIndex);
 		clips = std::move(acquired.clips);
 		headless::GrowBounds(bounds, world, posed);
 	}
 
 	const uint32_t clip = rigged && !skinned.empty() ? FindClip(clips, opts.clip) : 0;
+
+	// The culling box stays the whole clip set's; only the camera narrows to the one clip, measured
+	// the same way over a set holding that clip alone.
+	if (opts.frameClip && !skinned.empty())
+	{
+		assetlib::AnimationSet playing = *animations;
+		playing.clips                  = { animations->clips.at(clip) };
+		playing.posedBoxes.clear();
+
+		bounds = headless::EmptyBounds();
+		for (uint32_t n = 0; n < model.nodes.size(); ++n)
+		{
+			const uint32_t meshIndex = model.nodes[n].mesh;
+			if (meshIndex != assetlib::c_InvalidIndex && !assetlib::isSkinned(model, meshIndex))
+				headless::GrowBounds(
+					bounds,
+					headless::InstanceTransform(model, n),
+					headless::MeshEntryBounds(model, meshIndex));
+		}
+		for (const SkinnedPlacement& placement : skinned)
+			headless::GrowBounds(
+				bounds,
+				placement.world,
+				assetlib::posedBounds(model, placement.meshIndex, *skeleton, playing));
+	}
 	for (const SkinnedPlacement& placement : skinned)
 	{
 		assets.CreateSkinnedInstance(

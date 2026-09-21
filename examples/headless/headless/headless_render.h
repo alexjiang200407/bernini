@@ -5,14 +5,19 @@
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
 #include <cstdint>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
 #include <string_view>
 
 namespace headless
 {
-	/** A device sized for one model and its environment, logging errors only. */
+	/**
+	 * A device sized for one model and its environment, logging errors only. A project's materials
+	 * may shade through surfaces of its own, and those are registered only at creation, so the
+	 * device registers whatever `dataRoot`'s Authored/Shaders holds -- none when it has none.
+	 */
 	[[nodiscard]] bgl::GraphicsRef
-	CreateHeadlessGraphics();
+	CreateHeadlessGraphics(const std::filesystem::path& dataRoot);
 
 	/** An offscreen target: presents nothing, and captures what it last drew. */
 	[[nodiscard]] bgl::RenderTargetRef
