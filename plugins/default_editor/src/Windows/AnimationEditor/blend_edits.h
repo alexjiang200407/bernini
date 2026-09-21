@@ -20,9 +20,7 @@ namespace editor
 	 * They exist here rather than at the door because the alternative is a rig that will not upload:
 	 * `validateBlendSet` and `AddRig` both refuse a run of fewer than two samples or one whose
 	 * parameters do not strictly increase, and a break found there surfaces as a scene that fails to
-	 * load rather than as a control that would not move. The panel cannot be tested at all --
-	 * `RenderTargetWindow`'s constructor needs a real `winId()` -- so every rule it enforces is a
-	 * free function here and pinned by a case, as GroundForSlope and FootIKForSliders already are.
+	 * load rather than as a control that would not move. These rules run without a graphics device.
 	 *
 	 * Every function takes the run in *authored* form: clips by name, in strictly increasing
 	 * parameter order, which is what a `.bblend` stores and what is saved back.

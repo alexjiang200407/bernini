@@ -4,13 +4,13 @@
 #include "Windows/AnimationEditor/transition_spans.h"
 #include <editor_sdk/mesh_load.h>
 
-#include "Render/Renderer.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/blob_shadow.h"
 #include "Windows/AnimationEditor/ground_slope.h"
-#include "Windows/RenderTarget/RenderTargetWindow.h"
+#include <QEvent>
+#include <QVBoxLayout>
 #include <assetlib_structs/Mesh.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -75,37 +75,28 @@ namespace
 }
 
 AnimationPreviewWindow::AnimationPreviewWindow(
+	editor::IEditorHost&         host,
 	QWidget*                     parent,
-	RenderTargetWindowDesc       rt,
-	editor::EnvironmentApplyDesc env) : RenderTargetWindow(parent, std::move(rt))
+	editor::ViewportDesc         rt,
+	editor::EnvironmentApplyDesc env) :
+	QWidget(parent), m_Host(host), m_DataRoot(host.GetStore().GetDataRoot())
 {
+	m_Viewport   = host.CreateViewport(this, rt);
+	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->addWidget(m_Viewport);
+	m_Viewport->setAcceptDrops(true);
+	m_Viewport->installEventFilter(this);
 	setAcceptDrops(true);
 
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
 	m_Environment.configured = std::move(env);
+	BindConfiguredEnvironment();
 
-	GetRenderer()->Invoke([&] {
-		bgl::IScene* scene = GetPreviewScene();
-
-		if (!m_Environment.configured.environmentMap.empty())
-		{
-			try
-			{
-				editor::BindEnvironment(
-					scene,
-					GetPreviewView(),
-					m_Environment,
-					m_Environment.configured.environmentMap,
-					assetlib::AssetStore(m_Environment.configured.dataRoot),
-					"AnimationPreview");
-			}
-			catch (const std::exception& error)
-			{
-				qWarning("Configured environment could not be loaded: %s", error.what());
-			}
-		}
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+		bgl::IScene* scene = &context.scene;
 
 		// Matte and mid-grey, so a sole meeting it reads against it rather than into it. Wide
 		// enough that a clip with root motion does not walk off the edge.
@@ -124,14 +115,14 @@ AnimationPreviewWindow::~AnimationPreviewWindow()
 	SetRenderingEnabled(false);
 	ClearGeometry();
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		try
 		{
-			editor::ReleaseEnvironment(GetPreviewScene(), m_Environment);
+			editor::ReleaseEnvironment(&context.scene, m_Environment);
 			if (m_GroundGeom.IsValid())
-				GetPreviewScene()->DeleteGeom(m_GroundGeom);
+				context.scene.DeleteGeom(m_GroundGeom);
 			if (m_GroundMaterial.IsValid())
-				GetPreviewScene()->DeleteMaterial(m_GroundMaterial);
+				context.scene.DeleteMaterial(m_GroundMaterial);
 		}
 		catch (const std::exception& e)
 		{
@@ -176,8 +167,8 @@ AnimationPreviewWindow::SetFootIK(const bgl::FootIKDesc& desc)
 	if (m_AnimatedDraws.empty())
 		return;
 
-	GetRenderer()->Invoke([&] {
-		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyFootIK(draw.instance);
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyFootIK(view, draw.instance);
 	});
 
 	// A constant holds at prevTime as well as at time, so the frame after this write reprojects
@@ -188,9 +179,10 @@ AnimationPreviewWindow::SetFootIK(const bgl::FootIKDesc& desc)
 }
 
 void
-AnimationPreviewWindow::ApplyFootIK(const bgl::MeshInstanceHandle instance)
+AnimationPreviewWindow::ApplyFootIK(
+	const bgl::SceneViewRef&      view,
+	const bgl::MeshInstanceHandle instance)
 {
-	bgl::ISceneView* view = GetPreviewView();
 	if (view->HasFootIK(instance))
 		view->SetFootIK(instance, m_FootIK);
 }
@@ -206,9 +198,9 @@ AnimationPreviewWindow::SetBlobShadow(const bool enabled)
 	if (m_AnimatedDraws.empty())
 		return;
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)
-			ApplyBlobShadow(draw.instance, draw.castsShadow);
+			ApplyBlobShadow(view, draw.instance, draw.castsShadow);
 	});
 }
 
@@ -223,19 +215,18 @@ AnimationPreviewWindow::SetFootShadows(const bool enabled)
 	if (m_AnimatedDraws.empty())
 		return;
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)
-			ApplyBlobShadow(draw.instance, draw.castsShadow);
+			ApplyBlobShadow(view, draw.instance, draw.castsShadow);
 	});
 }
 
 void
 AnimationPreviewWindow::ApplyBlobShadow(
+	const bgl::SceneViewRef&      view,
 	const bgl::MeshInstanceHandle instance,
 	const bool                    castsShadow)
 {
-	bgl::ISceneView* view = GetPreviewView();
-
 	const std::optional<bgl::BlobShadowDesc> desc = editor::PreviewBlobShadow(
 		castsShadow && m_BlobShadow,
 		castsShadow && m_FootShadows,
@@ -254,10 +245,10 @@ AnimationPreviewWindow::ReplaceGround()
 	if (!m_GroundPlaced || !isVisible())
 		return;
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		try
 		{
-			PlaceGround();
+			PlaceGround(context, view);
 		}
 		catch (const std::exception& e)
 		{
@@ -269,7 +260,7 @@ AnimationPreviewWindow::ReplaceGround()
 void
 AnimationPreviewWindow::showEvent(QShowEvent* event)
 {
-	RenderTargetWindow::showEvent(event);
+	QWidget::showEvent(event);
 
 	// The ground is the scene's, and the scene is shared with every other viewport: a slope set
 	// here is a slope every skinned instance anywhere in it plants against. So it stands only while
@@ -281,19 +272,17 @@ void
 AnimationPreviewWindow::hideEvent(QHideEvent* event)
 {
 	if (m_GroundPlaced)
-		GetRenderer()->Invoke([&] {
-			GetPreviewScene()->SetGround({});
-			GetPreviewScene()->SetFootPlanting(true);
+		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+			context.scene.SetGround({});
+			context.scene.SetFootPlanting(true);
 		});
 
-	RenderTargetWindow::hideEvent(event);
+	QWidget::hideEvent(event);
 }
 
 void
-AnimationPreviewWindow::PlaceGround()
+AnimationPreviewWindow::PlaceGround(editor::RenderContext& context, const bgl::SceneViewRef& view)
 {
-	bgl::ISceneView* view = GetPreviewView();
-
 	for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
 	{
 		if (instance.IsValid())
@@ -301,8 +290,8 @@ AnimationPreviewWindow::PlaceGround()
 		instance = bgl::MeshInstanceHandle();
 	}
 
-	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
-	GetPreviewScene()->SetFootPlanting(m_FootPlanting);
+	context.scene.SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
+	context.scene.SetFootPlanting(m_FootPlanting);
 	m_GroundPlaced = true;
 
 	if (m_FloorVisible)
@@ -317,17 +306,6 @@ AnimationPreviewWindow::PlaceGround()
 		m_GroundInstances[0] = view->CreateStaticMeshInstance(m_GroundGeom, floor);
 		m_GroundInstances[1] = view->CreateStaticMeshInstance(m_GroundGeom, floor * flip);
 	}
-}
-
-void
-AnimationPreviewWindow::SetAssets(game::AssetManager* assets)
-{
-	if (assets == m_Assets)
-		return;
-
-	// Through the manager that acquired it, before the pointer moves off it.
-	ClearGeometry();
-	m_Assets = assets;
 }
 
 void
@@ -355,28 +333,27 @@ AnimationPreviewWindow::ClearGeometry()
 	{
 		// The floor leaves with the rig, and the ground it tilted goes back to flat: the scene is
 		// shared, and nothing else in it should stand on a slope this panel set.
-		GetRenderer()->Invoke([&] {
+		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 			for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
 			{
 				if (instance.IsValid())
-					GetPreviewView()->DeleteMeshInstance(instance);
+					view.Get()->DeleteMeshInstance(instance);
 				instance = bgl::MeshInstanceHandle();
 			}
 			m_GroundPlaced = false;
-			GetPreviewScene()->SetGround({});
-			GetPreviewScene()->SetFootPlanting(true);
+			context.scene.SetGround({});
+			context.scene.SetFootPlanting(true);
 		});
 	}
 
-	if (m_Assets != nullptr &&
-	    (!m_Instances.empty() || !m_Geoms.empty() || !m_AnimatedDraws.empty()))
+	if ((!m_Instances.empty() || !m_Geoms.empty() || !m_AnimatedDraws.empty()))
 	{
-		GetRenderer()->Invoke([&] {
+		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 			for (const AnimatedDraw& draw : m_AnimatedDraws)
 			{
 				try
 				{
-					m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+					context.assets.DestroyInstance(view, draw.instance);
 				}
 				catch (const std::exception& e)
 				{
@@ -388,7 +365,7 @@ AnimationPreviewWindow::ClearGeometry()
 			{
 				try
 				{
-					m_Assets->DestroyInstance(GetPreviewViewRef(), instance);
+					context.assets.DestroyInstance(view, instance);
 				}
 				catch (const std::exception& e)
 				{
@@ -400,7 +377,7 @@ AnimationPreviewWindow::ClearGeometry()
 			{
 				try
 				{
-					m_Assets->ReleaseGeom(geom);
+					context.assets.ReleaseGeom(geom);
 				}
 				catch (const std::exception& e)
 				{
@@ -425,7 +402,7 @@ AnimationPreviewWindow::LoadMesh(
 {
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
-	if (m_Assets == nullptr || m_DataRoot.empty())
+	if (m_DataRoot.empty())
 	{
 		QMessageBox::warning(
 			window(),
@@ -470,7 +447,7 @@ AnimationPreviewWindow::LoadMesh(
 		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
-			mesh = editor::LoadMeshThroughSeam(m_Assets->GetStore(), absolutePath);
+			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 
@@ -478,7 +455,7 @@ AnimationPreviewWindow::LoadMesh(
 
 			// One scan answers both questions. It reads and parses every asset in the project, so
 			// asking each of them for its own would double the cost of every load.
-			const auto graph = assetlib::AssetRefGraph::Scan(assetlib::AssetStore(m_DataRoot));
+			const auto graph = assetlib::AssetRefGraph::Scan(m_Host.GetStore());
 
 			bindings = editor::ResolveAnimationBindings(graph, mesh.skeleton);
 			if (animations.empty() && !bindings.animations.empty())
@@ -496,7 +473,7 @@ AnimationPreviewWindow::LoadMesh(
 
 				// Through a store, like every other read: a project opens as a mount, so a rig that
 				// ships inside a .bpak is only reachable that way.
-				const auto store = assetlib::AssetStore(m_DataRoot);
+				const auto& store = m_Host.GetStore();
 
 				const assetlib::AnimationSet clips    = store.LoadRegenAnimations(animations);
 				const assetlib::Skeleton     skeleton = store.LoadRegenSkeleton(clips.skeleton);
@@ -569,24 +546,24 @@ AnimationPreviewWindow::LoadMesh(
 		// -- only the reverse deadlocks (see Renderer) -- so the GUI thread stays free to paint.
 		auto loaded = Loaded();
 
+		ClearGeometry();
 		const background::TaskResult upload = background::RunWithLoadingScreen(
 			this,
 			QString("Loading %1").arg(name),
 			[&](background::Progress& progress) {
 				progress.Report(0, 0, "Uploading materials and geometry...");
-				loaded = GetRenderer()->Invoke([&] {
-					ClearGeometry();
-
+				m_Viewport->Invoke([&](editor::RenderContext&   context,
+			                           const bgl::SceneViewRef& view) {
 					auto out     = Loaded();
 					auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
 					auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
 
 					const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
 						const bgl::GeomHandle geom =
-							m_Assets->AcquireMesh(rel, placement.meshIndex);
+							context.assets.AcquireMesh(rel, placement.meshIndex);
 						m_Geoms.push_back(geom);
 						m_Instances.push_back(
-							m_Assets->CreateInstance(GetPreviewViewRef(), geom, placement.world));
+							context.assets.CreateInstance(view, geom, placement.world));
 						bmesh::GrowBoundsForMesh(
 							mesh,
 							placement.meshIndex,
@@ -625,12 +602,13 @@ AnimationPreviewWindow::LoadMesh(
 							// seconds on a dense rig. Absent only if the measurement was skipped, and
 							// then the acquire makes it: a stall beats culling the mesh by a box of
 							// nothing.
-							game::AssetManager::SkinnedMesh skinned = m_Assets->AcquireSkinnedMesh(
-								rel,
-								animations,
-								blend,
-								placement.meshIndex,
-								posed);
+							game::AssetManager::SkinnedMesh skinned =
+								context.assets.AcquireSkinnedMesh(
+									rel,
+									animations,
+									blend,
+									placement.meshIndex,
+									posed);
 
 							const bgl::GeomHandle geom = skinned.geom;
 							m_Geoms.push_back(geom);
@@ -642,7 +620,13 @@ AnimationPreviewWindow::LoadMesh(
 							m_AnimatedDraws.push_back(
 								{ geom,
 						          placement.world,
-						          SpawnAnimated(geom, placement.world, 0, castsShadow),
+						          SpawnAnimated(
+									  context,
+									  view,
+									  geom,
+									  placement.world,
+									  0,
+									  castsShadow),
 						          castsShadow });
 							out.clips  = std::move(skinned.clips);
 							out.spaces = std::move(skinned.spaces);
@@ -675,7 +659,7 @@ AnimationPreviewWindow::LoadMesh(
 					// Under the rig, at whatever slope the panel last set: the floor is part of what
 					// a rig is previewed against, and a planted foot only means something with
 					// ground to meet.
-					PlaceGround();
+					PlaceGround(context, view);
 
 					out.center = (aabbMin + aabbMax) * 0.5f;
 					out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
@@ -687,10 +671,10 @@ AnimationPreviewWindow::LoadMesh(
 					if (m_BlobShadow || m_FootShadows)
 					{
 						for (const AnimatedDraw& draw : m_AnimatedDraws)
-							ApplyBlobShadow(draw.instance, draw.castsShadow);
+							ApplyBlobShadow(view, draw.instance, draw.castsShadow);
 					}
 
-					return out;
+					loaded = std::move(out);
 				});
 			},
 			background::Cancellable::kNo);
@@ -824,7 +808,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	// unrelated unbaked material: that bake is worth doing and the text says only what is true, but
 	// it will not lift this refusal.
 	const std::vector<std::string> loose =
-		editor::BakeableMaterials(assetlib::AssetStore(m_DataRoot), mesh.materials);
+		editor::BakeableMaterials(m_Host.GetStore(), mesh.materials);
 
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
@@ -861,7 +845,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 		this,
 		QStringLiteral("Baking materials"),
 		[&](background::Progress& progress) {
-			editor::BakeMaterials(m_Assets->GetStore(), files, progress);
+			editor::BakeMaterials(m_Host.GetStore(), files, progress);
 		},
 		background::Cancellable::kYes);
 
@@ -877,29 +861,29 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 		return;
 	}
 
-	// The Material Editor reads its panel off the file; MainWindow routes this the same way it
-	// routes the Content Explorer's bakes.
-	for (const std::string& relPath : loose) Q_EMIT MaterialBaked(QString::fromStdString(relPath));
+	for (const std::string& relPath : loose) m_Host.AssetChanged(relPath);
 
 	LoadMesh(absolutePath, animations);
 }
 
 bgl::MeshInstanceHandle
 AnimationPreviewWindow::SpawnAnimated(
-	const bgl::GeomHandle geom,
-	const glm::mat4&      world,
-	const uint32_t        clip,
-	const bool            castsShadow)
+	editor::RenderContext&   context,
+	const bgl::SceneViewRef& view,
+	const bgl::GeomHandle    geom,
+	const glm::mat4&         world,
+	const uint32_t           clip,
+	const bool               castsShadow)
 {
 	// Phase 0 and rate 1: the panel's transport is the clock. `source` is the whole of what the two
 	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
-	const bgl::MeshInstanceHandle instance = m_Assets->CreateSkinnedInstance(
-		GetPreviewViewRef(),
+	const bgl::MeshInstanceHandle instance = context.assets.CreateSkinnedInstance(
+		view,
 		geom,
 		world,
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
-	ApplyFootIK(instance);
-	ApplyBlobShadow(instance, castsShadow);
+	ApplyFootIK(view, instance);
+	ApplyBlobShadow(view, instance, castsShadow);
 	return instance;
 }
 
@@ -911,7 +895,7 @@ AnimationPreviewWindow::StampTransition(
 	const float                     toParameter,
 	const editor::TransitionLayout& layout)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
+	if (m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
 		return;
 
 	const auto nodes = static_cast<uint32_t>(m_Clips.size() + m_Spaces.size());
@@ -927,12 +911,12 @@ AnimationPreviewWindow::StampTransition(
 
 	m_Playback = editor::TransitionPlayback(fromNode, toNode, fromParameter, toParameter, layout);
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
-				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+				view->SetSkinnedPlayback(draw.instance, m_Playback);
 			}
 			catch (const std::exception& e)
 			{
@@ -961,20 +945,21 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float 
 	const uint32_t node = editor::DominantNode(m_Playback, nowSeconds);
 	m_Playback          = bgl::SkinnedPlaybackDesc::FromClip(node);
 
-	if (m_Assets == nullptr || m_AnimatedDraws.empty())
+	if (m_AnimatedDraws.empty())
 	{
 		Q_EMIT PoseSourceChanged(m_Source);
 		return;
 	}
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
-				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				context.assets.DestroyInstance(view, draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, node, draw.castsShadow);
+				draw.instance =
+					SpawnAnimated(context, view, draw.geom, draw.world, node, draw.castsShadow);
 			}
 			catch (const std::exception& e)
 			{
@@ -989,17 +974,17 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float 
 QString
 AnimationPreviewWindow::RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty())
+	if (m_AnimatedDraws.empty())
 		return QStringLiteral("Nothing is loaded to retarget.");
 
 	auto refusal = QString();
 
 	// One geom, not all of them: every animated entry here came from one file against one clip set,
 	// so they are on one rig, and the manager writes the rig and sweeps every geom sharing it.
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		try
 		{
-			m_Assets->SetBlendParameters(m_AnimatedDraws.front().geom, spaces);
+			context.assets.SetBlendParameters(m_AnimatedDraws.front().geom, spaces);
 		}
 		catch (const std::exception& e)
 		{
@@ -1021,7 +1006,7 @@ AnimationPreviewWindow::ShowSpace(
 	const float    parameter,
 	const float    nowSeconds)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	if (m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
 	    !editor::RewritesPlayback(m_Source))
 	{
 		return;
@@ -1044,15 +1029,16 @@ AnimationPreviewWindow::ShowSpace(
 	m_Playback.slot[0].param1 = parameter;
 	m_Playback.slot[0].tRef   = nowSeconds;
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
-				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				context.assets.DestroyInstance(view, draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, seed, draw.castsShadow);
-				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+				draw.instance =
+					SpawnAnimated(context, view, draw.geom, draw.world, seed, draw.castsShadow);
+				view->SetSkinnedPlayback(draw.instance, m_Playback);
 			}
 			catch (const std::exception& e)
 			{
@@ -1069,7 +1055,7 @@ AnimationPreviewWindow::RetargetSpace(
 	const float    nowSeconds,
 	const float    duration)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	if (m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
 	    !editor::RewritesPlayback(m_Source))
 	{
 		return;
@@ -1094,12 +1080,12 @@ AnimationPreviewWindow::RetargetSpace(
 		return;
 	}
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
-				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+				view->SetSkinnedPlayback(draw.instance, m_Playback);
 			}
 			catch (const std::exception& e)
 			{
@@ -1112,8 +1098,7 @@ AnimationPreviewWindow::RetargetSpace(
 void
 AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSeconds)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty() ||
-	    index == editor::DominantNode(m_Playback, nowSeconds))
+	if (m_AnimatedDraws.empty() || index == editor::DominantNode(m_Playback, nowSeconds))
 	{
 		return;
 	}
@@ -1125,14 +1110,15 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSecon
 	// duration, where the record does carry its own past -- which is the strip's job, not this one's.
 	m_Playback = bgl::SkinnedPlaybackDesc::FromClip(index);
 
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
-				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				context.assets.DestroyInstance(view, draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, index, draw.castsShadow);
+				draw.instance =
+					SpawnAnimated(context, view, draw.geom, draw.world, index, draw.castsShadow);
 			}
 			catch (const std::exception& e)
 			{
@@ -1187,40 +1173,37 @@ AnimationPreviewWindow::dropEvent(QDropEvent* event)
 void
 AnimationPreviewWindow::SetEnvironment(const std::string& benvPath)
 {
-	// A dropped `.benv` belongs to the open project, so its own data root is the one that resolves
-	// it. The configured root only stands in before a project is opened.
-	const std::filesystem::path& dataRoot =
-		m_DataRoot.empty() ? m_Environment.configured.dataRoot : m_DataRoot;
-
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		editor::BindEnvironment(
-			GetPreviewScene(),
-			GetPreviewView(),
+			&context.scene,
+			view.Get(),
 			m_Environment,
 			benvPath,
-			assetlib::AssetStore(dataRoot),
+			m_Host.GetStore(),
 			"AnimationPreview");
 	});
 }
 
 void
-AnimationPreviewWindow::RestoreConfiguredEnvironment()
+AnimationPreviewWindow::BindConfiguredEnvironment()
 {
-	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(m_Environment);
-	if (!restore)
-		return;
-
-	GetRenderer()->Invoke([&] {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		if (!m_Environment.configured.environmentMap.empty())
 		{
 			try
 			{
+				auto external = std::optional<assetlib::AssetStore>();
+				if (!m_Environment.configured.dataRoot.empty() &&
+				    m_Environment.configured.dataRoot != m_Host.GetStore().GetDataRoot())
+					external.emplace(m_Environment.configured.dataRoot);
+				const auto& store = external ? *external : m_Host.GetStore();
+
 				editor::BindEnvironment(
-					GetPreviewScene(),
-					GetPreviewView(),
+					&context.scene,
+					view.Get(),
 					m_Environment,
-					*restore,
-					assetlib::AssetStore(m_Environment.configured.dataRoot),
+					m_Environment.configured.environmentMap,
+					store,
 					"AnimationPreview");
 			}
 			catch (const std::exception& error)
@@ -1232,9 +1215,19 @@ AnimationPreviewWindow::RestoreConfiguredEnvironment()
 }
 
 void
+AnimationPreviewWindow::RestoreConfiguredEnvironment()
+{
+	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(m_Environment);
+	if (!restore)
+		return;
+
+	BindConfiguredEnvironment();
+}
+
+void
 AnimationPreviewWindow::resizeEvent(QResizeEvent* event)
 {
-	RenderTargetWindow::resizeEvent(event);
+	QWidget::resizeEvent(event);
 	UpdateCamera();
 }
 
@@ -1281,11 +1274,48 @@ AnimationPreviewWindow::UpdateCamera()
 {
 	const float aspect =
 		height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
-	SetCamera(m_Orbit.GetCamera(aspect));
+	m_Viewport->SetCamera(m_Orbit.GetCamera(aspect));
 }
 
 QStringList
 AnimationPreviewWindow::GetHeldOpenPaths() const
 {
 	return editor::GetHeldOpenEnvironment(m_Environment);
+}
+
+bool
+AnimationPreviewWindow::eventFilter(QObject* watched, QEvent* event)
+{
+	if (watched != m_Viewport)
+		return QWidget::eventFilter(watched, event);
+	switch (event->type())
+	{
+	case QEvent::MouseButtonPress:
+		mousePressEvent(static_cast<QMouseEvent*>(event));
+		return true;
+	case QEvent::MouseButtonRelease:
+		mouseReleaseEvent(static_cast<QMouseEvent*>(event));
+		return true;
+	case QEvent::MouseMove:
+		mouseMoveEvent(static_cast<QMouseEvent*>(event));
+		return true;
+	case QEvent::Wheel:
+		wheelEvent(static_cast<QWheelEvent*>(event));
+		return true;
+	case QEvent::DragEnter:
+		dragEnterEvent(static_cast<QDragEnterEvent*>(event));
+		return true;
+	case QEvent::DragMove:
+		dragMoveEvent(static_cast<QDragMoveEvent*>(event));
+		return true;
+	case QEvent::Drop:
+		dropEvent(static_cast<QDropEvent*>(event));
+		return true;
+	case QEvent::Resize:
+		UpdateCamera();
+		break;
+	default:
+		break;
+	}
+	return QWidget::eventFilter(watched, event);
 }

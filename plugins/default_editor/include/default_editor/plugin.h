@@ -10,8 +10,12 @@ namespace editor::defaults
 	{
 		ViewportDesc         materialViewport;
 		EnvironmentApplyDesc materialEnvironment;
+		ViewportDesc         rigViewport;
+		EnvironmentApplyDesc rigEnvironment;
 	};
-	inline constexpr std::array<std::string_view, 1> c_StartupPanels{ "bernini.material" };
+	inline constexpr std::array<std::string_view, 3> c_StartupPanels{ "bernini.material",
+		                                                              "bernini.animation",
+		                                                              "bernini.blend_space" };
 	[[nodiscard]] EditorPluginPtr
 	CreatePlugin(Config config);
 }

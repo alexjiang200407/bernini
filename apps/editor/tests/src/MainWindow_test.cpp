@@ -636,7 +636,7 @@ TEST_CASE(
 	window.show();
 
 	auto* materialDock  = window.findChild<QDockWidget*>("bernini.material");
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
 	auto* materials     = window.findChild<MaterialEditorWindow*>();
 	auto* preview       = window.findChild<MaterialPreviewWindow*>();
 
@@ -917,8 +917,8 @@ TEST_CASE(
 
 	const MainWindow window(nullptr, editor.ConfigFile());
 
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
-	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* blendDock     = window.findChild<QDockWidget*>("bernini.blend_space");
 	REQUIRE(animationDock != nullptr);
 	REQUIRE(blendDock != nullptr);
 
@@ -956,7 +956,7 @@ TEST_CASE(
 	MainWindow           window(nullptr, editor.ConfigFile());
 	window.resize(1200, 700);
 	window.show();
-	auto* dock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* dock = window.findChild<QDockWidget*>("bernini.animation");
 	REQUIRE(dock != nullptr);
 	dock->show();
 	dock->raise();
@@ -1074,8 +1074,8 @@ TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][b
 	MainWindow window(nullptr, editor.ConfigFile());
 	window.show();
 
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
-	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* blendDock     = window.findChild<QDockWidget*>("bernini.blend_space");
 	auto* blend         = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(animationDock != nullptr);
 	REQUIRE(blendDock != nullptr);
@@ -1125,7 +1125,7 @@ TEST_CASE(
 	MainWindow window(nullptr, editor.ConfigFile());
 	window.show();
 
-	auto* blendDock = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* blendDock = window.findChild<QDockWidget*>("bernini.blend_space");
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
 	auto* explorer  = window.findChild<ContentExplorerWindow*>();
 	REQUIRE(blendDock != nullptr);
@@ -1205,6 +1205,127 @@ TEST_CASE(
 		CHECK(std::ranges::all_of(sliders, [ground](const Scrubber* slider) {
 			return slider->isVisibleTo(ground);
 		}));
+	}
+}
+
+TEST_CASE(
+	"Blend documents open through the registered asset editor and reuse its startup tab",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       set = assetlib::BlendSet();
+	set.animations                 = "Derived/Animations/absent.banim";
+	const std::string key          = "Authored/Animations/solo.bblend";
+	store.Save(set, key);
+	MainWindow window(nullptr, editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+	auto* dock = window.findChild<QDockWidget*>("bernini.blend_space");
+	REQUIRE(dock != nullptr);
+	auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+	REQUIRE(panel != nullptr);
+	auto* explorer = window.findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+	for (int request = 0; request < 2; ++request)
+	{
+		Q_EMIT explorer->AssetOpenRequested(QString::fromStdString(key));
+		QCoreApplication::processEvents();
+		CHECK(window.findChildren<QDockWidget*>("bernini.blend_space").size() == 1);
+		CHECK(dock->widget() == panel);
+		CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key, set.animations });
+	}
+	window.findChild<QDockWidget*>("bernini.material")->raise();
+	QCoreApplication::processEvents();
+	CHECK(panel->GetHeldAssets().empty());
+}
+
+TEST_CASE(
+	"Blend plugin close commits a pending threshold and vetoes a failed save",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       set = assetlib::BlendSet();
+	set.animations                 = "Derived/Animations/absent.banim";
+	set.spaces                     = { { "Speed", { { "Walk", 0.0f }, { "Run", 1.0f } } } };
+	const std::string key          = "Authored/Animations/pending.bblend";
+	store.Save(set, key);
+	MainWindow window(nullptr, editor.ConfigFile());
+	auto*      dock = window.findChild<QDockWidget*>("bernini.blend_space");
+	REQUIRE(dock != nullptr);
+	auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+	REQUIRE(panel != nullptr);
+	panel->OpenAsset(key);
+	auto* samples   = panel->findChild<QListWidget*>("BlendSpaceSamples");
+	auto* threshold = panel->findChild<QDoubleSpinBox*>("BlendSampleThreshold");
+	REQUIRE(samples != nullptr);
+	REQUIRE(threshold != nullptr);
+	samples->setCurrentRow(0);
+	REQUIRE(threshold->isEnabled());
+	threshold->setValue(0.25);
+	CHECK(store.Load<assetlib::BlendSet>(key).spaces.front().samples.front().parameter == 0.0f);
+	const auto path = store.ResolveWritePath(key);
+	REQUIRE(fs::remove(path));
+	REQUIRE(fs::create_directory(path));
+	QTimer dismiss;
+	QObject::connect(&dismiss, &QTimer::timeout, &window, [] {
+		for (auto* widget : QApplication::topLevelWidgets())
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->accept();
+	});
+	dismiss.start(10);
+	CHECK_FALSE(panel->CanClose());
+	dismiss.stop();
+	CHECK(threshold->value() == 0.25);
+	REQUIRE(fs::remove(path));
+	CHECK(panel->CanClose());
+	CHECK(store.Load<assetlib::BlendSet>(key).spaces.front().samples.front().parameter == 0.25f);
+}
+
+TEST_CASE(
+	"Rig plugin viewports accept environment drops and restore the project configuration",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor editor;
+	const auto           configured = editor.DataRoot() / "Authored/Environments/configured.benv";
+	std::ofstream(editor.ConfigFile()) << nlohmann::json{
+		{ "headless", true },
+		{ "startupProject", editor.ProjectFile().generic_string() },
+		{ "materialEditor", { { "temporalAA", false } } },
+		{ "animationEditor",
+		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } }
+	}.dump(2);
+	MainWindow window(nullptr, editor.ConfigFile());
+	for (const auto* id : { "bernini.animation", "bernini.blend_space" })
+	{
+		auto* dock = window.findChild<QDockWidget*>(id);
+		REQUIRE(dock != nullptr);
+		auto* panel = dynamic_cast<editor::EditorPanel*>(dock->widget());
+		REQUIRE(panel != nullptr);
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/configured.benv" });
+		auto* view = panel->findChild<RenderTargetWindow*>();
+		REQUIRE(view != nullptr);
+		QMimeData mime;
+		mime.setUrls(
+			{ QUrl::fromLocalFile(
+				QString::fromStdString(
+					(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+		QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+		QCoreApplication::sendEvent(view, &enter);
+		REQUIRE(enter.isAccepted());
+		QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+		QCoreApplication::sendEvent(view, &drop);
+		REQUIRE(drop.isAccepted());
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/dropped.benv" });
+		panel->SetActive(false);
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/configured.benv" });
 	}
 }
 

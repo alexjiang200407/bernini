@@ -2,8 +2,8 @@
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
-#include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/held_open_assets.h"
+#include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorViewport.h>
 #include <editor_sdk/OrbitCamera.h>
 #include <editor_sdk/environment.h>
 
@@ -54,41 +54,35 @@ class QWheelEvent;
  * pose. A mesh with no rig at all is refused: nothing to animate.
  *
  * Everything is acquired through `game::AssetManager`, so a mesh renders here exactly as it does
- * anywhere else the manager serves; SetAssets(nullptr) releases everything held, and MainWindow
- * calls it before the manager itself is torn down.
+ * anywhere else the manager serves. The project host outlives the preview and its acquisitions.
  *
  * The window has no clock of its own: the panel owns the transport and feeds SetTime.
  */
-class AnimationPreviewWindow : public RenderTargetWindow, public editor::IHoldsAssets
+class AnimationPreviewWindow : public QWidget
 {
 	Q_OBJECT
 
 public:
 	AnimationPreviewWindow(
+		editor::IEditorHost&         host,
 		QWidget*                     parent,
-		RenderTargetWindowDesc       rt,
+		editor::ViewportDesc         rt,
 		editor::EnvironmentApplyDesc env);
 	~AnimationPreviewWindow() override;
 
 	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
 	[[nodiscard]] QStringList
-	GetHeldOpenPaths() const override;
+	GetHeldOpenPaths() const;
 
-	/**
-	 * The manager this preview acquires through, or nullptr to release everything held. The
-	 * manager must outlive every acquisition, so the owner clears this before destroying it.
-	 */
 	void
-	SetAssets(game::AssetManager* assets);
-
-	// The project's Data directory: what a dropped absolute path is resolved against, and the
-	// root the manager's relative paths mean.
-	// TODO: feat/archive mounts will stand behind these paths; the drop containment check and the
-	// drawsLoose probe both assume a loose filesystem today.
-	void
-	SetDataRoot(const std::filesystem::path& dataRoot)
+	SetRenderingEnabled(bool enabled)
 	{
-		m_DataRoot = dataRoot;
+		m_Viewport->SetRenderingEnabled(enabled);
+	}
+	void
+	SetTime(float seconds)
+	{
+		m_Viewport->SetTime(seconds);
 	}
 
 	/**
@@ -313,14 +307,6 @@ Q_SIGNALS:
 	void
 	MeshChanged(const QString& relPath);
 
-	/**
-	 * Bake Now rewrote `relPath` on disk. Anything showing what that file says -- the Material
-	 * Editor's properties panel -- has to re-read it; MainWindow routes this the way it routes the
-	 * Content Explorer's bakes.
-	 */
-	void
-	MaterialBaked(const QString& relPath);
-
 	/** The `.banim` candidates for the shown mesh, and which one is playing (-1: none). */
 	void
 	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
@@ -351,6 +337,8 @@ Q_SIGNALS:
 	SpacesChanged(const std::vector<game::BlendSpaceInfo>& spaces);
 
 protected:
+	bool
+	eventFilter(QObject* watched, QEvent* event) override;
 	void
 	resizeEvent(QResizeEvent* event) override;
 	void
@@ -374,6 +362,8 @@ protected:
 	// neither what it was configured with nor what it was asked to show.
 	void
 	RestoreConfiguredEnvironment();
+	void
+	BindConfiguredEnvironment();
 
 	void
 	mousePressEvent(QMouseEvent* event) override;
@@ -408,17 +398,26 @@ private:
 
 	/** Places one animated instance on `clip` at phase 0, rate 1, reading the active pose source. */
 	[[nodiscard]] bgl::MeshInstanceHandle
-	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip, bool castsShadow);
+	SpawnAnimated(
+		editor::RenderContext&   context,
+		const bgl::SceneViewRef& view,
+		bgl::GeomHandle          geom,
+		const glm::mat4&         world,
+		uint32_t                 clip,
+		bool                     castsShadow);
 
 	// Writes m_FootIK into one instance. Render thread only. A crowd instance and a rig without
 	// legs own no record and are left alone.
 	void
-	ApplyFootIK(bgl::MeshInstanceHandle instance);
+	ApplyFootIK(const bgl::SceneViewRef& view, bgl::MeshInstanceHandle instance);
 
 	// Puts the disc and the foot shadows on one instance, or takes them off, per m_BlobShadow and
 	// m_FootShadows. Render thread only.
 	void
-	ApplyBlobShadow(bgl::MeshInstanceHandle instance, bool castsShadow);
+	ApplyBlobShadow(
+		const bgl::SceneViewRef& view,
+		bgl::MeshInstanceHandle  instance,
+		bool                     castsShadow);
 
 	/**
 	 * Sets the scene's ground to the current slope and stands the floor under the rig at the same
@@ -426,7 +425,7 @@ private:
 	 * deleted and re-placed, which is what a slope change costs.
 	 */
 	void
-	PlaceGround();
+	PlaceGround(editor::RenderContext& context, const bgl::SceneViewRef& view);
 
 	/** PlaceGround from the UI thread, when there is a ground to re-place and it is on screen. */
 	void
@@ -442,8 +441,9 @@ private:
 		bool                    castsShadow = false;
 	};
 
-	game::AssetManager* m_Assets = nullptr;
-	bgl::PoseSource     m_Source = bgl::PoseSource::kPerInstance;
+	editor::IEditorHost&     m_Host;
+	editor::IEditorViewport* m_Viewport = nullptr;
+	bgl::PoseSource          m_Source   = bgl::PoseSource::kPerInstance;
 
 	bool m_MeshDropsEnabled = true;
 

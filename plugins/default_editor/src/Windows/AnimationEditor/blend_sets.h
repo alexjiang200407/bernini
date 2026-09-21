@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_refs.h>
 #include <assetlib/blend.h>
@@ -63,7 +64,7 @@ namespace editor
 	 *         `assetlib::blendSetKeyFor` and `AssetStore::Save` refuse.
 	 */
 	[[nodiscard]] std::string
-	CreateEmptyBlendSet(const std::filesystem::path& dataRoot, std::string_view animationsKey);
+	CreateEmptyBlendSet(const assetlib::AssetStore& store, std::string_view animationsKey);
 
 	/**
 	 * The set at `key`, as authored -- clips by name, which is the form every rule in
@@ -77,7 +78,7 @@ namespace editor
 	 *         container, and for what `validateBlendSet` refuses in one already on disk.
 	 */
 	[[nodiscard]] assetlib::BlendSet
-	LoadBlendSet(const std::filesystem::path& dataRoot, std::string_view key);
+	LoadBlendSet(const assetlib::AssetStore& store, std::string_view key);
 
 	/**
 	 * Writes `set` back to `key`, over what stands there.
@@ -93,7 +94,7 @@ namespace editor
 	 */
 	void
 	SaveBlendSet(
-		const std::filesystem::path& dataRoot,
-		std::string_view             key,
-		const assetlib::BlendSet&    set);
+		const assetlib::AssetStore& store,
+		std::string_view            key,
+		const assetlib::BlendSet&   set);
 }
