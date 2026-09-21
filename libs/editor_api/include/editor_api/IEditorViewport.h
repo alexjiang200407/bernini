@@ -23,8 +23,10 @@ namespace editor
 
 	struct ViewportDesc
 	{
-		uint32_t initialInstances = 16;
-		bool     taaEnabled       = true;
+		uint32_t initialInstances       = 16;
+		bool     taaEnabled             = true;
+		float    renderScale            = 1.0f;
+		float    taaReconstructionWidth = 0.4f;
 	};
 
 	/** GUI-thread widget; destruction drains its render work before releasing its view. */

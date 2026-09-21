@@ -226,8 +226,60 @@ TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][pl
 				panel = candidate;
 		REQUIRE(panel != nullptr);
 		CHECK(panel->parentWidget()->objectName() == "sample.fixture_panel");
+		SECTION("Normal Qt ownership") {}
+		SECTION("A reparented panel is reclaimed before its host dies")
+		{
+			panel->setParent(nullptr);
+		}
 	}
 	CHECK(panel.isNull());
+}
+
+TEST_CASE(
+	"Lazy plugin viewports preserve defaults and follow render choices",
+	"[mainwindow][plugins][render]")
+{
+	const PluginHeadlessEditor editor;
+	MainWindow                 window(nullptr, editor.ConfigFile());
+	bool                       overrideDefaults = false;
+	SECTION("Plugin presentation defaults") {}
+	SECTION("Earlier menu choices override plugin defaults")
+	{
+		overrideDefaults = true;
+		auto* scale      = ActionNamed(window, "0.5x");
+		auto* width      = ActionNamed(window, "0.8 px");
+		REQUIRE(scale != nullptr);
+		REQUIRE(width != nullptr);
+		scale->trigger();
+		width->trigger();
+	}
+	auto* taa = ActionNamed(window, "Temporal Antialiasing");
+	REQUIRE(taa != nullptr);
+	CHECK_FALSE(taa->isEnabled());
+	for (QAction* action : window.menuBar()->actions())
+		if (action->text() == "Tools" && action->menu() != nullptr)
+			Q_EMIT action->menu()->aboutToShow();
+	auto* show = ActionNamed(window, "Fixture Panel");
+	REQUIRE(show != nullptr);
+	show->trigger();
+	auto* dock = window.findChild<QDockWidget*>("sample.fixture_panel");
+	REQUIRE(dock != nullptr);
+	auto* viewport = dock->findChild<RenderTargetWindow*>();
+	REQUIRE(viewport != nullptr);
+	CHECK(viewport->GetRenderScale() == Catch::Approx(overrideDefaults ? 0.5f : 0.75f));
+	CHECK(viewport->GetTaaReconstructionWidth() == Catch::Approx(overrideDefaults ? 0.8f : 0.6f));
+	QMenu* render = nullptr;
+	for (QAction* action : window.menuBar()->actions())
+		if (action->text() == "Render")
+			render = action->menu();
+	REQUIRE(render != nullptr);
+	Q_EMIT render->aboutToShow();
+	CHECK(taa->isEnabled());
+	CHECK(taa->isChecked());
+	auto* scale = ActionNamed(window, "1.5x");
+	REQUIRE(scale != nullptr);
+	scale->trigger();
+	CHECK(viewport->GetRenderScale() == Catch::Approx(1.5f));
 }
 
 TEST_CASE("A plugin editor failure stays inside the GUI boundary", "[mainwindow][plugins]")

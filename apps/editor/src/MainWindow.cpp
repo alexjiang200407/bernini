@@ -9,6 +9,7 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
@@ -72,6 +73,7 @@
 #include <QDebug>
 #include <QKeySequence>
 #include <bgl/PassTiming.h>
+#include <core/str/str.h>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -86,7 +88,6 @@
 #include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -550,7 +551,21 @@ MainWindow::SetUpRenderMenu()
 		anyTaa ? "Jitter the projection and accumulate a temporal history in the viewports." :
 				 "No viewport enabled temporalAA in config.json, so none allocated a history.");
 
+	connect(render, &QMenu::aboutToShow, this, [this, taa] {
+		bool available = false;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			available = available || view->IsTaaAvailable();
+		const QSignalBlocker blocker(taa);
+		taa->setEnabled(available);
+		taa->setChecked(m_TaaOverride.value_or(available));
+		taa->setStatusTip(
+			available ?
+				"Jitter the projection and accumulate a temporal history in the viewports." :
+				"No open viewport allocated temporal-AA history.");
+	});
+
 	connect(taa, &QAction::toggled, this, [this](bool enabled) {
+		m_TaaOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetTaaEnabled(enabled);
 	});
@@ -561,6 +576,7 @@ MainWindow::SetUpRenderMenu()
 	outline->setStatusTip("Contour the selected submesh in the viewports.");
 
 	connect(outline, &QAction::toggled, this, [this](bool enabled) {
+		m_OutlineEnabled = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
 	});
@@ -618,6 +634,7 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 		group->addAction(action);
 
 		connect(action, &QAction::triggered, this, [this, factor]() {
+			m_RenderScaleOverride = factor;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetRenderScale(factor);
 		});
@@ -658,6 +675,7 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 		group->addAction(action);
 
 		connect(action, &QAction::triggered, this, [this, value]() {
+			m_ReconstructionWidthOverride = value;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetTaaReconstructionWidth(value);
 		});
@@ -1202,6 +1220,18 @@ MainWindow::SetActiveProject(assetlib::Project project)
 								m_Project->GetStore().ResolveWritePath(key).wstring()));
 					}
 				},
+			.viewportCreated =
+				[this](RenderTargetWindow& view) {
+					if (m_TaaOverride)
+						view.SetTaaEnabled(*m_TaaOverride);
+					if (m_RenderScaleOverride)
+						view.SetRenderScale(*m_RenderScaleOverride);
+					if (m_ReconstructionWidthOverride)
+						view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+					view.SetOutlineEnabled(m_OutlineEnabled);
+					view.SetGpuTimingEnabled(
+						m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
+				},
 		});
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
@@ -1305,7 +1335,7 @@ MainWindow::SetUpPluginContributions()
 	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
 		language.RegisterCatalog(catalog);
 
-	std::unordered_map<std::string, QMenu*> menus;
+	core::str::unordered_str_map<QMenu*> menus;
 	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);
 	const auto toolsMenu = [&]() {
 		if (m_Ui.toolsMenu == nullptr)
@@ -1375,10 +1405,10 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 {
 	if (m_EditorHost == nullptr)
 		return;
-	if (const auto found = m_PluginDocks.find(std::string(id)); found != m_PluginDocks.end())
+	if (const auto found = m_PluginDocks.find(id); found != m_PluginDocks.end())
 	{
-		found->second->show();
-		found->second->raise();
+		found->second.dock->show();
+		found->second.dock->raise();
 		return;
 	}
 
@@ -1404,7 +1434,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
 		panel->SetActive(editor::IsPanelShown(visible, this));
 	});
-	m_PluginDocks.emplace(desc->id, dock);
+	m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
 	static_cast<void>(dockOwner.release());
 	dock->show();
 	dock->raise();
@@ -1428,7 +1458,7 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 		QDockWidget* dock = nullptr;
 		if (const auto found = m_PluginDocks.find(desc->id); found != m_PluginDocks.end())
 		{
-			dock = found->second;
+			dock = found->second.dock;
 		}
 		else
 		{
@@ -1455,7 +1485,7 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 				[this, panel](const bool visible) {
 					panel->SetActive(editor::IsPanelShown(visible, this));
 				});
-			m_PluginDocks.emplace(desc->id, dock);
+			m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
 			static_cast<void>(dockOwner.release());
 		}
 
@@ -1480,7 +1510,7 @@ MainWindow::CanClosePluginPanels()
 	for (const auto& [id, dock] : m_PluginDocks)
 	{
 		static_cast<void>(id);
-		if (auto* panel = dynamic_cast<editor::EditorPanel*>(dock->widget()); panel != nullptr)
+		if (auto* panel = dock.panel.data(); panel != nullptr)
 		{
 			try
 			{
@@ -1502,8 +1532,14 @@ MainWindow::ClearPluginPanels()
 {
 	for (const auto& [id, dock] : m_PluginDocks)
 	{
-		static_cast<void>(id);
-		delete dock;
+		delete dock.dock;
+		if (dock.panel != nullptr)
+		{
+			qWarning(
+				"Plugin panel '%s' survived dock teardown; deleting it before project services",
+				id.c_str());
+			delete dock.panel.data();
+		}
 	}
 	m_PluginDocks.clear();
 	m_EditorHost.reset();

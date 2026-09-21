@@ -8,6 +8,7 @@
 #include <assetlib/AssetStore.h>
 #include <editor_api/IEditorViewport.h>
 #include <gamelib/AssetManager.h>
+#include <memory>
 #include <qwidget.h>
 #include <span>
 #include <stdexcept>
@@ -59,13 +60,18 @@ namespace editor::plugins
 			throw std::runtime_error("Editor viewport requires a parent");
 		if (m_Renderer == nullptr || m_Assets == nullptr)
 			throw std::runtime_error("Editor render services are unavailable");
-		return new RenderTargetWindow(
+		auto viewport = std::make_unique<RenderTargetWindow>(
 			parent,
-			{ .renderer         = m_Renderer,
-		      .assets           = m_Assets,
-		      .initialInstances = desc.initialInstances,
-		      .taaEnabled       = desc.taaEnabled,
-		      .headless         = m_Headless });
+			RenderTargetWindowDesc{ .renderer               = m_Renderer,
+		                            .assets                 = m_Assets,
+		                            .initialInstances       = desc.initialInstances,
+		                            .taaEnabled             = desc.taaEnabled,
+		                            .renderScale            = desc.renderScale,
+		                            .taaReconstructionWidth = desc.taaReconstructionWidth,
+		                            .headless               = m_Headless });
+		if (m_Dispatch.viewportCreated)
+			m_Dispatch.viewportCreated(*viewport);
+		return viewport.release();
 	}
 
 	void

@@ -1,21 +1,23 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QString>
 
 #include <assetlib/Project.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <memory>
+#include <optional>
 #include <qobject.h>
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "Async/BackgroundTask.h"
@@ -215,6 +217,10 @@ private:
 	ClearPluginPanels();
 
 	editor::MainWindowWidgets m_Ui;
+	std::optional<bool>       m_TaaOverride;
+	std::optional<float>      m_RenderScaleOverride;
+	std::optional<float>      m_ReconstructionWidthOverride;
+	bool                      m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.
@@ -228,9 +234,15 @@ private:
 
 	std::filesystem::path m_RelaunchProject;
 
+	struct PluginDock
+	{
+		QDockWidget*                  dock;
+		QPointer<editor::EditorPanel> panel;
+	};
+
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
-	std::unordered_map<std::string, QDockWidget*>   m_PluginDocks;
+	core::str::unordered_str_map<PluginDock>        m_PluginDocks;
 	std::unique_ptr<assetlib::Project>              m_Project;
 	ContentExplorerWindow*                          m_ContentExplorer      = nullptr;
 	MaterialEditorWindow*                           m_MaterialEditor       = nullptr;
