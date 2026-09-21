@@ -285,6 +285,7 @@ struct — see `DecodeVertex` in
 | position | `float32x3` | **yes** | must be the **first** attribute (offset 0) — the meshlet builder reads positions at stride intervals from offset 0 |
 | normal | `float32x3` | no | default `(0,0,1)` |
 | texcoord0 | `float32x2` | no | default `(0,0)` |
+| texcoord1 | `float32x2` | no | carried **only** where the primitive's material samples a map through it — see [Geometry AO](#geometry-ao-on-a-second-uv-set); absent, the renderer reads that map as white |
 | tangent | `float32x4` | no | `xyz` + `w` = bitangent handedness; authored upstream when the source has one, else **derived at import**; absent only when there are no UVs/normals/triangles to derive from, and then → geometric-normal fallback |
 | joints0 | `uint16x4` | no | bone indices, **already in the skeleton's bone order** — not the glTF's joint order |
 | weights0 | `unorm16x4` | no | renormalized to sum 1 before quantizing |
@@ -296,6 +297,30 @@ them is only drawable against the `.bskel` it names — see [Rigs](#rigs).
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
 (CPU) mirror [libs/bgl_common/shaders/src/idl/VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) (GPU) — the enum
 ordering is shared so a layout maps field-for-field between them.
+
+### Geometry AO on a second UV set
+
+A material's AO through UV0 — ORM red — can only hold *texture* AO on art that tiles or atlases its
+UVs: one texel is many places, so it cannot also say that one of them sits under an eave. Geometry
+AO goes on a **second, unique UV set** instead, the way a lightmap does, and multiplies the first.
+Authoring it:
+
+* **Unwrap a unique `TEXCOORD_1`**: no two triangles share a texel, and it fills the unit square
+  without wrapping. A margin between islands keeps the filter from bleeding one into the next. The
+  import warns on a set that leaves `[0, 1]` — the renderer tells a mesh with *no* second set by a
+  UV1 far outside it.
+* **Bake a single channel into it.** Red is what is read; a greyscale map is the usual form. It is
+  sampled clamped and trilinear, so its resolution can sit far below the tiled maps' — occlusion is
+  soft.
+* **Name it as glTF does**: `material.occlusionTexture` with `texCoord: 1`. A `texCoord: 0` map
+  still routes into ORM red; any set past the second is refused. `strength` is ignored with a
+  warning, as for the first set: bake the map at the strength it is meant to have.
+* **What it holds is what was baked together.** It lives on the material and is read per mesh, so
+  contact between pieces placed separately is only in it if they were baked in one scene — a crate
+  baked on a stand-in ground plane darkens at its foot; the same crate baked alone does not.
+* **A set nothing samples is not carried.** Exporters emit degenerate ones — every vertex at one
+  point — and a primitive whose material samples no map through `TEXCOORD_1` imports exactly as if
+  it had none.
 
 ### Normal & tangent space
 
@@ -868,11 +893,12 @@ Ten rules, each of which is a way to get this wrong:
   no metallic-roughness texture leaves roughness and metallic **unrouted**, which the bake fills with
   the group's fallback: the factors alone drive them.
 
-  The map is **refused** rather than routed when its `texCoord` is not 0. Only `TEXCOORD_0` is read
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), and baked AO is commonly
-  unwrapped onto a second UV set — sampling it through the wrong parameterisation is confident
-  garbage, which is worse than the white default. `occlusionTexture.strength` has no home in
-  `PbrParams` and is likewise ignored; both cases warn rather than passing silently.
+  A map on `texCoord: 1` is **not** routed into ORM red: ORM is sampled through `TEXCOORD_0`, and
+  baked AO is commonly unwrapped onto a second UV set, so folding it in would be confident garbage.
+  The import keeps it beside the ORM as `uv1OcclusionTexture` instead — see
+  [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
+  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)). `occlusionTexture.strength`
+  has no home in `PbrParams` and is ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
   sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB with the alpha left
