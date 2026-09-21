@@ -9,6 +9,7 @@
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <memory>
+#include <optional>
 #include <qobject.h>
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
@@ -215,6 +216,10 @@ private:
 	ClearPluginPanels();
 
 	editor::MainWindowWidgets m_Ui;
+	std::optional<bool>       m_TaaOverride;
+	std::optional<float>      m_RenderScaleOverride;
+	std::optional<float>      m_ReconstructionWidthOverride;
+	bool                      m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.

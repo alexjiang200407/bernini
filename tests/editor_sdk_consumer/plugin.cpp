@@ -1,3 +1,5 @@
+#include <QVBoxLayout>
+#include <QWidget>
 #include <RmlUi/Core/Context.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
@@ -6,8 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <editor_api/EditorPanel.h>
+#include <editor_api/IEditorHost.h>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
+#include <editor_api/IEditorViewport.h>
 #include <gamelib/ui/UiRuntime.h>
 #include <memory>
 #include <span>
@@ -69,11 +73,18 @@ namespace
 			registry.AddPanel(
 				{ "sample.fixture_panel",
 			      { "sample.fixture", "panel", "Fixture Panel" },
-			      [](editor::IEditorHost&, QWidget* parent) {
+			      [](editor::IEditorHost& host, QWidget* parent) {
 					  class Panel final : public editor::EditorPanel
 					  {
 					  public:
-						  using EditorPanel::EditorPanel;
+						  Panel(editor::IEditorHost& host, QWidget* parent) : EditorPanel(parent)
+						  {
+							  auto* layout = new QVBoxLayout(this);
+							  m_Viewport   = host.CreateViewport(
+								  this,
+								  { .renderScale = 0.75f, .taaReconstructionWidth = 0.6f });
+							  layout->addWidget(m_Viewport);
+						  }
 						  std::vector<std::string>
 						  GetHeldAssets() const override
 						  {
@@ -85,10 +96,15 @@ namespace
 							  return true;
 						  }
 						  void
-						  SetActive(bool) override
-						  {}
+						  SetActive(bool active) override
+						  {
+							  m_Viewport->SetRenderingEnabled(active);
+						  }
+
+					  private:
+						  editor::IEditorViewport* m_Viewport = nullptr;
 					  };
-					  return new Panel(parent);
+					  return new Panel(host, parent);
 				  } });
 			registry.AddAction(
 				{ "sample.show_fixture",

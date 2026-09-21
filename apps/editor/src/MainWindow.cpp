@@ -9,6 +9,7 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
@@ -550,7 +551,21 @@ MainWindow::SetUpRenderMenu()
 		anyTaa ? "Jitter the projection and accumulate a temporal history in the viewports." :
 				 "No viewport enabled temporalAA in config.json, so none allocated a history.");
 
+	connect(render, &QMenu::aboutToShow, this, [this, taa] {
+		bool available = false;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			available = available || view->IsTaaAvailable();
+		const QSignalBlocker blocker(taa);
+		taa->setEnabled(available);
+		taa->setChecked(m_TaaOverride.value_or(available));
+		taa->setStatusTip(
+			available ?
+				"Jitter the projection and accumulate a temporal history in the viewports." :
+				"No open viewport allocated temporal-AA history.");
+	});
+
 	connect(taa, &QAction::toggled, this, [this](bool enabled) {
+		m_TaaOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetTaaEnabled(enabled);
 	});
@@ -561,6 +576,7 @@ MainWindow::SetUpRenderMenu()
 	outline->setStatusTip("Contour the selected submesh in the viewports.");
 
 	connect(outline, &QAction::toggled, this, [this](bool enabled) {
+		m_OutlineEnabled = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
 	});
@@ -618,6 +634,7 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 		group->addAction(action);
 
 		connect(action, &QAction::triggered, this, [this, factor]() {
+			m_RenderScaleOverride = factor;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetRenderScale(factor);
 		});
@@ -658,6 +675,7 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 		group->addAction(action);
 
 		connect(action, &QAction::triggered, this, [this, value]() {
+			m_ReconstructionWidthOverride = value;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetTaaReconstructionWidth(value);
 		});
@@ -1201,6 +1219,18 @@ MainWindow::SetActiveProject(assetlib::Project project)
 							QString::fromStdWString(
 								m_Project->GetStore().ResolveWritePath(key).wstring()));
 					}
+				},
+			.viewportCreated =
+				[this](RenderTargetWindow& view) {
+					if (m_TaaOverride)
+						view.SetTaaEnabled(*m_TaaOverride);
+					if (m_RenderScaleOverride)
+						view.SetRenderScale(*m_RenderScaleOverride);
+					if (m_ReconstructionWidthOverride)
+						view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+					view.SetOutlineEnabled(m_OutlineEnabled);
+					view.SetGpuTimingEnabled(
+						m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
 				},
 		});
 

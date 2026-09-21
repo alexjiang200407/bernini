@@ -13,14 +13,16 @@
 #include <string_view>
 
 class Renderer;
+class RenderTargetWindow;
 
 namespace editor::plugins
 {
 	struct EditorHostDispatch
 	{
-		std::function<void(std::string_view)> showPanel;
-		std::function<void(std::string_view)> openAsset;
-		std::function<void(std::string_view)> assetChanged;
+		std::function<void(std::string_view)>    showPanel;
+		std::function<void(std::string_view)>    openAsset;
+		std::function<void(std::string_view)>    assetChanged;
+		std::function<void(RenderTargetWindow&)> viewportCreated;
 	};
 
 	class EditorHost final : public IEditorHost
