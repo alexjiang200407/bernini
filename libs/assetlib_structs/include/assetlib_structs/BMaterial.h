@@ -195,6 +195,10 @@ namespace assetlib
 
 		MaterialLayer layer;
 
+		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied
+		// with the model's own AO. Read under every model; empty when absent.
+		std::string uv1OcclusionTexture;
+
 		std::string editorGraph;
 
 		PbrParams pbr;

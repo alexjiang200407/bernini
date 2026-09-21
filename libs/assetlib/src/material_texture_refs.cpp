@@ -40,6 +40,8 @@ namespace assetlib
 	{
 		auto seen = std::vector<std::pair<std::string, RefKind>>();
 
+		mapOne(material.uv1OcclusionTexture, RefKind::kBakedMap, map, seen);
+
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:

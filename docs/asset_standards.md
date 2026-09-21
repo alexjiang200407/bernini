@@ -439,6 +439,15 @@ in `docs/specs/`.
   and `doubleSided`, top-level keys beside `shadingModel`. `gamelib` derives the renderer's `LayerType`
   from `alphaMode`; a model's payload holds nothing about how alpha is read.
 
+  **`uv1OcclusionTexture` — geometry occlusion, which every model has and none owns**: the
+  top-level `uv1Occlusion` key, a single-channel map sampled through the mesh's *second* UV set and
+  multiplied with the model's own AO. It is a whole texture, never a channel route and never part of
+  the baked triplet — the triplet is addressed by UV0, and a map on another UV set cannot be
+  composited into it — so no bake reads or writes it. It is what gets sampled rather than what a bake
+  reads, which is why the reference graph and the baked-map prune hold it as a baked map under either
+  model. Absent, the
+  key is not written, so a material without one is byte-for-byte what it was before the key existed.
+
   **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
 
   * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
