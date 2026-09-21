@@ -148,13 +148,25 @@ namespace
 			auto* layout = new QVBoxLayout(this);
 			m_Label      = new QLabel(this);
 			layout->addWidget(m_Label);
+			m_Changed = new QLabel(this);
+			m_Changed->setObjectName("sample.changedAsset");
+			layout->addWidget(m_Changed);
 		}
 
 		void
 		OpenAsset(std::string_view key) override
 		{
 			m_Key = key;
+			m_Changed->clear();
 			m_Label->setText(QString::fromUtf8(key.data(), static_cast<qsizetype>(key.size())));
+		}
+
+		void
+		OnAssetChanged(std::string_view key) override
+		{
+			if (key == m_Key)
+				m_Changed->setText(
+					QString::fromUtf8(key.data(), static_cast<qsizetype>(key.size())));
 		}
 
 		std::vector<std::string>
@@ -176,7 +188,8 @@ namespace
 		}
 
 	private:
-		QLabel*     m_Label = nullptr;
+		QLabel*     m_Label   = nullptr;
+		QLabel*     m_Changed = nullptr;
 		std::string m_Key;
 	};
 

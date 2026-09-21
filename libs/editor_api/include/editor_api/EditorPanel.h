@@ -24,6 +24,13 @@ namespace editor
 		/** Tab selection, not QWidget visibility; inactive tabs must suspend their viewports. */
 		virtual void
 		SetActive(bool active) = 0;
+
+		/** Queued on the GUI thread; key is borrowed for this call. Default: no cached state. */
+		virtual void
+		OnAssetChanged(std::string_view key)
+		{
+			static_cast<void>(key);
+		}
 	};
 
 	class AssetEditorPanel : public EditorPanel

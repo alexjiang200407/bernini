@@ -1150,6 +1150,34 @@ MainWindow::SetActiveProject(assetlib::Project project)
 							QString::fromStdWString(
 								m_Project->GetStore().ResolveWritePath(key).wstring()));
 					}
+					for (const auto& [id, dock] : m_PluginDocks)
+					{
+						auto* panel = dock.panel.data();
+						if (panel == nullptr)
+							continue;
+						QMetaObject::invokeMethod(
+							panel,
+							[panel, changed = std::string(key), panelId = id] {
+								try
+								{
+									panel->OnAssetChanged(changed);
+								}
+								catch (const std::exception& error)
+								{
+									qWarning(
+										"Plugin panel '%s' asset notification failed: %s",
+										panelId.c_str(),
+										error.what());
+								}
+								catch (...)
+								{
+									qWarning(
+										"Plugin panel '%s' asset notification failed",
+										panelId.c_str());
+								}
+							},
+							Qt::QueuedConnection);
+					}
 				},
 			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
 		});

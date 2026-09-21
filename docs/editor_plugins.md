@@ -67,7 +67,7 @@ and fix the map.
 | `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_api/include/editor_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_api/include/editor_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
 | `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_api/include/editor_api/TranslationCatalog.h), [translation_csv.h](libs/editor_api/include/editor_api/translation_csv.h) | Module data and optional CSV ingestion |
 | `MenuDesc` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
-| `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_api/include/editor_api/EditorPanel.h) | Project-scoped widgets, close veto and held assets |
+| `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_api/include/editor_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
 | `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_api/include/editor_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
@@ -99,6 +99,7 @@ flowchart TD
     Editor[Editor plugin] -->|Register owned contributions| Registry[IEditorRegistry]
     Registry -->|deferred factory| Panel[Project panel]
     Panel -->|borrows| Host[IEditorHost]
+    Host -->|queued OnAssetChanged| Panel
     Panel --> Support[editor_sdk: Qt and asset helpers]
     Host -->|GetLanguageResolver| Language[Host-owned language resolver]
     Editor -->|AddTranslations| Registry
@@ -245,6 +246,15 @@ and shutdown tests exercise both services through the end of viewport teardown.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
   own writes. The host reports thrown errors; a successful write calls `AssetChanged`, which drops
   cached previews and their render assets because another document may reference the changed key.
+- **Asset changes:** after a successful write, call `IEditorHost::AssetChanged` on the GUI thread
+  with a normalized mount key. It invalidates host caches and queues `EditorPanel::OnAssetChanged`
+  once for each panel alive at that call, including inactive panels and the writer. Each queued
+  delivery owns its key; the handler borrows it only for the call. Panels created later receive no
+  old notifications, and destroying a recipient cancels its deliveries. There is no subscription
+  token or captured client callback. Delivery order between panels is unspecified; changes to one
+  panel arrive in posting order and are not coalesced. Exceptions are logged per panel and do not
+  stop the other deliveries. Handlers refresh or mark stale; they must not report the same change
+  back to the host or silently overwrite unsaved edits. The default handler does nothing.
 - **References:** `ReadReferences` must validate the document and report every reference, even
   one whose target is absent. Each field token uniquely identifies an occurrence; the host treats
   tokens as opaque, normalizes targets through assetlib and expands directory moves. A rewrite
@@ -275,7 +285,7 @@ a working document editor. Its contracts still use a fake host; `editor_tests` e
 plugin through the production registry and project host.
 
 `just test editor_plugin` exercises deferred registration, Qt ownership, stable contribution addresses, exclusive destruction, tab activation, held asset
-replacement, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
+replacement, optional asset-change handling, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
 against its Qt-free target alone. A separately configured project builds a real shared fixture from
 `Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
@@ -283,7 +293,9 @@ logger, allocation-id sequence and RmlUi lifetime are the host's. `editor_tests`
 and stale modules and missing declared dependencies before factory invocation, checks duplicate kind
 batches, and forces the plugin binary copy path. Headless tests cover host viewport and thumbnail
 rendering. The editor dispatches menu and content actions, dropped source files, document opens and
-panel navigation through the active project host. Project replacement drains thumbnail description
+panel navigation through the active project host. A loaded SDK fixture also tests queued
+asset notifications, owned keys, inactive recipients, exception isolation and cancellation when
+a panel or project host is destroyed. Project replacement drains thumbnail description
 work and destroys plugin panels before replacing the store or render services. The thumbnail cache
 borrows only the project store through `SetStore`; it owns a separate render asset manager for
 its mip-capped uploads.

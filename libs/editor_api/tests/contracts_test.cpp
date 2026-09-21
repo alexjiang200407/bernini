@@ -211,6 +211,27 @@ TEST_CASE(
 	REQUIRE(host.shown.size() == 1);
 }
 
+TEST_CASE("A panel can report a changed document without reopening it", "[plugin][panel]")
+{
+	auto              plugin = sample::CreateEditorPlugin();
+	RecordingRegistry registry;
+	plugin->Register(registry);
+	RecordingHost host;
+	QWidget       root;
+	auto*         panel = registry.editors.front().factory->Create(host, &root);
+	panel->OpenAsset("Authored/first.bexample");
+	panel->OnAssetChanged("Authored/other.bexample");
+	CHECK(panel->findChild<QLabel*>("sample.changedAsset")->text().isEmpty());
+	panel->SetActive(false);
+	panel->OnAssetChanged("Authored/first.bexample");
+	CHECK(panel->findChild<QLabel*>("sample.changedAsset")->text() == "Authored/first.bexample");
+	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ "Authored/first.bexample" });
+	panel->OpenAsset("Authored/second.bexample");
+	CHECK(panel->findChild<QLabel*>("sample.changedAsset")->text().isEmpty());
+	auto* overview = registry.panels.front().factory->Create(host, &root);
+	CHECK_NOTHROW(overview->OnAssetChanged("Authored/first.bexample"));
+}
+
 TEST_CASE(
 	"A registered document kind owns its semantics beyond the registration call",
 	"[plugin][references]")

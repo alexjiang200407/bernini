@@ -38,6 +38,7 @@
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFileSystemModel>
 #include <QLabel>
@@ -59,6 +60,7 @@
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QVariant>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -265,6 +267,82 @@ TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][pl
 		}
 	}
 	CHECK(panel.isNull());
+}
+
+TEST_CASE(
+	"Asset changes reach only surviving project panels",
+	"[mainwindow][plugins][render][notification]")
+{
+	const PluginHeadlessEditor editor;
+	auto                       window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+	const auto                 open   = [&window](const QString& id) {
+		for (QAction* action : window->menuBar()->actions())
+			if (action->text() == "Tools" && action->menu() != nullptr)
+				Q_EMIT action->menu()->aboutToShow();
+		auto* action = ActionNamed(*window, id);
+		REQUIRE(action != nullptr);
+		action->trigger();
+		auto* dock = window->findChild<QDockWidget*>(id);
+		REQUIRE(dock != nullptr);
+		return dock->widget();
+	};
+	QPointer<QWidget> first   = open("sample.observer_one");
+	QPointer<QWidget> second  = open("sample.observer_two");
+	auto*             publish = first->findChild<QPushButton*>();
+	REQUIRE(publish != nullptr);
+	auto* key = first->findChild<QLineEdit*>();
+	REQUIRE(key != nullptr);
+	key->setText("Authored/original.bfixture");
+	publish->click();
+	key->setText("Authored/replaced.bfixture");
+	CHECK(first->property("notificationCount").toInt() == 0);
+	CHECK(second->property("notificationCount").toInt() == 0);
+
+	SECTION("Inactive panels receive the owned key once")
+	{
+		first->hide();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		for (const auto& panel : { first, second })
+		{
+			CHECK(panel->property("notificationCount").toInt() == 1);
+			CHECK(panel->findChild<QLabel*>()->text() == "Authored/original.bfixture");
+		}
+		publish->click();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 2);
+		CHECK(second->findChild<QLabel*>()->text() == "Authored/replaced.bfixture");
+	}
+	SECTION("A panel created after publication receives no earlier change")
+	{
+		auto* late = open("sample.observer_late");
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 1);
+		CHECK(late->property("notificationCount").toInt() == 0);
+	}
+	SECTION("A destroyed recipient is skipped")
+	{
+		delete second.data();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(second.isNull());
+		CHECK(first->property("notificationCount").toInt() == 1);
+	}
+	SECTION("A throwing recipient does not suppress other panels")
+	{
+		first->setProperty("throwOnChange", true);
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 0);
+		CHECK(second->property("notificationCount").toInt() == 1);
+	}
+	SECTION("A new project host receives no queued changes from its predecessor")
+	{
+		window.reset();
+		REQUIRE(first.isNull());
+		REQUIRE(second.isNull());
+		window     = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+		auto* next = open("sample.observer_one");
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(next->property("notificationCount").toInt() == 0);
+	}
 }
 
 TEST_CASE(

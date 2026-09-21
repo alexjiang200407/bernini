@@ -35,7 +35,7 @@ namespace editor
 		virtual void
 		OpenAsset(std::string_view key) = 0;
 
-		/** After a successful store write, invalidate dependent previews and explorer metadata. */
+		/** GUI thread after a successful write; invalidate caches and queue notifications to live panels. */
 		virtual void
 		AssetChanged(std::string_view key) = 0;
 	};
