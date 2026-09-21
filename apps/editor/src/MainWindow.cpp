@@ -1118,14 +1118,11 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	ClearPluginPanels();
 
-	// A manager resolves every path against one Data root, so a new project needs a new one. The
-	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
 		m_Thumbnails->SetStore(nullptr);
 	ClearEditorPanels();
 
-	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
-	// thread like any other scene mutation -- the viewports are still drawing at this point.
+	// Panel teardown drains render work before the borrowed manager is released on its thread.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
 	m_Project          = std::make_unique<assetlib::Project>(std::move(project));

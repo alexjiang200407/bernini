@@ -50,6 +50,9 @@
 #include <QModelIndex>
 #include <QPointer>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSplitter>
 #include <QString>
 #include <QStringList>
 #include <QTabBar>
@@ -200,6 +203,21 @@ namespace
 		return named == actions.end() ? nullptr : *named;
 	}
 
+	void
+	ObserveViewportTeardown(MainWindow& window, QObject& observer, std::vector<fs::path>& roots)
+	{
+		for (auto* view : window.findChildren<RenderTargetWindow*>())
+		{
+			game::AssetManager* assets = nullptr;
+			view->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				assets = &context.assets;
+			});
+			QObject::connect(view, &QObject::destroyed, &observer, [assets, &roots] {
+				roots.push_back(assets->GetStore().GetDataRoot());
+			});
+		}
+	}
+
 	/** A panel nobody listed anywhere, to prove the walk finds one. */
 	class SpyPanel : public QObject, public editor::IFollowsProject
 	{
@@ -347,6 +365,9 @@ TEST_CASE(
 	const auto baseline = sceneSlots();
 	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
 	{
+		std::vector<fs::path> releasedRoots;
+		QObject               teardownObserver;
+		ObserveViewportTeardown(window, teardownObserver, releasedRoots);
 		material                  = window.findChild<MaterialEditorWindow*>();
 		animation                 = window.findChild<AnimationEditorWindow*>();
 		blend                     = window.findChild<BlendSpaceEditorWindow*>();
@@ -395,6 +416,9 @@ TEST_CASE(
 		CHECK(material.isNull());
 		CHECK(animation.isNull());
 		CHECK(blend.isNull());
+		REQUIRE(releasedRoots.size() == c_ViewportCount);
+		for (const auto& root : releasedRoots)
+			CHECK(root == (replacementIndex == 0 ? first.DataRoot() : second.DataRoot()));
 		auto* replacement = window.findChild<MaterialEditorWindow*>();
 		REQUIRE(replacement != nullptr);
 		CHECK(replacement->GetDataRoot() == second.DataRoot());
@@ -418,9 +442,12 @@ TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][
 	const HeadlessEditor editor;
 
 	std::vector<QPointer<RenderTargetWindow>> viewports;
+	std::vector<fs::path>                     releasedRoots;
+	QObject                                   teardownObserver;
 
 	{
 		auto window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+		ObserveViewportTeardown(*window, teardownObserver, releasedRoots);
 
 		for (RenderTargetWindow* view : window->findChildren<RenderTargetWindow*>())
 			viewports.emplace_back(view);
@@ -436,6 +463,8 @@ TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][
 	// The QPointers are the part that can fail cleanly: a viewport that survives its window without
 	// touching the Renderer leaves one non-null rather than crashing.
 	for (const QPointer<RenderTargetWindow>& view : viewports) CHECK(view.isNull());
+	REQUIRE(releasedRoots.size() == c_ViewportCount);
+	for (const auto& root : releasedRoots) CHECK(root == editor.DataRoot());
 }
 
 TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][render]")
@@ -831,6 +860,32 @@ TEST_CASE(
 	for (int i = 0; i < surfaces->count(); ++i) tabs << surfaces->tabText(i);
 
 	CHECK(tabs == QStringList({ QStringLiteral("Clip"), QStringLiteral("Blend") }));
+}
+
+TEST_CASE(
+	"Animation properties fit beside a visible scrollbar",
+	"[mainwindow][animation][layout][render]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(nullptr, editor.ConfigFile());
+	window.resize(1200, 700);
+	window.show();
+	auto* dock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	REQUIRE(dock != nullptr);
+	dock->show();
+	dock->raise();
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	auto* scroll   = animation->findChild<QScrollArea*>();
+	auto* splitter = animation->findChild<QSplitter*>();
+	REQUIRE(scroll != nullptr);
+	REQUIRE(splitter != nullptr);
+	scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	splitter->setSizes({ scroll->minimumWidth(), 1000 });
+	QCoreApplication::processEvents();
+	REQUIRE(scroll->verticalScrollBar()->isVisible());
+	CHECK(scroll->widget()->width() <= scroll->viewport()->width());
+	CHECK(scroll->horizontalScrollBar()->maximum() == 0);
 }
 
 TEST_CASE(

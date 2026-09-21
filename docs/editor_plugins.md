@@ -156,6 +156,10 @@ The built-in Material, Animation and Blend Space panels follow the same project 
 empty editor allocates no preview viewports, and project replacement destroys the old panels before
 releasing their asset manager. New viewports retain the current Render-menu overrides. Preview teardown stops rendering and
 releases owned geometry, materials and environment maps from the persistent scene.
+The built-in descriptors borrow their renderer and asset manager without an expiry check. Their
+owner must destroy the panels synchronously before either service; a non-null pointer alone does
+not prove it is live. Viewport destruction drains queued render work before returning. Replacement
+and shutdown tests exercise both services through the end of viewport teardown.
 
 ## Risky contracts
 

@@ -38,6 +38,7 @@ class QToolButton;
 
 struct AnimationEditorWindowDesc
 {
+	// Borrowed services must outlive the panel, including its preview's render-thread teardown.
 	Renderer*                    renderer                = nullptr;
 	game::AssetManager*          assets                  = nullptr;
 	uint32_t                     initialPreviewInstances = 16;

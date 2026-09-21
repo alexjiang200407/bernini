@@ -30,6 +30,7 @@ namespace game
 
 struct RenderTargetWindowDesc
 {
+	// Borrowed services must outlive the viewport; destruction drains its pending render work.
 	Renderer*           renderer         = nullptr;
 	game::AssetManager* assets           = nullptr;
 	uint32_t            initialInstances = 0;
