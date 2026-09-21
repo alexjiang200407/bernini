@@ -1407,8 +1407,8 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		return;
 	if (const auto found = m_PluginDocks.find(std::string(id)); found != m_PluginDocks.end())
 	{
-		found->second->show();
-		found->second->raise();
+		found->second.dock->show();
+		found->second.dock->raise();
 		return;
 	}
 
@@ -1434,7 +1434,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
 		panel->SetActive(editor::IsPanelShown(visible, this));
 	});
-	m_PluginDocks.emplace(desc->id, dock);
+	m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
 	static_cast<void>(dockOwner.release());
 	dock->show();
 	dock->raise();
@@ -1458,7 +1458,7 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 		QDockWidget* dock = nullptr;
 		if (const auto found = m_PluginDocks.find(desc->id); found != m_PluginDocks.end())
 		{
-			dock = found->second;
+			dock = found->second.dock;
 		}
 		else
 		{
@@ -1485,7 +1485,7 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 				[this, panel](const bool visible) {
 					panel->SetActive(editor::IsPanelShown(visible, this));
 				});
-			m_PluginDocks.emplace(desc->id, dock);
+			m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
 			static_cast<void>(dockOwner.release());
 		}
 
@@ -1510,7 +1510,7 @@ MainWindow::CanClosePluginPanels()
 	for (const auto& [id, dock] : m_PluginDocks)
 	{
 		static_cast<void>(id);
-		if (auto* panel = dynamic_cast<editor::EditorPanel*>(dock->widget()); panel != nullptr)
+		if (auto* panel = dock.panel.data(); panel != nullptr)
 		{
 			try
 			{
@@ -1532,8 +1532,14 @@ MainWindow::ClearPluginPanels()
 {
 	for (const auto& [id, dock] : m_PluginDocks)
 	{
-		static_cast<void>(id);
-		delete dock;
+		delete dock.dock;
+		if (dock.panel != nullptr)
+		{
+			qWarning(
+				"Plugin panel '%s' survived dock teardown; deleting it before project services",
+				id.c_str());
+			delete dock.panel.data();
+		}
 	}
 	m_PluginDocks.clear();
 	m_EditorHost.reset();

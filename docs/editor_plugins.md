@@ -149,7 +149,8 @@ the current host toggles. TAA availability is refreshed when the Render menu ope
 The module stays loaded until process exit. Its plugin object outlives its descriptors and kinds;
 those outlive all callbacks and panels using them. On project close, ask all panels `CanClose`
 first; any refusal keeps the project alive. Then destroy panels and their viewport children and
-join plugin work while the old host still exists. Destroy the host last. On another project, create
+join plugin work while the old host still exists. The host tracks returned panels with guarded pointers; a panel that survives dock teardown is
+logged by contribution ID and deleted before project services. Destroy the host last. On another project, create
 new panels against a new host; do not silently retarget stored references to old services.
 
 ## Risky contracts

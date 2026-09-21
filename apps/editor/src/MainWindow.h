@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QString>
 
 #include <assetlib/Project.h>
@@ -233,9 +234,15 @@ private:
 
 	std::filesystem::path m_RelaunchProject;
 
+	struct PluginDock
+	{
+		QDockWidget*                  dock;
+		QPointer<editor::EditorPanel> panel;
+	};
+
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
-	std::unordered_map<std::string, QDockWidget*>   m_PluginDocks;
+	std::unordered_map<std::string, PluginDock>     m_PluginDocks;
 	std::unique_ptr<assetlib::Project>              m_Project;
 	ContentExplorerWindow*                          m_ContentExplorer      = nullptr;
 	MaterialEditorWindow*                           m_MaterialEditor       = nullptr;

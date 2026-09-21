@@ -226,6 +226,11 @@ TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][pl
 				panel = candidate;
 		REQUIRE(panel != nullptr);
 		CHECK(panel->parentWidget()->objectName() == "sample.fixture_panel");
+		SECTION("Normal Qt ownership") {}
+		SECTION("A reparented panel is reclaimed before its host dies")
+		{
+			panel->setParent(nullptr);
+		}
 	}
 	CHECK(panel.isNull());
 }
