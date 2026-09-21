@@ -8,6 +8,7 @@ find_package(Qt6 CONFIG REQUIRED COMPONENTS Test)
 file(GLOB_RECURSE EDITOR_TESTS_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+	${BERNINI_ROOT}/plugins/default_editor/tests/*.cpp
 )
 
 # Not qt_add_executable: that would apply WIN32_EXECUTABLE-style finalization, and a test binary
@@ -24,6 +25,7 @@ set_target_properties(editor_tests PROPERTIES
 
 target_include_directories(editor_tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/src
+	${BERNINI_ROOT}/plugins/default_editor/src
 )
 
 # editor_lib carries the editor's own objects, its include dirs, its PCH and its Qt/bgl/assetlib link
@@ -36,6 +38,7 @@ target_link_libraries(editor_tests PRIVATE
 	editor_plugin_example
 	Catch2::Catch2
 	Qt6::Test
+	QtNodes::QtNodes
 )
 
 if(BERNINI_EDITOR_SDK)
@@ -96,4 +99,4 @@ if(TARGET Qt6::QOffscreenIntegrationPlugin)
 	endif()
 endif()
 
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${EDITOR_TESTS_SOURCES})
+source_group(TREE "${BERNINI_ROOT}" PREFIX "Source Files" FILES ${EDITOR_TESTS_SOURCES})

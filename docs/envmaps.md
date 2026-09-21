@@ -311,7 +311,7 @@ orbits — lighting and backdrop alike, since both read the one rotation. It is 
 Preview does with World Space Lighting off, and what the asset previews want; a viewport judged on
 the world keeps it locked. `SkyboxDesc::opacity` and `backdrop` fade the backdrop toward a
 scene-linear grey without touching the lighting, Blender's World Opacity. In the editor both are the viewport's
-`SkyPresentation` ([apps/editor/src/Render/environment.h](apps/editor/src/Render/environment.h)),
+`SkyPresentation` ([environment.h](../libs/editor_sdk/include/editor_sdk/environment.h)),
 defaulted to that look for the material and animation previews and the thumbnails, and set per
 viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, `followView`.
 `EnvOrientation_test` pins that a following sky keeps its lit side on screen from either side of the

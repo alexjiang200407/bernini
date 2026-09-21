@@ -4,12 +4,12 @@
 #include <QThreadPool>
 
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include "util/held_open_assets.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/environment.h>
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>

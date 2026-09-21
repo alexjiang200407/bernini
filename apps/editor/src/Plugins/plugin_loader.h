@@ -44,7 +44,8 @@ namespace editor::plugins
 			std::span<const std::filesystem::path> configuredDirectories,
 			const BuildIdentity&                   build,
 			const std::filesystem::path&           pluginCopyRoot,
-			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault);
+			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault,
+			EditorPluginPtr      builtIn  = {});
 
 		[[nodiscard]] const std::vector<std::string>&
 		Ids() const noexcept;

@@ -1,6 +1,5 @@
 #include "BlendSpaceEditorWindow.h"
 
-#include "Render/environment.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/GroundControls.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
@@ -9,6 +8,7 @@
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <editor_sdk/asset_paths.h>
+#include <editor_sdk/environment.h>
 #include <editor_sdk/mime_files.h>
 
 #include <QComboBox>

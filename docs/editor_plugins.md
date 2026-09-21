@@ -12,7 +12,7 @@ and fix the map.
 ## Design choices
 
 - **Optional shared Qt support.** `Bernini::editor_sdk` exports the loading-screen runner,
-  CPU texture-preview caches, mesh placement helpers and asset path/drag helpers used by the host
+  CPU texture-preview caches, camera/environment, mesh loading, material baking and asset path/drag helpers used by the host
   and editor modules. It links Qt Widgets, assetlib and the bgl contract, with no renderer or host
   implementation dependency. SDK builds share one library, including its Qt meta-objects; other
   editor builds link it statically. It adds no panel or project lifecycle contract.
@@ -75,6 +75,11 @@ and fix the map.
 | CPU preview caches | [TexturePreviewCache.h](../libs/editor_sdk/include/editor_sdk/TexturePreviewCache.h), [StampedPixmapCache.h](../libs/editor_sdk/include/editor_sdk/StampedPixmapCache.h) | Per-object decode and file-stamp cache state; no GPU ownership |
 | Asset UI helpers | [asset_paths.h](../libs/editor_sdk/include/editor_sdk/asset_paths.h), [source_mesh.h](../libs/editor_sdk/include/editor_sdk/source_mesh.h), [mime_files.h](../libs/editor_sdk/include/editor_sdk/mime_files.h), [mesh_drop.h](../libs/editor_sdk/include/editor_sdk/mesh_drop.h) | Path containment, imported-source lookup and Qt drag payloads |
 | Mesh placement | [BMeshUtil.h](../libs/editor_sdk/include/editor_sdk/BMeshUtil.h) | Node transforms and bounds, without renderer state |
+| Preview interaction | [OrbitCamera.h](../libs/editor_sdk/include/editor_sdk/OrbitCamera.h) | Orbit, pan and dolly camera policy |
+| Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
+| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Supplied project store with a plain-file fallback for external meshes |
+| Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
+| Default plugin | [plugin.h](../plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
 `EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
@@ -112,6 +117,19 @@ flowchart TD
 
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
+
+`plugins/default_editor` owns the Material editor, its graph nodes and the glTF material-graph
+writer. It is a statically linked module registered through the same registry before local modules;
+its target has no editor-host implementation include path. The host supplies configuration by value
+and opens `bernini.material` once the project host exists. Animation and Blend Space remain concrete
+host panels until their migration. The target-public `default_editor/import_writers.h` lets the
+host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.
+
+Material composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
+resize events to plugin-owned interaction. The host retains render scheduling and presentation.
+Material borrows the project store for asset operations; an explicitly configured environment from
+another asset root uses its own external store. Content Explorer and rig-editor bakes report
+`AssetChanged`; Material invalidates its cached disk state without replacing unsaved graphs.
 
 ## Local loading
 
@@ -188,7 +206,8 @@ The built-in Material, Animation and Blend Space panels follow the same project 
 empty editor allocates no preview viewports, and project replacement destroys the old panels before
 releasing their asset manager. New viewports retain the current Render-menu overrides. Preview teardown stops rendering and
 releases owned geometry, materials and environment maps from the persistent scene.
-The built-in descriptors borrow their renderer and asset manager without an expiry check. Their
+Material uses an owned panel factory and borrows `IEditorHost`. The remaining rig descriptors
+borrow their renderer and asset manager without an expiry check. Their
 owner must destroy the panels synchronously before either service; a non-null pointer alone does
 not prove it is live. Viewport destruction drains queued render work before returning. Replacement
 and shutdown tests exercise both services through the end of viewport teardown.

@@ -312,7 +312,8 @@ namespace editor::plugins
 		std::span<const std::filesystem::path> configuredDirectories,
 		const BuildIdentity&                   build,
 		const std::filesystem::path&           pluginCopyRoot,
-		PluginBinaryCopyMode                   copyMode)
+		PluginBinaryCopyMode                   copyMode,
+		EditorPluginPtr                        builtIn)
 	{
 		core::str::unordered_str_map<Descriptor> available;
 		for (const std::filesystem::path& directory : configuredDirectories)
@@ -336,7 +337,13 @@ namespace editor::plugins
 			selected.push_back(found->second);
 		}
 
-		PluginSession                              session;
+		PluginSession session;
+		if (builtIn)
+		{
+			session.m_Impl->editorPlugins.push_back(std::move(builtIn));
+			session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
+		}
+
 		std::map<std::filesystem::path, QLibrary*> loadedModules;
 		const auto loadModule = [&](const std::filesystem::path& path) -> QLibrary& {
 			const std::filesystem::path normalized = path.lexically_normal();

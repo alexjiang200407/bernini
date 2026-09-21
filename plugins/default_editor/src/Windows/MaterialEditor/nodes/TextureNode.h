@@ -1,0 +1,115 @@
+#pragma once
+
+#include <QPixmap>
+#include <QtNodes/NodeDelegateModel>
+#include <memory>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <bgl/TextureAssetHandle.h>
+
+class QLabel;
+class TexturePreviewCache;
+namespace editor
+{
+	class IEditorHost;
+}
+
+class TextureNode : public QtNodes::NodeDelegateModel
+{
+	Q_OBJECT
+
+public:
+	// Ports 0..2 are the RGBA / RGB / RG bundles; ports 3..6 are the scalar R / G / B / A channels;
+	// port 7 is the whole texture, for a surface slot -- bound, never routed.
+	static constexpr unsigned int c_BundleCount  = 3;
+	static constexpr unsigned int c_ChannelCount = 4;
+	static constexpr unsigned int c_TexturePort  = c_BundleCount + c_ChannelCount;
+	static constexpr unsigned int c_PortCount    = c_TexturePort + 1;
+
+	// `previews` may be null when the editor runs without graphics; the node then shows no image.
+	TextureNode(editor::IEditorHost* host, TexturePreviewCache* previews);
+
+	QString
+	caption() const override
+	{
+		return m_Caption;
+	}
+
+	QString
+	name() const override
+	{
+		return QStringLiteral("Texture");
+	}
+
+	unsigned int
+	nPorts(QtNodes::PortType portType) const override
+	{
+		return portType == QtNodes::PortType::Out ? c_PortCount : 0u;
+	}
+
+	QtNodes::NodeDataType
+	dataType(QtNodes::PortType, QtNodes::PortIndex port) const override
+	{
+		if (static_cast<unsigned int>(port) == c_TexturePort)
+			return SurfaceTextureData::Type();
+		return ChannelData::Type(ArityOf(port));
+	}
+
+	// The channel width of a bundle or scalar port; the whole-texture port never asks.
+	[[nodiscard]] static unsigned int
+	ArityOf(QtNodes::PortIndex port) noexcept
+	{
+		const auto index = static_cast<unsigned int>(port);
+		return index < c_BundleCount ? ChannelData::c_MaxChannels - index : 1u;
+	}
+
+	std::shared_ptr<QtNodes::NodeData>
+	outData(QtNodes::PortIndex port) override;
+
+	void
+	setInData(std::shared_ptr<QtNodes::NodeData>, QtNodes::PortIndex) override
+	{}
+
+	QWidget*
+	embeddedWidget() override;
+
+	QString
+	portCaption(QtNodes::PortType, QtNodes::PortIndex port) const override;
+
+	bool
+	portCaptionVisible(QtNodes::PortType, QtNodes::PortIndex) const override
+	{
+		return true;
+	}
+
+	QJsonObject
+	save() const override;
+	void
+	load(const QJsonObject& json) override;
+
+	void
+	SetTexturePath(const QString& path);
+
+private:
+	// Paints m_Preview into m_PreviewLabel, scaled to fit and centred. No-op before either exists.
+	void
+	RefreshPreview();
+
+	editor::IEditorHost*    m_Host     = nullptr;
+	TexturePreviewCache*    m_Previews = nullptr;
+	QString                 m_Path;
+	QString                 m_Caption = QStringLiteral("Texture");
+	bgl::TextureAssetHandle m_Texture;
+
+	QLabel* m_PreviewLabel = nullptr;
+	QPixmap m_Preview;
+};

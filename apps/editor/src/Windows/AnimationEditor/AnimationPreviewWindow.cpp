@@ -1,17 +1,15 @@
 #include "AnimationPreviewWindow.h"
 
-#include "Mesh/mesh_load.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
+#include <editor_sdk/mesh_load.h>
 
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/blob_shadow.h"
 #include "Windows/AnimationEditor/ground_slope.h"
-#include "Windows/MaterialEditor/material_io.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <assetlib_structs/Mesh.h>
 #include <bgl/IScene.h>
@@ -21,6 +19,8 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/environment.h>
+#include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_drop.h>
 #include <editor_sdk/mime_files.h>
 #include <gamelib/BlendSpaceInfo.h>
@@ -89,13 +89,23 @@ AnimationPreviewWindow::AnimationPreviewWindow(
 	GetRenderer()->Invoke([&] {
 		bgl::IScene* scene = GetPreviewScene();
 
-		editor::BindEnvironment(
-			scene,
-			GetPreviewView(),
-			m_Environment,
-			m_Environment.configured.environmentMap,
-			m_Environment.configured.dataRoot,
-			"AnimationPreview");
+		if (!m_Environment.configured.environmentMap.empty())
+		{
+			try
+			{
+				editor::BindEnvironment(
+					scene,
+					GetPreviewView(),
+					m_Environment,
+					m_Environment.configured.environmentMap,
+					assetlib::AssetStore(m_Environment.configured.dataRoot),
+					"AnimationPreview");
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Configured environment could not be loaded: %s", error.what());
+			}
+		}
 
 		// Matte and mid-grey, so a sole meeting it reads against it rather than into it. Wide
 		// enough that a clip with root motion does not walk off the edge.
@@ -460,7 +470,7 @@ AnimationPreviewWindow::LoadMesh(
 		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
-			mesh = editor::LoadMeshThroughSeam(m_DataRoot, absolutePath);
+			mesh = editor::LoadMeshThroughSeam(m_Assets->GetStore(), absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 
@@ -850,7 +860,9 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QStringLiteral("Baking materials"),
-		[&](background::Progress& progress) { editor::BakeMaterials(m_DataRoot, files, progress); },
+		[&](background::Progress& progress) {
+			editor::BakeMaterials(m_Assets->GetStore(), files, progress);
+		},
 		background::Cancellable::kYes);
 
 	if (result.Cancelled())
@@ -1186,7 +1198,7 @@ AnimationPreviewWindow::SetEnvironment(const std::string& benvPath)
 			GetPreviewView(),
 			m_Environment,
 			benvPath,
-			dataRoot,
+			assetlib::AssetStore(dataRoot),
 			"AnimationPreview");
 	});
 }
@@ -1199,13 +1211,23 @@ AnimationPreviewWindow::RestoreConfiguredEnvironment()
 		return;
 
 	GetRenderer()->Invoke([&] {
-		editor::BindEnvironment(
-			GetPreviewScene(),
-			GetPreviewView(),
-			m_Environment,
-			*restore,
-			m_Environment.configured.dataRoot,
-			"AnimationPreview");
+		if (!m_Environment.configured.environmentMap.empty())
+		{
+			try
+			{
+				editor::BindEnvironment(
+					GetPreviewScene(),
+					GetPreviewView(),
+					m_Environment,
+					*restore,
+					assetlib::AssetStore(m_Environment.configured.dataRoot),
+					"AnimationPreview");
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Configured environment could not be loaded: %s", error.what());
+			}
+		}
 	});
 }
 

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Render/OrbitCamera.h"
-#include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/held_open_assets.h"
+#include <editor_sdk/OrbitCamera.h>
+#include <editor_sdk/environment.h>
 
 #include <array>
 #include <bgl/GeomHandle.h>

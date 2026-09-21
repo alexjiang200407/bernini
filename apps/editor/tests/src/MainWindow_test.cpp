@@ -37,6 +37,8 @@
 #include <QDir>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QFileDialog>
@@ -48,19 +50,27 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QModelIndex>
+#include <QPoint>
+#include <QPointF>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalSpy>
 #include <QSplitter>
 #include <QString>
 #include <QStringList>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTest>
 #include <QTimer>
+#include <QUrl>
 #include <QVariant>
+#include <QtTest/qtestmouse.h>
+#include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -625,7 +635,7 @@ TEST_CASE(
 	MainWindow window(nullptr, editor.ConfigFile());
 	window.show();
 
-	auto* materialDock  = window.findChild<QDockWidget*>("MaterialEditorDock");
+	auto* materialDock  = window.findChild<QDockWidget*>("bernini.material");
 	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
 	auto* materials     = window.findChild<MaterialEditorWindow*>();
 	auto* preview       = window.findChild<MaterialPreviewWindow*>();
@@ -639,13 +649,11 @@ TEST_CASE(
 	materialDock->raise();
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
-	// apples.bmesh names its materials relative to the shared asset directory, so that is the root
-	// the panel has to resolve them against -- not the scaffolded project's empty one.
+	// An external mesh exercises the plain-file preview without retargeting the project host.
 	const fs::path dataRoot = fs::absolute("assets/Data");
 	const fs::path mesh     = dataRoot / "Derived" / "Meshes" / "apples.bmesh";
 	REQUIRE(fs::exists(mesh));
 
-	materials->SetDataRoot(QString::fromStdString(dataRoot.string()));
 	preview->LoadMesh(mesh);
 	REQUIRE_FALSE(preview->MeshPath().empty());
 
@@ -1198,4 +1206,138 @@ TEST_CASE(
 			return slider->isVisibleTo(ground);
 		}));
 	}
+}
+
+TEST_CASE(
+	"Material plugin viewport receives native-widget picking input",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(nullptr, editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+	auto* preview = window.findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	CHECK(view->parentWidget() == preview);
+	QSignalSpy picked(preview, &MaterialPreviewWindow::SubmeshPicked);
+	QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->rect().center());
+	REQUIRE(picked.count() == 1);
+	CHECK(picked.front().front().toInt() == 0);
+}
+
+TEST_CASE(
+	"Material retains its configured project environment without an explicit data root",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	const auto           configured = editor.DataRoot() / "Authored/Environments/pending.benv";
+	std::ofstream(editor.ConfigFile()) << nlohmann::json{
+		{ "headless", true },
+		{ "startupProject", editor.ProjectFile().generic_string() },
+		{ "materialEditor",
+		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } },
+		{ "animationEditor", { { "temporalAA", false }, { "environmentMap", "" } } }
+	}.dump(2);
+	MainWindow window(nullptr, editor.ConfigFile());
+	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(panel != nullptr);
+	auto* preview = panel->findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	const std::vector<std::string> expected{ "Authored/Environments/pending.benv" };
+	// An unavailable environment remains held while the user repairs its files.
+	CHECK(panel->GetHeldAssets() == expected);
+	QMimeData mime;
+	mime.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString(
+				(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(view, &enter);
+	REQUIRE(enter.isAccepted());
+	QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(view, &drop);
+	REQUIRE(drop.isAccepted());
+	CHECK(
+		panel->GetHeldAssets() == std::vector<std::string>{ "Authored/Environments/dropped.benv" });
+	panel->Reset();
+	CHECK(panel->GetHeldAssets() == expected);
+}
+
+TEST_CASE(
+	"An explorer bake refreshes the registered Material panel",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       material = assetlib::BMaterial();
+	material.name                       = "Notification";
+	material.pbr.baseColorTexture       = "Derived/BakedTextures/before.ktx2";
+	const std::string key               = "Authored/Materials/notification.bmaterial";
+	store.Save(material, key);
+	MainWindow window(nullptr, editor.ConfigFile());
+	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(panel != nullptr);
+	REQUIRE(dynamic_cast<editor::EditorPanel*>(panel) != nullptr);
+	QPushButton* open = nullptr;
+	for (auto* button : panel->findChildren<QPushButton*>())
+		if (button->text() == "Open...")
+			open = button;
+	REQUIRE(open != nullptr);
+	REQUIRE(open->isEnabled());
+	const bool nativeDisabled = QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+	QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+	QTimer        chooser;
+	QElapsedTimer deadline;
+	deadline.start();
+	bool selected = false;
+	QObject::connect(&chooser, &QTimer::timeout, &window, [&] {
+		for (auto* widget : QApplication::topLevelWidgets())
+		{
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->reject();
+			if (auto* dialog = qobject_cast<QFileDialog*>(widget))
+			{
+				if (deadline.elapsed() > 10000)
+				{
+					dialog->reject();
+					continue;
+				}
+				if (auto* name = dialog->findChild<QLineEdit*>("fileNameEdit"))
+				{
+					name->setText(QString::fromStdString(store.ResolveWritePath(key).string()));
+					selected = true;
+					static_cast<QDialog*>(dialog)->accept();
+				}
+			}
+		}
+	});
+	chooser.start(10);
+	open->click();
+	chooser.stop();
+	QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs, nativeDisabled);
+	REQUIRE(selected);
+	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
+	const auto shows = [panel](const QString& text) {
+		for (auto* label : panel->findChildren<QLabel*>())
+			if (label->text().contains(text))
+				return true;
+		return false;
+	};
+	REQUIRE(shows("before.ktx2"));
+	const auto file               = store.ResolveWritePath(key);
+	const auto stamp              = fs::last_write_time(file);
+	material.pbr.baseColorTexture = "Derived/BakedTextures/after.ktx2";
+	store.Save(material, key);
+	fs::last_write_time(file, stamp);
+	CHECK_FALSE(shows("after.ktx2"));
+	auto* explorer = window.findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+	Q_EMIT explorer->MaterialBaked(QString::fromStdString(key));
+	QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+	CHECK(shows("after.ktx2"));
+	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
 }
