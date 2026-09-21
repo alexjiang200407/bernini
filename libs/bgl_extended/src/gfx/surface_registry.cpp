@@ -93,7 +93,8 @@ namespace bgl
 		}
 
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
-		// kinds; it shadows programs/forward/Transparent.slang, which is this with no arms.
+		// kinds -- the arm's function picked by the surface's contract; it shadows
+		// programs/forward/Transparent.slang, which is this with no arms.
 		std::string
 		TransparentProgramSource(const std::span<const SurfaceType> types)
 		{
@@ -104,9 +105,11 @@ namespace bgl
 				imports += std::format("import {};\n", BindingModuleName(slot));
 				arms += std::format(
 					"    case {}u:\n        return "
-					"materialData.ShadeGameBlended<Slot{}Surface>(input, "
+					"materialData.{}<Slot{}Surface>(input, "
 					"isFrontFace);\n",
 					static_cast<uint32_t>(types[slot].kind),
+					types[slot].shading == SurfaceShading::kLit ? "ShadeGameLitBlended" :
+																  "ShadeGameBlended",
 					slot);
 			}
 
@@ -125,10 +128,11 @@ namespace bgl
 		}
 
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
-		// program, and the static depth pass's coverage twins. Named by the draw-bucket config, so the
-		// names generated here are the names the passes build.
+		// program, and the static depth pass's coverage twins -- the lit family where the surface
+		// owns its lighting. Named by the draw-bucket config, so the names generated here are the
+		// names the passes build.
 		std::vector<SlangSourceModule>
-		SurfacePrograms(uint32_t slot, MaterialType kind)
+		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
 		{
 			const auto colour = [kind](LayerType layer) {
 				return DrawBucketPixelSrc(DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
@@ -137,23 +141,34 @@ namespace bgl
 				return DrawBucketCoveragePixelSrc(
 					DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
 			};
+			const bool lit = shading == SurfaceShading::kLit;
 
 			// Entry programs nothing imports, so each loads only when a draw bucket builds it.
 			return {
 				{ colour(LayerType::kOpaque),
-				  ColorProgramSource(slot, "GameOpaqueProgram"),
+				  ColorProgramSource(slot, lit ? "GameLitOpaqueProgram" : "GameOpaqueProgram"),
 				  false },
 				{ colour(LayerType::kMask),
-				  ColorProgramSource(slot, "GameAlphaTestedProgram"),
+				  ColorProgramSource(
+					  slot,
+					  lit ? "GameLitAlphaTestedProgram" : "GameAlphaTestedProgram"),
 				  false },
 				{ colour(LayerType::kHashed),
-				  ColorProgramSource(slot, "GameHashedAlphaProgram"),
+				  ColorProgramSource(
+					  slot,
+					  lit ? "GameLitHashedAlphaProgram" : "GameHashedAlphaProgram"),
 				  false },
 				{ coverage(LayerType::kMask),
-				  CoverageProgramSource(slot, "DiscardUncoveredGameAlphaTested"),
+				  CoverageProgramSource(
+					  slot,
+					  lit ? "DiscardUncoveredGameLitAlphaTested" :
+							"DiscardUncoveredGameAlphaTested"),
 				  false },
 				{ coverage(LayerType::kHashed),
-				  CoverageProgramSource(slot, "DiscardUncoveredGameHashedAlpha"),
+				  CoverageProgramSource(
+					  slot,
+					  lit ? "DiscardUncoveredGameLitHashedAlpha" :
+							"DiscardUncoveredGameHashedAlpha"),
 				  false },
 			};
 		}
@@ -223,18 +238,6 @@ namespace bgl
 				continue;
 			}
 
-			// The lit contract reflects but nothing draws it yet: refused here so the failure is
-			// this message, not a compile error inside a generated program calling Evaluate on a
-			// struct that declared Shade.
-			if (reflected->type.shading == SurfaceShading::kLit)
-			{
-				throw ApiError(
-					std::format(
-						"surface '{}' owns its lighting (ILitSurfaceSource), which this renderer "
-						"cannot draw yet",
-						stem));
-			}
-
 			// Past this not even one draw bucket each could exist beside the unlit fallback's.
 			if (types.size() == c_MaxSurfaces)
 			{
@@ -261,7 +264,8 @@ namespace bgl
 				{ BindingModuleName(slot),
 			      BindingModuleSource(slot, types[slot].name, sourceTypes[slot]) });
 
-			for (const SlangSourceModule& program : SurfacePrograms(slot, types[slot].kind))
+			for (const SlangSourceModule& program :
+			     SurfacePrograms(slot, types[slot].kind, types[slot].shading))
 			{
 				device.AddSourceModule(program);
 			}
