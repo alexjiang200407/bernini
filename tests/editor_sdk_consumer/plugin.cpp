@@ -1,6 +1,10 @@
+#include <QLabel>
+#include <QLineEdit>
 #include <QObject>
+#include <QPushButton>
 #include <QString>
 #include <QVBoxLayout>
+#include <QVariant>
 #include <QWidget>
 #include <RmlUi/Core/Context.h>
 #include <assetlib/AssetStore.h>
@@ -25,6 +29,8 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #if defined(_WIN32)
@@ -111,9 +117,65 @@ namespace
 			return new Panel(host, parent);
 		}
 	};
+	class NotificationFactory final : public editor::IEditorPanelFactory
+	{
+	public:
+		editor::EditorPanel*
+		Create(editor::IEditorHost& host, QWidget* parent) override
+		{
+			class Panel final : public editor::EditorPanel
+			{
+			public:
+				Panel(editor::IEditorHost& host, QWidget* parent) :
+					EditorPanel(parent), m_Host(host)
+				{
+					auto* layout  = new QVBoxLayout(this);
+					m_Key         = new QLineEdit("Authored/change.bfixture", this);
+					m_Last        = new QLabel(this);
+					auto* publish = new QPushButton("Publish", this);
+					layout->addWidget(m_Key);
+					layout->addWidget(m_Last);
+					layout->addWidget(publish);
+					connect(publish, &QPushButton::clicked, this, [this] {
+						m_Host.AssetChanged(m_Key->text().toStdString());
+					});
+					setProperty("notificationCount", 0);
+				}
+				std::vector<std::string>
+				GetHeldAssets() const override
+				{
+					return {};
+				}
+				bool
+				CanClose() override
+				{
+					return true;
+				}
+				void
+				SetActive(bool) override
+				{}
+				void
+				OnAssetChanged(std::string_view key) override
+				{
+					if (property("throwOnChange").toBool())
+						throw std::runtime_error("fixture notification failed");
+					m_Last->setText(
+						QString::fromUtf8(key.data(), static_cast<qsizetype>(key.size())));
+					setProperty("notificationCount", property("notificationCount").toInt() + 1);
+				}
+
+			private:
+				editor::IEditorHost& m_Host;
+				QLineEdit*           m_Key;
+				QLabel*              m_Last;
+			};
+			return new Panel(host, parent);
+		}
+	};
 	class ShowPanelAction final : public editor::IEditorAction
 	{
 	public:
+		explicit ShowPanelAction(std::string id = "sample.fixture_panel") : m_Id(std::move(id)) {}
 		bool
 		IsEnabled(editor::IEditorHost&, std::span<const std::string>) const override
 		{
@@ -122,8 +184,11 @@ namespace
 		void
 		Invoke(editor::IEditorHost& host, std::span<const std::string>) override
 		{
-			host.ShowPanel("sample.fixture_panel");
+			host.ShowPanel(m_Id);
 		}
+
+	private:
+		std::string m_Id;
 	};
 	class ThrowingFactory final : public editor::IAssetEditorFactory
 	{
@@ -153,6 +218,21 @@ namespace
 					.SetTitle({ "sample.fixture", "panel", "Fixture Panel" })
 					.SetMenuId(std::string(editor::c_ToolsMenuId))
 					.AddAction<ShowPanelAction>());
+			for (const std::string id :
+			     { "sample.observer_one", "sample.observer_two", "sample.observer_late" })
+			{
+				registry.AddPanel(
+					editor::PanelDesc()
+						.SetId(id)
+						.SetTitle({ "sample.fixture", "observer", id.c_str() })
+						.AddFactory<NotificationFactory>());
+				registry.AddAction(
+					editor::ActionDesc()
+						.SetId(id)
+						.SetTitle({ "sample.fixture", "observer", id.c_str() })
+						.SetMenuId(std::string(editor::c_ToolsMenuId))
+						.AddAction<ShowPanelAction>(id));
+			}
 			registry.AddAssetEditor(
 				editor::AssetEditorDesc()
 					.SetId("sample.throwing_editor")

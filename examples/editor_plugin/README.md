@@ -29,3 +29,6 @@ Factories and actions are explicit contribution objects constructed by descripto
 `ActionDesc().SetId("sample.open").AddAction<OpenPanelAction>("sample.overview")`. The registry owns
 them; configuration such as the panel ID is stored by value. The current project host is supplied
 at invocation rather than cached at registration.
+
+The document panel overrides `OnAssetChanged` to display the changed key when it matches its selected
+document, without reopening it. Unrelated keys are ignored; the general tab keeps the default no-op handler.
