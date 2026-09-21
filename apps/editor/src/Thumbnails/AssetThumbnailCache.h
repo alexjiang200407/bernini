@@ -83,21 +83,9 @@ public:
 	[[nodiscard]] QStringList
 	GetHeldOpenPaths() const override;
 
-	/**
-	 * Points the cache at the editor's asset manager, which owns the project's Data root. Null (the
-	 * default, and what a closed project means) leaves materials unresolvable, so they get no
-	 * thumbnail and every mesh draws in the neutral default.
-	 *
-	 * Borrowed, not owned, and never acquired through: the cache builds a private manager over the
-	 * same scene, because its texture uploads are mip-capped to the thumbnail's size and the shared
-	 * manager keys textures by path -- a capped upload registered there would be served to a
-	 * viewport asking for the same texture at full resolution. It must outlive this cache.
-	 *
-	 * Drops everything already rendered, and everything queued or mid-render: all of it was made
-	 * against the manager being replaced.
-	 */
+	/** Borrowed until replaced; drains old work before returning. Null closes the project. */
 	void
-	SetAssets(game::AssetManager* assets, const assetlib::AssetStore* store = nullptr);
+	SetStore(const assetlib::AssetStore* store);
 
 	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
 	void
@@ -293,9 +281,7 @@ private:
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 
-	// The project's manager, kept for its data root -- see SetAssets. Null until a project is open.
-	game::AssetManager*         m_Assets = nullptr;
-	const assetlib::AssetStore* m_Store  = nullptr;
+	const assetlib::AssetStore* m_Store = nullptr;
 
 	// What the cache actually acquires through: a manager of its own over the shared scene, so its
 	// mip-capped texture uploads never sit in the shared cache under the path a viewport would ask

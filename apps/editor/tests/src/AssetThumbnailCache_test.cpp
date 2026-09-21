@@ -91,6 +91,7 @@ namespace
 	// MainWindow's does) and the editor's shared asset manager over that scene.
 	struct Fixture
 	{
+		assetlib::AssetStore              store{ c_DataRoot };
 		std::optional<Renderer>           renderer;
 		std::optional<game::AssetManager> assets;
 
@@ -263,7 +264,7 @@ TEST_CASE("A plugin thumbnail is resolved before the built-in renderer", "[thumb
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
-	cache.SetAssets(&*fixture.assets, &store);
+	cache.SetStore(&store);
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MaterialPath);
@@ -304,7 +305,7 @@ TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugin
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
-	cache.SetAssets(&*fixture.assets, &store);
+	cache.SetStore(&store);
 	cache.Request(c_MaterialPath);
 
 	std::jthread release([&] {
@@ -313,8 +314,8 @@ TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugin
 		released = true;
 		changed.notify_all();
 	});
-	cache.SetAssets(nullptr);
-	cache.SetAssets(&*fixture.assets, &store);
+	cache.SetStore(nullptr);
+	cache.SetStore(&store);
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 	cache.Request(c_MaterialPath);
 
@@ -347,7 +348,7 @@ TEST_CASE(
 		return extension == ".bmesh" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
-	cache.SetAssets(&*fixture.assets, &store);
+	cache.SetStore(&store);
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MeshPath);
@@ -383,7 +384,7 @@ TEST_CASE("A plugin scene thumbnail releases its preview geometry", "[thumbnails
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
-	cache.SetAssets(&*fixture.assets, &store);
+	cache.SetStore(&store);
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	cache.Request(c_MaterialPath);
@@ -399,7 +400,7 @@ TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbna
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	// Nothing has been asked for yet, so nothing is cached.
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
@@ -436,7 +437,7 @@ TEST_CASE(
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
@@ -464,7 +465,7 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
@@ -500,7 +501,7 @@ TEST_CASE("A hashed material thumbnails as a surface rather than as noise", "[th
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	const auto thumbnailOf = [&](const std::string& relative) {
 		QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
@@ -557,7 +558,7 @@ TEST_CASE("Tearing the cache down mid-batch leaves the renderer alive", "[thumbn
 	{
 		AssetThumbnailCache cache(fixture.Desc());
 		REQUIRE(cache.IsReady());
-		cache.SetAssets(&*fixture.assets);
+		cache.SetStore(&fixture.store);
 
 		for (const QString& path : paths) cache.Request(path);
 
@@ -583,28 +584,28 @@ TEST_CASE("A read finishing after its project closed does not land", "[thumbnail
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
 	// No pumping in between: the read is still on the worker when the project closes.
 	cache.Request(hashedFile);
-	cache.SetAssets(nullptr);
+	cache.SetStore(nullptr);
 
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 1000));
 
 	// And the cache still renders once a project is back, so the cancel released everything the
 	// next shot needs.
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 	cache.Request(c_MeshPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 }
 
-TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][render]")
+TEST_CASE("A material cannot be drawn without a project store", "[thumbnails][render]")
 {
 	Fixture fixture;
 
-	// A `.bmaterial` is nothing but references relative to the data root, and the manager is the only
+	// A `.bmaterial` is nothing but references relative to the data root, and the store is the only
 	// thing that resolves them. Without one -- no project open -- there is nothing to draw.
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
@@ -614,8 +615,8 @@ TEST_CASE("A material cannot be drawn without an asset manager", "[thumbnails][r
 	cache.Request(c_MaterialPath);
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 1000));
 
-	// And it draws once one arrives, so it was the manager that was missing and nothing else.
-	cache.SetAssets(&*fixture.assets);
+	// And it draws once one arrives, so it was the store that was missing and nothing else.
+	cache.SetStore(&fixture.store);
 	cache.Request(c_MaterialPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 }
@@ -626,7 +627,7 @@ TEST_CASE("A second request for an unchanged asset does not re-render", "[thumbn
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
@@ -645,7 +646,7 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
@@ -663,7 +664,7 @@ TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
-	cache.SetAssets(&*fixture.assets);
+	cache.SetStore(&fixture.store);
 
 	const QString path = "assets/Data/Derived/Meshes/foreign_token_test.bmesh";
 	{
@@ -700,7 +701,7 @@ TEST_CASE("Without a graphics device the cache stays inert", "[thumbnails]")
 
 	REQUIRE(!cache.IsReady());
 
-	cache.SetAssets(nullptr);
+	cache.SetStore(nullptr);
 	cache.Request(c_MeshPath);
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
 }

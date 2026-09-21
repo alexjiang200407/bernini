@@ -239,7 +239,9 @@ and stale modules and missing declared dependencies before factory invocation, c
 batches, and forces the plugin binary copy path. Headless tests cover host viewport and thumbnail
 rendering. The editor dispatches menu and content actions, dropped source files, document opens and
 panel navigation through the active project host. Project replacement drains thumbnail description
-work and destroys plugin panels before replacing the store or render services.
+work and destroys plugin panels before replacing the store or render services. The thumbnail cache
+borrows only the project store through `SetStore`; it owns a separate render asset manager for
+its mip-capped uploads.
 
 The localization tests use the concrete resolver through the fake host. They cover host isolation,
 owned catalog copies, CSV decoding, invalid-input refusal, fallback and unchanged routing. They do

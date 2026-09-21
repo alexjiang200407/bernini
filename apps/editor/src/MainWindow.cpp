@@ -1165,7 +1165,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	// A manager resolves every path against one Data root, so a new project needs a new one. The
 	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(nullptr);
+		m_Thumbnails->SetStore(nullptr);
 	if (m_AnimationEditor)
 		m_AnimationEditor->SetAssets(nullptr);
 	if (m_BlendSpaceEditor)
@@ -1209,9 +1209,9 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	UpdateProject();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
-	// asks for a render straight away -- a material cannot be resolved without a manager.
+	// asks for a render straight away -- a material cannot be resolved without the project store.
 	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(m_Assets.get(), &m_Project->GetStore());
+		m_Thumbnails->SetStore(&m_Project->GetStore());
 
 	m_ContentExplorer->SetRootPath(dataDir);
 

@@ -340,29 +340,28 @@ AssetThumbnailCache::~AssetThumbnailCache()
 }
 
 void
-AssetThumbnailCache::SetAssets(game::AssetManager* assets, const assetlib::AssetStore* store)
+AssetThumbnailCache::SetStore(const assetlib::AssetStore* store)
 {
-	if (m_Assets == assets && m_Store == store)
+	if (m_Store == store)
 		return;
 
 	m_Pool.waitForDone();
 
-	// Hand the old project's assets back through the manager that acquired them, before it goes.
+	// Drain project work before the caller can destroy the borrowed store.
 	CancelShot();
 	ReleaseGeometry();
 	ReleaseMaterials();
 
-	m_Assets = assets;
-	m_Store  = store;
+	m_Store = store;
 
 	if (IsReady())
 	{
 		m_Desc.renderer->Invoke([&] {
 			m_ThumbAssets.reset();
-			if (m_Assets != nullptr)
+			if (m_Store != nullptr)
 				m_ThumbAssets = std::make_unique<game::AssetManager>(
 					m_Desc.renderer->GetScene(),
-					m_Assets->DataRoot(),
+					m_Store->GetDataRoot(),
 					game::AssetManagerOptions{ .hashedAsBlend = true });
 		});
 	}
@@ -387,10 +386,10 @@ AssetThumbnailCache::Invalidate()
 
 	m_Desc.renderer->Invoke([&] {
 		m_ThumbAssets.reset();
-		if (m_Assets != nullptr)
+		if (m_Store != nullptr)
 			m_ThumbAssets = std::make_unique<game::AssetManager>(
 				m_Desc.renderer->GetScene(),
-				m_Assets->DataRoot(),
+				m_Store->GetDataRoot(),
 				game::AssetManagerOptions{ .hashedAsBlend = true });
 	});
 }
@@ -398,7 +397,7 @@ AssetThumbnailCache::Invalidate()
 std::filesystem::path
 AssetThumbnailCache::DataRoot() const
 {
-	return m_Assets != nullptr ? m_Assets->DataRoot() : std::filesystem::path();
+	return m_Store != nullptr ? m_Store->GetDataRoot() : std::filesystem::path();
 }
 
 bool
@@ -583,7 +582,7 @@ AssetThumbnailCache::Request(const QString& path)
 
 	// A material is nothing but references into the data root, so without one there is nothing to
 	// draw. A mesh still has its geometry, and falls back to the neutral default.
-	if (material && m_Assets == nullptr)
+	if (material && m_Store == nullptr)
 		return;
 
 	const std::optional<qint64> claimed = BeginRequest(path);
