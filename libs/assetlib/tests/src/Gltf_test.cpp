@@ -4,6 +4,7 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/BMesh.h>
@@ -19,9 +20,11 @@
 #include <catch2/catch_approx.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -449,7 +452,8 @@ namespace
     { "name": "attenuated", "occlusionTexture": { "index": 1, "strength": 0.5 } },
     { "name": "none", "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } } },
     { "name": "specGloss", "occlusionTexture": { "index": 1 },
-      "extensions": { "KHR_materials_pbrSpecularGlossiness": { "glossinessFactor": 0.5 } } }
+      "extensions": { "KHR_materials_pbrSpecularGlossiness": { "glossinessFactor": 0.5 } } },
+    { "name": "thirdUvSet", "occlusionTexture": { "index": 1, "texCoord": 2 } }
   ]
 })";
 
@@ -466,7 +470,7 @@ namespace
 TEST_CASE("A material's own occlusion map is imported", "[bmesh][gltf][occlusion]")
 {
 	const BMeshImport mesh = LoadOcclusionGltf();
-	REQUIRE(mesh.materials.size() == 7);
+	REQUIRE(mesh.materials.size() == 8);
 	REQUIRE(mesh.textures.size() == 3);
 
 	// The whole defect: an occlusionTexture with no metallic-roughness texture beside it used to
@@ -498,12 +502,153 @@ TEST_CASE("Occlusion and metallic-roughness are kept apart", "[bmesh][gltf][occl
 }
 
 TEST_CASE(
-	"An occlusion map on a second UV set is refused, not resampled",
-	"[bmesh][gltf][occlusion]")
+	"An occlusion map on the second UV set is kept beside the ORM, not folded into it",
+	"[bmesh][gltf][occlusion][uv1]")
 {
-	// The one outcome worse than dropping it: only TEXCOORD_0 is read, so honouring this index would
-	// sample a map baked against another parameterisation and produce confident garbage.
-	CHECK(LoadOcclusionGltf().materials[3].occlusionTexture == c_InvalidIndex);
+	// Folding it into ORM red would sample it through TEXCOORD_0: a map baked against another
+	// parameterisation, read as confident garbage.
+	const BMeshImport      mesh        = LoadOcclusionGltf();
+	const BMaterialImport& secondUvSet = mesh.materials[3];
+
+	CHECK(secondUvSet.uv1OcclusionTexture != c_InvalidIndex);
+	CHECK(secondUvSet.occlusionTexture == c_InvalidIndex);
+}
+
+TEST_CASE(
+	"An occlusion map on the first UV set claims no UV1 slot",
+	"[bmesh][gltf][occlusion][uv1]")
+{
+	CHECK(LoadOcclusionGltf().materials[0].uv1OcclusionTexture == c_InvalidIndex);
+}
+
+TEST_CASE(
+	"An occlusion map on a UV set past the second is refused, not resampled",
+	"[bmesh][gltf][occlusion][uv1]")
+{
+	const BMeshImport      mesh       = LoadOcclusionGltf();
+	const BMaterialImport& thirdUvSet = mesh.materials[7];
+
+	CHECK(thirdUvSet.occlusionTexture == c_InvalidIndex);
+	CHECK(thirdUvSet.uv1OcclusionTexture == c_InvalidIndex);
+}
+
+namespace
+{
+	// One triangle drawn four times, one primitive each, so every submesh shares its positions and
+	// first UV set and differs only in what it says about the second:
+	//   0 -- "wall", which samples occlusion through TEXCOORD_1, with a real unwrap
+	//   1 -- "plain", which samples nothing through it, with a degenerate one: every vertex at (0, 1)
+	//   2 -- "plain" again, with no TEXCOORD_1 at all
+	//   3 -- "wall" again, with no TEXCOORD_1 to sample
+	constexpr const char* c_SecondUvGltf = R"({
+  "asset": { "version": "2.0" },
+  "scene": 0,
+  "scenes": [ { "nodes": [ 0 ] } ],
+  "nodes": [ { "mesh": 0 } ],
+  "meshes": [ { "primitives": [
+    { "attributes": { "POSITION": 0, "TEXCOORD_0": 1, "TEXCOORD_1": 2 }, "indices": 4, "material": 0 },
+    { "attributes": { "POSITION": 0, "TEXCOORD_0": 1, "TEXCOORD_1": 3 }, "indices": 4, "material": 1 },
+    { "attributes": { "POSITION": 0, "TEXCOORD_0": 1 }, "indices": 4, "material": 1 },
+    { "attributes": { "POSITION": 0, "TEXCOORD_0": 1 }, "indices": 4, "material": 0 }
+  ] } ],
+  "buffers": [ { "byteLength": 116, "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AACAPgAAgD4AAEA/AACAPgAAgD4AAEA/AAAAAAAAgD8AAAAAAACAPwAAAAAAAIA/AAABAAIAAAA=" } ],
+  "bufferViews": [
+    { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
+    { "buffer": 0, "byteOffset": 36, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 60, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 84, "byteLength": 24 },
+    { "buffer": 0, "byteOffset": 108, "byteLength": 6 }
+  ],
+  "accessors": [
+    { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [ 0, 0, 0 ], "max": [ 1, 1, 0 ] },
+    { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC2" },
+    { "bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2" },
+    { "bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC2" },
+    { "bufferView": 4, "componentType": 5123, "count": 3, "type": "SCALAR" }
+  ],
+  "images": [
+    { "name": "wall_ao", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNwYGAAAADEAEG9pK30AAAAAElFTkSuQmCC" }
+  ],
+  "textures": [ { "source": 0 } ],
+  "materials": [
+    { "name": "wall", "occlusionTexture": { "index": 0, "texCoord": 1 } },
+    { "name": "plain" }
+  ]
+})";
+
+	BMeshImport
+	LoadSecondUvGltf()
+	{
+		const auto path = WriteTempGltf(c_SecondUvGltf, "bmesh_second_uv_test.gltf");
+		auto       mesh = loadFromGltf(path);
+		std::filesystem::remove(path);
+		return mesh;
+	}
+
+	std::span<const std::byte>
+	VertexBytes(const BMeshImport& mesh, const Submesh& submesh)
+	{
+		return std::span(mesh.vertexData)
+		    .subspan(submesh.vertexByteOffset, size_t(submesh.vertexCount) * submesh.layout.stride);
+	}
+}
+
+TEST_CASE(
+	"A primitive whose material samples TEXCOORD_1 carries the set it samples",
+	"[bmesh][gltf][uv1]")
+{
+	const BMeshImport mesh = LoadSecondUvGltf();
+	REQUIRE(mesh.submeshes.size() == 4);
+
+	const Submesh&         wall = mesh.submeshes[0];
+	const VertexAttribute* uv1  = findAttribute(wall.layout, VertexSemantic::kTexCoord1);
+	REQUIRE(uv1 != nullptr);
+	CHECK(uv1->format == VertexFormat::kFloat32x2);
+
+	// The unwrap's own values, not the first set's and not a default: the third vertex is (0.25,
+	// 0.75), where TEXCOORD_0 holds (0, 1).
+	glm::vec2 third;
+	std::memcpy(
+		&third,
+		mesh.vertexData.data() + wall.vertexByteOffset + 2 * size_t(wall.layout.stride) +
+			uv1->offset,
+		sizeof(third));
+	CHECK(third == glm::vec2(0.25f, 0.75f));
+}
+
+TEST_CASE(
+	"A TEXCOORD_1 no material samples is not carried, and costs the mesh nothing",
+	"[bmesh][gltf][uv1]")
+{
+	// The degenerate set the town pack ships on most of its primitives. The pin is the byte
+	// comparison: the primitive that carries one imports exactly as the one that never had it.
+	const BMeshImport mesh = LoadSecondUvGltf();
+	REQUIRE(mesh.submeshes.size() == 4);
+
+	const Submesh& degenerate = mesh.submeshes[1];
+	const Submesh& without    = mesh.submeshes[2];
+
+	CHECK(findAttribute(degenerate.layout, VertexSemantic::kTexCoord1) == nullptr);
+	CHECK(degenerate.layout.stride == without.layout.stride);
+	CHECK(degenerate.layout.attributeCount == without.layout.attributeCount);
+
+	const auto a = VertexBytes(mesh, degenerate);
+	const auto b = VertexBytes(mesh, without);
+	CHECK(std::ranges::equal(a, b));
+}
+
+TEST_CASE(
+	"A primitive with no TEXCOORD_1 is imported whole though its material samples one",
+	"[bmesh][gltf][uv1]")
+{
+	// The renderer draws it unoccluded; the import warns and keeps the rest of the primitive.
+	const BMeshImport mesh = LoadSecondUvGltf();
+	REQUIRE(mesh.submeshes.size() == 4);
+
+	const Submesh& wallWithout = mesh.submeshes[3];
+	CHECK(findAttribute(wallWithout.layout, VertexSemantic::kTexCoord1) == nullptr);
+	CHECK(wallWithout.vertexCount == 3);
+	CHECK(mesh.materials[0].uv1OcclusionTexture != c_InvalidIndex);
 }
 
 TEST_CASE(
