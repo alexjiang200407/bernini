@@ -176,10 +176,10 @@ ContentExplorerWindow::SetThumbnails(AssetThumbnailCache* thumbnails)
 void
 ContentExplorerWindow::SetPluginImporter(
 	std::function<bool(const std::filesystem::path&)>                   accepts,
-	std::function<void(const std::filesystem::path&, std::string_view)> import)
+	std::function<void(const std::filesystem::path&, std::string_view)> importAsset)
 {
 	m_AcceptsPluginImport = std::move(accepts);
-	m_PluginImport        = std::move(import);
+	m_PluginImport        = std::move(importAsset);
 }
 
 void

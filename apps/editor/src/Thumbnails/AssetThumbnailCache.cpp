@@ -159,13 +159,13 @@ namespace
 			QString               path,
 			std::string           relPath,
 			bool                  isMaterial,
-			std::string           materialOverride,
+			std::string           materialOverridePath,
 			std::filesystem::path dataRoot,
 			uint32_t              textureMaxDim,
 			Sink                  sink) :
 			m_Path(std::move(path)), m_RelPath(std::move(relPath)), m_IsMaterial(isMaterial),
-			m_MaterialOverride(std::move(materialOverride)), m_DataRoot(std::move(dataRoot)),
-			m_TextureMaxDim(textureMaxDim), m_Sink(std::move(sink))
+			m_MaterialOverridePath(std::move(materialOverridePath)),
+			m_DataRoot(std::move(dataRoot)), m_TextureMaxDim(textureMaxDim), m_Sink(std::move(sink))
 		{
 			setAutoDelete(true);
 		}
@@ -218,8 +218,12 @@ namespace
 							PrefetchMaterial(m_DataRoot, relPath, m_TextureMaxDim, *prefetch);
 					}
 				}
-				if (!m_MaterialOverride.empty())
-					PrefetchMaterial(m_DataRoot, m_MaterialOverride, m_TextureMaxDim, *prefetch);
+				if (!m_MaterialOverridePath.empty())
+					PrefetchMaterial(
+						m_DataRoot,
+						m_MaterialOverridePath,
+						m_TextureMaxDim,
+						*prefetch);
 			}
 			catch (const std::exception& e)
 			{
@@ -236,7 +240,7 @@ namespace
 		QString               m_Path;
 		std::string           m_RelPath;
 		bool                  m_IsMaterial = false;
-		std::string           m_MaterialOverride;
+		std::string           m_MaterialOverridePath;
 		std::filesystem::path m_DataRoot;
 		uint32_t              m_TextureMaxDim = 0;
 		Sink                  m_Sink;

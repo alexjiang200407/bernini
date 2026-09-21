@@ -369,7 +369,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 				return;
 			try
 			{
-				importer->import(*m_EditorHost, source, target);
+				importer->importAsset(*m_EditorHost, source, target);
 			}
 			catch (const std::exception& error)
 			{

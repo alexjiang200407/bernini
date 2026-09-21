@@ -190,7 +190,7 @@ namespace editor::plugins
 	EditorRegistry::AddImporter(ImporterDesc desc)
 	{
 		RequireUnique(desc.id, m_Importers);
-		if (!desc.import)
+		if (!desc.importAsset)
 			throw std::runtime_error("Editor importer callback is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)

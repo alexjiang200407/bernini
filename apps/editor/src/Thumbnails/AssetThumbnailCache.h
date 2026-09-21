@@ -38,6 +38,9 @@ class QImage;
 
 struct AssetThumbnailDesc
 {
+	using ThumbnailProviderLookup =
+		std::function<const editor::ThumbnailProviderDesc*(std::string_view)>;
+
 	Renderer* renderer = nullptr;
 
 	uint32_t dimension        = 256;
@@ -47,7 +50,7 @@ struct AssetThumbnailDesc
 	// it was generated from cannot stand against different backdrops.
 	editor::EnvironmentApplyDesc env;
 
-	std::function<const editor::ThumbnailProviderDesc*(std::string_view)> pluginProvider;
+	ThumbnailProviderLookup pluginProvider;
 };
 
 /**

@@ -66,7 +66,7 @@ public:
 	void
 	SetPluginImporter(
 		std::function<bool(const std::filesystem::path&)>                   accepts,
-		std::function<void(const std::filesystem::path&, std::string_view)> import);
+		std::function<void(const std::filesystem::path&, std::string_view)> importAsset);
 
 	void
 	SetPluginActions(std::function<void(QMenu&, const std::vector<std::string>&)> append);
