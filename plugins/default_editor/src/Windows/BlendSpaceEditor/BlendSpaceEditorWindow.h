@@ -1,4 +1,9 @@
 #pragma once
+#include <editor_api/EditorPanel.h>
+#include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorViewport.h>
+#include <string>
+#include <string_view>
 
 #include <QElapsedTimer>
 #include <QString>
@@ -11,9 +16,6 @@
 #include <vector>
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
-#include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/follows_project.h"
-#include "util/held_open_assets.h"
 #include <editor_sdk/environment.h>
 
 class AnimationPreviewWindow;
@@ -50,17 +52,15 @@ namespace game
  * The clock never wraps and never runs backwards: a space's phase is integrated from the moment it
  * was stamped, so a clock that stepped back would put the pose behind its own reference.
  */
-class BlendSpaceEditorWindow :
-	public QWidget,
-	public editor::IHoldsAssets,
-	public editor::IFollowsProject
+class BlendSpaceEditorWindow : public editor::AssetEditorPanel
 {
 	Q_OBJECT
 
 public:
 	BlendSpaceEditorWindow(
+		editor::IEditorHost&         host,
 		QWidget*                     parent,
-		RenderTargetWindowDesc       rt,
+		editor::ViewportDesc         rt,
 		editor::EnvironmentApplyDesc env);
 
 	/**
@@ -70,6 +70,9 @@ public:
 	 */
 	void
 	OpenBlendSet(const QString& key);
+	void
+	OpenAsset(std::string_view key) override;
+	~BlendSpaceEditorWindow() override;
 
 	/** Back to the empty state, releasing what the viewport holds. */
 	void
@@ -82,24 +85,22 @@ public:
 		return m_BlendRelPath;
 	}
 
-	/** The open project's Data directory; closes the set, which belonged to the last one. */
-	void
-	SetDataRoot(const QString& dataRoot) override;
-
-	/** Forwarded to the preview -- nullptr releases everything it holds, and closes the set. */
-	void
-	SetAssets(game::AssetManager* assets);
-
 	/**
 	 * Leaving the tab closes the set, as the Animation panel's `SetDockVisible` does and for its
-	 * reason. MainWindow drives this through `editor::IsPanelShown`.
+	 * reason. SetActive drives this; minimizing the host does not deactivate its selected panel.
 	 */
 	void
 	SetDockVisible(bool visible);
 
 	/** The set, the clip set it names and the mesh it is shown on, absolute. */
 	[[nodiscard]] QStringList
-	GetHeldOpenPaths() const override;
+	GetHeldOpenPaths() const;
+	std::vector<std::string>
+	GetHeldAssets() const override;
+	bool
+	CanClose() override;
+	void
+	SetActive(bool active) override;
 
 protected:
 	void
@@ -115,6 +116,7 @@ protected:
 	showEvent(QShowEvent* event) override;
 
 private:
+	editor::IEditorHost& m_Host;
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
 

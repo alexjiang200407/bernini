@@ -408,10 +408,7 @@ ContentExplorerWindow::AttachModels()
 			}
 
 			const QString asset = editor::AssetAt(*m_FileModel, index, m_RootPath);
-			if (editor::IsBlendSetFile(asset))
-				Q_EMIT BlendSetOpenRequested(asset);
-			else
-				Q_EMIT AssetOpenRequested(asset);
+			Q_EMIT AssetOpenRequested(asset);
 		});
 
 	// The model populates directories asynchronously and mutates as folders are added or

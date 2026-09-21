@@ -182,7 +182,8 @@ TEST_CASE("The first blend set is written empty, beside its clip set", "[animati
 	REQUIRE(dir.isValid());
 	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
 
-	const std::string key = editor::CreateEmptyBlendSet(root, "Derived/Animations/loco.banim");
+	const std::string key =
+		editor::CreateEmptyBlendSet(assetlib::AssetStore(root), "Derived/Animations/loco.banim");
 	CHECK(key == "Authored/Animations/loco.bblend");
 
 	SECTION("it holds no spaces, and names the clip set it was authored against")
@@ -205,14 +206,17 @@ TEST_CASE("The first blend set is written empty, beside its clip set", "[animati
 	SECTION("a second create refuses rather than writing over the first")
 	{
 		CHECK_THROWS_WITH(
-			editor::CreateEmptyBlendSet(root, "Derived/Animations/loco.banim"),
+			editor::CreateEmptyBlendSet(
+				assetlib::AssetStore(root),
+				"Derived/Animations/loco.banim"),
 			Catch::Matchers::ContainsSubstring("already exists"));
 	}
 
 	SECTION("a clip set that is not one is refused by the convention")
 	{
-		CHECK_THROWS(editor::CreateEmptyBlendSet(root, "Derived/Meshes/rig.bmesh"));
-		CHECK_THROWS(editor::CreateEmptyBlendSet(root, ""));
+		CHECK_THROWS(
+			editor::CreateEmptyBlendSet(assetlib::AssetStore(root), "Derived/Meshes/rig.bmesh"));
+		CHECK_THROWS(editor::CreateEmptyBlendSet(assetlib::AssetStore(root), ""));
 	}
 }
 
@@ -235,14 +239,14 @@ TEST_CASE("An edited set is written back over what it was read from", "[animatio
 
 	SECTION("what comes back is what an edit takes, and a save puts it all back")
 	{
-		assetlib::BlendSet set = editor::LoadBlendSet(root, key);
+		assetlib::BlendSet set = editor::LoadBlendSet(assetlib::AssetStore(root), key);
 		REQUIRE(set.spaces.size() == 1);
 		CHECK(set.spaces[0].samples.size() == 2);
 
 		set.spaces[0].samples[1].parameter = 4.0f;
-		editor::SaveBlendSet(root, key, set);
+		editor::SaveBlendSet(assetlib::AssetStore(root), key, set);
 
-		const assetlib::BlendSet read = editor::LoadBlendSet(root, key);
+		const assetlib::BlendSet read = editor::LoadBlendSet(assetlib::AssetStore(root), key);
 		CHECK(read.spaces[0].samples[1].parameter == 4.0f);
 
 		// The reason an edit loads the document rather than rebuilding it from what the acquire
@@ -253,12 +257,12 @@ TEST_CASE("An edited set is written back over what it was read from", "[animatio
 
 	SECTION("a set the format refuses is not written at all")
 	{
-		assetlib::BlendSet set = editor::LoadBlendSet(root, key);
+		assetlib::BlendSet set = editor::LoadBlendSet(assetlib::AssetStore(root), key);
 		set.spaces[0].samples.pop_back();  // one sample is a clip, not a space
 
-		CHECK_THROWS(editor::SaveBlendSet(root, key, set));
+		CHECK_THROWS(editor::SaveBlendSet(assetlib::AssetStore(root), key, set));
 
 		// Nothing was written, so what stands is still the set that was there.
-		CHECK(editor::LoadBlendSet(root, key).spaces[0].samples.size() == 2);
+		CHECK(editor::LoadBlendSet(assetlib::AssetStore(root), key).spaces[0].samples.size() == 2);
 	}
 }

@@ -29,8 +29,6 @@ class QLabel;
 class QMenu;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
-class AnimationEditorWindow;
-class BlendSpaceEditorWindow;
 class RenderTargetWindow;
 class Renderer;
 
@@ -156,21 +154,13 @@ private:
 	void
 	ShowProjectState();
 
-	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
-	// selected tab.
-	void
-	DriveViewportsFromTab(QDockWidget* dock);
-
 	// Adds the viewport frame-time readout to the status bar and connects every viewport to it. The
 	// viewport docks are tabbed together, so at most one of them reports at a time.
 	void
 	SetUpFrameStats();
 
 	void
-	ConnectEditorPanels();
-
-	void
-	ClearEditorPanels() noexcept;
+	ClearFrameStats() noexcept;
 
 	void
 	ConfigureViewport(RenderTargetWindow& view);
@@ -223,7 +213,6 @@ private:
 	void
 	ClearPluginPanels();
 
-	std::function<void()>     m_CreateEditorPanels;
 	editor::MainWindowWidgets m_Ui;
 	std::optional<bool>       m_TaaOverride;
 	std::optional<float>      m_RenderScaleOverride;
@@ -252,14 +241,10 @@ private:
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
 	core::str::unordered_str_map<PluginDock>        m_PluginDocks;
 	std::unique_ptr<assetlib::Project>              m_Project;
-	ContentExplorerWindow*                          m_ContentExplorer      = nullptr;
-	AnimationEditorWindow*                          m_AnimationEditor      = nullptr;
-	BlendSpaceEditorWindow*                         m_BlendSpaceEditor     = nullptr;
-	QDockWidget*                                    m_EditorDockAnchor     = nullptr;
-	QDockWidget*                                    m_AnimationEditorDock  = nullptr;
-	QDockWidget*                                    m_BlendSpaceEditorDock = nullptr;
-	QDockWidget*                                    m_ContentExplorerDock  = nullptr;
-	QLabel*                                         m_FrameStats           = nullptr;
+	ContentExplorerWindow*                          m_ContentExplorer     = nullptr;
+	QDockWidget*                                    m_EditorDockAnchor    = nullptr;
+	QDockWidget*                                    m_ContentExplorerDock = nullptr;
+	QLabel*                                         m_FrameStats          = nullptr;
 
 	// The viewport the readout is currently about, or null when none is visible. A viewport that
 	// leaves the frame loop stops reporting, so without this its last figures would stay on the

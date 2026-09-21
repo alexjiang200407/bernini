@@ -12,6 +12,7 @@
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
 #include <editor_sdk/mesh_drop.h>
+#include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
 
@@ -65,21 +66,14 @@ namespace
 	constexpr int    c_RevealRepaintDelaysMs[] = { 0, 300 };
 }
 
-AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWindowDesc desc) :
-	QWidget(parent)
+AnimationEditorWindow::AnimationEditorWindow(
+	editor::IEditorHost&      host,
+	QWidget*                  parent,
+	AnimationEditorWindowDesc desc) :
+	editor::EditorPanel(parent), m_Host(host),
+	m_DataRoot(QString::fromStdWString(host.GetStore().GetDataRoot().wstring()))
 {
-	auto rt                   = RenderTargetWindowDesc();
-	rt.renderer               = desc.renderer;
-	rt.assets                 = desc.assets;
-	rt.initialInstances       = desc.initialPreviewInstances;
-	rt.taaEnabled             = desc.taaEnabled;
-	rt.renderScale            = desc.renderScale;
-	rt.taaReconstructionWidth = desc.taaReconstructionWidth;
-	rt.headless               = desc.headless;
-	rt.headlessWidth          = desc.headlessWidth;
-	rt.headlessHeight         = desc.headlessHeight;
-
-	m_Preview = new AnimationPreviewWindow(this, std::move(rt), std::move(desc.previewEnv));
+	m_Preview = new AnimationPreviewWindow(host, this, desc.viewport, std::move(desc.previewEnv));
 	m_Preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	m_Preview->setMinimumSize(256, 256);
 
@@ -549,14 +543,6 @@ AnimationEditorWindow::dropEvent(QDropEvent* event)
 	event->acceptProposedAction();
 }
 
-void
-AnimationEditorWindow::SetDataRoot(const QString& dataRoot)
-{
-	m_DataRoot = dataRoot;
-	m_Preview->SetDataRoot(std::filesystem::path(dataRoot.toStdWString()));
-	m_Preview->Clear();
-}
-
 QStringList
 AnimationEditorWindow::GetHeldOpenPaths() const
 {
@@ -567,20 +553,11 @@ AnimationEditorWindow::GetHeldOpenPaths() const
 
 	auto held = QStringList();
 	held << root.absoluteFilePath(m_MeshRelPath);
+	if (!m_BlendRelPath.isEmpty())
+		held << root.absoluteFilePath(m_BlendRelPath);
 	for (int i = 0; i < m_SourceSelector->count(); ++i)
 		held << root.absoluteFilePath(m_SourceSelector->itemText(i));
 	return held;
-}
-
-void
-AnimationEditorWindow::SetAssets(game::AssetManager* assets)
-{
-	m_Preview->SetAssets(assets);
-
-	// The geometry just went with the manager; the clip list, transport and mesh label must not
-	// keep advertising it.
-	if (assets == nullptr)
-		m_Preview->Clear();
 }
 
 int
@@ -1087,4 +1064,27 @@ AnimationEditorWindow::showEvent(QShowEvent* event)
 		m_ClockDelta.restart();
 		m_Clock->start();
 	}
+}
+
+void
+AnimationEditorWindow::SetActive(bool active)
+{
+	SetDockVisible(active);
+	m_Preview->SetRenderingEnabled(active);
+}
+std::vector<std::string>
+AnimationEditorWindow::GetHeldAssets() const
+{
+	auto              result = std::vector<std::string>();
+	const QStringList paths  = GetHeldOpenPaths() + m_Preview->GetHeldOpenPaths();
+	for (const QString& path : paths)
+	{
+		try
+		{
+			result.push_back(m_Host.GetStore().KeyFor(std::filesystem::path(path.toStdWString())));
+		}
+		catch (const std::exception&)
+		{}  // Configured environments may live outside the project.
+	}
+	return result;
 }

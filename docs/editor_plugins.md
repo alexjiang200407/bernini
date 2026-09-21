@@ -118,17 +118,20 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-`plugins/default_editor` owns the Material editor, its graph nodes and the glTF material-graph
-writer. It is a statically linked module registered through the same registry before local modules;
+`plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
+glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;
 its target has no editor-host implementation include path. The host supplies configuration by value
-and opens `bernini.material` once the project host exists. Animation and Blend Space remain concrete
-host panels until their migration. The target-public `default_editor/import_writers.h` lets the
+and opens its three startup contributions once the project host exists. Material and Animation
+register general panels; Blend Space registers an asset editor for `.bblend`. Showing a contribution
+by ID creates either kind, and document opening raises its tab before delivering the key.
+The target-public `default_editor/import_writers.h` lets the
 host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.
 
-Material composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
+Each preview composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
 resize events to plugin-owned interaction. The host retains render scheduling and presentation.
-Material borrows the project store for asset operations; an explicitly configured environment from
-another asset root uses its own external store. Content Explorer and rig-editor bakes report
+The panels borrow the project store for asset operations; an explicitly configured environment from
+another asset root uses its own external store. An omitted environment root uses the project store.
+Content Explorer and rig-editor bakes report
 `AssetChanged`; Material invalidates its cached disk state without replacing unsaved graphs.
 
 ## Local loading
@@ -186,7 +189,9 @@ host tags every thumbnail stage with its project generation, so a queued result 
 project cannot satisfy the same path in its replacement.
 
 `InvokeRender` and viewport `Invoke` run synchronously on the render thread and propagate
-exceptions to the caller. A closure must never wait on the GUI thread or retain the borrowed
+exceptions to the caller. `Invoke` also accepts a worker caller whose owner joins before viewport
+teardown; rig uploads use this under the modal loading screen. Other viewport methods remain on the
+GUI thread. A closure must never wait on the GUI thread or retain the borrowed
 context. Owned scene handles may be retained by a panel, but all access and release still belong
 on the render thread, before its host dies. The host drains a viewport's pending draws before
 destroying its view. Inactive tabs must suspend their viewports through `SetActive`.
@@ -206,11 +211,12 @@ The built-in Material, Animation and Blend Space panels follow the same project 
 empty editor allocates no preview viewports, and project replacement destroys the old panels before
 releasing their asset manager. New viewports retain the current Render-menu overrides. Preview teardown stops rendering and
 releases owned geometry, materials and environment maps from the persistent scene.
-Material uses an owned panel factory and borrows `IEditorHost`. The remaining rig descriptors
-borrow their renderer and asset manager without an expiry check. Their
-owner must destroy the panels synchronously before either service; a non-null pointer alone does
-not prove it is live. Viewport destruction drains queued render work before returning. Replacement
-and shutdown tests exercise both services through the end of viewport teardown.
+All three use owned factories and borrow `IEditorHost`. Rig acquisitions use the asset manager only
+inside the supplied render context; no panel caches its pointer. Deactivation clears Animation's
+mesh and Blend Space's document, stops their clocks and releases their shared-ground state.
+Blend Space's `CanClose` saves a pending threshold edit and vetoes project close if that save fails.
+Viewport destruction drains queued render work before returning. Replacement and shutdown tests
+exercise both services through the end of viewport teardown.
 
 ## Risky contracts
 

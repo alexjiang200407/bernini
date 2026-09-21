@@ -1,4 +1,9 @@
 #pragma once
+#include <editor_api/EditorPanel.h>
+#include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorViewport.h>
+#include <string>
+#include <string_view>
 
 #include <gamelib/AssetManager.h>
 
@@ -11,11 +16,8 @@
 #include <qtmetamacros.h>
 #include <vector>
 
-#include "Render/Renderer.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
-#include "util/follows_project.h"
-#include "util/held_open_assets.h"
 #include <bgl/InstanceDesc.h>
 #include <editor_sdk/environment.h>
 
@@ -38,19 +40,8 @@ class QToolButton;
 
 struct AnimationEditorWindowDesc
 {
-	// Borrowed services must outlive the panel, including its preview's render-thread teardown.
-	Renderer*                    renderer                = nullptr;
-	game::AssetManager*          assets                  = nullptr;
-	uint32_t                     initialPreviewInstances = 16;
-	bool                         taaEnabled              = true;
-	float                        renderScale             = 1.0f;
-	float                        taaReconstructionWidth  = 0.4f;
+	editor::ViewportDesc         viewport;
 	editor::EnvironmentApplyDesc previewEnv;
-
-	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.
-	bool     headless       = false;
-	uint32_t headlessWidth  = 256;
-	uint32_t headlessHeight = 256;
 };
 
 /**
@@ -62,37 +53,27 @@ struct AnimationEditorWindowDesc
  * playing, and every change of the clock lands in the preview via SetTime. The preview's
  * instances are always {clip, phase 0, rate 1}, so the transport's seconds are the whole story.
  */
-class AnimationEditorWindow :
-	public QWidget,
-	public editor::IHoldsAssets,
-	public editor::IFollowsProject
+class AnimationEditorWindow : public editor::EditorPanel
 {
 	Q_OBJECT
 
 public:
-	explicit AnimationEditorWindow(QWidget* parent = nullptr, AnimationEditorWindowDesc desc = {});
+	AnimationEditorWindow(
+		editor::IEditorHost&      host,
+		QWidget*                  parent,
+		AnimationEditorWindowDesc desc);
 
-	/** The open project's Data directory; clears the preview, since its mesh belonged to the last one. */
-	void
-	SetDataRoot(const QString& dataRoot) override;
-
-	// The project Data root this panel resolves against, empty until a project opens.
+	// Fixed for this panel's project lifetime.
 	[[nodiscard]] const QString&
 	GetDataRoot() const noexcept
 	{
 		return m_DataRoot;
 	}
 
-	/** Forwarded to the preview -- nullptr releases everything it holds. */
-	void
-	SetAssets(game::AssetManager* assets);
-
 	/**
 	 * Leaving the panel closes what it was showing: the dock's tab switching away (or the dock
 	 * closing) clears the preview, which releases the acquired assets and every held-open path.
-	 * MainWindow drives this from QDockWidget::visibilityChanged -- a tabified dock's widget gets
-	 * no hideEvent on a tab switch -- through editor::IsPanelShown, which is what keeps a minimized
-	 * window from reading as a panel the user left.
+	 * SetActive drives this; minimizing the host does not deactivate its selected panel.
 	 */
 	void
 	SetDockVisible(bool visible);
@@ -104,7 +85,16 @@ public:
 	 * disk records that the panel has it.
 	 */
 	[[nodiscard]] QStringList
-	GetHeldOpenPaths() const override;
+	GetHeldOpenPaths() const;
+	std::vector<std::string>
+	GetHeldAssets() const override;
+	bool
+	CanClose() override
+	{
+		return true;
+	}
+	void
+	SetActive(bool active) override;
 
 	/**
 	 * The tier selector's entry for a pose source, and back.
@@ -138,6 +128,7 @@ protected:
 	showEvent(QShowEvent* event) override;
 
 private:
+	editor::IEditorHost& m_Host;
 	void
 	OpenMeshDialog();
 

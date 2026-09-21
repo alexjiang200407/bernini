@@ -68,11 +68,10 @@ namespace editor
 	}
 
 	std::string
-	CreateEmptyBlendSet(const std::filesystem::path& dataRoot, const std::string_view animationsKey)
+	CreateEmptyBlendSet(const assetlib::AssetStore& store, const std::string_view animationsKey)
 	{
 		const std::string key = assetlib::blendSetKeyFor(animationsKey);
 
-		const assetlib::AssetStore store(dataRoot);
 		core::throw_runtime_error_if(
 			store.GetFiles().Stat(key).has_value(),
 			"'{}' already exists; edit it rather than starting over",
@@ -85,19 +84,17 @@ namespace editor
 	}
 
 	assetlib::BlendSet
-	LoadBlendSet(const std::filesystem::path& dataRoot, const std::string_view key)
+	LoadBlendSet(const assetlib::AssetStore& store, const std::string_view key)
 	{
-		const assetlib::AssetStore store(dataRoot);
 		return store.Load<assetlib::BlendSet>(key);
 	}
 
 	void
 	SaveBlendSet(
-		const std::filesystem::path& dataRoot,
-		const std::string_view       key,
-		const assetlib::BlendSet&    set)
+		const assetlib::AssetStore& store,
+		const std::string_view      key,
+		const assetlib::BlendSet&   set)
 	{
-		const assetlib::AssetStore store(dataRoot);
 		store.Save(set, key);
 	}
 }

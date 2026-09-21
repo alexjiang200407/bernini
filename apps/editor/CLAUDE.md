@@ -5,8 +5,9 @@ managing resources. It is also the offline asset-cook host — artists export gl
 editor imports it (via assetlib) and converts it into the game-ready format.
 
 - CMake targets: `editor_lib` (host), `editor` (just `main.cpp`), `editor_tests`.
-  `plugins/default_editor` owns the registered Material panel and its graph/import code; it links
-  only public engine/editor contracts and SDK helpers. Animation and Blend Space remain here.
+  `plugins/default_editor` owns Material, Animation and Blend Space and their authoring code; it
+  links only public engine/editor contracts and SDK helpers. The host creates all three through
+  registered factories and routes document opens by the registered extension.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
 - Builds on Windows (D3D12) and macOS (Metal). macOS needs Qt on `CMAKE_PREFIX_PATH`.
@@ -268,7 +269,7 @@ in `AssetThumbnailCache_test.cpp`, which renders a real `.bmesh` and a real `.bm
 writes each to `assets/golden/thumbnail_*.got.png` to be looked at. Tag such cases `[render]`
 so they can be skipped.
 
-Material graph and data-rule tests live in `plugins/default_editor/tests`, compiled into
+Material graph, rig playback and authoring-rule tests live in `plugins/default_editor/tests`, compiled into
 `editor_tests`. They need no device: `TextureNode` accepts a null host and preview cache for CPU
 graph operations. The panel itself requires a live host. Its viewport input, held assets, cache
 notifications and project teardown are covered by `MainWindow_test` against the shipping plugin.

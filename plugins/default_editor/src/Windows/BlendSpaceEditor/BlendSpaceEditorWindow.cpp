@@ -6,7 +6,6 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/blend_sets.h"
-#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/environment.h>
 #include <editor_sdk/mime_files.h>
@@ -140,11 +139,14 @@ namespace
 }
 
 BlendSpaceEditorWindow::BlendSpaceEditorWindow(
+	editor::IEditorHost&         host,
 	QWidget*                     parent,
-	RenderTargetWindowDesc       rt,
-	editor::EnvironmentApplyDesc env) : QWidget(parent)
+	editor::ViewportDesc         rt,
+	editor::EnvironmentApplyDesc env) :
+	editor::AssetEditorPanel(parent), m_Host(host),
+	m_DataRoot(QString::fromStdWString(host.GetStore().GetDataRoot().wstring()))
 {
-	m_Preview = new AnimationPreviewWindow(this, std::move(rt), std::move(env));
+	m_Preview = new AnimationPreviewWindow(host, this, std::move(rt), std::move(env));
 	m_Preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	m_Preview->setMinimumSize(256, 256);
 
@@ -439,13 +441,11 @@ BlendSpaceEditorWindow::NewBlendSet()
 	if (m_DataRoot.isEmpty())
 		return;
 
-	const std::filesystem::path dataRoot = ToPath(m_DataRoot);
-
 	auto clipSets = QStringList();
 	try
 	{
-		for (const std::string& clipSet : editor::ClipSetsWithoutBlendSet(
-				 assetlib::AssetRefGraph::Scan(assetlib::AssetStore(dataRoot))))
+		for (const std::string& clipSet :
+		     editor::ClipSetsWithoutBlendSet(assetlib::AssetRefGraph::Scan(m_Host.GetStore())))
 			clipSets << QString::fromStdString(clipSet);
 	}
 	catch (const std::exception& e)
@@ -484,7 +484,7 @@ BlendSpaceEditorWindow::NewBlendSet()
 	auto key = std::string();
 	try
 	{
-		key = editor::CreateEmptyBlendSet(dataRoot, clipSet.toStdString());
+		key = editor::CreateEmptyBlendSet(m_Host.GetStore(), clipSet.toStdString());
 	}
 	catch (const std::exception& e)
 	{
@@ -495,6 +495,7 @@ BlendSpaceEditorWindow::NewBlendSet()
 		return;
 	}
 
+	m_Host.AssetChanged(key);
 	OpenBlendSet(QString::fromStdString(key));
 }
 
@@ -509,12 +510,11 @@ BlendSpaceEditorWindow::OpenBlendSet(const QString& key)
 	m_SetLabel->setText(key);
 	m_Stage->setCurrentIndex(1);
 
-	const std::filesystem::path dataRoot = ToPath(m_DataRoot);
-	const std::string           setKey   = key.toStdString();
+	const std::string setKey = key.toStdString();
 
 	try
 	{
-		m_BlendSet    = editor::LoadBlendSet(dataRoot, setKey);
+		m_BlendSet    = editor::LoadBlendSet(m_Host.GetStore(), setKey);
 		m_SetReadable = true;
 	}
 	catch (const std::exception& e)
@@ -529,9 +529,8 @@ BlendSpaceEditorWindow::OpenBlendSet(const QString& key)
 	auto meshes = std::vector<std::string>();
 	try
 	{
-		meshes = editor::ResolveBlendSetMeshes(
-			assetlib::AssetRefGraph::Scan(assetlib::AssetStore(dataRoot)),
-			setKey);
+		meshes =
+			editor::ResolveBlendSetMeshes(assetlib::AssetRefGraph::Scan(m_Host.GetStore()), setKey);
 
 		if (meshes.empty())
 			m_ViewReason = QStringLiteral(
@@ -570,7 +569,8 @@ BlendSpaceEditorWindow::CloseBlendSet()
 	{
 		try
 		{
-			editor::SaveBlendSet(ToPath(m_DataRoot), m_BlendRelPath.toStdString(), m_BlendSet);
+			editor::SaveBlendSet(m_Host.GetStore(), m_BlendRelPath.toStdString(), m_BlendSet);
+			m_Host.AssetChanged(m_BlendRelPath.toStdString());
 		}
 		catch (const std::exception& e)
 		{
@@ -631,23 +631,6 @@ BlendSpaceEditorWindow::ShowViewPage()
 			QStringLiteral("The mesh this set is shown on could not be loaded.") :
 			m_ViewReason);
 	m_View->setCurrentIndex(0);
-}
-
-void
-BlendSpaceEditorWindow::SetDataRoot(const QString& dataRoot)
-{
-	m_DataRoot = dataRoot;
-	m_Preview->SetDataRoot(ToPath(dataRoot));
-	CloseBlendSet();
-}
-
-void
-BlendSpaceEditorWindow::SetAssets(game::AssetManager* assets)
-{
-	m_Preview->SetAssets(assets);
-
-	if (assets == nullptr)
-		CloseBlendSet();
 }
 
 void
@@ -929,7 +912,8 @@ BlendSpaceEditorWindow::CommitBlendSet()
 
 	try
 	{
-		editor::SaveBlendSet(ToPath(m_DataRoot), m_BlendRelPath.toStdString(), m_BlendSet);
+		editor::SaveBlendSet(m_Host.GetStore(), m_BlendRelPath.toStdString(), m_BlendSet);
+		m_Host.AssetChanged(m_BlendRelPath.toStdString());
 	}
 	catch (const std::exception& e)
 	{
@@ -1390,4 +1374,43 @@ BlendSpaceEditorWindow::showEvent(QShowEvent* event)
 		m_ClockDelta.restart();
 		m_Clock->start();
 	}
+}
+
+BlendSpaceEditorWindow::~BlendSpaceEditorWindow() { CloseBlendSet(); }
+
+bool
+BlendSpaceEditorWindow::CanClose()
+{
+	if (m_BlendSetDirty)
+		CommitBlendSet();
+	return !m_BlendSetDirty;
+}
+
+void
+BlendSpaceEditorWindow::OpenAsset(std::string_view key)
+{
+	OpenBlendSet(QString::fromUtf8(key.data(), static_cast<qsizetype>(key.size())));
+}
+
+void
+BlendSpaceEditorWindow::SetActive(bool active)
+{
+	SetDockVisible(active);
+	m_Preview->SetRenderingEnabled(active);
+}
+std::vector<std::string>
+BlendSpaceEditorWindow::GetHeldAssets() const
+{
+	auto              result = std::vector<std::string>();
+	const QStringList paths  = GetHeldOpenPaths() + m_Preview->GetHeldOpenPaths();
+	for (const QString& path : paths)
+	{
+		try
+		{
+			result.push_back(m_Host.GetStore().KeyFor(std::filesystem::path(path.toStdWString())));
+		}
+		catch (const std::exception&)
+		{}  // Configured environments may live outside the project.
+	}
+	return result;
 }

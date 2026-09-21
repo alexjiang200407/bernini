@@ -20,9 +20,6 @@
 #include "Plugins/plugin_loader.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "Windows/AnimationEditor/AnimationEditorWindow.h"
-#include "Windows/AnimationEditor/AnimationPreviewWindow.h"
-#include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -221,31 +218,23 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
-		auto matSettings = settings["materialEditor"];
-		auto matDesc     = editor::defaults::Config();
-		matDesc.materialViewport.initialInstances =
+		auto matSettings   = settings["materialEditor"];
+		auto defaultConfig = editor::defaults::Config();
+		defaultConfig.materialViewport.initialInstances =
 			matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		matDesc.materialViewport.taaEnabled  = matSettings["temporalAA"].GetOrDefault(true);
-		matDesc.materialViewport.renderScale = matSettings["renderScale"].GetOrDefault(1.0f);
-		matDesc.materialViewport.taaReconstructionWidth =
+		defaultConfig.materialViewport.taaEnabled  = matSettings["temporalAA"].GetOrDefault(true);
+		defaultConfig.materialViewport.renderScale = matSettings["renderScale"].GetOrDefault(1.0f);
+		defaultConfig.materialViewport.taaReconstructionWidth =
 			matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
-		matDesc.materialEnvironment.environmentMap =
+		defaultConfig.materialEnvironment.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
-		matDesc.materialEnvironment.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
-		matDesc.materialEnvironment.sky      = readSky(matSettings, editor::SkyPresentation());
+		defaultConfig.materialEnvironment.dataRoot =
+			matSettings["dataRoot"].GetOrDefault(std::string());
+		defaultConfig.materialEnvironment.sky = readSky(matSettings, editor::SkyPresentation());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
-			matDesc.materialEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
-
-		m_Plugins =
-			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
-				requiredPlugins,
-				editor::plugins::ConfiguredPluginDirectories(configPath),
-				editor::plugins::CurrentBuildIdentity(),
-				editor::plugins::DefaultPluginCopyRoot(),
-				editor::plugins::PluginBinaryCopyMode::kPlatformDefault,
-				editor::defaults::CreatePlugin(matDesc)));
+			defaultConfig.materialEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		auto thumbSettings           = settings["thumbnails"];
 		auto thumbDesc               = AssetThumbnailDesc();
@@ -263,72 +252,41 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		auto animSettings = settings["animationEditor"];
-		auto animDesc     = AnimationEditorWindowDesc();
-		animDesc.renderer = m_Renderer.get();
-		animDesc.initialPreviewInstances =
+		defaultConfig.rigViewport.initialInstances =
 			animSettings["initialPreviewInstances"].GetOrDefault(16u);
-		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
-		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
-		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
-		animDesc.headless               = headless;
+		defaultConfig.rigViewport.taaEnabled  = animSettings["temporalAA"].GetOrDefault(true);
+		defaultConfig.rigViewport.renderScale = animSettings["renderScale"].GetOrDefault(1.0f);
+		defaultConfig.rigViewport.taaReconstructionWidth =
+			animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
-		animDesc.previewEnv.environmentMap = animSettings["environmentMap"].GetOrDefault(
+		defaultConfig.rigEnvironment.environmentMap = animSettings["environmentMap"].GetOrDefault(
 			matSettings["environmentMap"].GetOrDefault(std::string()));
-		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(
+		defaultConfig.rigEnvironment.dataRoot = animSettings["dataRoot"].GetOrDefault(
 			matSettings["dataRoot"].GetOrDefault(std::string()));
-		animDesc.previewEnv.sky = readSky(animSettings, matDesc.materialEnvironment.sky);
+		defaultConfig.rigEnvironment.sky =
+			readSky(animSettings, defaultConfig.materialEnvironment.sky);
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = animSettings["exposure"])
-			animDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		// A rig previewed exactly as the Animation panel previews one, so it reads that panel's section
-		// rather than a copy of it.
-		auto blendRt                   = RenderTargetWindowDesc();
-		blendRt.renderer               = m_Renderer.get();
-		blendRt.initialInstances       = animDesc.initialPreviewInstances;
-		blendRt.taaEnabled             = animDesc.taaEnabled;
-		blendRt.renderScale            = animDesc.renderScale;
-		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
-		blendRt.headless               = headless;
-		auto blendEnv                  = animDesc.previewEnv;
+		m_Plugins =
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
+				requiredPlugins,
+				editor::plugins::ConfiguredPluginDirectories(configPath),
+				editor::plugins::CurrentBuildIdentity(),
+				editor::plugins::DefaultPluginCopyRoot(),
+				editor::plugins::PluginBinaryCopyMode::kPlatformDefault,
+				editor::defaults::CreatePlugin(defaultConfig)));
 
-		m_CreateEditorPanels = [this, animDesc, blendRt, blendEnv] {
-			auto animation    = animDesc;
-			auto blend        = blendRt;
-			animation.assets  = m_Assets.get();
-			blend.assets      = m_Assets.get();
-			m_AnimationEditor = new AnimationEditorWindow(m_AnimationEditorDock, animation);
-			m_BlendSpaceEditor =
-				new BlendSpaceEditorWindow(m_BlendSpaceEditorDock, blend, blendEnv);
-			ConnectEditorPanels();
-		};
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
 
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
-
-	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
-	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
-	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
-
-	m_BlendSpaceEditorDock = new QDockWidget("Blend Space Editor", this);
-	m_BlendSpaceEditorDock->setObjectName("BlendSpaceEditorDock");
-	m_BlendSpaceEditorDock->setTitleBarWidget(new QWidget(m_BlendSpaceEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_BlendSpaceEditorDock);
-
-	// Neither movable nor floatable, so the editors stay one tab group and exactly one viewport is
-	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
-	// dragged to another area, or out into a window of its own, would put a second viewport into the
-	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
-	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock : { m_AnimationEditorDock, m_BlendSpaceEditorDock })
-		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
@@ -434,8 +392,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
-	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
-	m_Ui.windowMenu->addAction(m_BlendSpaceEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 	m_Ui.windowMenu->addSeparator();
 	SetUpGpuTimingEntry();
@@ -668,7 +624,7 @@ MainWindow::ReleaseRenderResources() noexcept
 		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
-	ClearEditorPanels();
+	ClearFrameStats();
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
 }
 
@@ -1117,7 +1073,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	if (m_Thumbnails)
 		m_Thumbnails->SetStore(nullptr);
-	ClearEditorPanels();
+	ClearFrameStats();
 
 	// Panel teardown drains render work before the borrowed manager is released on its thread.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
@@ -1181,7 +1137,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 		});
 
 	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);
-	m_CreateEditorPanels();
+	SetUpFrameStats();
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
 	RefreshTextures();
@@ -1196,11 +1152,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	editor::SetProjectDataRoot(this, dataDir);
 
-	if (m_AnimationEditor)
-		m_AnimationEditor->SetAssets(m_Assets.get());
-	if (m_BlendSpaceEditor)
-		m_BlendSpaceEditor->SetAssets(m_Assets.get());
-
 	ShowProjectState();
 
 	setWindowTitle(
@@ -1208,24 +1159,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
-}
-
-void
-MainWindow::DriveViewportsFromTab(QDockWidget* dock)
-{
-	// Tabifying leaves the unselected dock's widget visible to Qt -- it is stacked behind, not
-	// hidden -- so without this every viewport in the editor keeps drawing whatever tab is on top.
-	// visibilityChanged is the signal that follows the tab, which show/hideEvent do not.
-	//
-	// One connection per view, so each dies with the view it drives; closeEvent cuts them all before
-	// that, because a dock hiding would otherwise put a viewport back into the loop on the way out.
-	for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
-	{
-		m_TabVisibility.push_back(
-			connect(dock, &QDockWidget::visibilityChanged, view, [view](bool visible) {
-				view->SetRenderingEnabled(visible);
-			}));
-	}
 }
 
 void
@@ -1357,15 +1290,24 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		return;
 	}
 
-	const editor::PanelDesc* desc = m_Plugins->Contributions().FindPanel(id);
+	const editor::PanelDesc*       desc      = m_Plugins->Contributions().FindPanel(id);
+	const editor::AssetEditorDesc* assetDesc = nullptr;
 	if (desc == nullptr)
+		for (const auto& candidate : m_Plugins->Contributions().AssetEditors())
+			if (candidate.id == id)
+			{
+				assetDesc = &candidate;
+				break;
+			}
+	if (desc == nullptr && assetDesc == nullptr)
 		throw std::runtime_error("Editor panel is not registered");
-	auto dockOwner = std::make_unique<QDockWidget>(
-		desc->title.Resolve(m_EditorHost->GetLanguageResolver()),
-		this);
+	const auto& title = desc != nullptr ? desc->title : assetDesc->title;
+	auto        dockOwner =
+		std::make_unique<QDockWidget>(title.Resolve(m_EditorHost->GetLanguageResolver()), this);
 	auto* dock = dockOwner.get();
-	dock->setObjectName(QString::fromStdString(desc->id));
-	editor::EditorPanel* panel = desc->factory->Create(*m_EditorHost, dock);
+	dock->setObjectName(QString::fromUtf8(id.data(), static_cast<qsizetype>(id.size())));
+	editor::EditorPanel* panel = desc != nullptr ? desc->factory->Create(*m_EditorHost, dock) :
+	                                               assetDesc->factory->Create(*m_EditorHost, dock);
 	if (panel == nullptr || panel->parentWidget() != dock)
 	{
 		delete panel;
@@ -1383,7 +1325,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
 		panel->SetActive(editor::IsPanelShown(visible, this));
 	});
-	m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
+	m_PluginDocks.emplace(std::string(id), PluginDock{ dock, panel });
 	static_cast<void>(dockOwner.release());
 	dock->show();
 	dock->raise();
@@ -1404,48 +1346,10 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 		if (desc == nullptr)
 			return;
 
-		QDockWidget* dock = nullptr;
-		if (const auto found = m_PluginDocks.find(desc->id); found != m_PluginDocks.end())
-		{
-			dock = found->second.dock;
-		}
-		else
-		{
-			auto dockOwner = std::make_unique<QDockWidget>(
-				desc->title.Resolve(m_EditorHost->GetLanguageResolver()),
-				this);
-			dock = dockOwner.get();
-			dock->setObjectName(QString::fromStdString(desc->id));
-			editor::AssetEditorPanel* panel = desc->factory->Create(*m_EditorHost, dock);
-			if (panel == nullptr || panel->parentWidget() != dock)
-			{
-				delete panel;
-				throw std::runtime_error("Asset editor factory returned an invalid widget");
-			}
-			dock->setWidget(panel);
-			dock->setTitleBarWidget(new QWidget(dock));
-			dock->setFeatures(QDockWidget::DockWidgetClosable);
-			addDockWidget(Qt::TopDockWidgetArea, dock);
-			if (m_EditorDockAnchor != nullptr)
-				tabifyDockWidget(m_EditorDockAnchor, dock);
-			else
-				m_EditorDockAnchor = dock;
-			m_Ui.windowMenu->addAction(dock->toggleViewAction());
-			connect(
-				dock,
-				&QDockWidget::visibilityChanged,
-				panel,
-				[this, panel](const bool visible) {
-					panel->SetActive(editor::IsPanelShown(visible, this));
-				});
-			m_PluginDocks.emplace(desc->id, PluginDock{ dock, panel });
-			static_cast<void>(dockOwner.release());
-		}
-
-		auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+		ShowPluginPanel(desc->id);
+		auto* panel =
+			dynamic_cast<editor::AssetEditorPanel*>(m_PluginDocks.at(desc->id).panel.data());
 		panel->OpenAsset(key);
-		dock->show();
-		dock->raise();
 	}
 	catch (const std::exception& error)
 	{
@@ -1528,7 +1432,7 @@ MainWindow::SetUpFrameStats()
 		{
 			const QString name = dock->windowTitle();
 
-			// Context is `view`, as in DriveViewportsFromTab: the connection dies with the viewport it
+			// Context is `view`: the connection dies with the viewport it
 			// names rather than outliving it holding its pointer.
 			m_TabVisibility.push_back(connect(
 				dock,
@@ -1595,8 +1499,6 @@ MainWindow::ShowEmptyState()
 
 	if (m_EditorDockAnchor)
 		m_EditorDockAnchor->hide();
-	m_AnimationEditorDock->hide();
-	m_BlendSpaceEditorDock->hide();
 	m_ContentExplorerDock->hide();
 
 	m_Ui.save->setEnabled(false);
@@ -1620,8 +1522,6 @@ MainWindow::ShowProjectState()
 	setCentralWidget(nullptr);
 
 	m_EditorDockAnchor->show();
-	m_AnimationEditorDock->show();
-	m_BlendSpaceEditorDock->show();
 	m_ContentExplorerDock->show();
 	m_EditorDockAnchor->raise();
 
@@ -1647,63 +1547,7 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 }
 
 void
-MainWindow::ConnectEditorPanels()
-{
-	tabifyDockWidget(m_EditorDockAnchor, m_AnimationEditorDock);
-	tabifyDockWidget(m_EditorDockAnchor, m_BlendSpaceEditorDock);
-	m_AnimationEditorDock->setWidget(m_AnimationEditor);
-	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
-	const auto materialChanged = [this](const QString& key) {
-		if (m_EditorHost)
-			m_EditorHost->AssetChanged(key.toStdString());
-	};
-	for (const QWidget* panel :
-	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
-		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
-			connect(preview, &AnimationPreviewWindow::MaterialBaked, this, materialChanged);
-
-	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
-	connect(
-		m_ContentExplorer,
-		&ContentExplorerWindow::BlendSetOpenRequested,
-		m_BlendSpaceEditor,
-		[this](const QString& key) {
-			m_BlendSpaceEditorDock->show();
-			m_BlendSpaceEditorDock->raise();
-			m_BlendSpaceEditor->OpenBlendSet(key);
-		});
-	DriveViewportsFromTab(m_AnimationEditorDock);
-	DriveViewportsFromTab(m_BlendSpaceEditorDock);
-
-	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
-	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
-	// on a tab switch.
-	//
-	// Through IsPanelShown, because the same signal reports a minimized or hidden window -- and
-	// unlike the two connections above, what these do is destructive.
-	m_TabVisibility.push_back(connect(
-		m_AnimationEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_AnimationEditor,
-		[this](bool visible) {
-			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
-	m_TabVisibility.push_back(connect(
-		m_BlendSpaceEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_BlendSpaceEditor,
-		[this](bool visible) {
-			m_BlendSpaceEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>()) ConfigureViewport(*view);
-	SetUpFrameStats();
-}
-
-void
-MainWindow::ClearEditorPanels() noexcept
+MainWindow::ClearFrameStats() noexcept
 {
 	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
 	m_TabVisibility.clear();
@@ -1712,8 +1556,4 @@ MainWindow::ClearEditorPanels() noexcept
 	m_FrameStats = nullptr;
 	if (m_GpuTiming != nullptr)
 		m_GpuTiming->SetSource(QString());
-	delete m_AnimationEditor;
-	m_AnimationEditor = nullptr;
-	delete m_BlendSpaceEditor;
-	m_BlendSpaceEditor = nullptr;
 }
