@@ -303,11 +303,13 @@ auto* panel = registry.FindPanel("sample.overview")->factory->Create(host, &proj
 panel->SetActive(true);
 ```
 
-See the compiled [sample](examples/editor_plugin/sample.cpp) and its
-[README](examples/editor_plugin/README.md). It links only the public API and a private JSON parser;
-it has no editor implementation include path. It currently displays a selected document key, not
-a working document editor. Its contracts still use a fake host; `editor_tests` exercises the same
-plugin through the production registry and project host.
+The independently configured [sample](examples/editor_plugin/README.md) builds separate runtime
+and editor modules through the exported SDK, with a generated local descriptor. The same sources
+also serve the fake-host contracts. Its project tab and selected-document tab use only the public
+API; the latter displays a key rather than editing JSON. Production-loader tests follow custom
+references through deletion protection, rename and migration, then pack the project, remove the
+loose files and read it in a Qt-free archive reader. The reader compiles the runtime implementation
+without the editor module. The README supplies the local configure, rebuild and restart loop.
 
 `just test editor_plugin` exercises deferred registration, Qt ownership, stable contribution addresses, exclusive destruction, tab activation, held asset
 replacement, optional asset-change handling, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.

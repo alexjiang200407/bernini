@@ -42,8 +42,10 @@ target_link_libraries(editor_tests PRIVATE
 )
 
 if(BERNINI_EDITOR_SDK)
-	add_dependencies(editor_tests editor_sdk_consumer)
+	add_dependencies(editor_tests editor_sdk_consumer editor_plugin_sample)
 	target_compile_definitions(editor_tests PRIVATE
+		EDITOR_PLUGIN_SAMPLE_DIR="${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>"
+		EDITOR_PLUGIN_SAMPLE_READER="${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>/sample_readback${CMAKE_EXECUTABLE_SUFFIX}"
 		EDITOR_PLUGIN_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
 		EDITOR_PLUGIN_COLLISION_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_collision_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
 		EDITOR_PLUGIN_REJECTED_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_rejected_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}")

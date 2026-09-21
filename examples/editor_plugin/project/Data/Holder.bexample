@@ -1,0 +1,4 @@
+{
+    "references": ["Target.bexample"],
+    "note": "Rename Target in Content Explorer; this reference follows it."
+}

@@ -9,7 +9,7 @@ host-owned language resolution and optional CSV ingestion using core and Qt Core
 interface; they do not link the host implementation. No production registry lives here yet.
 editor_plugin_tests exercises examples/editor_plugin through a recording host and tests the concrete
 resolver and CSV reader, with no GPU work. In a top-level renderer build, this directory also exports
-the build-tree `BerniniEditorSDK` package. Its external fixture must configure as a separate CMake
-project and link `Bernini::editor_api`; adding the engine with `add_subdirectory` defeats the gate.
+the build-tree `BerniniEditorSDK` package. Its external ABI fixture and local sample configure as separate CMake
+projects and link `Bernini::editor_api`; adding the engine with `add_subdirectory` defeats the gate.
 
 See docs/editor_plugins.md for ownership, threading, and the integration still pending.
