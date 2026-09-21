@@ -78,6 +78,11 @@ import bgl.PbrSurface;
 import bgl.SurfaceSource;
 )";
 
+	constexpr std::string_view c_LitContract = R"(import bgl.MaterialReader;
+import bgl.SurfaceLight;
+import bgl.LitSurfaceSource;
+)";
+
 	// A surface whose fields are ordered to tell the layout rules apart: a float before a float3
 	// packs them into one 16-byte span under the scalar rules a raw load reconstructs, and pushes
 	// the float3 to 16 under any rule that aligns a vector to its size.
@@ -120,6 +125,12 @@ struct GateSurface : ISurfaceSource
 	Module(std::string_view body)
 	{
 		return std::string(c_Contract) + std::string(body);
+	}
+
+	std::string
+	LitModule(std::string_view body)
+	{
+		return std::string(c_LitContract) + std::string(body);
 	}
 
 	// Where GateParams' six fields land, in declaration order.
@@ -174,6 +185,7 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
 	CHECK(surface.kind == MaterialType::kInvalid);
+	CHECK(surface.shading == SurfaceShading::kPbrSurface);
 	CHECK(surface.params.byteSize == paramsSize);
 
 	REQUIRE(surface.params.values.size() == 4u);
@@ -264,6 +276,68 @@ struct KindSurface : ISurfaceSource
 	CHECK(surface.params.textures[3].kind == SurfaceTextureKind::kColor);
 }
 
+// The lit contract reflects under exactly the rules the PBR-surface one does -- same parameter
+// walk, same slots -- with the discriminator saying which contract the struct conforms to. The
+// module also exercises ISurfaceLight: Shade reads the sun and both environment lookups, so the
+// contract's methods are held compilable by this compile.
+TEST_CASE("A lit surface reflects with its own contract", "[surface][reflection]")
+{
+	constexpr std::string_view c_Toon = R"(struct ToonParams
+{
+    [Color]
+    [Default(1.0, 0.5, 0.25)]
+    float3 shadowTint;
+
+    [Default(3.0)]
+    float bands;
+
+    ColorSlot base;
+};
+
+struct ToonSurface : ILitSurfaceSource
+{
+    typealias MaterialParams = ToonParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, ToonParams params) { return 1.0; }
+
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, ToonParams params)
+    {
+        let towardSun = -light.SunDirection();
+        let facing = max(dot(reader.WorldNormal(), towardSun), 0.0);
+        let band = floor(facing * params.bands) / params.bands;
+        let ambient = light.Irradiance(reader.WorldNormal())
+            + light.Reflection(reader.WorldNormal(), 1.0);
+        let base = reader.Sample(params.base, reader.Uv());
+        let lit = lerp(params.shadowTint, light.SunRadiance(), band);
+        return float4(base.rgb * (lit + ambient), base.a);
+    }
+};
+)";
+
+	Session                               session;
+	const std::optional<ReflectedSurface> reflected =
+		ReflectSurface(session.Load("Toon", LitModule(c_Toon)), "Toon");
+	REQUIRE(reflected.has_value());
+	const SurfaceType& surface = reflected->type;
+
+	CHECK(reflected->sourceTypeName == "ToonSurface");
+	CHECK(surface.name == "Toon");
+	CHECK(surface.kind == MaterialType::kInvalid);
+	CHECK(surface.shading == SurfaceShading::kLit);
+
+	REQUIRE(surface.params.values.size() == 2u);
+	CHECK(surface.params.values[0].name == "shadowTint");
+	CHECK(surface.params.values[0].type == SurfaceValueType::kFloat3);
+	CHECK(surface.params.values[0].isColor);
+	CHECK(surface.params.values[1].name == "bands");
+	CHECK(surface.params.values[1].defaultValue.x == 3.0f);
+
+	REQUIRE(surface.params.textures.size() == 1u);
+	CHECK(surface.params.textures[0].name == "base");
+	CHECK(surface.params.textures[0].kind == SurfaceTextureKind::kColor);
+	CHECK(surface.params.textures[0].index == 0u);
+}
+
 // A module that never imported the contract is not a failed surface, it is the game's own code:
 // the same directory is its module search path, so most of what sits there is nothing the engine
 // has an opinion about. Anything that does import the contract is held to it, below.
@@ -318,6 +392,74 @@ struct SecondSurface : ISurfaceSource
 			ReflectSurface(session.Load("Two", Module(c_Body)), "Two"),
 			std::runtime_error,
 			Catch::Matchers::MessageMatches(ContainsSubstring("both conform to ISurfaceSource")));
+	}
+
+	SECTION("nothing conforms to the lit contract it imported")
+	{
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(
+				session.Load("LoneLit", LitModule("struct LoneLit { float value; };\n")),
+				"LoneLit"),
+			std::runtime_error,
+			Catch::Matchers::Message(
+				"surface 'LoneLit': no struct in the module conforms to ILitSurfaceSource"));
+	}
+
+	SECTION("nothing conforms to either contract it imported")
+	{
+		const std::string body = std::string(c_LitContract) + "struct Neither { float value; };\n";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Neither", Module(body)), "Neither"),
+			std::runtime_error,
+			Catch::Matchers::Message(
+				"surface 'Neither': no struct in the module conforms to "
+				"ISurfaceSource or ILitSurfaceSource"));
+	}
+
+	SECTION("one struct conforms to each contract")
+	{
+		const std::string body =
+			std::string(c_LitContract) + R"(struct SplitParams { float value; };
+
+struct PbrHalf : ISurfaceSource
+{
+    typealias MaterialParams = SplitParams;
+    static float Coverage<R : IMaterialReader>(R reader, SplitParams params) { return 1.0; }
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, SplitParams params) { return PbrSurface(); }
+};
+
+struct LitHalf : ILitSurfaceSource
+{
+    typealias MaterialParams = SplitParams;
+    static float Coverage<R : IMaterialReader>(R reader, SplitParams params) { return 1.0; }
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, SplitParams params) { return float4(0.0); }
+};
+)";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Split", Module(body)), "Split"),
+			std::runtime_error,
+			Catch::Matchers::MessageMatches(
+				ContainsSubstring("both conform to a surface contract")));
+	}
+
+	SECTION("one struct conforms to both contracts")
+	{
+		const std::string body =
+			std::string(c_LitContract) + R"(struct GreedyParams { float value; };
+
+struct GreedySurface : ISurfaceSource, ILitSurfaceSource
+{
+    typealias MaterialParams = GreedyParams;
+    static float Coverage<R : IMaterialReader>(R reader, GreedyParams params) { return 1.0; }
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, GreedyParams params) { return PbrSurface(); }
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, GreedyParams params) { return float4(0.0); }
+};
+)";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Greedy", Module(body)), "Greedy"),
+			std::runtime_error,
+			Catch::Matchers::MessageMatches(ContainsSubstring(
+				"conforms to ISurfaceSource and ILitSurfaceSource; a surface owns one contract")));
 	}
 
 	SECTION("a ninth texture")
