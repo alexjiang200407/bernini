@@ -76,7 +76,9 @@ when a material names it, and still by name.
 
 `Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
 lighting then reads. A surface chooses what a pixel *is*, not how it is lit; there is no
-game-defined lighting model.
+game-defined lighting model. One thing reaches the surface's answer after it returns: the
+material's UV1 occlusion map, which the engine multiplies into `orm.r` through the second UV set
+the surface never sees ([Passes](passes.md)).
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque

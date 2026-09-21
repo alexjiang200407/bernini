@@ -622,6 +622,10 @@ namespace bgl
 		[[nodiscard]] core::slot_handle
 		AllocateGeomSlot(const GeomRecord& record);
 
+		// The bytes a record stores for `texture`, or for `fallback` when the caller named none.
+		[[nodiscard]] idl::RawTextureHandle
+		ResolveTexture(TextureAssetHandle texture, core::slot_handle fallback) const;
+
 		// The desc -> GPU-struct conversion, shared by Create* and Update*, so a material built by
 		// either route is byte-identical (including the default-texture fallbacks for absent maps).
 		[[nodiscard]] idl::PbrMaterial

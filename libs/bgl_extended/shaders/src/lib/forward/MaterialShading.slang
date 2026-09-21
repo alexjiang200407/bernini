@@ -13,12 +13,13 @@ public extension MaterialData
 {
     // Base colour is passed in rather than sampled here, so the tested paths can test it without
     // sampling the texture a second time.
-    PbrSurface SurfaceOf<M : IPbrMaterial>(M material, float2 uv, float4 baseColor)
+    PbrSurface SurfaceOf<M : IPbrMaterial>(M material, ForwardVSOut input, float4 baseColor)
     {
         PbrSurface surface;
         surface.baseColor = baseColor;
-        surface.orm = material.GetORM(uv);
-        surface.normalXY = material.GetNormalXY(uv);
+        surface.orm = material.GetORM(input.uv);
+        surface.orm.r *= material.GetUv1Occlusion(input.uv1);
+        surface.normalXY = material.GetNormalXY(input.uv);
         surface.specularFactors = material.GetSpecular();
         surface.transmissionFactor = material.GetTransmission();
         surface.emissive = float3(0.0, 0.0, 0.0);
@@ -60,14 +61,14 @@ public extension MaterialData
     {
         M material = M.Load(input.materialOffset);
 
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace), 1.0);
+        return float4(ShadeSurface(input, SurfaceOf(material, input, material.GetBaseColor(input.uv)), isFrontFace), 1.0);
     }
 
     public float4 ShadeBlended<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
     {
         M material = M.Load(input.materialOffset);
 
-        return ShadeSurfaceBlended(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
+        return ShadeSurfaceBlended(input, SurfaceOf(material, input, material.GetBaseColor(input.uv)), isFrontFace);
     }
 
     // Every engine-defined kind under blend. The transparent program falls through to this for any
@@ -123,7 +124,7 @@ public extension MaterialData
         let baseColor = material.GetBaseColor(input.uv);
         DiscardUncoveredAlphaTested(material, baseColor);
 
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 1.0);
+        return float4(ShadeSurface(input, SurfaceOf(material, input, baseColor), isFrontFace), 1.0);
     }
 
     // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
@@ -138,6 +139,6 @@ public extension MaterialData
 
         M material = M.Load(input.materialOffset);
 
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace), 0.0);
+        return float4(ShadeSurface(input, SurfaceOf(material, input, material.GetBaseColor(input.uv)), isFrontFace), 0.0);
     }
 }
