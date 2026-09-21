@@ -197,7 +197,8 @@ AnimationPreviewWindow::SetBlobShadow(const bool enabled)
 		return;
 
 	GetRenderer()->Invoke([&] {
-		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyBlobShadow(draw.instance);
+		for (const AnimatedDraw& draw : m_AnimatedDraws)
+			ApplyBlobShadow(draw.instance, draw.castsShadow);
 	});
 }
 
@@ -213,18 +214,21 @@ AnimationPreviewWindow::SetFootShadows(const bool enabled)
 		return;
 
 	GetRenderer()->Invoke([&] {
-		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyBlobShadow(draw.instance);
+		for (const AnimatedDraw& draw : m_AnimatedDraws)
+			ApplyBlobShadow(draw.instance, draw.castsShadow);
 	});
 }
 
 void
-AnimationPreviewWindow::ApplyBlobShadow(const bgl::MeshInstanceHandle instance)
+AnimationPreviewWindow::ApplyBlobShadow(
+	const bgl::MeshInstanceHandle instance,
+	const bool                    castsShadow)
 {
 	bgl::ISceneView* view = GetPreviewView();
 
 	const std::optional<bgl::BlobShadowDesc> desc = editor::PreviewBlobShadow(
-		m_BlobShadow,
-		m_FootShadows,
+		castsShadow && m_BlobShadow,
+		castsShadow && m_FootShadows,
 		view->HasFootIK(instance),
 		m_BlobDesc,
 		m_FootDesc);
@@ -620,8 +624,16 @@ AnimationPreviewWindow::LoadMesh(
 
 							const bgl::GeomHandle geom = skinned.geom;
 							m_Geoms.push_back(geom);
+							const bool castsShadow = std::ranges::none_of(
+								m_AnimatedDraws,
+								[&](const AnimatedDraw& draw) {
+									return draw.world == placement.world;
+								});
 							m_AnimatedDraws.push_back(
-								{ geom, placement.world, SpawnAnimated(geom, placement.world, 0) });
+								{ geom,
+						          placement.world,
+						          SpawnAnimated(geom, placement.world, 0, castsShadow),
+						          castsShadow });
 							out.clips  = std::move(skinned.clips);
 							out.spaces = std::move(skinned.spaces);
 							m_Playback = bgl::SkinnedPlaybackDesc::FromClip(0);
@@ -665,7 +677,7 @@ AnimationPreviewWindow::LoadMesh(
 					if (m_BlobShadow || m_FootShadows)
 					{
 						for (const AnimatedDraw& draw : m_AnimatedDraws)
-							ApplyBlobShadow(draw.instance);
+							ApplyBlobShadow(draw.instance, draw.castsShadow);
 					}
 
 					return out;
@@ -864,7 +876,8 @@ bgl::MeshInstanceHandle
 AnimationPreviewWindow::SpawnAnimated(
 	const bgl::GeomHandle geom,
 	const glm::mat4&      world,
-	const uint32_t        clip)
+	const uint32_t        clip,
+	const bool            castsShadow)
 {
 	// Phase 0 and rate 1: the panel's transport is the clock. `source` is the whole of what the two
 	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
@@ -874,7 +887,7 @@ AnimationPreviewWindow::SpawnAnimated(
 		world,
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
 	ApplyFootIK(instance);
-	ApplyBlobShadow(instance);
+	ApplyBlobShadow(instance, castsShadow);
 	return instance;
 }
 
@@ -949,7 +962,7 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float 
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, node);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, node, draw.castsShadow);
 			}
 			catch (const std::exception& e)
 			{
@@ -1026,7 +1039,7 @@ AnimationPreviewWindow::ShowSpace(
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, seed);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, seed, draw.castsShadow);
 				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
 			}
 			catch (const std::exception& e)
@@ -1107,7 +1120,7 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSecon
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, index);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, index, draw.castsShadow);
 			}
 			catch (const std::exception& e)
 			{

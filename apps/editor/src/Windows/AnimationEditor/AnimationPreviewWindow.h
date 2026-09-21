@@ -408,7 +408,7 @@ private:
 
 	/** Places one animated instance on `clip` at phase 0, rate 1, reading the active pose source. */
 	[[nodiscard]] bgl::MeshInstanceHandle
-	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip);
+	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip, bool castsShadow);
 
 	// Writes m_FootIK into one instance. Render thread only. A crowd instance and a rig without
 	// legs own no record and are left alone.
@@ -418,7 +418,7 @@ private:
 	// Puts the disc and the foot shadows on one instance, or takes them off, per m_BlobShadow and
 	// m_FootShadows. Render thread only.
 	void
-	ApplyBlobShadow(bgl::MeshInstanceHandle instance);
+	ApplyBlobShadow(bgl::MeshInstanceHandle instance, bool castsShadow);
 
 	/**
 	 * Sets the scene's ground to the current slope and stands the floor under the rig at the same
@@ -439,6 +439,7 @@ private:
 		bgl::GeomHandle         geom;
 		glm::mat4               world = glm::mat4(1.0f);
 		bgl::MeshInstanceHandle instance;
+		bool                    castsShadow = false;
 	};
 
 	game::AssetManager* m_Assets = nullptr;
