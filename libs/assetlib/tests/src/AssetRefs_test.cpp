@@ -18,6 +18,7 @@
 #include <assetlib_structs/Node.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #include <filesystem>
 #include <ios>
 #include <optional>
@@ -121,6 +122,34 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 			CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 			CHECK(fs::exists(root.path / texture));
 		}
+	}
+}
+
+// The renderer samples the UV1 map directly, under either model, so it is held like a baked map
+// rather than like a source the bake reads.
+TEST_CASE("A material's UV1 occlusion map is held under every shading model", "[assetrefs]")
+{
+	const DataRoot root("bernini_refs_uv1_occlusion");
+
+	const std::string map = "Derived/SourceTextures/wall_ao.ktx2";
+	WriteSource(root.path / map, { { 128, 128, 128, 255 } });
+
+	for (const ShadingModel model : { ShadingModel::kPbr, ShadingModel::kPbrSurface })
+	{
+		INFO("shading model " << static_cast<uint32_t>(model));
+
+		BMaterial material;
+		material.shadingModel        = model;
+		material.uv1OcclusionTexture = map;
+		StoreAt(root.path).Save(material, "Authored/Materials/wall.bmaterial");
+
+		const AssetRefGraph graph     = root.Scan();
+		const auto          referrers = graph.ReferrersOf(map);
+
+		REQUIRE(referrers.size() == 1);
+		CHECK(referrers[0].referrer == "Authored/Materials/wall.bmaterial");
+		CHECK(referrers[0].kind == RefKind::kBakedMap);
+		CHECK_FALSE(planDeletion(graph, map).Allowed());
 	}
 }
 

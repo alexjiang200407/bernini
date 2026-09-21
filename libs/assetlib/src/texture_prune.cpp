@@ -79,6 +79,8 @@ namespace assetlib
 
 					++live.materials;
 
+					markMap(live, material.uv1OcclusionTexture);
+
 					switch (material.shadingModel)
 					{
 					case ShadingModel::kPbr:
