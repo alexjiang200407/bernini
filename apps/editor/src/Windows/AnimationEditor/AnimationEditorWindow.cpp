@@ -69,6 +69,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 {
 	auto rt                   = RenderTargetWindowDesc();
 	rt.renderer               = desc.renderer;
+	rt.assets                 = desc.assets;
 	rt.initialInstances       = desc.initialPreviewInstances;
 	rt.taaEnabled             = desc.taaEnabled;
 	rt.renderScale            = desc.renderScale;

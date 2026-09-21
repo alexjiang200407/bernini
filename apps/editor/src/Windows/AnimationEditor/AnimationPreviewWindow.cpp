@@ -111,11 +111,13 @@ AnimationPreviewWindow::AnimationPreviewWindow(
 
 AnimationPreviewWindow::~AnimationPreviewWindow()
 {
+	SetRenderingEnabled(false);
 	ClearGeometry();
 
 	GetRenderer()->Invoke([&] {
 		try
 		{
+			editor::ReleaseEnvironment(GetPreviewScene(), m_Environment);
 			if (m_GroundGeom.IsValid())
 				GetPreviewScene()->DeleteGeom(m_GroundGeom);
 			if (m_GroundMaterial.IsValid())

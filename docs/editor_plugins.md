@@ -152,6 +152,10 @@ first; any refusal keeps the project alive. Then destroy panels and their viewpo
 join plugin work while the old host still exists. The host tracks returned panels with guarded pointers; a panel that survives dock teardown is
 logged by contribution ID and deleted before project services. Destroy the host last. On another project, create
 new panels against a new host; do not silently retarget stored references to old services.
+The built-in Material, Animation and Blend Space panels follow the same project lifetime: an
+empty editor allocates no preview viewports, and project replacement destroys the old panels before
+releasing their asset manager. New viewports retain the current Render-menu overrides. Preview teardown stops rendering and
+releases owned geometry, materials and environment maps from the persistent scene.
 
 ## Risky contracts
 

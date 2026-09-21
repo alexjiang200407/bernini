@@ -14,22 +14,34 @@
 #include "util/follows_project.h"
 #include "util/rig_containers.h"
 #include <algorithm>
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/MaterialHandle.h>
+#include <cstdint>
 #include <editor_api/EditorPanel.h>
+#include <editor_api/IEditorViewport.h>
 #include <editor_api/PluginDescriptor.h>
+#include <gamelib/AssetManager.h>
 
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDialog>
 #include <QDir>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
+#include <QFileDialog>
 #include <QFileSystemModel>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListView>
 #include <QListWidget>
 #include <QMenu>
@@ -52,8 +64,10 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <qcontainerfwd.h>
 #include <qlist.h>
 #include <qmainwindow.h>
+#include <qnamespace.h>
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
@@ -298,6 +312,106 @@ TEST_CASE("A plugin editor failure stays inside the GUI boundary", "[mainwindow]
 	CHECK(window->findChild<QWidget*>("sample.throwing_editor_child") == nullptr);
 }
 #endif
+
+TEST_CASE(
+	"Replacing a project replaces its built-in panels and render services",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor             first;
+	const HeadlessEditor             second;
+	MainWindow                       window(nullptr, first.ConfigFile());
+	QPointer<MaterialEditorWindow>   material  = window.findChild<MaterialEditorWindow*>();
+	QPointer<AnimationEditorWindow>  animation = window.findChild<AnimationEditorWindow*>();
+	QPointer<BlendSpaceEditorWindow> blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(material != nullptr);
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+	auto* scale = ActionNamed(window, "0.5x");
+	REQUIRE(scale != nullptr);
+	scale->trigger();
+	auto* open = ActionNamed(window, "Open Project...");
+	REQUIRE(open != nullptr);
+
+	const auto sceneSlots = [&] {
+		std::array<uint32_t, 2> allocations{};
+		window.findChild<RenderTargetWindow*>()->Invoke(
+			[&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				const auto probeMaterial = context.scene.CreatePbrMaterial({});
+				const auto probeGeom = context.scene.AddPlaneGeom(1, 1, 1.0f, 1.0f, probeMaterial);
+				allocations          = { probeGeom.handle.index, probeMaterial.byteOffset };
+				context.scene.DeleteGeom(probeGeom);
+				context.scene.DeleteMaterial(probeMaterial);
+			});
+		return allocations;
+	};
+	const auto baseline = sceneSlots();
+	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
+	{
+		material                  = window.findChild<MaterialEditorWindow*>();
+		animation                 = window.findChild<AnimationEditorWindow*>();
+		blend                     = window.findChild<BlendSpaceEditorWindow*>();
+		const bool nativeDisabled = QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+		QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+		QElapsedTimer deadline;
+		deadline.start();
+		QTimer      chooser;
+		bool        selected = false;
+		QString     dialogMessage;
+		QStringList selection;
+		QObject::connect(&chooser, &QTimer::timeout, &window, [&] {
+			for (QWidget* widget : QApplication::topLevelWidgets())
+			{
+				if (auto* message = qobject_cast<QMessageBox*>(widget))
+				{
+					dialogMessage = message->text();
+					message->reject();
+				}
+				if (deadline.elapsed() > 10000)
+				{
+					if (auto* dialog = qobject_cast<QDialog*>(widget))
+						dialog->reject();
+					continue;
+				}
+				if (auto* dialog = qobject_cast<QFileDialog*>(widget);
+				    dialog != nullptr && !selected)
+				{
+					auto* fileName = dialog->findChild<QLineEdit*>("fileNameEdit");
+					if (fileName == nullptr)
+						continue;
+					fileName->setText(QString::fromStdString(second.ProjectFile().string()));
+					selection = dialog->selectedFiles();
+					selected  = true;
+					static_cast<QDialog*>(dialog)->accept();
+				}
+			}
+		});
+		chooser.start(10);
+		open->trigger();
+		chooser.stop();
+		QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs, nativeDisabled);
+		INFO(dialogMessage.toStdString());
+		INFO(selection.join(";").toStdString());
+		REQUIRE(selected);
+		CHECK(material.isNull());
+		CHECK(animation.isNull());
+		CHECK(blend.isNull());
+		auto* replacement = window.findChild<MaterialEditorWindow*>();
+		REQUIRE(replacement != nullptr);
+		CHECK(replacement->GetDataRoot() == second.DataRoot());
+		const auto views = window.findChildren<RenderTargetWindow*>();
+		REQUIRE(views.size() == c_ViewportCount);
+		for (auto* view : views)
+		{
+			CHECK(view->GetRenderScale() == Catch::Approx(0.5f));
+			fs::path root;
+			view->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				root = context.assets.GetStore().GetDataRoot();
+			});
+			CHECK(root == second.DataRoot());
+		}
+		CHECK(sceneSlots() == baseline);
+	}
+}
 
 TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][render]")
 {
@@ -632,6 +746,10 @@ TEST_CASE("What a project enables and an empty editor does not", "[mainwindow][r
 		core::file::write_atomic(config, R"({ "headless": true })");
 
 		const MainWindow window(nullptr, config);
+		CHECK(window.findChildren<RenderTargetWindow*>().isEmpty());
+		CHECK(window.findChild<MaterialEditorWindow*>() == nullptr);
+		CHECK(window.findChild<AnimationEditorWindow*>() == nullptr);
+		CHECK(window.findChild<BlendSpaceEditorWindow*>() == nullptr);
 
 		const QAction* save  = entry(window, "Save");
 		const QAction* clean = entry(window, "Clean Unused Textures...");

@@ -108,6 +108,24 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	ShowDefaultSphere();
 }
 
+MaterialPreviewWindow::~MaterialPreviewWindow()
+{
+	SetRenderingEnabled(false);
+	ClearGeometry();
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			editor::ReleaseEnvironment(GetPreviewScene(), m_Environment);
+			if (m_DefaultMaterial.IsValid())
+				GetPreviewScene()->DeleteMaterial(m_DefaultMaterial);
+		}
+		catch (const std::exception& error)
+		{
+			qWarning("MaterialPreview: failed to release preview resources: %s", error.what());
+		}
+	});
+}
+
 void
 MaterialPreviewWindow::ClearGeometry()
 {

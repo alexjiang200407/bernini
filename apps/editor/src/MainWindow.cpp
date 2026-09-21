@@ -293,10 +293,19 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		blendRt.headless               = headless;
 		auto blendEnv                  = animDesc.previewEnv;
 
-		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
-		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
-		m_BlendSpaceEditor =
-			new BlendSpaceEditorWindow(this, std::move(blendRt), std::move(blendEnv));
+		m_CreateEditorPanels = [this, matDesc, animDesc, blendRt, blendEnv] {
+			auto material     = matDesc;
+			auto animation    = animDesc;
+			auto blend        = blendRt;
+			material.assets   = m_Assets.get();
+			animation.assets  = m_Assets.get();
+			blend.assets      = m_Assets.get();
+			m_MaterialEditor  = new MaterialEditorWindow(m_MaterialEditorDock, material);
+			m_AnimationEditor = new AnimationEditorWindow(m_AnimationEditorDock, animation);
+			m_BlendSpaceEditor =
+				new BlendSpaceEditorWindow(m_BlendSpaceEditorDock, blend, blendEnv);
+			ConnectEditorPanels();
+		};
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
@@ -306,19 +315,16 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 
 	m_MaterialEditorDock = new QDockWidget("Material Editor", this);
 	m_MaterialEditorDock->setObjectName("MaterialEditorDock");
-	m_MaterialEditorDock->setWidget(m_MaterialEditor);
 	m_MaterialEditorDock->setTitleBarWidget(new QWidget(m_MaterialEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_MaterialEditorDock);
 
 	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
 	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
-	m_AnimationEditorDock->setWidget(m_AnimationEditor);
 	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
 
 	m_BlendSpaceEditorDock = new QDockWidget("Blend Space Editor", this);
 	m_BlendSpaceEditorDock->setObjectName("BlendSpaceEditorDock");
-	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
 	m_BlendSpaceEditorDock->setTitleBarWidget(new QWidget(m_BlendSpaceEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_BlendSpaceEditorDock);
 
@@ -420,33 +426,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			}
 		});
 
-	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
-	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
-	// same way.
-	connect(
-		m_ContentExplorer,
-		&ContentExplorerWindow::MaterialBaked,
-		m_MaterialEditor,
-		&MaterialEditorWindow::RefreshMaterialState);
-	for (const QWidget* panel :
-	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
-		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
-			connect(
-				preview,
-				&AnimationPreviewWindow::MaterialBaked,
-				m_MaterialEditor,
-				&MaterialEditorWindow::RefreshMaterialState);
-
-	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
-	connect(
-		m_ContentExplorer,
-		&ContentExplorerWindow::BlendSetOpenRequested,
-		m_BlendSpaceEditor,
-		[this](const QString& key) {
-			m_BlendSpaceEditorDock->show();
-			m_BlendSpaceEditorDock->raise();
-			m_BlendSpaceEditor->OpenBlendSet(key);
-		});
 	connect(
 		m_ContentExplorer,
 		&ContentExplorerWindow::AssetOpenRequested,
@@ -457,43 +436,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
-	DriveViewportsFromTab(m_MaterialEditorDock);
-	DriveViewportsFromTab(m_AnimationEditorDock);
-	DriveViewportsFromTab(m_BlendSpaceEditorDock);
-
-	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
-	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
-	// on a tab switch.
-	//
-	// Through IsPanelShown, because the same signal reports a minimized or hidden window -- and
-	// unlike the two connections above, what these do is destructive.
-	m_TabVisibility.push_back(connect(
-		m_AnimationEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_AnimationEditor,
-		[this](bool visible) {
-			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
-	// and nothing asks: the panel writes only on Save.
-	m_TabVisibility.push_back(connect(
-		m_MaterialEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_MaterialEditor,
-		[this](bool visible) {
-			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
-	m_TabVisibility.push_back(connect(
-		m_BlendSpaceEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_BlendSpaceEditor,
-		[this](bool visible) {
-			m_BlendSpaceEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_BlendSpaceEditorDock->toggleViewAction());
@@ -502,15 +444,13 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	SetUpGpuTimingEntry();
 	SetUpPluginContributions();
 
-	SetUpRenderMenu();
-
-	SetUpFrameStats();
-
 	// config.json may name a project to open on launch, so working on one does not mean reopening
 	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(startupProject))
 		ShowEmptyState();
+
+	SetUpRenderMenu();
 
 	// Startup is over: a project opened from the menu from here on gets the modal screen, not the
 	// one main() is about to close.
@@ -633,6 +573,13 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 		action->setChecked(qFuzzyCompare(factor, current));
 		group->addAction(action);
 
+		connect(scale, &QMenu::aboutToShow, action, [this, action, factor] {
+			const auto  views   = findChildren<RenderTargetWindow*>();
+			const float current = m_RenderScaleOverride.value_or(
+				views.isEmpty() ? 1.0f : views.first()->GetRenderScale());
+			action->setChecked(qFuzzyCompare(factor, current));
+		});
+
 		connect(action, &QAction::triggered, this, [this, factor]() {
 			m_RenderScaleOverride = factor;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
@@ -673,6 +620,13 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 		action->setCheckable(true);
 		action->setChecked(qFuzzyCompare(value, current));
 		group->addAction(action);
+
+		connect(width, &QMenu::aboutToShow, action, [this, action, value] {
+			const auto  views   = findChildren<RenderTargetWindow*>();
+			const float current = m_ReconstructionWidthOverride.value_or(
+				views.isEmpty() ? 0.4f : views.first()->GetTaaReconstructionWidth());
+			action->setChecked(qFuzzyCompare(value, current));
+		});
 
 		connect(action, &QAction::triggered, this, [this, value]() {
 			m_ReconstructionWidthOverride = value;
@@ -717,24 +671,8 @@ MainWindow::ReleaseRenderResources() noexcept
 		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
-	// Their acquisitions release through the manager, so they go before m_Assets does.
-	if (m_AnimationEditor != nullptr)
-		m_AnimationEditor->SetAssets(nullptr);
-	if (m_BlendSpaceEditor != nullptr)
-		m_BlendSpaceEditor->SetAssets(nullptr);
-
-	// After the thumbnails, which release their materials back through it, and before the viewports,
-	// so the instances it deletes leave views that are still standing.
+	ClearEditorPanels();
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
-
-	delete m_MaterialEditor;
-	m_MaterialEditor = nullptr;
-
-	delete m_AnimationEditor;
-	m_AnimationEditor = nullptr;
-
-	delete m_BlendSpaceEditor;
-	m_BlendSpaceEditor = nullptr;
 }
 
 void
@@ -1184,10 +1122,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
 		m_Thumbnails->SetStore(nullptr);
-	if (m_AnimationEditor)
-		m_AnimationEditor->SetAssets(nullptr);
-	if (m_BlendSpaceEditor)
-		m_BlendSpaceEditor->SetAssets(nullptr);
+	ClearEditorPanels();
 
 	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
 	// thread like any other scene mutation -- the viewports are still drawing at this point.
@@ -1220,19 +1155,10 @@ MainWindow::SetActiveProject(assetlib::Project project)
 								m_Project->GetStore().ResolveWritePath(key).wstring()));
 					}
 				},
-			.viewportCreated =
-				[this](RenderTargetWindow& view) {
-					if (m_TaaOverride)
-						view.SetTaaEnabled(*m_TaaOverride);
-					if (m_RenderScaleOverride)
-						view.SetRenderScale(*m_RenderScaleOverride);
-					if (m_ReconstructionWidthOverride)
-						view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
-					view.SetOutlineEnabled(m_OutlineEnabled);
-					view.SetGpuTimingEnabled(
-						m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
-				},
+			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
 		});
+
+	m_CreateEditorPanels();
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
 	RefreshTextures();
@@ -1602,7 +1528,7 @@ MainWindow::SetUpFrameStats()
 			connect(
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
-				this,
+				m_FrameStats,
 				[this, view, name](
 					double                               meanMs,
 					double                               maxMs,
@@ -1677,4 +1603,109 @@ MainWindow::ShowProjectState()
 	m_Ui.windowMenu->setEnabled(true);
 
 	resizeDocks({ m_MaterialEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
+}
+
+void
+MainWindow::ConfigureViewport(RenderTargetWindow& view)
+{
+	if (m_TaaOverride)
+		view.SetTaaEnabled(*m_TaaOverride);
+	if (m_RenderScaleOverride)
+		view.SetRenderScale(*m_RenderScaleOverride);
+	if (m_ReconstructionWidthOverride)
+		view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+	view.SetOutlineEnabled(m_OutlineEnabled);
+	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
+}
+
+void
+MainWindow::ConnectEditorPanels()
+{
+	m_MaterialEditorDock->setWidget(m_MaterialEditor);
+	m_AnimationEditorDock->setWidget(m_AnimationEditor);
+	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
+	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
+	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
+	// same way.
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::MaterialBaked,
+		m_MaterialEditor,
+		&MaterialEditorWindow::RefreshMaterialState);
+	for (const QWidget* panel :
+	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
+		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
+			connect(
+				preview,
+				&AnimationPreviewWindow::MaterialBaked,
+				m_MaterialEditor,
+				&MaterialEditorWindow::RefreshMaterialState);
+
+	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::BlendSetOpenRequested,
+		m_BlendSpaceEditor,
+		[this](const QString& key) {
+			m_BlendSpaceEditorDock->show();
+			m_BlendSpaceEditorDock->raise();
+			m_BlendSpaceEditor->OpenBlendSet(key);
+		});
+	DriveViewportsFromTab(m_MaterialEditorDock);
+	DriveViewportsFromTab(m_AnimationEditorDock);
+	DriveViewportsFromTab(m_BlendSpaceEditorDock);
+
+	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
+	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
+	// on a tab switch.
+	//
+	// Through IsPanelShown, because the same signal reports a minimized or hidden window -- and
+	// unlike the two connections above, what these do is destructive.
+	m_TabVisibility.push_back(connect(
+		m_AnimationEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_AnimationEditor,
+		[this](bool visible) {
+			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
+
+	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
+	// and nothing asks: the panel writes only on Save.
+	m_TabVisibility.push_back(connect(
+		m_MaterialEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_MaterialEditor,
+		[this](bool visible) {
+			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
+
+	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
+	m_TabVisibility.push_back(connect(
+		m_BlendSpaceEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_BlendSpaceEditor,
+		[this](bool visible) {
+			m_BlendSpaceEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
+
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>()) ConfigureViewport(*view);
+	SetUpFrameStats();
+}
+
+void
+MainWindow::ClearEditorPanels() noexcept
+{
+	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
+	m_TabVisibility.clear();
+	m_FrameStatsSource = nullptr;
+	delete m_FrameStats;
+	m_FrameStats = nullptr;
+	if (m_GpuTiming != nullptr)
+		m_GpuTiming->SetSource(QString());
+	delete m_MaterialEditor;
+	m_MaterialEditor = nullptr;
+	delete m_AnimationEditor;
+	m_AnimationEditor = nullptr;
+	delete m_BlendSpaceEditor;
+	m_BlendSpaceEditor = nullptr;
 }

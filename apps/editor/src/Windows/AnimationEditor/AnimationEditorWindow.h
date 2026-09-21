@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gamelib/AssetManager.h>
+
 #include <QElapsedTimer>
 #include <QWidget>
 #include <cstdint>
@@ -37,6 +39,7 @@ class QToolButton;
 struct AnimationEditorWindowDesc
 {
 	Renderer*                    renderer                = nullptr;
+	game::AssetManager*          assets                  = nullptr;
 	uint32_t                     initialPreviewInstances = 16;
 	bool                         taaEnabled              = true;
 	float                        renderScale             = 1.0f;

@@ -42,6 +42,7 @@ class MaterialPreviewWindow : public RenderTargetWindow, public editor::IHoldsAs
 
 public:
 	MaterialPreviewWindow(QWidget* parent, RenderTargetWindowDesc rt, MaterialPreviewEnv env);
+	~MaterialPreviewWindow() override;
 
 	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
 	[[nodiscard]] QStringList
