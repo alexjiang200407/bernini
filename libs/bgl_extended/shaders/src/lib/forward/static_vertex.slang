@@ -25,6 +25,7 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
 
     vertexOut.normal = ctx.mesh.TransformDirection(vertex.normal);
     vertexOut.uv = vertex.uv;
+    vertexOut.uv1 = vertex.uv1;
     vertexOut.tangent = float4(ctx.mesh.TransformDirection(vertex.tangent.xyz), vertex.tangent.w);
 
     vertexOut.materialOffset = instance.material.GetByteOffset();

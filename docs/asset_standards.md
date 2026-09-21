@@ -443,10 +443,11 @@ in `docs/specs/`.
   top-level `uv1Occlusion` key, a single-channel map sampled through the mesh's *second* UV set and
   multiplied with the model's own AO. It is a whole texture, never a channel route and never part of
   the baked triplet — the triplet is addressed by UV0, and a map on another UV set cannot be
-  composited into it — so no bake reads or writes it. It is what gets sampled rather than what a bake
-  reads, which is why the reference graph and the baked-map prune hold it as a baked map under either
-  model. Absent, the
-  key is not written, so a material without one is byte-for-byte what it was before the key existed.
+  composited into it — so no bake reads or writes it. The renderer samples it directly, which is why
+  the reference graph and the baked-map prune hold it as a baked map under either model. It scales
+  the environment's light and never the sun's, like the AO it multiplies; on a mesh with no second UV
+  set it reads as white ([Passes](passes.md)). Absent, the key is not written, so a material without
+  one is byte-for-byte what it was before the key existed.
 
   **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
 

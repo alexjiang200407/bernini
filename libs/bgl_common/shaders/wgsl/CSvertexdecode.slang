@@ -21,5 +21,6 @@ void main(uint3 id: SV_DispatchThreadID)
     VertexLayout layout = {};
     let v = DecodeVertex(src, layout, id.x * 64);
     let a = DecodeAttribute(src, id.x * 64, VertexFormat.kUnorm16x4);
-    gOut[0] = float4(v.position, 1.0) + v.tangent + a + float4(v.uv, v.joints.x, v.weights.x) + float4(v.normal, 0.0);
+    gOut[0] =
+        float4(v.position, 1.0) + v.tangent + a + float4(v.uv, v.joints.x, v.weights.x) + float4(v.normal, 0.0) + float4(v.uv1, 0.0, 0.0);
 }
