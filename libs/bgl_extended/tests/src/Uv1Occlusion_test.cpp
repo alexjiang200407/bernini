@@ -84,15 +84,18 @@ namespace
 			const glm::vec2 c  = corners[i];
 			const glm::vec2 uv = c * 0.5f + 0.5f;
 
+			const std::array<float, 3> position = {
+				{ c.x * c_HalfExtent, c.y * c_HalfExtent, 0.0f }
+			};
+			const std::array<float, 3> normal   = { { 0.0f, 0.0f, 1.0f } };
+			const std::array<float, 2> texcoord = { { uv.x, uv.y } };
+
 			const size_t at = i * stride;
-			bgl::test::PutFloats(
-				mesh.vertexData,
-				at,
-				std::array{ c.x * c_HalfExtent, c.y * c_HalfExtent, 0.0f });
-			bgl::test::PutFloats(mesh.vertexData, at + 12, std::array{ 0.0f, 0.0f, 1.0f });
-			bgl::test::PutFloats(mesh.vertexData, at + 24, std::array{ uv.x, uv.y });
+			bgl::test::PutFloats(mesh.vertexData, at, position);
+			bgl::test::PutFloats(mesh.vertexData, at + 12, normal);
+			bgl::test::PutFloats(mesh.vertexData, at + 24, texcoord);
 			if (withUv1)
-				bgl::test::PutFloats(mesh.vertexData, at + 32, std::array{ uv.x, uv.y });
+				bgl::test::PutFloats(mesh.vertexData, at + 32, texcoord);
 		}
 
 		auto meshlet           = assetlib::Meshlet();
@@ -279,8 +282,8 @@ namespace
 		const auto shot = "assets/golden/uv1_occlusion_" + name + ".got.png";
 		probe.gfx->ScreenshotPng(probe.target, shot);
 
-		return { bgl::test::MeanColor(shot, c_OccludedX, c_BoxY, c_BoxSize, c_BoxSize),
-			     bgl::test::MeanColor(shot, c_OpenX, c_BoxY, c_BoxSize, c_BoxSize) };
+		return { { bgl::test::MeanColor(shot, c_OccludedX, c_BoxY, c_BoxSize, c_BoxSize),
+			       bgl::test::MeanColor(shot, c_OpenX, c_BoxY, c_BoxSize, c_BoxSize) } };
 	}
 
 	/** One material of each kind, matte and with no specular lobe, carrying `map` or none. */
