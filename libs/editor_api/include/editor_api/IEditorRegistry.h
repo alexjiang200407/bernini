@@ -1,30 +1,19 @@
 #pragma once
 
-#include <QWidget>
-#include <assetlib/AssetStore.h>
-#include <editor_api/EditorPanel.h>
-#include <editor_api/IEditorHost.h>
+#include <editor_api/IAssetEditorFactory.h>
+#include <editor_api/IEditorAction.h>
+#include <editor_api/IEditorImporter.h>
+#include <editor_api/IEditorPanelFactory.h>
+#include <editor_api/IThumbnailProvider.h>
 #include <editor_api/LocalizedText.h>
-#include <editor_api/Thumbnail.h>
 #include <editor_api/TranslationCatalog.h>
-#include <filesystem>
-#include <functional>
-#include <span>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace editor
 {
-	using PanelFactory       = std::function<EditorPanel*(IEditorHost&, QWidget*)>;
-	using AssetEditorFactory = std::function<AssetEditorPanel*(IEditorHost&, QWidget*)>;
-	using ActionPredicate    = std::function<bool(IEditorHost&, std::span<const std::string>)>;
-	using ActionCallback     = std::function<void(IEditorHost&, std::span<const std::string>)>;
-	using ImportCallback =
-		std::function<void(IEditorHost&, const std::filesystem::path&, std::string_view)>;
-	using ThumbnailCallback =
-		std::function<Thumbnail(const assetlib::AssetStore&, std::string_view)>;
-
 	inline constexpr std::string_view c_FileMenuId  = "editor.file";
 	inline constexpr std::string_view c_ToolsMenuId = "editor.tools";
 
@@ -37,44 +26,43 @@ namespace editor
 
 	struct PanelDesc
 	{
-		std::string   id;
-		LocalizedText title;
-		PanelFactory  create;
+		std::string                          id;
+		LocalizedText                        title;
+		std::unique_ptr<IEditorPanelFactory> factory;
 	};
 
 	struct AssetEditorDesc
 	{
-		std::string              id;
-		LocalizedText            title;
-		std::vector<std::string> extensions;
-		AssetEditorFactory       create;
+		std::string                          id;
+		LocalizedText                        title;
+		std::vector<std::string>             extensions;
+		std::unique_ptr<IAssetEditorFactory> factory;
 	};
 
 	struct ActionDesc
 	{
-		std::string              id;
-		LocalizedText            title;
-		std::string              menuId;
-		std::vector<std::string> extensions;
-		ActionPredicate          enabled;
-		ActionCallback           invoke;
+		std::string                    id;
+		LocalizedText                  title;
+		std::string                    menuId;
+		std::vector<std::string>       extensions;
+		std::unique_ptr<IEditorAction> action;
 	};
 
 	struct ImporterDesc
 	{
-		std::string              id;
-		std::vector<std::string> extensions;
-		ImportCallback           importAsset;
+		std::string                      id;
+		std::vector<std::string>         extensions;
+		std::unique_ptr<IEditorImporter> importer;
 	};
 
 	struct ThumbnailProviderDesc
 	{
-		std::string              id;
-		std::vector<std::string> extensions;
-		ThumbnailCallback        describe;
+		std::string                         id;
+		std::vector<std::string>            extensions;
+		std::unique_ptr<IThumbnailProvider> provider;
 	};
 
-	/** Startup only. Own descriptors by value; reject invalid IDs/callbacks and collisions. See docs/editor_plugins.md. */
+	// Startup only; ownership transfers even on rejection. See docs/editor_plugins.md.
 	class IEditorRegistry
 	{
 	public:
@@ -100,11 +88,11 @@ namespace editor
 		virtual void
 		AddAction(ActionDesc desc) = 0;
 
-		/** One importer per source extension; callback receives an OS source path and a target folder key. */
+		/** One importer per source extension; Import receives an OS source path and a target folder key. */
 		virtual void
 		AddImporter(ImporterDesc desc) = 0;
 
-		/** One provider per extension; describe may run concurrently on workers and must not touch widgets. */
+		/** One provider per extension; Describe may run concurrently on workers and must not touch widgets. */
 		virtual void
 		AddThumbnailProvider(ThumbnailProviderDesc desc) = 0;
 	};

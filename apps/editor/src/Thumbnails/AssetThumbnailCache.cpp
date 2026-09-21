@@ -470,7 +470,7 @@ AssetThumbnailCache::Request(const QString& path)
 			QString           failure;
 			try
 			{
-				thumbnail = provider->describe(*store, key);
+				thumbnail = provider->provider->Describe(*store, key);
 			}
 			catch (const std::exception& error)
 			{

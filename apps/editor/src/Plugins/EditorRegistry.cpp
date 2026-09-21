@@ -1,4 +1,5 @@
 #include "Plugins/EditorRegistry.h"
+#include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/LocalizedText.h>
 #include <editor_api/TranslationCatalog.h>
@@ -105,6 +106,33 @@ namespace editor::plugins
 	}
 
 	void
+	EditorRegistry::Register(IEditorPlugin& plugin)
+	{
+		const auto catalogs   = m_Catalogs.size();
+		const auto menus      = m_Menus.size();
+		const auto panels     = m_Panels.size();
+		const auto editors    = m_AssetEditors.size();
+		const auto actions    = m_Actions.size();
+		const auto importers  = m_Importers.size();
+		const auto thumbnails = m_ThumbnailProviders.size();
+		try
+		{
+			plugin.Register(*this);
+		}
+		catch (...)
+		{
+			m_ThumbnailProviders.resize(thumbnails);
+			m_Importers.resize(importers);
+			m_Actions.resize(actions);
+			m_AssetEditors.resize(editors);
+			m_Panels.resize(panels);
+			m_Menus.resize(menus);
+			m_Catalogs.resize(catalogs);
+			throw;
+		}
+	}
+
+	void
 	EditorRegistry::AddTranslations(TranslationCatalog catalog)
 	{
 		LanguageResolver validation;
@@ -139,7 +167,7 @@ namespace editor::plugins
 				return value.id == desc.id;
 			}))
 			throw std::runtime_error("Editor panel ID collides");
-		if (!desc.create)
+		if (!desc.factory)
 			throw std::runtime_error("Editor panel factory is missing");
 		m_Panels.push_back(std::move(desc));
 	}
@@ -153,7 +181,7 @@ namespace editor::plugins
 				return value.id == desc.id;
 			}))
 			throw std::runtime_error("Editor panel ID collides");
-		if (!desc.create)
+		if (!desc.factory)
 			throw std::runtime_error("Asset editor factory is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)
@@ -167,8 +195,8 @@ namespace editor::plugins
 	{
 		RequireUnique(desc.id, m_Actions);
 		RequireText(desc.title);
-		if (!desc.enabled || !desc.invoke)
-			throw std::runtime_error("Editor action callback is missing");
+		if (!desc.action)
+			throw std::runtime_error("Editor action is missing");
 		if (desc.extensions.empty())
 		{
 			if (desc.menuId != c_FileMenuId && desc.menuId != c_ToolsMenuId &&
@@ -190,8 +218,8 @@ namespace editor::plugins
 	EditorRegistry::AddImporter(ImporterDesc desc)
 	{
 		RequireUnique(desc.id, m_Importers);
-		if (!desc.importAsset)
-			throw std::runtime_error("Editor importer callback is missing");
+		if (!desc.importer)
+			throw std::runtime_error("Editor importer is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)
 		{
@@ -207,7 +235,7 @@ namespace editor::plugins
 	EditorRegistry::AddThumbnailProvider(ThumbnailProviderDesc desc)
 	{
 		RequireUnique(desc.id, m_ThumbnailProviders);
-		if (!desc.describe)
+		if (!desc.provider)
 			throw std::runtime_error("Thumbnail provider callback is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)

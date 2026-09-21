@@ -17,7 +17,6 @@
 #include <editor_api/PluginDescriptor.h>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -395,10 +394,8 @@ namespace editor::plugins
 					core::throw_runtime_error(
 						"Editor plugin factory returned null: {}",
 						descriptor.id);
-				EditorRegistry staged = session.m_Impl->contributions;
-				plugin->Register(staged);
-				session.m_Impl->contributions = std::move(staged);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
+				session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
 		}

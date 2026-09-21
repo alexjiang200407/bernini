@@ -52,6 +52,9 @@ and fix the map.
 | `IAssetPlugin`, `IAssetKindRegistry`, `IAssetKind` | [IAssetPlugin.h](libs/assetlib/include/assetlib/IAssetPlugin.h) | Qt-free authored-kind registration and document operations |
 | `IEditorPlugin` | [IEditorPlugin.h](libs/editor_api/include/editor_api/IEditorPlugin.h) | Register editor contributions at startup |
 | Descriptor constants | [PluginDescriptor.h](libs/editor_api/include/editor_api/PluginDescriptor.h) | Descriptor filename and schema version |
+| `IEditorPanelFactory`, `IAssetEditorFactory` | [IEditorPanelFactory.h](libs/editor_api/include/editor_api/IEditorPanelFactory.h), [IAssetEditorFactory.h](libs/editor_api/include/editor_api/IAssetEditorFactory.h) | Owned deferred factories for project widgets |
+| `IEditorAction` | [IEditorAction.h](libs/editor_api/include/editor_api/IEditorAction.h) | Owned action with enablement and invocation |
+| `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_api/include/editor_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_api/include/editor_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
 | `LocalizedText` | [LocalizedText.h](libs/editor_api/include/editor_api/LocalizedText.h) | Deferred label lookup with fallback |
 | `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_api/include/editor_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_api/include/editor_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
@@ -63,7 +66,7 @@ and fix the map.
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
-`EditorPluginPtr`. Descriptor callback aliases live in `IEditorRegistry.h`; `RenderWork` and
+`EditorPluginPtr`. Descriptors own contribution objects through `unique_ptr`; `RenderWork` and
 `ViewportRenderWork` live beside `RenderContext`.
 
 Recheck this table whenever the public files move.
@@ -73,7 +76,7 @@ Recheck this table whenever the public files move.
 ```mermaid
 flowchart TD
     Runtime[Runtime plugin] -->|RegisterKinds| Kinds[IAssetKindRegistry]
-    Editor[Editor plugin] -->|Register| Registry[IEditorRegistry]
+    Editor[Editor plugin] -->|Register owned contributions| Registry[IEditorRegistry]
     Registry -->|deferred factory| Panel[Project panel]
     Panel -->|borrows| Host[IEditorHost]
     Host -->|GetLanguageResolver| Language[Host-owned language resolver]
@@ -118,8 +121,9 @@ The SDK stamp moves when a public contract header changes or a shared library ex
 package rebuilds. A module or declared dependency older than the stamp is refused so a developer
 rebuilds the plugin against the current SDK. All descriptors needed by the project are checked
 before any module is loaded. Kind registration happens in a private registry and reaches the
-project registry only after the whole module registers without a collision. Editor registration
-likewise runs against a staged copy; menus, callbacks and factories become visible together.
+project registry only after the whole module registers without a collision. Editor registration runs as a startup transaction. Failure destroys every newly registered object
+and removes its menus and catalogs, preserving earlier registrations. Plugin objects are retained
+before registration starts, so contribution cleanup always runs while its plugin is alive.
 
 On Windows the loader copies both modules and every declared private dependency to a per-process
 plugin binary directory before loading; the originals remain writable by the linker. Other
@@ -129,6 +133,12 @@ shutdown; plugin objects and registered kinds are destroyed before their image.
 ## Threading and lifetime
 
 Registration, factories, panels, actions, importers and host navigation run on the GUI thread.
+Factories, actions, importers and thumbnail providers are noncopyable, nonmovable objects owned
+exclusively by the registry. Descriptor movement and vector growth move their owning pointers,
+not the objects. Descriptor addresses are not stable during registration; registration must finish
+before dispatch begins. Store configuration as owned values. Contribution methods must not retain
+borrowed hosts, stores, selections or paths; a created panel may borrow its project host for the
+panel lifetime below. Native C++ cannot prevent an implementation from storing an unsafe pointer.
 An importer may arrange background CPU work, but must finish or join it before returning; these
 callbacks do not grant a background task permission to outlive the project. Thumbnail descriptions
 and document callbacks may run concurrently and must not access widgets or mutate shared state. The
@@ -164,7 +174,7 @@ and shutdown tests exercise both services through the end of viewport teardown.
 ## Risky contracts
 
 - **Registration:** IDs are nonempty, plugin-qualified strings. Extensions are lowercase with a
-  leading dot. Missing required callbacks, null kinds, duplicate IDs or conflicting extension claims
+  leading dot. Null contribution objects, null kinds, duplicate IDs or conflicting extension claims
   are errors, including conflicts with built-ins. Registry implementations must discard all of a
   failed module's contributions. Panel/editor IDs share one namespace; other categories have their
   own ID namespaces. Runtime kind batches and editor contribution batches both enforce collision
@@ -203,7 +213,7 @@ and shutdown tests exercise both services through the end of viewport teardown.
   otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
   reserved `editor.` IDs and missing parents; never find, merge or create menus by their labels.
   Menu IDs have their own namespace. Failed registration rolls back menus with other contributions.
-- **Actions:** both callbacks are required. Empty extensions means a menu action with an empty
+- **Actions:** one owned `IEditorAction` implements both `IsEnabled` and `Invoke`. Empty extensions means a menu action with an empty
   selection; otherwise the action is a content-menu contribution, offered only when every selected
   key matches. A menu action requires an existing `menuId`; a content-menu action requires an
   empty `menuId`. The host owns the actual actions and menus.
@@ -233,7 +243,7 @@ and shutdown tests exercise both services through the end of viewport teardown.
 auto plugin = sample::CreateEditorPlugin();
 plugin->Register(registry);
 // Later, while the plugin and registry still live:
-auto* panel = registry.FindPanel("sample.overview")->create(host, &projectRoot);
+auto* panel = registry.FindPanel("sample.overview")->factory->Create(host, &projectRoot);
 panel->SetActive(true);
 ```
 
@@ -243,7 +253,7 @@ it has no editor implementation include path. It currently displays a selected d
 a working document editor. Its contracts still use a fake host; `editor_tests` exercises the same
 plugin through the production registry and project host.
 
-`just test editor_plugin` exercises deferred registration, Qt ownership, tab activation, held asset
+`just test editor_plugin` exercises deferred registration, Qt ownership, stable contribution addresses, exclusive destruction, tab activation, held asset
 replacement, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
 against its Qt-free target alone. A separately configured project builds a real shared fixture from

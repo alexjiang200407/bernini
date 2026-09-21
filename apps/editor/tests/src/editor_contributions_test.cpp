@@ -2,6 +2,9 @@
 #include "Plugins/EditorRegistry.h"
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorImporter.h>
+#include <editor_api/IEditorPanelFactory.h>
+#include <editor_api/IThumbnailProvider.h>
 
 #include <QWidget>
 #include <assetlib/AssetStore.h>
@@ -11,7 +14,9 @@
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/LocalizedText.h>
+#include <editor_api/Thumbnail.h>
 #include <filesystem>
+#include <memory>
 #include <sample.h>
 #include <span>
 #include <string>
@@ -45,6 +50,31 @@ namespace
 		}
 	};
 
+	class NullFactory final : public editor::IEditorPanelFactory
+	{
+	public:
+		editor::EditorPanel*
+		Create(editor::IEditorHost&, QWidget*) override
+		{
+			return nullptr;
+		}
+	};
+	class Importer final : public editor::IEditorImporter
+	{
+	public:
+		void
+		Import(editor::IEditorHost&, const std::filesystem::path&, std::string_view) override
+		{}
+	};
+	class ThumbnailProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view) const override
+		{
+			return {};
+		}
+	};
 	editor::LocalizedText
 	Text(std::string key)
 	{
@@ -76,7 +106,7 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 		nullptr,
 		true,
 		{ .showPanel = [&](const std::string_view id) { shown = id; } });
-	registry.Actions().front().invoke(host, {});
+	registry.Actions().front().action->Invoke(host, {});
 	CHECK(shown == "sample.overview");
 	CHECK(
 		host.GetLanguageResolver().Resolve({ "sample.editor", "overview", "Project tools" }) ==
@@ -88,13 +118,10 @@ TEST_CASE(
 	"[plugins][registry]")
 {
 	editor::plugins::EditorRegistry registry;
-	const auto                      create = [](editor::IEditorHost&, QWidget*) {
-		return static_cast<editor::EditorPanel*>(nullptr);
-	};
-	registry.AddPanel({ "sample.panel", Text("panel"), create });
+	registry.AddPanel({ "sample.panel", Text("panel"), std::make_unique<NullFactory>() });
 
 	CHECK_THROWS_WITH(
-		registry.AddPanel({ "sample.panel", Text("second"), create }),
+		registry.AddPanel({ "sample.panel", Text("second"), std::make_unique<NullFactory>() }),
 		Catch::Matchers::ContainsSubstring("collides"));
 	CHECK(registry.Panels().size() == 1);
 }
@@ -104,26 +131,114 @@ TEST_CASE(
 	"[plugins][registry]")
 {
 	editor::plugins::EditorRegistry registry;
-	registry.AddImporter(
-		{ "sample.import",
-	      { ".source" },
-	      [](editor::IEditorHost&, const std::filesystem::path&, std::string_view) {} });
-	registry.AddImporter(
-		{ "sample.ai_import",
-	      { ".ai_state" },
-	      [](editor::IEditorHost&, const std::filesystem::path&, std::string_view) {} });
+	registry.AddImporter({ "sample.import", { ".source" }, std::make_unique<Importer>() });
+	registry.AddImporter({ "sample.ai_import", { ".ai_state" }, std::make_unique<Importer>() });
 	registry.AddThumbnailProvider(
-		{ "sample.thumbnail", { ".bexample" }, [](const assetlib::AssetStore&, std::string_view) {
-			 return editor::Thumbnail{};
-		 } });
+		{ "sample.thumbnail", { ".bexample" }, std::make_unique<ThumbnailProvider>() });
 
 	CHECK(registry.FindImporter(".source") == &registry.Importers().front());
 	CHECK(registry.FindImporter(".ai_state") != nullptr);
 	CHECK(registry.FindThumbnailProvider(".bexample") == &registry.ThumbnailProviders().front());
 	CHECK_THROWS_WITH(
 		registry.AddImporter(
-			{ "sample.second_import",
-	          { ".source" },
-	          [](editor::IEditorHost&, const std::filesystem::path&, std::string_view) {} }),
+			{ "sample.second_import", { ".source" }, std::make_unique<Importer>() }),
 		Catch::Matchers::ContainsSubstring("collides"));
+}
+
+TEST_CASE(
+	"Failed plugin registration destroys its owned batch before the plugin",
+	"[plugins][registry][lifetime]")
+{
+	struct State
+	{
+		int  destroyed     = 0;
+		bool pluginAlive   = true;
+		bool ownerOutlived = true;
+	};
+	class Factory final : public editor::IEditorPanelFactory
+	{
+	public:
+		explicit Factory(std::shared_ptr<State> state) : m_State(std::move(state)) {}
+		~Factory() override
+		{
+			++m_State->destroyed;
+			m_State->ownerOutlived &= m_State->pluginAlive;
+		}
+		editor::EditorPanel*
+		Create(editor::IEditorHost&, QWidget*) override
+		{
+			return nullptr;
+		}
+
+	private:
+		std::shared_ptr<State> m_State;
+	};
+	class FailingPlugin final : public editor::IEditorPlugin
+	{
+	public:
+		explicit FailingPlugin(std::shared_ptr<State> state) : m_State(std::move(state)) {}
+		~FailingPlugin() override { m_State->pluginAlive = false; }
+		void
+		Register(editor::IEditorRegistry& registry) override
+		{
+			registry.AddTranslations({ "failed.editor", { { "title", "en", "Title" } } });
+			registry.AddMenu({ "failed.menu", "sample.menu", Text("menu") });
+			registry.AddPanel(
+				{ "failed.panel", Text("panel"), std::make_unique<Factory>(m_State) });
+			registry.AddImporter(
+				{ "failed.importer", { ".failed" }, std::make_unique<Importer>() });
+			registry.AddThumbnailProvider(
+				{ "failed.thumbnail", { ".failed" }, std::make_unique<ThumbnailProvider>() });
+			m_Sample->Register(registry);
+			registry.AddPanel(
+				{ "sample.panel", Text("duplicate"), std::make_unique<Factory>(m_State) });
+		}
+
+	private:
+		std::shared_ptr<State>  m_State;
+		editor::EditorPluginPtr m_Sample = sample::CreateEditorPlugin();
+	};
+	auto                            validPlugin = sample::CreateEditorPlugin();
+	editor::plugins::EditorRegistry registry;
+	registry.AddMenu({ "sample.menu", std::string(editor::c_ToolsMenuId), Text("menu") });
+	registry.AddPanel({ "sample.panel", Text("panel"), std::make_unique<NullFactory>() });
+	const auto* original = registry.Panels().front().factory.get();
+	auto        state    = std::make_shared<State>();
+	{
+		FailingPlugin plugin(state);
+		CHECK_THROWS_WITH(
+			registry.Register(plugin),
+			Catch::Matchers::ContainsSubstring("collides"));
+		CHECK(state->destroyed == 2);
+		CHECK(state->ownerOutlived);
+		CHECK(registry.Catalogs().empty());
+		REQUIRE(registry.Menus().size() == 1);
+		REQUIRE(registry.Panels().size() == 1);
+		CHECK(registry.Panels().front().factory.get() == original);
+		CHECK(registry.Actions().empty());
+		CHECK(registry.AssetEditors().empty());
+		CHECK(registry.Importers().empty());
+		CHECK(registry.ThumbnailProviders().empty());
+	}
+	CHECK_FALSE(state->pluginAlive);
+	CHECK(state->ownerOutlived);
+	registry.Register(*validPlugin);
+	CHECK(registry.Actions().size() == 1);
+}
+
+TEST_CASE("Null contribution objects are rejected", "[plugins][registry]")
+{
+	editor::plugins::EditorRegistry registry;
+	CHECK_THROWS(registry.AddPanel({ "sample.panel", Text("panel"), nullptr }));
+	CHECK_THROWS(
+		registry.AddAssetEditor({ "sample.editor", Text("editor"), { ".bexample" }, nullptr }));
+	CHECK_THROWS(registry.AddAction(
+		{ "sample.action", Text("action"), std::string(editor::c_ToolsMenuId), {}, nullptr }));
+	CHECK_THROWS(registry.AddImporter({ "sample.importer", { ".source" }, nullptr }));
+	CHECK_THROWS(registry.AddThumbnailProvider({ "sample.thumbnail", { ".bexample" }, nullptr }));
+	CHECK(registry.Panels().empty());
+	CHECK(registry.AssetEditors().empty());
+	CHECK(registry.Actions().empty());
+	CHECK(registry.Importers().empty());
+	CHECK(registry.ThumbnailProviders().empty());
 }

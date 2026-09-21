@@ -8,7 +8,10 @@
 #include <charconv>
 #include <cstddef>
 #include <editor_api/EditorPanel.h>
+#include <editor_api/IAssetEditorFactory.h>
+#include <editor_api/IEditorAction.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorPanelFactory.h>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/LocalizedText.h>
@@ -177,6 +180,43 @@ namespace
 		std::string m_Key;
 	};
 
+	class OverviewFactory final : public editor::IEditorPanelFactory
+	{
+	public:
+		editor::EditorPanel*
+		Create(editor::IEditorHost& host, QWidget* parent) override
+		{
+			return new OverviewPanel(host, parent);
+		}
+	};
+	class DocumentFactory final : public editor::IAssetEditorFactory
+	{
+	public:
+		editor::AssetEditorPanel*
+		Create(editor::IEditorHost&, QWidget* parent) override
+		{
+			return new DocumentPanel(parent);
+		}
+	};
+	class OpenPanelAction final : public editor::IEditorAction
+	{
+	public:
+		explicit OpenPanelAction(std::string panelId) : m_PanelId(std::move(panelId)) {}
+		bool
+		IsEnabled(editor::IEditorHost&, std::span<const std::string>) const override
+		{
+			return true;
+		}
+		void
+		Invoke(editor::IEditorHost& host, std::span<const std::string>) override
+		{
+			host.ShowPanel(m_PanelId);
+		}
+
+	private:
+		std::string m_PanelId;
+	};
+
 	class SampleEditorPlugin final : public editor::IEditorPlugin
 	{
 	public:
@@ -194,25 +234,18 @@ namespace
 			registry.AddPanel(
 				{ "sample.overview",
 			      { "sample.editor", "overview", "Project tools" },
-			      [](editor::IEditorHost& host, QWidget* parent) {
-					  return new OverviewPanel(host, parent);
-				  } });
+			      std::make_unique<OverviewFactory>() });
 			registry.AddAssetEditor(
 				{ "sample.document",
 			      { "sample.editor", "document", "Sample document" },
 			      { ".bexample" },
-			      [](editor::IEditorHost&, QWidget* parent) {
-					  return new DocumentPanel(parent);
-				  } });
+			      std::make_unique<DocumentFactory>() });
 			registry.AddAction(
 				{ "sample.show-overview",
 			      { "sample.editor", "overview", "Project tools" },
 			      "sample.tools",
 			      {},
-			      [](editor::IEditorHost&, std::span<const std::string>) { return true; },
-			      [](editor::IEditorHost& host, std::span<const std::string>) {
-					  host.ShowPanel("sample.overview");
-				  } });
+			      std::make_unique<OpenPanelAction>("sample.overview") });
 		}
 	};
 }

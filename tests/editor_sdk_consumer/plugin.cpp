@@ -8,7 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <editor_api/EditorPanel.h>
+#include <editor_api/IAssetEditorFactory.h>
+#include <editor_api/IEditorAction.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorPanelFactory.h>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
@@ -64,6 +67,70 @@ namespace
 		assetlib::AssetKindDesc m_Desc{ "sample.fixture", ".bfixture", true };
 	};
 
+	class PanelFactory final : public editor::IEditorPanelFactory
+	{
+	public:
+		editor::EditorPanel*
+		Create(editor::IEditorHost& host, QWidget* parent) override
+		{
+			class Panel final : public editor::EditorPanel
+			{
+			public:
+				Panel(editor::IEditorHost& host, QWidget* parent) : EditorPanel(parent)
+				{
+					auto* layout = new QVBoxLayout(this);
+					m_Viewport   = host.CreateViewport(
+						this,
+						{ .renderScale = 0.75f, .taaReconstructionWidth = 0.6f });
+					layout->addWidget(m_Viewport);
+				}
+				std::vector<std::string>
+				GetHeldAssets() const override
+				{
+					return {};
+				}
+				bool
+				CanClose() override
+				{
+					return true;
+				}
+				void
+				SetActive(bool active) override
+				{
+					m_Viewport->SetRenderingEnabled(active);
+				}
+
+			private:
+				editor::IEditorViewport* m_Viewport = nullptr;
+			};
+			return new Panel(host, parent);
+		}
+	};
+	class ShowPanelAction final : public editor::IEditorAction
+	{
+	public:
+		bool
+		IsEnabled(editor::IEditorHost&, std::span<const std::string>) const override
+		{
+			return true;
+		}
+		void
+		Invoke(editor::IEditorHost& host, std::span<const std::string>) override
+		{
+			host.ShowPanel("sample.fixture_panel");
+		}
+	};
+	class ThrowingFactory final : public editor::IAssetEditorFactory
+	{
+	public:
+		editor::AssetEditorPanel*
+		Create(editor::IEditorHost&, QWidget* parent) override
+		{
+			auto* child = new QWidget(parent);
+			child->setObjectName("sample.throwing_editor_child");
+			throw std::runtime_error("fixture editor failed");
+		}
+	};
 	class Plugin final : public editor::IEditorPlugin
 	{
 	public:
@@ -73,57 +140,18 @@ namespace
 			registry.AddPanel(
 				{ "sample.fixture_panel",
 			      { "sample.fixture", "panel", "Fixture Panel" },
-			      [](editor::IEditorHost& host, QWidget* parent) {
-					  class Panel final : public editor::EditorPanel
-					  {
-					  public:
-						  Panel(editor::IEditorHost& host, QWidget* parent) : EditorPanel(parent)
-						  {
-							  auto* layout = new QVBoxLayout(this);
-							  m_Viewport   = host.CreateViewport(
-								  this,
-								  { .renderScale = 0.75f, .taaReconstructionWidth = 0.6f });
-							  layout->addWidget(m_Viewport);
-						  }
-						  std::vector<std::string>
-						  GetHeldAssets() const override
-						  {
-							  return {};
-						  }
-						  bool
-						  CanClose() override
-						  {
-							  return true;
-						  }
-						  void
-						  SetActive(bool active) override
-						  {
-							  m_Viewport->SetRenderingEnabled(active);
-						  }
-
-					  private:
-						  editor::IEditorViewport* m_Viewport = nullptr;
-					  };
-					  return new Panel(host, parent);
-				  } });
+			      std::make_unique<PanelFactory>() });
 			registry.AddAction(
 				{ "sample.show_fixture",
 			      { "sample.fixture", "panel", "Fixture Panel" },
 			      std::string(editor::c_ToolsMenuId),
 			      {},
-			      [](editor::IEditorHost&, std::span<const std::string>) { return true; },
-			      [](editor::IEditorHost& host, std::span<const std::string>) {
-					  host.ShowPanel("sample.fixture_panel");
-				  } });
+			      std::make_unique<ShowPanelAction>() });
 			registry.AddAssetEditor(
 				{ "sample.throwing_editor",
 			      { "sample.fixture", "editor", "Fixture Editor" },
 			      { ".bfixture" },
-			      [](editor::IEditorHost&, QWidget* parent) -> editor::AssetEditorPanel* {
-					  auto* child = new QWidget(parent);
-					  child->setObjectName("sample.throwing_editor_child");
-					  throw std::runtime_error("fixture editor failed");
-				  } });
+			      std::make_unique<ThrowingFactory>() });
 		}
 	};
 

@@ -41,7 +41,6 @@
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
-#include <assetlib/project_layout.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/TranslationCatalog.h>
 
@@ -376,7 +375,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 				return;
 			try
 			{
-				importer->importAsset(*m_EditorHost, source, target);
+				importer->importer->Import(*m_EditorHost, source, target);
 			}
 			catch (const std::exception& error)
 			{
@@ -403,7 +402,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 				bool enabled = false;
 				try
 				{
-					enabled = desc.enabled(*m_EditorHost, selection);
+					enabled = desc.action->IsEnabled(*m_EditorHost, selection);
 				}
 				catch (const std::exception& error)
 				{
@@ -416,7 +415,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 				connect(action, &QAction::triggered, &menu, [this, descriptor, selection] {
 					try
 					{
-						descriptor->invoke(*m_EditorHost, selection);
+						descriptor->action->Invoke(*m_EditorHost, selection);
 					}
 					catch (const std::exception& error)
 					{
@@ -1300,7 +1299,8 @@ MainWindow::SetUpPluginContributions()
 			bool enabled = false;
 			try
 			{
-				enabled = m_EditorHost != nullptr && descriptor->enabled(*m_EditorHost, {});
+				enabled =
+					m_EditorHost != nullptr && descriptor->action->IsEnabled(*m_EditorHost, {});
 			}
 			catch (const std::exception& error)
 			{
@@ -1313,7 +1313,7 @@ MainWindow::SetUpPluginContributions()
 				return;
 			try
 			{
-				descriptor->invoke(*m_EditorHost, {});
+				descriptor->action->Invoke(*m_EditorHost, {});
 			}
 			catch (const std::exception& error)
 			{
@@ -1343,7 +1343,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		this);
 	auto* dock = dockOwner.get();
 	dock->setObjectName(QString::fromStdString(desc->id));
-	editor::EditorPanel* panel = desc->create(*m_EditorHost, dock);
+	editor::EditorPanel* panel = desc->factory->Create(*m_EditorHost, dock);
 	if (panel == nullptr || panel->parentWidget() != dock)
 	{
 		delete panel;
@@ -1390,7 +1390,7 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 				this);
 			dock = dockOwner.get();
 			dock->setObjectName(QString::fromStdString(desc->id));
-			editor::AssetEditorPanel* panel = desc->create(*m_EditorHost, dock);
+			editor::AssetEditorPanel* panel = desc->factory->Create(*m_EditorHost, dock);
 			if (panel == nullptr || panel->parentWidget() != dock)
 			{
 				delete panel;
