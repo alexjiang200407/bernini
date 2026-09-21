@@ -1,7 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 
-#include "util/asset_paths.h"
 #include <QtNodes/internal/GraphicsView.hpp>
+#include <editor_sdk/asset_paths.h>
 
 #include <QDragEnterEvent>
 #include <QDropEvent>

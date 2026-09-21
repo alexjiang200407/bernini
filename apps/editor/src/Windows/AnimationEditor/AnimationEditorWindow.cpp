@@ -7,11 +7,11 @@
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
-#include "util/mesh_drop.h"
 #include <algorithm>
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
+#include <editor_sdk/mesh_drop.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
 

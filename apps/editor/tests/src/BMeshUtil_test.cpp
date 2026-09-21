@@ -1,8 +1,8 @@
-#include "Mesh/BMeshUtil.h"
 #include <assetlib/bmesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
+#include <editor_sdk/BMeshUtil.h>
 
 #include <assetlib_structs/BMesh.h>
 #include <catch2/catch_test_macros.hpp>

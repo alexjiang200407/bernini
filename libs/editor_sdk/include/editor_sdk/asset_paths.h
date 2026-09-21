@@ -1,5 +1,7 @@
 #pragma once
 
+#include <editor_sdk/export.h>
+
 #include <QString>
 #include <qtypes.h>
 
@@ -12,18 +14,18 @@ namespace editor
 	 * resolution is the caller's problem: two writes inside one millisecond share a stamp, so anything
 	 * that has just rewritten a file invalidates rather than trusting this to have moved.
 	 */
-	[[nodiscard]] qint64
+	[[nodiscard]] EDITOR_SDK_EXPORT qint64
 	FileStamp(const QString& path);
 
 	/**
 	 * Whether `path` names a texture asset (`.ktx2`, case-insensitively), whatever the file's
 	 * contents turn out to be.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsTextureFile(const QString& path);
 
 	/** Whether `path` names a blend set (`.bblend`, case-insensitively). */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsBlendSetFile(const QString& path);
 
 	/**
@@ -33,7 +35,7 @@ namespace editor
 	 * The reference graph still reads these from the filesystem directly, so rename and delete
 	 * cascades of their *inputs* see them.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsHiddenInExplorer(const QString& path);
 
 	/**
@@ -42,7 +44,7 @@ namespace editor
 	 * An import joins a typed name onto a category directory and a suffix, so anything that could
 	 * redirect that join names a file outside the layout the project guarantees.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsPlainFileStem(const QString& name);
 
 	/**
@@ -53,7 +55,7 @@ namespace editor
 	 * asset goes through here rather than being checked for the same characters again, so a name that
 	 * is derived cannot fail the validation a typed one is held to.
 	 */
-	[[nodiscard]] QString
+	[[nodiscard]] EDITOR_SDK_EXPORT QString
 	ToPlainFileStem(const QString& name);
 
 	/**
@@ -74,7 +76,7 @@ namespace editor
 	 * cannot return. Applying it here would make a file whose name contains `:` read as outside its
 	 * own root, and one caller of this is the gate on every deletion.
 	 */
-	[[nodiscard]] QString
+	[[nodiscard]] EDITOR_SDK_EXPORT QString
 	GetKeyUnder(const QString& root, const QString& path);
 
 	/**
@@ -82,7 +84,7 @@ namespace editor
 	 * that only asks. One rule, two spellings of it -- a caller that needs the key must not have to
 	 * ask twice, and a caller that does not must not have to write `.isEmpty()` to mean "inside".
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsKeyUnder(const QString& root, const QString& path);
 
 	/**
@@ -92,7 +94,7 @@ namespace editor
 	 * `std::filesystem::path::operator/=` would use to re-root the join, and which
 	 * `QDir::isAbsolutePath` does not call absolute -- and anything that normalizes to `..` or above.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsContainedRelativePath(const QString& path);
 
 	/**
@@ -101,6 +103,6 @@ namespace editor
 	 * The category is the fixed part: every reference in a project is written against that layout, so
 	 * a typed folder organises inside one and can never move an asset out of it.
 	 */
-	[[nodiscard]] QString
+	[[nodiscard]] EDITOR_SDK_EXPORT QString
 	JoinCategory(const QString& category, const QString& path);
 }

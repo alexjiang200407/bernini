@@ -1,11 +1,11 @@
 #include "AssetOperations.h"
 
-#include "Async/BackgroundTask.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/avatar_create.h"
 #include "Windows/MaterialEditor/material_io.h"
-#include "util/source_mesh.h"
 #include <assetlib/asset_refs.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/source_mesh.h>
 
 #include <QDir>
 #include <QFileInfo>

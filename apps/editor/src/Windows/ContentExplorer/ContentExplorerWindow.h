@@ -14,9 +14,9 @@
 #include <string_view>
 #include <vector>
 
-#include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
 #include "Windows/ContentExplorer/AssetOperations.h"
+#include <editor_sdk/TexturePreviewCache.h>
 
 #include "Windows/ContentExplorer/content_explorer_ui.h"
 

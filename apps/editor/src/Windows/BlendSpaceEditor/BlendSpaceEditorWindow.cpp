@@ -8,8 +8,8 @@
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/asset_paths.h"
-#include "util/mime_files.h"
+#include <editor_sdk/asset_paths.h>
+#include <editor_sdk/mime_files.h>
 
 #include <QComboBox>
 #include <QDialog>

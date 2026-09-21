@@ -1,16 +1,16 @@
 #include "MaterialPreviewWindow.h"
 #include "Mesh/mesh_load.h"
 
-#include "Async/BackgroundTask.h"
-#include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/mesh_drop.h"
-#include "util/mime_files.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/GeomHandle.h>
+#include <editor_sdk/BMeshUtil.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/mesh_drop.h>
+#include <editor_sdk/mime_files.h>
 #include <gamelib/Ray.h>
 
 #include <QApplication>

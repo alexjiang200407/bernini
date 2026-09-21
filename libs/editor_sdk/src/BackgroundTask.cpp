@@ -1,5 +1,5 @@
-#include "Async/BackgroundTask.h"
 #include <assetlib/cancel.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include <QCloseEvent>
 #include <QEventLoop>

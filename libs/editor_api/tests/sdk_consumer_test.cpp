@@ -1,11 +1,15 @@
+#include <QObject>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/profiling/memory.h>
 #include <cstdint>
 #include <editor_api/IEditorPlugin.h>
+#include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 #include <filesystem>
 #include <gamelib/ui/UiRuntime.h>
+#include <memory>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
@@ -138,4 +142,14 @@ TEST_CASE("An independent SDK plugin observes the host UI runtime", "[editor_plu
 			"BerniniEditorSdkTestTrySecondUiRuntime")(&store, &renderer));
 
 	std::filesystem::remove_all(root);
+}
+
+TEST_CASE("An independent SDK plugin shares Qt support types with the host", "[editor_plugin][sdk]")
+{
+	const auto cache = std::unique_ptr<QObject>(
+		SdkFixture().Find<QObject*()>("BerniniEditorSdkTestCreatePreviewCache")());
+	REQUIRE(cache != nullptr);
+	CHECK(qobject_cast<TexturePreviewCache*>(cache.get()) != nullptr);
+	CHECK(qobject_cast<StampedPixmapCache*>(cache.get()) != nullptr);
+	CHECK(SdkFixture().Find<bool()>("BerniniEditorSdkTestAssetPaths")());
 }

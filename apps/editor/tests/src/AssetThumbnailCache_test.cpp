@@ -1,7 +1,6 @@
 #include "Plugins/EditorHost.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
@@ -12,6 +11,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <editor_api/IEditorViewport.h>
 #include <editor_api/IThumbnailProvider.h>
+#include <editor_sdk/StampedPixmapCache.h>
 #include <memory>
 
 #include "util/QtSupport.h"

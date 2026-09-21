@@ -1,7 +1,7 @@
-#include "util/mesh_drop.h"
+#include <editor_sdk/mesh_drop.h>
 
-#include "util/mime_files.h"
-#include "util/source_mesh.h"
+#include <editor_sdk/mime_files.h>
+#include <editor_sdk/source_mesh.h>
 
 #include <QFileInfo>
 #include <QMessageBox>

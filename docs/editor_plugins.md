@@ -11,6 +11,12 @@ and fix the map.
 
 ## Design choices
 
+- **Optional shared Qt support.** `Bernini::editor_sdk` exports the loading-screen runner,
+  CPU texture-preview caches, mesh placement helpers and asset path/drag helpers used by the host
+  and editor modules. It links Qt Widgets, assetlib and the bgl contract, with no renderer or host
+  implementation dependency. SDK builds share one library, including its Qt meta-objects; other
+  editor builds link it statically. It adds no panel or project lifecycle contract.
+
 - **Separate document semantics from Qt presentation.** `assetlib_plugin_api` has no Qt, renderer
   or implementation-library dependency. A runtime module registers authored kinds; its editor
   module registers panels and presentation. Built-in `AssetType` and codecs are unchanged.
@@ -39,7 +45,8 @@ and fix the map.
   shared `core_process`. Windows SDK builds require shared RmlUi targets, because a DLL cannot
   re-export every symbol from an imported static archive automatically.
 - **The SDK is a build-tree package.** Configure a plugin with
-  `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_api`. This package
+  `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_api`; link
+  `Bernini::editor_sdk` as well when using the optional Qt helpers. This package
   names the exact libraries and dependency tree of that engine build; it is not an installed,
   version-independent engine package. Top-level editor builds enable it by default. Builds without
   Qt/editor, embedded games and `RENDERER_BACKEND=NONE` keep assetlib and gamelib static and produce
@@ -64,6 +71,10 @@ and fix the map.
 | `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_api/include/editor_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
+| Loading-screen tasks | [BackgroundTask.h](../libs/editor_sdk/include/editor_sdk/BackgroundTask.h) | Scoped worker execution with GUI-thread progress and cooperative cancellation |
+| CPU preview caches | [TexturePreviewCache.h](../libs/editor_sdk/include/editor_sdk/TexturePreviewCache.h), [StampedPixmapCache.h](../libs/editor_sdk/include/editor_sdk/StampedPixmapCache.h) | Per-object decode and file-stamp cache state; no GPU ownership |
+| Asset UI helpers | [asset_paths.h](../libs/editor_sdk/include/editor_sdk/asset_paths.h), [source_mesh.h](../libs/editor_sdk/include/editor_sdk/source_mesh.h), [mime_files.h](../libs/editor_sdk/include/editor_sdk/mime_files.h), [mesh_drop.h](../libs/editor_sdk/include/editor_sdk/mesh_drop.h) | Path containment, imported-source lookup and Qt drag payloads |
+| Mesh placement | [BMeshUtil.h](../libs/editor_sdk/include/editor_sdk/BMeshUtil.h) | Node transforms and bounds, without renderer state |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
 `EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
@@ -88,6 +99,7 @@ flowchart TD
     Editor[Editor plugin] -->|Register owned contributions| Registry[IEditorRegistry]
     Registry -->|deferred factory| Panel[Project panel]
     Panel -->|borrows| Host[IEditorHost]
+    Panel --> Support[editor_sdk: Qt and asset helpers]
     Host -->|GetLanguageResolver| Language[Host-owned language resolver]
     Editor -->|AddTranslations| Registry
     Registry -->|copies catalogs| Language

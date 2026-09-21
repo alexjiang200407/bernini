@@ -4,8 +4,6 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 
-#include "Async/BackgroundTask.h"
-#include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
@@ -15,14 +13,16 @@
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/mesh_drop.h"
-#include "util/mime_files.h"
 #include <assetlib_structs/Mesh.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <editor_sdk/BMeshUtil.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/mesh_drop.h>
+#include <editor_sdk/mime_files.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 

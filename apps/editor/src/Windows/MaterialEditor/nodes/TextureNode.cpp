@@ -23,13 +23,13 @@
 #include <utility>
 
 #include "Render/Renderer.h"
-#include "Thumbnails/StampedPixmapCache.h"
-#include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 
 namespace
 {

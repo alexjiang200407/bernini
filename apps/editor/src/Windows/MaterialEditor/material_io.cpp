@@ -1,12 +1,12 @@
 #include "material_io.h"
 
-#include "Async/BackgroundTask.h"
 #include "Mesh/mesh_load.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <algorithm>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include <QFileInfo>
 #include <QMessageBox>

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <editor_sdk/export.h>
+
 #include <QCache>
 #include <QObject>
 #include <QPixmap>
@@ -22,7 +24,7 @@
  * Every failure path owes an Abandon or a Reject. A claim that is never ended is never producible
  * again.
  */
-class StampedPixmapCache : public QObject
+class EDITOR_SDK_EXPORT StampedPixmapCache : public QObject
 {
 	Q_OBJECT
 

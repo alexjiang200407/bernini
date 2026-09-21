@@ -1,3 +1,5 @@
+#include <QObject>
+#include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <RmlUi/Core/Context.h>
@@ -15,6 +17,8 @@
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
+#include <editor_sdk/TexturePreviewCache.h>
+#include <editor_sdk/asset_paths.h>
 #include <gamelib/ui/UiRuntime.h>
 #include <memory>
 #include <span>
@@ -227,4 +231,23 @@ BerniniEditorSdkTestTrySecondUiRuntime(
 	{
 		return false;
 	}
+}
+
+extern "C" SDK_FIXTURE_EXPORT QObject*
+BerniniEditorSdkTestCreatePreviewCache()
+{
+	return new TexturePreviewCache();
+}
+
+extern "C" SDK_FIXTURE_EXPORT bool
+BerniniEditorSdkTestAssetPaths()
+{
+	return editor::GetKeyUnder(
+			   QStringLiteral("/project/Data"),
+			   QStringLiteral("/project/Data/Authored/a.ktx2")) ==
+	           QStringLiteral("Authored/a.ktx2") &&
+	       editor::GetKeyUnder(
+			   QStringLiteral("/project/Data"),
+			   QStringLiteral("/project/other.ktx2"))
+	           .isEmpty();
 }

@@ -1,12 +1,12 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 
-#include "Thumbnails/TexturePreviewCache.h"
 #include "util/QtSupport.h"
-#include "util/asset_paths.h"
 #include <algorithm>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
+#include <editor_sdk/TexturePreviewCache.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <QComboBox>
 #include <QDir>

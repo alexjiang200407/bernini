@@ -1,5 +1,7 @@
 #pragma once
 
+#include <editor_sdk/export.h>
+
 #include <QHash>
 #include <QString>
 #include <qtypes.h>
@@ -12,11 +14,11 @@ namespace editor
 	 * category is half of it, since a `.ktx2` is an ordinary texture anywhere else. Nothing is
 	 * opened.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsImportedSourceKey(const QString& key);
 
 	/** The same of an absolute `path`, false when it lies outside `dataRoot` or none is open. */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsImportedSource(const QString& dataRoot, const QString& path);
 
 	/**
@@ -32,7 +34,7 @@ namespace editor
 	 * names one no bake has written yet, and a caller that reports the missing file tells the user
 	 * more than an empty answer would.
 	 */
-	[[nodiscard]] QString
+	[[nodiscard]] EDITOR_SDK_EXPORT QString
 	GetSourceMesh(const QString& dataRoot, const QString& path);
 
 	/**
@@ -44,7 +46,7 @@ namespace editor
 	 * A key and not an absolute path, unlike GetSourceMesh's answer, because what a caller does
 	 * with it is derive another key (`avatarKeyFor`) rather than open the file.
 	 */
-	[[nodiscard]] QString
+	[[nodiscard]] EDITOR_SDK_EXPORT QString
 	GetSourceSkeleton(const QString& dataRoot, const QString& path);
 
 	/**
@@ -56,7 +58,7 @@ namespace editor
 	 * pixmap caches -- two writes inside one millisecond share a stamp, and whatever has just
 	 * rewritten a document re-roots rather than trusting this to notice.
 	 */
-	class SourceMeshCache
+	class EDITOR_SDK_EXPORT SourceMeshCache
 	{
 	public:
 		/** The project's Data directory. Forgets what was resolved against the last one. */
