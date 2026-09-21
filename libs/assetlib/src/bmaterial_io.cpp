@@ -527,6 +527,8 @@ namespace assetlib
 			taker.Take("alphaCutoff", layer.alphaCutoff);
 			taker.Take("doubleSided", layer.doubleSided);
 
+			taker.Take("uv1Occlusion", material.uv1OcclusionTexture);
+
 			PbrParams& pbr = material.pbr;
 
 			taker.Take("baseColorFactor", pbr.baseColorFactor);
@@ -638,6 +640,8 @@ namespace assetlib
 		json["alphaMode"]          = alphaModeName(layer.alphaMode);
 		json["alphaCutoff"]        = doc::plainFloat(layer.alphaCutoff);
 		json["doubleSided"]        = layer.doubleSided;
+
+		setOrErase(json, "uv1Occlusion", material.uv1OcclusionTexture);
 
 		writePbr(json, material);
 		writePbrSurface(json, material);
