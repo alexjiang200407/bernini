@@ -162,7 +162,12 @@ public struct GameRecord<G : ISurfaceSource>
     }
 
     public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
-    public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace) { return G.Evaluate(Reader(input, isFrontFace), params); }
+    public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace)
+    {
+        PbrSurface surface = G.Evaluate(Reader(input, isFrontFace), params);
+        surface.orm.r *= materialData.SampleUv1Occlusion(materialData.GetTextureAt(byteOffset, cGameSurfaceUv1OcclusionIndex), input.uv1);
+        return surface;
+    }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 
     public float CoverageAtBias(ForwardVSOut input, bool isFrontFace, float lodBias)

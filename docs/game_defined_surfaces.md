@@ -79,6 +79,9 @@ lighting then reads. A surface under this contract chooses what a pixel *is*, no
 A sibling contract for a surface that owns its lighting — `ILitSurfaceSource`, whose `Shade`
 returns pre-exposure radiance through an `ISurfaceLight` of the sun and the environment — draws
 through lit programs of its own, and the engine's PBR never runs for it.
+One thing reaches an `Evaluate` surface's answer after it returns: the material's UV1 occlusion
+map, which the engine multiplies into `orm.r` through the second UV set the surface never sees
+([Passes](passes.md)).
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque

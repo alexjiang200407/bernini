@@ -167,6 +167,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
     vertexOut.normal = ctx.mesh.TransformDirection(mul(skinRotation, vertex.normal));
 
     vertexOut.uv = vertex.uv;
+    vertexOut.uv1 = vertex.uv1;
 
     // The tangent is skinned by the same basis as the normal. w is handedness and must survive the
     // transform untouched.

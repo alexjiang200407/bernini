@@ -69,6 +69,9 @@ public struct ForwardVSOut
     public float3 worldPos : POSITION;
     public float3 normal : NORMAL;
     public float2 uv : TEXCOORD;
+    // The second UV set, or cNoUv1 on a mesh without one; see HasUv1. Not TEXCOORD1: on Metal,
+    // Slang names a numbered semantic differently as a mesh output than as a fragment input.
+    public float2 uv1 : SECONDUV;
     public float4 tangent : TANGENT;
     // A byte offset into the material arena, naming the record's header. The record says which
     // kind it is, which is what the transparent pipeline reads: it is shared by both, so it cannot
