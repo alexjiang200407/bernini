@@ -9,7 +9,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <editor_api/EditorPanel.h>
+#include <editor_api/IEditorAction.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorPanelFactory.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
 #include <editor_api/ILanguageResolver.h>
@@ -17,11 +19,13 @@
 #include <editor_api/LocalizedText.h>
 #include <editor_api/TranslationCatalog.h>
 #include <exception>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -154,12 +158,12 @@ TEST_CASE(
 	RecordingHost host;
 	QWidget       root;
 	const auto&   desc  = registry.panels.front();
-	auto*         panel = desc.create(host, &root);
+	auto*         panel = desc.factory->Create(host, &root);
 	REQUIRE(panel->parentWidget() == &root);
 	REQUIRE(panel->GetHeldAssets().empty());
 	REQUIRE(panel->CanClose());
-	REQUIRE(registry.actions.front().enabled(host, {}));
-	registry.actions.front().invoke(host, {});
+	REQUIRE(registry.actions.front().action->IsEnabled(host, {}));
+	registry.actions.front().action->Invoke(host, {});
 	REQUIRE(host.shown == std::vector<std::string>{ desc.id });
 }
 
@@ -177,7 +181,7 @@ TEST_CASE(
 		REQUIRE(registry.editors.size() == 1);
 		const auto& desc = registry.editors.front();
 		REQUIRE(desc.extensions == std::vector<std::string>{ ".bexample" });
-		observed = desc.create(host, &root);
+		observed = desc.factory->Create(host, &root);
 		REQUIRE(observed->parentWidget() == &root);
 		REQUIRE(observed->GetHeldAssets().empty());
 		observed->OpenAsset("Authored/Example/first.bexample");
@@ -196,13 +200,13 @@ TEST_CASE(
 			observed->findChild<QLabel*>()->text() == QString("Authored/Example/second.bexample"));
 	}
 	REQUIRE(observed.isNull());
-	registry.actions.front().invoke(host, {});
+	registry.actions.front().action->Invoke(host, {});
 	REQUIRE(host.shown.size() == 1);
 	RecordingHost nextHost;
 	QWidget       nextRoot;
-	auto*         nextPanel = registry.editors.front().create(nextHost, &nextRoot);
+	auto*         nextPanel = registry.editors.front().factory->Create(nextHost, &nextRoot);
 	REQUIRE(nextPanel->GetHeldAssets().empty());
-	registry.actions.front().invoke(nextHost, {});
+	registry.actions.front().action->Invoke(nextHost, {});
 	REQUIRE(nextHost.shown == host.shown);
 	REQUIRE(host.shown.size() == 1);
 }
@@ -287,12 +291,105 @@ TEST_CASE("Translated labels preserve menu routing and action identity", "[plugi
 	REQUIRE(action.menuId == menu.id);
 	REQUIRE(menu.parentId == editor::c_ToolsMenuId);
 	REQUIRE(action.id == "sample.show-overview");
-	action.invoke(host, {});
+	action.action->Invoke(host, {});
 	REQUIRE(host.shown == std::vector<std::string>{ panel.id });
 	QWidget     root;
-	const auto* widget = panel.create(host, &root);
+	const auto* widget = panel.factory->Create(host, &root);
 	REQUIRE(widget->findChild<QLabel*>()->text() == resolve(panel.title));
 	host.language.SetLocale("en");
 	REQUIRE(resolve(action.title) == "Project tools");
 	REQUIRE(action.menuId == menu.id);
+}
+
+TEST_CASE("Owned actions survive registration storage growth and movement", "[plugin][lifetime]")
+{
+	struct State
+	{
+		int destroyed = 0;
+	};
+	class Action final : public editor::IEditorAction
+	{
+	public:
+		Action(std::shared_ptr<State> state, std::string id) :
+			m_State(std::move(state)), m_Id(std::move(id))
+		{}
+		~Action() override { ++m_State->destroyed; }
+		bool
+		IsEnabled(editor::IEditorHost&, std::span<const std::string>) const override
+		{
+			return true;
+		}
+		void
+		Invoke(editor::IEditorHost& host, std::span<const std::string>) override
+		{
+			host.ShowPanel(m_Id);
+		}
+
+	private:
+		std::shared_ptr<State> m_State;
+		std::string            m_Id;
+	};
+	static_assert(!std::is_move_constructible_v<Action>);
+	static_assert(!std::is_copy_constructible_v<editor::ActionDesc>);
+	auto          state = std::make_shared<State>();
+	RecordingHost host;
+	{
+		RecordingRegistry registry;
+		auto              desc =
+			editor::ActionDesc().SetId("sample.first").AddAction<Action>(state, "sample.original");
+		auto* original = desc.action.get();
+		registry.AddAction(std::move(desc));
+		const auto oldCapacity = registry.actions.capacity();
+		for (int i = 0; i < 128; ++i)
+			registry.AddAction(
+				editor::ActionDesc().SetId("sample.next").AddAction<Action>(state, "sample.next"));
+		CHECK(registry.actions.capacity() > oldCapacity);
+		CHECK(registry.actions.front().action.get() == original);
+		RecordingRegistry moved(std::move(registry));
+		original->Invoke(host, {});
+		CHECK(host.shown == std::vector<std::string>{ "sample.original" });
+		CHECK(state->destroyed == 0);
+	}
+	CHECK(state->destroyed == 129);
+}
+
+TEST_CASE(
+	"Descriptor builders forward ownership and preserve it when construction fails",
+	"[plugin][lifetime]")
+{
+	class Factory final : public editor::IEditorPanelFactory
+	{
+	public:
+		explicit Factory(std::unique_ptr<std::string> value) : m_Value(std::move(value))
+		{
+			if (!m_Value)
+				throw std::runtime_error("Missing configuration");
+		}
+		editor::EditorPanel*
+		Create(editor::IEditorHost&, QWidget*) override
+		{
+			return nullptr;
+		}
+		const std::string&
+		GetValue() const noexcept
+		{
+			return *m_Value;
+		}
+
+	private:
+		std::unique_ptr<std::string> m_Value;
+	};
+	auto value = std::make_unique<std::string>("owned configuration");
+	auto desc  = editor::PanelDesc().SetId("sample.panel").AddFactory<Factory>(std::move(value));
+	CHECK(value == nullptr);
+	const auto* factory = static_cast<const Factory*>(desc.factory.get());
+	CHECK(factory->GetValue() == "owned configuration");
+	CHECK(&desc.SetTitle({ "sample.editor", "panel", "Panel" }) == &desc);
+	CHECK_THROWS(desc.AddFactory<Factory>(nullptr));
+	CHECK(desc.factory.get() == factory);
+	CHECK(factory->GetValue() == "owned configuration");
+	RecordingRegistry registry;
+	registry.AddPanel(std::move(desc));
+	CHECK(desc.factory == nullptr);
+	CHECK(registry.panels.front().factory.get() == factory);
 }

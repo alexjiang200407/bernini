@@ -186,6 +186,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	{
 		auto rtDesc                   = RenderTargetWindowDesc();
 		rtDesc.renderer               = m_Desc.renderer;
+		rtDesc.assets                 = m_Desc.assets;
 		rtDesc.initialInstances       = m_Desc.initialPreviewInstances;
 		rtDesc.taaEnabled             = m_Desc.taaEnabled;
 		rtDesc.renderScale            = m_Desc.renderScale;
@@ -258,6 +259,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 MaterialEditorWindow::~MaterialEditorWindow()
 {
+	if (m_Preview != nullptr)
+		m_Preview->SetRenderingEnabled(false);
 	ReleasePreviewMaterials();
 
 	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a

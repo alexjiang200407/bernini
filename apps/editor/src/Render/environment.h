@@ -135,6 +135,10 @@ namespace editor
 		AppliedEnvironment bound;
 	};
 
+	/** Release owned maps on the render thread; the view must never render again. */
+	void
+	ReleaseEnvironment(bgl::IScene* scene, EnvironmentBinding& binding);
+
 	/**
 	 * What a view lit through `binding` holds open: the `.benv` bound to it, and nothing at all when
 	 * it is lit by nothing.

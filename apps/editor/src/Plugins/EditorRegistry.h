@@ -1,5 +1,6 @@
 #pragma once
 
+#include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/TranslationCatalog.h>
 #include <span>
@@ -11,6 +12,10 @@ namespace editor::plugins
 	class EditorRegistry final : public IEditorRegistry
 	{
 	public:
+		// Startup only; a failed registration destroys its contributions and preserves earlier ones.
+		void
+		Register(IEditorPlugin& plugin);
+
 		void
 		AddTranslations(TranslationCatalog catalog) override;
 

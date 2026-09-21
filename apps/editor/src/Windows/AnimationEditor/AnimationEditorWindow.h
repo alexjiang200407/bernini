@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gamelib/AssetManager.h>
+
 #include <QElapsedTimer>
 #include <QWidget>
 #include <cstdint>
@@ -36,7 +38,9 @@ class QToolButton;
 
 struct AnimationEditorWindowDesc
 {
+	// Borrowed services must outlive the panel, including its preview's render-thread teardown.
 	Renderer*                    renderer                = nullptr;
+	game::AssetManager*          assets                  = nullptr;
 	uint32_t                     initialPreviewInstances = 16;
 	bool                         taaEnabled              = true;
 	float                        renderScale             = 1.0f;

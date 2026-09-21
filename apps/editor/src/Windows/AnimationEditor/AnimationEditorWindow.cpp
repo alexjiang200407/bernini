@@ -29,6 +29,7 @@
 #include <QMimeData>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
@@ -69,6 +70,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 {
 	auto rt                   = RenderTargetWindowDesc();
 	rt.renderer               = desc.renderer;
+	rt.assets                 = desc.assets;
 	rt.initialInstances       = desc.initialPreviewInstances;
 	rt.taaEnabled             = desc.taaEnabled;
 	rt.renderScale            = desc.renderScale;
@@ -283,16 +285,15 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
-	// The column scrolls rather than asking the window for its height: every control adds to a
-	// minimum that would otherwise be taken out of whatever dock sits below the panel. Its width
-	// is still its own, though -- a scroll area hides both hints from the splitter, and the
-	// horizontal bar is off, so without the floor a narrowed column would clip its buttons.
 	auto* scrollBox = new QScrollArea(this);
 	scrollBox->setWidget(column);
 	scrollBox->setWidgetResizable(true);
 	scrollBox->setFrameShape(QFrame::NoFrame);
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	scrollBox->setMinimumWidth(column->sizeHint().width());
+	// Horizontal scrolling is disabled; reserve the vertical bar's width before it appears.
+	column->ensurePolished();
+	scrollBox->setMinimumWidth(
+		column->sizeHint().width() + scrollBox->verticalScrollBar()->sizeHint().width());
 
 	// After the width above is taken: collapsing the group takes its sliders out of the column's
 	// hint. Reaches the preview before it is on screen, where a rebind is recorded and applied when

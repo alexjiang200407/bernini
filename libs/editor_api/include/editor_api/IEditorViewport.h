@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <gamelib/AssetManager.h>
+#include <utility>
 
 namespace editor
 {
@@ -27,6 +28,61 @@ namespace editor
 		bool     taaEnabled             = true;
 		float    renderScale            = 1.0f;
 		float    taaReconstructionWidth = 0.4f;
+		ViewportDesc&
+		SetInitialInstances(uint32_t value) & noexcept
+		{
+			initialInstances = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetInitialInstances(uint32_t value) && noexcept
+		{
+			SetInitialInstances(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetTaaEnabled(bool value) & noexcept
+		{
+			taaEnabled = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetTaaEnabled(bool value) && noexcept
+		{
+			SetTaaEnabled(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetRenderScale(float value) & noexcept
+		{
+			renderScale = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetRenderScale(float value) && noexcept
+		{
+			SetRenderScale(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetTaaReconstructionWidth(float value) & noexcept
+		{
+			taaReconstructionWidth = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetTaaReconstructionWidth(float value) && noexcept
+		{
+			SetTaaReconstructionWidth(value);
+			return std::move(*this);
+		}
 	};
 
 	/** GUI-thread widget; destruction drains its render work before releasing its view. */

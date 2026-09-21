@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gamelib/AssetManager.h>
+
 #include <QWidget>
 
 #include "Render/Renderer.h"
@@ -42,12 +44,14 @@ namespace QtNodes
 
 struct MaterialEditorWindowDesc
 {
-	Renderer*          renderer                = nullptr;
-	uint32_t           initialPreviewInstances = 16;
-	bool               taaEnabled              = true;
-	float              renderScale             = 1.0f;
-	float              taaReconstructionWidth  = 0.4f;
-	MaterialPreviewEnv previewEnv;
+	// Borrowed services must outlive the panel, including its preview's render-thread teardown.
+	Renderer*           renderer                = nullptr;
+	game::AssetManager* assets                  = nullptr;
+	uint32_t            initialPreviewInstances = 16;
+	bool                taaEnabled              = true;
+	float               renderScale             = 1.0f;
+	float               taaReconstructionWidth  = 0.4f;
+	MaterialPreviewEnv  previewEnv;
 
 	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.
 	bool     headless       = false;

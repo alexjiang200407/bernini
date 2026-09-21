@@ -167,13 +167,21 @@ private:
 	void
 	SetUpFrameStats();
 
+	void
+	ConnectEditorPanels();
+
+	void
+	ClearEditorPanels() noexcept;
+
+	void
+	ConfigureViewport(RenderTargetWindow& view);
+
 	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
 	void
 	Build(const std::filesystem::path& configPath, const std::filesystem::path& project);
 
 	/**
-	 * Hands back everything that renders, in the order it has to go: the thumbnails and the assets
-	 * release through the Renderer, and the viewports outlive both.
+	 * Destroys thumbnails and panels before their project asset manager and renderer.
 	 *
 	 * Called by the destructor, and by the constructor when it fails part-way. Qt destroys the
 	 * viewports as children of this window, which happens *after* its members -- so leaving it to
@@ -216,6 +224,7 @@ private:
 	void
 	ClearPluginPanels();
 
+	std::function<void()>     m_CreateEditorPanels;
 	editor::MainWindowWidgets m_Ui;
 	std::optional<bool>       m_TaaOverride;
 	std::optional<float>      m_RenderScaleOverride;

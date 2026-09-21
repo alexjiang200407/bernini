@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <initializer_list>
 #include <optional>
 #include <qcontainerfwd.h>
 #include <qlogging.h>
@@ -114,6 +115,17 @@ namespace editor
 		bound.prefilter  = replace(previous.prefilter, applied.prefilter);
 		bound.skybox     = replace(previous.skybox, applied.skybox);
 		return bound;
+	}
+
+	void
+	ReleaseEnvironment(bgl::IScene* scene, EnvironmentBinding& binding)
+	{
+		for (const auto texture :
+		     { binding.bound.irradiance, binding.bound.prefilter, binding.bound.skybox })
+			if (texture.textureSlot)
+				scene->DeleteTextureAsset(texture);
+		binding.bound = {};
+		binding.boundPath.clear();
 	}
 
 	QStringList

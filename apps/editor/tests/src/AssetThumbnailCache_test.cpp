@@ -11,6 +11,8 @@
 #include <bgl/ISceneView.h>
 #include <bgl/types/SceneDesc.h>
 #include <editor_api/IEditorViewport.h>
+#include <editor_api/IThumbnailProvider.h>
+#include <memory>
 
 #include "util/QtSupport.h"
 
@@ -218,7 +220,9 @@ TEST_CASE("The plugin host owns headless viewport rendering", "[plugins][viewpor
 	QPointer<editor::IEditorViewport> observed;
 	{
 		QWidget root;
-		observed = host.CreateViewport(&root, { .initialInstances = 4, .taaEnabled = false });
+		observed = host.CreateViewport(
+			&root,
+			editor::ViewportDesc().SetInitialInstances(4).SetTaaEnabled(false));
 		REQUIRE(observed != nullptr);
 		CHECK(observed->parentWidget() == &root);
 		bool invoked = false;
@@ -250,16 +254,22 @@ TEST_CASE("Only the assets the editor can draw are thumbnailed", "[thumbnails]")
 
 TEST_CASE("A plugin thumbnail is resolved before the built-in renderer", "[thumbnails][plugins]")
 {
-	Fixture                             fixture;
-	assetlib::AssetStore                store(c_DataRoot);
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmaterial" },
-		[](const assetlib::AssetStore&, std::string_view) {
+	Fixture              fixture;
+	assetlib::AssetStore store(c_DataRoot);
+	class ImageProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view) const override
+		{
 			return editor::Thumbnail(QImage(24, 24, QImage::Format_RGBA8888));
-		},
+		}
 	};
-	auto desc           = fixture.Desc();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<ImageProvider>();
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
@@ -275,32 +285,46 @@ TEST_CASE("A plugin thumbnail is resolved before the built-in renderer", "[thumb
 
 TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugins][lifetime]")
 {
-	Fixture                             fixture;
-	assetlib::AssetStore                store(c_DataRoot);
-	std::mutex                          mutex;
-	std::condition_variable             changed;
-	bool                                entered   = false;
-	bool                                released  = false;
-	bool                                completed = false;
-	int                                 calls     = 0;
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmaterial" },
-		[&](const assetlib::AssetStore&, std::string_view) {
-			std::unique_lock lock(mutex);
-			if (calls == 0)
+	Fixture              fixture;
+	assetlib::AssetStore store(c_DataRoot);
+	struct State
+	{
+		std::mutex              mutex;
+		std::condition_variable changed;
+		bool                    entered   = false;
+		bool                    released  = false;
+		bool                    completed = false;
+		int                     calls     = 0;
+	};
+	class BlockingProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		explicit BlockingProvider(std::shared_ptr<State> state) : m_State(std::move(state)) {}
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view) const override
+		{
+			std::unique_lock lock(m_State->mutex);
+			if (m_State->calls == 0)
 			{
-				entered = true;
-				changed.notify_all();
-				changed.wait(lock, [&] { return released; });
+				m_State->entered = true;
+				m_State->changed.notify_all();
+				m_State->changed.wait(lock, [&] { return m_State->released; });
 			}
 			QImage image(8, 8, QImage::Format_RGBA8888);
-			image.fill(calls++ == 0 ? Qt::red : Qt::blue);
-			completed = true;
+			image.fill(m_State->calls++ == 0 ? Qt::red : Qt::blue);
+			m_State->completed = true;
 			return editor::Thumbnail(std::move(image));
-		},
+		}
+
+	private:
+		std::shared_ptr<State> m_State;
 	};
-	auto desc           = fixture.Desc();
+	auto       state    = std::make_shared<State>();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<BlockingProvider>(state);
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
@@ -309,10 +333,10 @@ TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugin
 	cache.Request(c_MaterialPath);
 
 	std::jthread release([&] {
-		std::unique_lock lock(mutex);
-		changed.wait(lock, [&] { return entered; });
-		released = true;
-		changed.notify_all();
+		std::unique_lock lock(state->mutex);
+		state->changed.wait(lock, [&] { return state->entered; });
+		state->released = true;
+		state->changed.notify_all();
 	});
 	cache.SetStore(nullptr);
 	cache.SetStore(&store);
@@ -320,8 +344,8 @@ TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugin
 	cache.Request(c_MaterialPath);
 
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
-	CHECK(completed);
-	CHECK(calls == 2);
+	CHECK(state->completed);
+	CHECK(state->calls == 2);
 	CHECK(cache.Lookup(c_MaterialPath).toImage().pixelColor(0, 0) == QColor(Qt::blue));
 }
 
@@ -329,21 +353,35 @@ TEST_CASE(
 	"Invalidation regenerates unchanged plugin thumbnails with external dependencies",
 	"[thumbnails][plugins]")
 {
-	Fixture                             fixture;
-	assetlib::AssetStore                store(c_DataRoot);
-	QColor                              sourceColour(Qt::red);
-	int                                 calls = 0;
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmesh" },
-		[&](const assetlib::AssetStore&, std::string_view) {
-			QImage image(8, 8, QImage::Format_RGBA8888);
-			image.fill(sourceColour);
-			++calls;
-			return editor::Thumbnail(std::move(image));
-		},
+	Fixture              fixture;
+	assetlib::AssetStore store(c_DataRoot);
+	struct State
+	{
+		QColor colour{ Qt::red };
+		int    calls = 0;
 	};
-	auto desc           = fixture.Desc();
+	class ColourProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		explicit ColourProvider(std::shared_ptr<State> state) : m_State(std::move(state)) {}
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view) const override
+		{
+			QImage image(8, 8, QImage::Format_RGBA8888);
+			image.fill(m_State->colour);
+			++m_State->calls;
+			return editor::Thumbnail(std::move(image));
+		}
+
+	private:
+		std::shared_ptr<State> m_State;
+	};
+	auto       state    = std::make_shared<State>();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmesh")
+	                          .AddProvider<ColourProvider>(state);
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmesh" ? &provider : nullptr;
 	};
@@ -355,31 +393,37 @@ TEST_CASE(
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::red));
 
-	sourceColour = Qt::blue;
+	state->colour = Qt::blue;
 	cache.Invalidate();
 	CHECK(cache.Lookup(c_MeshPath).isNull());
 	cache.Request(c_MeshPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
-	CHECK(calls == 2);
+	CHECK(state->calls == 2);
 	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::blue));
 }
 
 TEST_CASE("A plugin scene thumbnail releases its preview geometry", "[thumbnails][plugins][render]")
 {
-	Fixture                             fixture;
-	assetlib::AssetStore                store(c_DataRoot);
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmaterial" },
-		[](const assetlib::AssetStore&, const std::string_view key) {
+	Fixture              fixture;
+	assetlib::AssetStore store(c_DataRoot);
+	class SceneProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view key) const override
+		{
 			return editor::Thumbnail(
 				editor::ThumbnailScene{
 					.geometry = editor::ThumbnailPrimitive::kSphere,
 					.material = std::string(key),
 				});
-		},
+		}
 	};
-	auto desc           = fixture.Desc();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<SceneProvider>();
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};

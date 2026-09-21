@@ -337,7 +337,10 @@ to keep in agreement beyond the one below.
   shared with the Material Editor's preview, and its ground with it, so the slope stands only while
   the panel is on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
   brings the slope back. Inside the group, a **Blob shadow** checkbox (on by default) puts the
-  engine's contact disc (`ISceneView::SetBlobShadow`) on every animated instance — the cheap read
+  engine's contact disc (`ISceneView::SetBlobShadow`) on one animated instance per placement transform.
+  Mesh parts on the same rig and transform share that instance's disc and foot shadows; otherwise
+  multipart characters accumulate one full-strength shadow per part. The choice survives clip,
+  blend-space and pose-source respawns. The disc is the cheap read
   of whether a foot is grounded, sized from the loaded bounds by `editor::BlobShadowForBounds` —
   the narrower horizontal extent, because the bounds are the clip union and their long axis is
   stride reach, not body, and cast from a twentieth of the rig's height up, because its origin

@@ -1,30 +1,20 @@
 #pragma once
 
-#include <QWidget>
-#include <assetlib/AssetStore.h>
-#include <editor_api/EditorPanel.h>
-#include <editor_api/IEditorHost.h>
+#include <editor_api/IAssetEditorFactory.h>
+#include <editor_api/IEditorAction.h>
+#include <editor_api/IEditorImporter.h>
+#include <editor_api/IEditorPanelFactory.h>
+#include <editor_api/IThumbnailProvider.h>
 #include <editor_api/LocalizedText.h>
-#include <editor_api/Thumbnail.h>
 #include <editor_api/TranslationCatalog.h>
-#include <filesystem>
-#include <functional>
-#include <span>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace editor
 {
-	using PanelFactory       = std::function<EditorPanel*(IEditorHost&, QWidget*)>;
-	using AssetEditorFactory = std::function<AssetEditorPanel*(IEditorHost&, QWidget*)>;
-	using ActionPredicate    = std::function<bool(IEditorHost&, std::span<const std::string>)>;
-	using ActionCallback     = std::function<void(IEditorHost&, std::span<const std::string>)>;
-	using ImportCallback =
-		std::function<void(IEditorHost&, const std::filesystem::path&, std::string_view)>;
-	using ThumbnailCallback =
-		std::function<Thumbnail(const assetlib::AssetStore&, std::string_view)>;
-
 	inline constexpr std::string_view c_FileMenuId  = "editor.file";
 	inline constexpr std::string_view c_ToolsMenuId = "editor.tools";
 
@@ -33,13 +23,99 @@ namespace editor
 		std::string   id;
 		std::string   parentId;
 		LocalizedText title;
+		MenuDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		MenuDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		MenuDesc&
+		SetParentId(std::string value) &
+		{
+			parentId = std::move(value);
+			return *this;
+		}
+
+		MenuDesc&&
+		SetParentId(std::string value) &&
+		{
+			SetParentId(std::move(value));
+			return std::move(*this);
+		}
+
+		MenuDesc&
+		SetTitle(LocalizedText value) &
+		{
+			title = std::move(value);
+			return *this;
+		}
+
+		MenuDesc&&
+		SetTitle(LocalizedText value) &&
+		{
+			SetTitle(std::move(value));
+			return std::move(*this);
+		}
 	};
 
 	struct PanelDesc
 	{
-		std::string   id;
-		LocalizedText title;
-		PanelFactory  create;
+		std::string           id;
+		LocalizedText         title;
+		EditorPanelFactoryPtr factory;
+		PanelDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		PanelDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		PanelDesc&
+		SetTitle(LocalizedText value) &
+		{
+			title = std::move(value);
+			return *this;
+		}
+
+		PanelDesc&&
+		SetTitle(LocalizedText value) &&
+		{
+			SetTitle(std::move(value));
+			return std::move(*this);
+		}
+
+		template <typename T, typename... Args>
+			requires EditorPanelFactoryFor<T, Args...>
+		PanelDesc&
+		AddFactory(Args&&... args) &
+		{
+			factory = std::make_unique<T>(std::forward<Args>(args)...);
+			return *this;
+		}
+
+		template <typename T, typename... Args>
+			requires EditorPanelFactoryFor<T, Args...>
+		PanelDesc&&
+		AddFactory(Args&&... args) &&
+		{
+			AddFactory<T>(std::forward<Args>(args)...);
+			return std::move(*this);
+		}
 	};
 
 	struct AssetEditorDesc
@@ -47,7 +123,66 @@ namespace editor
 		std::string              id;
 		LocalizedText            title;
 		std::vector<std::string> extensions;
-		AssetEditorFactory       create;
+		AssetEditorFactoryPtr    factory;
+		AssetEditorDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		AssetEditorDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		AssetEditorDesc&
+		SetTitle(LocalizedText value) &
+		{
+			title = std::move(value);
+			return *this;
+		}
+
+		AssetEditorDesc&&
+		SetTitle(LocalizedText value) &&
+		{
+			SetTitle(std::move(value));
+			return std::move(*this);
+		}
+
+		AssetEditorDesc&
+		AddExtension(std::string extension) &
+		{
+			extensions.push_back(std::move(extension));
+			return *this;
+		}
+
+		AssetEditorDesc&&
+		AddExtension(std::string extension) &&
+		{
+			AddExtension(std::move(extension));
+			return std::move(*this);
+		}
+
+		template <typename T, typename... Args>
+			requires AssetEditorFactoryFor<T, Args...>
+		AssetEditorDesc&
+		AddFactory(Args&&... args) &
+		{
+			factory = std::make_unique<T>(std::forward<Args>(args)...);
+			return *this;
+		}
+
+		template <typename T, typename... Args>
+			requires AssetEditorFactoryFor<T, Args...>
+		AssetEditorDesc&&
+		AddFactory(Args&&... args) &&
+		{
+			AddFactory<T>(std::forward<Args>(args)...);
+			return std::move(*this);
+		}
 	};
 
 	struct ActionDesc
@@ -56,25 +191,187 @@ namespace editor
 		LocalizedText            title;
 		std::string              menuId;
 		std::vector<std::string> extensions;
-		ActionPredicate          enabled;
-		ActionCallback           invoke;
+		EditorActionPtr          action;
+		ActionDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		ActionDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		ActionDesc&
+		SetTitle(LocalizedText value) &
+		{
+			title = std::move(value);
+			return *this;
+		}
+
+		ActionDesc&&
+		SetTitle(LocalizedText value) &&
+		{
+			SetTitle(std::move(value));
+			return std::move(*this);
+		}
+
+		ActionDesc&
+		SetMenuId(std::string value) &
+		{
+			menuId = std::move(value);
+			return *this;
+		}
+
+		ActionDesc&&
+		SetMenuId(std::string value) &&
+		{
+			SetMenuId(std::move(value));
+			return std::move(*this);
+		}
+
+		ActionDesc&
+		AddExtension(std::string extension) &
+		{
+			extensions.push_back(std::move(extension));
+			return *this;
+		}
+
+		ActionDesc&&
+		AddExtension(std::string extension) &&
+		{
+			AddExtension(std::move(extension));
+			return std::move(*this);
+		}
+
+		template <typename T, typename... Args>
+			requires EditorActionFor<T, Args...>
+		ActionDesc&
+		AddAction(Args&&... args) &
+		{
+			action = std::make_unique<T>(std::forward<Args>(args)...);
+			return *this;
+		}
+
+		template <typename T, typename... Args>
+			requires EditorActionFor<T, Args...>
+		ActionDesc&&
+		AddAction(Args&&... args) &&
+		{
+			AddAction<T>(std::forward<Args>(args)...);
+			return std::move(*this);
+		}
 	};
 
 	struct ImporterDesc
 	{
 		std::string              id;
 		std::vector<std::string> extensions;
-		ImportCallback           importAsset;
+		EditorImporterPtr        importer;
+		ImporterDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		ImporterDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		ImporterDesc&
+		AddExtension(std::string extension) &
+		{
+			extensions.push_back(std::move(extension));
+			return *this;
+		}
+
+		ImporterDesc&&
+		AddExtension(std::string extension) &&
+		{
+			AddExtension(std::move(extension));
+			return std::move(*this);
+		}
+
+		template <typename T, typename... Args>
+			requires EditorImporterFor<T, Args...>
+		ImporterDesc&
+		AddImporter(Args&&... args) &
+		{
+			importer = std::make_unique<T>(std::forward<Args>(args)...);
+			return *this;
+		}
+
+		template <typename T, typename... Args>
+			requires EditorImporterFor<T, Args...>
+		ImporterDesc&&
+		AddImporter(Args&&... args) &&
+		{
+			AddImporter<T>(std::forward<Args>(args)...);
+			return std::move(*this);
+		}
 	};
 
 	struct ThumbnailProviderDesc
 	{
 		std::string              id;
 		std::vector<std::string> extensions;
-		ThumbnailCallback        describe;
+		ThumbnailProviderPtr     provider;
+		ThumbnailProviderDesc&
+		SetId(std::string value) &
+		{
+			id = std::move(value);
+			return *this;
+		}
+
+		ThumbnailProviderDesc&&
+		SetId(std::string value) &&
+		{
+			SetId(std::move(value));
+			return std::move(*this);
+		}
+
+		ThumbnailProviderDesc&
+		AddExtension(std::string extension) &
+		{
+			extensions.push_back(std::move(extension));
+			return *this;
+		}
+
+		ThumbnailProviderDesc&&
+		AddExtension(std::string extension) &&
+		{
+			AddExtension(std::move(extension));
+			return std::move(*this);
+		}
+
+		template <typename T, typename... Args>
+			requires ThumbnailProviderFor<T, Args...>
+		ThumbnailProviderDesc&
+		AddProvider(Args&&... args) &
+		{
+			provider = std::make_unique<T>(std::forward<Args>(args)...);
+			return *this;
+		}
+
+		template <typename T, typename... Args>
+			requires ThumbnailProviderFor<T, Args...>
+		ThumbnailProviderDesc&&
+		AddProvider(Args&&... args) &&
+		{
+			AddProvider<T>(std::forward<Args>(args)...);
+			return std::move(*this);
+		}
 	};
 
-	/** Startup only. Own descriptors by value; reject invalid IDs/callbacks and collisions. See docs/editor_plugins.md. */
+	// Startup only; ownership transfers even on rejection. See docs/editor_plugins.md.
 	class IEditorRegistry
 	{
 	public:
@@ -100,11 +397,11 @@ namespace editor
 		virtual void
 		AddAction(ActionDesc desc) = 0;
 
-		/** One importer per source extension; callback receives an OS source path and a target folder key. */
+		/** One importer per source extension; Import receives an OS source path and a target folder key. */
 		virtual void
 		AddImporter(ImporterDesc desc) = 0;
 
-		/** One provider per extension; describe may run concurrently on workers and must not touch widgets. */
+		/** One provider per extension; Describe may run concurrently on workers and must not touch widgets. */
 		virtual void
 		AddThumbnailProvider(ThumbnailProviderDesc desc) = 0;
 	};

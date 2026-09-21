@@ -92,7 +92,7 @@ case writes one in a temp directory and names it. That is also how a test opens 
 ## editor_lib
 
 `editor_api` is the separate public plugin contract, held to the library bar. Its headers expose
-no `apps/editor/src` types. The editor does not consume it yet; `editor_plugin_tests` exercises a
+no `apps/editor/src` types. The production registry owns plugin contribution objects; `editor_plugin_tests` exercises a
 compiled sample against a fake host and a separately configured SDK fixture. See
 [Editor plugin contracts](../../docs/editor_plugins.md).
 
@@ -280,14 +280,11 @@ each catching a bug in the code they were extracted from.
 Two things a test cannot drive, and why:
 
 - **Modal dialogs** (`QFileDialog`, `QMessageBox`, `QInputDialog`, `QMenu::exec`) are
-  called directly on the concrete Qt types, with no injection seam. Triggering one from
-  a test hangs it. This is what keeps `editor::import::ImportMesh`, `AssetOperations`'
-  Delete/Rename/Bake, `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
-  `MaterialEditorWindow`'s save/open uncovered. Hoisting a rule out into a free function that
-  takes what it needs is what unlocks it, and the import is the worked example:
-  `editor::import::WriteMaterials`, `WriteRig` and `RollBack` are each driven directly by a
-  test, so what an import *writes* and what a failed one *deletes* are pinned even though the
-  import itself is not.
+  called directly on the concrete Qt types, with no injection seam. A test must drive their nested
+  event loop or it hangs. `MainWindow_test` exercises project replacement with a non-native file
+  dialog, a timer entering the filename, and a deadline rejecting dialogs on failure. Native file
+  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup
+  and Material save/open retain untested modal paths; their extracted data operations are tested.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
