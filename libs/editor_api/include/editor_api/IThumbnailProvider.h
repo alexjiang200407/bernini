@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <concepts>
 #include <editor_api/Thumbnail.h>
 #include <memory>
 #include <string_view>
@@ -26,5 +27,9 @@ namespace editor
 		IThumbnailProvider() = default;
 	};
 	using ThumbnailProviderPtr = std::unique_ptr<IThumbnailProvider>;
+
+	template <typename T, typename... Args>
+	concept ThumbnailProviderFor =
+		std::derived_from<T, IThumbnailProvider> && std::constructible_from<T, Args...>;
 
 }

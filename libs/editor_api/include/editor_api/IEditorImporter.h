@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #include <editor_api/IEditorHost.h>
 #include <filesystem>
 #include <memory>
@@ -28,5 +29,9 @@ namespace editor
 		IEditorImporter() = default;
 	};
 	using EditorImporterPtr = std::unique_ptr<IEditorImporter>;
+
+	template <typename T, typename... Args>
+	concept EditorImporterFor =
+		std::derived_from<T, IEditorImporter> && std::constructible_from<T, Args...>;
 
 }

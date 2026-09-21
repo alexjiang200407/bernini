@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #include <editor_api/IEditorHost.h>
 #include <memory>
 #include <span>
@@ -28,5 +29,9 @@ namespace editor
 		IEditorAction() = default;
 	};
 	using EditorActionPtr = std::unique_ptr<IEditorAction>;
+
+	template <typename T, typename... Args>
+	concept EditorActionFor =
+		std::derived_from<T, IEditorAction> && std::constructible_from<T, Args...>;
 
 }

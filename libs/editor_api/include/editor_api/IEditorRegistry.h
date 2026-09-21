@@ -1,6 +1,5 @@
 #pragma once
 
-#include <concepts>
 #include <editor_api/IAssetEditorFactory.h>
 #include <editor_api/IEditorAction.h>
 #include <editor_api/IEditorImporter.h>
@@ -101,8 +100,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorPanelFactory> &&
-		             std::constructible_from<T, Args...>
+			requires EditorPanelFactoryFor<T, Args...>
 		PanelDesc&
 		AddFactory(Args&&... args) &
 		{
@@ -111,8 +109,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorPanelFactory> &&
-		             std::constructible_from<T, Args...>
+			requires EditorPanelFactoryFor<T, Args...>
 		PanelDesc&&
 		AddFactory(Args&&... args) &&
 		{
@@ -170,8 +167,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IAssetEditorFactory> &&
-		             std::constructible_from<T, Args...>
+			requires AssetEditorFactoryFor<T, Args...>
 		AssetEditorDesc&
 		AddFactory(Args&&... args) &
 		{
@@ -180,8 +176,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IAssetEditorFactory> &&
-		             std::constructible_from<T, Args...>
+			requires AssetEditorFactoryFor<T, Args...>
 		AssetEditorDesc&&
 		AddFactory(Args&&... args) &&
 		{
@@ -254,7 +249,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorAction> && std::constructible_from<T, Args...>
+			requires EditorActionFor<T, Args...>
 		ActionDesc&
 		AddAction(Args&&... args) &
 		{
@@ -263,7 +258,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorAction> && std::constructible_from<T, Args...>
+			requires EditorActionFor<T, Args...>
 		ActionDesc&&
 		AddAction(Args&&... args) &&
 		{
@@ -306,7 +301,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorImporter> && std::constructible_from<T, Args...>
+			requires EditorImporterFor<T, Args...>
 		ImporterDesc&
 		AddImporter(Args&&... args) &
 		{
@@ -315,7 +310,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IEditorImporter> && std::constructible_from<T, Args...>
+			requires EditorImporterFor<T, Args...>
 		ImporterDesc&&
 		AddImporter(Args&&... args) &&
 		{
@@ -358,7 +353,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IThumbnailProvider> && std::constructible_from<T, Args...>
+			requires ThumbnailProviderFor<T, Args...>
 		ThumbnailProviderDesc&
 		AddProvider(Args&&... args) &
 		{
@@ -367,7 +362,7 @@ namespace editor
 		}
 
 		template <typename T, typename... Args>
-			requires std::derived_from<T, IThumbnailProvider> && std::constructible_from<T, Args...>
+			requires ThumbnailProviderFor<T, Args...>
 		ThumbnailProviderDesc&&
 		AddProvider(Args&&... args) &&
 		{

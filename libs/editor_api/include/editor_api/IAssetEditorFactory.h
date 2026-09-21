@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <concepts>
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorHost.h>
 #include <memory>
@@ -25,5 +26,9 @@ namespace editor
 		IAssetEditorFactory() = default;
 	};
 	using AssetEditorFactoryPtr = std::unique_ptr<IAssetEditorFactory>;
+
+	template <typename T, typename... Args>
+	concept AssetEditorFactoryFor =
+		std::derived_from<T, IAssetEditorFactory> && std::constructible_from<T, Args...>;
 
 }

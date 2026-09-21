@@ -73,7 +73,8 @@ Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPlugi
 Registration descriptors and `ViewportDesc` support fluent `Set…` methods; extension lists use
 `AddExtension`. `AddFactory<T>`, `AddAction<T>`, `AddImporter<T>` and `AddProvider<T>` construct
 and own a concrete contribution, forwarding constructor arguments. These templates require a
-constructible public implementation of the corresponding interface. Replacing an object destroys
+constructible public implementation of the corresponding interface, expressed by named concepts
+such as `EditorPanelFactoryFor<T, Args...>` beside the interface. Replacing an object destroys
 its predecessor only after successful construction. Lvalue chains return the same descriptor;
 rvalue chains retain the rvalue category so a temporary transfers directly into registration.
 
