@@ -13,16 +13,19 @@ namespace assetlib::imp
 	 * metallic-roughness texture, which specifies only roughness(G) and metallic(B); its red channel
 	 * carries occlusion only under the shared-ORM convention. occlusionTexture is glTF's own
 	 * occlusion map and takes precedence over that red channel wherever it is present.
+	 * uv1OcclusionTexture is the same map when glTF addresses it through TEXCOORD_1: geometry AO on a
+	 * second UV set, kept beside the ORM rather than folded into it.
 	 */
 	struct BMaterialImport
 	{
-		uint32_t  baseColorTexture = 0xFFFFFFFFu;
-		uint32_t  normalTexture    = 0xFFFFFFFFu;
-		uint32_t  ormTexture       = 0xFFFFFFFFu;
-		uint32_t  occlusionTexture = 0xFFFFFFFFu;
-		glm::vec4 baseColorFactor  = glm::vec4(1.0f);
-		float     metallicFactor   = 1.0f;
-		float     roughnessFactor  = 1.0f;
+		uint32_t  baseColorTexture    = 0xFFFFFFFFu;
+		uint32_t  normalTexture       = 0xFFFFFFFFu;
+		uint32_t  ormTexture          = 0xFFFFFFFFu;
+		uint32_t  occlusionTexture    = 0xFFFFFFFFu;
+		uint32_t  uv1OcclusionTexture = 0xFFFFFFFFu;
+		glm::vec4 baseColorFactor     = glm::vec4(1.0f);
+		float     metallicFactor      = 1.0f;
+		float     roughnessFactor     = 1.0f;
 
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
