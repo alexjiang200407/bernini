@@ -25,6 +25,7 @@ The sample registers its own catalog and resolves its widget title using the hos
 `ILanguageResolver`. The fake host owns a concrete `LanguageResolver`; the tests also exercise the
 optional CSV reader. Widget titles resolve at construction, with live refresh still deferred.
 
-Factories and actions are explicit contribution objects transferred in descriptors with
-`std::make_unique`. The registry owns them; configuration such as the action's panel ID is stored
-by value. The current project host is supplied at invocation rather than cached at registration.
+Factories and actions are explicit contribution objects constructed by descriptor builders such as
+`ActionDesc().SetId("sample.open").AddAction<OpenPanelAction>("sample.overview")`. The registry owns
+them; configuration such as the panel ID is stored by value. The current project host is supplied
+at invocation rather than cached at registration.

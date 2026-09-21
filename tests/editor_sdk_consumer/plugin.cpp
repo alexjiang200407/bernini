@@ -81,7 +81,8 @@ namespace
 					auto* layout = new QVBoxLayout(this);
 					m_Viewport   = host.CreateViewport(
 						this,
-						{ .renderScale = 0.75f, .taaReconstructionWidth = 0.6f });
+						editor::ViewportDesc().SetRenderScale(0.75f).SetTaaReconstructionWidth(
+							0.6f));
 					layout->addWidget(m_Viewport);
 				}
 				std::vector<std::string>
@@ -138,20 +139,22 @@ namespace
 		Register(editor::IEditorRegistry& registry) override
 		{
 			registry.AddPanel(
-				{ "sample.fixture_panel",
-			      { "sample.fixture", "panel", "Fixture Panel" },
-			      std::make_unique<PanelFactory>() });
+				editor::PanelDesc()
+					.SetId("sample.fixture_panel")
+					.SetTitle({ "sample.fixture", "panel", "Fixture Panel" })
+					.AddFactory<PanelFactory>());
 			registry.AddAction(
-				{ "sample.show_fixture",
-			      { "sample.fixture", "panel", "Fixture Panel" },
-			      std::string(editor::c_ToolsMenuId),
-			      {},
-			      std::make_unique<ShowPanelAction>() });
+				editor::ActionDesc()
+					.SetId("sample.show_fixture")
+					.SetTitle({ "sample.fixture", "panel", "Fixture Panel" })
+					.SetMenuId(std::string(editor::c_ToolsMenuId))
+					.AddAction<ShowPanelAction>());
 			registry.AddAssetEditor(
-				{ "sample.throwing_editor",
-			      { "sample.fixture", "editor", "Fixture Editor" },
-			      { ".bfixture" },
-			      std::make_unique<ThrowingFactory>() });
+				editor::AssetEditorDesc()
+					.SetId("sample.throwing_editor")
+					.SetTitle({ "sample.fixture", "editor", "Fixture Editor" })
+					.AddExtension(".bfixture")
+					.AddFactory<ThrowingFactory>());
 		}
 	};
 

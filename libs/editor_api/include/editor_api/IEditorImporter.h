@@ -1,6 +1,7 @@
 #pragma once
 #include <editor_api/IEditorHost.h>
 #include <filesystem>
+#include <memory>
 #include <string_view>
 
 namespace editor
@@ -26,4 +27,6 @@ namespace editor
 	protected:
 		IEditorImporter() = default;
 	};
+	using EditorImporterPtr = std::unique_ptr<IEditorImporter>;
+
 }

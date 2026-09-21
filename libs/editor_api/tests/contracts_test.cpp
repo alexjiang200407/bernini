@@ -11,6 +11,7 @@
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorAction.h>
 #include <editor_api/IEditorHost.h>
+#include <editor_api/IEditorPanelFactory.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
 #include <editor_api/ILanguageResolver.h>
@@ -334,13 +335,14 @@ TEST_CASE("Owned actions survive registration storage growth and movement", "[pl
 	RecordingHost host;
 	{
 		RecordingRegistry registry;
-		auto              action = std::make_unique<Action>(state, std::string("sample.original"));
-		auto*             original = action.get();
-		registry.AddAction({ "sample.first", {}, {}, {}, std::move(action) });
+		auto              desc =
+			editor::ActionDesc().SetId("sample.first").AddAction<Action>(state, "sample.original");
+		auto* original = desc.action.get();
+		registry.AddAction(std::move(desc));
 		const auto oldCapacity = registry.actions.capacity();
 		for (int i = 0; i < 128; ++i)
 			registry.AddAction(
-				{ "sample.next", {}, {}, {}, std::make_unique<Action>(state, "sample.next") });
+				editor::ActionDesc().SetId("sample.next").AddAction<Action>(state, "sample.next"));
 		CHECK(registry.actions.capacity() > oldCapacity);
 		CHECK(registry.actions.front().action.get() == original);
 		RecordingRegistry moved(std::move(registry));
@@ -349,4 +351,45 @@ TEST_CASE("Owned actions survive registration storage growth and movement", "[pl
 		CHECK(state->destroyed == 0);
 	}
 	CHECK(state->destroyed == 129);
+}
+
+TEST_CASE(
+	"Descriptor builders forward ownership and preserve it when construction fails",
+	"[plugin][lifetime]")
+{
+	class Factory final : public editor::IEditorPanelFactory
+	{
+	public:
+		explicit Factory(std::unique_ptr<std::string> value) : m_Value(std::move(value))
+		{
+			if (!m_Value)
+				throw std::runtime_error("Missing configuration");
+		}
+		editor::EditorPanel*
+		Create(editor::IEditorHost&, QWidget*) override
+		{
+			return nullptr;
+		}
+		const std::string&
+		GetValue() const noexcept
+		{
+			return *m_Value;
+		}
+
+	private:
+		std::unique_ptr<std::string> m_Value;
+	};
+	auto value = std::make_unique<std::string>("owned configuration");
+	auto desc  = editor::PanelDesc().SetId("sample.panel").AddFactory<Factory>(std::move(value));
+	CHECK(value == nullptr);
+	const auto* factory = static_cast<const Factory*>(desc.factory.get());
+	CHECK(factory->GetValue() == "owned configuration");
+	CHECK(&desc.SetTitle({ "sample.editor", "panel", "Panel" }) == &desc);
+	CHECK_THROWS(desc.AddFactory<Factory>(nullptr));
+	CHECK(desc.factory.get() == factory);
+	CHECK(factory->GetValue() == "owned configuration");
+	RecordingRegistry registry;
+	registry.AddPanel(std::move(desc));
+	CHECK(desc.factory == nullptr);
+	CHECK(registry.panels.front().factory.get() == factory);
 }

@@ -118,10 +118,18 @@ TEST_CASE(
 	"[plugins][registry]")
 {
 	editor::plugins::EditorRegistry registry;
-	registry.AddPanel({ "sample.panel", Text("panel"), std::make_unique<NullFactory>() });
+	registry.AddPanel(
+		editor::PanelDesc()
+			.SetId("sample.panel")
+			.SetTitle(Text("panel"))
+			.AddFactory<NullFactory>());
 
 	CHECK_THROWS_WITH(
-		registry.AddPanel({ "sample.panel", Text("second"), std::make_unique<NullFactory>() }),
+		registry.AddPanel(
+			editor::PanelDesc()
+				.SetId("sample.panel")
+				.SetTitle(Text("second"))
+				.AddFactory<NullFactory>()),
 		Catch::Matchers::ContainsSubstring("collides"));
 	CHECK(registry.Panels().size() == 1);
 }
@@ -131,17 +139,31 @@ TEST_CASE(
 	"[plugins][registry]")
 {
 	editor::plugins::EditorRegistry registry;
-	registry.AddImporter({ "sample.import", { ".source" }, std::make_unique<Importer>() });
-	registry.AddImporter({ "sample.ai_import", { ".ai_state" }, std::make_unique<Importer>() });
+	registry.AddImporter(
+		editor::ImporterDesc()
+			.SetId("sample.import")
+			.AddExtension(".source")
+			.AddImporter<Importer>());
+	registry.AddImporter(
+		editor::ImporterDesc()
+			.SetId("sample.ai_import")
+			.AddExtension(".ai_state")
+			.AddImporter<Importer>());
 	registry.AddThumbnailProvider(
-		{ "sample.thumbnail", { ".bexample" }, std::make_unique<ThumbnailProvider>() });
+		editor::ThumbnailProviderDesc()
+			.SetId("sample.thumbnail")
+			.AddExtension(".bexample")
+			.AddProvider<ThumbnailProvider>());
 
 	CHECK(registry.FindImporter(".source") == &registry.Importers().front());
 	CHECK(registry.FindImporter(".ai_state") != nullptr);
 	CHECK(registry.FindThumbnailProvider(".bexample") == &registry.ThumbnailProviders().front());
 	CHECK_THROWS_WITH(
 		registry.AddImporter(
-			{ "sample.second_import", { ".source" }, std::make_unique<Importer>() }),
+			editor::ImporterDesc()
+				.SetId("sample.second_import")
+				.AddExtension(".source")
+				.AddImporter<Importer>()),
 		Catch::Matchers::ContainsSubstring("collides"));
 }
 
@@ -182,16 +204,32 @@ TEST_CASE(
 		Register(editor::IEditorRegistry& registry) override
 		{
 			registry.AddTranslations({ "failed.editor", { { "title", "en", "Title" } } });
-			registry.AddMenu({ "failed.menu", "sample.menu", Text("menu") });
+			registry.AddMenu(
+				editor::MenuDesc()
+					.SetId("failed.menu")
+					.SetParentId("sample.menu")
+					.SetTitle(Text("menu")));
 			registry.AddPanel(
-				{ "failed.panel", Text("panel"), std::make_unique<Factory>(m_State) });
+				editor::PanelDesc()
+					.SetId("failed.panel")
+					.SetTitle(Text("panel"))
+					.AddFactory<Factory>(m_State));
 			registry.AddImporter(
-				{ "failed.importer", { ".failed" }, std::make_unique<Importer>() });
+				editor::ImporterDesc()
+					.SetId("failed.importer")
+					.AddExtension(".failed")
+					.AddImporter<Importer>());
 			registry.AddThumbnailProvider(
-				{ "failed.thumbnail", { ".failed" }, std::make_unique<ThumbnailProvider>() });
+				editor::ThumbnailProviderDesc()
+					.SetId("failed.thumbnail")
+					.AddExtension(".failed")
+					.AddProvider<ThumbnailProvider>());
 			m_Sample->Register(registry);
 			registry.AddPanel(
-				{ "sample.panel", Text("duplicate"), std::make_unique<Factory>(m_State) });
+				editor::PanelDesc()
+					.SetId("sample.panel")
+					.SetTitle(Text("duplicate"))
+					.AddFactory<Factory>(m_State));
 		}
 
 	private:
@@ -200,8 +238,16 @@ TEST_CASE(
 	};
 	auto                            validPlugin = sample::CreateEditorPlugin();
 	editor::plugins::EditorRegistry registry;
-	registry.AddMenu({ "sample.menu", std::string(editor::c_ToolsMenuId), Text("menu") });
-	registry.AddPanel({ "sample.panel", Text("panel"), std::make_unique<NullFactory>() });
+	registry.AddMenu(
+		editor::MenuDesc()
+			.SetId("sample.menu")
+			.SetParentId(std::string(editor::c_ToolsMenuId))
+			.SetTitle(Text("menu")));
+	registry.AddPanel(
+		editor::PanelDesc()
+			.SetId("sample.panel")
+			.SetTitle(Text("panel"))
+			.AddFactory<NullFactory>());
 	const auto* original = registry.Panels().front().factory.get();
 	auto        state    = std::make_shared<State>();
 	{
@@ -229,13 +275,22 @@ TEST_CASE(
 TEST_CASE("Null contribution objects are rejected", "[plugins][registry]")
 {
 	editor::plugins::EditorRegistry registry;
-	CHECK_THROWS(registry.AddPanel({ "sample.panel", Text("panel"), nullptr }));
 	CHECK_THROWS(
-		registry.AddAssetEditor({ "sample.editor", Text("editor"), { ".bexample" }, nullptr }));
+		registry.AddPanel(editor::PanelDesc().SetId("sample.panel").SetTitle(Text("panel"))));
+	CHECK_THROWS(registry.AddAssetEditor(
+		editor::AssetEditorDesc()
+			.SetId("sample.editor")
+			.SetTitle(Text("editor"))
+			.AddExtension(".bexample")));
 	CHECK_THROWS(registry.AddAction(
-		{ "sample.action", Text("action"), std::string(editor::c_ToolsMenuId), {}, nullptr }));
-	CHECK_THROWS(registry.AddImporter({ "sample.importer", { ".source" }, nullptr }));
-	CHECK_THROWS(registry.AddThumbnailProvider({ "sample.thumbnail", { ".bexample" }, nullptr }));
+		editor::ActionDesc()
+			.SetId("sample.action")
+			.SetTitle(Text("action"))
+			.SetMenuId(std::string(editor::c_ToolsMenuId))));
+	CHECK_THROWS(registry.AddImporter(
+		editor::ImporterDesc().SetId("sample.importer").AddExtension(".source")));
+	CHECK_THROWS(registry.AddThumbnailProvider(
+		editor::ThumbnailProviderDesc().SetId("sample.thumbnail").AddExtension(".bexample")));
 	CHECK(registry.Panels().empty());
 	CHECK(registry.AssetEditors().empty());
 	CHECK(registry.Actions().empty());

@@ -220,7 +220,9 @@ TEST_CASE("The plugin host owns headless viewport rendering", "[plugins][viewpor
 	QPointer<editor::IEditorViewport> observed;
 	{
 		QWidget root;
-		observed = host.CreateViewport(&root, { .initialInstances = 4, .taaEnabled = false });
+		observed = host.CreateViewport(
+			&root,
+			editor::ViewportDesc().SetInitialInstances(4).SetTaaEnabled(false));
 		REQUIRE(observed != nullptr);
 		CHECK(observed->parentWidget() == &root);
 		bool invoked = false;
@@ -263,12 +265,11 @@ TEST_CASE("A plugin thumbnail is resolved before the built-in renderer", "[thumb
 			return editor::Thumbnail(QImage(24, 24, QImage::Format_RGBA8888));
 		}
 	};
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmaterial" },
-		std::make_unique<ImageProvider>(),
-	};
-	auto desc           = fixture.Desc();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<ImageProvider>();
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
@@ -318,12 +319,13 @@ TEST_CASE("Changing projects drains plugin thumbnail work", "[thumbnails][plugin
 	private:
 		std::shared_ptr<State> m_State;
 	};
-	auto                                state = std::make_shared<State>();
-	const editor::ThumbnailProviderDesc provider{ "sample.thumbnail",
-		                                          { ".bmaterial" },
-		                                          std::make_unique<BlockingProvider>(state) };
-	auto                                desc = fixture.Desc();
-	desc.pluginProvider                      = [&](const std::string_view extension) {
+	auto       state    = std::make_shared<State>();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<BlockingProvider>(state);
+	auto       desc     = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
@@ -374,12 +376,13 @@ TEST_CASE(
 	private:
 		std::shared_ptr<State> m_State;
 	};
-	auto                                state = std::make_shared<State>();
-	const editor::ThumbnailProviderDesc provider{ "sample.thumbnail",
-		                                          { ".bmesh" },
-		                                          std::make_unique<ColourProvider>(state) };
-	auto                                desc = fixture.Desc();
-	desc.pluginProvider                      = [&](const std::string_view extension) {
+	auto       state    = std::make_shared<State>();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmesh")
+	                          .AddProvider<ColourProvider>(state);
+	auto       desc     = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmesh" ? &provider : nullptr;
 	};
 	AssetThumbnailCache cache(std::move(desc));
@@ -416,12 +419,11 @@ TEST_CASE("A plugin scene thumbnail releases its preview geometry", "[thumbnails
 				});
 		}
 	};
-	const editor::ThumbnailProviderDesc provider{
-		"sample.thumbnail",
-		{ ".bmaterial" },
-		std::make_unique<SceneProvider>(),
-	};
-	auto desc           = fixture.Desc();
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmaterial")
+	                          .AddProvider<SceneProvider>();
+	auto       desc     = fixture.Desc();
 	desc.pluginProvider = [&](const std::string_view extension) {
 		return extension == ".bmaterial" ? &provider : nullptr;
 	};

@@ -228,24 +228,27 @@ namespace
 			      { { "overview", "zh_CN", QString::fromUtf8("项目工具") },
 			        { "tools", "zh_CN", QString::fromUtf8("示例工具") } } });
 			registry.AddMenu(
-				{ "sample.tools",
-			      std::string(editor::c_ToolsMenuId),
-			      { "sample.editor", "tools", "Sample tools" } });
+				editor::MenuDesc()
+					.SetId("sample.tools")
+					.SetParentId(std::string(editor::c_ToolsMenuId))
+					.SetTitle({ "sample.editor", "tools", "Sample tools" }));
 			registry.AddPanel(
-				{ "sample.overview",
-			      { "sample.editor", "overview", "Project tools" },
-			      std::make_unique<OverviewFactory>() });
+				editor::PanelDesc()
+					.SetId("sample.overview")
+					.SetTitle({ "sample.editor", "overview", "Project tools" })
+					.AddFactory<OverviewFactory>());
 			registry.AddAssetEditor(
-				{ "sample.document",
-			      { "sample.editor", "document", "Sample document" },
-			      { ".bexample" },
-			      std::make_unique<DocumentFactory>() });
+				editor::AssetEditorDesc()
+					.SetId("sample.document")
+					.SetTitle({ "sample.editor", "document", "Sample document" })
+					.AddExtension(".bexample")
+					.AddFactory<DocumentFactory>());
 			registry.AddAction(
-				{ "sample.show-overview",
-			      { "sample.editor", "overview", "Project tools" },
-			      "sample.tools",
-			      {},
-			      std::make_unique<OpenPanelAction>("sample.overview") });
+				editor::ActionDesc()
+					.SetId("sample.show-overview")
+					.SetTitle({ "sample.editor", "overview", "Project tools" })
+					.SetMenuId("sample.tools")
+					.AddAction<OpenPanelAction>("sample.overview"));
 		}
 	};
 }

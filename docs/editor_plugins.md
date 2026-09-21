@@ -66,8 +66,16 @@ and fix the map.
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
-`EditorPluginPtr`. Descriptors own contribution objects through `unique_ptr`; `RenderWork` and
+`EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
+`EditorActionPtr`. Descriptors hold these exclusive owners; `RenderWork` and
 `ViewportRenderWork` live beside `RenderContext`.
+
+Registration descriptors and `ViewportDesc` support fluent `Set…` methods; extension lists use
+`AddExtension`. `AddFactory<T>`, `AddAction<T>`, `AddImporter<T>` and `AddProvider<T>` construct
+and own a concrete contribution, forwarding constructor arguments. These templates require a
+constructible public implementation of the corresponding interface. Replacing an object destroys
+its predecessor only after successful construction. Lvalue chains return the same descriptor;
+rvalue chains retain the rvalue category so a temporary transfers directly into registration.
 
 Recheck this table whenever the public files move.
 

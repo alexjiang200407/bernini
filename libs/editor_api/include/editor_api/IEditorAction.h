@@ -1,5 +1,6 @@
 #pragma once
 #include <editor_api/IEditorHost.h>
+#include <memory>
 #include <span>
 #include <string>
 
@@ -26,4 +27,6 @@ namespace editor
 	protected:
 		IEditorAction() = default;
 	};
+	using EditorActionPtr = std::unique_ptr<IEditorAction>;
+
 }

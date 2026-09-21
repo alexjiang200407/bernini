@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <editor_api/Thumbnail.h>
+#include <memory>
 #include <string_view>
 
 namespace editor
@@ -24,4 +25,6 @@ namespace editor
 	protected:
 		IThumbnailProvider() = default;
 	};
+	using ThumbnailProviderPtr = std::unique_ptr<IThumbnailProvider>;
+
 }

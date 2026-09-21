@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorHost.h>
+#include <memory>
 
 namespace editor
 {
@@ -23,4 +24,6 @@ namespace editor
 	protected:
 		IEditorPanelFactory() = default;
 	};
+	using EditorPanelFactoryPtr = std::unique_ptr<IEditorPanelFactory>;
+
 }
