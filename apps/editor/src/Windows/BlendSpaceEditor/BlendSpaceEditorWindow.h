@@ -10,11 +10,11 @@
 #include <qtmetamacros.h>
 #include <vector>
 
-#include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
+#include <editor_sdk/environment.h>
 
 class AnimationPreviewWindow;
 class GroundControls;

@@ -2,9 +2,9 @@
 
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/avatar_create.h"
-#include "Windows/MaterialEditor/material_io.h"
 #include <assetlib/asset_refs.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/material_bake.h>
 #include <editor_sdk/source_mesh.h>
 
 #include <QDir>
@@ -48,7 +48,7 @@ AssetOperations::Bake(const QString& asset)
 		m_Parent,
 		QString("Baking %1").arg(QFileInfo(asset).fileName()),
 		[&](background::Progress& progress) {
-			editor::BakeMaterials(dataRoot, { asset }, progress);
+			editor::BakeMaterials(assetlib::AssetStore(dataRoot), { asset }, progress);
 		},
 		background::Cancellable::kYes);
 

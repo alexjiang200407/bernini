@@ -4,7 +4,9 @@ editor is the Bernini game editor: a desktop application for authoring scenes an
 managing resources. It is also the offline asset-cook host — artists export glTF, the
 editor imports it (via assetlib) and converts it into the game-ready format.
 
-- CMake targets: `editor_lib` (everything), `editor` (just `main.cpp`), `editor_tests`.
+- CMake targets: `editor_lib` (host), `editor` (just `main.cpp`), `editor_tests`.
+  `plugins/default_editor` owns the registered Material panel and its graph/import code; it links
+  only public engine/editor contracts and SDK helpers. Animation and Blend Space remain here.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
 - Builds on Windows (D3D12) and macOS (Metal). macOS needs Qt on `CMAKE_PREFIX_PATH`.
@@ -250,11 +252,8 @@ and pins its teardown order, its data-root propagation, and that every viewport 
 headless. A null `Renderer` **asserts**: no shipping path produces one, and four methods here
 dereference it unconditionally.
 
-What is still out of reach is the **modal dialog**, not the window. A fake `IGraphics` is **not**
-a seam worth having either: `MaterialEditorWindow`, `AssetThumbnailCache` and `TextureNode` each
-degrade when their `Renderer` is null, and no shipping path produces one — a fake would buy coverage
-of three branches no user reaches, and nothing else. What a failing device does instead is leave
-through `main`, which reports it and exits.
+Material integration tests create its registered panel through the real project host and compose
+a headless viewport. A failing graphics device leaves through `main`, which reports it and exits.
 
 What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
 `StampedPixmapCache` hold the ones the caches are built on. Reach for that shape before
@@ -269,17 +268,10 @@ in `AssetThumbnailCache_test.cpp`, which renders a real `.bmesh` and a real `.bm
 writes each to `assets/golden/thumbnail_*.got.png` to be looked at. Tag such cases `[render]`
 so they can be skipped.
 
-Everything else runs on the CPU in about a second, because the pieces that matter were
-already built to work without a device: `MaterialEditorWindow` degrades to "No graphics
-device", and `TextureNode` takes a null scene and a null preview cache on purpose. The
-tests lean on exactly that.
-
-A `MaterialEditorWindow` **without a device has no submesh graphs at all** — they are built
-from the preview's geometry, and there is no preview. So its per-submesh behaviour cannot
-be driven through the window. Where such a rule is worth pinning, lift it into a free function
-that takes what it needs (`editor::IsSameMaterialFile` in `material_io.h`, `OutputCentre` in
-`material_graph.h`) and test that. Both of those paid for themselves the day they were written,
-each catching a bug in the code they were extracted from.
+Material graph and data-rule tests live in `plugins/default_editor/tests`, compiled into
+`editor_tests`. They need no device: `TextureNode` accepts a null host and preview cache for CPU
+graph operations. The panel itself requires a live host. Its viewport input, held assets, cache
+notifications and project teardown are covered by `MainWindow_test` against the shipping plugin.
 
 Two things a test cannot drive, and why:
 
@@ -288,7 +280,7 @@ Two things a test cannot drive, and why:
   event loop or it hangs. `MainWindow_test` exercises project replacement with a non-native file
   dialog, a timer entering the filename, and a deadline rejecting dialogs on failure. Native file
   dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup
-  and Material save/open retain untested modal paths; their extracted data operations are tested.
+   and Material save retain untested modal paths; their extracted data operations are tested.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight

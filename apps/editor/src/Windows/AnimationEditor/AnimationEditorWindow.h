@@ -12,12 +12,12 @@
 #include <vector>
 
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 #include <bgl/InstanceDesc.h>
+#include <editor_sdk/environment.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 

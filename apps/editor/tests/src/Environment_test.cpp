@@ -1,8 +1,8 @@
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/containers/fixed_buffer.h>
+#include <editor_sdk/environment.h>
 
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>

@@ -19,14 +19,12 @@
 #include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "main_window_ui.h"
 #include "util/follows_project.h"
@@ -40,9 +38,11 @@
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
+#include <default_editor/plugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/TranslationCatalog.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/environment.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -138,12 +138,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		std::vector<std::string> requiredPlugins;
 		if (!startupProject.empty() && std::filesystem::is_regular_file(startupProject))
 			requiredPlugins = assetlib::Project::PluginIdsOf(startupProject);
-		m_Plugins =
-			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
-				requiredPlugins,
-				editor::plugins::ConfiguredPluginDirectories(configPath),
-				editor::plugins::CurrentBuildIdentity(),
-				editor::plugins::DefaultPluginCopyRoot()));
 
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
@@ -227,22 +221,31 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
-		auto matSettings                = settings["materialEditor"];
-		auto matDesc                    = MaterialEditorWindowDesc();
-		matDesc.renderer                = m_Renderer.get();
-		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
-		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
-		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
-		matDesc.headless                = headless;
-		matDesc.previewEnv.environmentMap =
+		auto matSettings = settings["materialEditor"];
+		auto matDesc     = editor::defaults::Config();
+		matDesc.materialViewport.initialInstances =
+			matSettings["initialPreviewInstances"].GetOrDefault(16u);
+		matDesc.materialViewport.taaEnabled  = matSettings["temporalAA"].GetOrDefault(true);
+		matDesc.materialViewport.renderScale = matSettings["renderScale"].GetOrDefault(1.0f);
+		matDesc.materialViewport.taaReconstructionWidth =
+			matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		matDesc.materialEnvironment.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
-		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
-		matDesc.previewEnv.sky      = readSky(matSettings, editor::SkyPresentation());
+		matDesc.materialEnvironment.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
+		matDesc.materialEnvironment.sky      = readSky(matSettings, editor::SkyPresentation());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
-			matDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+			matDesc.materialEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
+
+		m_Plugins =
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
+				requiredPlugins,
+				editor::plugins::ConfiguredPluginDirectories(configPath),
+				editor::plugins::CurrentBuildIdentity(),
+				editor::plugins::DefaultPluginCopyRoot(),
+				editor::plugins::PluginBinaryCopyMode::kPlatformDefault,
+				editor::defaults::CreatePlugin(matDesc)));
 
 		auto thumbSettings           = settings["thumbnails"];
 		auto thumbDesc               = AssetThumbnailDesc();
@@ -275,7 +278,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			matSettings["environmentMap"].GetOrDefault(std::string()));
 		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(
 			matSettings["dataRoot"].GetOrDefault(std::string()));
-		animDesc.previewEnv.sky = readSky(animSettings, matDesc.previewEnv.sky);
+		animDesc.previewEnv.sky = readSky(animSettings, matDesc.materialEnvironment.sky);
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = animSettings["exposure"])
@@ -292,14 +295,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		blendRt.headless               = headless;
 		auto blendEnv                  = animDesc.previewEnv;
 
-		m_CreateEditorPanels = [this, matDesc, animDesc, blendRt, blendEnv] {
-			auto material     = matDesc;
+		m_CreateEditorPanels = [this, animDesc, blendRt, blendEnv] {
 			auto animation    = animDesc;
 			auto blend        = blendRt;
-			material.assets   = m_Assets.get();
 			animation.assets  = m_Assets.get();
 			blend.assets      = m_Assets.get();
-			m_MaterialEditor  = new MaterialEditorWindow(m_MaterialEditorDock, material);
 			m_AnimationEditor = new AnimationEditorWindow(m_AnimationEditorDock, animation);
 			m_BlendSpaceEditor =
 				new BlendSpaceEditorWindow(m_BlendSpaceEditorDock, blend, blendEnv);
@@ -312,11 +312,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
 
-	m_MaterialEditorDock = new QDockWidget("Material Editor", this);
-	m_MaterialEditorDock->setObjectName("MaterialEditorDock");
-	m_MaterialEditorDock->setTitleBarWidget(new QWidget(m_MaterialEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_MaterialEditorDock);
-
 	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
 	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
 	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
@@ -327,16 +322,12 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_BlendSpaceEditorDock->setTitleBarWidget(new QWidget(m_BlendSpaceEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_BlendSpaceEditorDock);
 
-	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
-	tabifyDockWidget(m_AnimationEditorDock, m_BlendSpaceEditorDock);
-
 	// Neither movable nor floatable, so the editors stay one tab group and exactly one viewport is
 	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
 	// dragged to another area, or out into a window of its own, would put a second viewport into the
 	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
 	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock :
-	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
+	for (QDockWidget* dock : { m_AnimationEditorDock, m_BlendSpaceEditorDock })
 		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
@@ -354,6 +345,14 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::MaterialBaked,
+		this,
+		[this](const QString& key) {
+			if (m_EditorHost)
+				m_EditorHost->AssetChanged(key.toStdString());
+		});
 	m_ContentExplorer->SetPluginImporter(
 		[this](const std::filesystem::path& source) {
 			std::string extension = source.extension().string();
@@ -435,7 +434,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
-	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_BlendSpaceEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
@@ -1182,6 +1180,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
 		});
 
+	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);
 	m_CreateEditorPanels();
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
@@ -1195,12 +1194,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	m_ContentExplorer->SetRootPath(dataDir);
 
-	// Before the two below, which each act on the root just handed over: the material reset
-	// repopulates the preview, which resolves the material paths it finds against it.
 	editor::SetProjectDataRoot(this, dataDir);
-
-	if (m_MaterialEditor)
-		m_MaterialEditor->Reset();
 
 	if (m_AnimationEditor)
 		m_AnimationEditor->SetAssets(m_Assets.get());
@@ -1378,9 +1372,13 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		throw std::runtime_error("Editor panel factory returned an invalid widget");
 	}
 	dock->setWidget(panel);
+	dock->setTitleBarWidget(new QWidget(dock));
 	dock->setFeatures(QDockWidget::DockWidgetClosable);
 	addDockWidget(Qt::TopDockWidgetArea, dock);
-	tabifyDockWidget(m_MaterialEditorDock, dock);
+	if (m_EditorDockAnchor != nullptr)
+		tabifyDockWidget(m_EditorDockAnchor, dock);
+	else
+		m_EditorDockAnchor = dock;
 	m_Ui.windowMenu->addAction(dock->toggleViewAction());
 	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
 		panel->SetActive(editor::IsPanelShown(visible, this));
@@ -1425,9 +1423,13 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 				throw std::runtime_error("Asset editor factory returned an invalid widget");
 			}
 			dock->setWidget(panel);
+			dock->setTitleBarWidget(new QWidget(dock));
 			dock->setFeatures(QDockWidget::DockWidgetClosable);
 			addDockWidget(Qt::TopDockWidgetArea, dock);
-			tabifyDockWidget(m_MaterialEditorDock, dock);
+			if (m_EditorDockAnchor != nullptr)
+				tabifyDockWidget(m_EditorDockAnchor, dock);
+			else
+				m_EditorDockAnchor = dock;
 			m_Ui.windowMenu->addAction(dock->toggleViewAction());
 			connect(
 				dock,
@@ -1493,13 +1495,14 @@ MainWindow::ClearPluginPanels()
 		}
 	}
 	m_PluginDocks.clear();
+	m_EditorDockAnchor = nullptr;
 	m_EditorHost.reset();
 }
 
 void
 MainWindow::SetUpFrameStats()
 {
-	if (m_MaterialEditor == nullptr)
+	if (m_EditorHost == nullptr)
 		return;
 
 	m_FrameStats = new QLabel(this);
@@ -1519,8 +1522,7 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock :
-	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
+	for (QDockWidget* dock : findChildren<QDockWidget*>())
 	{
 		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 		{
@@ -1591,7 +1593,8 @@ MainWindow::ShowEmptyState()
 {
 	setWindowTitle(editor::WindowTitle(m_InstanceName, QString()));
 
-	m_MaterialEditorDock->hide();
+	if (m_EditorDockAnchor)
+		m_EditorDockAnchor->hide();
 	m_AnimationEditorDock->hide();
 	m_BlendSpaceEditorDock->hide();
 	m_ContentExplorerDock->hide();
@@ -1616,18 +1619,18 @@ MainWindow::ShowProjectState()
 {
 	setCentralWidget(nullptr);
 
-	m_MaterialEditorDock->show();
+	m_EditorDockAnchor->show();
 	m_AnimationEditorDock->show();
 	m_BlendSpaceEditorDock->show();
 	m_ContentExplorerDock->show();
-	m_MaterialEditorDock->raise();
+	m_EditorDockAnchor->raise();
 
 	m_Ui.save->setEnabled(true);
 	m_Ui.cleanUnusedTextures->setEnabled(true);
 	m_Ui.editMenu->setEnabled(true);
 	m_Ui.windowMenu->setEnabled(true);
 
-	resizeDocks({ m_MaterialEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
+	resizeDocks({ m_EditorDockAnchor, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
 
 void
@@ -1646,25 +1649,18 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 void
 MainWindow::ConnectEditorPanels()
 {
-	m_MaterialEditorDock->setWidget(m_MaterialEditor);
+	tabifyDockWidget(m_EditorDockAnchor, m_AnimationEditorDock);
+	tabifyDockWidget(m_EditorDockAnchor, m_BlendSpaceEditorDock);
 	m_AnimationEditorDock->setWidget(m_AnimationEditor);
 	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
-	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
-	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
-	// same way.
-	connect(
-		m_ContentExplorer,
-		&ContentExplorerWindow::MaterialBaked,
-		m_MaterialEditor,
-		&MaterialEditorWindow::RefreshMaterialState);
+	const auto materialChanged = [this](const QString& key) {
+		if (m_EditorHost)
+			m_EditorHost->AssetChanged(key.toStdString());
+	};
 	for (const QWidget* panel :
 	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
 		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
-			connect(
-				preview,
-				&AnimationPreviewWindow::MaterialBaked,
-				m_MaterialEditor,
-				&MaterialEditorWindow::RefreshMaterialState);
+			connect(preview, &AnimationPreviewWindow::MaterialBaked, this, materialChanged);
 
 	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
 	connect(
@@ -1676,7 +1672,6 @@ MainWindow::ConnectEditorPanels()
 			m_BlendSpaceEditorDock->raise();
 			m_BlendSpaceEditor->OpenBlendSet(key);
 		});
-	DriveViewportsFromTab(m_MaterialEditorDock);
 	DriveViewportsFromTab(m_AnimationEditorDock);
 	DriveViewportsFromTab(m_BlendSpaceEditorDock);
 
@@ -1692,16 +1687,6 @@ MainWindow::ConnectEditorPanels()
 		m_AnimationEditor,
 		[this](bool visible) {
 			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
-	// and nothing asks: the panel writes only on Save.
-	m_TabVisibility.push_back(connect(
-		m_MaterialEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_MaterialEditor,
-		[this](bool visible) {
-			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
 		}));
 
 	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
@@ -1727,8 +1712,6 @@ MainWindow::ClearEditorPanels() noexcept
 	m_FrameStats = nullptr;
 	if (m_GpuTiming != nullptr)
 		m_GpuTiming->SetSource(QString());
-	delete m_MaterialEditor;
-	m_MaterialEditor = nullptr;
 	delete m_AnimationEditor;
 	m_AnimationEditor = nullptr;
 	delete m_BlendSpaceEditor;

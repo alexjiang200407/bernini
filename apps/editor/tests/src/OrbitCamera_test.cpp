@@ -1,4 +1,4 @@
-#include "Render/OrbitCamera.h"
+#include <editor_sdk/OrbitCamera.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>

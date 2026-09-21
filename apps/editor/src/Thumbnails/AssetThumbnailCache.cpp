@@ -1,9 +1,8 @@
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "Mesh/mesh_load.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
+#include <editor_sdk/mesh_load.h>
 
-#include "Render/environment.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/IScene.h>
@@ -16,6 +15,7 @@
 #include <editor_api/Thumbnail.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/environment.h>
 #include <gamelib/AssetManager.h>
 
 #include <QDateTime>
@@ -194,7 +194,7 @@ namespace
 				else
 				{
 					mesh = std::make_shared<assetlib::BMesh>(editor::LoadMeshThroughSeam(
-						m_DataRoot,
+						assetlib::AssetStore(m_DataRoot),
 						std::filesystem::path(m_Path.toStdWString())));
 
 					if (mesh->meshes.empty())
@@ -288,13 +288,23 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 		// The same helper the material preview uses, so a thumbnail cannot be lit differently from
 		// the preview it was generated from.
 		m_Environment.configured = m_Desc.env;
-		editor::BindEnvironment(
-			scene,
-			view,
-			m_Environment,
-			m_Environment.configured.environmentMap,
-			m_Environment.configured.dataRoot,
-			"AssetThumbnail");
+		if (!m_Environment.configured.environmentMap.empty())
+		{
+			try
+			{
+				editor::BindEnvironment(
+					scene,
+					view,
+					m_Environment,
+					m_Environment.configured.environmentMap,
+					assetlib::AssetStore(m_Environment.configured.dataRoot),
+					"AssetThumbnail");
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Configured environment could not be loaded: %s", error.what());
+			}
+		}
 
 		// What a submesh gets when the mesh names no material, or names one that will not load. A
 		// fresh import names none at all: toBMesh drops the source's materials on purpose.
