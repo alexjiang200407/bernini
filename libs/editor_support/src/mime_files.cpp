@@ -1,4 +1,4 @@
-#include "mime_files.h"
+#include <editor_support/mime_files.h>
 
 #include <QMimeData>
 #include <QUrl>

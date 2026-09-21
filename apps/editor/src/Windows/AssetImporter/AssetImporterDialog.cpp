@@ -2,11 +2,11 @@
 
 #include "Windows/AssetImporter/ImportSection.h"
 #include "Windows/AssetImporter/material_stems.h"
-#include "util/asset_paths.h"
 #include <algorithm>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
+#include <editor_support/asset_paths.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>

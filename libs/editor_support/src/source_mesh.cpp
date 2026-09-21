@@ -1,6 +1,6 @@
-#include "util/source_mesh.h"
+#include <editor_support/source_mesh.h>
 
-#include "util/asset_paths.h"
+#include <editor_support/asset_paths.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
@@ -21,12 +21,6 @@ namespace editor
 {
 	namespace
 	{
-		QString
-		Suffix(const std::string_view extension)
-		{
-			return QString::fromUtf8(extension.data(), static_cast<qsizetype>(extension.size()));
-		}
-
 		/**
 		 * The `.bimport` describing the source at `path`, absolute, or empty when it is not an
 		 * imported source of this project's.

@@ -20,8 +20,8 @@
 #include <string_view>
 #include <vector>
 
-#include "Async/BackgroundTask.h"
 #include "main_window_ui.h"
+#include <editor_support/BackgroundTask.h>
 
 class QAction;
 class QDockWidget;

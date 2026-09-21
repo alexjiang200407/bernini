@@ -4,8 +4,8 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/envmap.h>
 
-#include "Async/BackgroundTask.h"
 #include "Import/import_writers.h"
+#include <editor_support/BackgroundTask.h>
 
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/asset_import.h>

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <editor_support/export.h>
+
 #include <QString>
 
 class QMimeData;
@@ -29,7 +31,7 @@ namespace editor
 	 * ReportUnresolved is what says so. Resolving here instead would read a document from disk on
 	 * every mouse move of every drag.
 	 */
-	[[nodiscard]] bool
+	[[nodiscard]] EDITOR_SUPPORT_EXPORT bool
 	IsMeshDrag(const QMimeData* mime);
 
 	/**
@@ -43,7 +45,7 @@ namespace editor
 	 * names one that has not been baked yet, and a load that reports the missing file tells the
 	 * user more than this refusing the gesture.
 	 */
-	[[nodiscard]] MeshDrop
+	[[nodiscard]] EDITOR_SUPPORT_EXPORT MeshDrop
 	GetMeshDroppedOn(const QMimeData* mime, const QString& dataRoot);
 
 	/**
@@ -52,6 +54,6 @@ namespace editor
 	 * Does nothing when the drop resolved, and nothing when it carried no source: a drag of
 	 * something else entirely is not a failure, it is a drop this viewport did not want.
 	 */
-	void
+	EDITOR_SUPPORT_EXPORT void
 	ReportUnresolved(QWidget* parent, const MeshDrop& drop);
 }

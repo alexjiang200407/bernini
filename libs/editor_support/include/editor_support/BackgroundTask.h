@@ -1,5 +1,7 @@
 #pragma once
 
+#include <editor_support/export.h>
+
 #include <QString>
 
 #include <assetlib/cancel.h>
@@ -59,7 +61,7 @@ namespace background
 	 * Handed to a background worker so it can drive the loading screen. Both methods are safe to call
 	 * from the worker thread: Report() marshals onto the UI thread and returns immediately.
 	 */
-	class Progress
+	class EDITOR_SUPPORT_EXPORT Progress
 	{
 	public:
 		void
@@ -76,14 +78,14 @@ namespace background
 		Cancellation() const;
 
 	private:
-		friend TaskResult
+		friend EDITOR_SUPPORT_EXPORT TaskResult
 		RunWithLoadingScreen(
 			QWidget*,
 			const QString&,
 			const std::function<void(Progress&)>&,
 			Cancellable);
 
-		friend TaskResult
+		friend EDITOR_SUPPORT_EXPORT TaskResult
 		RunReporting(const ProgressSink&, const std::function<void(Progress&)>&);
 
 		Progress(ProgressRelay* relay, assetlib::CancelToken cancel) :
@@ -101,7 +103,7 @@ namespace background
 	 * carry no locks and the frame graph is documented single-threaded -- so a worker may decode and
 	 * parse, but every scene mutation has to happen after this returns.
 	 *
-	 * Or through `Renderer::Invoke`, which is the one way to mutate from inside `work`: it serializes
+	 * Or through the host render service, which is the one way to mutate from inside `work`: it serializes
 	 * the closure onto the render thread whichever thread asks, and blocks only the asker. A worker
 	 * blocking there is safe -- it is the reverse, a render closure waiting on the GUI thread, that
 	 * deadlocks. Use it for work whose cost is the upload rather than the decode, which would
@@ -116,7 +118,7 @@ namespace background
 	 *         threw assetlib::Cancelled in response; kFailed when it threw anything else, in which case
 	 *         `TaskResult::error` carries the message to show.
 	 */
-	TaskResult
+	EDITOR_SUPPORT_EXPORT TaskResult
 	RunWithLoadingScreen(
 		QWidget*                              parent,
 		const QString&                        title,
@@ -129,10 +131,10 @@ namespace background
 	 * startup screen is the one: it is up before there is a window for a modal to be modal over,
 	 * and it spans the renderer, the project and the rebuild.
 	 *
-	 * `work` is under the same rule as above: thread-safe state only, `Renderer::Invoke` for
+	 * `work` is under the same rule as above: thread-safe state only, the host render service for
 	 * anything in bgl. There is no cancel, because there is nothing sensible to do with a
 	 * half-built editor.
 	 */
-	TaskResult
+	EDITOR_SUPPORT_EXPORT TaskResult
 	RunReporting(const ProgressSink& sink, const std::function<void(Progress&)>& work);
 }

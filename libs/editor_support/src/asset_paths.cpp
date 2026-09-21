@@ -1,4 +1,4 @@
-#include "util/asset_paths.h"
+#include <editor_support/asset_paths.h>
 
 #include <QDateTime>
 #include <QDir>

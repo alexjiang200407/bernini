@@ -52,9 +52,7 @@
 #include <utility>
 #include <vector>
 
-#include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
-#include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
@@ -68,6 +66,8 @@
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
+#include <editor_support/BackgroundTask.h>
+#include <editor_support/TexturePreviewCache.h>
 
 namespace
 {

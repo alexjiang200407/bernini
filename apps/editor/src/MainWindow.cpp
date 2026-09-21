@@ -15,7 +15,6 @@
 #include <QStringList>
 #include <QTabWidget>
 
-#include "Async/BackgroundTask.h"
 #include "Plugins/EditorHost.h"
 #include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
@@ -43,6 +42,7 @@
 #include <assetlib/progress.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/TranslationCatalog.h>
+#include <editor_support/BackgroundTask.h>
 
 #include <QActionGroup>
 #include <QMenuBar>

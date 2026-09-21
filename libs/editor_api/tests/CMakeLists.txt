@@ -5,7 +5,7 @@ add_executable(editor_plugin_tests main.cpp contracts_test.cpp localization_test
 target_link_libraries(editor_plugin_tests PRIVATE
     editor_api editor_localization editor_plugin_example Catch2::Catch2 nlohmann_json::nlohmann_json)
 set_target_properties(editor_plugin_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
-add_dependencies(editor_plugin_tests editor_api_selfcheck assetlib_plugin_api_selfcheck)
+add_dependencies(editor_plugin_tests editor_api_selfcheck assetlib_plugin_api_selfcheck editor_support_selfcheck)
 
 if(BERNINI_EDITOR_SDK)
     include(ExternalProject)
@@ -26,7 +26,8 @@ if(BERNINI_EDITOR_SDK)
         BUILD_ALWAYS TRUE
         LIST_SEPARATOR "|"
         INSTALL_COMMAND ""
-        DEPENDS assetlib gamelib core_process)
+        DEPENDS assetlib gamelib core_process editor_support)
+    target_link_libraries(editor_plugin_tests PRIVATE editor_support)
     add_dependencies(editor_plugin_tests editor_sdk_consumer)
     target_sources(editor_plugin_tests PRIVATE sdk_consumer_test.cpp)
     target_include_directories(editor_plugin_tests SYSTEM PRIVATE

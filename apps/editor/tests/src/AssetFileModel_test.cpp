@@ -4,9 +4,9 @@
 #include "Windows/ContentExplorer/AssetFileModel.h"
 #include <assetlib/codecs.h>  // IWYU pragma: keep
 
-#include "Thumbnails/TexturePreviewCache.h"
 #include "util/QtSupport.h"
-#include "util/asset_paths.h"
+#include <editor_support/TexturePreviewCache.h>
+#include <editor_support/asset_paths.h>
 
 #include "StoreAt.h"
 

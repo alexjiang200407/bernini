@@ -96,7 +96,11 @@ no `apps/editor/src` types. The production registry owns plugin contribution obj
 compiled sample against a fake host and a separately configured SDK fixture. See
 [Editor plugin contracts](../../docs/editor_plugins.md).
 
-Every editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
+Shared loading-screen, CPU preview-cache, mesh-placement and asset UI helpers live in
+`libs/editor_support`, exposed through `<editor_support/...>` and linked by the host and plugins.
+GPU thumbnail orchestration and project lifecycle walkers remain host-private.
+
+Every host editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
 `editor` and `editor_tests` both link. `main.cpp` is held out because it owns `main()`,
 and the test runner has its own — so the tests exercise the objects that ship rather
 than a recompiled copy free to drift from them.

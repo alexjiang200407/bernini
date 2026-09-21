@@ -5,8 +5,8 @@
 #include "Windows/ContentExplorer/AssetOperations.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/content_explorer_ui.h"
-#include "util/asset_paths.h"
-#include "util/source_mesh.h"
+#include <editor_support/asset_paths.h>
+#include <editor_support/source_mesh.h>
 
 #include <QAbstractItemView>
 #include <QAction>

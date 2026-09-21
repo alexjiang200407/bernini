@@ -1,9 +1,9 @@
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "Thumbnails/TexturePreviewCache.h"
-#include "util/asset_paths.h"
-#include "util/source_mesh.h"
+#include <editor_support/TexturePreviewCache.h>
+#include <editor_support/asset_paths.h>
+#include <editor_support/source_mesh.h>
 
 #include <QApplication>
 #include <QIcon>

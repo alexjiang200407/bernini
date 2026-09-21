@@ -2,8 +2,8 @@
 
 #include <QDebug>
 
-#include "util/asset_paths.h"
 #include <assetlib/AssetStore.h>
+#include <editor_support/asset_paths.h>
 #include <exception>
 #include <filesystem>
 #include <qlogging.h>

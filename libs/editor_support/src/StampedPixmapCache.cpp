@@ -1,7 +1,7 @@
-#include "Thumbnails/StampedPixmapCache.h"
+#include <editor_support/StampedPixmapCache.h>
 
-#include "util/asset_paths.h"
 #include <algorithm>
+#include <editor_support/asset_paths.h>
 #include <optional>
 #include <qobject.h>
 #include <qpixmap.h>
@@ -67,7 +67,7 @@ StampedPixmapCache::Store(const QString& path, const QPixmap& pixmap, qint64 sta
 		static_cast<int>(
 			(static_cast<qint64>(pixmap.width()) * pixmap.height() * pixmap.depth() / 8) / 1024));
 
-	m_Cache.insert(path, new Entry{ pixmap, stamp }, costKb);
+	m_Cache.insert(path, new Entry{ pixmap, stamp, {} }, costKb);
 	Q_EMIT Ready(path, pixmap);
 }
 

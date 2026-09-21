@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <assetlib/bmesh.h>
 
-#include "Mesh/BMeshUtil.h"
 #include "Render/environment.h"
-#include "Thumbnails/StampedPixmapCache.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/IScene.h>
@@ -16,6 +14,8 @@
 #include <cstddef>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/Thumbnail.h>
+#include <editor_support/BMeshUtil.h>
+#include <editor_support/StampedPixmapCache.h>
 #include <gamelib/AssetManager.h>
 
 #include <QDateTime>

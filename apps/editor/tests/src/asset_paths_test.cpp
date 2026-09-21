@@ -1,4 +1,4 @@
-#include "util/asset_paths.h"
+#include <editor_support/asset_paths.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <qstringliteral.h>

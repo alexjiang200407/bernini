@@ -1,7 +1,7 @@
 #include "Windows/AssetImporter/material_stems.h"
 
-#include "util/asset_paths.h"
 #include <assetlib/bmesh_gltf.h>
+#include <editor_support/asset_paths.h>
 
 #include <QSet>
 #include <cstddef>

@@ -2,8 +2,8 @@
 
 #include <assetlib/AssetStore.h>
 
-#include "Mesh/BMeshUtil.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include <editor_support/BMeshUtil.h>
 #include <gamelib/ClipInfo.h>
 
 #include <span>
