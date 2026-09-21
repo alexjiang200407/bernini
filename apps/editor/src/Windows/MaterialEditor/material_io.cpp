@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include <QFileInfo>
 #include <QMessageBox>

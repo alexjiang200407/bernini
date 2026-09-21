@@ -3,7 +3,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib_structs/BMaterial.h>
-#include <editor_support/BMeshUtil.h>
+#include <editor_sdk/BMeshUtil.h>
 #include <gamelib/ClipInfo.h>
 
 #include <QtGlobal>

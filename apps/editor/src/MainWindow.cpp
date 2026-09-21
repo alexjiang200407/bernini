@@ -42,7 +42,7 @@
 #include <assetlib/progress.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/TranslationCatalog.h>
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include <QActionGroup>
 #include <QMenuBar>

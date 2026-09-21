@@ -17,8 +17,8 @@
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/IEditorViewport.h>
-#include <editor_support/TexturePreviewCache.h>
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/TexturePreviewCache.h>
+#include <editor_sdk/asset_paths.h>
 #include <gamelib/ui/UiRuntime.h>
 #include <memory>
 #include <span>

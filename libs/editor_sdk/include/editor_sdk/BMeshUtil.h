@@ -1,6 +1,6 @@
 #pragma once
 
-#include <editor_support/export.h>
+#include <editor_sdk/export.h>
 
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
@@ -11,8 +11,8 @@
 namespace bmesh
 {
 	// A node's transform composed with all of its ancestors'.
-	EDITOR_SUPPORT_EXPORT glm::mat4
-						  GetWorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
+	EDITOR_SDK_EXPORT glm::mat4
+					  GetWorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
 
 	/**
 	 * Where to place an instance of the mesh `nodeIndex` references. GetWorldTransform for ordinary
@@ -25,12 +25,12 @@ namespace bmesh
 	 *
 	 * This is the rule for both bind pose and animation: a pose evaluates into the same space.
 	 */
-	EDITOR_SUPPORT_EXPORT glm::mat4
-						  GetInstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
+	EDITOR_SDK_EXPORT glm::mat4
+					  GetInstanceTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex);
 
 	// Grows [outMin,outMax] to contain the box after `transform`, corner by corner (the box is not
 	// axis-aligned once rotated).
-	EDITOR_SUPPORT_EXPORT void
+	EDITOR_SDK_EXPORT void
 	GrowBounds(
 		const glm::mat4& transform,
 		const glm::vec3& boxMin,
@@ -39,7 +39,7 @@ namespace bmesh
 		glm::vec3&       outMax);
 
 	// GrowBounds over every submesh box of mesh entry `meshIndex`.
-	EDITOR_SUPPORT_EXPORT void
+	EDITOR_SDK_EXPORT void
 	GrowBoundsForMesh(
 		const assetlib::BMesh& mesh,
 		uint32_t               meshIndex,
@@ -48,7 +48,7 @@ namespace bmesh
 		glm::vec3&             outMax);
 
 	// Whether `node` references a mesh entry that exists in `mesh` -- not every node carries one.
-	[[nodiscard]] EDITOR_SUPPORT_EXPORT bool
+	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	ReferencesMesh(const assetlib::BMesh& mesh, const assetlib::Node& node) noexcept;
 
 	/** One mesh entry a node references, and the world transform an instance of it stands at. */
@@ -59,6 +59,6 @@ namespace bmesh
 	};
 
 	// One entry per node of `mesh` that references a mesh entry, via GetInstanceTransform.
-	[[nodiscard]] EDITOR_SUPPORT_EXPORT std::vector<InstancePlacement>
-										PlanInstances(const assetlib::BMesh& mesh);
+	[[nodiscard]] EDITOR_SDK_EXPORT std::vector<InstancePlacement>
+									PlanInstances(const assetlib::BMesh& mesh);
 }

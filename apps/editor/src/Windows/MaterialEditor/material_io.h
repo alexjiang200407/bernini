@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <qcontainerfwd.h>
 
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 class MaterialGraphModel;
 class QWidget;

@@ -97,7 +97,7 @@ compiled sample against a fake host and a separately configured SDK fixture. See
 [Editor plugin contracts](../../docs/editor_plugins.md).
 
 Shared loading-screen, CPU preview-cache, mesh-placement and asset UI helpers live in
-`libs/editor_support`, exposed through `<editor_support/...>` and linked by the host and plugins.
+`libs/editor_sdk`, exposed through `<editor_sdk/...>` and linked by the host and plugins.
 GPU thumbnail orchestration and project lifecycle walkers remain host-private.
 
 Every host editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that

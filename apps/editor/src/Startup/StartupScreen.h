@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <qobject.h>
 
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 class QLabel;
 class QProgressBar;

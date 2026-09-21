@@ -1,6 +1,6 @@
 #pragma once
 
-#include <editor_support/export.h>
+#include <editor_sdk/export.h>
 
 #include <QString>
 
@@ -61,7 +61,7 @@ namespace background
 	 * Handed to a background worker so it can drive the loading screen. Both methods are safe to call
 	 * from the worker thread: Report() marshals onto the UI thread and returns immediately.
 	 */
-	class EDITOR_SUPPORT_EXPORT Progress
+	class EDITOR_SDK_EXPORT Progress
 	{
 	public:
 		void
@@ -78,14 +78,14 @@ namespace background
 		Cancellation() const;
 
 	private:
-		friend EDITOR_SUPPORT_EXPORT TaskResult
+		friend EDITOR_SDK_EXPORT TaskResult
 		RunWithLoadingScreen(
 			QWidget*,
 			const QString&,
 			const std::function<void(Progress&)>&,
 			Cancellable);
 
-		friend EDITOR_SUPPORT_EXPORT TaskResult
+		friend EDITOR_SDK_EXPORT TaskResult
 		RunReporting(const ProgressSink&, const std::function<void(Progress&)>&);
 
 		Progress(ProgressRelay* relay, assetlib::CancelToken cancel) :
@@ -118,7 +118,7 @@ namespace background
 	 *         threw assetlib::Cancelled in response; kFailed when it threw anything else, in which case
 	 *         `TaskResult::error` carries the message to show.
 	 */
-	EDITOR_SUPPORT_EXPORT TaskResult
+	EDITOR_SDK_EXPORT TaskResult
 	RunWithLoadingScreen(
 		QWidget*                              parent,
 		const QString&                        title,
@@ -135,6 +135,6 @@ namespace background
 	 * anything in bgl. There is no cancel, because there is nothing sensible to do with a
 	 * half-built editor.
 	 */
-	EDITOR_SUPPORT_EXPORT TaskResult
+	EDITOR_SDK_EXPORT TaskResult
 	RunReporting(const ProgressSink& sink, const std::function<void(Progress&)>& work);
 }

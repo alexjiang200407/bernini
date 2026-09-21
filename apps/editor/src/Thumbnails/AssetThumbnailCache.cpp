@@ -14,8 +14,8 @@
 #include <cstddef>
 #include <editor_api/IEditorRegistry.h>
 #include <editor_api/Thumbnail.h>
-#include <editor_support/BMeshUtil.h>
-#include <editor_support/StampedPixmapCache.h>
+#include <editor_sdk/BMeshUtil.h>
+#include <editor_sdk/StampedPixmapCache.h>
 #include <gamelib/AssetManager.h>
 
 #include <QDateTime>

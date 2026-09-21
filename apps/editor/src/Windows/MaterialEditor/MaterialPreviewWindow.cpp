@@ -7,10 +7,10 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/GeomHandle.h>
-#include <editor_support/BMeshUtil.h>
-#include <editor_support/BackgroundTask.h>
-#include <editor_support/mesh_drop.h>
-#include <editor_support/mime_files.h>
+#include <editor_sdk/BMeshUtil.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/mesh_drop.h>
+#include <editor_sdk/mime_files.h>
 #include <gamelib/Ray.h>
 
 #include <QApplication>

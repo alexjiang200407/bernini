@@ -1,5 +1,5 @@
-#include <editor_support/StampedPixmapCache.h>
-#include <editor_support/TexturePreviewCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 
 #include <QDebug>
 #include <QPainter>

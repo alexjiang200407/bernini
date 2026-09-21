@@ -11,7 +11,7 @@
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
-#include <editor_support/mesh_drop.h>
+#include <editor_sdk/mesh_drop.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
 

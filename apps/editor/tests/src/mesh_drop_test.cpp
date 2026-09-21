@@ -2,7 +2,7 @@
 // `AssetCodecFor` constraint needs. A template specialisation is not a symbol reference
 // include-cleaner can see, so it reads as unused right up until the call stops matching.
 #include <assetlib/codecs.h>  // IWYU pragma: keep
-#include <editor_support/mesh_drop.h>
+#include <editor_sdk/mesh_drop.h>
 
 #include "StoreAt.h"
 

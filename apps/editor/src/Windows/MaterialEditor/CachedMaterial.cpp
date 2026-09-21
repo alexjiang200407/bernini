@@ -3,7 +3,7 @@
 #include <QDebug>
 
 #include <assetlib/AssetStore.h>
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/asset_paths.h>
 #include <exception>
 #include <filesystem>
 #include <qlogging.h>

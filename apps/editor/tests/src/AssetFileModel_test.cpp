@@ -5,8 +5,8 @@
 #include <assetlib/codecs.h>  // IWYU pragma: keep
 
 #include "util/QtSupport.h"
-#include <editor_support/TexturePreviewCache.h>
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/TexturePreviewCache.h>
+#include <editor_sdk/asset_paths.h>
 
 #include "StoreAt.h"
 

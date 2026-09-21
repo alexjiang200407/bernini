@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
-#include <editor_support/TexturePreviewCache.h>
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/TexturePreviewCache.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <QComboBox>
 #include <QDir>

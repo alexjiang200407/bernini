@@ -7,7 +7,7 @@
 #include <qtmetamacros.h>
 #include <qvariant.h>
 
-#include <editor_support/source_mesh.h>
+#include <editor_sdk/source_mesh.h>
 
 class AssetThumbnailCache;
 class StampedPixmapCache;

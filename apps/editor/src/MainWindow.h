@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "main_window_ui.h"
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 class QAction;
 class QDockWidget;

@@ -3,7 +3,7 @@
 #include <assetlib/AssetStore.h>
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
-#include <editor_support/BMeshUtil.h>
+#include <editor_sdk/BMeshUtil.h>
 #include <gamelib/ClipInfo.h>
 
 #include <span>

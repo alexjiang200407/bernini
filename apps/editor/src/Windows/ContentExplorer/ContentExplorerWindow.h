@@ -16,7 +16,7 @@
 
 #include "Windows/ContentExplorer/AssetFileModel.h"
 #include "Windows/ContentExplorer/AssetOperations.h"
-#include <editor_support/TexturePreviewCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 
 #include "Windows/ContentExplorer/content_explorer_ui.h"
 

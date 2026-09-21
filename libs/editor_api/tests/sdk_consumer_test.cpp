@@ -5,8 +5,8 @@
 #include <core/profiling/memory.h>
 #include <cstdint>
 #include <editor_api/IEditorPlugin.h>
-#include <editor_support/StampedPixmapCache.h>
-#include <editor_support/TexturePreviewCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 #include <filesystem>
 #include <gamelib/ui/UiRuntime.h>
 #include <memory>

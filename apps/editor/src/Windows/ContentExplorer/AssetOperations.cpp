@@ -4,8 +4,8 @@
 #include "Windows/ContentExplorer/avatar_create.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include <assetlib/asset_refs.h>
-#include <editor_support/BackgroundTask.h>
-#include <editor_support/source_mesh.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/source_mesh.h>
 
 #include <QDir>
 #include <QFileInfo>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <editor_support/export.h>
+#include <editor_sdk/export.h>
 
 #include <QImage>
 #include <QThreadPool>
@@ -8,7 +8,7 @@
 #include <qtmetamacros.h>
 #include <qtypes.h>
 
-#include <editor_support/StampedPixmapCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
 
 /**
  * Decodes .ktx2 files into small RGBA pixmaps for display in the editor, off the UI thread.
@@ -16,7 +16,7 @@
  * Evicting a live preview is safe: QPixmap is implicitly shared, so a node that already applied one
  * keeps its own reference.
  */
-class EDITOR_SUPPORT_EXPORT TexturePreviewCache : public StampedPixmapCache
+class EDITOR_SDK_EXPORT TexturePreviewCache : public StampedPixmapCache
 {
 	Q_OBJECT
 

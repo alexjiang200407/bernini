@@ -5,7 +5,7 @@
 #include <assetlib/envmap.h>
 
 #include "Import/import_writers.h"
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/asset_import.h>

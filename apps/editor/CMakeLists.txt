@@ -79,7 +79,7 @@ target_link_libraries(editor_lib
 		assetlib
 		gamelib
 		editor_api
-		editor_support
+		editor_sdk
 		editor_localization
 		Qt6::Widgets
 		QtNodes::QtNodes

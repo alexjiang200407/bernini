@@ -3,7 +3,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <cstdint>
-#include <editor_support/BMeshUtil.h>
+#include <editor_sdk/BMeshUtil.h>
 #include <vector>
 
 namespace bmesh

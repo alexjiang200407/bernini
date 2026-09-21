@@ -6,7 +6,7 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>

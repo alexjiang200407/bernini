@@ -1,8 +1,8 @@
-#include <editor_support/StampedPixmapCache.h>
-#include <editor_support/TexturePreviewCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
+#include <editor_sdk/TexturePreviewCache.h>
 
 #include "util/QtSupport.h"
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <QSignalSpy>
 #include <QTemporaryDir>

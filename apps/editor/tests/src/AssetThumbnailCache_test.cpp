@@ -11,7 +11,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <editor_api/IEditorViewport.h>
 #include <editor_api/IThumbnailProvider.h>
-#include <editor_support/StampedPixmapCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
 #include <memory>
 
 #include "util/QtSupport.h"

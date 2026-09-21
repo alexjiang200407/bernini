@@ -9,7 +9,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
-#include <editor_support/StampedPixmapCache.h>
+#include <editor_sdk/StampedPixmapCache.h>
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>

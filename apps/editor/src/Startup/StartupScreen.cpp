@@ -1,5 +1,5 @@
 #include "Startup/StartupScreen.h"
-#include <editor_support/BackgroundTask.h>
+#include <editor_sdk/BackgroundTask.h>
 
 #include <QApplication>
 #include <QFontMetrics>

@@ -1,6 +1,6 @@
-#include <editor_support/source_mesh.h>
+#include <editor_sdk/source_mesh.h>
 
-#include <editor_support/asset_paths.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
