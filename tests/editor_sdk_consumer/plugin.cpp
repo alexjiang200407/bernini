@@ -5,6 +5,7 @@
 #include <core/profiling/memory.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_api/EditorPanel.h>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/IEditorRegistry.h>
 #include <gamelib/ui/UiRuntime.h>
@@ -12,6 +13,7 @@
 #include <span>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #if defined(_WIN32)
@@ -62,8 +64,51 @@ namespace
 	{
 	public:
 		void
-		Register(editor::IEditorRegistry&) override
-		{}
+		Register(editor::IEditorRegistry& registry) override
+		{
+			registry.AddPanel(
+				{ "sample.fixture_panel",
+			      { "sample.fixture", "panel", "Fixture Panel" },
+			      [](editor::IEditorHost&, QWidget* parent) {
+					  class Panel final : public editor::EditorPanel
+					  {
+					  public:
+						  using EditorPanel::EditorPanel;
+						  std::vector<std::string>
+						  GetHeldAssets() const override
+						  {
+							  return {};
+						  }
+						  bool
+						  CanClose() override
+						  {
+							  return true;
+						  }
+						  void
+						  SetActive(bool) override
+						  {}
+					  };
+					  return new Panel(parent);
+				  } });
+			registry.AddAction(
+				{ "sample.show_fixture",
+			      { "sample.fixture", "panel", "Fixture Panel" },
+			      std::string(editor::c_ToolsMenuId),
+			      {},
+			      [](editor::IEditorHost&, std::span<const std::string>) { return true; },
+			      [](editor::IEditorHost& host, std::span<const std::string>) {
+					  host.ShowPanel("sample.fixture_panel");
+				  } });
+			registry.AddAssetEditor(
+				{ "sample.throwing_editor",
+			      { "sample.fixture", "editor", "Fixture Editor" },
+			      { ".bfixture" },
+			      [](editor::IEditorHost&, QWidget* parent) -> editor::AssetEditorPanel* {
+					  auto* child = new QWidget(parent);
+					  child->setObjectName("sample.throwing_editor_child");
+					  throw std::runtime_error("fixture editor failed");
+				  } });
+		}
 	};
 
 	class AssetPlugin final : public assetlib::IAssetPlugin

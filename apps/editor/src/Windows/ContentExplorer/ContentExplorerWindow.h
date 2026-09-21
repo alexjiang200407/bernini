@@ -4,10 +4,15 @@
 
 #include <QStringList>
 #include <QWidget>
+#include <filesystem>
+#include <functional>
 #include <qcontainerfwd.h>
 #include <qcoreevent.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"
@@ -21,6 +26,7 @@ class QFileSystemModel;
 class QLabel;
 class QModelIndex;
 class QPoint;
+class QMenu;
 
 class ContentExplorerWindow : public QWidget
 {
@@ -57,6 +63,14 @@ public:
 	void
 	SetThumbnails(AssetThumbnailCache* thumbnails);
 
+	void
+	SetPluginImporter(
+		std::function<bool(const std::filesystem::path&)>                   accepts,
+		std::function<void(const std::filesystem::path&, std::string_view)> importAsset);
+
+	void
+	SetPluginActions(std::function<void(QMenu&, const std::vector<std::string>&)> append);
+
 	[[nodiscard]] TexturePreviewCache&
 	GetTexturePreviews() noexcept
 	{
@@ -77,6 +91,9 @@ Q_SIGNALS:
 	 */
 	void
 	BlendSetOpenRequested(const QString& key);
+
+	void
+	AssetOpenRequested(const QString& key);
 
 protected:
 	// Keeps the empty-directory placeholder sized to the file table's viewport.
@@ -200,5 +217,8 @@ private:
 
 	// A pure-CPU decode with no renderer behind it, so the explorer stands its own cache instead of
 	// being handed one the way the GPU-backed AssetThumbnailCache is.
-	TexturePreviewCache m_TexturePreviews;
+	TexturePreviewCache                                                 m_TexturePreviews;
+	std::function<bool(const std::filesystem::path&)>                   m_AcceptsPluginImport;
+	std::function<void(const std::filesystem::path&, std::string_view)> m_PluginImport;
+	std::function<void(QMenu&, const std::vector<std::string>&)>        m_AppendPluginActions;
 };

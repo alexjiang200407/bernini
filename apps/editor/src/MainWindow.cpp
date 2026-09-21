@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -14,6 +15,8 @@
 #include <QTabWidget>
 
 #include "Async/BackgroundTask.h"
+#include "Plugins/EditorHost.h"
+#include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
@@ -32,11 +35,14 @@
 #include "util/panel_visibility.h"
 #include "util/surface_relaunch.h"
 #include "util/window_title.h"
+#include <algorithm>
 #include <array>
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
+#include <editor_api/IEditorRegistry.h>
+#include <editor_api/TranslationCatalog.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -51,8 +57,11 @@
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <editor_api/EditorPanel.h>
+#include <editor_api/LanguageResolver.h>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -74,8 +83,10 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
+#include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -137,6 +148,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
 		const bool headless = settings["headless"].GetOrDefault(false);
+		m_Headless          = headless;
 
 		const auto gfxSettings = settings["graphics"];
 
@@ -240,6 +252,9 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		thumbDesc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
 		thumbDesc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
 		thumbDesc.env.sky            = readSky(thumbSettings, editor::SkyPresentation());
+		thumbDesc.pluginProvider     = [this](const std::string_view extension) {
+			return m_Plugins->Contributions().FindThumbnailProvider(extension);
+		};
 
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
@@ -333,6 +348,76 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
+	m_ContentExplorer->SetPluginImporter(
+		[this](const std::filesystem::path& source) {
+			std::string extension = source.extension().string();
+			std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+				return static_cast<char>(std::tolower(c));
+			});
+			return m_Plugins->Contributions().FindImporter(extension) != nullptr;
+		},
+		[this](const std::filesystem::path& source, const std::string_view target) {
+			if (m_EditorHost == nullptr)
+				return;
+			std::string extension = source.extension().string();
+			std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+				return static_cast<char>(std::tolower(c));
+			});
+			const editor::ImporterDesc* importer =
+				m_Plugins->Contributions().FindImporter(extension);
+			if (importer == nullptr)
+				return;
+			try
+			{
+				importer->importAsset(*m_EditorHost, source, target);
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Import", error.what());
+			}
+		});
+	m_ContentExplorer->SetPluginActions(
+		[this](QMenu& menu, const std::vector<std::string>& selection) {
+			if (m_EditorHost == nullptr)
+				return;
+			for (const editor::ActionDesc& desc : m_Plugins->Contributions().Actions())
+			{
+				if (desc.extensions.empty())
+					continue;
+				const bool matches = std::ranges::all_of(selection, [&](const std::string& key) {
+					std::string extension = std::filesystem::path(key).extension().string();
+					std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+						return static_cast<char>(std::tolower(c));
+					});
+					return std::ranges::find(desc.extensions, extension) != desc.extensions.end();
+				});
+				if (!matches)
+					continue;
+				bool enabled = false;
+				try
+				{
+					enabled = desc.enabled(*m_EditorHost, selection);
+				}
+				catch (const std::exception& error)
+				{
+					qWarning("Plugin action predicate failed: %s", error.what());
+				}
+				QAction* action =
+					menu.addAction(desc.title.Resolve(m_EditorHost->GetLanguageResolver()));
+				action->setEnabled(enabled);
+				const editor::ActionDesc* descriptor = &desc;
+				connect(action, &QAction::triggered, &menu, [this, descriptor, selection] {
+					try
+					{
+						descriptor->invoke(*m_EditorHost, selection);
+					}
+					catch (const std::exception& error)
+					{
+						QMessageBox::warning(this, "Plugin Action", error.what());
+					}
+				});
+			}
+		});
 
 	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
 	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
@@ -361,6 +446,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			m_BlendSpaceEditorDock->raise();
 			m_BlendSpaceEditor->OpenBlendSet(key);
 		});
+	connect(
+		m_ContentExplorer,
+		&ContentExplorerWindow::AssetOpenRequested,
+		this,
+		[this](const QString& key) { OpenPluginAsset(key.toStdString()); });
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
@@ -409,6 +499,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 	m_Ui.windowMenu->addSeparator();
 	SetUpGpuTimingEntry();
+	SetUpPluginContributions();
 
 	SetUpRenderMenu();
 
@@ -576,6 +667,12 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 void
 MainWindow::closeEvent(QCloseEvent* event)
 {
+	if (!CanClosePluginPanels())
+	{
+		event->ignore();
+		return;
+	}
+
 	// Cut first so a dock hiding below cannot put a viewport back into the loop.
 	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
 	m_TabVisibility.clear();
@@ -593,6 +690,8 @@ MainWindow::~MainWindow() { ReleaseRenderResources(); }
 void
 MainWindow::ReleaseRenderResources() noexcept
 {
+	ClearPluginPanels();
+
 	if (m_Renderer == nullptr)
 		return;
 
@@ -633,6 +732,8 @@ MainWindow::NewProject()
 
 	const auto root        = std::filesystem::path(location.toStdWString()) / name.toStdString();
 	const auto projectFile = root / (name.toStdString() + assetlib::Project::c_FileExtension);
+	if (!CanClosePluginPanels())
+		return;
 
 	// Asked before Create, so declining writes nothing.
 	const ProjectOpening opening = AskHowToOpen("New Project", projectFile);
@@ -735,6 +836,9 @@ MainWindow::RestartInto(const std::filesystem::path& projectFile)
 bool
 MainWindow::OpenProjectAt(const std::filesystem::path& path)
 {
+	if (!CanClosePluginPanels())
+		return false;
+
 	try
 	{
 		ZoneScopedN("editor open project");
@@ -1056,14 +1160,12 @@ MainWindow::SetActiveProject(assetlib::Project project)
 {
 	ZoneScopedN("editor set active project");
 
-	m_Project = std::make_unique<assetlib::Project>(std::move(project));
-
-	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
+	ClearPluginPanels();
 
 	// A manager resolves every path against one Data root, so a new project needs a new one. The
 	// consumers below borrow it, so it has to be replaced before any of them are told about it.
 	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(nullptr);
+		m_Thumbnails->SetStore(nullptr);
 	if (m_AnimationEditor)
 		m_AnimationEditor->SetAssets(nullptr);
 	if (m_BlendSpaceEditor)
@@ -1073,19 +1175,43 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	// thread like any other scene mutation -- the viewports are still drawing at this point.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
+	m_Project          = std::make_unique<assetlib::Project>(std::move(project));
+	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
+
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
 	// when it places an instance.
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
+	m_EditorHost = std::make_unique<editor::plugins::EditorHost>(
+		m_Project->GetStore(),
+		m_Plugins->Contributions().Catalogs(),
+		m_Renderer.get(),
+		m_Assets.get(),
+		m_Headless,
+		editor::plugins::EditorHostDispatch{
+			.showPanel = [this](const std::string_view id) { ShowPluginPanel(id); },
+			.openAsset = [this](const std::string_view key) { OpenPluginAsset(key); },
+			.assetChanged =
+				[this](const std::string_view key) {
+					m_ContentExplorer->update();
+					if (m_Thumbnails != nullptr)
+					{
+						m_Thumbnails->Invalidate();
+						m_Thumbnails->Request(
+							QString::fromStdWString(
+								m_Project->GetStore().ResolveWritePath(key).wstring()));
+					}
+				},
+		});
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
 	RefreshTextures();
 	UpdateProject();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
-	// asks for a render straight away -- a material cannot be resolved without a manager.
+	// asks for a render straight away -- a material cannot be resolved without the project store.
 	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(m_Assets.get());
+		m_Thumbnails->SetStore(&m_Project->GetStore());
 
 	m_ContentExplorer->SetRootPath(dataDir);
 
@@ -1166,6 +1292,221 @@ MainWindow::SetUpGpuTimingEntry()
 	// Closed from its own title bar, the entry has to follow: an unchecked box beside a window that
 	// is up says the wrong thing, and the next click would then do nothing.
 	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, graph, &QAction::setChecked);
+}
+
+void
+MainWindow::SetUpPluginContributions()
+{
+	const editor::plugins::EditorRegistry& registry = m_Plugins->Contributions();
+	if (registry.Menus().empty() && registry.Actions().empty())
+		return;
+
+	editor::LanguageResolver language;
+	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
+		language.RegisterCatalog(catalog);
+
+	std::unordered_map<std::string, QMenu*> menus;
+	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);
+	const auto toolsMenu = [&]() {
+		if (m_Ui.toolsMenu == nullptr)
+		{
+			m_Ui.toolsMenu = new QMenu("Tools", this);
+			menuBar()->insertMenu(m_Ui.windowMenu->menuAction(), m_Ui.toolsMenu);
+		}
+		menus.emplace(editor::c_ToolsMenuId, m_Ui.toolsMenu);
+	};
+
+	for (const editor::MenuDesc& desc : registry.Menus())
+	{
+		QMenu* menu = nullptr;
+		if (desc.parentId.empty())
+		{
+			menu = new QMenu(desc.title.Resolve(language), this);
+			menuBar()->insertMenu(m_Ui.windowMenu->menuAction(), menu);
+		}
+		else
+		{
+			if (desc.parentId == editor::c_ToolsMenuId)
+				toolsMenu();
+			menu = menus.at(desc.parentId)->addMenu(desc.title.Resolve(language));
+		}
+		menus.emplace(desc.id, menu);
+	}
+
+	for (const editor::ActionDesc& desc : registry.Actions())
+	{
+		if (!desc.extensions.empty())
+			continue;
+		if (desc.menuId == editor::c_ToolsMenuId)
+			toolsMenu();
+		QMenu*                    menu       = menus.at(desc.menuId);
+		QAction*                  action     = menu->addAction(desc.title.Resolve(language));
+		const editor::ActionDesc* descriptor = &desc;
+		action->setEnabled(false);
+		connect(menu, &QMenu::aboutToShow, action, [this, action, descriptor] {
+			bool enabled = false;
+			try
+			{
+				enabled = m_EditorHost != nullptr && descriptor->enabled(*m_EditorHost, {});
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Plugin action predicate failed: %s", error.what());
+			}
+			action->setEnabled(enabled);
+		});
+		connect(action, &QAction::triggered, this, [this, descriptor] {
+			if (m_EditorHost == nullptr)
+				return;
+			try
+			{
+				descriptor->invoke(*m_EditorHost, {});
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Action", error.what());
+			}
+		});
+	}
+}
+
+void
+MainWindow::ShowPluginPanel(const std::string_view id)
+{
+	if (m_EditorHost == nullptr)
+		return;
+	if (const auto found = m_PluginDocks.find(std::string(id)); found != m_PluginDocks.end())
+	{
+		found->second->show();
+		found->second->raise();
+		return;
+	}
+
+	const editor::PanelDesc* desc = m_Plugins->Contributions().FindPanel(id);
+	if (desc == nullptr)
+		throw std::runtime_error("Editor panel is not registered");
+	auto dockOwner = std::make_unique<QDockWidget>(
+		desc->title.Resolve(m_EditorHost->GetLanguageResolver()),
+		this);
+	auto* dock = dockOwner.get();
+	dock->setObjectName(QString::fromStdString(desc->id));
+	editor::EditorPanel* panel = desc->create(*m_EditorHost, dock);
+	if (panel == nullptr || panel->parentWidget() != dock)
+	{
+		delete panel;
+		throw std::runtime_error("Editor panel factory returned an invalid widget");
+	}
+	dock->setWidget(panel);
+	dock->setFeatures(QDockWidget::DockWidgetClosable);
+	addDockWidget(Qt::TopDockWidgetArea, dock);
+	tabifyDockWidget(m_MaterialEditorDock, dock);
+	m_Ui.windowMenu->addAction(dock->toggleViewAction());
+	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
+		panel->SetActive(editor::IsPanelShown(visible, this));
+	});
+	m_PluginDocks.emplace(desc->id, dock);
+	static_cast<void>(dockOwner.release());
+	dock->show();
+	dock->raise();
+}
+
+void
+MainWindow::OpenPluginAsset(const std::string_view key)
+{
+	try
+	{
+		if (m_EditorHost == nullptr)
+			return;
+		std::string extension = std::filesystem::path(key).extension().string();
+		std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+			return static_cast<char>(std::tolower(c));
+		});
+		const editor::AssetEditorDesc* desc = m_Plugins->Contributions().FindAssetEditor(extension);
+		if (desc == nullptr)
+			return;
+
+		QDockWidget* dock = nullptr;
+		if (const auto found = m_PluginDocks.find(desc->id); found != m_PluginDocks.end())
+		{
+			dock = found->second;
+		}
+		else
+		{
+			auto dockOwner = std::make_unique<QDockWidget>(
+				desc->title.Resolve(m_EditorHost->GetLanguageResolver()),
+				this);
+			dock = dockOwner.get();
+			dock->setObjectName(QString::fromStdString(desc->id));
+			editor::AssetEditorPanel* panel = desc->create(*m_EditorHost, dock);
+			if (panel == nullptr || panel->parentWidget() != dock)
+			{
+				delete panel;
+				throw std::runtime_error("Asset editor factory returned an invalid widget");
+			}
+			dock->setWidget(panel);
+			dock->setFeatures(QDockWidget::DockWidgetClosable);
+			addDockWidget(Qt::TopDockWidgetArea, dock);
+			tabifyDockWidget(m_MaterialEditorDock, dock);
+			m_Ui.windowMenu->addAction(dock->toggleViewAction());
+			connect(
+				dock,
+				&QDockWidget::visibilityChanged,
+				panel,
+				[this, panel](const bool visible) {
+					panel->SetActive(editor::IsPanelShown(visible, this));
+				});
+			m_PluginDocks.emplace(desc->id, dock);
+			static_cast<void>(dockOwner.release());
+		}
+
+		auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+		panel->OpenAsset(key);
+		dock->show();
+		dock->raise();
+	}
+	catch (const std::exception& error)
+	{
+		QMessageBox::warning(this, "Plugin Asset", error.what());
+	}
+	catch (...)
+	{
+		QMessageBox::warning(this, "Plugin Asset", "The plugin could not open this asset");
+	}
+}
+
+bool
+MainWindow::CanClosePluginPanels()
+{
+	for (const auto& [id, dock] : m_PluginDocks)
+	{
+		static_cast<void>(id);
+		if (auto* panel = dynamic_cast<editor::EditorPanel*>(dock->widget()); panel != nullptr)
+		{
+			try
+			{
+				if (!panel->CanClose())
+					return false;
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Panel", error.what());
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void
+MainWindow::ClearPluginPanels()
+{
+	for (const auto& [id, dock] : m_PluginDocks)
+	{
+		static_cast<void>(id);
+		delete dock;
+	}
+	m_PluginDocks.clear();
+	m_EditorHost.reset();
 }
 
 void

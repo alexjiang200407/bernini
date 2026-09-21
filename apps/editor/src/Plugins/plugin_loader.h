@@ -10,6 +10,8 @@
 
 namespace editor::plugins
 {
+	class EditorRegistry;
+
 	struct BuildIdentity
 	{
 		std::string           id;
@@ -52,6 +54,9 @@ namespace editor::plugins
 
 		[[nodiscard]] std::span<const editor::EditorPluginPtr>
 		EditorPlugins() const noexcept;
+
+		[[nodiscard]] const EditorRegistry&
+		Contributions() const noexcept;
 
 	private:
 		PluginSession();

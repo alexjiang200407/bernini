@@ -9,7 +9,9 @@ namespace editor
 	/** The menu bar BuildMainWindowUi creates, so the window can connect and drive it. */
 	struct MainWindowWidgets
 	{
-		QMenu* editMenu = nullptr;
+		QMenu* fileMenu  = nullptr;
+		QMenu* editMenu  = nullptr;
+		QMenu* toolsMenu = nullptr;
 
 		// Left empty: the dock toggles that fill it do not exist until the docks do.
 		QMenu* windowMenu = nullptr;

@@ -7,7 +7,9 @@
 #include "Render/environment.h"
 #include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/Camera.h>
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
@@ -17,7 +19,9 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RenderJob.h>
 #include <cstdint>
+#include <editor_api/IEditorRegistry.h>
 #include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <optional>
@@ -34,6 +38,9 @@ class QImage;
 
 struct AssetThumbnailDesc
 {
+	using ThumbnailProviderLookup =
+		std::function<const editor::ThumbnailProviderDesc*(std::string_view)>;
+
 	Renderer* renderer = nullptr;
 
 	uint32_t dimension        = 256;
@@ -42,6 +49,8 @@ struct AssetThumbnailDesc
 	// The same block the material preview takes, defaults included, so a thumbnail and the preview
 	// it was generated from cannot stand against different backdrops.
 	editor::EnvironmentApplyDesc env;
+
+	ThumbnailProviderLookup pluginProvider;
 };
 
 /**
@@ -74,25 +83,20 @@ public:
 	[[nodiscard]] QStringList
 	GetHeldOpenPaths() const override;
 
-	/**
-	 * Points the cache at the editor's asset manager, which owns the project's Data root. Null (the
-	 * default, and what a closed project means) leaves materials unresolvable, so they get no
-	 * thumbnail and every mesh draws in the neutral default.
-	 *
-	 * Borrowed, not owned, and never acquired through: the cache builds a private manager over the
-	 * same scene, because its texture uploads are mip-capped to the thumbnail's size and the shared
-	 * manager keys textures by path -- a capped upload registered there would be served to a
-	 * viewport asking for the same texture at full resolution. It must outlive this cache.
-	 *
-	 * Drops everything already rendered, and everything queued or mid-render: all of it was made
-	 * against the manager being replaced.
-	 */
+	/** Borrowed until replaced; drains old work before returning. Null closes the project. */
 	void
-	SetAssets(game::AssetManager* assets);
+	SetStore(const assetlib::AssetStore* store);
+
+	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
+	void
+	Invalidate();
 
 	// Whether `path` names an asset this cache knows how to draw.
 	[[nodiscard]] static bool
 	CanThumbnail(const QString& path);
+
+	[[nodiscard]] bool
+	CanRequest(const QString& path) const;
 
 	// Renders `path` unless a current copy is cached or one is already being rendered. Emits Ready on
 	// success.
@@ -137,6 +141,9 @@ private:
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
 		QString                                failure;
+		std::string                            material;
+		std::optional<bgl::Camera>             camera;
+		uint64_t                               epoch = 0;
 	};
 
 	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
@@ -274,8 +281,7 @@ private:
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 
-	// The project's manager, kept for its data root -- see SetAssets. Null until a project is open.
-	game::AssetManager* m_Assets = nullptr;
+	const assetlib::AssetStore* m_Store = nullptr;
 
 	// What the cache actually acquires through: a manager of its own over the shared scene, so its
 	// mip-capped texture uploads never sit in the shared cache under the path a viewport would ask

@@ -33,6 +33,7 @@ target_include_directories(editor_tests PRIVATE
 # exist before any test runs.
 target_link_libraries(editor_tests PRIVATE
 	editor_lib
+	editor_plugin_example
 	Catch2::Catch2
 	Qt6::Test
 )

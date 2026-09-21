@@ -64,7 +64,7 @@ namespace editor
 	{
 		std::string              id;
 		std::vector<std::string> extensions;
-		ImportCallback           import;
+		ImportCallback           importAsset;
 	};
 
 	struct ThumbnailProviderDesc
