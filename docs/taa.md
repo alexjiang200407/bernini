@@ -87,8 +87,8 @@ stopped. The forward pass on `TownStreet` moves by an eighth for a 56% cut in pi
 geometry.
 
 `--render-scale` on `bgl_pass_timings` and `bgl_ai_viewer` is how the table is taken again;
-`[taa][render]` pins that a two-thirds upscale of a still fence at the output grid's Nyquist stays
-above 32 dB PSNR of the native converged render (measured 33.8 dB on Metal, against 29.5 dB for the
+`[taa][render]` pins that a two-thirds upscale of a still fence of two-output-pixel slats — barely
+over the render grid's own Nyquist — stays above 32 dB PSNR of the native converged render (measured 33.8 dB on Metal, against 29.5 dB for the
 raw upscale it replaces), and that a target returned to 1.0 by `IGraphics::SetRenderScale`
 converges to the bytes one created there does.
 

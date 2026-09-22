@@ -286,7 +286,8 @@ TEST_CASE(
 		0,
 		static_cast<int>(c_Width),
 		static_cast<int>(c_Height));
-	const double psnr = mse > 0.0f ? 10.0 * std::log10(1.0 / static_cast<double>(mse)) : 99.0;
+	const float psnr =
+		bgl::test::PsnrDb(bc7, rgb9e5, 0, 0, static_cast<int>(c_Width), static_cast<int>(c_Height));
 
 	INFO(
 		"frame mse " << mse << " (" << psnr << " dB), sphere luma " << sphere.Luma()

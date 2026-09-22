@@ -1,8 +1,10 @@
 #include "util/GoldenImage.h"
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -339,6 +341,13 @@ namespace bgl::test
 		stbi_image_free(truth);
 
 		return count > 0 ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
+	}
+
+	float
+	PsnrDb(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h)
+	{
+		const float mse = FrameDelta(pathA, pathB, x, y, w, h);
+		return mse > 0.0f ? 10.0f * std::log10(1.0f / mse) : std::numeric_limits<float>::infinity();
 	}
 
 	float

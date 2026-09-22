@@ -74,6 +74,15 @@ namespace bgl::test
 	FrameDelta(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h);
 
 	/**
+	 * FrameDelta over the same box, as peak signal-to-noise in dB: 10 log10(1 / MSE), with a peak
+	 * of 1. Identical frames are +infinity. The unit an upscaler or a codec is quoted in.
+	 *
+	 * @throws std::runtime_error as FrameDelta does.
+	 */
+	[[nodiscard]] float
+	PsnrDb(const std::string& pathA, const std::string& pathB, int x, int y, int w, int h);
+
+	/**
 	 * Mean luma of `path` over exactly those pixels that are background in `referencePath` — where
 	 * "background" is a reference luma below `threshold`.
 	 *
