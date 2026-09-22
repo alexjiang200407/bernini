@@ -77,8 +77,8 @@ when a material names it, and still by name.
 `Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
 lighting then reads. A surface under this contract chooses what a pixel *is*, not how it is lit.
 A sibling contract for a surface that owns its lighting — `ILitSurfaceSource`, whose `Shade`
-returns radiance through an `ISurfaceLight` of the sun and the environment — reflects, and is
-refused at registration by name: nothing draws one yet.
+returns pre-exposure radiance through an `ISurfaceLight` of the sun and the environment — draws
+through lit programs of its own, and the engine's PBR never runs for it.
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque

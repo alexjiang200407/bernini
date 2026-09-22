@@ -1,5 +1,7 @@
+import bgl.LitSurfaceSource;
 import bgl.MaterialReader;
 import bgl.PbrSurface;
+import bgl.SurfaceLight;
 import bgl.SurfaceSource;
 import idl.GameSurfaceRecord;
 import idl.IMaterial;
@@ -115,6 +117,25 @@ public struct BiasedArenaReader : IMaterialReader
     public float3 CameraPos() { return inner.CameraPos(); }
 }
 
+// The readers a record hands its surface, built by the record's location alone: neither depends
+// on the surface's type, so both record structs below share these.
+MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFrontFace)
+{
+    MaterialArenaReader reader;
+    reader.byteOffset = byteOffset;
+    reader.input = input;
+    reader.isFrontFace = isFrontFace;
+    return reader;
+}
+
+BiasedArenaReader BiasedArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFrontFace, float lodBias)
+{
+    BiasedArenaReader reader;
+    reader.inner = ArenaReaderAt(byteOffset, input, isFrontFace);
+    reader.lodBias = lodBias;
+    return reader;
+}
+
 // A game surface's record: the engine's fixed part, then the surface's own parameters, loaded as the
 // struct the surface declared them as.
 public struct GameRecord<G : ISurfaceSource>
@@ -132,21 +153,11 @@ public struct GameRecord<G : ISurfaceSource>
         return record;
     }
 
-    MaterialArenaReader Reader(ForwardVSOut input, bool isFrontFace)
-    {
-        MaterialArenaReader reader;
-        reader.byteOffset = byteOffset;
-        reader.input = input;
-        reader.isFrontFace = isFrontFace;
-        return reader;
-    }
+    MaterialArenaReader Reader(ForwardVSOut input, bool isFrontFace) { return ArenaReaderAt(byteOffset, input, isFrontFace); }
 
     BiasedArenaReader BiasedReader(ForwardVSOut input, bool isFrontFace, float lodBias)
     {
-        BiasedArenaReader reader;
-        reader.inner = Reader(input, isFrontFace);
-        reader.lodBias = lodBias;
-        return reader;
+        return BiasedArenaReaderAt(byteOffset, input, isFrontFace, lodBias);
     }
 
     public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
@@ -161,6 +172,69 @@ public struct GameRecord<G : ISurfaceSource>
     // The mip-0 texel counts of the texture the surface declared its coverage is measured against.
     // @pre engine.coverageSlot != cNoCoverageSlot, which CreateSurfaceMaterial refuses the hashed
     // layer without.
+    public float2 CoverageDimensions() { return materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(); }
+}
+
+// The engine's side of ISurfaceLight: the same sun and environment the PBR lighting path reads,
+// world-space directions carried through the environment's rotation before the cubes are sampled.
+// An unset environment samples the same null handles the PBR path samples, so "black when no
+// lighting is set" is one behaviour, not two.
+public struct MaterialSurfaceLight : ISurfaceLight
+{
+    public float3 SunDirection() { return materialData.sunDirection; }
+    public float3 SunRadiance() { return materialData.sunRadiance; }
+
+    public float3 Irradiance(float3 dir) { return materialData.GetSurfaceEnv().Irradiance(mul(float3x3(materialData.envRotation), dir)); }
+
+    // The prefilter chain indexes roughness across its seven mips (docs/envmaps.md), so the
+    // contract's roughness maps onto the chain's highest mip index directly. The PBR path's
+    // screen-space-footprint floor (PbrShading.slang) is deliberately not carried over: it needs
+    // the reflection vector's derivatives, which this seam does not have -- a lit surface asking
+    // for a sharp reflection on a small distant object inherits the grain that floor guards
+    // against.
+    public float3 Reflection(float3 dir, float roughness)
+    {
+        return materialData.GetSurfaceEnv().Prefiltered(mul(float3x3(materialData.envRotation), dir), saturate(roughness) * 6.0);
+    }
+}
+
+// A lit surface's record, loaded exactly as GameRecord loads a PBR surface's: the engine's fixed
+// part is shared, and only the function the params are handed to differs.
+public struct LitGameRecord<G : ILitSurfaceSource>
+{
+    GameSurfaceRecord engine;
+    G.MaterialParams params;
+    uint byteOffset;
+
+    public static LitGameRecord<G> Load(uint byteOffset)
+    {
+        LitGameRecord<G> record;
+        record.engine = materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset));
+        record.params = materialData.materials.LoadAt<G.MaterialParams>(byteOffset + cGameSurfaceParamsByteOffset);
+        record.byteOffset = byteOffset;
+        return record;
+    }
+
+    MaterialArenaReader Reader(ForwardVSOut input, bool isFrontFace) { return ArenaReaderAt(byteOffset, input, isFrontFace); }
+
+    BiasedArenaReader BiasedReader(ForwardVSOut input, bool isFrontFace, float lodBias)
+    {
+        return BiasedArenaReaderAt(byteOffset, input, isFrontFace, lodBias);
+    }
+
+    public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
+    public float4 Shade(ForwardVSOut input, bool isFrontFace)
+    {
+        return G.Shade(Reader(input, isFrontFace), MaterialSurfaceLight(), params);
+    }
+    public float AlphaCutoff() { return engine.alphaCutoff; }
+
+    public float CoverageAtBias(ForwardVSOut input, bool isFrontFace, float lodBias)
+    {
+        return G.Coverage(BiasedReader(input, isFrontFace, lodBias), params);
+    }
+
+    // @pre engine.coverageSlot != cNoCoverageSlot, as GameRecord::CoverageDimensions.
     public float2 CoverageDimensions() { return materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(); }
 }
 
@@ -184,6 +258,25 @@ public struct NullSurface : ISurfaceSource
         PbrSurface surface = PbrSurface();
         surface.baseColor = float4(0.5, 0.5, 0.5, 1.0);
         return surface;
+    }
+}
+
+public struct NullLitSurfaceParams
+{
+    public uint unused;
+};
+
+// NullSurface's lit twin: what holds the lit shapes to DXIL validation
+// (programs/forward/GameSurfaceShapes.slang). Nothing draws it.
+public struct NullLitSurface : ILitSurfaceSource
+{
+    public typealias MaterialParams = NullLitSurfaceParams;
+
+    public static float Coverage<R : IMaterialReader>(R reader, NullLitSurfaceParams params) { return 1.0; }
+
+    public static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, NullLitSurfaceParams params)
+    {
+        return float4(0.5, 0.5, 0.5, 1.0);
     }
 }
 
@@ -286,5 +379,98 @@ public extension MaterialData
         let record = GameRecord<G>.Load(input.materialOffset);
 
         return ShadeSurfaceBlended(input, record.Evaluate(input, isFrontFace), isFrontFace);
+    }
+
+    // The lit twins of the programs above: a lit surface's Shade is its whole lighting, so these
+    // never call ShadeSurface. Exposure is applied here and nowhere the surface can see
+    // (bgl/LitSurfaceSource.slang), so everything after the forward pass keeps one meaning.
+    public ForwardPSOut GameLitOpaqueProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGameLit<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
+    public ForwardPSOut GameLitAlphaTestedProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGameLitAlphaTested<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
+    public ForwardPSOut GameLitHashedAlphaProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        ForwardPSOut output;
+        output.color = ShadeGameLitHashedAlpha<G>(input, isFrontFace);
+        output.motion = ComputeMotionVector(input);
+        return output;
+    }
+
+    public float4 ShadeGameLit<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        return float4(record.Shade(input, isFrontFace).rgb * exposure, 1.0);
+    }
+
+    // The one cutout coverage decision for a lit surface, as DiscardUncoveredGameAlphaTested.
+    public void DiscardUncoveredGameLitAlphaTested<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        if (record.Coverage(input, isFrontFace) < record.AlphaCutoff())
+        {
+            discard;
+        }
+    }
+
+    // The one hashed coverage decision for a lit surface; the two-level scheme is
+    // DiscardUncoveredGameHashedAlpha's, unchanged by who lights the pixel.
+    public void DiscardUncoveredGameLitHashedAlpha<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        let texDim = record.CoverageDimensions() * exp2(c_HashedAlphaLodBias);
+        let hashAlpha = record.CoverageAtBias(input, isFrontFace, c_HashedAlphaLodBias);
+        let meanAlpha = record.CoverageAtBias(input, isFrontFace, c_HashedAlphaLodBias + c_MinifiedAlphaMeanBias);
+
+        float alpha = SharpenMinifiedAlpha(hashAlpha, meanAlpha, input.uv, texDim);
+
+        if (alpha < HashedAlphaThreshold(input.worldPos, alphaHashSeed))
+        {
+            discard;
+        }
+    }
+
+    public float4 ShadeGameLitAlphaTested<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        DiscardUncoveredGameLitAlphaTested<G>(input, isFrontFace);
+
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        return float4(record.Shade(input, isFrontFace).rgb * exposure, 1.0);
+    }
+
+    public float4 ShadeGameLitHashedAlpha<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        DiscardUncoveredGameLitHashedAlpha<G>(input, isFrontFace);
+
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        return float4(record.Shade(input, isFrontFace).rgb * exposure, 0.0);
+    }
+
+    // Premultiplied against the shared blend PSO's SrcBlend = One. Shade's a is the surface's
+    // coverage, and a lit surface has no transmission split: everything it returns thins by
+    // coverage whole, which is the alpha = 0 arm of BlendedSurface.
+    public float4 ShadeGameLitBlended<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        let record = LitGameRecord<G>.Load(input.materialOffset);
+
+        let shaded = record.Shade(input, isFrontFace);
+        let coverage = saturate(shaded.a);
+        return float4(shaded.rgb * exposure * coverage, coverage);
     }
 }
