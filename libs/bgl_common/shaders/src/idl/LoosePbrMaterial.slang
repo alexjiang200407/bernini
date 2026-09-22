@@ -24,7 +24,7 @@ public struct LoosePbrMaterial
     public RawTextureHandle textures[9];
 
     // Sampled whole through the second UV set, never routed: handle 9, after the channels' nine.
-    public RawTextureHandle uv1OcclusionTexture;
+    public RawTextureHandle geometryOcclusionTexture;
 
     public uint channels[9];
 

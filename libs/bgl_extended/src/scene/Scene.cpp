@@ -1948,17 +1948,17 @@ namespace bgl
 			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
 
 		idl::PbrMaterial material{};
-		material.baseColorTexture    = ResolveTexture(desc.baseColorTexture, white);
-		material.normalTexture       = ResolveTexture(desc.normalTexture, flatNormal);
-		material.ormTexture          = ResolveTexture(desc.ormTexture, white);
-		material.uv1OcclusionTexture = ResolveTexture(desc.uv1OcclusionTexture, white);
-		material.baseColorFactor     = desc.baseColorFactor;
-		material.metallicFactor      = desc.metallicFactor;
-		material.roughnessFactor     = desc.roughnessFactor;
-		material.specular            = glm::vec4(desc.specularColorFactor, desc.specularFactor);
-		material.transmissionFactor  = desc.transmissionFactor;
-		material.alphaCutoff         = desc.alphaCutoff;
-		material.doubleSided         = desc.doubleSided ? 1u : 0u;
+		material.baseColorTexture         = ResolveTexture(desc.baseColorTexture, white);
+		material.normalTexture            = ResolveTexture(desc.normalTexture, flatNormal);
+		material.ormTexture               = ResolveTexture(desc.ormTexture, white);
+		material.geometryOcclusionTexture = ResolveTexture(desc.geometryOcclusionTexture, white);
+		material.baseColorFactor          = desc.baseColorFactor;
+		material.metallicFactor           = desc.metallicFactor;
+		material.roughnessFactor          = desc.roughnessFactor;
+		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
+		material.transmissionFactor = desc.transmissionFactor;
+		material.alphaCutoff        = desc.alphaCutoff;
+		material.doubleSided        = desc.doubleSided ? 1u : 0u;
 
 		return material;
 	}
@@ -2308,13 +2308,14 @@ namespace bgl
 		static_assert(offsetof(idl::PbrMaterial, normalTexture) == sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::PbrMaterial, ormTexture) == 2 * sizeof(idl::RawTextureHandle));
 		static_assert(
-			offsetof(idl::PbrMaterial, uv1OcclusionTexture) == 3 * sizeof(idl::RawTextureHandle));
+			offsetof(idl::PbrMaterial, geometryOcclusionTexture) ==
+			3 * sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::LoosePbrMaterial, textures) == 0);
 		static_assert(
 			sizeof(idl::LoosePbrMaterial::textures) ==
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
 		static_assert(
-			offsetof(idl::LoosePbrMaterial, uv1OcclusionTexture) ==
+			offsetof(idl::LoosePbrMaterial, geometryOcclusionTexture) ==
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::GameSurfaceRecord, textures) == 0);
 		static_assert(
@@ -2379,7 +2380,7 @@ namespace bgl
 		resolve(material, idl::PbrChannel::kNormalX, desc.normal[0], flatNormal, 0);
 		resolve(material, idl::PbrChannel::kNormalY, desc.normal[1], flatNormal, 1);
 
-		material.uv1OcclusionTexture = ResolveTexture(desc.uv1OcclusionTexture, white);
+		material.geometryOcclusionTexture = ResolveTexture(desc.geometryOcclusionTexture, white);
 
 		material.baseColorFactor    = desc.baseColorFactor;
 		material.metallicFactor     = desc.metallicFactor;

@@ -429,7 +429,9 @@ BuildImportedMaterialGraph(
 	}
 
 	wires.push_back(
-		{ maps.uv1Occlusion, c_TextureR, static_cast<unsigned int>(output->Uv1OcclusionPort()) });
+		{ maps.geometryOcclusion,
+	      c_TextureR,
+	      static_cast<unsigned int>(output->GeometryOcclusionPort()) });
 
 	PlaceTextureWires(model, outputId, wires);
 }
@@ -460,26 +462,28 @@ BuildPbrMaterialGraph(
 	BuildImportedMaterialGraph(
 		model,
 		imported,
-		ImportedMaterialMaps{
-			fileOf(assetlib::PbrChannel::kBaseColorR),
-			fileOf(assetlib::PbrChannel::kNormalX),
-			fileOf(assetlib::PbrChannel::kRoughness),
-			fileOf(assetlib::PbrChannel::kAo),
-			Rebase(QString::fromStdString(material.pbr.uv1OcclusionTexture), dataRoot, false) });
+		ImportedMaterialMaps{ fileOf(assetlib::PbrChannel::kBaseColorR),
+	                          fileOf(assetlib::PbrChannel::kNormalX),
+	                          fileOf(assetlib::PbrChannel::kRoughness),
+	                          fileOf(assetlib::PbrChannel::kAo),
+	                          Rebase(
+								  QString::fromStdString(material.pbr.geometryOcclusionTexture),
+								  dataRoot,
+								  false) });
 }
 
 void
-WireUv1Occlusion(
+WireGeometryOcclusion(
 	MaterialGraphModel&          model,
 	const assetlib::BMaterial&   material,
 	const std::filesystem::path& dataRoot)
 {
-	if (material.pbr.uv1OcclusionTexture.empty())
+	if (material.pbr.geometryOcclusionTexture.empty())
 		return;
 
 	const QtNodes::NodeId     outputId = model.OutputNodeId();
 	const MaterialOutputNode* sink = qobject_cast<const MaterialOutputNode*>(model.OutputNode());
-	if (sink == nullptr || sink->HasUv1Occlusion())
+	if (sink == nullptr || sink->HasGeometryOcclusion())
 		return;
 
 	double lowest = c_OutputNodeY;
@@ -494,13 +498,13 @@ WireUv1Occlusion(
 	model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, lowest));
 	if (auto* texture = model.delegateModel<TextureNode>(textureId))
 		texture->SetTexturePath(
-			Rebase(QString::fromStdString(material.pbr.uv1OcclusionTexture), dataRoot, false));
+			Rebase(QString::fromStdString(material.pbr.geometryOcclusionTexture), dataRoot, false));
 
 	model.addConnection(
 		QtNodes::ConnectionId{ textureId,
 	                           static_cast<QtNodes::PortIndex>(c_TextureR),
 	                           outputId,
-	                           sink->Uv1OcclusionPort() });
+	                           sink->GeometryOcclusionPort() });
 }
 
 std::optional<QPointF>

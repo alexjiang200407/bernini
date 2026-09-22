@@ -283,7 +283,7 @@ namespace
 		// Enough frames for TAA to blend the previous shot's material out of its history.
 		for (int i = 0; i < 24; ++i) probe.gfx->DrawFrame(probe.target, job);
 
-		const auto shot = "assets/golden/uv1_occlusion_" + name + ".got.png";
+		const auto shot = "assets/golden/geometry_occlusion_" + name + ".got.png";
 		probe.gfx->ScreenshotPng(probe.target, shot);
 
 		return { { bgl::test::MeanColor(shot, c_OccludedX, c_BoxY, c_BoxSize, c_BoxSize),
@@ -304,20 +304,20 @@ namespace
 			{ "pbr",
 			  [](bgl::IScene& scene, bgl::TextureAssetHandle map) {
 				  return scene.CreatePbrMaterial(
-					  { .baseColorFactor     = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f),
-			            .metallicFactor      = 0.0f,
-			            .roughnessFactor     = 1.0f,
-			            .specularFactor      = 0.0f,
-			            .uv1OcclusionTexture = map });
+					  { .baseColorFactor          = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f),
+			            .metallicFactor           = 0.0f,
+			            .roughnessFactor          = 1.0f,
+			            .specularFactor           = 0.0f,
+			            .geometryOcclusionTexture = map });
 			  } },
 			{ "loose",
 			  [](bgl::IScene& scene, bgl::TextureAssetHandle map) {
-				  auto desc                = bgl::LoosePbrMaterialDesc();
-				  desc.baseColorFactor     = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f);
-				  desc.metallicFactor      = 0.0f;
-				  desc.roughnessFactor     = 1.0f;
-				  desc.specularFactor      = 0.0f;
-				  desc.uv1OcclusionTexture = map;
+				  auto desc                     = bgl::LoosePbrMaterialDesc();
+				  desc.baseColorFactor          = glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f);
+				  desc.metallicFactor           = 0.0f;
+				  desc.roughnessFactor          = 1.0f;
+				  desc.specularFactor           = 0.0f;
+				  desc.geometryOcclusionTexture = map;
 				  return scene.CreateLoosePbrMaterial(desc);
 			  } },
 			{ "surface",
@@ -330,7 +330,7 @@ namespace
 				                   { "metallicFactor", glm::vec4(0.0f) } };
 				  // A surface takes the map through a slot it declares, bound by name like any other.
 				  if (map.textureSlot)
-					  desc.textures.push_back({ .name = "uv1Occlusion", .texture = map });
+					  desc.textures.push_back({ .name = "geometryOcclusion", .texture = map });
 				  return scene.CreateSurfaceMaterial(desc);
 			  } },
 		};
@@ -338,8 +338,8 @@ namespace
 }
 
 TEST_CASE(
-	"A UV1 occlusion map darkens the environment's light and not the sun's",
-	"[uv1ao][render]")
+	"A geometry occlusion map darkens the environment's light and not the sun's",
+	"[geometryao][render]")
 {
 	SECTION(
 		"under the environment alone, the occluded half goes dark and the open half is untouched")
@@ -398,8 +398,8 @@ TEST_CASE(
 // A material is shared across meshes, and only some of them carry the set it addresses: the rest
 // must draw as though the map were white rather than stamped with whatever one texel holds.
 TEST_CASE(
-	"A mesh without a second UV set reads a UV1 occlusion map as unoccluded",
-	"[uv1ao][render]")
+	"A mesh without a second UV set reads a geometry occlusion map as unoccluded",
+	"[geometryao][render]")
 {
 	auto probe = MakeProbe(false, Light::kEnvironment);
 

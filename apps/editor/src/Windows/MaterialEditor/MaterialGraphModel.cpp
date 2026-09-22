@@ -104,8 +104,9 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 
 	// Its index follows the PBR sink's group ports, which differ between sinks, so it is moved by
 	// what it is rather than by where it was. A surface's sink has none.
-	const auto*     oldPbr     = qobject_cast<const MaterialOutputNode*>(old);
-	const PortIndex oldUv1Port = oldPbr != nullptr ? oldPbr->Uv1OcclusionPort() : InvalidPortIndex;
+	const auto*     oldPbr = qobject_cast<const MaterialOutputNode*>(old);
+	const PortIndex oldGeometryOcclusionPort =
+		oldPbr != nullptr ? oldPbr->GeometryOcclusionPort() : InvalidPortIndex;
 
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
@@ -130,14 +131,17 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	if (sink != nullptr)
 		sink->load(state);
 
-	const auto*     newPbr     = qobject_cast<const MaterialOutputNode*>(sink);
-	const PortIndex newUv1Port = newPbr != nullptr ? newPbr->Uv1OcclusionPort() : InvalidPortIndex;
+	const auto*     newPbr = qobject_cast<const MaterialOutputNode*>(sink);
+	const PortIndex newGeometryOcclusionPort =
+		newPbr != nullptr ? newPbr->GeometryOcclusionPort() : InvalidPortIndex;
 
 	for (const ConnectionId& wire : incoming)
 	{
-		const bool      isUv1  = oldUv1Port != InvalidPortIndex && wire.inPortIndex == oldUv1Port;
-		const PortIndex inPort = isUv1 ? newUv1Port : wire.inPortIndex;
-		if (inPort == InvalidPortIndex || (!isUv1 && inPort == newUv1Port))
+		const bool      isGeometryOcclusion = oldGeometryOcclusionPort != InvalidPortIndex &&
+		                                      wire.inPortIndex == oldGeometryOcclusionPort;
+		const PortIndex inPort = isGeometryOcclusion ? newGeometryOcclusionPort : wire.inPortIndex;
+		if (inPort == InvalidPortIndex ||
+		    (!isGeometryOcclusion && inPort == newGeometryOcclusionPort))
 			continue;
 
 		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, inPort };

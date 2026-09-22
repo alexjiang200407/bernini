@@ -299,7 +299,8 @@ namespace assetlib
 			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
 			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
 			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
-			out += std::format("    uv1Occlusion    {}\n", pathOr(pbr.uv1OcclusionTexture));
+			out +=
+				std::format("    geometryOcclusion    {}\n", pathOr(pbr.geometryOcclusionTexture));
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)

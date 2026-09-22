@@ -670,7 +670,9 @@ TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][
 	CHECK(rewired.textures[0].routes[0].channel == 2);
 }
 
-TEST_CASE("A surface's sink shows no Occlusion (UV1) port", "[materialgraph][surfacesink][uv1]")
+TEST_CASE(
+	"A surface's sink shows no Geometry Occlusion (UV1) port",
+	"[materialgraph][surfacesink][geometryao]")
 {
 	// A surface takes geometry AO the way it takes any map -- through a slot it declares and
 	// samples itself -- so its node shows the slots it declares and no port it never names.
@@ -685,15 +687,15 @@ TEST_CASE("A surface's sink shows no Occlusion (UV1) port", "[materialgraph][sur
 		INFO("port " << port);
 		CHECK(
 			sink->portCaption(PortType::In, static_cast<QtNodes::PortIndex>(port)) !=
-			QStringLiteral("Occlusion (UV1)"));
+			QStringLiteral("Geometry Occlusion (UV1)"));
 	}
 }
 
 TEST_CASE(
-	"Switching a PBR board to a surface lets its UV1 wire go",
-	"[materialgraph][surfacesink][uv1]")
+	"Switching a PBR board to a surface lets its geometry occlusion wire go",
+	"[materialgraph][surfacesink][geometryao]")
 {
-	// The opaque sink's UV1 port sits at the index of Rim's orm.r, a single-channel port the wire's
+	// The opaque sink's geometry occlusion port sits at the index of Rim's orm.r, a single-channel port the wire's
 	// type fits: moved by index, the occlusion map would be bound as the surface's ORM red.
 	MaterialGraphModel model(Registry());
 	const NodeId       outputId  = model.addNode(QStringLiteral("MaterialOutput"));
@@ -707,7 +709,7 @@ TEST_CASE(
 		ConnectionId{ textureId,
 	                  QtNodes::PortIndex(TextureNode::c_BundleCount),
 	                  outputId,
-	                  pbr->Uv1OcclusionPort() });
+	                  pbr->GeometryOcclusionPort() });
 
 	REQUIRE(model.SetOutputType(QStringLiteral("SurfaceOutput:Rim")));
 

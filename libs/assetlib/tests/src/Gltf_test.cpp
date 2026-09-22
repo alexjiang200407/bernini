@@ -510,15 +510,15 @@ TEST_CASE(
 	const BMeshImport      mesh        = LoadOcclusionGltf();
 	const BMaterialImport& secondUvSet = mesh.materials[3];
 
-	CHECK(secondUvSet.uv1OcclusionTexture != c_InvalidIndex);
+	CHECK(secondUvSet.geometryOcclusionTexture != c_InvalidIndex);
 	CHECK(secondUvSet.occlusionTexture == c_InvalidIndex);
 }
 
 TEST_CASE(
-	"An occlusion map on the first UV set claims no UV1 slot",
+	"An occlusion map on the first UV set claims no geometry occlusion slot",
 	"[bmesh][gltf][occlusion][uv1]")
 {
-	CHECK(LoadOcclusionGltf().materials[0].uv1OcclusionTexture == c_InvalidIndex);
+	CHECK(LoadOcclusionGltf().materials[0].geometryOcclusionTexture == c_InvalidIndex);
 }
 
 TEST_CASE(
@@ -529,7 +529,7 @@ TEST_CASE(
 	const BMaterialImport& thirdUvSet = mesh.materials[7];
 
 	CHECK(thirdUvSet.occlusionTexture == c_InvalidIndex);
-	CHECK(thirdUvSet.uv1OcclusionTexture == c_InvalidIndex);
+	CHECK(thirdUvSet.geometryOcclusionTexture == c_InvalidIndex);
 }
 
 namespace
@@ -648,7 +648,7 @@ TEST_CASE(
 	const Submesh& wallWithout = mesh.submeshes[3];
 	CHECK(findAttribute(wallWithout.layout, VertexSemantic::kTexCoord1) == nullptr);
 	CHECK(wallWithout.vertexCount == 3);
-	CHECK(mesh.materials[0].uv1OcclusionTexture != c_InvalidIndex);
+	CHECK(mesh.materials[0].geometryOcclusionTexture != c_InvalidIndex);
 }
 
 TEST_CASE(

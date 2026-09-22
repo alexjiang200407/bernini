@@ -18,7 +18,7 @@ public extension MaterialData
         PbrSurface surface;
         surface.baseColor = baseColor;
         surface.orm = material.GetORM(input.uv);
-        surface.orm.r *= material.GetUv1Occlusion(input.uv1);
+        surface.orm.r *= material.GetGeometryOcclusion(input.uv1);
         surface.normalXY = material.GetNormalXY(input.uv);
         surface.specularFactors = material.GetSpecular();
         surface.transmissionFactor = material.GetTransmission();

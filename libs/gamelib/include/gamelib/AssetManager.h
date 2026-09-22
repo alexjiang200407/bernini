@@ -36,7 +36,7 @@ namespace game
 	 * The texture files `material` names, relative to the data root: the nine authoring routes when
 	 * `loose`, otherwise the baked triplet. A surface's slots list one path apiece -- the whole
 	 * binding, or a routed slot's baked map -- except a slot whose bit is set in `looseSlots`,
-	 * which expands to its four route sources in place. The two PBR cases end with the UV1 occlusion
+	 * which expands to its four route sources in place. The two PBR cases end with the geometry occlusion
 	 * map; a surface takes that map through a slot of its own. Unrouted slots and channels, and an
 	 * absent map, come back as empty strings, so the result is positional.
 	 *
