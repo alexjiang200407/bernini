@@ -154,8 +154,10 @@ namespace editor
 	public:
 		using QWidget::QWidget;
 
-		/** Synchronous render work; never retain context or wait on the GUI thread. */
-		// Worker callers must join before viewport teardown.
+		/**
+		 * Synchronous render work; never retain context or wait on the GUI thread. Worker callers
+		 * must join before viewport teardown.
+		 */
 		virtual void
 		Invoke(const ViewportRenderWork& work) = 0;
 

@@ -396,8 +396,20 @@ namespace assetlib
 				const IAssetKind* custom = graph.m_Registry->FindByExtension(kind);
 				if (custom != nullptr)
 				{
-					std::vector<std::byte>         bytes      = files.Read(referrer);
-					std::vector<DocumentReference> references = custom->ReadReferences(bytes);
+					std::vector<DocumentReference> references;
+					try
+					{
+						references = custom->ReadReferences(files.Read(referrer));
+					}
+					catch (const std::exception& e)
+					{
+						// Fatal, as for every built-in kind: a document the plugin cannot read is one
+						// whose references cannot be known, and a delete would then go through.
+						throw std::runtime_error(
+							"assetlib::AssetRefGraph: cannot read the " + custom->GetDesc().id +
+							" document '" + referrer +
+							"', so the assets it references cannot be known: " + e.what());
+					}
 					for (DocumentReference& reference : references)
 					{
 						reference.target = normalizeRef(reference.target);

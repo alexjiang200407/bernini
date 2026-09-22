@@ -4,6 +4,8 @@
 #include <assetlib/asset_refs.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/LooseFileSystem.h>
 #include <cstddef>
 #include <filesystem>
@@ -11,6 +13,7 @@
 #include <ios>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -165,6 +168,41 @@ TEST_CASE(
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("other.document", ".bexample")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("sample.document", ".other")));
 	REQUIRE_THROWS(registry.Add(std::make_unique<TestKind>("mesh.document", ".bmesh")));
+}
+
+TEST_CASE(
+	"A plugin document the kind cannot read stops the scan, naming it",
+	"[plugins][assetkind]")
+{
+	// As for every built-in kind: a referrer whose references cannot be known would let a delete
+	// through, so the scan fails rather than reporting the document as referencing nothing.
+	class MalformedKind final : public TestKind
+	{
+	public:
+		MalformedKind() : TestKind("sample.strict", ".bstrict") {}
+
+		std::vector<assetlib::DocumentReference>
+		ReadReferences(std::span<const std::byte>) const override
+		{
+			throw std::runtime_error("not a document");
+		}
+	};
+
+	const auto root = std::filesystem::temp_directory_path() / "bernini_asset_kind_malformed";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root);
+	std::ofstream(root / "Broken.bstrict") << "?";
+
+	auto registry = std::make_shared<assetlib::AssetKindRegistry>();
+	registry->Add(std::make_unique<MalformedKind>());
+	assetlib::AssetStore store = MakeStore(root, registry);
+	CHECK_THROWS_WITH(
+		assetlib::AssetRefGraph::Scan(store),
+		Catch::Matchers::ContainsSubstring("Broken.bstrict") &&
+			Catch::Matchers::ContainsSubstring("sample.strict") &&
+			Catch::Matchers::ContainsSubstring("not a document"));
+
+	std::filesystem::remove_all(root);
 }
 
 TEST_CASE("Merging asset kind registrations is atomic", "[plugins][assetkind]")
