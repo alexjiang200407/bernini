@@ -8,6 +8,7 @@
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
 #include "types/DepthStencilState.h"
@@ -37,6 +38,32 @@ namespace bgl
 
 		m_ResourceManager = ctx.resourceManager;
 
+		auto pipelineDesc        = MeshletPipelineDesc();
+		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
+		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
+		pipelineDesc.AddRtvFormat(c_Format);
+
+		auto raster = RasterState();
+		raster.SetFillMode(RasterFillMode::kSolid)
+			.SetCullMode(RasterCullMode::kNone)
+			.SetFrontCounterClockwise(true)
+			.SetDepthClipEnable(false);
+
+		auto depth = DepthStencilState{};
+		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
+
+		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+
+		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
+	}
+
+	void
+	BrdfLutGenPass::Generate(ICommandList* cmdList)
+	{
+		gassert(cmdList != nullptr, "Command list must be initialized");
+		gassert(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
+		gassert(!Generated(), "BRDF LUT is generated at most once");
+
 		auto textureDesc      = TextureDesc();
 		textureDesc.format    = c_Format;
 		textureDesc.width     = c_Dimension;
@@ -64,32 +91,7 @@ namespace bgl
 		rtvDesc.format    = c_Format;
 		rtvDesc.debugName = "BRDF LUT RTV";
 
-		m_Rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
-
-		auto pipelineDesc        = MeshletPipelineDesc();
-		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
-		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
-		pipelineDesc.AddRtvFormat(c_Format);
-
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
-			.SetFrontCounterClockwise(true)
-			.SetDepthClipEnable(false);
-
-		auto depth = DepthStencilState{};
-		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
-
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
-
-		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
-	}
-
-	void
-	BrdfLutGenPass::Generate(ICommandList* cmdList)
-	{
-		gassert(cmdList != nullptr, "Command list must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
+		const RtvHandle rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
 
 		cmdList->BeginEvent("BRDF LUT");
 
@@ -97,7 +99,7 @@ namespace bgl
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(
 			Viewport(static_cast<float>(c_Dimension), static_cast<float>(c_Dimension)));
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(m_Rtv);
+		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(rtv);
 
 		cmdList->SetMeshletState(gfxState);
 		cmdList->DispatchMesh(1, 1, 1);
@@ -112,16 +114,9 @@ namespace bgl
 
 		cmdList->Barrier(m_Texture, barrier);
 		cmdList->EndEvent();
-	}
 
-	void
-	BrdfLutGenPass::ReleaseTarget() noexcept
-	{
-		if (m_ResourceManager == nullptr || m_Rtv.IsNull())
-			return;
-
-		m_ResourceManager->DestroyRtv(m_Rtv, false);
-		m_Rtv = {};
+		// Deferred: the recording above still references the view until the submission retires.
+		m_ResourceManager->DestroyRtv(rtv, true);
 	}
 
 	void
@@ -130,8 +125,6 @@ namespace bgl
 		if (m_ResourceManager == nullptr)
 			return;
 
-		if (!m_Rtv.IsNull())
-			m_ResourceManager->DestroyRtv(m_Rtv, false);
 		if (!m_Srv.IsNull())
 			m_ResourceManager->DestroySrv(m_Srv, false);
 		if (!m_Texture.IsNull())
