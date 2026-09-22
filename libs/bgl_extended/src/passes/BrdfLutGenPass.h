@@ -3,7 +3,6 @@
 #include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
 #include "resource/Srv.h"
 #include "resource/Texture.h"
 #include <cstdint>
@@ -16,7 +15,9 @@ namespace bgl
 	class ICommandList;
 
 	/**
-	 * The split-sum BRDF lookup table, generated once per device.
+	 * The split-sum BRDF lookup table, generated at most once per device -- on the first frame
+	 * that draws a PBR-lit bucket, not at device creation, so a scene shaded entirely by lit
+	 * surfaces never builds it.
 	 *
 	 * It is a property of the shading model rather than of any environment -- the integral is taken
 	 * against a white one -- so it is owned here and shared by every view, and no caller can supply a
@@ -37,41 +38,37 @@ namespace bgl
 		BrdfLutGenPass&
 		operator=(BrdfLutGenPass&&) noexcept = delete;
 
-		/**
-		 * Creates the texture and its RTV, and requests the pipeline; Generate needs `pipelines`
-		 * built first.
-		 */
+		/** Requests the pipeline; Generate needs `pipelines` built first. Creates no resource. */
 		void
 		Init(const PassInitContext& ctx);
 
 		/**
-		 * Records the integration into `cmdList`, leaving the texture readable by a pixel shader. The
-		 * caller submits and waits: nothing samples the table until it has been written once.
+		 * Creates the texture and records the integration into `cmdList`, leaving the texture
+		 * readable by a pixel shader: commands recorded after this on the same list may sample it.
+		 * The render target it drew into is freed deferred -- the table is written once and only
+		 * sampled afterwards, so holding the view would spend a slot of the caller's RTV budget for
+		 * the lifetime of the device.
 		 *
-		 * @pre `cmdList` is open.
+		 * @pre `cmdList` is open, and Init's pipeline batch has been built.
 		 */
 		void
 		Generate(ICommandList* cmdList);
 
-		/**
-		 * Frees the render target the integration drew into. The table is written once and only
-		 * sampled afterwards, so holding the view would spend a slot of the caller's RTV budget for
-		 * the lifetime of the device.
-		 *
-		 * @pre the Generate submission has completed -- the free is immediate, and the view is still
-		 *      referenced by the command list until then.
-		 */
-		void
-		ReleaseTarget() noexcept;
+		/** Whether Generate has run: the one question laziness makes worth asking. */
+		[[nodiscard]] bool
+		Generated() const noexcept
+		{
+			return !m_Texture.IsNull();
+		}
 
-		/** The table itself, for barriers and copies. Null until Init. */
+		/** The table itself, for barriers and copies. Null until Generate. */
 		[[nodiscard]] TextureHandle
 		GetTexture() const noexcept
 		{
 			return m_Texture;
 		}
 
-		/** Null until Init. Valid to sample only after the Generate submission has completed. */
+		/** Null until Generate; a scene that never demands PBR shading hands this out null. */
 		[[nodiscard]] SrvHandle
 		GetSrv() const noexcept
 		{
@@ -91,6 +88,5 @@ namespace bgl
 		MeshletKernel      m_Kernel;
 		TextureHandle      m_Texture;
 		SrvHandle          m_Srv;
-		RtvHandle          m_Rtv;
 	};
 }

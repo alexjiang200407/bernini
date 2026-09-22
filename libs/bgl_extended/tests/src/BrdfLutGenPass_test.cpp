@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
+#include "gfx/RenderContext.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
@@ -12,7 +13,16 @@
 #include "types/QueueType.h"
 #include "util/HalfFloat.h"
 #include "util/TestOptions.h"
+#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/RenderJob.h>
+#include <bgl/Viewport.h>
+#include <bgl/glm.h>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -60,20 +70,31 @@ namespace
 		lut.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
 		pipelines.Build();
 
-		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
+		// Nothing exists until Generate: laziness is the pass's contract now, and the texture the
+		// readback below copies is created by the recording itself.
+		REQUIRE_FALSE(lut.Generated());
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = layout.totalBytes;
-		rbDesc.debugName = "BRDF LUT Readback";
+		auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-		auto readback     = resourceManager->CreateReadbackBuffer(rbDesc);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		// Registered so Generate's deferred RTV free gates on this queue's timeline; without it
+		// the free could reclaim the slot while the submission still draws through it.
+		resourceManager->RegisterQueue(cmdQueue.Get());
+
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList =
 			device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
 
 		cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 		lut.Generate(cmdList.Get());
+		REQUIRE(lut.Generated());
+
+		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = layout.totalBytes;
+		rbDesc.debugName = "BRDF LUT Readback";
+
+		auto readback = resourceManager->CreateReadbackBuffer(rbDesc);
 
 		auto toCopySource = bgl::TextureBarrierDesc();
 		toCopySource.AddSyncBefore(bgl::BarrierSyncFlag::kAllCommands)
@@ -109,6 +130,7 @@ namespace
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
 		lut.Release();
+		resourceManager->UnregisterQueue(cmdQueue.Get());
 
 		return table;
 	}
@@ -198,4 +220,69 @@ TEST_CASE("The generated BRDF table satisfies the split-sum identities", "[brdfl
 		CHECK(mirror.scale > 0.9f);
 		CHECK(rough.scale < mirror.scale - 0.1f);
 	}
+}
+
+// The laziness itself: the plan's acceptance says a scene with no PBR-lit material never builds
+// the table. Drawing lit surfaces is not enough to trigger it -- only a bucket that shades
+// through the engine's PBR is.
+TEST_CASE("The BRDF LUT is generated only when PBR shading is drawn", "[brdflut][lit][render]")
+{
+	auto opts             = HeadlessOptions();
+	opts.surfaceShaderDir = "./shaders/tests/surfaces";
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+	const bgl::RenderContext* ctx = gfxBase->GetRenderContext();
+	REQUIRE(ctx != nullptr);
+
+	CHECK_FALSE(ctx->IsBrdfLutGenerated());
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 128;
+	targetDesc.height   = 96;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 256;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 400000;
+	sceneDesc.initialIndices              = 10000;
+	sceneDesc.initialPbrMaterials         = 4;
+	sceneDesc.initialSurfaceMaterials     = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	auto unlit = scene->CreateSurfaceMaterial({ .surface = "Unlit" });
+	view->CreateStaticMeshInstance(scene->AddSphereGeom(16, 16, 3.0f, unlit), glm::mat4(1.0f));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = bgl::Camera()
+	                   .LookAt(
+						   glm::vec3(0.0f, 0.0f, 12.0f),
+						   glm::vec3(0.0f, 0.0f, 11.0f),
+						   glm::vec3(0.0f, 1.0f, 0.0f))
+	                   .Perspective(glm::radians(60.0f), 128.0f / 96.0f, 0.5f, 100.0f);
+	job.viewport = bgl::Viewport(128.0f, 96.0f);
+
+	for (int i = 0; i < 3; ++i) gfx->DrawFrame(target, job);
+
+	// Three frames of a lit surface drew, and none of them built the table.
+	CHECK_FALSE(ctx->IsBrdfLutGenerated());
+
+	auto pbr = scene->CreatePbrMaterial({});
+	view->CreateStaticMeshInstance(
+		scene->AddSphereGeom(16, 16, 3.0f, pbr),
+		glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f)));
+
+	gfx->DrawFrame(target, job);
+
+	CHECK(ctx->IsBrdfLutGenerated());
 }

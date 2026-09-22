@@ -33,8 +33,10 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/MaterialType.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/gassert.h>
@@ -197,10 +199,17 @@ namespace bgl
 		DeviceRef                        device,
 		ResourceManagerRef               resourceManager,
 		std::shared_ptr<DrawBucketTable> buckets,
+		std::span<const SurfaceType>     surfaceTypes,
 		bool                             enableDebug) :
 		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
 	{
+		m_GameSurfaceShading.reserve(surfaceTypes.size());
+		for (const SurfaceType& type : surfaceTypes)
+		{
+			m_GameSurfaceShading.emplace_back(type.shading);
+		}
+
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
@@ -232,7 +241,6 @@ namespace bgl
 		m_OverlayPass.Init(passes);
 		m_OutlineMask.Init(passes);
 		m_TaaResolve.Init(passes);
-		m_BrdfLut.Init(passes);
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
@@ -250,12 +258,9 @@ namespace bgl
 			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
-		m_BrdfLut.Generate(m_CommandList.Get());
 		m_TonemapLut.Upload(m_CommandList.Get());
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
-
-		m_BrdfLut.ReleaseTarget();
 
 #if defined(BERNINI_GPU_DEBUG)
 		m_BufferPoisoner.Init(m_ResourceManager);
@@ -685,6 +690,55 @@ namespace bgl
 			"EnsureDrawBucketPipelinesExist left the shared blend kernel uninitialized");
 	}
 
+	// Whether a bucket of this kind samples the split-sum machinery: the engine's PBR records, and
+	// a game surface whose lighting is the engine's. A lit surface's kind does not, and neither
+	// does kNull or kAssert.
+	bool
+	RenderContext::KindIsPbrLit(MaterialType kind) const noexcept
+	{
+		if (kind == MaterialType::kPBR || kind == MaterialType::kLoosePbr)
+			return true;
+
+		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
+		if (static_cast<uint32_t>(kind) < start)
+			return false;
+
+		const uint32_t slot = static_cast<uint32_t>(kind) - start;
+		return slot < m_GameSurfaceShading.size() &&
+		       m_GameSurfaceShading[slot] == SurfaceShading::kPbrSurface;
+	}
+
+	void
+	RenderContext::EnsureBrdfLutExists(DrawBucketMask demanded)
+	{
+		if (m_BrdfLut.Generated())
+			return;
+
+		const DrawBucketTable& table  = *m_DrawBucketTable;
+		bool                   needed = false;
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count && !needed; ++bucket)
+		{
+			needed = demanded.test(bucket) && KindIsPbrLit(table.Desc(bucket).material);
+		}
+		if (!needed)
+			return;
+
+		// The same demand shape as the bucket kernels above: built by the first Draw that needs
+		// it, so a scene shaded entirely by lit surfaces never builds the pipeline or the texture.
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes    = PassInitContext{ m_Device.Get(),
+			                                    &pipelines,
+			                                    m_ResourceManager,
+			                                    m_DrawBucketTable.get() };
+		m_BrdfLut.Init(passes);
+		pipelines.Build();
+		m_Device->ReleaseSlangSession();
+
+		// Recorded at the head of the open frame list, so every pass the frame graph records at
+		// EndFrame -- the first sampler of the table among them -- orders after the write.
+		m_BrdfLut.Generate(m_CommandList.Get());
+	}
+
 	void
 	RenderContext::Draw(const RenderJob& job)
 	{
@@ -702,6 +756,7 @@ namespace bgl
 		auto scene = view->GetScene()->As<Scene>();
 
 		EnsureDrawBucketPipelinesExist(view->DemandedDrawBuckets());
+		EnsureBrdfLutExists(view->DemandedDrawBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
