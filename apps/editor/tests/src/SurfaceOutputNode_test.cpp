@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -109,9 +110,8 @@ TEST_CASE("A surface sink is its surface, reflected", "[materialgraph][surfacesi
 	REQUIRE(sink != nullptr);
 
 	// A whole-texture port per slot, and a data slot adds one channel port per component
-	// (ADR-7), then the UV1 occlusion port every sink has; nothing flows out of a sink.
-	CHECK(sink->nPorts(PortType::In) == 8u);
-	CHECK(sink->portCaption(PortType::In, 7) == QStringLiteral("Occlusion (UV1)"));
+	// (ADR-7); nothing flows out of a sink.
+	CHECK(sink->nPorts(PortType::In) == 7u);
 	CHECK(sink->nPorts(PortType::Out) == 0u);
 	CHECK(sink->portCaption(PortType::In, 0) == QStringLiteral("baseColor (Color)"));
 	CHECK(sink->portCaption(PortType::In, 1) == QStringLiteral("mask (Coverage)"));
@@ -670,24 +670,46 @@ TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][
 	CHECK(rewired.textures[0].routes[0].channel == 2);
 }
 
-TEST_CASE(
-	"A surface document's UV1 occlusion map round-trips its board",
-	"[materialgraph][surfacesink][uv1]")
+TEST_CASE("A surface's sink shows no Occlusion (UV1) port", "[materialgraph][surfacesink][uv1]")
 {
-	// Every model draws the map (ADR-7), so a surface's sink carries the port a PBR one does.
-	auto material                = assetlib::BMaterial();
-	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name        = "Rim";
-	material.uv1OcclusionTexture = "Derived/SourceTextures/wall/wall_ao.ktx2";
-
+	// A surface takes geometry AO the way it takes any map -- through a slot it declares and
+	// samples itself -- so its node shows the slots it declares and no port it never names.
 	MaterialGraphModel model(Registry());
-	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+	REQUIRE(model.addNode(QStringLiteral("SurfaceOutput:Rim")) != InvalidNodeId);
 
 	SurfaceOutputNode* sink = Sink(model);
 	REQUIRE(sink != nullptr);
-	CHECK(sink->HasUv1Occlusion());
 
-	CHECK(
-		CompileMaterial(model, QStringLiteral("wall"), c_DataRoot).uv1OcclusionTexture ==
-		material.uv1OcclusionTexture);
+	for (unsigned int port = 0; port < sink->nPorts(PortType::In); ++port)
+	{
+		INFO("port " << port);
+		CHECK(
+			sink->portCaption(PortType::In, static_cast<QtNodes::PortIndex>(port)) !=
+			QStringLiteral("Occlusion (UV1)"));
+	}
+}
+
+TEST_CASE(
+	"Switching a PBR board to a surface lets its UV1 wire go",
+	"[materialgraph][surfacesink][uv1]")
+{
+	// The opaque sink's UV1 port sits at the index of Rim's orm.r, a single-channel port the wire's
+	// type fits: moved by index, the occlusion map would be bound as the surface's ORM red.
+	MaterialGraphModel model(Registry());
+	const NodeId       outputId  = model.addNode(QStringLiteral("MaterialOutput"));
+	const NodeId       textureId = model.addNode(QStringLiteral("Texture"));
+	if (auto* texture = model.delegateModel<TextureNode>(textureId))
+		texture->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/wall/ao.ktx2"));
+
+	const auto* pbr = qobject_cast<const MaterialOutputNode*>(model.OutputNode());
+	REQUIRE(pbr != nullptr);
+	model.addConnection(
+		ConnectionId{ textureId,
+	                  QtNodes::PortIndex(TextureNode::c_BundleCount),
+	                  outputId,
+	                  pbr->Uv1OcclusionPort() });
+
+	REQUIRE(model.SetOutputType(QStringLiteral("SurfaceOutput:Rim")));
+
+	CHECK(model.allConnectionIds(model.OutputNodeId()).empty());
 }

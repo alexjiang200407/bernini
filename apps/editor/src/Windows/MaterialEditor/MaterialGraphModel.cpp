@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <QJsonObject>
 #include <QPointF>
@@ -101,9 +102,10 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// "internal-data" envelope, and load() expects the state itself.
 	const QJsonObject state = old->save();
 
-	// Its index follows the sink's own ports, which differ between sinks, so it is moved by what it
-	// is rather than by where it was.
-	const PortIndex oldUv1Port = old->Uv1OcclusionPort();
+	// Its index follows the PBR sink's group ports, which differ between sinks, so it is moved by
+	// what it is rather than by where it was. A surface's sink has none.
+	const auto*     oldPbr     = qobject_cast<const MaterialOutputNode*>(old);
+	const PortIndex oldUv1Port = oldPbr != nullptr ? oldPbr->Uv1OcclusionPort() : InvalidPortIndex;
 
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
@@ -128,13 +130,14 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	if (sink != nullptr)
 		sink->load(state);
 
-	const PortIndex newUv1Port = sink != nullptr ? sink->Uv1OcclusionPort() : InvalidPortIndex;
+	const auto*     newPbr     = qobject_cast<const MaterialOutputNode*>(sink);
+	const PortIndex newUv1Port = newPbr != nullptr ? newPbr->Uv1OcclusionPort() : InvalidPortIndex;
 
 	for (const ConnectionId& wire : incoming)
 	{
-		const bool      isUv1  = wire.inPortIndex == oldUv1Port;
+		const bool      isUv1  = oldUv1Port != InvalidPortIndex && wire.inPortIndex == oldUv1Port;
 		const PortIndex inPort = isUv1 ? newUv1Port : wire.inPortIndex;
-		if (!isUv1 && inPort == newUv1Port)
+		if (inPort == InvalidPortIndex || (!isUv1 && inPort == newUv1Port))
 			continue;
 
 		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, inPort };

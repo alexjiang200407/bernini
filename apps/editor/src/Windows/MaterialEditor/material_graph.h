@@ -144,9 +144,10 @@ BuildPbrMaterialGraph(
 	const std::filesystem::path& dataRoot);
 
 /**
- * Wires `material`'s UV1 occlusion map into the sink of `model` when the document names one and the
- * board does not: a board saved before the port existed, or by a document the editor never wrote,
- * would otherwise compile the map away on its next Save. A Texture node is placed below the rest.
+ * Wires `material`'s UV1 occlusion map into the PBR sink of `model` when the document names one and
+ * the board does not: a board saved before the port existed, or by a document the editor never
+ * wrote, would otherwise compile the map away on its next Save. A Texture node is placed below the
+ * rest. A surface's sink has no such port and is left alone.
  */
 void
 WireUv1Occlusion(

@@ -4,13 +4,8 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <filesystem>
-#include <memory>
-#include <qstring.h>
 #include <qtmetamacros.h>
 
-#include "Windows/MaterialEditor/nodes/ChannelData.h"
-#include <QtNodes/internal/Definitions.hpp>
-#include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 
 class QEvent;
@@ -38,58 +33,7 @@ public:
 	virtual void
 	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot) const = 0;
 
-	/**
-	 * The input the UV1 occlusion map is wired into: every sink has one, after all the ports its
-	 * own model declares, so a board saved before it existed keeps every connection it had.
-	 */
-	[[nodiscard]] QtNodes::PortIndex
-	Uv1OcclusionPort() const
-	{
-		return static_cast<QtNodes::PortIndex>(ModelPortCount());
-	}
-
-	/** Whether anything is wired into Uv1OcclusionPort. */
-	[[nodiscard]] bool
-	HasUv1Occlusion() const noexcept
-	{
-		return m_Uv1Occlusion != nullptr;
-	}
-
-	/** What is wired into Uv1OcclusionPort -- its file and its upload -- or an empty route. */
-	[[nodiscard]] ChannelData::Route
-	Uv1OcclusionRoute() const noexcept
-	{
-		return m_Uv1Occlusion != nullptr ? m_Uv1Occlusion->At(0) : ChannelData::Route{};
-	}
-
 protected:
-	// The input ports the sink's own model declares, which Uv1OcclusionPort follows.
-	[[nodiscard]] virtual unsigned int
-	ModelPortCount() const = 0;
-
-	[[nodiscard]] bool
-	IsUv1OcclusionPort(QtNodes::PortIndex port) const
-	{
-		return port == Uv1OcclusionPort();
-	}
-
-	[[nodiscard]] static QtNodes::NodeDataType
-	Uv1OcclusionType()
-	{
-		return ChannelData::Type(1);
-	}
-
-	[[nodiscard]] static QString
-	Uv1OcclusionCaption();
-
-	// Takes the payload QtNodes pushes into Uv1OcclusionPort, null on a disconnect.
-	void
-	SetUv1Occlusion(std::shared_ptr<QtNodes::NodeData> data);
-
-	// Writes the wired map into `material.uv1OcclusionTexture`, relative to `dataRoot`, or clears it.
-	void
-	CompileUv1Occlusion(assetlib::BMaterial& material, const std::filesystem::path& dataRoot) const;
-
 	/**
 	 * Re-measures the node whenever `widget` resizes. QtNodes reads the embedded widget's size
 	 * only when the node is created, so a widget that settles on first show -- or a form row
@@ -114,8 +58,6 @@ protected:
 
 private:
 	QWidget* m_WatchedWidget = nullptr;
-
-	std::shared_ptr<ChannelData> m_Uv1Occlusion;
 
 Q_SIGNALS:
 	// Something the compiled material depends on changed; the window recompiles the preview on it.

@@ -157,8 +157,6 @@ namespace editor
 				sink.BoundTextureAsset(slot));
 		}
 
-		desc.uv1OcclusionTexture = sink.Uv1OcclusionRoute().texture;
-
 		return desc;
 	}
 

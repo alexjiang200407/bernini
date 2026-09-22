@@ -319,11 +319,6 @@ BuildSurfaceMaterialGraph(
 		      output->WholePortFor(slotIndex) });
 	}
 
-	wires.push_back(
-		{ Rebase(QString::fromStdString(material.uv1OcclusionTexture), dataRoot, false),
-	      c_TextureR,
-	      static_cast<unsigned int>(output->Uv1OcclusionPort()) });
-
 	PlaceTextureWires(model, outputId, wires);
 
 	return true;
@@ -482,8 +477,8 @@ WireUv1Occlusion(
 	if (material.uv1OcclusionTexture.empty())
 		return;
 
-	const QtNodes::NodeId   outputId = model.OutputNodeId();
-	const MaterialSinkNode* sink     = model.OutputNode();
+	const QtNodes::NodeId     outputId = model.OutputNodeId();
+	const MaterialOutputNode* sink = qobject_cast<const MaterialOutputNode*>(model.OutputNode());
 	if (sink == nullptr || sink->HasUv1Occlusion())
 		return;
 
