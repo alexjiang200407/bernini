@@ -9,7 +9,7 @@ add_subdirectory(${BERNINI_ROOT}/libs/editor_api ${CMAKE_BINARY_DIR}/libs/editor
 
 find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 
-add_subdirectory(${BERNINI_ROOT}/plugins/default_editor ${CMAKE_BINARY_DIR}/plugins/default_editor)
+add_subdirectory(plugins/default_editor)
 
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp

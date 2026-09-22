@@ -79,7 +79,7 @@ and fix the map.
 | Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
 | Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Supplied project store with a plain-file fallback for external meshes |
 | Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
-| Default plugin | [plugin.h](../plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
+| Default plugin | [plugin.h](../apps/editor/plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
 `EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
@@ -118,7 +118,7 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-`plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
+`apps/editor/plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;
 its target has no editor-host implementation include path. The host supplies configuration by value
 and opens its three startup contributions once the project host exists. Material and Animation
