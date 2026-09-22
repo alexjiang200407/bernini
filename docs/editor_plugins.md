@@ -140,7 +140,11 @@ A `.bproj` names its required plugin IDs in `plugins`. Machine-local `config.jso
 output directories in `pluginDirectories`; each directory contains `bernini-plugin.json` and the
 binaries it names. Opening a project with a different ordered plugin list restarts the editor, just
 as changing its surface shaders does. Missing, malformed or incompatible requirements stop startup
-with the plugin named in the error.
+with the plugin named in the error. **Window → Plugins** shows what did load: the engine build ID
+and configuration, then every plugin with its source directory, the modules it loaded and each
+kind, menu, panel, asset editor, action, importer and thumbnail provider it registered, then the
+configured directories the project did not require. It is filled once at startup, since nothing
+in the set can change without a relaunch.
 
 ```json
 {

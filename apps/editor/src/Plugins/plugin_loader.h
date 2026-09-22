@@ -6,6 +6,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace editor::plugins
@@ -25,6 +26,44 @@ namespace editor::plugins
 		kAlways,
 		kNever,
 	};
+
+	enum class ContributionKind
+	{
+		kAssetKind,
+		kMenu,
+		kPanel,
+		kAssetEditor,
+		kAction,
+		kImporter,
+		kThumbnailProvider,
+	};
+
+	struct LoadedContribution
+	{
+		ContributionKind kind;
+		std::string      id;
+		std::string      detail;
+	};
+
+	/** What one plugin put into the session; `directory` is empty for the host-linked plugin. */
+	struct LoadedPlugin
+	{
+		std::string                     id;
+		std::filesystem::path           directory;
+		std::filesystem::path           runtimeModule;
+		std::filesystem::path           editorModule;
+		std::vector<LoadedContribution> contributions;
+	};
+
+	/** A descriptor read from a configured directory, whether or not the project required it. */
+	struct ConfiguredPlugin
+	{
+		std::string           id;
+		std::filesystem::path directory;
+		bool                  loaded = false;
+	};
+
+	inline constexpr std::string_view c_BuiltInPluginId = "bernini.default";
 
 	class PluginSession
 	{
@@ -58,6 +97,14 @@ namespace editor::plugins
 
 		[[nodiscard]] const EditorRegistry&
 		Contributions() const noexcept;
+
+		/** The host-linked plugin first, then the required ones in project order. */
+		[[nodiscard]] std::span<const LoadedPlugin>
+		Plugins() const noexcept;
+
+		/** Every configured directory's descriptor, in configuration order. */
+		[[nodiscard]] std::span<const ConfiguredPlugin>
+		Configured() const noexcept;
 
 	private:
 		PluginSession();

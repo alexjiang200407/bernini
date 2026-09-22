@@ -46,6 +46,7 @@ just run editor -- --project /path/to/copied-project/Sample.bproj
 
 The project already requires `sample.document`. In another project, add
 `"plugins": ["sample.document"]` to its `.bproj`, preserving any existing requirements.
+**Window → Plugins** lists `sample.document` with both modules and its contributions once it loaded.
 Open **Tools → Sample tools → Project tools** to see the project tab. Open `Holder.bexample` in
 Content Explorer to see its document tab. Close the document tab before trying rename/delete:
 open documents are protected independently of their saved references. Deleting `Target.bexample`

@@ -36,6 +36,7 @@ namespace editor
 {
 	class EditorPanel;
 	class GpuTimingWindow;
+	class PluginsWindow;
 	namespace plugins
 	{
 		class EditorHost;
@@ -185,6 +186,10 @@ private:
 	void
 	SetUpGpuTimingEntry();
 
+	// Window > Plugins: what loaded, from where, and what each contributed.
+	void
+	SetUpPluginsEntry();
+
 	// The Render menu. Its entries toggle temporal AA and set the viewports' render scale, which is
 	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
@@ -260,6 +265,8 @@ private:
 	editor::GpuTimingWindow* m_GpuTiming       = nullptr;
 	QAction*                 m_GpuTimingAction = nullptr;
 	bool                     m_GpuTimingWasOn  = false;
+
+	editor::PluginsWindow* m_PluginsWindow = nullptr;
 
 	std::unique_ptr<Renderer> m_Renderer;
 	bool                      m_Headless = false;

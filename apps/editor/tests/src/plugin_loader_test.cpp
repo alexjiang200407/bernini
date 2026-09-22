@@ -1,8 +1,12 @@
 #include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
+#include "Windows/Plugins/PluginsWindow.h"
 
 #include <QLibrary>
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -108,10 +112,70 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 	CHECK(session.KindRegistry()->FindById("sample.fixture") != nullptr);
 	CHECK(session.EditorPlugins().size() == 1);
 	CHECK(session.Contributions().FindPanel("sample.fixture_panel") != nullptr);
+
+	REQUIRE(session.Plugins().size() == 1);
+	const editor::plugins::LoadedPlugin& loaded = session.Plugins().front();
+	CHECK(loaded.id == "sample.valid");
+	CHECK(loaded.directory == plugin);
+	CHECK(loaded.runtimeModule.filename() == fs::path(EDITOR_PLUGIN_FIXTURE).filename());
+	CHECK(loaded.editorModule == loaded.runtimeModule);
+	CHECK(std::ranges::any_of(loaded.contributions, [](const auto& contribution) {
+		return contribution.kind == editor::plugins::ContributionKind::kAssetKind &&
+		       contribution.id == "sample.fixture";
+	}));
+	CHECK(std::ranges::any_of(loaded.contributions, [](const auto& contribution) {
+		return contribution.kind == editor::plugins::ContributionKind::kPanel &&
+		       contribution.id == "sample.fixture_panel";
+	}));
+	REQUIRE(session.Configured().size() == 1);
+	CHECK(session.Configured().front().loaded);
 	CHECK(
 		fs::is_regular_file(
 			sandbox.root / "plugin-copies" / "sample.valid" /
 			fs::path(EDITOR_PLUGIN_FIXTURE).filename()));
+}
+
+TEST_CASE("The Plugins window lists what loaded and what was only configured", "[plugins][loader]")
+{
+	Sandbox sandbox;
+	auto    build  = editor::plugins::CurrentBuildIdentity();
+	build.sdkStamp = sandbox.root / "sdk.stamp";
+	SetSdkStamp(build, fs::file_time_type::clock::now() - std::chrono::hours(1));
+	const fs::path required =
+		WriteDescriptor(sandbox.root / "required", "sample.required", EDITOR_PLUGIN_FIXTURE, build);
+	const fs::path spare =
+		WriteDescriptor(sandbox.root / "spare", "sample.spare", EDITOR_PLUGIN_FIXTURE, build);
+
+	const editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
+		std::vector<std::string>{ "sample.required" },
+		std::vector<fs::path>{ required, spare },
+		build,
+		sandbox.root / "plugin-copies",
+		editor::plugins::PluginBinaryCopyMode::kNever);
+
+	const editor::PluginsWindow window(session, build);
+	const auto*                 tree = window.findChild<QTreeWidget*>("PluginsTree");
+	REQUIRE(tree != nullptr);
+	REQUIRE(tree->topLevelItemCount() == 2);
+
+	const QTreeWidgetItem* plugin = tree->topLevelItem(0);
+	CHECK(plugin->text(0) == "Plugin");
+	CHECK(plugin->text(1) == "sample.required");
+	CHECK(plugin->text(2) == QString::fromStdWString(required.wstring()));
+	std::vector<std::string> rows;
+	for (int i = 0; i < plugin->childCount(); ++i)
+		rows.push_back((plugin->child(i)->text(0) + " " + plugin->child(i)->text(1)).toStdString());
+	CHECK(std::ranges::find(rows, "Asset kind sample.fixture") != rows.end());
+	CHECK(std::ranges::find(rows, "Panel sample.fixture_panel") != rows.end());
+	CHECK(
+		std::ranges::find(
+			rows,
+			"Runtime module " + fs::path(EDITOR_PLUGIN_FIXTURE).filename().string()) != rows.end());
+
+	const QTreeWidgetItem* unused = tree->topLevelItem(1);
+	CHECK(unused->text(0) == "Configured, not required by this project");
+	REQUIRE(unused->childCount() == 1);
+	CHECK(unused->child(0)->text(1) == "sample.spare");
 }
 
 TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins][loader]")

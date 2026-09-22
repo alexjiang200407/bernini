@@ -12,8 +12,10 @@
 #include <core/err/util.h>
 #include <core/platform/util.h>
 #include <core/str/str.h>
+#include <cstddef>
 #include <cstdint>
 #include <editor_api/IEditorPlugin.h>
+#include <editor_api/IEditorRegistry.h>
 #include <editor_api/PluginDescriptor.h>
 #include <filesystem>
 #include <fstream>
@@ -178,6 +180,73 @@ namespace editor::plugins
 			}
 		}
 
+		std::string
+		Joined(const std::vector<std::string>& values)
+		{
+			std::string joined;
+			for (const std::string& value : values)
+			{
+				if (!joined.empty())
+					joined += ", ";
+				joined += value;
+			}
+			return joined;
+		}
+
+		struct RegistrySizes
+		{
+			std::size_t menus;
+			std::size_t panels;
+			std::size_t assetEditors;
+			std::size_t actions;
+			std::size_t importers;
+			std::size_t thumbnailProviders;
+		};
+
+		RegistrySizes
+		SizesOf(const EditorRegistry& registry)
+		{
+			return { registry.Menus().size(),        registry.Panels().size(),
+				     registry.AssetEditors().size(), registry.Actions().size(),
+				     registry.Importers().size(),    registry.ThumbnailProviders().size() };
+		}
+
+		void
+		AppendRegisteredSince(
+			const EditorRegistry&            registry,
+			const RegistrySizes&             before,
+			std::vector<LoadedContribution>& out)
+		{
+			for (const MenuDesc& desc : registry.Menus().subspan(before.menus))
+				out.push_back({ ContributionKind::kMenu, desc.id, desc.parentId });
+			for (const PanelDesc& desc : registry.Panels().subspan(before.panels))
+				out.push_back({ ContributionKind::kPanel, desc.id, {} });
+			for (const AssetEditorDesc& desc : registry.AssetEditors().subspan(before.assetEditors))
+				out.push_back({ ContributionKind::kAssetEditor, desc.id, Joined(desc.extensions) });
+			for (const ActionDesc& desc : registry.Actions().subspan(before.actions))
+				out.push_back(
+					{ ContributionKind::kAction,
+				      desc.id,
+				      desc.extensions.empty() ? desc.menuId : Joined(desc.extensions) });
+			for (const ImporterDesc& desc : registry.Importers().subspan(before.importers))
+				out.push_back({ ContributionKind::kImporter, desc.id, Joined(desc.extensions) });
+			for (const ThumbnailProviderDesc& desc :
+			     registry.ThumbnailProviders().subspan(before.thumbnailProviders))
+				out.push_back(
+					{ ContributionKind::kThumbnailProvider, desc.id, Joined(desc.extensions) });
+		}
+
+		void
+		RegisterEditorPlugin(
+			EditorRegistry&                  registry,
+			IEditorPlugin&                   plugin,
+			std::vector<LoadedContribution>& out)
+		{
+			const RegistrySizes before = SizesOf(registry);
+			registry.Register(plugin);
+			AppendRegisteredSince(registry, before, out);
+		}
+
 		bool
 		ShouldCopyPluginBinaries(const PluginBinaryCopyMode choice)
 		{
@@ -235,7 +304,9 @@ namespace editor::plugins
 		EditorRegistry                               contributions;
 		std::shared_ptr<assetlib::AssetKindRegistry> kinds =
 			std::make_shared<assetlib::AssetKindRegistry>();
-		std::vector<std::string> ids;
+		std::vector<std::string>      ids;
+		std::vector<LoadedPlugin>     plugins;
+		std::vector<ConfiguredPlugin> configured;
 	};
 
 	PluginSession::PluginSession() : m_Impl(std::make_unique<Impl>()) {}
@@ -266,6 +337,18 @@ namespace editor::plugins
 	PluginSession::Contributions() const noexcept
 	{
 		return m_Impl->contributions;
+	}
+
+	std::span<const LoadedPlugin>
+	PluginSession::Plugins() const noexcept
+	{
+		return m_Impl->plugins;
+	}
+
+	std::span<const ConfiguredPlugin>
+	PluginSession::Configured() const noexcept
+	{
+		return m_Impl->configured;
 	}
 
 	BuildIdentity
@@ -316,10 +399,12 @@ namespace editor::plugins
 		EditorPluginPtr                        builtIn)
 	{
 		core::str::unordered_str_map<Descriptor> available;
+		std::vector<ConfiguredPlugin>            configured;
 		for (const std::filesystem::path& directory : configuredDirectories)
 		{
 			Descriptor        descriptor = ReadDescriptor(directory);
 			const std::string id         = descriptor.id;
+			configured.push_back({ id, directory, false });
 			if (!available.emplace(id, std::move(descriptor)).second)
 				core::throw_runtime_error("Plugin ID has more than one configured directory");
 		}
@@ -335,13 +420,21 @@ namespace editor::plugins
 				core::throw_runtime_error("Project requires an unconfigured plugin: {}", id);
 			ValidateDescriptor(found->second, build);
 			selected.push_back(found->second);
+			std::ranges::find(configured, id, &ConfiguredPlugin::id)->loaded = true;
 		}
 
 		PluginSession session;
+		session.m_Impl->configured = std::move(configured);
 		if (builtIn)
 		{
+			LoadedPlugin loaded;
+			loaded.id = std::string(c_BuiltInPluginId);
 			session.m_Impl->editorPlugins.push_back(std::move(builtIn));
-			session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
+			RegisterEditorPlugin(
+				session.m_Impl->contributions,
+				*session.m_Impl->editorPlugins.back(),
+				loaded.contributions);
+			session.m_Impl->plugins.push_back(std::move(loaded));
 		}
 
 		std::map<std::filesystem::path, QLibrary*> loadedModules;
@@ -366,6 +459,9 @@ namespace editor::plugins
 		for (const Descriptor& original : selected)
 		{
 			const Descriptor descriptor = PreparePluginBinaries(original, pluginCopyRoot, copyMode);
+			LoadedPlugin     loaded;
+			loaded.id        = descriptor.id;
+			loaded.directory = original.directory;
 			if (!descriptor.runtime.empty())
 			{
 				QLibrary&  module = loadModule(descriptor.directory / descriptor.runtime);
@@ -383,8 +479,14 @@ namespace editor::plugins
 
 				assetlib::AssetKindRegistry staged;
 				plugin->RegisterKinds(staged);
+				for (const assetlib::AssetKindPtr& kind : staged.Kinds())
+					loaded.contributions.push_back(
+						{ ContributionKind::kAssetKind,
+					      kind->GetDesc().id,
+					      kind->GetDesc().extension });
 				session.m_Impl->kinds->Merge(std::move(staged));
 				session.m_Impl->assetPlugins.push_back(std::move(plugin));
+				loaded.runtimeModule = descriptor.directory / descriptor.runtime;
 			}
 
 			if (!descriptor.editor.empty())
@@ -402,9 +504,14 @@ namespace editor::plugins
 						"Editor plugin factory returned null: {}",
 						descriptor.id);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
-				session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
+				RegisterEditorPlugin(
+					session.m_Impl->contributions,
+					*session.m_Impl->editorPlugins.back(),
+					loaded.contributions);
+				loaded.editorModule = descriptor.directory / descriptor.editor;
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
+			session.m_Impl->plugins.push_back(std::move(loaded));
 		}
 
 		return session;

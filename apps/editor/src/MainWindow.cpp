@@ -22,6 +22,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
+#include "Windows/Plugins/PluginsWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "main_window_ui.h"
 #include "util/follows_project.h"
@@ -395,6 +396,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 	m_Ui.windowMenu->addSeparator();
 	SetUpGpuTimingEntry();
+	SetUpPluginsEntry();
 	SetUpPluginContributions();
 
 	// config.json may name a project to open on launch, so working on one does not mean reopening
@@ -1199,6 +1201,22 @@ MainWindow::SetUpGpuTimingEntry()
 	// Closed from its own title bar, the entry has to follow: an unchecked box beside a window that
 	// is up says the wrong thing, and the next click would then do nothing.
 	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, graph, &QAction::setChecked);
+}
+
+void
+MainWindow::SetUpPluginsEntry()
+{
+	m_PluginsWindow =
+		new editor::PluginsWindow(*m_Plugins, editor::plugins::CurrentBuildIdentity(), this);
+
+	auto* action = m_Ui.windowMenu->addAction("Plugins");
+	action->setStatusTip(
+		"List the plugins this editor loaded, where each came from and what it contributed.");
+	connect(action, &QAction::triggered, this, [this] {
+		m_PluginsWindow->show();
+		m_PluginsWindow->raise();
+		m_PluginsWindow->activateWindow();
+	});
 }
 
 void
