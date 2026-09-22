@@ -16,7 +16,8 @@ namespace editor
 
 		parent->resize(1280, 720);
 
-		QMenu* file = parent->menuBar()->addMenu(QStringLiteral("File"));
+		QMenu* file      = parent->menuBar()->addMenu(QStringLiteral("File"));
+		widgets.fileMenu = file;
 
 		widgets.newProject = file->addAction(QStringLiteral("New Project..."));
 		widgets.newProject->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));

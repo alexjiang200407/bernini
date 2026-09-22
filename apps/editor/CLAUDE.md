@@ -4,7 +4,10 @@ editor is the Bernini game editor: a desktop application for authoring scenes an
 managing resources. It is also the offline asset-cook host — artists export glTF, the
 editor imports it (via assetlib) and converts it into the game-ready format.
 
-- CMake targets: `editor_lib` (everything), `editor` (just `main.cpp`), `editor_tests`.
+- CMake targets: `editor_lib` (host), `editor` (just `main.cpp`), `editor_tests`.
+  `plugins/default_editor` owns Material, Animation and Blend Space and their authoring code; it
+  links only public engine/editor contracts and SDK helpers. The host creates all three through
+  registered factories and routes document opens by the registered extension.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
 - Builds on Windows (D3D12) and macOS (Metal). macOS needs Qt on `CMAKE_PREFIX_PATH`.
@@ -68,8 +71,9 @@ open the project's own assets.
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
 `startupProject` names the project to open on launch (read by `main`, never by `MainWindow`),
-`instanceName` names *this* editor, `headless`
-builds every viewport offscreen, and `memoryReport` (default true) decides whether the run's memory
+`instanceName` names *this* editor, `headless` builds every viewport offscreen, `pluginDirectories`
+names plugin directories beyond the `plugins/` beside the executable, and `memoryReport` (default
+true) decides whether the run's memory
 table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
 § Memory. `MainWindow::Build` reads it for everything but those two: the report is armed in `main`
 before the window exists, so that building the window is inside what it measures, and
@@ -77,6 +81,14 @@ before the window exists, so that building the window is inside what it measures
 `instanceName` leads the window title — `A — Bernini Editor — Test Project` — so two editors run
 side by side for an A/B comparison can be told apart where every other part of the title is
 identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.
+
+Plugins load in `main` before any project is chosen: every directory holding a `bernini-plugin.json`
+under `plugins/` beside the executable, then each `pluginDirectories` entry, each checked for build
+identity and age. Their runtime kinds are registered before a project opens, and a project whose
+`.bproj` lists a plugin the editor did not load is refused wherever it is opened -- at startup, from
+the landing page, from File -- through `editor::plugins::OpenProjectWithPlugins`. The editor halves
+register as the window builds, the host-linked default plugin first. Windows loads a per-process
+shadow copy so rebuilding the original DLL does not wait for the editor to exit.
 
 The editor never writes the file — `ws` seeds it and a person edits it. What it *does* write beside
 it is `recent_projects.json`, the list the landing page offers (`src/util/recent_projects.h`): every
@@ -99,7 +111,16 @@ the only route into `SetActiveProject` that raises no dialog.
 
 ## editor_lib
 
-Every editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
+`editor_plugin_api` is the separate public plugin contract, held to the library bar. Its headers expose
+no `apps/editor/src` types. The production registry owns plugin contribution objects; `editor_plugin_tests` exercises a
+compiled sample against a fake host and a separately configured SDK fixture. See
+[Editor plugin contracts](../../docs/editor_plugins.md).
+
+Shared loading-screen, CPU preview-cache, mesh-placement and asset UI helpers live in
+`libs/editor_sdk`, exposed through `<editor_sdk/...>` and linked by the host and plugins.
+GPU thumbnail orchestration and project lifecycle walkers remain host-private.
+
+Every host editor source **except `main.cpp`** lives in `editor_lib`, an OBJECT library that
 `editor` and `editor_tests` both link. `main.cpp` is held out because it owns `main()`,
 and the test runner has its own — so the tests exercise the objects that ship rather
 than a recompiled copy free to drift from them.
@@ -249,11 +270,8 @@ and pins its teardown order, its data-root propagation, and that every viewport 
 headless. A null `Renderer` **asserts**: no shipping path produces one, and four methods here
 dereference it unconditionally.
 
-What is still out of reach is the **modal dialog**, not the window. A fake `IGraphics` is **not**
-a seam worth having either: `MaterialEditorWindow`, `AssetThumbnailCache` and `TextureNode` each
-degrade when their `Renderer` is null, and no shipping path produces one — a fake would buy coverage
-of three branches no user reaches, and nothing else. What a failing device does instead is leave
-through `main`, which reports it and exits.
+Material integration tests create its registered panel through the real project host and compose
+a headless viewport. A failing graphics device leaves through `main`, which reports it and exits.
 
 What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
 `StampedPixmapCache` hold the ones the caches are built on. Reach for that shape before
@@ -268,29 +286,19 @@ in `AssetThumbnailCache_test.cpp`, which renders a real `.bmesh` and a real `.bm
 writes each to `assets/golden/thumbnail_*.got.png` to be looked at. Tag such cases `[render]`
 so they can be skipped.
 
-Everything else runs on the CPU in about a second, because the pieces that matter were
-already built to work without a device: `MaterialEditorWindow` degrades to "No graphics
-device", and `TextureNode` takes a null scene and a null preview cache on purpose. The
-tests lean on exactly that.
-
-A `MaterialEditorWindow` **without a device has no submesh graphs at all** — they are built
-from the preview's geometry, and there is no preview. So its per-submesh behaviour cannot
-be driven through the window. Where such a rule is worth pinning, lift it into a free function
-that takes what it needs (`editor::IsSameMaterialFile` in `material_io.h`, `OutputCentre` in
-`material_graph.h`) and test that. Both of those paid for themselves the day they were written,
-each catching a bug in the code they were extracted from.
+Material graph, rig playback and authoring-rule tests live in `plugins/default_editor/tests`, compiled into
+`editor_tests`. They need no device: `TextureNode` accepts a null host and preview cache for CPU
+graph operations. The panel itself requires a live host. Its viewport input, held assets, cache
+notifications and project teardown are covered by `MainWindow_test` against the shipping plugin.
 
 Two things a test cannot drive, and why:
 
 - **Modal dialogs** (`QFileDialog`, `QMessageBox`, `QInputDialog`, `QMenu::exec`) are
-  called directly on the concrete Qt types, with no injection seam. Triggering one from
-  a test hangs it. This is what keeps `editor::import::ImportMesh`, `AssetOperations`'
-  Delete/Rename/Bake, `MainWindow::NewProject`/`OpenProject`/`CleanUnusedTextures`, and
-  `MaterialEditorWindow`'s save/open uncovered. Hoisting a rule out into a free function that
-  takes what it needs is what unlocks it, and the import is the worked example:
-  `editor::import::WriteMaterials`, `WriteRig` and `RollBack` are each driven directly by a
-  test, so what an import *writes* and what a failed one *deletes* are pinned even though the
-  import itself is not.
+  called directly on the concrete Qt types, with no injection seam. A test must drive their nested
+  event loop or it hangs. `MainWindow_test` exercises project replacement with a non-native file
+  dialog, a timer entering the filename, and a deadline rejecting dialogs on failure. Native file
+  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup
+   and Material save retain untested modal paths; their extracted data operations are tested.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight

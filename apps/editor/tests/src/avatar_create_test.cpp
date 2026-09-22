@@ -1,5 +1,5 @@
 #include "Windows/ContentExplorer/avatar_create.h"
-#include "util/source_mesh.h"
+#include <editor_sdk/source_mesh.h>
 
 #include "StoreAt.h"
 

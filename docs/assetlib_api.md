@@ -10,6 +10,11 @@ draw. `gamelib` is the seam that links both.
 non-obvious contracts — not signatures. The header at each linked path is the source of truth;
 when this doc disagrees, trust the header, then fix this doc.
 
+The Qt-free [IAssetPlugin contract](libs/assetlib/include/assetlib/IAssetPlugin.h) registers custom
+authored kinds before a project store opens. Those kinds extend `AssetStore`, the reference graph,
+rename, migrate and pack without entering the closed built-in `AssetType`; see
+[Editor plugin contracts](docs/editor_plugins.md) for loading and lifetime rules.
+
 ---
 
 ## Design Choices
@@ -113,7 +118,8 @@ when this doc disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `AssetStore` | [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The project: the read mount and the writable root as one. Loads every container by key, answers staleness, describes against disk. |
-| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: the metadata file, the scaffolded `Data/` tree, and the `AssetStore` over it. |
+| `AssetKindRegistry` | [AssetKindRegistry.h](libs/assetlib/include/assetlib/AssetKindRegistry.h) | Project-owned custom authored kinds, propagated into stores and transactions. |
+| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: metadata including required plugin IDs, the scaffolded `Data/` tree, and the `AssetStore` over it. |
 | `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
 | `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
 
@@ -238,6 +244,8 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we
   cannot see is an edge we would delete through.
+  Registered authored kinds contribute opaque field references through `IAssetKind::ReadReferences`;
+  these edges participate in deletion and rename planning alongside built-in references.
 * **`planDeletion` on a directory** — a directory is held only by an edge reaching *into* it
   from outside, and takes everything beneath it. Whether it is a directory the *project* needs is
   not a question this can answer; `Project::IsRequiredDirectory` is.
@@ -245,6 +253,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   the files last, because a move is the step most likely to be refused. A failure writes the
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
+  Custom referrers are rewritten through `IAssetKind::RewriteReferences` using their field tokens.
 * **`planRename` on an imported source** — a source and its `.bimport` are one asset under two
   names, so either spelling plans the same move and `subject` reads back as the document's. A file
   is a source when a document records it as one (`RefKind::kImportedSource`), whatever its extension,

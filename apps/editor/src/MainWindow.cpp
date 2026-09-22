@@ -1,26 +1,27 @@
 #include "MainWindow.h"
 
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDockWidget>
 #include <QLabel>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
 #include <QTabWidget>
+#include <qcontainerfwd.h>
 
-#include "Async/BackgroundTask.h"
+#include "Plugins/EditorHost.h"
+#include "Plugins/EditorRegistry.h"
+#include "Plugins/plugin_loader.h"
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "Windows/AnimationEditor/AnimationEditorWindow.h"
-#include "Windows/AnimationEditor/AnimationPreviewWindow.h"
-#include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/Plugins/PluginsWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "main_window_ui.h"
 #include "util/follows_project.h"
@@ -31,11 +32,16 @@
 #include "util/recent_projects.h"
 #include "util/surface_relaunch.h"
 #include "util/window_title.h"
+#include <algorithm>
 #include <array>
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
-#include <assetlib/project_layout.h>
+#include <default_editor/plugin.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/TranslationCatalog.h>
+#include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/environment.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -51,8 +57,11 @@
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -63,6 +72,7 @@
 #include <QDebug>
 #include <QKeySequence>
 #include <bgl/PassTiming.h>
+#include <core/str/str.h>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -74,16 +84,19 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
+#include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
 #include <vector>
 
 MainWindow::MainWindow(
-	assetlib::Project        project,
-	std::filesystem::path    configPath,
-	background::ProgressSink startup,
-	QWidget*                 parent) : QMainWindow(parent), m_StartupProgress(std::move(startup))
+	std::unique_ptr<editor::plugins::PluginSession> plugins,
+	assetlib::Project                               project,
+	std::filesystem::path                           configPath,
+	background::ProgressSink                        startup,
+	QWidget*                                        parent) :
+	QMainWindow(parent), m_StartupProgress(std::move(startup)), m_Plugins(std::move(plugins))
 {
 	try
 	{
@@ -123,6 +136,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
 		const bool headless = settings["headless"].GetOrDefault(false);
+		m_Headless          = headless;
 
 		const auto gfxSettings = settings["graphics"];
 
@@ -240,24 +254,33 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
-		auto matSettings                = settings["materialEditor"];
-		auto matDesc                    = MaterialEditorWindowDesc();
-		matDesc.renderer                = m_Renderer.get();
-		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
-		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
-		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
-		matDesc.bloom                   = readBloom(matSettings);
-		matDesc.colorGrade              = readColorGrade(matSettings);
-		matDesc.headless                = headless;
-		matDesc.previewEnv.environmentMap =
+		const auto readViewport = [&](const auto& section) {
+			auto       viewport             = editor::ViewportDesc();
+			const auto bloom                = readBloom(section);
+			const auto grade                = readColorGrade(section);
+			viewport.initialInstances       = section["initialPreviewInstances"].GetOrDefault(16u);
+			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
+			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
+			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
+			viewport.bloomEnabled           = bloom.enabled;
+			viewport.bloom                  = bloom.settings;
+			viewport.colorGradeEnabled      = grade.enabled;
+			viewport.colorGrade             = grade.settings;
+			return viewport;
+		};
+
+		auto matSettings               = settings["materialEditor"];
+		auto defaultConfig             = editor::defaults::Config();
+		defaultConfig.materialViewport = readViewport(matSettings);
+		defaultConfig.materialEnvironment.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
-		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
-		matDesc.previewEnv.sky      = readSky(matSettings, editor::SkyPresentation());
+		defaultConfig.materialEnvironment.dataRoot =
+			matSettings["dataRoot"].GetOrDefault(std::string());
+		defaultConfig.materialEnvironment.sky = readSky(matSettings, editor::SkyPresentation());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
-			matDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+			defaultConfig.materialEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		auto thumbSettings           = settings["thumbnails"];
 		auto thumbDesc               = AssetThumbnailDesc();
@@ -267,87 +290,37 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		thumbDesc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
 		thumbDesc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
 		thumbDesc.env.sky            = readSky(thumbSettings, editor::SkyPresentation());
+		thumbDesc.pluginProvider     = [this](const std::string_view extension) {
+			return m_Plugins->Contributions().FindThumbnailProvider(extension);
+		};
 
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		auto animSettings = settings["animationEditor"];
-		auto animDesc     = AnimationEditorWindowDesc();
-		animDesc.renderer = m_Renderer.get();
-		animDesc.initialPreviewInstances =
-			animSettings["initialPreviewInstances"].GetOrDefault(16u);
-		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
-		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
-		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
-		animDesc.bloom                  = readBloom(animSettings);
-		animDesc.colorGrade             = readColorGrade(animSettings);
-		animDesc.headless               = headless;
+		auto animSettings         = settings["animationEditor"];
+		defaultConfig.rigViewport = readViewport(animSettings);
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
-		animDesc.previewEnv.environmentMap = animSettings["environmentMap"].GetOrDefault(
+		defaultConfig.rigEnvironment.environmentMap = animSettings["environmentMap"].GetOrDefault(
 			matSettings["environmentMap"].GetOrDefault(std::string()));
-		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(
+		defaultConfig.rigEnvironment.dataRoot = animSettings["dataRoot"].GetOrDefault(
 			matSettings["dataRoot"].GetOrDefault(std::string()));
-		animDesc.previewEnv.sky = readSky(animSettings, matDesc.previewEnv.sky);
+		defaultConfig.rigEnvironment.sky =
+			readSky(animSettings, defaultConfig.materialEnvironment.sky);
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = animSettings["exposure"])
-			animDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
+			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		// A rig previewed exactly as the Animation panel previews one, so it reads that panel's section
-		// rather than a copy of it.
-		auto blendRt                   = RenderTargetWindowDesc();
-		blendRt.renderer               = m_Renderer.get();
-		blendRt.initialInstances       = animDesc.initialPreviewInstances;
-		blendRt.taaEnabled             = animDesc.taaEnabled;
-		blendRt.renderScale            = animDesc.renderScale;
-		blendRt.taaReconstructionWidth = animDesc.taaReconstructionWidth;
-		blendRt.bloom                  = animDesc.bloom;
-		blendRt.colorGrade             = animDesc.colorGrade;
-		blendRt.headless               = headless;
-		auto blendEnv                  = animDesc.previewEnv;
+		m_Plugins->RegisterEditorPlugins(editor::defaults::CreatePlugin(defaultConfig));
 
-		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
-		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
-		m_BlendSpaceEditor =
-			new BlendSpaceEditorWindow(this, std::move(blendRt), std::move(blendEnv));
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
 
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
-
-	m_MaterialEditorDock = new QDockWidget("Material Editor", this);
-	m_MaterialEditorDock->setObjectName("MaterialEditorDock");
-	m_MaterialEditorDock->setWidget(m_MaterialEditor);
-	m_MaterialEditorDock->setTitleBarWidget(new QWidget(m_MaterialEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_MaterialEditorDock);
-
-	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
-	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
-	m_AnimationEditorDock->setWidget(m_AnimationEditor);
-	m_AnimationEditorDock->setTitleBarWidget(new QWidget(m_AnimationEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
-
-	m_BlendSpaceEditorDock = new QDockWidget("Blend Space Editor", this);
-	m_BlendSpaceEditorDock->setObjectName("BlendSpaceEditorDock");
-	m_BlendSpaceEditorDock->setWidget(m_BlendSpaceEditor);
-	m_BlendSpaceEditorDock->setTitleBarWidget(new QWidget(m_BlendSpaceEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_BlendSpaceEditorDock);
-
-	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
-	tabifyDockWidget(m_AnimationEditorDock, m_BlendSpaceEditorDock);
-
-	// Neither movable nor floatable, so the editors stay one tab group and exactly one viewport is
-	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
-	// dragged to another area, or out into a window of its own, would put a second viewport into the
-	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
-	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock :
-	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
-		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
@@ -364,88 +337,104 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
-
-	// Baking rewrites the material on disk, which is where the Material Editor's panel reads the
-	// staleness marker and the baked-texture listing from. The Animation panel's Bake Now goes the
-	// same way.
 	connect(
 		m_ContentExplorer,
 		&ContentExplorerWindow::MaterialBaked,
-		m_MaterialEditor,
-		&MaterialEditorWindow::RefreshMaterialState);
-	for (const QWidget* panel :
-	     { static_cast<QWidget*>(m_AnimationEditor), static_cast<QWidget*>(m_BlendSpaceEditor) })
-		for (auto* preview : panel->findChildren<AnimationPreviewWindow*>())
-			connect(
-				preview,
-				&AnimationPreviewWindow::MaterialBaked,
-				m_MaterialEditor,
-				&MaterialEditorWindow::RefreshMaterialState);
+		this,
+		[this](const QString& key) {
+			if (m_EditorHost)
+				m_EditorHost->AssetChanged(key.toStdString());
+		});
+	m_ContentExplorer->SetPluginImporter(
+		[this](const std::filesystem::path& source) {
+			std::string extension = source.extension().string();
+			std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+				return static_cast<char>(std::tolower(c));
+			});
+			return m_Plugins->Contributions().FindImporter(extension) != nullptr;
+		},
+		[this](const std::filesystem::path& source, const std::string_view target) {
+			if (m_EditorHost == nullptr)
+				return;
+			std::string extension = source.extension().string();
+			std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+				return static_cast<char>(std::tolower(c));
+			});
+			const editor::ImporterDesc* importer =
+				m_Plugins->Contributions().FindImporter(extension);
+			if (importer == nullptr)
+				return;
+			try
+			{
+				importer->importer->Import(*m_EditorHost, source, target);
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Import", error.what());
+			}
+		});
+	m_ContentExplorer->SetPluginActions(
+		[this](QMenu& menu, const std::vector<std::string>& selection) {
+			if (m_EditorHost == nullptr)
+				return;
+			for (const editor::ActionDesc& desc : m_Plugins->Contributions().Actions())
+			{
+				if (desc.extensions.empty())
+					continue;
+				const bool matches = std::ranges::all_of(selection, [&](const std::string& key) {
+					std::string extension = std::filesystem::path(key).extension().string();
+					std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+						return static_cast<char>(std::tolower(c));
+					});
+					return std::ranges::find(desc.extensions, extension) != desc.extensions.end();
+				});
+				if (!matches)
+					continue;
+				bool enabled = false;
+				try
+				{
+					enabled = desc.action->IsEnabled(*m_EditorHost, selection);
+				}
+				catch (const std::exception& error)
+				{
+					qWarning("Plugin action predicate failed: %s", error.what());
+				}
+				QAction* action =
+					menu.addAction(desc.title.Resolve(m_EditorHost->GetLanguageResolver()));
+				action->setEnabled(enabled);
+				const editor::ActionDesc* descriptor = &desc;
+				connect(action, &QAction::triggered, &menu, [this, descriptor, selection] {
+					try
+					{
+						descriptor->action->Invoke(*m_EditorHost, selection);
+					}
+					catch (const std::exception& error)
+					{
+						QMessageBox::warning(this, "Plugin Action", error.what());
+					}
+				});
+			}
+		});
 
-	// Brought forward before the set opens, so what is opened is on screen rather than behind a tab.
 	connect(
 		m_ContentExplorer,
-		&ContentExplorerWindow::BlendSetOpenRequested,
-		m_BlendSpaceEditor,
-		[this](const QString& key) {
-			m_BlendSpaceEditorDock->show();
-			m_BlendSpaceEditorDock->raise();
-			m_BlendSpaceEditor->OpenBlendSet(key);
-		});
+		&ContentExplorerWindow::AssetOpenRequested,
+		this,
+		[this](const QString& key) { OpenPluginAsset(key.toStdString()); });
 
 	m_ContentExplorer->setMinimumSize(0, 0);
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
-	DriveViewportsFromTab(m_MaterialEditorDock);
-	DriveViewportsFromTab(m_AnimationEditorDock);
-	DriveViewportsFromTab(m_BlendSpaceEditorDock);
-
-	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
-	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
-	// on a tab switch.
-	//
-	// Through IsPanelShown, because the same signal reports a minimized or hidden window -- and
-	// unlike the two connections above, what these do is destructive.
-	m_TabVisibility.push_back(connect(
-		m_AnimationEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_AnimationEditor,
-		[this](bool visible) {
-			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
-	// and nothing asks: the panel writes only on Save.
-	m_TabVisibility.push_back(connect(
-		m_MaterialEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_MaterialEditor,
-		[this](bool visible) {
-			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	// The Blend Space tab the same way: the set closes, with a threshold still being typed saved first.
-	m_TabVisibility.push_back(connect(
-		m_BlendSpaceEditorDock,
-		&QDockWidget::visibilityChanged,
-		m_BlendSpaceEditor,
-		[this](bool visible) {
-			m_BlendSpaceEditor->SetDockVisible(editor::IsPanelShown(visible, this));
-		}));
-
-	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
-	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
-	m_Ui.windowMenu->addAction(m_BlendSpaceEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 	m_Ui.windowMenu->addSeparator();
 	SetUpGpuTimingEntry();
-
-	SetUpRenderMenu();
-
-	SetUpFrameStats();
+	SetUpPluginsEntry();
+	SetUpPluginContributions();
 
 	SetActiveProject(std::move(project));
+
+	SetUpRenderMenu();
 
 	// Startup is over: a project opened from the menu from here on gets the modal screen, not the
 	// one main() is about to close.
@@ -486,7 +475,21 @@ MainWindow::SetUpRenderMenu()
 		anyTaa ? "Jitter the projection and accumulate a temporal history in the viewports." :
 				 "No viewport enabled temporalAA in config.json, so none allocated a history.");
 
+	connect(render, &QMenu::aboutToShow, this, [this, taa] {
+		bool available = false;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			available = available || view->IsTaaAvailable();
+		const QSignalBlocker blocker(taa);
+		taa->setEnabled(available);
+		taa->setChecked(m_TaaOverride.value_or(available));
+		taa->setStatusTip(
+			available ?
+				"Jitter the projection and accumulate a temporal history in the viewports." :
+				"No open viewport allocated temporal-AA history.");
+	});
+
 	connect(taa, &QAction::toggled, this, [this](bool enabled) {
+		m_TaaOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetTaaEnabled(enabled);
 	});
@@ -497,6 +500,7 @@ MainWindow::SetUpRenderMenu()
 	outline->setStatusTip("Contour the selected submesh in the viewports.");
 
 	connect(outline, &QAction::toggled, this, [this](bool enabled) {
+		m_OutlineEnabled = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
 	});
@@ -515,6 +519,7 @@ MainWindow::SetUpRenderMenu()
 		"bloom is each viewport's `bloom` section in config.json.");
 
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
+		m_BloomOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetBloomEnabled(enabled);
 	});
@@ -532,6 +537,7 @@ MainWindow::SetUpRenderMenu()
 		"viewport's `colorGrade` section in config.json.");
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
+		m_ColorGradeOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetColorGradeEnabled(enabled);
 	});
@@ -588,7 +594,15 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 		action->setChecked(qFuzzyCompare(factor, current));
 		group->addAction(action);
 
+		connect(scale, &QMenu::aboutToShow, action, [this, action, factor] {
+			const auto  views   = findChildren<RenderTargetWindow*>();
+			const float current = m_RenderScaleOverride.value_or(
+				views.isEmpty() ? 1.0f : views.first()->GetRenderScale());
+			action->setChecked(qFuzzyCompare(factor, current));
+		});
+
 		connect(action, &QAction::triggered, this, [this, factor]() {
+			m_RenderScaleOverride = factor;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetRenderScale(factor);
 		});
@@ -628,7 +642,15 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 		action->setChecked(qFuzzyCompare(value, current));
 		group->addAction(action);
 
+		connect(width, &QMenu::aboutToShow, action, [this, action, value] {
+			const auto  views   = findChildren<RenderTargetWindow*>();
+			const float current = m_ReconstructionWidthOverride.value_or(
+				views.isEmpty() ? 0.4f : views.first()->GetTaaReconstructionWidth());
+			action->setChecked(qFuzzyCompare(value, current));
+		});
+
 		connect(action, &QAction::triggered, this, [this, value]() {
+			m_ReconstructionWidthOverride = value;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetTaaReconstructionWidth(value);
 		});
@@ -638,6 +660,12 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 void
 MainWindow::closeEvent(QCloseEvent* event)
 {
+	if (!CanClosePluginPanels())
+	{
+		event->ignore();
+		return;
+	}
+
 	// Cut first so a dock hiding below cannot put a viewport back into the loop.
 	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
 	m_TabVisibility.clear();
@@ -655,6 +683,8 @@ MainWindow::~MainWindow() { ReleaseRenderResources(); }
 void
 MainWindow::ReleaseRenderResources() noexcept
 {
+	ClearPluginPanels();
+
 	if (m_Renderer == nullptr)
 		return;
 
@@ -662,24 +692,8 @@ MainWindow::ReleaseRenderResources() noexcept
 		m_ContentExplorer->SetThumbnails(nullptr);
 	m_Thumbnails.reset();
 
-	// Their acquisitions release through the manager, so they go before m_Assets does.
-	if (m_AnimationEditor != nullptr)
-		m_AnimationEditor->SetAssets(nullptr);
-	if (m_BlendSpaceEditor != nullptr)
-		m_BlendSpaceEditor->SetAssets(nullptr);
-
-	// After the thumbnails, which release their materials back through it, and before the viewports,
-	// so the instances it deletes leave views that are still standing.
+	ClearFrameStats();
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
-
-	delete m_MaterialEditor;
-	m_MaterialEditor = nullptr;
-
-	delete m_AnimationEditor;
-	m_AnimationEditor = nullptr;
-
-	delete m_BlendSpaceEditor;
-	m_BlendSpaceEditor = nullptr;
 }
 
 void
@@ -687,6 +701,9 @@ MainWindow::NewProject()
 {
 	const std::optional<editor::NewProjectRequest> request = editor::AskForNewProject(this);
 	if (!request)
+		return;
+
+	if (!CanClosePluginPanels())
 		return;
 
 	// Asked before Create, so declining writes nothing.
@@ -746,8 +763,8 @@ MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& proj
 		this,
 		title,
 		QString(
-			"%1 has different shaders from the ones this editor loaded at startup. The editor "
-			"will restart to open it.")
+			"%1 requires different shaders from the ones this editor loaded at startup. The "
+			"editor will restart to open it.")
 			.arg(QString::fromStdWString(projectFile.stem().wstring())),
 		QMessageBox::Ok | QMessageBox::Cancel,
 		QMessageBox::Ok);
@@ -772,11 +789,14 @@ MainWindow::RestartInto(const std::filesystem::path& projectFile)
 bool
 MainWindow::OpenProjectAt(const std::filesystem::path& path)
 {
+	if (!CanClosePluginPanels())
+		return false;
+
 	try
 	{
 		ZoneScopedN("editor open project");
 
-		SetActiveProject(assetlib::Project::Open(path));
+		SetActiveProject(editor::plugins::OpenProjectWithPlugins(path, *m_Plugins));
 		return true;
 	}
 	catch (const std::exception& e)
@@ -1093,51 +1113,89 @@ MainWindow::SetActiveProject(assetlib::Project project)
 {
 	ZoneScopedN("editor set active project");
 
+	ClearPluginPanels();
+
+	if (m_Thumbnails)
+		m_Thumbnails->SetStore(nullptr);
+	ClearFrameStats();
+
+	// Panel teardown drains render work before the borrowed manager is released on its thread.
+	m_Renderer->Invoke([&] { m_Assets.reset(); });
+
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
-
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
-
-	// A manager resolves every path against one Data root, so a new project needs a new one. The
-	// consumers below borrow it, so it has to be replaced before any of them are told about it.
-	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(nullptr);
-	if (m_AnimationEditor)
-		m_AnimationEditor->SetAssets(nullptr);
-	if (m_BlendSpaceEditor)
-		m_BlendSpaceEditor->SetAssets(nullptr);
-
-	// ~AssetManager hands every asset it still holds back to the scene, so it runs on the render
-	// thread like any other scene mutation -- the viewports are still drawing at this point.
-	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
 	// when it places an instance.
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
+	m_EditorHost = std::make_unique<editor::plugins::EditorHost>(
+		m_Project->GetStore(),
+		m_Plugins->Contributions().Catalogs(),
+		m_Renderer.get(),
+		m_Assets.get(),
+		m_Headless,
+		editor::plugins::EditorHostDispatch{
+			.showPanel = [this](const std::string_view id) { ShowPluginPanel(id); },
+			.openAsset = [this](const std::string_view key) { OpenPluginAsset(key); },
+			.assetChanged =
+				[this](const std::string_view key) {
+					m_ContentExplorer->update();
+					if (m_Thumbnails != nullptr)
+					{
+						m_Thumbnails->Invalidate();
+						m_Thumbnails->Request(
+							QString::fromStdWString(
+								m_Project->GetStore().ResolveWritePath(key).wstring()));
+					}
+					for (const auto& [id, dock] : m_PluginDocks)
+					{
+						auto* panel = dock.panel.data();
+						if (panel == nullptr)
+							continue;
+						QMetaObject::invokeMethod(
+							panel,
+							[panel, changed = std::string(key), panelId = id] {
+								try
+								{
+									panel->OnAssetChanged(changed);
+								}
+								catch (const std::exception& error)
+								{
+									qWarning(
+										"Plugin panel '%s' asset notification failed: %s",
+										panelId.c_str(),
+										error.what());
+								}
+								catch (...)
+								{
+									qWarning(
+										"Plugin panel '%s' asset notification failed",
+										panelId.c_str());
+								}
+							},
+							Qt::QueuedConnection);
+					}
+				},
+			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
+		});
+
+	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);
+	SetUpFrameStats();
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
 	RefreshTextures();
 	UpdateProject();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
-	// asks for a render straight away -- a material cannot be resolved without a manager.
+	// asks for a render straight away -- a material cannot be resolved without the project store.
 	if (m_Thumbnails)
-		m_Thumbnails->SetAssets(m_Assets.get());
+		m_Thumbnails->SetStore(&m_Project->GetStore());
 
 	m_ContentExplorer->SetRootPath(dataDir);
 
-	// Before the two below, which each act on the root just handed over: the material reset
-	// repopulates the preview, which resolves the material paths it finds against it.
 	editor::SetProjectDataRoot(this, dataDir);
-
-	if (m_MaterialEditor)
-		m_MaterialEditor->Reset();
-
-	if (m_AnimationEditor)
-		m_AnimationEditor->SetAssets(m_Assets.get());
-	if (m_BlendSpaceEditor)
-		m_BlendSpaceEditor->SetAssets(m_Assets.get());
 
 	ShowProjectState();
 
@@ -1146,24 +1204,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	statusBar()->showMessage(
 		QString("Project data: %1")
 			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
-}
-
-void
-MainWindow::DriveViewportsFromTab(QDockWidget* dock)
-{
-	// Tabifying leaves the unselected dock's widget visible to Qt -- it is stacked behind, not
-	// hidden -- so without this every viewport in the editor keeps drawing whatever tab is on top.
-	// visibilityChanged is the signal that follows the tab, which show/hideEvent do not.
-	//
-	// One connection per view, so each dies with the view it drives; closeEvent cuts them all before
-	// that, because a dock hiding would otherwise put a viewport back into the loop on the way out.
-	for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
-	{
-		m_TabVisibility.push_back(
-			connect(dock, &QDockWidget::visibilityChanged, view, [view](bool visible) {
-				view->SetRenderingEnabled(visible);
-			}));
-	}
 }
 
 void
@@ -1207,9 +1247,226 @@ MainWindow::SetUpGpuTimingEntry()
 }
 
 void
+MainWindow::SetUpPluginsEntry()
+{
+	m_PluginsWindow = new editor::PluginsWindow(*m_Plugins, this);
+
+	QMenu* plugins = menuBar()->addMenu("Plugins");
+	auto*  loaded  = plugins->addAction("Loaded Plugins");
+	loaded->setStatusTip("List the plugins this editor loaded at startup.");
+	connect(loaded, &QAction::triggered, this, [this] {
+		m_PluginsWindow->show();
+		m_PluginsWindow->raise();
+		m_PluginsWindow->activateWindow();
+	});
+}
+
+void
+MainWindow::SetUpPluginContributions()
+{
+	const editor::plugins::EditorRegistry& registry = m_Plugins->Contributions();
+	if (registry.Menus().empty() && registry.Actions().empty())
+		return;
+
+	editor::LanguageResolver language;
+	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
+		language.RegisterCatalog(catalog);
+
+	core::str::unordered_str_map<QMenu*> menus;
+	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);
+	const auto toolsMenu = [&]() {
+		if (m_Ui.toolsMenu == nullptr)
+		{
+			m_Ui.toolsMenu = new QMenu("Tools", this);
+			menuBar()->insertMenu(m_Ui.windowMenu->menuAction(), m_Ui.toolsMenu);
+		}
+		menus.emplace(editor::c_ToolsMenuId, m_Ui.toolsMenu);
+	};
+
+	for (const editor::MenuDesc& desc : registry.Menus())
+	{
+		QMenu* menu = nullptr;
+		if (desc.parentId.empty())
+		{
+			menu = new QMenu(desc.title.Resolve(language), this);
+			menuBar()->insertMenu(m_Ui.windowMenu->menuAction(), menu);
+		}
+		else
+		{
+			if (desc.parentId == editor::c_ToolsMenuId)
+				toolsMenu();
+			menu = menus.at(desc.parentId)->addMenu(desc.title.Resolve(language));
+		}
+		menus.emplace(desc.id, menu);
+	}
+
+	for (const editor::ActionDesc& desc : registry.Actions())
+	{
+		if (!desc.extensions.empty())
+			continue;
+		if (desc.menuId == editor::c_ToolsMenuId)
+			toolsMenu();
+		QMenu*                    menu       = menus.at(desc.menuId);
+		QAction*                  action     = menu->addAction(desc.title.Resolve(language));
+		const editor::ActionDesc* descriptor = &desc;
+		action->setEnabled(false);
+		connect(menu, &QMenu::aboutToShow, action, [this, action, descriptor] {
+			bool enabled = false;
+			try
+			{
+				enabled =
+					m_EditorHost != nullptr && descriptor->action->IsEnabled(*m_EditorHost, {});
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Plugin action predicate failed: %s", error.what());
+			}
+			action->setEnabled(enabled);
+		});
+		connect(action, &QAction::triggered, this, [this, descriptor] {
+			if (m_EditorHost == nullptr)
+				return;
+			try
+			{
+				descriptor->action->Invoke(*m_EditorHost, {});
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Action", error.what());
+			}
+		});
+	}
+}
+
+void
+MainWindow::ShowPluginPanel(const std::string_view id)
+{
+	if (m_EditorHost == nullptr)
+		return;
+	if (const auto found = m_PluginDocks.find(id); found != m_PluginDocks.end())
+	{
+		found->second.dock->show();
+		found->second.dock->raise();
+		return;
+	}
+
+	const editor::PanelDesc*       desc      = m_Plugins->Contributions().FindPanel(id);
+	const editor::AssetEditorDesc* assetDesc = nullptr;
+	if (desc == nullptr)
+		for (const auto& candidate : m_Plugins->Contributions().AssetEditors())
+			if (candidate.id == id)
+			{
+				assetDesc = &candidate;
+				break;
+			}
+	if (desc == nullptr && assetDesc == nullptr)
+		throw std::runtime_error("Editor panel is not registered");
+	const auto& title = desc != nullptr ? desc->title : assetDesc->title;
+	auto        dockOwner =
+		std::make_unique<QDockWidget>(title.Resolve(m_EditorHost->GetLanguageResolver()), this);
+	auto* dock = dockOwner.get();
+	dock->setObjectName(QString::fromUtf8(id.data(), static_cast<qsizetype>(id.size())));
+	editor::EditorPanel* panel = desc != nullptr ? desc->factory->Create(*m_EditorHost, dock) :
+	                                               assetDesc->factory->Create(*m_EditorHost, dock);
+	if (panel == nullptr || panel->parentWidget() != dock)
+	{
+		delete panel;
+		throw std::runtime_error("Editor panel factory returned an invalid widget");
+	}
+	dock->setWidget(panel);
+	dock->setTitleBarWidget(new QWidget(dock));
+	dock->setFeatures(QDockWidget::DockWidgetClosable);
+	addDockWidget(Qt::TopDockWidgetArea, dock);
+	if (m_EditorDockAnchor != nullptr)
+		tabifyDockWidget(m_EditorDockAnchor, dock);
+	else
+		m_EditorDockAnchor = dock;
+	m_Ui.windowMenu->addAction(dock->toggleViewAction());
+	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
+		panel->SetActive(editor::IsPanelShown(visible, this));
+	});
+	m_PluginDocks.emplace(std::string(id), PluginDock{ dock, panel });
+	static_cast<void>(dockOwner.release());
+	dock->show();
+	dock->raise();
+}
+
+void
+MainWindow::OpenPluginAsset(const std::string_view key)
+{
+	try
+	{
+		if (m_EditorHost == nullptr)
+			return;
+		std::string extension = std::filesystem::path(key).extension().string();
+		std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+			return static_cast<char>(std::tolower(c));
+		});
+		const editor::AssetEditorDesc* desc = m_Plugins->Contributions().FindAssetEditor(extension);
+		if (desc == nullptr)
+			return;
+
+		ShowPluginPanel(desc->id);
+		auto* panel =
+			dynamic_cast<editor::AssetEditorPanel*>(m_PluginDocks.at(desc->id).panel.data());
+		panel->OpenAsset(key);
+	}
+	catch (const std::exception& error)
+	{
+		QMessageBox::warning(this, "Plugin Asset", error.what());
+	}
+	catch (...)
+	{
+		QMessageBox::warning(this, "Plugin Asset", "The plugin could not open this asset");
+	}
+}
+
+bool
+MainWindow::CanClosePluginPanels()
+{
+	for (const auto& [id, dock] : m_PluginDocks)
+	{
+		static_cast<void>(id);
+		if (auto* panel = dock.panel.data(); panel != nullptr)
+		{
+			try
+			{
+				if (!panel->CanClose())
+					return false;
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(this, "Plugin Panel", error.what());
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void
+MainWindow::ClearPluginPanels()
+{
+	for (const auto& [id, dock] : m_PluginDocks)
+	{
+		delete dock.dock;
+		if (dock.panel != nullptr)
+		{
+			qWarning(
+				"Plugin panel '%s' survived dock teardown; deleting it before project services",
+				id.c_str());
+			delete dock.panel.data();
+		}
+	}
+	m_PluginDocks.clear();
+	m_EditorDockAnchor = nullptr;
+	m_EditorHost.reset();
+}
+
+void
 MainWindow::SetUpFrameStats()
 {
-	if (m_MaterialEditor == nullptr)
+	if (m_EditorHost == nullptr)
 		return;
 
 	m_FrameStats = new QLabel(this);
@@ -1229,14 +1486,13 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock :
-	     { m_MaterialEditorDock, m_AnimationEditorDock, m_BlendSpaceEditorDock })
+	for (QDockWidget* dock : findChildren<QDockWidget*>())
 	{
 		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 		{
 			const QString name = dock->windowTitle();
 
-			// Context is `view`, as in DriveViewportsFromTab: the connection dies with the viewport it
+			// Context is `view`: the connection dies with the viewport it
 			// names rather than outliving it holding its pointer.
 			m_TabVisibility.push_back(connect(
 				dock,
@@ -1263,7 +1519,7 @@ MainWindow::SetUpFrameStats()
 			connect(
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
-				this,
+				m_FrameStats,
 				[this, view, name](
 					double                               meanMs,
 					double                               maxMs,
@@ -1299,11 +1555,38 @@ MainWindow::SetUpFrameStats()
 void
 MainWindow::ShowProjectState()
 {
-	m_MaterialEditorDock->show();
-	m_AnimationEditorDock->show();
-	m_BlendSpaceEditorDock->show();
+	m_EditorDockAnchor->show();
 	m_ContentExplorerDock->show();
-	m_MaterialEditorDock->raise();
+	m_EditorDockAnchor->raise();
 
-	resizeDocks({ m_MaterialEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
+	resizeDocks({ m_EditorDockAnchor, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
+}
+
+void
+MainWindow::ConfigureViewport(RenderTargetWindow& view)
+{
+	if (m_TaaOverride)
+		view.SetTaaEnabled(*m_TaaOverride);
+	if (m_RenderScaleOverride)
+		view.SetRenderScale(*m_RenderScaleOverride);
+	if (m_ReconstructionWidthOverride)
+		view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+	if (m_BloomOverride)
+		view.SetBloomEnabled(*m_BloomOverride);
+	if (m_ColorGradeOverride)
+		view.SetColorGradeEnabled(*m_ColorGradeOverride);
+	view.SetOutlineEnabled(m_OutlineEnabled);
+	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
+}
+
+void
+MainWindow::ClearFrameStats() noexcept
+{
+	for (const QMetaObject::Connection& connection : m_TabVisibility) disconnect(connection);
+	m_TabVisibility.clear();
+	m_FrameStatsSource = nullptr;
+	delete m_FrameStats;
+	m_FrameStats = nullptr;
+	if (m_GpuTiming != nullptr)
+		m_GpuTiming->SetSource(QString());
 }

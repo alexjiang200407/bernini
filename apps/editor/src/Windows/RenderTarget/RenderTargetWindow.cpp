@@ -6,6 +6,7 @@
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <format>
 #include <qcoreevent.h>
 #include <qlogging.h>
@@ -30,6 +31,7 @@
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
+#include <stdexcept>
 
 namespace
 {
@@ -165,7 +167,7 @@ namespace
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
-	QWidget(parent), m_Desc(std::move(desc))
+	editor::IEditorViewport(parent), m_Desc(std::move(desc))
 {
 	// Every method here reaches the bgl objects through it, and MainWindow fills the desc in
 	// immediately after constructing the Renderer -- so a null one is a wiring mistake, not a state
@@ -259,6 +261,19 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// Deliberately not SyncSize'd here: the frame loop must not chase the window's size, or it would
 	// resize the backbuffers on the very next frame and undo the settle timer above.
 	m_FrameClock.start();
+}
+
+void
+RenderTargetWindow::Invoke(const editor::ViewportRenderWork& work)
+{
+	if (m_Desc.assets == nullptr)
+		throw std::runtime_error("Editor viewport asset service is unavailable");
+	m_Desc.renderer->Invoke([&] {
+		editor::RenderContext context{ *m_Desc.renderer->GetGraphics(),
+			                           *m_Desc.renderer->GetScene(),
+			                           *m_Desc.assets };
+		work(context, m_SceneView);
+	});
 }
 
 RenderTargetWindow::~RenderTargetWindow()

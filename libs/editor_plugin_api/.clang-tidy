@@ -1,0 +1,4 @@
+InheritParentConfig: true
+Checks: >
+  misc-include-cleaner
+HeaderFilterRegex: 'libs/editor_plugin_api/include/'

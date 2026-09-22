@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Plugins/plugin_loader.h"
 
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/GroundControls.h"
@@ -14,37 +15,76 @@
 #include "util/recent_projects.h"
 #include "util/rig_containers.h"
 #include <algorithm>
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/MaterialHandle.h>
+#include <cstdint>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/PluginDescriptor.h>
+#include <gamelib/AssetManager.h>
 
 #include <QAction>
+#include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDialog>
 #include <QDir>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QElapsedTimer>
+#include <QEvent>
+#include <QFileDialog>
 #include <QFileSystemModel>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListView>
 #include <QListWidget>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
+#include <QMimeData>
 #include <QModelIndex>
+#include <QPoint>
+#include <QPointF>
 #include <QPointer>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSignalSpy>
+#include <QSplitter>
 #include <QString>
 #include <QStringList>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QTest>
+#include <QTimer>
+#include <QUrl>
+#include <QVariant>
+#include <QtTest/qtestmouse.h>
+#include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <nlohmann/json.hpp>
+#include <qcontainerfwd.h>
 #include <qlist.h>
+#include <qmainwindow.h>
+#include <qnamespace.h>
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
@@ -116,7 +156,59 @@ namespace
 		{
 			return assetlib::Project::Open(ProjectFile());
 		}
+
+		// What main() does before the window: the directories the config names, and no others.
+		[[nodiscard]] std::unique_ptr<editor::plugins::PluginSession>
+		Plugins() const
+		{
+			return std::make_unique<editor::plugins::PluginSession>(
+				editor::plugins::PluginSession::Load(
+					editor::plugins::ConfiguredPluginDirectories(ConfigFile()),
+					editor::plugins::CurrentBuildIdentity(),
+					temp.path().toStdString() / fs::path("plugin-copies")));
+		}
 	};
+
+#if defined(EDITOR_PLUGIN_FIXTURE)
+	struct PluginHeadlessEditor : HeadlessEditor
+	{
+		PluginHeadlessEditor()
+		{
+			const fs::path pluginDirectory = temp.path().toStdString() / fs::path("fixture-plugin");
+			fs::create_directories(pluginDirectory);
+			const fs::path source(EDITOR_PLUGIN_FIXTURE);
+			const fs::path module = source.filename();
+			fs::copy_file(source, pluginDirectory / module, fs::copy_options::overwrite_existing);
+			const editor::plugins::BuildIdentity build = editor::plugins::CurrentBuildIdentity();
+			std::ofstream(pluginDirectory / editor::c_PluginDescriptorFileName)
+				<< nlohmann::json{
+					   { "version", editor::c_PluginDescriptorVersion },
+					   { "id", "sample.fixture" },
+					   { "engineBuildId", build.id },
+					   { "configuration", build.configuration },
+					   { "editor", module.generic_string() },
+					   { "dependencies", nlohmann::json::array() },
+				   }
+					   .dump(2);
+			std::ofstream(ProjectFile())
+				<< nlohmann::json{
+					   { "name", "MyGame" },
+					   { "version", 1 },
+					   { "plugins", { "sample.fixture" } },
+				   }
+					   .dump(2);
+			std::ofstream(ConfigFile())
+				<< nlohmann::json{
+					   { "headless", true },
+					   { "startupProject", ProjectFile().string() },
+					   { "pluginDirectories", { pluginDirectory.string() } },
+					   { "materialEditor", { { "temporalAA", false } } },
+					   { "animationEditor", { { "temporalAA", false } } },
+				   }
+					   .dump(2);
+		}
+	};
+#endif
 
 	[[nodiscard]] QAction*
 	ActionNamed(const MainWindow& window, const QString& text)
@@ -126,6 +218,21 @@ namespace
 			std::ranges::find_if(actions, [&text](const QAction* a) { return a->text() == text; });
 
 		return named == actions.end() ? nullptr : *named;
+	}
+
+	void
+	ObserveViewportTeardown(MainWindow& window, QObject& observer, std::vector<fs::path>& roots)
+	{
+		for (auto* view : window.findChildren<RenderTargetWindow*>())
+		{
+			game::AssetManager* assets = nullptr;
+			view->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				assets = &context.assets;
+			});
+			QObject::connect(view, &QObject::destroyed, &observer, [assets, &roots] {
+				roots.push_back(assets->GetStore().GetDataRoot());
+			});
+		}
 	}
 
 	/** A panel nobody listed anywhere, to prove the walk finds one. */
@@ -146,14 +253,298 @@ namespace
 	};
 }
 
+#if defined(EDITOR_PLUGIN_FIXTURE)
+TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][plugins][render]")
+{
+	const PluginHeadlessEditor    editor;
+	QPointer<editor::EditorPanel> panel;
+	{
+		auto window =
+			std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		QMenu* tools = nullptr;
+		for (QAction* action : window->menuBar()->actions())
+			if (action->menu() != nullptr && action->text() == "Tools")
+				tools = action->menu();
+		REQUIRE(tools != nullptr);
+		Q_EMIT tools->aboutToShow();
+		QAction* show = ActionNamed(*window, "Fixture Panel");
+		REQUIRE(show != nullptr);
+		REQUIRE(show->isEnabled());
+		show->trigger();
+		for (QWidget* widget : window->findChildren<QWidget*>())
+			if (auto* candidate = dynamic_cast<editor::EditorPanel*>(widget))
+				panel = candidate;
+		REQUIRE(panel != nullptr);
+		CHECK(panel->parentWidget()->objectName() == "sample.fixture_panel");
+		SECTION("Normal Qt ownership") {}
+		SECTION("A reparented panel is reclaimed before its host dies")
+		{
+			panel->setParent(nullptr);
+		}
+	}
+	CHECK(panel.isNull());
+}
+
+TEST_CASE(
+	"Asset changes reach only surviving project panels",
+	"[mainwindow][plugins][render][notification]")
+{
+	const PluginHeadlessEditor editor;
+	auto                       window =
+		std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	const auto open = [&window](const QString& id) {
+		for (QAction* action : window->menuBar()->actions())
+			if (action->text() == "Tools" && action->menu() != nullptr)
+				Q_EMIT action->menu()->aboutToShow();
+		auto* action = ActionNamed(*window, id);
+		REQUIRE(action != nullptr);
+		action->trigger();
+		auto* dock = window->findChild<QDockWidget*>(id);
+		REQUIRE(dock != nullptr);
+		return dock->widget();
+	};
+	QPointer<QWidget> first   = open("sample.observer_one");
+	QPointer<QWidget> second  = open("sample.observer_two");
+	auto*             publish = first->findChild<QPushButton*>();
+	REQUIRE(publish != nullptr);
+	auto* key = first->findChild<QLineEdit*>();
+	REQUIRE(key != nullptr);
+	key->setText("Authored/original.bfixture");
+	publish->click();
+	key->setText("Authored/replaced.bfixture");
+	CHECK(first->property("notificationCount").toInt() == 0);
+	CHECK(second->property("notificationCount").toInt() == 0);
+
+	SECTION("Inactive panels receive the owned key once")
+	{
+		first->hide();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		for (const auto& panel : { first, second })
+		{
+			CHECK(panel->property("notificationCount").toInt() == 1);
+			CHECK(panel->findChild<QLabel*>()->text() == "Authored/original.bfixture");
+		}
+		publish->click();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 2);
+		CHECK(second->findChild<QLabel*>()->text() == "Authored/replaced.bfixture");
+	}
+	SECTION("A panel created after publication receives no earlier change")
+	{
+		auto* late = open("sample.observer_late");
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 1);
+		CHECK(late->property("notificationCount").toInt() == 0);
+	}
+	SECTION("A destroyed recipient is skipped")
+	{
+		delete second.data();
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(second.isNull());
+		CHECK(first->property("notificationCount").toInt() == 1);
+	}
+	SECTION("A throwing recipient does not suppress other panels")
+	{
+		first->setProperty("throwOnChange", true);
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(first->property("notificationCount").toInt() == 0);
+		CHECK(second->property("notificationCount").toInt() == 1);
+	}
+	SECTION("A new project host receives no queued changes from its predecessor")
+	{
+		window.reset();
+		REQUIRE(first.isNull());
+		REQUIRE(second.isNull());
+		window = std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		auto* next = open("sample.observer_one");
+		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+		CHECK(next->property("notificationCount").toInt() == 0);
+	}
+}
+
+TEST_CASE(
+	"Lazy plugin viewports preserve defaults and follow render choices",
+	"[mainwindow][plugins][render]")
+{
+	const PluginHeadlessEditor editor;
+	MainWindow                 window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	bool                       overrideDefaults = false;
+	SECTION("Plugin presentation defaults") {}
+	SECTION("Earlier menu choices override plugin defaults")
+	{
+		overrideDefaults = true;
+		auto* scale      = ActionNamed(window, "0.5x");
+		auto* width      = ActionNamed(window, "0.8 px");
+		REQUIRE(scale != nullptr);
+		REQUIRE(width != nullptr);
+		scale->trigger();
+		width->trigger();
+	}
+	auto* taa = ActionNamed(window, "Temporal Antialiasing");
+	REQUIRE(taa != nullptr);
+	CHECK_FALSE(taa->isEnabled());
+	for (QAction* action : window.menuBar()->actions())
+		if (action->text() == "Tools" && action->menu() != nullptr)
+			Q_EMIT action->menu()->aboutToShow();
+	auto* show = ActionNamed(window, "Fixture Panel");
+	REQUIRE(show != nullptr);
+	show->trigger();
+	auto* dock = window.findChild<QDockWidget*>("sample.fixture_panel");
+	REQUIRE(dock != nullptr);
+	auto* viewport = dock->findChild<RenderTargetWindow*>();
+	REQUIRE(viewport != nullptr);
+	CHECK(viewport->GetRenderScale() == Catch::Approx(overrideDefaults ? 0.5f : 0.75f));
+	CHECK(viewport->GetTaaReconstructionWidth() == Catch::Approx(overrideDefaults ? 0.8f : 0.6f));
+	QMenu* render = nullptr;
+	for (QAction* action : window.menuBar()->actions())
+		if (action->text() == "Render")
+			render = action->menu();
+	REQUIRE(render != nullptr);
+	Q_EMIT render->aboutToShow();
+	CHECK(taa->isEnabled());
+	CHECK(taa->isChecked());
+	auto* scale = ActionNamed(window, "1.5x");
+	REQUIRE(scale != nullptr);
+	scale->trigger();
+	CHECK(viewport->GetRenderScale() == Catch::Approx(1.5f));
+}
+
+TEST_CASE("A plugin editor failure stays inside the GUI boundary", "[mainwindow][plugins]")
+{
+	const PluginHeadlessEditor editor;
+	auto                       window =
+		std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto* explorer = window->findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+
+	QTimer::singleShot(0, [] {
+		for (QWidget* widget : QApplication::topLevelWidgets())
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->accept();
+	});
+	CHECK_NOTHROW(Q_EMIT explorer->AssetOpenRequested("Authored/failure.bfixture"));
+	CHECK(window->findChild<QWidget*>("sample.throwing_editor_child") == nullptr);
+}
+#endif
+
+TEST_CASE(
+	"Replacing a project replaces its built-in panels and render services",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor             first;
+	const HeadlessEditor             second;
+	MainWindow                       window(first.Plugins(), first.Open(), first.ConfigFile());
+	QPointer<MaterialEditorWindow>   material  = window.findChild<MaterialEditorWindow*>();
+	QPointer<AnimationEditorWindow>  animation = window.findChild<AnimationEditorWindow*>();
+	QPointer<BlendSpaceEditorWindow> blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(material != nullptr);
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+	auto* scale = ActionNamed(window, "0.5x");
+	REQUIRE(scale != nullptr);
+	scale->trigger();
+	auto* open = ActionNamed(window, "Open Project...");
+	REQUIRE(open != nullptr);
+
+	const auto sceneSlots = [&] {
+		std::array<uint32_t, 2> allocations{};
+		window.findChild<RenderTargetWindow*>()->Invoke(
+			[&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				const auto probeMaterial = context.scene.CreatePbrMaterial({});
+				const auto probeGeom = context.scene.AddPlaneGeom(1, 1, 1.0f, 1.0f, probeMaterial);
+				allocations          = { probeGeom.handle.index, probeMaterial.byteOffset };
+				context.scene.DeleteGeom(probeGeom);
+				context.scene.DeleteMaterial(probeMaterial);
+			});
+		return allocations;
+	};
+	const auto baseline = sceneSlots();
+	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
+	{
+		std::vector<fs::path> releasedRoots;
+		QObject               teardownObserver;
+		ObserveViewportTeardown(window, teardownObserver, releasedRoots);
+		material                  = window.findChild<MaterialEditorWindow*>();
+		animation                 = window.findChild<AnimationEditorWindow*>();
+		blend                     = window.findChild<BlendSpaceEditorWindow*>();
+		const bool nativeDisabled = QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+		QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+		QElapsedTimer deadline;
+		deadline.start();
+		QTimer      chooser;
+		bool        selected = false;
+		QString     dialogMessage;
+		QStringList selection;
+		QObject::connect(&chooser, &QTimer::timeout, &window, [&] {
+			for (QWidget* widget : QApplication::topLevelWidgets())
+			{
+				if (auto* message = qobject_cast<QMessageBox*>(widget))
+				{
+					dialogMessage = message->text();
+					message->reject();
+				}
+				if (deadline.elapsed() > 10000)
+				{
+					if (auto* dialog = qobject_cast<QDialog*>(widget))
+						dialog->reject();
+					continue;
+				}
+				if (auto* dialog = qobject_cast<QFileDialog*>(widget);
+				    dialog != nullptr && !selected)
+				{
+					auto* fileName = dialog->findChild<QLineEdit*>("fileNameEdit");
+					if (fileName == nullptr)
+						continue;
+					fileName->setText(QString::fromStdString(second.ProjectFile().string()));
+					selection = dialog->selectedFiles();
+					selected  = true;
+					static_cast<QDialog*>(dialog)->accept();
+				}
+			}
+		});
+		chooser.start(10);
+		open->trigger();
+		chooser.stop();
+		QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs, nativeDisabled);
+		INFO(dialogMessage.toStdString());
+		INFO(selection.join(";").toStdString());
+		REQUIRE(selected);
+		CHECK(material.isNull());
+		CHECK(animation.isNull());
+		CHECK(blend.isNull());
+		REQUIRE(releasedRoots.size() == c_ViewportCount);
+		for (const auto& root : releasedRoots)
+			CHECK(root == (replacementIndex == 0 ? first.DataRoot() : second.DataRoot()));
+		auto* replacement = window.findChild<MaterialEditorWindow*>();
+		REQUIRE(replacement != nullptr);
+		CHECK(replacement->GetDataRoot() == second.DataRoot());
+		const auto views = window.findChildren<RenderTargetWindow*>();
+		REQUIRE(views.size() == c_ViewportCount);
+		for (auto* view : views)
+		{
+			CHECK(view->GetRenderScale() == Catch::Approx(0.5f));
+			fs::path root;
+			view->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef&) {
+				root = context.assets.GetStore().GetDataRoot();
+			});
+			CHECK(root == second.DataRoot());
+		}
+		CHECK(sceneSlots() == baseline);
+	}
+}
+
 TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
 	std::vector<QPointer<RenderTargetWindow>> viewports;
+	std::vector<fs::path>                     releasedRoots;
+	QObject                                   teardownObserver;
 
 	{
-		auto window = std::make_unique<MainWindow>(editor.Open(), editor.ConfigFile());
+		auto window =
+			std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		ObserveViewportTeardown(*window, teardownObserver, releasedRoots);
 
 		for (RenderTargetWindow* view : window->findChildren<RenderTargetWindow*>())
 			viewports.emplace_back(view);
@@ -169,13 +560,15 @@ TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][
 	// The QPointers are the part that can fail cleanly: a viewport that survives its window without
 	// touching the Renderer leaves one non-null rather than crashing.
 	for (const QPointer<RenderTargetWindow>& view : viewports) CHECK(view.isNull());
+	REQUIRE(releasedRoots.size() == c_ViewportCount);
+	for (const auto& root : releasedRoots) CHECK(root == editor.DataRoot());
 }
 
 TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	// The project is open by the time the constructor returns.
 	auto* materials = window.findChild<MaterialEditorWindow*>();
@@ -224,7 +617,7 @@ struct TintSurface : ISurfaceSource
 };
 )");
 
-	const MainWindow window(assetlib::Project::Open(other), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), assetlib::Project::Open(other), editor.ConfigFile());
 
 	auto* materials = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(materials != nullptr);
@@ -246,11 +639,11 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
-	auto* materialDock  = window.findChild<QDockWidget*>("MaterialEditorDock");
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* materialDock  = window.findChild<QDockWidget*>("bernini.material");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
 	auto* materials     = window.findChild<MaterialEditorWindow*>();
 	auto* preview       = window.findChild<MaterialPreviewWindow*>();
 
@@ -263,13 +656,11 @@ TEST_CASE(
 	materialDock->raise();
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
-	// apples.bmesh names its materials relative to the shared asset directory, so that is the root
-	// the panel has to resolve them against -- not the scaffolded project's empty one.
+	// An external mesh exercises the plain-file preview without retargeting the project host.
 	const fs::path dataRoot = fs::absolute("assets/Data");
 	const fs::path mesh     = dataRoot / "Derived" / "Meshes" / "apples.bmesh";
 	REQUIRE(fs::exists(mesh));
 
-	materials->SetDataRoot(QString::fromStdString(dataRoot.string()));
 	preview->LoadMesh(mesh);
 	REQUIRE_FALSE(preview->MeshPath().empty());
 
@@ -298,7 +689,7 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 
@@ -328,7 +719,7 @@ TEST_CASE(
 })";
 	core::file::write_atomic(editor.ConfigFile(), config);
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	const auto* material = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(material != nullptr);
@@ -385,7 +776,7 @@ TEST_CASE(
 })";
 	core::file::write_atomic(editor.ConfigFile(), config);
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	const auto* material = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(material != nullptr);
@@ -433,7 +824,7 @@ TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 	QCoreApplication::processEvents();
 
@@ -454,7 +845,7 @@ TEST_CASE("The timing graph turns GPU timing on while it is open", "[mainwindow]
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	QAction* timing = ActionNamed(window, "GPU Pass Timing");
 	QAction* graph  = ActionNamed(window, "GPU Timing Graph");
@@ -520,6 +911,7 @@ TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup]
 
 	{
 		const MainWindow window(
+			editor.Plugins(),
 			editor.Open(),
 			editor.ConfigFile(),
 			[&](int, int, const QString& label) { labels.push_back(label); });
@@ -547,7 +939,7 @@ TEST_CASE(
 	const HeadlessEditor editor;
 
 	{
-		const MainWindow window(editor.Open(), editor.ConfigFile());
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	}
 
 	// Beside the config the window read, which is how a test keeps off the shipping editor's list.
@@ -587,10 +979,10 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
-	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* blendDock     = window.findChild<QDockWidget*>("bernini.blend_space");
 	REQUIRE(animationDock != nullptr);
 	REQUIRE(blendDock != nullptr);
 
@@ -606,7 +998,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
@@ -621,13 +1013,39 @@ TEST_CASE(
 }
 
 TEST_CASE(
+	"Animation properties fit beside a visible scrollbar",
+	"[mainwindow][animation][layout][render]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.resize(1200, 700);
+	window.show();
+	auto* dock = window.findChild<QDockWidget*>("bernini.animation");
+	REQUIRE(dock != nullptr);
+	dock->show();
+	dock->raise();
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	auto* scroll   = animation->findChild<QScrollArea*>();
+	auto* splitter = animation->findChild<QSplitter*>();
+	REQUIRE(scroll != nullptr);
+	REQUIRE(splitter != nullptr);
+	scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	splitter->setSizes({ scroll->minimumWidth(), 1000 });
+	QCoreApplication::processEvents();
+	REQUIRE(scroll->verticalScrollBar()->isVisible());
+	CHECK(scroll->widget()->width() <= scroll->viewport()->width());
+	CHECK(scroll->horizontalScrollBar()->maximum() == 0);
+}
+
+TEST_CASE(
 	"A blend set with nothing to show it on still opens, and still edits",
 	"[mainwindow][blendspace][render]")
 {
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(blend != nullptr);
@@ -670,7 +1088,7 @@ TEST_CASE(
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(blend != nullptr);
@@ -717,11 +1135,11 @@ TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][b
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
-	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
-	auto* blendDock     = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* blendDock     = window.findChild<QDockWidget*>("bernini.blend_space");
 	auto* blend         = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(animationDock != nullptr);
 	REQUIRE(blendDock != nullptr);
@@ -744,7 +1162,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
@@ -768,10 +1186,10 @@ TEST_CASE(
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	MainWindow window(editor.Open(), editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
-	auto* blendDock = window.findChild<QDockWidget*>("BlendSpaceEditorDock");
+	auto* blendDock = window.findChild<QDockWidget*>("bernini.blend_space");
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
 	auto* explorer  = window.findChild<ContentExplorerWindow*>();
 	REQUIRE(blendDock != nullptr);
@@ -824,7 +1242,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(editor.Open(), editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
@@ -852,4 +1270,259 @@ TEST_CASE(
 			return slider->isVisibleTo(ground);
 		}));
 	}
+}
+
+TEST_CASE(
+	"Blend documents open through the registered asset editor and reuse its startup tab",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       set = assetlib::BlendSet();
+	set.animations                 = "Derived/Animations/absent.banim";
+	const std::string key          = "Authored/Animations/solo.bblend";
+	store.Save(set, key);
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+	auto* dock = window.findChild<QDockWidget*>("bernini.blend_space");
+	REQUIRE(dock != nullptr);
+	auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+	REQUIRE(panel != nullptr);
+	auto* explorer = window.findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+	for (int request = 0; request < 2; ++request)
+	{
+		Q_EMIT explorer->AssetOpenRequested(QString::fromStdString(key));
+		QCoreApplication::processEvents();
+		CHECK(window.findChildren<QDockWidget*>("bernini.blend_space").size() == 1);
+		CHECK(dock->widget() == panel);
+		CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key, set.animations });
+	}
+	window.findChild<QDockWidget*>("bernini.material")->raise();
+	QCoreApplication::processEvents();
+	CHECK(panel->GetHeldAssets().empty());
+}
+
+TEST_CASE(
+	"Blend plugin close commits a pending threshold and vetoes a failed save",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       set = assetlib::BlendSet();
+	set.animations                 = "Derived/Animations/absent.banim";
+	set.spaces                     = { { "Speed", { { "Walk", 0.0f }, { "Run", 1.0f } } } };
+	const std::string key          = "Authored/Animations/pending.bblend";
+	store.Save(set, key);
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto*      dock = window.findChild<QDockWidget*>("bernini.blend_space");
+	REQUIRE(dock != nullptr);
+	auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
+	REQUIRE(panel != nullptr);
+	panel->OpenAsset(key);
+	auto* samples   = panel->findChild<QListWidget*>("BlendSpaceSamples");
+	auto* threshold = panel->findChild<QDoubleSpinBox*>("BlendSampleThreshold");
+	REQUIRE(samples != nullptr);
+	REQUIRE(threshold != nullptr);
+	samples->setCurrentRow(0);
+	REQUIRE(threshold->isEnabled());
+	threshold->setValue(0.25);
+	CHECK(store.Load<assetlib::BlendSet>(key).spaces.front().samples.front().parameter == 0.0f);
+	const auto path = store.ResolveWritePath(key);
+	REQUIRE(fs::remove(path));
+	REQUIRE(fs::create_directory(path));
+	QTimer dismiss;
+	QObject::connect(&dismiss, &QTimer::timeout, &window, [] {
+		for (auto* widget : QApplication::topLevelWidgets())
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->accept();
+	});
+	dismiss.start(10);
+	CHECK_FALSE(panel->CanClose());
+	dismiss.stop();
+	CHECK(threshold->value() == 0.25);
+	REQUIRE(fs::remove(path));
+	CHECK(panel->CanClose());
+	CHECK(store.Load<assetlib::BlendSet>(key).spaces.front().samples.front().parameter == 0.25f);
+}
+
+TEST_CASE(
+	"Rig plugin viewports accept environment drops and restore the project configuration",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor editor;
+	const auto           configured = editor.DataRoot() / "Authored/Environments/configured.benv";
+	std::ofstream(editor.ConfigFile()) << nlohmann::json{
+		{ "headless", true },
+		{ "startupProject", editor.ProjectFile().generic_string() },
+		{ "materialEditor", { { "temporalAA", false } } },
+		{ "animationEditor",
+		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } }
+	}.dump(2);
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	for (const auto* id : { "bernini.animation", "bernini.blend_space" })
+	{
+		auto* dock = window.findChild<QDockWidget*>(id);
+		REQUIRE(dock != nullptr);
+		auto* panel = dynamic_cast<editor::EditorPanel*>(dock->widget());
+		REQUIRE(panel != nullptr);
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/configured.benv" });
+		auto* view = panel->findChild<RenderTargetWindow*>();
+		REQUIRE(view != nullptr);
+		QMimeData mime;
+		mime.setUrls(
+			{ QUrl::fromLocalFile(
+				QString::fromStdString(
+					(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+		QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+		QCoreApplication::sendEvent(view, &enter);
+		REQUIRE(enter.isAccepted());
+		QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+		QCoreApplication::sendEvent(view, &drop);
+		REQUIRE(drop.isAccepted());
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/dropped.benv" });
+		panel->SetActive(false);
+		CHECK(
+			panel->GetHeldAssets() ==
+			std::vector<std::string>{ "Authored/Environments/configured.benv" });
+	}
+}
+
+TEST_CASE(
+	"Material plugin viewport receives native-widget picking input",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+	auto* preview = window.findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	CHECK(view->parentWidget() == preview);
+	QSignalSpy picked(preview, &MaterialPreviewWindow::SubmeshPicked);
+	QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->rect().center());
+	REQUIRE(picked.count() == 1);
+	CHECK(picked.front().front().toInt() == 0);
+}
+
+TEST_CASE(
+	"Material retains its configured project environment without an explicit data root",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	const auto           configured = editor.DataRoot() / "Authored/Environments/pending.benv";
+	std::ofstream(editor.ConfigFile()) << nlohmann::json{
+		{ "headless", true },
+		{ "startupProject", editor.ProjectFile().generic_string() },
+		{ "materialEditor",
+		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } },
+		{ "animationEditor", { { "temporalAA", false }, { "environmentMap", "" } } }
+	}.dump(2);
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(panel != nullptr);
+	auto* preview = panel->findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	const std::vector<std::string> expected{ "Authored/Environments/pending.benv" };
+	// An unavailable environment remains held while the user repairs its files.
+	CHECK(panel->GetHeldAssets() == expected);
+	QMimeData mime;
+	mime.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString(
+				(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(view, &enter);
+	REQUIRE(enter.isAccepted());
+	QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(view, &drop);
+	REQUIRE(drop.isAccepted());
+	CHECK(
+		panel->GetHeldAssets() == std::vector<std::string>{ "Authored/Environments/dropped.benv" });
+	panel->Reset();
+	CHECK(panel->GetHeldAssets() == expected);
+}
+
+TEST_CASE(
+	"An explorer bake refreshes the registered Material panel",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor       editor;
+	const assetlib::AssetStore store(editor.DataRoot());
+	auto                       material = assetlib::BMaterial();
+	material.name                       = "Notification";
+	material.pbr.baseColorTexture       = "Derived/BakedTextures/before.ktx2";
+	const std::string key               = "Authored/Materials/notification.bmaterial";
+	store.Save(material, key);
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(panel != nullptr);
+	REQUIRE(dynamic_cast<editor::EditorPanel*>(panel) != nullptr);
+	QPushButton* open = nullptr;
+	for (auto* button : panel->findChildren<QPushButton*>())
+		if (button->text() == "Open...")
+			open = button;
+	REQUIRE(open != nullptr);
+	REQUIRE(open->isEnabled());
+	const bool nativeDisabled = QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+	QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+	QTimer        chooser;
+	QElapsedTimer deadline;
+	deadline.start();
+	bool selected = false;
+	QObject::connect(&chooser, &QTimer::timeout, &window, [&] {
+		for (auto* widget : QApplication::topLevelWidgets())
+		{
+			if (auto* message = qobject_cast<QMessageBox*>(widget))
+				message->reject();
+			if (auto* dialog = qobject_cast<QFileDialog*>(widget))
+			{
+				if (deadline.elapsed() > 10000)
+				{
+					dialog->reject();
+					continue;
+				}
+				if (auto* name = dialog->findChild<QLineEdit*>("fileNameEdit"))
+				{
+					name->setText(QString::fromStdString(store.ResolveWritePath(key).string()));
+					selected = true;
+					static_cast<QDialog*>(dialog)->accept();
+				}
+			}
+		}
+	});
+	chooser.start(10);
+	open->click();
+	chooser.stop();
+	QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs, nativeDisabled);
+	REQUIRE(selected);
+	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
+	const auto shows = [panel](const QString& text) {
+		for (auto* label : panel->findChildren<QLabel*>())
+			if (label->text().contains(text))
+				return true;
+		return false;
+	};
+	REQUIRE(shows("before.ktx2"));
+	const auto file               = store.ResolveWritePath(key);
+	const auto stamp              = fs::last_write_time(file);
+	material.pbr.baseColorTexture = "Derived/BakedTextures/after.ktx2";
+	store.Save(material, key);
+	fs::last_write_time(file, stamp);
+	CHECK_FALSE(shows("after.ktx2"));
+	auto* explorer = window.findChild<ContentExplorerWindow*>();
+	REQUIRE(explorer != nullptr);
+	Q_EMIT explorer->MaterialBaked(QString::fromStdString(key));
+	QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+	CHECK(shows("after.ktx2"));
+	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
 }

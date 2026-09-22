@@ -1,8 +1,8 @@
 #include "Render/Renderer.h"
-#include "Render/environment.h"
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/containers/fixed_buffer.h>
+#include <editor_sdk/environment.h>
 
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
@@ -217,4 +217,24 @@ TEST_CASE("A view that bound nothing holds nothing", "[environment]")
 
 	CHECK(editor::GetHeldOpenEnvironment(binding).isEmpty());
 	CHECK(editor::GetHeldOpenEnvironment(editor::EnvironmentBinding()).isEmpty());
+}
+
+TEST_CASE("Releasing a preview environment frees every owned texture", "[environment][render]")
+{
+	Fixture    fixture;
+	const bool ran = fixture.renderer->Invoke([&] {
+		editor::EnvironmentBinding binding;
+		binding.bound       = fixture.AddEnvironment();
+		binding.boundPath   = "preview.benv";
+		const auto previous = binding.bound;
+
+		editor::ReleaseEnvironment(fixture.Scene(), binding);
+		CHECK_FALSE(fixture.StillAlive(previous.irradiance));
+		CHECK_FALSE(fixture.StillAlive(previous.prefilter));
+		CHECK_FALSE(fixture.StillAlive(previous.skybox));
+		CHECK(binding.boundPath.empty());
+		CHECK_NOTHROW(editor::ReleaseEnvironment(fixture.Scene(), binding));
+		return true;
+	});
+	REQUIRE(ran);
 }

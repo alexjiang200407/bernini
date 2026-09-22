@@ -28,9 +28,11 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   forward-declares `Rml::Context`, `Rml::ElementDocument`, `Rml::RenderInterface` and `lua_State`,
   and includes no RmlUi header. A client that drives a context includes `<RmlUi/Core.h>` itself.
   `UiRenderer`'s RmlUi half is behind an implementation its header does not name, so a client that
-  only *draws* a UI compiles no RmlUi header at all. The target is linked `PUBLIC` with its includes
-  imported as SYSTEM, so `enable_strict_compiler`'s warnings-as-errors never compile them — which is
-  why `apps/editor`, which links `gamelib` and never touches a context, pays only the link.
+  only *draws* a UI compiles no RmlUi header at all. A static game build links RmlUi `PUBLIC`. An
+  editor SDK build instead absorbs the static Core, Debugger and Lua archives into shared
+  `gamelib`, then publishes their headers as SYSTEM includes; every native plugin calls the same
+  process copy. The independent SDK fixture includes `Context.h` and calls `Context::Update`, which
+  pins both the header and exported-symbol side of that contract.
 
 * **Every path is a mount key, never a host path.** `UiFileInterface` reads through the
   `AssetStore`'s `core::file::IFileSystem`, so `Authored/UI/menu.rml` resolves identically from a

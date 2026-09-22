@@ -1,0 +1,172 @@
+#include <assetlib/envmap.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/SkyboxDesc.h>
+#include <bgl/glm.h>
+#include <editor_sdk/environment.h>
+
+#include <QLoggingCategory>
+
+#include <assetlib/AssetStore.h>
+#include <assetlib_structs/ImageData.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <initializer_list>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <string>
+#include <utility>
+
+namespace editor
+{
+	AppliedEnvironment
+	ApplyEnvironment(
+		bgl::IScene*                scene,
+		bgl::ISceneView*            view,
+		const std::string&          benvPath,
+		const assetlib::AssetStore& store,
+		std::optional<float>        exposureOverride,
+		const SkyPresentation&      sky,
+		const char*                 who)
+	{
+		auto applied = AppliedEnvironment();
+
+		if (benvPath.empty())
+			return applied;
+
+		auto env = assetlib::ResolvedEnvironment();
+		try
+		{
+			env = store.ResolveEnvironment(std::filesystem::path(benvPath));
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("%s: cannot load environment '%s': %s", who, benvPath.c_str(), e.what());
+			return applied;
+		}
+
+		// The lighting's own exposure is the value derived from these maps, so it is the right
+		// default; config only overrules it deliberately.
+		view->SetExposure(exposureOverride.value_or(env.maps.exposure));
+
+		try
+		{
+			const auto irradiance = scene->AddTextureAsset(std::move(env.maps.irradiance));
+			const auto prefilter  = scene->AddTextureAsset(std::move(env.maps.prefilter));
+
+			// Both or neither: they are the diffuse and specular convolutions of one radiance, so a
+			// view holding one of them would light the scene from half an environment.
+			if (irradiance.textureSlot && prefilter.textureSlot)
+			{
+				view->SetEnvironmentMap({ irradiance, prefilter });
+				applied.irradiance = irradiance;
+				applied.prefilter  = prefilter;
+			}
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("%s: SetEnvironmentMap failed: %s", who, e.what());
+		}
+
+		try
+		{
+			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
+			    skybox.textureSlot)
+			{
+				auto desc          = bgl::SkyboxDesc();
+				desc.skyboxCubeTex = skybox;
+				desc.mipLevel      = sky.mipLevel.value_or(env.skyMipLevel);
+				desc.rotationY     = env.skyRotationY;
+				desc.followsView   = sky.followsView;
+				desc.opacity       = sky.opacity;
+				desc.backdrop      = glm::vec3(sky.backdropGrey);
+				view->SetSkyBox(desc);
+				applied.skybox = skybox;
+			}
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("%s: SetSkyBox failed: %s", who, e.what());
+		}
+
+		return applied;
+	}
+
+	AppliedEnvironment
+	ReplaceEnvironment(
+		bgl::IScene*              scene,
+		const AppliedEnvironment& previous,
+		const AppliedEnvironment& applied)
+	{
+		const auto replace = [scene](bgl::TextureAssetHandle prev, bgl::TextureAssetHandle next) {
+			if (!next.textureSlot)
+				return prev;
+			if (prev.textureSlot && prev.textureSlot != next.textureSlot)
+				scene->DeleteTextureAsset(prev);
+			return next;
+		};
+
+		auto bound       = AppliedEnvironment();
+		bound.irradiance = replace(previous.irradiance, applied.irradiance);
+		bound.prefilter  = replace(previous.prefilter, applied.prefilter);
+		bound.skybox     = replace(previous.skybox, applied.skybox);
+		return bound;
+	}
+
+	void
+	ReleaseEnvironment(bgl::IScene* scene, EnvironmentBinding& binding)
+	{
+		for (const auto texture :
+		     { binding.bound.irradiance, binding.bound.prefilter, binding.bound.skybox })
+			if (texture.textureSlot)
+				scene->DeleteTextureAsset(texture);
+		binding.bound = {};
+		binding.boundPath.clear();
+	}
+
+	QStringList
+	GetHeldOpenEnvironment(const EnvironmentBinding& binding)
+	{
+		if (binding.boundPath.empty())
+			return {};
+
+		return { QString::fromStdString(binding.boundPath) };
+	}
+
+	std::optional<std::string>
+	GetEnvironmentToRestore(const EnvironmentBinding& binding)
+	{
+		if (binding.configured.environmentMap.empty() ||
+		    binding.boundPath == binding.configured.environmentMap)
+			return std::nullopt;
+
+		return binding.configured.environmentMap;
+	}
+
+	void
+	BindEnvironment(
+		bgl::IScene*                scene,
+		bgl::ISceneView*            view,
+		EnvironmentBinding&         binding,
+		const std::string&          benvPath,
+		const assetlib::AssetStore& store,
+		const char*                 who)
+	{
+		const AppliedEnvironment applied = ApplyEnvironment(
+			scene,
+			view,
+			benvPath,
+			store,
+			binding.configured.exposureOverride,
+			binding.configured.sky,
+			who);
+
+		// After the new one is bound, never before: releasing first would leave the view naming a
+		// slot that had been handed back.
+		binding.bound     = ReplaceEnvironment(scene, binding.bound, applied);
+		binding.boundPath = benvPath;
+	}
+}

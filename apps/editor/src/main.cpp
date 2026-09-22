@@ -10,6 +10,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <qbytearrayview.h>
 #include <qcontainerfwd.h>
@@ -24,9 +25,11 @@
 #include <string_view>
 #include <tracy/Tracy.hpp>
 #include <utility>
+#include <vector>
 
 #include "EditorStyle.h"
 #include "MainWindow.h"
+#include "Plugins/plugin_loader.h"
 #include "Startup/ProjectLauncher.h"
 #include "Startup/StartupScreen.h"
 #include "Startup/startup_project.h"
@@ -113,12 +116,35 @@ main(int argc, char* argv[])
 				.arg(QString::fromUtf8(e.what()), directory));
 	};
 
+	// Plugins first, because a project opens against their kinds: every descriptor under plugins/
+	// beside the executable, then whatever config.json adds. The window registers their editor
+	// halves once it builds.
+	auto plugins = std::unique_ptr<editor::plugins::PluginSession>();
+	try
+	{
+		std::vector<std::filesystem::path> directories =
+			editor::plugins::DiscoverPluginDirectories(editor::plugins::DefaultPluginRoot());
+		for (std::filesystem::path& directory :
+		     editor::plugins::ConfiguredPluginDirectories(configPath))
+			directories.push_back(std::move(directory));
+		plugins =
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
+				directories,
+				editor::plugins::CurrentBuildIdentity(),
+				editor::plugins::DefaultPluginCopyRoot()));
+	}
+	catch (const std::exception& e)
+	{
+		couldNotStart(e);
+		return 1;
+	}
+
 	// Opened before anything is built, because the project decides which surfaces the renderer
 	// compiles: without one there is nothing to compile for, and the landing page asks instead.
 	auto startupProject = editor::StartupProject();
 	try
 	{
-		startupProject = editor::OpenStartupProject(ProjectArgument(), configPath);
+		startupProject = editor::OpenStartupProject(ProjectArgument(), configPath, *plugins);
 	}
 	catch (const std::exception& e)
 	{
@@ -134,6 +160,7 @@ main(int argc, char* argv[])
 
 		editor::ProjectLauncher launcher(
 			editor::ReadRecentProjects(editor::RecentProjectsFileBeside(configPath)),
+			*plugins,
 			startupProject.failure);
 		if (launcher.exec() != QDialog::Accepted)
 			return 0;
@@ -158,7 +185,11 @@ main(int argc, char* argv[])
 		// wall clock of a cold start is made of nests under this.
 		ZoneScopedN("editor startup");
 
-		window.emplace(std::move(*startupProject.project), configPath, startup.Sink());
+		window.emplace(
+			std::move(plugins),
+			std::move(*startupProject.project),
+			configPath,
+			startup.Sink());
 	}
 	catch (const std::exception& e)
 	{

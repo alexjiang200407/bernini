@@ -1,6 +1,8 @@
 #include "Startup/ProjectLauncher.h"
 #include "Startup/startup_project.h"
 
+#include "Plugins/plugin_loader.h"
+
 #include <QDialog>
 #include <QLabel>
 #include <QListWidget>
@@ -27,6 +29,12 @@ namespace
 	struct Projects
 	{
 		QTemporaryDir temp;
+
+		// main() loads plugins before it opens anything; these cases load none.
+		editor::plugins::PluginSession plugins = editor::plugins::PluginSession::Load(
+			{},
+			editor::plugins::CurrentBuildIdentity(),
+			fs::path(temp.path().toStdWString()) / "plugin-copies");
 
 		[[nodiscard]] fs::path
 		Root() const
@@ -62,7 +70,7 @@ TEST_CASE("The config's startup project is the one the editor opens", "[startup]
 	const fs::path game = projects.Create("Game");
 
 	const editor::StartupProject startup =
-		editor::OpenStartupProject(fs::path(), projects.Config(game));
+		editor::OpenStartupProject(fs::path(), projects.Config(game), projects.plugins);
 
 	REQUIRE(startup.project.has_value());
 	CHECK(startup.project->GetName() == "Game");
@@ -76,7 +84,8 @@ TEST_CASE("A project named on the command line outranks the config's", "[startup
 	const fs::path game  = projects.Create("Game");
 	const fs::path other = projects.Create("Other");
 
-	const editor::StartupProject startup = editor::OpenStartupProject(other, projects.Config(game));
+	const editor::StartupProject startup =
+		editor::OpenStartupProject(other, projects.Config(game), projects.plugins);
 
 	REQUIRE(startup.project.has_value());
 	CHECK(startup.project->GetName() == "Other");
@@ -87,7 +96,7 @@ TEST_CASE("With no project named, the editor lands on the landing page", "[start
 	const Projects projects;
 
 	const editor::StartupProject startup =
-		editor::OpenStartupProject(fs::path(), projects.Config(fs::path()));
+		editor::OpenStartupProject(fs::path(), projects.Config(fs::path()), projects.plugins);
 
 	CHECK_FALSE(startup.project.has_value());
 
@@ -103,7 +112,7 @@ TEST_CASE("A project that will not open lands on the landing page, saying why", 
 	const fs::path gone = projects.Root() / "Gone" / "Gone.bproj";
 
 	const editor::StartupProject startup =
-		editor::OpenStartupProject(fs::path(), projects.Config(gone));
+		editor::OpenStartupProject(fs::path(), projects.Config(gone), projects.plugins);
 
 	CHECK_FALSE(startup.project.has_value());
 	CHECK(startup.failure.contains(QString::fromStdWString(gone.wstring())));
@@ -115,7 +124,7 @@ TEST_CASE("The landing page lists recent projects and opens the one chosen", "[s
 	const fs::path game  = projects.Create("Game");
 	const fs::path other = projects.Create("Other");
 
-	editor::ProjectLauncher launcher({ other, game });
+	editor::ProjectLauncher launcher({ other, game }, projects.plugins);
 
 	auto* list = launcher.findChild<QListWidget*>("RecentProjects");
 	REQUIRE(list != nullptr);
@@ -131,11 +140,15 @@ TEST_CASE("The landing page lists recent projects and opens the one chosen", "[s
 
 TEST_CASE("The landing page says why the startup project did not open", "[startup]")
 {
-	const editor::ProjectLauncher quiet({});
+	const Projects                projects;
+	const editor::ProjectLauncher quiet({}, projects.plugins);
 	CHECK(quiet.findChild<QLabel*>("LauncherNotice") == nullptr);
 
-	const editor::ProjectLauncher told({}, QStringLiteral("Could not open Gone.bproj"));
-	const auto*                   notice = told.findChild<QLabel*>("LauncherNotice");
+	const editor::ProjectLauncher told(
+		{},
+		projects.plugins,
+		QStringLiteral("Could not open Gone.bproj"));
+	const auto* notice = told.findChild<QLabel*>("LauncherNotice");
 	REQUIRE(notice != nullptr);
 	CHECK(notice->text() == QStringLiteral("Could not open Gone.bproj"));
 }

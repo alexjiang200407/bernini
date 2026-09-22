@@ -1,10 +1,13 @@
 #pragma once
+#include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <cassert>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace assetlib
 {
@@ -36,7 +39,13 @@ namespace assetlib
 		 * @throws std::runtime_error if the file is missing or malformed.
 		 */
 		static Project
-		Open(const std::filesystem::path& projectFile);
+		Open(
+			const std::filesystem::path&       projectFile,
+			std::shared_ptr<AssetKindRegistry> registry = {});
+
+		/** Plugin IDs required before this project can be opened. */
+		[[nodiscard]] static std::vector<std::string>
+		PluginIdsOf(const std::filesystem::path& projectFile);
 
 		/**
 		 * Writes the current metadata back to the project file.
@@ -67,6 +76,12 @@ namespace assetlib
 		GetProjectFile() const noexcept
 		{
 			return m_ProjectFile;
+		}
+
+		[[nodiscard]] const std::vector<std::string>&
+		GetPluginIds() const noexcept
+		{
+			return m_PluginIds;
 		}
 
 		std::filesystem::path
@@ -106,6 +121,12 @@ namespace assetlib
 			return *m_Store;
 		}
 
+		[[nodiscard]] AssetKindRegistry&
+		GetKindRegistry() noexcept
+		{
+			return *m_Registry;
+		}
+
 		/** Re-points the store at the data directory. */
 		void
 		ReloadStore();
@@ -119,10 +140,12 @@ namespace assetlib
 		// Held rather than built per call: GetStore hands out a reference and is noexcept, and the
 		// constructor throws on a data root that has gone. optional because a Project is
 		// default-constructed before Open fills it in.
-		std::optional<AssetStore> m_Store;
+		std::optional<AssetStore>          m_Store;
+		std::shared_ptr<AssetKindRegistry> m_Registry = std::make_shared<AssetKindRegistry>();
 
-		std::string           m_Name;
-		std::filesystem::path m_ProjectFile;
-		int                   m_FormatVersion = c_FormatVersion;
+		std::string              m_Name;
+		std::vector<std::string> m_PluginIds;
+		std::filesystem::path    m_ProjectFile;
+		int                      m_FormatVersion = c_FormatVersion;
 	};
 }

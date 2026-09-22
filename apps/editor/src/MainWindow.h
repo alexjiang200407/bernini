@@ -1,22 +1,27 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QString>
 
 #include <assetlib/Project.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <memory>
+#include <optional>
 #include <qobject.h>
 #include <qobjectdefs.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
+#include <string>
+#include <string_view>
 #include <vector>
 
-#include "Async/BackgroundTask.h"
 #include "main_window_ui.h"
+#include <editor_sdk/BackgroundTask.h>
 
 class QAction;
 class QDockWidget;
@@ -24,15 +29,19 @@ class QLabel;
 class QMenu;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
-class AnimationEditorWindow;
-class BlendSpaceEditorWindow;
-class MaterialEditorWindow;
 class RenderTargetWindow;
 class Renderer;
 
 namespace editor
 {
+	class EditorPanel;
 	class GpuTimingWindow;
+	class PluginsWindow;
+	namespace plugins
+	{
+		class EditorHost;
+		class PluginSession;
+	}
 }
 
 class MainWindow : public QMainWindow
@@ -44,6 +53,8 @@ public:
 	 * @param project The project to open, and the one the renderer registers surfaces from. There is
 	 *                no editor without one: choosing it is the landing page's job, before any of
 	 *                this is built.
+	 * @param plugins The plugins main loaded, whose kinds `project` was opened against. The window
+	 *                registers their editor halves after the host-linked plugin's.
 	 * @param configPath The config.json to build from. Empty takes the one deployed next to the
 	 *                   executable, which is what ships; a test names one of its own, because
 	 *                   editor_tests runs from the directory that file is deployed into.
@@ -52,10 +63,11 @@ public:
 	 *                there was a screen to report to and what the tests still do.
 	 */
 	explicit MainWindow(
-		assetlib::Project        project,
-		std::filesystem::path    configPath = {},
-		background::ProgressSink startup    = {},
-		QWidget*                 parent     = nullptr);
+		std::unique_ptr<editor::plugins::PluginSession> plugins,
+		assetlib::Project                               project,
+		std::filesystem::path                           configPath = {},
+		background::ProgressSink                        startup    = {},
+		QWidget*                                        parent     = nullptr);
 	~MainWindow();
 
 	/**
@@ -144,23 +156,23 @@ private:
 	void
 	ShowProjectState();
 
-	// Keeps every RenderTargetWindow under `dock` in the frame loop only while the dock is the
-	// selected tab.
-	void
-	DriveViewportsFromTab(QDockWidget* dock);
-
 	// Adds the viewport frame-time readout to the status bar and connects every viewport to it. The
 	// viewport docks are tabbed together, so at most one of them reports at a time.
 	void
 	SetUpFrameStats();
+
+	void
+	ClearFrameStats() noexcept;
+
+	void
+	ConfigureViewport(RenderTargetWindow& view);
 
 	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
 	void
 	Build(const std::filesystem::path& configPath, assetlib::Project project);
 
 	/**
-	 * Hands back everything that renders, in the order it has to go: the thumbnails and the assets
-	 * release through the Renderer, and the viewports outlive both.
+	 * Destroys thumbnails and panels before their project asset manager and renderer.
 	 *
 	 * Called by the destructor, and by the constructor when it fails part-way. Qt destroys the
 	 * viewports as children of this window, which happens *after* its members -- so leaving it to
@@ -175,6 +187,10 @@ private:
 	void
 	SetUpGpuTimingEntry();
 
+	// The Plugins menu: what loaded, and room for what a plugin install will need later.
+	void
+	SetUpPluginsEntry();
+
 	// The Render menu. Its entries toggle temporal AA and set the viewports' render scale, which is
 	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
@@ -188,7 +204,28 @@ private:
 	void
 	SetUpReconstructionWidthMenu(QMenu* render);
 
+	void
+	SetUpPluginContributions();
+
+	void
+	ShowPluginPanel(std::string_view id);
+
+	void
+	OpenPluginAsset(std::string_view key);
+
+	[[nodiscard]] bool
+	CanClosePluginPanels();
+
+	void
+	ClearPluginPanels();
+
 	editor::MainWindowWidgets m_Ui;
+	std::optional<bool>       m_TaaOverride;
+	std::optional<bool>       m_BloomOverride;
+	std::optional<bool>       m_ColorGradeOverride;
+	std::optional<float>      m_RenderScaleOverride;
+	std::optional<float>      m_ReconstructionWidthOverride;
+	bool                      m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.
@@ -202,19 +239,23 @@ private:
 
 	std::filesystem::path m_RelaunchProject;
 
+	struct PluginDock
+	{
+		QDockWidget*                  dock;
+		QPointer<editor::EditorPanel> panel;
+	};
+
 	// Every project this window opens is recorded here, for the landing page to offer next launch.
 	std::filesystem::path m_RecentProjectsFile;
 
-	std::unique_ptr<assetlib::Project> m_Project;
-	ContentExplorerWindow*             m_ContentExplorer      = nullptr;
-	MaterialEditorWindow*              m_MaterialEditor       = nullptr;
-	AnimationEditorWindow*             m_AnimationEditor      = nullptr;
-	BlendSpaceEditorWindow*            m_BlendSpaceEditor     = nullptr;
-	QDockWidget*                       m_MaterialEditorDock   = nullptr;
-	QDockWidget*                       m_AnimationEditorDock  = nullptr;
-	QDockWidget*                       m_BlendSpaceEditorDock = nullptr;
-	QDockWidget*                       m_ContentExplorerDock  = nullptr;
-	QLabel*                            m_FrameStats           = nullptr;
+	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
+	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
+	core::str::unordered_str_map<PluginDock>        m_PluginDocks;
+	std::unique_ptr<assetlib::Project>              m_Project;
+	ContentExplorerWindow*                          m_ContentExplorer     = nullptr;
+	QDockWidget*                                    m_EditorDockAnchor    = nullptr;
+	QDockWidget*                                    m_ContentExplorerDock = nullptr;
+	QLabel*                                         m_FrameStats          = nullptr;
 
 	// The viewport the readout is currently about, or null when none is visible. A viewport that
 	// leaves the frame loop stops reporting, so without this its last figures would stay on the
@@ -231,7 +272,10 @@ private:
 	QAction*                 m_GpuTimingAction = nullptr;
 	bool                     m_GpuTimingWasOn  = false;
 
+	editor::PluginsWindow* m_PluginsWindow = nullptr;
+
 	std::unique_ptr<Renderer> m_Renderer;
+	bool                      m_Headless = false;
 
 	// The dock-visibility connections, held so the destructor can cut them before the windows they
 	// reach go away.

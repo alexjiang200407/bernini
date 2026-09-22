@@ -1,0 +1,22 @@
+include(CMakeFindDependencyMacro)
+
+set(BerniniEditorSDK_BUILD_ID "@BERNINI_EDITOR_BUILD_ID@")
+
+find_dependency(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets)
+find_dependency(glm CONFIG REQUIRED)
+find_dependency(spdlog CONFIG REQUIRED)
+find_dependency(Tracy CONFIG REQUIRED)
+find_dependency(cpptrace CONFIG REQUIRED)
+find_dependency(nlohmann_json CONFIG REQUIRED)
+find_dependency(RmlUi CONFIG REQUIRED)
+
+if (APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_bernini_sdk_wrapgl WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if (_bernini_sdk_wrapgl)
+        list(FILTER _bernini_sdk_wrapgl EXCLUDE REGEX "AGL")
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${_bernini_sdk_wrapgl}")
+    endif()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/BerniniEditorSDKTargets.cmake")

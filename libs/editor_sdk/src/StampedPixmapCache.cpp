@@ -1,0 +1,105 @@
+#include <editor_sdk/StampedPixmapCache.h>
+
+#include <algorithm>
+#include <editor_sdk/asset_paths.h>
+#include <optional>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+
+StampedPixmapCache::StampedPixmapCache(int budgetKb, QObject* parent) :
+	QObject(parent), m_Cache(budgetKb)
+{}
+
+QPixmap
+StampedPixmapCache::Lookup(const QString& path) const
+{
+	const Entry* entry = m_Cache.object(path);
+	if (entry == nullptr || entry->stamp != editor::FileStamp(path))
+		return {};
+
+	return entry->pixmap;
+}
+
+QString
+StampedPixmapCache::GetRejection(const QString& path) const
+{
+	const Entry* entry = m_Cache.object(path);
+	if (entry == nullptr || !entry->pixmap.isNull() || entry->stamp != editor::FileStamp(path))
+		return {};
+
+	return entry->rejection;
+}
+
+std::optional<qint64>
+StampedPixmapCache::BeginRequest(const QString& path)
+{
+	if (path.isEmpty() || m_Claimed.contains(path))
+		return std::nullopt;
+
+	const qint64 stamp = editor::FileStamp(path);
+
+	if (const Entry* entry = m_Cache.object(path); entry != nullptr)
+	{
+		if (entry->stamp == stamp)
+			return std::nullopt;
+
+		// Rewritten on disk since it was made. The editor is also the asset-cook host, so this is
+		// reachable without ever closing the folder.
+		m_Cache.remove(path);
+	}
+
+	m_Claimed.insert(path);
+	return stamp;
+}
+
+void
+StampedPixmapCache::Store(const QString& path, const QPixmap& pixmap, qint64 stamp)
+{
+	m_Claimed.remove(path);
+
+	if (pixmap.isNull())
+		return;
+
+	const int costKb = std::max(
+		1,
+		static_cast<int>(
+			(static_cast<qint64>(pixmap.width()) * pixmap.height() * pixmap.depth() / 8) / 1024));
+
+	m_Cache.insert(path, new Entry{ pixmap, stamp, {} }, costKb);
+	Q_EMIT Ready(path, pixmap);
+}
+
+void
+StampedPixmapCache::Abandon(const QString& path) noexcept
+{
+	m_Claimed.remove(path);
+}
+
+void
+StampedPixmapCache::Reject(const QString& path, qint64 stamp, const QString& reason)
+{
+	m_Claimed.remove(path);
+
+	// A late failure must not take down a success that already landed for the same content.
+	if (const Entry* entry = m_Cache.object(path);
+	    entry != nullptr && entry->stamp == stamp && !entry->pixmap.isNull())
+		return;
+
+	m_Cache.insert(path, new Entry{ QPixmap(), stamp, reason }, 1);
+	Q_EMIT Rejected(path, reason);
+}
+
+void
+StampedPixmapCache::Clear()
+{
+	m_Cache.clear();
+	m_Claimed.clear();
+}
+
+bool
+StampedPixmapCache::IsClaimed(const QString& path) const noexcept
+{
+	return m_Claimed.contains(path);
+}

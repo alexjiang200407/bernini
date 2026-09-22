@@ -5,34 +5,11 @@ message(STATUS "Qt6 version: ${Qt6_VERSION}")
 
 qt_standard_project_setup()   # enables AUTOMOC / AUTORCC
 
+add_subdirectory(${BERNINI_ROOT}/libs/editor_plugin_api ${CMAKE_BINARY_DIR}/libs/editor_plugin_api)
+
 find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 
-# QtNodes (node-graph UI for the Material Editor). Vendored via FetchContent so it builds against
-# the Qt already resolved by find_package(Qt6) above -- NOT vcpkg's qtbase: the vcpkg nodeeditor
-# port would build all of Qt from source and collide with the system Qt. It builds a small
-# QtNodes.dll (~1 MB) into the shared runtime output dir, so it sits next to editor.exe with no
-# extra deploy step. Exposes the target QtNodes::QtNodes.
-include(FetchContent)
-set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-	QtNodes
-	GIT_REPOSITORY https://github.com/paceholder/nodeeditor.git
-	GIT_TAG 3.0.16
-)
-FetchContent_MakeAvailable(QtNodes)
-
-# Qt's FindWrapOpenGL adds AGL to everything linking Qt6::OpenGL, and finds it by searching the
-# running system rather than the SDK. AGL.framework still exists on disk but was dropped from the
-# SDK, so the path resolves at configure time and then fails at link under -isysroot. Nothing here
-# wants the Carbon-era API; OpenGL.framework is what a modern build links, so AGL is filtered out.
-if (APPLE AND TARGET WrapOpenGL::WrapOpenGL)
-    get_target_property(_bernini_wrapgl_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
-    if (_bernini_wrapgl_libs)
-        list(FILTER _bernini_wrapgl_libs EXCLUDE REGEX "AGL")
-        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES
-            INTERFACE_LINK_LIBRARIES "${_bernini_wrapgl_libs}")
-    endif()
-endif()
+add_subdirectory(plugins/default_editor)
 
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
@@ -76,10 +53,32 @@ target_link_libraries(editor_lib
 		bgl_extended
 		assetlib
 		gamelib
+		editor_plugin_api
+		editor_sdk
+		default_editor
+		editor_localization
 		Qt6::Widgets
-		QtNodes::QtNodes
 		nlohmann_json::nlohmann_json
 )
+
+if(BERNINI_EDITOR_SDK)
+	add_dependencies(editor_lib editor_sdk_stamp)
+	set(EDITOR_BUILD_ID "${BERNINI_EDITOR_BUILD_ID}")
+	set(EDITOR_SDK_STAMP "${BERNINI_EDITOR_SDK_STAMP}")
+else()
+	set(EDITOR_BUILD_ID "")
+	set(EDITOR_SDK_STAMP "")
+endif()
+
+set(EDITOR_BUILD_CONFIG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include/$<CONFIG>")
+configure_file(
+	${CMAKE_CURRENT_SOURCE_DIR}/src/Plugins/plugin_build_config.h.in
+	${CMAKE_CURRENT_BINARY_DIR}/plugin_build_config.h.in
+	@ONLY)
+file(GENERATE
+	OUTPUT "${EDITOR_BUILD_CONFIG_INCLUDE_DIR}/plugin_build_config.h"
+	INPUT "${CMAKE_CURRENT_BINARY_DIR}/plugin_build_config.h.in")
+target_include_directories(editor_lib PRIVATE "${EDITOR_BUILD_CONFIG_INCLUDE_DIR}")
 
 
 target_precompile_headers(editor_lib
@@ -102,6 +101,20 @@ target_link_libraries(editor PRIVATE editor_lib)
 # must depend on the staging itself -- the Release presets configure away the test and example targets
 # that otherwise pull copy_assets in, and without them nothing stages assets at all.
 add_dependencies(editor copy_assets)
+
+# The editor loads every plugin under plugins/ beside its executable, so the sample the test tree
+# builds is staged there and `just run editor` finds it with nothing configured. The directory is
+# named by the plugin ID, which is what the loader's error names when a project wants one.
+if(TARGET editor_plugin_sample)
+	add_custom_target(editor_stage_sample_plugin
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>"
+			"$<TARGET_FILE_DIR:editor>/plugins/sample.document"
+		COMMENT "Staging the sample plugin beside the editor"
+		VERBATIM)
+	add_dependencies(editor_stage_sample_plugin editor_plugin_sample)
+	add_dependencies(editor editor_stage_sample_plugin)
+endif()
 
 # On the executable, NOT on editor_lib. The Agility SDK loader looks up D3D12SDKVersion /
 # D3D12SDKPath as exports of the .exe, and bgl_d3d12_agility is an OBJECT library -- CMake does not

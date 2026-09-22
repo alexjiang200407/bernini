@@ -1,8 +1,9 @@
 #include "Startup/startup_project.h"
 
+#include "Plugins/plugin_loader.h"
+
 #include <QString>
 
-#include <assetlib/Project.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
 
@@ -15,8 +16,9 @@ namespace editor
 {
 	StartupProject
 	OpenStartupProject(
-		const std::filesystem::path& argument,
-		const std::filesystem::path& configPath)
+		const std::filesystem::path&  argument,
+		const std::filesystem::path&  configPath,
+		const plugins::PluginSession& plugins)
 	{
 		std::filesystem::path projectFile = argument;
 		if (projectFile.empty())
@@ -31,7 +33,7 @@ namespace editor
 
 		try
 		{
-			startup.project.emplace(assetlib::Project::Open(projectFile));
+			startup.project.emplace(plugins::OpenProjectWithPlugins(projectFile, plugins));
 		}
 		catch (const std::exception& e)
 		{

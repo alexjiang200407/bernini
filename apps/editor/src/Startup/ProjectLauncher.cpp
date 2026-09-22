@@ -1,5 +1,7 @@
 #include "Startup/ProjectLauncher.h"
 
+#include "Plugins/plugin_loader.h"
+
 #include "util/project_dialogs.h"
 
 #include <QDialog>
@@ -28,8 +30,9 @@ namespace editor
 {
 	ProjectLauncher::ProjectLauncher(
 		std::vector<std::filesystem::path> recent,
+		const plugins::PluginSession&      plugins,
 		const QString&                     notice,
-		QWidget*                           parent) : QDialog(parent), m_Recent(std::move(recent))
+		QWidget* parent) : QDialog(parent), m_Recent(std::move(recent)), m_Plugins(&plugins)
 	{
 		setWindowTitle(QStringLiteral("Bernini Editor"));
 		setMinimumSize(560, 420);
@@ -145,7 +148,7 @@ namespace editor
 	{
 		try
 		{
-			m_Project.emplace(assetlib::Project::Open(projectFile));
+			m_Project.emplace(plugins::OpenProjectWithPlugins(projectFile, *m_Plugins));
 			accept();
 		}
 		catch (const std::exception& e)

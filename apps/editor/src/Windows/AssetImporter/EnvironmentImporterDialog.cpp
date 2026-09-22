@@ -1,8 +1,8 @@
 #include "EnvironmentImporterDialog.h"
 
 #include "Windows/AssetImporter/folder_row.h"
-#include "util/asset_paths.h"
 #include <assetlib/project_layout.h>
+#include <editor_sdk/asset_paths.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>

@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QString>
 
+#include "Plugins/plugin_loader.h"
 #include <assetlib/Project.h>
 
 #include <filesystem>
@@ -26,10 +27,13 @@ namespace editor
 	public:
 		/**
 		 * @param recent  The projects to offer, most recent first.
+		 * @param plugins The loaded plugins, whose kinds a chosen project opens against; outlives
+		 *                the launcher.
 		 * @param notice  Shown above them: why the project the editor was told to open did not.
 		 */
 		explicit ProjectLauncher(
 			std::vector<std::filesystem::path> recent,
+			const plugins::PluginSession&      plugins,
 			const QString&                     notice = {},
 			QWidget*                           parent = nullptr);
 
@@ -49,6 +53,7 @@ namespace editor
 		OpenAt(const std::filesystem::path& projectFile);
 
 		std::vector<std::filesystem::path> m_Recent;
+		const plugins::PluginSession*      m_Plugins    = nullptr;
 		QListWidget*                       m_RecentList = nullptr;
 		std::optional<assetlib::Project>   m_Project;
 	};

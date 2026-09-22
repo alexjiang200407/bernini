@@ -3,6 +3,7 @@
     "instanceName": "",
     "headless": false,
     "memoryReport": true,
+    "pluginDirectories": [],
     "graphics": {
         "enableDebugLayer": true,
         "enableGPUBasedValidation": false,
