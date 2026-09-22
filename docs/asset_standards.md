@@ -104,8 +104,15 @@ There are **two producers of textures**, and they compress differently:
   per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
   transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
-  `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA` /
-  `kBC4_R`).
+  `ktxTexture2_TranscodeBasis`es to the target.
+
+  **Which target a map takes is one table.** `textureEncoding`
+  ([libs/assetlib/src/texture_encoding.cpp](libs/assetlib/src/texture_encoding.cpp)) maps each role —
+  base colour opaque or carrying alpha, ORM, normal, geometry occlusion, surface slot, environment LDR
+  and HDR, and the transcode a Basis file gets at load — to a `Ktx2Compression` and a stable string
+  tag. The material bake, the environment bake and `loadKTX2` all read it, so the formats in the
+  table above are its rows rather than constants in three files. A change to a row is a bump of
+  `c_TextureEncodingToken` ([Asset Containers](asset_containers.md)).
 
   **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
   `orm_<hash>.ktx2`, where the hash covers the group, its target format and, per channel, the source
