@@ -604,6 +604,7 @@ namespace assetlib
 			bakePbr(material, desc, cancel);
 			return;
 		case ShadingModel::kPbrSurface:
+		case ShadingModel::kLitSurface:
 			bakeSurface(material, desc, cancel);
 			return;
 		case ShadingModel::kCount:
@@ -630,7 +631,7 @@ namespace assetlib
 	stripAuthoringData(BMaterial& material)
 	{
 		const bool isPbr     = material.shadingModel == ShadingModel::kPbr;
-		const bool isSurface = material.shadingModel == ShadingModel::kPbrSurface;
+		const bool isSurface = isSurfaceModel(material.shadingModel);
 
 		// Checked before anything is cleared: a material that cannot be stripped must come out of
 		// this call untouched, not half-stripped.

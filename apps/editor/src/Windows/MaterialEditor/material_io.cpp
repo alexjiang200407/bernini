@@ -5,6 +5,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <algorithm>
+#include <assetlib/bmaterial.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -51,7 +52,7 @@ namespace editor
 	BakedTexturesSummary(const assetlib::BMaterial& material)
 	{
 		// A surface material's bake is per routed slot (ADR-7); a slot bound whole has none.
-		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(material.shadingModel))
 		{
 			auto lines = QStringList();
 			for (const assetlib::SurfaceTextureBinding& slot : material.surface.textures)

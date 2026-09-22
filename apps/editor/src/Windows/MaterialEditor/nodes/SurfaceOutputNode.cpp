@@ -494,7 +494,11 @@ void
 SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
 	const
 {
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	// The registered surface's own contract decides the model, so a lit surface's document says
+	// what its module says and a save never demotes one to the engine-lit model.
+	material.shadingModel = m_Surface.shading == bgl::SurfaceShading::kLit ?
+	                            assetlib::ShadingModel::kLitSurface :
+	                            assetlib::ShadingModel::kPbrSurface;
 
 	material.layer.alphaMode   = m_AlphaMode;
 	material.layer.alphaCutoff = m_AlphaCutoff;

@@ -379,3 +379,126 @@ TEST_CASE("A routed slot draws through its routes when its bake is absent", "[ga
 	CHECK_FALSE(assets.AcquireTexture(baked, &empty).textureSlot);
 	CHECK_FALSE(std::filesystem::exists(root.path / baked));
 }
+
+namespace
+{
+	// A surface on the lit contract: a constant, so it draws with no environment and no sun set.
+	constexpr const char* c_GlowSource = R"(import bgl.MaterialReader;
+import bgl.SurfaceLight;
+import bgl.LitSurfaceSource;
+
+struct GlowParams
+{
+    [Color]
+    [Default(1.0, 1.0, 1.0)]
+    float3 glowColor;
+};
+
+struct GlowSurface : ILitSurfaceSource
+{
+    typealias MaterialParams = GlowParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, GlowParams params) { return 1.0; }
+
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, GlowParams params)
+    {
+        return float4(params.glowColor, 1.0);
+    }
+};
+)";
+
+	void
+	WriteSurfaceMaterial(
+		const std::filesystem::path& root,
+		const char*                  file,
+		assetlib::ShadingModel       model,
+		const char*                  surface)
+	{
+		auto material         = assetlib::BMaterial();
+		material.name         = "lit";
+		material.shadingModel = model;
+		material.surface.name = surface;
+
+		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
+	}
+}
+
+// The lit model from the document down, and ADR-5's two refusals: the model a document declares
+// is its contract expectation, checked against what the named surface's module conforms to.
+TEST_CASE("A lit surface material routes by its document's model", "[gamelib][surface][lit]")
+{
+	using Catch::Matchers::ContainsSubstring;
+	using Catch::Matchers::MessageMatches;
+
+	ProjectRoot root("bernini_gamelib_lit_surface");
+	std::ofstream(root.Shaders() / "Glow.slang") << c_GlowSource;
+
+	WriteSurfaceMaterial(root.path, "glow.bmaterial", assetlib::ShadingModel::kLitSurface, "Glow");
+	WriteSurfaceMaterial(
+		root.path,
+		"wrong_pbr.bmaterial",
+		assetlib::ShadingModel::kPbrSurface,
+		"Glow");
+	WriteSurfaceMaterial(
+		root.path,
+		"wrong_lit.bmaterial",
+		assetlib::ShadingModel::kLitSurface,
+		"Rim");
+
+	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	REQUIRE(gfx != nullptr);
+	REQUIRE(gfx->GetSurfaceTypes().size() == 2u);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 256;
+	targetDesc.height   = 256;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto scene = gfx->CreateScene(SurfaceSceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	// Deliberately no environment: a lit surface draws without one, which is half the point.
+	auto assets = game::AssetManager(scene, root.path);
+
+	const bgl::MaterialHandle lit = assets.AcquireMaterial("Authored/Materials/glow.bmaterial");
+	REQUIRE(lit.IsValid());
+	CHECK(lit.materialType == bgl::MaterialType::kGameStart);
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(256.0f, 256.0f);
+
+	const auto* emptyPng = "assets/golden/gamelib_lit_empty.got.png";
+	for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, emptyPng);
+
+	const bgl::GeomHandle geom = scene->AddSphereGeom(24, 24, 3.0f, lit);
+	view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
+
+	const auto* litPng = "assets/golden/gamelib_lit_glow.got.png";
+	gfx->ScreenshotPng(target, litPng);
+
+	CHECK(bgl::test::FrameDelta(emptyPng, litPng, 0, 0, 256, 256) > 1e-3f);
+
+	// ADR-5, both ways round: the document expected the other contract.
+	CHECK_THROWS_MATCHES(
+		assets.AcquireMaterial("Authored/Materials/wrong_pbr.bmaterial"),
+		bgl::SceneError,
+		MessageMatches(ContainsSubstring("surface 'Glow' owns its lighting")));
+
+	CHECK_THROWS_MATCHES(
+		assets.AcquireMaterial("Authored/Materials/wrong_lit.bmaterial"),
+		bgl::SceneError,
+		MessageMatches(ContainsSubstring("surface 'Rim' is lit by the engine")));
+}

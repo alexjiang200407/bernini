@@ -1,11 +1,13 @@
 #pragma once
 #include <bgl/LayerType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +62,12 @@ namespace bgl
 	{
 		// Which registered surface draws it: a name from IGraphics::GetSurfaceTypes().
 		std::string surface;
+
+		// Which contract the caller expects that surface to conform to; a mismatch against what
+		// reflection read off the module is refused. A document says which model it was authored
+		// for, so a surface that changes contract fails loud instead of silently changing what
+		// every material drawn by it means. Unset says the caller has no expectation.
+		std::optional<SurfaceShading> shading;
 
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;

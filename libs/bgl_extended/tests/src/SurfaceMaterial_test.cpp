@@ -426,6 +426,26 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 			MessageMatches(ContainsSubstring("no surface named 'Nowhere' is registered")));
 	}
 
+	// ADR-5: a caller that states its contract is refused the other one; no expectation stated
+	// takes the surface as it is, which is what every call above this section does.
+	SECTION("a contract expectation the surface does not meet")
+	{
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial(
+				{ .surface = "Unlit", .shading = SurfaceShading::kPbrSurface }),
+			SceneError,
+			MessageMatches(ContainsSubstring("surface 'Unlit' owns its lighting")));
+
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial({ .surface = "Rim", .shading = SurfaceShading::kLit }),
+			SceneError,
+			MessageMatches(ContainsSubstring("surface 'Rim' is lit by the engine")));
+
+		// The stated expectation that matches is not a refusal.
+		CHECK_NOTHROW(
+			scene->CreateSurfaceMaterial({ .surface = "Unlit", .shading = SurfaceShading::kLit }));
+	}
+
 	SECTION("a value the surface does not declare")
 	{
 		CHECK_THROWS_MATCHES(

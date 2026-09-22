@@ -6,6 +6,7 @@
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
@@ -244,7 +245,7 @@ namespace game
 		const bool                 loose,
 		const uint32_t             looseSlots)
 	{
-		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(material.shadingModel))
 		{
 			auto paths = std::vector<std::string>();
 			paths.reserve(material.surface.textures.size());
@@ -468,7 +469,7 @@ namespace game
 		std::string                key,
 		TexturePrefetch*           prefetch)
 	{
-		const bool surface = material.shadingModel == assetlib::ShadingModel::kPbrSurface;
+		const bool surface = assetlib::isSurfaceModel(material.shadingModel);
 
 		if (material.shadingModel != assetlib::ShadingModel::kPbr && !surface)
 			throw bgl::SceneError(
@@ -1487,7 +1488,7 @@ namespace game
 		// A surface material is neither loose nor baked, so the check above lets one through --
 		// and the triplet it would write is a field no surface reads. Refused rather than ignored:
 		// the write would report success and change nothing on screen.
-		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(record.source.shadingModel))
 		{
 			throw bgl::SceneError(
 				"SetMaterialTexture expects a baked material; a surface material's textures are "
@@ -1556,7 +1557,7 @@ namespace game
 
 		// Rewritten in place, so the handle stays valid and every submesh bound to this material
 		// follows the change without being rebound.
-		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(record.source.shadingModel))
 			m_Scene->UpdateSurfaceMaterial(record.handle, SurfaceDesc(record));
 		else if (record.loose)
 			m_Scene->UpdateLoosePbrMaterial(record.handle, LooseDesc(record));
@@ -1601,6 +1602,12 @@ namespace game
 		desc.layerType   = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff = layer.alphaCutoff;
 		desc.doubleSided = layer.doubleSided;
+
+		// The document's model is its contract expectation (ADR-5): the renderer refuses a named
+		// surface that conforms to the other one.
+		desc.shading = record.source.shadingModel == assetlib::ShadingModel::kLitSurface ?
+		                   bgl::SurfaceShading::kLit :
+		                   bgl::SurfaceShading::kPbrSurface;
 
 		desc.values.reserve(surface.values.size());
 		for (const assetlib::SurfaceValueBinding& value : surface.values)
