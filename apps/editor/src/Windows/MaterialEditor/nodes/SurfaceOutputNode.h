@@ -189,6 +189,10 @@ public:
 	void
 	SetDoubleSided(bool doubleSided);
 
+protected:
+	[[nodiscard]] unsigned int
+	ModelPortCount() const override;
+
 private:
 	void
 	SyncWidgets();

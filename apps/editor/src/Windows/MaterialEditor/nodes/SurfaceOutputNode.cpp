@@ -108,9 +108,12 @@ SurfaceOutputNode::ModelNameFor(const std::string& surfaceName)
 unsigned int
 SurfaceOutputNode::nPorts(QtNodes::PortType portType) const
 {
-	if (portType != QtNodes::PortType::In)
-		return 0u;
+	return portType == QtNodes::PortType::In ? ModelPortCount() + 1u : 0u;
+}
 
+unsigned int
+SurfaceOutputNode::ModelPortCount() const
+{
 	auto count = 0u;
 	for (const bgl::SurfaceTexture& texture : m_Surface.params.textures)
 		count += 1u + (texture.kind == bgl::SurfaceTextureKind::kData ?
@@ -159,12 +162,21 @@ SurfaceOutputNode::ChannelPortFor(size_t slot, uint32_t component) const
 QtNodes::NodeDataType
 SurfaceOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
+	if (IsUv1OcclusionPort(port))
+		return Uv1OcclusionType();
+
 	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::Type(1);
 }
 
 void
 SurfaceOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
+	if (IsUv1OcclusionPort(port))
+	{
+		SetUv1Occlusion(std::move(data));
+		return;
+	}
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.slot >= m_Bound.size())
 		return;
@@ -192,6 +204,9 @@ SurfaceOutputNode::SlotIsRouted(size_t slot) const
 bool
 SurfaceOutputNode::PortAccepts(QtNodes::PortIndex port) const
 {
+	if (IsUv1OcclusionPort(port))
+		return true;
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.slot >= m_Bound.size())
 		return false;
@@ -214,6 +229,9 @@ SurfaceOutputNode::RouteFor(size_t slot, uint32_t component) const
 QString
 SurfaceOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 {
+	if (IsUv1OcclusionPort(port))
+		return Uv1OcclusionCaption();
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.slot >= m_Surface.params.textures.size())
 		return {};
@@ -547,6 +565,8 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 
 		surface.textures.push_back(std::move(binding));
 	}
+
+	CompileUv1Occlusion(material, dataRoot);
 }
 
 QJsonObject

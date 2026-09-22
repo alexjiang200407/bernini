@@ -157,6 +157,8 @@ namespace editor
 				sink.BoundTextureAsset(slot));
 		}
 
+		desc.uv1OcclusionTexture = sink.Uv1OcclusionRoute().texture;
+
 		return desc;
 	}
 
@@ -215,6 +217,8 @@ namespace editor
 			desc.orm[i] = route(channel(assetlib::c_OrmChannels, i));
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
+
+		desc.uv1OcclusionTexture = output->Uv1OcclusionRoute().texture;
 
 		// The kind check matters since a board switches: a handle left by a surface sink is a
 		// different bucket, and updating it in place would throw on every keystroke.

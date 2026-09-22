@@ -75,8 +75,8 @@ TEST_CASE("A material output starts with one port per group", "[materialoutput]"
 	const MaterialOutputNode node;
 
 	// A group of more than one channel shows one wide port until it is split, so three groups are
-	// three ports -- not the nine channels behind them.
-	REQUIRE(node.nPorts(PortType::In) == 3u);
+	// three ports -- not the nine channels behind them -- and the UV1 occlusion port follows them.
+	REQUIRE(node.nPorts(PortType::In) == 4u);
 
 	SECTION("and each collapsed port takes its whole group's width")
 	{
@@ -92,7 +92,8 @@ TEST_CASE("A material output starts with one port per group", "[materialoutput]"
 		REQUIRE(node.portCaption(PortType::In, kBaseColorPort) == QString("Base Color"));
 		REQUIRE(node.portCaption(PortType::In, kOrmPort) == QString("ORM"));
 		REQUIRE(node.portCaption(PortType::In, kNormalPort) == QString("Normal"));
-		REQUIRE(node.portCaption(PortType::In, 3).isEmpty());
+		REQUIRE(node.portCaption(PortType::In, 3) == QString("Occlusion (UV1)"));
+		REQUIRE(node.portCaption(PortType::In, 4).isEmpty());
 	}
 
 	SECTION("and nothing is routed until something is wired")
@@ -195,7 +196,7 @@ TEST_CASE("Splitting a group gives it a port per channel", "[materialoutput]")
 	{
 		node.load(State(true, false, false));
 
-		REQUIRE(node.nPorts(PortType::In) == 5u);
+		REQUIRE(node.nPorts(PortType::In) == 6u);
 	}
 
 	SECTION("a split group's ports are one channel wide")
@@ -214,8 +215,8 @@ TEST_CASE("Splitting a group gives it a port per channel", "[materialoutput]")
 	{
 		node.load(State(true, true, true));
 
-		// 3 base + 3 ORM + 2 normal. No opaque base alpha.
-		REQUIRE(node.nPorts(PortType::In) == 8u);
+		// 3 base + 3 ORM + 2 normal, then UV1 occlusion. No opaque base alpha.
+		REQUIRE(node.nPorts(PortType::In) == 9u);
 
 		const QStringList expected = { "Base R",    "Base G",   "Base B",   "AO",
 			                           "Roughness", "Metallic", "Normal X", "Normal Y" };
@@ -304,9 +305,9 @@ TEST_CASE("A material output round-trips its factors and its splits", "[material
 	REQUIRE(reloaded.RoughnessFactor() == 0.875f);
 
 	// The split state has to survive too, or a reloaded graph would have fewer ports than the
-	// connections saved alongside it refer to. 3 base + 1 ORM + 2 normal.
+	// connections saved alongside it refer to. 3 base + 1 ORM + 2 normal + UV1 occlusion.
 	REQUIRE(reloaded.nPorts(PortType::In) == saved.nPorts(PortType::In));
-	REQUIRE(reloaded.nPorts(PortType::In) == 6u);
+	REQUIRE(reloaded.nPorts(PortType::In) == 7u);
 }
 
 TEST_CASE("A missing factor loads as one", "[materialoutput]")
@@ -321,7 +322,7 @@ TEST_CASE("A missing factor loads as one", "[materialoutput]")
 	REQUIRE(node.BaseColorFactor() == glm::vec4(1.0f));
 	REQUIRE(node.MetallicFactor() == 1.0f);
 	REQUIRE(node.RoughnessFactor() == 1.0f);
-	REQUIRE(node.nPorts(PortType::In) == 3u);
+	REQUIRE(node.nPorts(PortType::In) == 4u);
 
 	REQUIRE(changed.count() == 1);
 }

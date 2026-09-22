@@ -100,6 +100,8 @@ MaterialOutputNode::CompileInto(
 		pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
 		pbr.routes[i].channel = wired.channel;
 	}
+
+	CompileUv1Occlusion(material, dataRoot);
 }
 
 unsigned int
@@ -150,19 +152,25 @@ MaterialOutputNode::ResolvePort(QtNodes::PortIndex port) const
 }
 
 unsigned int
-MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+MaterialOutputNode::ModelPortCount() const
 {
-	if (portType != QtNodes::PortType::In)
-		return 0u;
-
 	unsigned int total = 0;
 	for (const unsigned int count : m_GroupPorts) total += count;
 	return total;
 }
 
+unsigned int
+MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+{
+	return portType == QtNodes::PortType::In ? ModelPortCount() + 1u : 0u;
+}
+
 QtNodes::NodeDataType
 MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
+	if (IsUv1OcclusionPort(port))
+		return Uv1OcclusionType();
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return ChannelData::Type(1);
@@ -175,6 +183,12 @@ MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 void
 MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
+	if (IsUv1OcclusionPort(port))
+	{
+		SetUv1Occlusion(std::move(data));
+		return;
+	}
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return;
@@ -533,6 +547,9 @@ MaterialOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) cons
 	static const char* const c_Captions[c_ChannelCount] = { "Base R",   "Base G",   "Base B",
 		                                                    "Base A",   "AO",       "Roughness",
 		                                                    "Metallic", "Normal X", "Normal Y" };
+
+	if (IsUv1OcclusionPort(port))
+		return Uv1OcclusionCaption();
 
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)

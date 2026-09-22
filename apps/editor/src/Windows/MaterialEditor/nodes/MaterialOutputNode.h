@@ -176,6 +176,9 @@ protected:
 	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout.
 	explicit MaterialOutputNode(unsigned int baseColorArity);
 
+	[[nodiscard]] unsigned int
+	ModelPortCount() const override;
+
 	// Rows appended to the embedded form, after the factors. Nothing by default.
 	virtual void
 	AddExtraRows(QWidget* parent, QFormLayout* form);
