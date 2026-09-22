@@ -581,6 +581,7 @@ namespace game
 		record.handle           = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
 		record.key              = key;
 		record.submeshMaterials = std::move(submeshMaterials);
+		record.submeshOverrides = OverridesOf(mesh, entry);
 		record.refCount         = 1;
 
 		const uint32_t slot = record.handle.handle.index;
@@ -871,6 +872,7 @@ namespace game
 				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig.handle, bounds);
 			record.key               = key;
 			record.submeshMaterials  = std::move(submeshMaterials);
+			record.submeshOverrides  = OverridesOf(mesh, entry);
 			record.skinnedClips      = clipInfo;
 			record.skinnedAnimations = animationsNorm;
 			// The rig's, not this call's: a shared rig hands back the set it was built with, and
@@ -1422,6 +1424,53 @@ namespace game
 		record.overrides[submeshIndex] = replacement;
 
 		ReleaseMaterial(previous);
+	}
+
+	std::vector<AssetManager::RegisteredOverride>
+	AssetManager::OverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry)
+	{
+		auto overrides = std::vector<RegisteredOverride>();
+		for (const assetlib::SubmeshMaterialOverride& registered : mesh.materialOverrides)
+		{
+			if (registered.submesh < entry.firstSubmesh ||
+			    registered.submesh >= entry.firstSubmesh + entry.submeshCount ||
+			    registered.material >= mesh.materials.size())
+				continue;
+			overrides.emplace_back(
+				registered.submesh - entry.firstSubmesh,
+				registered.name,
+				mesh.materials[registered.material]);
+		}
+		return overrides;
+	}
+
+	void
+	AssetManager::SetInstanceSubmeshOverride(
+		bgl::SceneViewRef       view,
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex,
+		std::string_view        name)
+	{
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to SetInstanceSubmeshOverride is not owned by this "
+				"AssetManager");
+
+		const GeomRecord& geom = m_Geoms.at(it->second.geomSlot);
+		const auto        found =
+			std::ranges::find_if(geom.submeshOverrides, [&](const RegisteredOverride& entry) {
+				return entry.submesh == submeshIndex && entry.name == name;
+			});
+		if (found == geom.submeshOverrides.end())
+			throw bgl::SceneError(
+				std::format(
+					"submesh {} of '{}' registers no override named '{}'",
+					submeshIndex,
+					geom.key,
+					name));
+
+		SetInstanceSubmeshMaterial(view, instance, submeshIndex, found->material);
 	}
 
 	void
