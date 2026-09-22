@@ -59,12 +59,13 @@ namespace
 
 		std::vector<uint32_t> screenshots;
 
-		uint32_t width  = 1280;
-		uint32_t height = 720;
-		uint32_t frames = 60;
-		uint32_t warmup = 8;
-		float    fps    = 30.0f;
-		bool     taa    = true;
+		uint32_t width       = 1280;
+		uint32_t height      = 720;
+		uint32_t frames      = 60;
+		uint32_t warmup      = 8;
+		float    fps         = 30.0f;
+		bool     taa         = true;
+		float    renderScale = 1.0f;
 
 		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
 		bool bloom = false;
@@ -230,6 +231,12 @@ try
 		app.add_option("-w,--width", opts.width, "Render width")->check(CLI::PositiveNumber);
 		app.add_option("-h,--height", opts.height, "Render height")->check(CLI::PositiveNumber);
 		app.add_option("--taa", opts.taa, "Render with temporal antialiasing, as a viewport does");
+		app.add_option(
+			   "--render-scale",
+			   opts.renderScale,
+			   "The geometry passes' grid relative to the output size; below 1 the TAA resolve "
+			   "reconstructs the output (RenderTargetDesc::renderScale)")
+			->check(CLI::PositiveNumber);
 		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
 		app.add_flag(
 			"--frame-clip",
@@ -299,7 +306,12 @@ try
 	}
 
 	auto graphics = headless::CreateHeadlessGraphics(dataRoot);
-	auto target   = headless::CreateHeadlessTarget(graphics, opts.width, opts.height, opts.taa);
+	auto target   = headless::CreateHeadlessTarget(
+		graphics,
+		opts.width,
+		opts.height,
+		opts.taa,
+		opts.renderScale);
 	target->SetBloomEnabled(opts.bloom);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
@@ -405,11 +417,13 @@ try
 	if (!skinned.empty())
 		PrintClips(clips, clip);
 	std::cout << std::format(
-		"{} frames at {} fps, {}x{}, {}, TAA {}, bloom {}, {} warm-up frames held at t = 0\n\n",
+		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} warm-up frames "
+		"held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
 		opts.width,
 		opts.height,
+		opts.renderScale,
 		opts.sunIntensity > 0.0f ?
 			std::format("{}, sun {:.2f}", envLit ? "lit" : "unlit by env", opts.sunIntensity) :
 			std::string(lit ? "lit" : "unlit"),

@@ -36,6 +36,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
+| `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
 | `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |

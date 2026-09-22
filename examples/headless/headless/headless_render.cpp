@@ -39,13 +39,15 @@ namespace headless
 		const bgl::GraphicsRef& graphics,
 		const uint32_t          width,
 		const uint32_t          height,
-		const bool              taa)
+		const bool              taa,
+		const float             renderScale)
 	{
-		auto desc       = bgl::RenderTargetDesc();
-		desc.width      = static_cast<int>(width);
-		desc.height     = static_cast<int>(height);
-		desc.headless   = true;
-		desc.taaEnabled = taa;
+		auto desc        = bgl::RenderTargetDesc();
+		desc.width       = static_cast<int>(width);
+		desc.height      = static_cast<int>(height);
+		desc.headless    = true;
+		desc.taaEnabled  = taa;
+		desc.renderScale = renderScale;
 		return graphics->CreateRenderTarget(desc);
 	}
 

@@ -1514,6 +1514,118 @@ TEST_CASE("A supersampling target presents and captures at its output size", "[t
 	CHECK(bgl::test::MeanColor(supersampled, 236, 236, 16, 16).Luma() < 0.02f);
 }
 
+// Scale 1.0 is the resolve every figure in this file was measured at, and a live scale change is the
+// one path that reaches it other than creation: attachments rebuilt, the sequence length re-derived,
+// the reconstruction's phase count back to one. A target returned to 1.0 must therefore converge to
+// the bytes a target that never left it does -- anything else is a scale-1 special case that
+// creation and the setter disagree on. The frames spent at half scale are one whole jitter sequence,
+// so both captures land on the same phase, and the accumulation lands somewhere different for each.
+TEST_CASE(
+	"Returning a target to render scale 1.0 restores the resolve it was created with",
+	"[taa][render]")
+{
+	constexpr int c_FramesAtHalfScale = static_cast<int>(bgl::c_JitterSequenceLength);
+
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(QuadSceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 128);
+	AddQuad(scene, view);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = Camera();
+	job.viewport = FullViewport();
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	const std::string never = "assets/golden/taa_scale_one_never_left.got.png";
+	const std::string back  = "assets/golden/taa_scale_one_returned.got.png";
+
+	auto neverLeft = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(neverLeft != nullptr);
+	for (int frame = 0; frame < c_ConvergeFrames; ++frame) gfx->DrawFrame(neverLeft, job);
+	gfx->ScreenshotPng(neverLeft, never);
+
+	targetDesc.renderScale = 0.5f;
+	auto returned          = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(returned != nullptr);
+	for (int frame = 0; frame < c_FramesAtHalfScale; ++frame) gfx->DrawFrame(returned, job);
+
+	gfx->SetRenderScale(returned, 1.0f);
+	REQUIRE(returned->GetRenderWidth() == neverLeft->GetRenderWidth());
+	for (int frame = 0; frame < c_ConvergeFrames; ++frame) gfx->DrawFrame(returned, job);
+	gfx->ScreenshotPng(returned, back);
+
+	// The quad must be in frame, or two black captures would agree about nothing.
+	CHECK(bgl::test::MeanColor(never, 118, 118, 20, 20).Luma() > 0.1f);
+
+	CHECK(bgl::test::MaxChannelDelta(never, back) == 0.0f);
+}
+
+// What a two-thirds render scale costs a still image, in the unit an upscaler is quoted in. The
+// fence's slats are about two output pixels across, which a 0.667 render grid samples at barely over
+// its own Nyquist, so drawing it once gets the slats visibly wrong and the reconstruction is what
+// puts them back; the raw upscale beside it is the floor that says the bound is doing work. The
+// threshold is the measured figure (33.8 dB on Metal, against 29.5 dB raw) less margin for the
+// backends, not a quality target: docs/taa.md has what the scale measures at 4K. It is read over the
+// whole frame at this framing, so a change to the fence or the camera re-measures it.
+TEST_CASE(
+	"A two-thirds upscale of a static scene converges near the native render",
+	"[taa][render]")
+{
+	constexpr float c_TwoThirdsScale = 0.667f;
+	constexpr float c_MinPsnrDb      = 32.0f;
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const std::string native = "assets/golden/taa_upscale_native.got.png";
+	const std::string taau   = "assets/golden/taa_upscale_taau.got.png";
+	const std::string raw    = "assets/golden/taa_upscale_raw.got.png";
+
+	RenderTo(native, true, c_ConvergeFrames, AddFineFence);
+	RenderTo(
+		taau,
+		true,
+		c_ConvergeFrames,
+		AddFineFence,
+		StillCamera,
+		StoppedClock,
+		c_TwoThirdsScale);
+	RenderTo(raw, false, 1, AddFineFence, StillCamera, StoppedClock, c_TwoThirdsScale);
+
+	const auto psnr = [&](const std::string& path) {
+		return bgl::test::PsnrDb(
+			path,
+			native,
+			0,
+			0,
+			static_cast<int>(c_Width),
+			static_cast<int>(c_Height));
+	};
+	const float taauPsnr = psnr(taau);
+	const float rawPsnr  = psnr(raw);
+
+	WARN(
+		"two-thirds upscale against the native converged render: reconstruction = "
+		<< taauPsnr << " dB, raw upscale = " << rawPsnr << " dB");
+
+	// The fence must be in frame, or an empty pair would score infinite agreement.
+	CHECK(
+		bgl::test::MeanColor(native, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox).Luma() >
+		0.1f);
+
+	CHECK(taauPsnr >= c_MinPsnrDb);
+	CHECK(taauPsnr > rawPsnr);
+}
+
 // The measurement the whole change is judged by, and the only one here that can say a frame is
 // *right* rather than unchanged or self-consistent: mean |delta| against the same frame rendered at
 // four times the linear resolution, unjittered and unaccumulated, box-filtered back down. Sixteen

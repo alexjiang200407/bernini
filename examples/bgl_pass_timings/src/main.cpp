@@ -53,7 +53,8 @@ namespace
 		// nothing in it yet, and none of that is what the model costs.
 		uint32_t warmup = 8;
 
-		bool taa = true;
+		bool  taa         = true;
+		float renderScale = 1.0f;
 
 		// Set by the run rather than by the caller: a project with no environment renders unlit, and
 		// what the passes cost is not the same question lit as it is unlit.
@@ -64,11 +65,12 @@ namespace
 	Report(const bgl::PassHistory& history, const Options& opts)
 	{
 		std::cout << std::format(
-			"\n{} frames of {} at {}x{}, {}, TAA {}, {} dropped to warm-up\n\n",
+			"\n{} frames of {} at {}x{}, render scale {}, {}, TAA {}, {} dropped to warm-up\n\n",
 			history.SampleCount(),
 			opts.mesh,
 			opts.width,
 			opts.height,
+			opts.renderScale,
 			opts.lit ? "lit" : "unlit",
 			opts.taa ? "on" : "off",
 			opts.warmup);
@@ -107,6 +109,12 @@ try
 		app.add_option("-w,--width", opts.width, "Render width")->check(CLI::PositiveNumber);
 		app.add_option("-h,--height", opts.height, "Render height")->check(CLI::PositiveNumber);
 		app.add_option("--taa", opts.taa, "Render with temporal antialiasing, as a viewport does");
+		app.add_option(
+			   "--render-scale",
+			   opts.renderScale,
+			   "The geometry passes' grid relative to the output size; below 1 the TAA resolve "
+			   "reconstructs the output (RenderTargetDesc::renderScale)")
+			->check(CLI::PositiveNumber);
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -114,7 +122,12 @@ try
 	const auto dataRoot = std::filesystem::path(opts.project);
 
 	auto graphics = headless::CreateHeadlessGraphics(dataRoot);
-	auto target   = headless::CreateHeadlessTarget(graphics, opts.width, opts.height, opts.taa);
+	auto target   = headless::CreateHeadlessTarget(
+		graphics,
+		opts.width,
+		opts.height,
+		opts.taa,
+		opts.renderScale);
 
 	// Every frame from here on is timed, which is what the whole run is for.
 	target->SetGpuTimingEnabled(true);

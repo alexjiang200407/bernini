@@ -56,6 +56,42 @@ resting stochastic quality — a converged hashed patch flickers at roughly the 
 mid-pan (measured 60–80× the sheltered figure), and sub-pixel strands at distance, hashed *and*
 alpha-tested, read dimmer — judged acceptable by eye against keeping the machinery.
 
+## Render scale
+
+The same field is a game's temporal upscaler: a scale below 1 shades the scene on a coarser grid and
+the resolve reconstructs the output from it, which is the shape of UE5 TSR and FSR2's accumulation
+at its simplest — jittered low-resolution samples accumulated onto the output grid. What it buys is
+bounded by what runs on which grid. Every pass before the resolve — `StaticDepth`, forward, transparents,
+skybox, the motion and outline targets — is on the render grid; the resolve, bloom,
+post-process and the overlay are on the output grid, and the resolve *reads* the output-sized
+history and writes it again whatever the render grid is. Measured with `bgl_pass_timings` on an
+M3 Pro at 3840x2160, TAA on, median of 120 frames, on the engine's `apples` and on animal-run's
+`TownStreet` lit by its own environment:
+
+| pass, ms | apples 1.0 | apples 0.667 | apples 0.5 | TownStreet 1.0 | TownStreet 0.667 |
+|---|---|---|---|---|---|
+| TaaResolve | 2.43 | 2.27 | 2.23 | 2.24 | 2.12 |
+| Forward | 0.55 | 0.40 | 0.41 | 2.34 | 2.06 |
+| StaticDepth | 0.11 | 0.10 | 0.10 | 1.11 | 1.09 |
+| Skybox | 0.42 | 0.20 | 0.12 | 0.36 | 0.17 |
+| PostProcess | 0.31 | 0.32 | 0.31 | 0.27 | 0.27 |
+| frame | 4.60 | 3.65 | 3.36 | 7.02 | 6.02 |
+
+A two-thirds scale keeps 53 dB PSNR of the native converged frame on `apples` and 47 dB on
+`TownStreet`, held still. It saves about a millisecond of seven on the heavier scene, and the resolve
+is the reason it is not more: at 4K it is a third to a half of the frame and it does not follow the
+render grid, so lowering the scale cannot touch it. `docs/specs/taa_clamp_footprint.md` is the one
+measured saving left in it; a compute and groupshared rewrite was measured slower on this GPU and
+stopped. The forward pass on `TownStreet` moves by an eighth for a 56% cut in pixels, and
+`StaticDepth` not at all — both are geometry-bound there, and a render scale does nothing for
+geometry.
+
+`--render-scale` on `bgl_pass_timings` and `bgl_ai_viewer` is how the table is taken again;
+`[taa][render]` pins that a two-thirds upscale of a still fence at the output grid's Nyquist stays
+above 32 dB PSNR of the native converged render (measured 33.8 dB on Metal, against 29.5 dB for the
+raw upscale it replaces), and that a target returned to 1.0 by `IGraphics::SetRenderScale`
+converges to the bytes one created there does.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
