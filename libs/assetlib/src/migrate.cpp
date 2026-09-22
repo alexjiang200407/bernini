@@ -98,12 +98,14 @@ namespace assetlib
 
 		/**
 		 * The bytes the project's current state says `key` should hold, or nullopt for a type
-		 * this does not migrate. On a dry run, an environment container that would be re-baked
-		 * comes back empty -- no container serializes to nothing, so it reads as a change -- because
-		 * its map's name follows from the cooked pixels, and resolving it would cost the convolution. Geometry goes through the regeneration seam, so a stale group
+		 * this does not migrate. Geometry goes through the regeneration seam, so a stale group
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
 		 * one (a binding naming a vanished submesh is this file's failure); everything else is
 		 * read and re-saved at the current form.
+		 *
+		 * On a dry run, an environment container that would be re-baked comes back empty -- no
+		 * container serializes to nothing, so it reads as a change -- because its map's name
+		 * follows from the cooked pixels, and resolving it would cost the convolution.
 		 */
 		std::optional<std::vector<std::byte>>
 		resave(
