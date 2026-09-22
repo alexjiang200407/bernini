@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 namespace assetlib
 {
@@ -7,6 +8,17 @@ namespace assetlib
 
 	[[nodiscard]] bool
 	isBakedMapName(std::string_view fileName) noexcept;
+
+	/**
+	 * The mount key a material's texture reference is drawn from. A reference ending `.ktx2` names a
+	 * file and comes back as it is; an empty one stays empty. Anything else is a baked map's content
+	 * name, `<dir>/<group>_<16 hex>`, which names no file: it resolves to the one the encoding table
+	 * stores that group's role in today.
+	 *
+	 * @throws std::runtime_error if a content name's group is not one a material bake writes.
+	 */
+	[[nodiscard]] std::string
+	bakedTextureKey(std::string_view reference);
 
 	/**
 	 * Strips the authoring data from a baked material, leaving the shippable form: the baked maps,

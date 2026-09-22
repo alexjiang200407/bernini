@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -792,6 +793,38 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	CHECK(
 		game::MaterialTextures(surface, false, 0b10) ==
 		std::vector<std::string>{ "Textures/albedo.ktx2", "Textures/ao.ktx2", "", "", "" });
+}
+
+TEST_CASE(
+	"MaterialTextures draws a baked map from the file its content name resolves to",
+	"[gamelib][assets]")
+{
+	// A content name names no file, so handing one to the texture cache would draw nothing. Every
+	// baked field goes through the resolver; a file key passes it unchanged.
+	auto baked                              = assetlib::BMaterial();
+	baked.pbr.baseColorTexture              = "Derived/BakedTextures/basecolor_0123456789abcdef";
+	baked.pbr.normalTexture                 = "Textures/nrm.ktx2";
+	baked.pbr.geometryOcclusionTexture      = "Textures/wall_ao.ktx2";
+	baked.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_0123456789abcdef";
+
+	const std::vector<std::string> pbr = game::MaterialTextures(baked, false, 0, true);
+	CHECK(pbr[0] == assetlib::bakedTextureKey(baked.pbr.baseColorTexture));
+	CHECK(pbr[0].ends_with(".ktx2"));
+	CHECK(pbr[1] == "Textures/nrm.ktx2");
+	CHECK(pbr[2].empty());
+	CHECK(pbr[3] == assetlib::bakedTextureKey(baked.pbr.geometryOcclusionBakedTexture));
+
+	auto surface         = assetlib::BMaterial();
+	surface.shadingModel = assetlib::ShadingModel::kPbrSurface;
+
+	auto& routed     = surface.surface.textures.emplace_back();
+	routed.name      = "orm";
+	routed.routes[0] = { "Textures/ao.ktx2", 0 };
+	routed.bakedPath = "Derived/BakedTextures/slot_0123456789abcdef";
+
+	CHECK(
+		game::MaterialTextures(surface, false) ==
+		std::vector<std::string>{ assetlib::bakedTextureKey(routed.bakedPath) });
 }
 
 TEST_CASE("A prefetched texture is uploaded without its file being read", "[gamelib][assets]")
