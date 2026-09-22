@@ -140,6 +140,7 @@ TEST_CASE("the staleness methods answer as the free functions do", "[assetsource
 	// them.
 	BSky sky;
 	sky.sky.source = "Derived/SourceTextures/skin.ktx2";
+	sky.sky.baked  = "Derived/SourceTextures/skin.ktx2";
 	CHECK(store.IsSkyBakeStale(sky) == isSkyBakeStale(sky, loose));
 	CHECK(store.EnvMapToDraw(sky.sky) == envMapToDraw(sky.sky, loose));
 

@@ -4,8 +4,11 @@
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
+#include <assetlib/project_layout.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
@@ -97,52 +100,57 @@ namespace
 		operator=(const EnvMaps&) = delete;
 	};
 
-	/** The float cubes one environment bakes from, written where a route can name them. */
-	struct Sources
+	/**
+	 * One environment as a project imports it: a gradient cube under `Authored/EnvSources` with the
+	 * `.bimport` beside it that says what it is cooked at, which is what a bake reads.
+	 */
+	struct Source
 	{
-		std::filesystem::path root;
-		assetlib::ImageData   sky;
-		assetlib::ImageData   prefilter;
-		assetlib::ImageData   irradiance;
+		std::filesystem::path                 root;
+		assetlib::ImageData                   radiance;
+		assetlib::EnvironmentImportParameters parameters;
 
-		Sources() : root(std::filesystem::temp_directory_path() / "bernini_env_compression")
+		Source() : root(std::filesystem::temp_directory_path() / "bernini_env_compression")
 		{
 			std::filesystem::remove_all(root);
-			std::filesystem::create_directories(root / "Derived/SourceTextures");
+			std::filesystem::create_directories(root / assetlib::c_EnvSourcesDirectoryName);
 
-			sky = GradientSky(c_SourceFace);
+			radiance = GradientSky(c_SourceFace);
 
-			auto desc      = assetlib::PrefilterDesc();
-			desc.faceSize  = c_SourceFace;
-			desc.mipLevels = c_PrefilterMips;
-			desc.samples   = 32;
-			prefilter      = assetlib::prefilterRadiance(sky, desc, nullptr);
-			irradiance     = assetlib::irradianceSh(sky, c_IrradianceFace);
+			parameters.skyFaceSize        = c_SourceFace;
+			parameters.skyMips            = 1;
+			parameters.prefilterFaceSize  = c_SourceFace;
+			parameters.prefilterMips      = c_PrefilterMips;
+			parameters.prefilterSamples   = 32;
+			parameters.irradianceFaceSize = c_IrradianceFace;
 
-			Write(sky, c_SkyKey);
-			Write(prefilter, c_PrefilterKey);
-			Write(irradiance, c_IrradianceKey);
+			assetlib::writeKTX2(radiance, root / c_Key, false, assetlib::Ktx2Compression::kNone);
+
+			auto document        = assetlib::ImportDocument();
+			document.source      = c_Key;
+			document.environment = parameters;
+			assetlib::AssetStore(root).Save(document, assetlib::importDocumentKeyFor(c_Key));
 		}
 
-		~Sources() { std::filesystem::remove_all(root); }
+		~Source() { std::filesystem::remove_all(root); }
 
-		Sources(const Sources&) = delete;
-		Sources&
-		operator=(const Sources&) = delete;
+		Source(const Source&) = delete;
+		Source&
+		operator=(const Source&) = delete;
 
-		/** What the bake makes of them: BC7 sky and prefilter, RGB9E5 irradiance. */
+		/** What the bake makes of it: BC7 sky and prefilter, RGB9E5 irradiance. */
 		[[nodiscard]] EnvMaps
 		Baked() const
 		{
 			const auto store = assetlib::AssetStore(root);
 
 			auto bakedSky       = assetlib::BSky();
-			bakedSky.sky.source = c_SkyKey;
+			bakedSky.sky.source = c_Key;
 			store.BakeSky(bakedSky);
 
 			auto lighting              = assetlib::BEnvLighting();
-			lighting.prefilter.source  = c_PrefilterKey;
-			lighting.irradiance.source = c_IrradianceKey;
+			lighting.prefilter.source  = c_Key;
+			lighting.irradiance.source = c_Key;
 			store.BakeEnvLighting(lighting);
 
 			return { assetlib::loadKTX2(root / bakedSky.sky.baked),
@@ -150,25 +158,27 @@ namespace
 				     assetlib::loadKTX2(root / lighting.irradiance.baked) };
 		}
 
-		/** The same three maps as every one of them shipped before BC7: RGB9E5. */
+		/**
+		 * The same three maps, convolved by the same functions at the same parameters, packed as
+		 * every one of them shipped before BC7: RGB9E5.
+		 */
 		[[nodiscard]] EnvMaps
 		Rgb9e5() const
 		{
-			return { assetlib::packRgb9e5(sky),
-				     assetlib::packRgb9e5(prefilter),
-				     assetlib::packRgb9e5(irradiance) };
+			auto desc      = assetlib::PrefilterDesc();
+			desc.faceSize  = parameters.prefilterFaceSize;
+			desc.mipLevels = parameters.prefilterMips;
+			desc.samples   = parameters.prefilterSamples;
+
+			return { assetlib::packRgb9e5(
+						 assetlib::skyChain(radiance, parameters.skyFaceSize, parameters.skyMips)),
+				     assetlib::packRgb9e5(assetlib::prefilterRadiance(radiance, desc, nullptr)),
+				     assetlib::packRgb9e5(
+						 assetlib::irradianceSh(radiance, parameters.irradianceFaceSize)) };
 		}
 
 	private:
-		static constexpr const char* c_SkyKey        = "Derived/SourceTextures/sky.ktx2";
-		static constexpr const char* c_PrefilterKey  = "Derived/SourceTextures/prefilter.ktx2";
-		static constexpr const char* c_IrradianceKey = "Derived/SourceTextures/irradiance.ktx2";
-
-		void
-		Write(const assetlib::ImageData& image, const char* key) const
-		{
-			assetlib::writeKTX2(image, root / key, false, assetlib::Ktx2Compression::kNone);
-		}
+		static constexpr const char* c_Key = "Authored/EnvSources/sky.ktx2";
 	};
 
 	/**
@@ -253,9 +263,9 @@ TEST_CASE(
 	"A BC7 environment renders within 40 dB of its RGB9E5 bake",
 	"[ibl][skybox][envbake][render]")
 {
-	const Sources sources;
+	const Source source;
 
-	auto baked = sources.Baked();
+	auto baked = source.Baked();
 	REQUIRE(baked.sky.vkFormat == assetlib::VkFormat::BC7_SRGB_BLOCK);
 	REQUIRE(baked.prefilter.vkFormat == assetlib::VkFormat::BC7_SRGB_BLOCK);
 	REQUIRE(baked.prefilter.mipLevels == c_PrefilterMips);
@@ -264,7 +274,7 @@ TEST_CASE(
 	const std::string rgb9e5 = "assets/golden/env_compression_rgb9e5.got.png";
 
 	Shoot(std::move(baked), bc7);
-	Shoot(sources.Rgb9e5(), rgb9e5);
+	Shoot(source.Rgb9e5(), rgb9e5);
 
 	const auto sphere   = bgl::test::MeanColor(bc7, c_SphereX, c_SphereY, c_BoxSize, c_BoxSize);
 	const auto backdrop = bgl::test::MeanColor(bc7, c_BackdropX, c_BackdropY, c_BoxSize, c_BoxSize);

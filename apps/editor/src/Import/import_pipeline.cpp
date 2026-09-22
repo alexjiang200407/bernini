@@ -368,7 +368,6 @@ namespace editor
 
 		desc.skyDir      = std::filesystem::path(dialog.GetSkyDirectory().toStdWString());
 		desc.lightingDir = std::filesystem::path(dialog.GetLightingDirectory().toStdWString());
-		desc.sourceDir   = std::filesystem::path(dialog.GetSourceDirectory().toStdWString());
 		desc.importedSourceDir =
 			std::filesystem::path(dialog.GetImportedSourceDirectory().toStdWString());
 

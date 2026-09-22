@@ -163,7 +163,7 @@ namespace assetlib
 		static constexpr std::string_view c_Extension = c_SkyExtension;
 		static constexpr AssetType        c_Type      = AssetType::kSky;
 		static constexpr uint32_t         c_Magic     = magic::c_BSky;
-		static constexpr uint64_t         c_BakeToken = 0x7c25e8b1904dfa36ull;
+		static constexpr uint64_t         c_BakeToken = 0xe4953f8c7c481c07ull;
 
 		[[nodiscard]] static std::vector<std::byte>
 		Serialize(const BSky& value);
@@ -179,7 +179,7 @@ namespace assetlib
 		static constexpr std::string_view c_Extension = c_EnvLightingExtension;
 		static constexpr AssetType        c_Type      = AssetType::kEnvLighting;
 		static constexpr uint32_t         c_Magic     = magic::c_BEnvL;
-		static constexpr uint64_t         c_BakeToken = 0xd48f19c7a35b062eull;
+		static constexpr uint64_t         c_BakeToken = 0xde4ee8df9d425a20ull;
 
 		[[nodiscard]] static std::vector<std::byte>
 		Serialize(const BEnvLighting& value);

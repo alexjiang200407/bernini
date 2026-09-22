@@ -95,17 +95,6 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		"one of them.");
 	layout->addWidget(m_ImportEnvironment);
 
-	m_SourceDir = editor::AddFolderRow(
-		layout,
-		this,
-		{ .label       = "Sources folder:",
-	      .category    = assetlib::c_SourceTexturesDirectoryName,
-	      .objectName  = "sourceDirectory",
-	      .placeholder = c_OptionalPlaceholder,
-	      .tip = "Subfolder of Derived/SourceTextures/ for the float intermediates each part is "
-	             "baked from. "
-	             "They are what a re-bake reads, so they are kept rather than being scratch." });
-
 	m_ImportedSourceDir = editor::AddFolderRow(
 		layout,
 		this,
@@ -174,14 +163,6 @@ EnvironmentImporterDialog::GetLightingDirectory() const
 	return editor::JoinCategory(
 		assetlib::c_EnvLightingDirectoryName,
 		m_LightingDir->text().trimmed());
-}
-
-QString
-EnvironmentImporterDialog::GetSourceDirectory() const
-{
-	return editor::JoinCategory(
-		assetlib::c_SourceTexturesDirectoryName,
-		m_SourceDir->text().trimmed());
 }
 
 QString
