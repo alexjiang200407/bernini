@@ -35,7 +35,6 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
-#include "env_parts.h"
 #include "mounted_io.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
@@ -178,11 +177,7 @@ namespace
 	std::vector<std::string>
 	FamilyOutputs()
 	{
-		return { "Derived/EnvLighting/forest.benvl",
-			     "Derived/Sky/forest.bsky",
-			     "Derived/SourceTextures/forest_irradiance.ktx2",
-			     "Derived/SourceTextures/forest_prefilter.ktx2",
-			     "Derived/SourceTextures/forest_sky.ktx2" };
+		return { "Derived/EnvLighting/forest.benvl", "Derived/Sky/forest.bsky" };
 	}
 }
 
@@ -202,11 +197,8 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 	CHECK(sandbox.Has(result.lighting));
 	CHECK(sandbox.Has(result.environment));
 
-	// The float intermediates are the routed sources a re-bake reads, so they are part of the import
-	// rather than scratch.
-	CHECK(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
-	CHECK(sandbox.Has("Derived/SourceTextures/forest_prefilter.ktx2"));
-	CHECK(sandbox.Has("Derived/SourceTextures/forest_irradiance.ktx2"));
+	// Nothing float is kept: every route names the copied source, and a re-bake cooks from it.
+	CHECK_FALSE(sandbox.Has("Derived/SourceTextures"));
 
 	// And it loads back as one environment: the .benv names the pair, each names its baked map, and
 	// nothing is stale the moment it was written.
@@ -215,18 +207,29 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 	CHECK(env.lighting == result.lighting);
 
 	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(result.sky);
+	CHECK(sky.sky.source == result.source);
 	CHECK_FALSE(sky.sky.baked.empty());
 	CHECK(sandbox.Has(sky.sky.baked));
 	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 
 	const BEnvLighting lighting = StoreAt(sandbox.DataRoot()).Load<BEnvLighting>(result.lighting);
+	CHECK(lighting.prefilter.source == result.source);
+	CHECK(lighting.irradiance.source == result.source);
 	CHECK_FALSE(isEnvLightingBakeStale(lighting, MountAt(sandbox.DataRoot())));
 
 	// A constant environment's exposure is 1 / (0.96 * radiance) -- the same value bakeEnvLighting
 	// derives, which is what says the import ran the real bake rather than a shortcut.
 	CHECK(result.exposure == Catch::Approx(1.0 / (0.96 * 0.5)).epsilon(0.01));
 
-	CHECK(result.written.size() >= 6);
+	// Baked maps are content-addressed and shared, so what the import created is the rest.
+	auto written = result.written;
+	std::ranges::sort(written);
+	CHECK(
+		written == std::vector<std::string>{ "Authored/EnvSources/forest.bimport",
+	                                         "Authored/EnvSources/forest.ktx2",
+	                                         "Authored/Environments/forest.benv",
+	                                         "Derived/EnvLighting/forest.benvl",
+	                                         "Derived/Sky/forest.bsky" });
 }
 
 // The checkboxes. A sky is re-authored in seconds and the lighting takes minutes, so paying for the
@@ -247,7 +250,6 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		CHECK(result.environment.empty());
 		CHECK(sandbox.Has(result.sky));
 		CHECK_FALSE(sandbox.Has("Derived/EnvLighting/forest.benvl"));
-		CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_prefilter.ktx2"));
 
 		// No lighting means nothing derived an exposure, and reporting one would be inventing it.
 		CHECK(result.exposure == Catch::Approx(1.0f));
@@ -266,7 +268,6 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		CHECK(result.sky.empty());
 		CHECK(sandbox.Has(result.lighting));
 		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
-		CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 	}
 
 	SECTION("an environment composes only the half that was written")
@@ -296,7 +297,6 @@ TEST_CASE("A cancelled import is refused before it writes anything", "[envimport
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(sandbox.Desc(), stop.get_token()), Cancelled);
 
 	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
-	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
 }
 
@@ -324,9 +324,8 @@ TEST_CASE("A failure part-way rolls back what it had written", "[envimport]")
 
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
-	// The sky was fully written -- source, bake and `.bsky` -- before the lighting failed.
+	// The sky was fully written -- bake and `.bsky` -- before the lighting failed.
 	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
-	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 	CHECK_FALSE(sandbox.Has("Authored/Environments/forest.benv"));
 
 	// The copy went in first and the document goes in last; a failure between them takes the first
@@ -341,20 +340,20 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 {
 	const Sandbox sandbox("bernini_envimport_spares");
 
-	// Put the sky's source there first, so the failing import overwrites it rather than creating it.
-	fs::create_directories(sandbox.DataRoot() / "Derived/SourceTextures");
-	writeKTX2(
-		ConstantCube(8, 0.25f),
-		sandbox.DataRoot() / "Derived/SourceTextures" / "forest_sky.ktx2",
-		false,
-		Ktx2Compression::kNone);
+	// Put the `.bsky` there first, so the failing import overwrites it rather than creating it.
+	auto sky        = sandbox.Desc();
+	sky.lighting    = false;
+	sky.environment = false;
+	static_cast<void>(sandbox.Store().ImportEnvironment(sky));
+	fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.bimport");
+	fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.ktx2");
 
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
-	// The `.bsky` was this import's, and goes. The source was already there, and stays -- deleting it
+	// The copy was this import's, and goes. The `.bsky` was already there, and stays -- deleting it
 	// would destroy whatever wrote it first.
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
-	CHECK(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
+	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
 }
 
 // Baked maps are content-addressed and shared, so the map an import wrote may be one another
@@ -447,7 +446,6 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		CHECK(names(targets, "Derived/Sky/forest.bsky"));
 		CHECK(names(targets, "Derived/EnvLighting/forest.benvl"));
 		CHECK(names(targets, "Authored/Environments/forest.benv"));
-		CHECK(names(targets, "Derived/SourceTextures/forest_sky.ktx2"));
 
 		// Content-addressed, so a collision with one is two imports agreeing rather than one
 		// destroying the other -- naming them here would refuse an import that is not in conflict.
@@ -464,7 +462,7 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
 
 		CHECK(std::ranges::none_of(targets, [](const std::string& t) {
-			return t.ends_with(".benvl") || t.ends_with("_prefilter.ktx2");
+			return t.ends_with(".benvl");
 		}));
 	}
 
@@ -646,8 +644,10 @@ TEST_CASE("The lighting's pixels do not depend on the sky's face size", "[envimp
 		desc.source                 = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
 		desc.parameters.skyFaceSize = skyFaceSize;
 		static_cast<void>(sandbox.Store().ImportEnvironment(desc));
-		return std::pair{ sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2"),
-			              sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2") };
+		const BEnvLighting lighting =
+			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>("Derived/EnvLighting/forest.benvl");
+		return std::pair{ sandbox.Bytes(lighting.prefilter.baked),
+			              sandbox.Bytes(lighting.irradiance.baked) };
 	};
 
 	// 16 is the lighting's own projection size at a prefilter of 8, so the first shares the sky's
@@ -731,14 +731,14 @@ TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport
 	}
 }
 
-// Producing only what is missing is the point of splitting a part's files: a lost container beside
-// its float chain is a bake from that chain, where re-running the part is minutes of convolution.
-TEST_CASE("A lost container is baked from the cube still on disk", "[envimport][reimport]")
+// Producing only what is missing is the point of splitting the parts: a lost sky is seconds of
+// projection, and must not cost the lighting's minutes of convolution.
+TEST_CASE("A lost container is re-cooked alone", "[envimport][reimport]")
 {
 	const Sandbox sandbox("bernini_envreimport_container");
 	static_cast<void>(ImportGradient(sandbox));
 
-	const auto chainAt               = WrittenAt(sandbox, "Derived/SourceTextures/forest_sky.ktx2");
+	const auto lightingAt            = WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl");
 	const std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
 	fs::remove(sandbox.DataRoot() / "Derived/Sky/forest.bsky");
 
@@ -748,30 +748,35 @@ TEST_CASE("A lost container is baked from the cube still on disk", "[envimport][
 	CHECK(entry->written == std::vector<std::string>{ "Derived/Sky/forest.bsky" });
 
 	CHECK(sandbox.Bytes("Derived/Sky/forest.bsky") == sky);
-	CHECK(WrittenAt(sandbox, "Derived/SourceTextures/forest_sky.ktx2") == chainAt);
+	CHECK(WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl") == lightingAt);
 }
 
-TEST_CASE("A lost cube is produced alone, beside the part's others", "[envimport][reimport]")
+// No float source is left to draw instead, so a baked map lost under a container that is still there
+// would leave the environment unloadable. Migrate re-bakes it, as it re-bakes a material's triplet.
+TEST_CASE("Migrate re-bakes a map lost from under its container", "[envimport][reimport]")
 {
-	const Sandbox sandbox("bernini_envreimport_cube");
+	const Sandbox sandbox("bernini_envreimport_bakedmap");
 	static_cast<void>(ImportGradient(sandbox));
 
-	const auto prefilterAt = WrittenAt(sandbox, "Derived/SourceTextures/forest_prefilter.ktx2");
-	const auto lightingAt  = WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl");
-	const std::vector<std::byte> irradiance =
-		sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2");
-	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_irradiance.ktx2");
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	const std::vector<std::byte> baked = sandbox.Bytes(sky.sky.baked);
+	fs::remove(sandbox.DataRoot() / sky.sky.baked);
+	REQUIRE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 
-	const ReimportReport report = sandbox.Store().Reimport(false);
-	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
-	REQUIRE(entry != nullptr);
-	CHECK(
-		entry->written ==
-		std::vector<std::string>{ "Derived/SourceTextures/forest_irradiance.ktx2" });
+	// The preview names it without cooking it, and writes nothing.
+	const MigrateReport dry = sandbox.Store().Migrate(true);
+	CHECK(std::ranges::any_of(dry.files, [&](const MigratedFile& file) {
+		return file.path == sandbox.DataRoot() / "Derived/Sky/forest.bsky" &&
+		       file.outcome == MigratedFile::Outcome::kRewritten;
+	}));
+	CHECK_FALSE(sandbox.Has(sky.sky.baked));
 
-	CHECK(sandbox.Bytes("Derived/SourceTextures/forest_irradiance.ktx2") == irradiance);
-	CHECK(WrittenAt(sandbox, "Derived/SourceTextures/forest_prefilter.ktx2") == prefilterAt);
-	CHECK(WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl") == lightingAt);
+	const MigrateReport report = sandbox.Store().Migrate(false);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(sandbox.Bytes(sky.sky.baked) == baked);
+	CHECK_FALSE(isSkyBakeStale(
+		StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"),
+		MountAt(sandbox.DataRoot())));
 }
 
 TEST_CASE("A dry run names an absent environment's files and writes none", "[envimport][reimport]")
@@ -830,13 +835,24 @@ namespace
 		StoreAt(sandbox.DataRoot()).Save(document, "Authored/EnvSources/forest.bimport");
 	}
 
-	const std::vector<std::string> c_SkyOutputs      = { "Derived/Sky/forest.bsky",
-		                                                 "Derived/SourceTextures/forest_sky.ktx2" };
-	const std::vector<std::string> c_LightingOutputs = {
-		"Derived/EnvLighting/forest.benvl",
-		"Derived/SourceTextures/forest_irradiance.ktx2",
-		"Derived/SourceTextures/forest_prefilter.ktx2"
-	};
+	const std::vector<std::string> c_SkyOutputs      = { "Derived/Sky/forest.bsky" };
+	const std::vector<std::string> c_LightingOutputs = { "Derived/EnvLighting/forest.benvl" };
+
+	/** The map a part's container names, decoded. */
+	ImageData
+	BakedSky(const Sandbox& sandbox)
+	{
+		const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+		return loadKTX2(sandbox.DataRoot() / sky.sky.baked);
+	}
+
+	std::vector<std::byte>
+	BakedPrefilter(const Sandbox& sandbox)
+	{
+		const BEnvLighting lighting =
+			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>("Derived/EnvLighting/forest.benvl");
+		return sandbox.Bytes(lighting.prefilter.baked);
+	}
 
 	std::vector<decltype(WrittenAt(std::declval<const Sandbox&>(), ""))>
 	WrittenAll(const Sandbox& sandbox, const std::vector<std::string>& files)
@@ -872,7 +888,7 @@ TEST_CASE("An edited sky parameter re-cooks the sky alone", "[envimport][stale]"
 
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") == c_SkyOutputs);
-	CHECK(loadKTX2(sandbox.DataRoot() / "Derived/SourceTextures/forest_sky.ktx2").mipLevels == 2);
+	CHECK(BakedSky(sandbox).mipLevels == 2);
 	CHECK(WrittenAll(sandbox, c_LightingOutputs) == lightingAt);
 
 	const ImportDocument after = sandbox.Document();
@@ -880,7 +896,7 @@ TEST_CASE("An edited sky parameter re-cooks the sky alone", "[envimport][stale]"
 	CHECK(after.envLightingParametersHash == before.envLightingParametersHash);
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 
-	// The container was re-baked from the new chain, so it is current against it.
+	// The container was re-baked at the new parameters, so it is current against its source.
 	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
 	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 }
@@ -908,8 +924,7 @@ TEST_CASE("A source re-exported in place re-cooks every part", "[envimport][stal
 {
 	const Sandbox sandbox("bernini_envstale_source");
 	static_cast<void>(ImportGradient(sandbox));
-	const std::vector<std::byte> prefilter =
-		sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2");
+	const std::vector<std::byte> prefilter = BakedPrefilter(sandbox);
 
 	WriteGradientHdr(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr", 131);
 	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
@@ -917,14 +932,14 @@ TEST_CASE("A source re-exported in place re-cooks every part", "[envimport][stal
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
 		GradientOutputs());
-	CHECK(sandbox.Bytes("Derived/SourceTextures/forest_prefilter.ktx2") != prefilter);
+	CHECK(BakedPrefilter(sandbox) != prefilter);
 	CHECK(
 		sandbox.Document().envSourceStamp ==
 		stampOf(sandbox.DataRoot() / "Authored/EnvSources/forest.hdr"));
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
-// A float cube carries no header, so the revision of the code that wrote it lives in the document.
+// A baked map carries no header, so the revision of the code that wrote it lives in the document.
 TEST_CASE("A moved revision re-cooks every part", "[envimport][stale]")
 {
 	const Sandbox sandbox("bernini_envstale_token");
@@ -987,7 +1002,7 @@ TEST_CASE("Migrate re-cooks a stale environment; a dry run only names it", "[env
 	const MigrateReport wet = sandbox.Store().Migrate(false);
 	CHECK(wet.Count(MigratedFile::Outcome::kFailed) == 0);
 	CHECK(hasPath(wet, "Derived/Sky/forest.bsky"));
-	CHECK(hasPath(wet, "Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Derived/SourceTextures"));
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
@@ -1000,7 +1015,7 @@ TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]
 	EditDocument(sandbox, [](ImportDocument& document) {
 		document.environment->prefilterSamples = 8;
 	});
-	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_prefilter.ktx2");
+	fs::remove(sandbox.DataRoot() / "Derived/EnvLighting/forest.benvl");
 
 	const MigrateReport report = sandbox.Store().Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
@@ -1016,29 +1031,53 @@ TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
-// `ReimportedSource::written` promises every file that landed before a failure. A part that writes one
-// cube and then throws on the next is the case that promise is for.
-TEST_CASE("A cube written before its part throws is still reported", "[envimport][reimport]")
+// `ReimportedSource::written` promises every file that landed before a failure. A sky written and then a
+// lighting that throws is the case that promise is for.
+TEST_CASE("A part written before a later one throws is still reported", "[envimport][reimport]")
 {
 	const Sandbox sandbox("bernini_envreimport_partial");
 	static_cast<void>(ImportGradient(sandbox));
 
-	// Eight texels a side cannot carry five mips, so the prefilter refuses after the irradiance is
-	// already on disk.
+	// Eight texels a side cannot carry five mips, so the lighting refuses after the sky is already on
+	// disk.
 	EditDocument(sandbox, [](ImportDocument& document) {
 		document.environment->prefilterMips = 5;
 	});
-	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_irradiance.ktx2");
-	fs::remove(sandbox.DataRoot() / "Derived/SourceTextures/forest_prefilter.ktx2");
+	fs::remove(sandbox.DataRoot() / "Derived/Sky/forest.bsky");
+	fs::remove(sandbox.DataRoot() / "Derived/EnvLighting/forest.benvl");
 
 	const ReimportReport report = sandbox.Store().Reimport(false);
 	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
 	REQUIRE(entry != nullptr);
 	CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("mips"));
+	CHECK(entry->written == std::vector<std::string>{ "Derived/Sky/forest.bsky" });
+	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
+}
+
+// A project an older build imported claims the float cubes it wrote beside each container. Those are
+// nobody's output now, and a document that still named them would have Reimport try to produce them.
+TEST_CASE("A document claiming the old float cubes reads without them", "[envimport][importdoc]")
+{
+	const Sandbox sandbox("bernini_envimport_retired");
+	static_cast<void>(ImportGradient(sandbox));
+
+	EditDocument(sandbox, [](ImportDocument& document) {
+		document.outputs.push_back("Derived/SourceTextures/forest_sky.ktx2");
+		document.outputs.push_back("Derived/SourceTextures/forest_prefilter.ktx2");
+		document.outputs.push_back("Derived/SourceTextures/forest_irradiance.ktx2");
+		document.envSourceBakeToken = 1;
+	});
+	CHECK(sandbox.Document().outputs == GradientOutputs());
+
 	CHECK(
-		entry->written ==
-		std::vector<std::string>{ "Derived/SourceTextures/forest_irradiance.ktx2" });
-	CHECK(sandbox.Has("Derived/SourceTextures/forest_irradiance.ktx2"));
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
+		GradientOutputs());
+	CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);
+	CHECK_FALSE(sandbox.Has("Derived/SourceTextures"));
+
+	const std::vector<std::byte> bytes = sandbox.Bytes("Authored/EnvSources/forest.bimport");
+	const auto text = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	CHECK(text.find("_sky.ktx2") == std::string::npos);
 }
 
 namespace
@@ -1083,21 +1122,19 @@ namespace
 			loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport");
 		CHECK(document.outputs == RenamedOutputs("dusk"));
 
-		// The part suffix is how a cube's part is told; a rename that dropped it would turn the sky's
-		// cube into a lighting output.
-		CHECK(
-			environmentOutputOf("Derived/SourceTextures/dusk_sky.ktx2") ==
-			EnvironmentOutput::kSkySource);
-
 		// Everything that names the family follows it: the authored `.benv`, and the containers'
-		// routes into their cubes.
+		// routes into the source.
 		const BEnv env =
 			StoreAt(sandbox.DataRoot()).Load<BEnv>("Authored/Environments/forest.benv");
 		CHECK(env.sky == "Derived/Sky/dusk.bsky");
 		CHECK(env.lighting == "Derived/EnvLighting/dusk.benvl");
 		CHECK(
 			StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/dusk.bsky").sky.source ==
-			"Derived/SourceTextures/dusk_sky.ktx2");
+			document.source);
+		CHECK(
+			StoreAt(sandbox.DataRoot())
+				.Load<BEnvLighting>("Derived/EnvLighting/dusk.benvl")
+				.prefilter.source == document.source);
 
 		const AssetStore store = sandbox.Store();
 		CHECK(AssetRefGraph::Scan(store).broken.empty());
@@ -1218,10 +1255,10 @@ TEST_CASE(
 	}
 }
 
-// The mesh rule, unchanged: the document goes and takes the source it alone names; the containers it
-// produced stay, because a document's claim is not a reference.
+// The containers it produced stay, because a document's claim is not a reference -- and so does the
+// source, because they route it: it is what their next bake cooks.
 TEST_CASE(
-	"Deleting an environment's document takes its source and leaves the rest",
+	"Deleting an environment's document leaves the source its containers route",
 	"[envimport][cascade]")
 {
 	const Sandbox sandbox("bernini_envdelete_document");
@@ -1229,7 +1266,8 @@ TEST_CASE(
 
 	REQUIRE(
 		DeleteIn(sandbox, "Authored/EnvSources/forest.bimport").status == DeletionStatus::kDeleted);
-	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.hdr"));
+	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
+	CHECK(sandbox.Has("Authored/EnvSources/forest.hdr"));
 	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
 }
 
@@ -1248,9 +1286,6 @@ TEST_CASE("An environment's source and parts are held by what names them", "[env
 	CHECK(DeleteIn(sandbox, "Authored/EnvSources/valley.ktx2").status == DeletionStatus::kRefused);
 	CHECK(sandbox.Has("Authored/EnvSources/valley.ktx2"));
 	CHECK(DeleteIn(sandbox, "Derived/Sky/forest.bsky").status == DeletionStatus::kRefused);
-	CHECK(
-		DeleteIn(sandbox, "Derived/SourceTextures/forest_sky.ktx2").status ==
-		DeletionStatus::kRefused);
 	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
 }
 

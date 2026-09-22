@@ -17,38 +17,21 @@ namespace assetlib
 		kLighting
 	};
 
-	/** The float cubes an import writes under `sourceDir`, one suffix apiece. */
-	inline constexpr std::string_view c_SkySourceSuffix        = "_sky.ktx2";
-	inline constexpr std::string_view c_PrefilterSourceSuffix  = "_prefilter.ktx2";
-	inline constexpr std::string_view c_IrradianceSourceSuffix = "_irradiance.ktx2";
-
-	/** What one file an environment import writes is. */
-	enum class EnvironmentOutput
-	{
-		kSkySource,
-		kSky,
-		kPrefilterSource,
-		kIrradianceSource,
-		kLighting
-	};
+	/**
+	 * Which part `outputKey` is, read off the names `ImportEnvironment` gives its files -- the only
+	 * place those names are chosen: a `.bsky` is the sky, a `.benvl` the lighting. Nullopt for a key
+	 * no environment import writes.
+	 */
+	[[nodiscard]] std::optional<EnvironmentPart>
+	environmentPartOf(std::string_view outputKey);
 
 	/**
-	 * What `outputKey` is, read off the names `ImportEnvironment` gives its files -- the only place
-	 * those names are chosen. Nullopt for a key no environment import writes.
+	 * Whether `outputKey` names one of the float cubes an environment import wrote under
+	 * `Derived/SourceTextures/` before the bake read its source directly. A document still claiming
+	 * one is read as if it did not (ImportDocument's codec drops them), so nothing re-produces it.
 	 */
-	[[nodiscard]] std::optional<EnvironmentOutput>
-	environmentOutputOf(std::string_view outputKey);
-
-	/** The `.bsky` and its float cube are the sky; the `.benvl` and its two are the lighting. */
-	[[nodiscard]] EnvironmentPart
-	partOf(EnvironmentOutput output) noexcept;
-
-	/**
-	 * What `output`'s file name adds to the source's stem: `_sky` for the sky's cube, nothing for a
-	 * container. A rename keeps it, because it is how a cube's part is told.
-	 */
-	[[nodiscard]] std::string_view
-	outputStemSuffix(EnvironmentOutput output) noexcept;
+	[[nodiscard]] bool
+	isRetiredEnvironmentOutput(std::string_view outputKey) noexcept;
 
 	/** Whether `outputKey` is a file `part` writes. */
 	[[nodiscard]] bool

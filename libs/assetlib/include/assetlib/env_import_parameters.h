@@ -4,7 +4,7 @@
 namespace assetlib
 {
 	/**
-	 * What an environment import computes its float sources with -- the half of an import that
+	 * What an environment import computes its maps with -- the half of an import that
 	 * changes the pixels, and so the half an import document records and keys on.
 	 *
 	 * Its own header, apart from envmap.h, because an import document holds one by value and every
@@ -31,15 +31,16 @@ namespace assetlib
 	};
 
 	/**
-	 * The revision of the float sources an environment import writes: `equirectToCube`, `skyChain`,
-	 * `prefilterRadiance` and `irradianceSh` as they stand. A `.ktx2` has nowhere to carry a token,
-	 * so the import document records this beside the source's stamp, as a mesh import records
-	 * `c_TextureBakeToken`; one written under another revision is stale whatever the stamp says.
+	 * The revision of what an environment bake makes of its source: `equirectToCube`, `skyChain`,
+	 * `prefilterRadiance`, `irradianceSh` and the encoding each map is stored in, as they stand. A
+	 * baked `.ktx2` has nowhere to carry a token, so the import document records this beside the
+	 * source's stamp, as a mesh import records `c_TextureBakeToken`, and every baked map's name
+	 * covers it; a part cooked under another revision is stale whatever the stamp says.
 	 *
-	 * Moves on any change to the pixels those four produce, to a fresh random value, never a
-	 * counter. Unlike `c_TextureBakeToken` it has no `TokenCanary_test` pin: the four run through
+	 * Moves on any change to the pixels those produce, to a fresh random value, never a counter.
+	 * Unlike `c_TextureBakeToken` it has no `TokenCanary_test` pin: the convolutions run through
 	 * libm's trigonometry, whose last bits differ between platforms, so a pinned hash would fail on
 	 * the other one for a reason that is not a change. Remembering the bump is the author's.
 	 */
-	inline constexpr uint64_t c_EnvSourceBakeToken = 0x0f5c965369abe169ull;
+	inline constexpr uint64_t c_EnvSourceBakeToken = 0x8d51fb49b24e3694ull;
 }

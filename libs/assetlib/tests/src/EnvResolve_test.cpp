@@ -138,9 +138,9 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		CHECK(resolved.maps.exposure == Catch::Approx(1.0f));
 	}
 
-	// The state a fresh checkout is in: the baked maps are regenerated per platform and kept out of
-	// source control, so a sky arrives with its float source and nothing compiled from it.
-	SECTION("a referenced sky that was never baked resolves to its source")
+	// A source is an image to convolve, not one to sample, so a sky with no bake is not drawn from it:
+	// the load says how to get the bake instead.
+	SECTION("a referenced sky that was never baked throws, even with its source on disk")
 	{
 		writeKTX2(
 			GradientCube(16, 3.0f),
@@ -154,22 +154,9 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		StoreAt(root.path).Save(sky, "Derived/Sky/raw.bsky");
 		SaveAt(BEnv{ .name = "raw", .sky = "Derived/Sky/raw.bsky" }, root.path / "raw.benv");
 
-		const ResolvedEnvironment resolved =
-			resolveEnvironment(root.path / "raw.benv", MountAt(root.path));
-		CHECK(SamePixels(resolved.maps.skybox, GradientCube(16, 3.0f)));
-	}
-
-	SECTION("a referenced sky with neither a baked map nor a source throws")
-	{
-		BSky sky;
-		sky.name       = "raw";
-		sky.sky.source = "Derived/SourceTextures/raw.ktx2";
-		StoreAt(root.path).Save(sky, "Derived/Sky/raw.bsky");
-		SaveAt(BEnv{ .name = "raw", .sky = "Derived/Sky/raw.bsky" }, root.path / "raw.benv");
-
 		CHECK_THROWS_WITH(
 			resolveEnvironment(root.path / "raw.benv", MountAt(root.path)),
-			Catch::Matchers::ContainsSubstring("is on disk"));
+			Catch::Matchers::ContainsSubstring("migrate"));
 	}
 
 	SECTION("a dangling reference throws")

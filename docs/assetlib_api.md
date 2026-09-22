@@ -248,8 +248,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
   that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
   containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An environment's
-  float cubes keep their part suffix across the move. An output a
+  since the document names the new path either way and `Reimport` writes it there. An output a
   rename of its own has since taken off the source's stem is left where it is — its name no longer
   says it came from this source — and the document's reference to it is rewritten like any other.
 

@@ -320,7 +320,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BSky>::c_BakeToken,
-			Pin{ .token = 0x7c25e8b1904dfa36ull, .hash = 0xc4ad4035fc805a1full },
+			Pin{ .token = 0xe4953f8c7c481c07ull, .hash = 0x137f4544ff950969ull },
 			AssetCodec<BSky>::Serialize(CanarySky()));
 	}
 
@@ -328,7 +328,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BEnvLighting>::c_BakeToken,
-			Pin{ .token = 0xd48f19c7a35b062eull, .hash = 0x20569dd2f51e76d8ull },
+			Pin{ .token = 0xde4ee8df9d425a20ull, .hash = 0xc0ece8c4cca39e31ull },
 			AssetCodec<BEnvLighting>::Serialize(CanaryLighting()));
 	}
 

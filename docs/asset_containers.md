@@ -112,13 +112,14 @@ A `.bimport` names three things, two of which nothing else can derive
   document names none refuses at regeneration and says to run `migrate`.
 * **`outputs`** -- every derived file this source produced that a re-import can put back, as mount
   keys, sorted. For a mesh that is its containers: a *produced* rig is listed, a *bound* one is not,
-  so deleting a source never takes another source's rig with it. For an environment it is the `.bsky`,
-  the `.benvl` *and* their float cubes -- names an import fixes in advance, where a mesh's extracted
-  textures are named after images it has not read yet and so are keyed by folder instead.
+  so deleting a source never takes another source's rig with it. For an environment it is the `.bsky`
+  and the `.benvl` -- names an import fixes in advance, where a mesh's extracted textures are named
+  after images it has not read yet and so are keyed by folder instead. The float cubes an older
+  build wrote beside them are dropped from an environment document as it is read.
 
 An environment source's document differs in what `parameters` holds and in the key recorded beside
-it. Its `parameters` hold an `environment` object naming the six numbers that decide its float
-sources' pixels (`EnvironmentImportParameters`, in
+it. Its `parameters` hold an `environment` object naming the six numbers that decide its baked
+maps' pixels (`EnvironmentImportParameters`, in
 [env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h)), and no `sampleRate`, which nothing reads for it
 and which would otherwise re-key every environment whenever the mesh default moved. The float
 sources are keyed the way a mesh's extracted textures are, below: `envSourceStampSize` /
@@ -136,9 +137,7 @@ It is also what makes an import **renameable as one thing**. Every file here is 
 source, so `planRename` on a source (or on its `.bimport` -- one asset, two names) moves the source,
 the document and each output that still carries the source's stem, and rewrites every reference to
 any of them. What makes a file a source is a document naming it, not its extension -- an
-environment's may be a `.ktx2`, which is otherwise a texture. An environment's float cubes carry the
-stem plus their part (`forest_sky.ktx2`), and move to `<new>_sky.ktx2`: the suffix is how a cube's
-part is told. A document is never moved out of its category, `Authored/Meshes` or
+environment's may be a `.ktx2`, which is otherwise a texture. A document is never moved out of its category, `Authored/Meshes` or
 `Authored/EnvSources`, by a rename of its own or of a folder holding it, since that is the one place
 `Reimport` looks for it. A *bound* rig is not in `outputs` and so is never moved by the source that borrowed it;
 a *produced* one is moved, and the borrowing document is rewritten to follow. See
@@ -208,31 +207,22 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky`, `.benvl` and float cubes from `Reimport` when absent and from `migrate` when stale. |
-| **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it. |
-| **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky`, `.benvl` or float cubes back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
+| **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it, and `migrate` re-bakes one lost from under a container still on disk. |
+| **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky` or `.benvl` back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
 tree that `bgl_extended_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
 as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 
-The `forest` environment is the one half-exception, and it is deliberate. Its source lives in the
-tree (`Authored/EnvSources/forest.hdr`, Blender 5.2's CC0 `forest.exr` in Radiance form) with the
-`.bimport` recording the parameters it was made at, so a reader can see what an environment's
-authored half looks like. Its containers and baked maps stay exactly as committed rather than being
-re-cooked from it: the float cubes a re-cook writes are 43 MB, which a project ignores because
-`Reimport` puts them back and a fixture tree cannot. Re-importing at the recorded parameters
-reproduces the committed **baked** sky and irradiance maps byte for byte, which is what says the
-record is true. The `.bsky` and `.benvl` themselves would not: they predate the source-tracking
-scheme and carry no route, which a live bake would fill in.
-
-**That document claims no `outputs`, and an adopted one never should.** A claim is what `Reimport`
-reads as "produce this if it is absent", so claiming the float cubes beside an unrouted container
-has it write tens of megabytes that nothing references -- no route names them, no staleness compares
-them, and the prune sweeps `Derived/BakedTextures/` and not them. A document that records a source
-and the parameters it was made at, and claims nothing, says exactly what is true of one adopted
-beside files it did not produce.
+The `forest` environment shows what an environment's authored half looks like. Its source lives in
+the tree (`Authored/EnvSources/forest.hdr`, Blender 5.2's CC0 `forest.exr` in Radiance form) with
+the `.bimport` recording the parameters it was made at and claiming its `.bsky` and `.benvl`, and
+the containers and their baked maps are committed beside it because the suites read them. They are
+exactly what the source and the document produce: `Reimport` over a checkout missing them writes
+the same bytes, and `migrate` re-cooks them when `c_EnvSourceBakeToken` moves — which is how the
+committed set is kept current, since the tree is a fixture and not a project.
 
 A project that takes the second half up must run `assetlib_cli migrate` **before** it does: the
 producing side reads each source's `outputs`, and a document written before that field existed
@@ -260,17 +250,20 @@ binds, and a clip set sweeps its boxes through the meshes standing *on disk*, so
 run would measure a clip against a mesh that is not written yet. The whole work list is decided
 before any of it runs, which is what makes the count the sink is stepped through fixed.
 
-**A present environment file can be stale, and that is `migrate`'s.** A float cube has no header, so
-its key lives in the `.bimport`: the copied source's stamp and `c_EnvSourceBakeToken` for the whole
-document, and a hash of the parameters each part was written with. A source re-exported in place or a
-moved token stales every part the document claims; a hand-edited parameter stales only its own part,
-so re-shaping the sky never re-convolves the lighting. The refresh re-cooks the stale parts whole —
-cubes and the containers baked from them — and writes the document last, so a refresh that fails
-part-way is still reported stale.
+**A present environment file can be stale, and that is `migrate`'s.** A baked map has no header, so
+an environment's key lives in the `.bimport`: the copied source's stamp and `c_EnvSourceBakeToken`
+for the whole document, and a hash of the parameters each part was written with. A source
+re-exported in place or a moved token stales every part the document claims; a hand-edited
+parameter stales only its own part, so re-shaping the sky never re-convolves the lighting. The
+refresh re-cooks the stale parts — each container and the maps it names — and writes the document
+last, so a refresh that fails part-way is still reported stale. `migrate` runs it before its re-save
+walk, which is why a moved codec token on `.bsky` or `.benvl` is safe to ship with the moved
+`c_EnvSourceBakeToken`: the walk reads containers the refresh has just written. The walk also
+re-bakes a container whose baked map is missing, when its source is there to cook.
 
-**Environments come last and one at a time.** Each is decoded once and each *part* re-run for
-only the files it is missing, so a `.bsky` lost beside its float chain is a bake from that chain in
-seconds, and only a lost cube costs a convolution. Every convolution already spreads across all the
+**Environments come last and one at a time.** Each is decoded once and each *part* re-run only when
+its container is missing, so a lost `.bsky` is seconds of projection and does not cost the
+lighting's minutes of convolution. Every convolution already spreads across all the
 cores there are, so running two environments at once would only divide them. The producing code is
 the one the import runs (`src/env_produce.h`), which is what makes the result byte for byte a fresh
 import's. None of it depends on the thread count; the suite checks that by importing on one thread

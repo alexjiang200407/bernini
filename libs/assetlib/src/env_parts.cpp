@@ -13,67 +13,29 @@
 
 namespace assetlib
 {
-	std::optional<EnvironmentOutput>
-	environmentOutputOf(std::string_view outputKey)
+	std::optional<EnvironmentPart>
+	environmentPartOf(std::string_view outputKey)
 	{
 		const std::string extension = extensionOf(outputKey);
 		if (extension == c_SkyExtension)
-			return EnvironmentOutput::kSky;
+			return EnvironmentPart::kSky;
 		if (extension == c_EnvLightingExtension)
-			return EnvironmentOutput::kLighting;
-		if (outputKey.ends_with(c_SkySourceSuffix))
-			return EnvironmentOutput::kSkySource;
-		if (outputKey.ends_with(c_PrefilterSourceSuffix))
-			return EnvironmentOutput::kPrefilterSource;
-		if (outputKey.ends_with(c_IrradianceSourceSuffix))
-			return EnvironmentOutput::kIrradianceSource;
+			return EnvironmentPart::kLighting;
 
 		return std::nullopt;
 	}
 
-	EnvironmentPart
-	partOf(EnvironmentOutput output) noexcept
+	bool
+	isRetiredEnvironmentOutput(std::string_view outputKey) noexcept
 	{
-		switch (output)
-		{
-		case EnvironmentOutput::kSkySource:
-		case EnvironmentOutput::kSky:
-			return EnvironmentPart::kSky;
-		case EnvironmentOutput::kPrefilterSource:
-		case EnvironmentOutput::kIrradianceSource:
-		case EnvironmentOutput::kLighting:
-			return EnvironmentPart::kLighting;
-		}
-		return EnvironmentPart::kLighting;
-	}
-
-	std::string_view
-	outputStemSuffix(EnvironmentOutput output) noexcept
-	{
-		const auto stemPart = [](std::string_view suffix) {
-			return suffix.substr(0, suffix.size() - c_TextureExtension.size());
-		};
-
-		switch (output)
-		{
-		case EnvironmentOutput::kSkySource:
-			return stemPart(c_SkySourceSuffix);
-		case EnvironmentOutput::kPrefilterSource:
-			return stemPart(c_PrefilterSourceSuffix);
-		case EnvironmentOutput::kIrradianceSource:
-			return stemPart(c_IrradianceSourceSuffix);
-		case EnvironmentOutput::kSky:
-		case EnvironmentOutput::kLighting:
-			return {};
-		}
-		return {};
+		return outputKey.ends_with("_sky.ktx2") || outputKey.ends_with("_prefilter.ktx2") ||
+		       outputKey.ends_with("_irradiance.ktx2");
 	}
 
 	bool
 	isPartOutput(std::string_view outputKey, EnvironmentPart part)
 	{
-		const std::optional<EnvironmentOutput> output = environmentOutputOf(outputKey);
-		return output && partOf(*output) == part;
+		return environmentPartOf(outputKey) == part;
 	}
 
 	uint64_t

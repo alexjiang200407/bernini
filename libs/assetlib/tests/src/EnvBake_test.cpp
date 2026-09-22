@@ -1,6 +1,8 @@
 #include <assetlib/container_info.h>
+#include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
@@ -18,6 +20,8 @@
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/VkFormat.h>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
@@ -71,21 +75,35 @@ namespace
 		explicit DataRoot(const char* name) : path(std::filesystem::temp_directory_path() / name)
 		{
 			std::filesystem::remove_all(path);
-			std::filesystem::create_directories(path / "Derived/SourceTextures");
+			std::filesystem::create_directories(path / c_EnvSourcesDirectoryName);
 		}
 
 		~DataRoot() { std::filesystem::remove_all(path); }
 
 		/**
-		 * Writes a float cube of `radiance` under Derived/SourceTextures/ and returns its
-		 * data-root path.
+		 * Writes a float cube of `radiance` as an imported environment source, with the `.bimport`
+		 * beside it that says what it is cooked at -- `size` for every face, a two-level prefilter --
+		 * and returns its data-root path.
 		 */
 		std::string
 		AddSource(const char* name, uint32_t size, float radiance) const
 		{
-			const auto relative = std::filesystem::path("Derived/SourceTextures") / name;
-			writeKTX2(ConstantCube(size, radiance), path / relative, false, Ktx2Compression::kNone);
-			return relative.generic_string();
+			const std::string key = KeyIn(c_EnvSourcesDirectoryName, name);
+			writeKTX2(ConstantCube(size, radiance), path / key, false, Ktx2Compression::kNone);
+
+			auto parameters               = EnvironmentImportParameters();
+			parameters.skyFaceSize        = size;
+			parameters.skyMips            = 1;
+			parameters.prefilterFaceSize  = size;
+			parameters.prefilterMips      = 2;
+			parameters.prefilterSamples   = 4;
+			parameters.irradianceFaceSize = size / 2;
+
+			auto document        = ImportDocument();
+			document.source      = key;
+			document.environment = parameters;
+			StoreAt(path).Save(document, importDocumentKeyFor(key));
+			return key;
 		}
 	};
 
@@ -103,8 +121,8 @@ namespace
 	{
 		BEnvLighting lighting;
 		lighting.name              = "test";
-		lighting.prefilter.source  = root.AddSource("prefilter_src.ktx2", 8, radiance);
-		lighting.irradiance.source = root.AddSource("irradiance_src.ktx2", 4, radiance);
+		lighting.prefilter.source  = root.AddSource("lighting_src.ktx2", 8, radiance);
+		lighting.irradiance.source = lighting.prefilter.source;
 		return lighting;
 	}
 }
@@ -165,8 +183,8 @@ TEST_CASE("an LDR sky and prefilter bake to BC7 sRGB; the irradiance stays RGB9E
 		CHECK(loadKTX2(root.path / odd.sky.baked).vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32);
 	}
 
-	// The mtime test keeps a target newer than its source, so a source that changes range under
-	// the same route must land on a different name or the old encoding would be served.
+	// A map already on disk under its name is taken as this bake's, so everything that changes the
+	// pixels has to change the name: the source, and the parameters it is cooked at.
 	SECTION("a source that becomes HDR bakes to a different map")
 	{
 		root.AddSource("sky_src.ktx2", 8, 3.0f);
@@ -175,6 +193,20 @@ TEST_CASE("an LDR sky and prefilter bake to BC7 sRGB; the irradiance stays RGB9E
 
 		CHECK(hdr.sky.baked != sky.sky.baked);
 		CHECK(loadKTX2(root.path / hdr.sky.baked).vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32);
+	}
+
+	SECTION("an edited parameter bakes to a different map")
+	{
+		const std::string documentKey     = importDocumentKeyFor(sky.sky.source);
+		ImportDocument    document        = StoreAt(root.path).Load<ImportDocument>(documentKey);
+		document.environment->skyFaceSize = 4;
+		StoreAt(root.path).Save(document, documentKey);
+
+		BSky smaller = sky;
+		StoreAt(root.path).BakeSky(smaller);
+
+		CHECK(smaller.sky.baked != sky.sky.baked);
+		CHECK(loadKTX2(root.path / smaller.sky.baked).width == 4);
 	}
 }
 
@@ -355,7 +387,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	}
 }
 
-TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbake]")
+TEST_CASE("a route draws its baked map, and nothing else", "[envbake]")
 {
 	const DataRoot root("bernini_envbake_draw");
 
@@ -369,37 +401,30 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
-	// The case a fresh checkout is in: Textures/ is regenerated per platform and kept out of source
-	// control, so the sources arrive and the bakes do not.
-	SECTION("a baked map that was never written falls back to the source")
+	// A source is an image to convolve, not one to sample: drawing it would mean minutes of
+	// convolution inside a load, or a sky that is not the one the bake makes.
+	SECTION("a stale bake is still drawn")
 	{
-		std::filesystem::remove(root.path / baked);
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
-
-		BSky unbaked = RoutedSky(root);
-		CHECK(envMapToDraw(unbaked.sky, MountAt(root.path)) == unbaked.sky.source);
+		root.AddSource("sky_src.ktx2", 16, 1.0f);
+		REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
+		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
-	// The material's rule: loose is not a representation a route with no source can draw, so the
-	// baked map is kept even though the stamp says it no longer reflects anything.
 	SECTION("a deleted source keeps the baked map")
 	{
 		std::filesystem::remove(root.path / source);
 		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == baked);
 	}
 
-	SECTION("a stale bake is displaced by the source it drifted from")
+	SECTION("no baked map throws, however present the source is")
 	{
-		root.AddSource("sky_src.ktx2", 16, 1.0f);
-		REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
-		CHECK(envMapToDraw(sky.sky, MountAt(root.path)) == source);
-	}
-
-	SECTION("neither on disk throws, naming both")
-	{
-		std::filesystem::remove(root.path / source);
 		std::filesystem::remove(root.path / baked);
-		CHECK_THROWS_AS(envMapToDraw(sky.sky, MountAt(root.path)), std::runtime_error);
+		CHECK_THROWS_WITH(
+			envMapToDraw(sky.sky, MountAt(root.path)),
+			Catch::Matchers::ContainsSubstring("migrate"));
+
+		BSky unbaked = RoutedSky(root);
+		CHECK_THROWS_AS(envMapToDraw(unbaked.sky, MountAt(root.path)), std::runtime_error);
 
 		// An unrouted route names nothing at all, which is the same verdict by a different path.
 		CHECK_THROWS_AS(envMapToDraw(EnvMapRoute{}, MountAt(root.path)), std::runtime_error);
@@ -432,28 +457,42 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 		half.prefilter.source = root.AddSource("half.ktx2", 4, 1.0f);
 		CHECK_THROWS_AS(StoreAt(root.path).BakeEnvLighting(half), std::runtime_error);
 		CHECK(half.prefilter.baked.empty());
+
+		BEnvLighting split      = half;
+		split.irradiance.source = root.AddSource("other.ktx2", 4, 1.0f);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeEnvLighting(split), std::runtime_error);
 	}
 
-	SECTION("a source that is not a float cube")
+	SECTION("a source that is not a cube")
 	{
+		BSky sky;
+		sky.sky.source = root.AddSource("flat.ktx2", 4, 1.0f);
+
 		auto flat      = ConstantCube(4, 1.0f);
 		flat.isCubemap = false;
-		writeKTX2(
-			flat,
-			root.path / "Derived/SourceTextures" / "flat.ktx2",
-			false,
-			Ktx2Compression::kNone);
+		writeKTX2(flat, root.path / sky.sky.source, false, Ktx2Compression::kNone);
 
-		BSky sky;
-		sky.sky.source = "Derived/SourceTextures/flat.ktx2";
 		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
+		CHECK(sky.sky.baked.empty());
+	}
+
+	// The route names the source; only the document beside it says what the source is cooked at.
+	SECTION("a source with no import document")
+	{
+		BSky sky;
+		sky.sky.source = root.AddSource("orphan.ktx2", 4, 1.0f);
+		std::filesystem::remove(root.path / importDocumentKeyFor(sky.sky.source));
+
+		CHECK_THROWS_WITH(
+			StoreAt(root.path).BakeSky(sky),
+			Catch::Matchers::ContainsSubstring("import document"));
 		CHECK(sky.sky.baked.empty());
 	}
 
 	SECTION("a missing source")
 	{
 		BSky sky;
-		sky.sky.source = "Derived/SourceTextures/nowhere.ktx2";
+		sky.sky.source = KeyIn(c_EnvSourcesDirectoryName, "nowhere.ktx2");
 		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
 	}
 }
