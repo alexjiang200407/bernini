@@ -4,6 +4,7 @@
 #include <QFont>
 #include <QFrame>
 #include <QLabel>
+#include <QPalette>
 #include <QScrollArea>
 #include <QString>
 #include <QStringList>
@@ -46,10 +47,17 @@ namespace editor
 
 		auto* list = new QWidget(this);
 		auto* rows = new QVBoxLayout(list);
-		rows->setSpacing(12);
+		rows->setContentsMargins(12, 12, 12, 12);
+		rows->setSpacing(8);
 		for (const plugins::LoadedPlugin& plugin : session.Plugins())
 		{
-			auto* row = new QWidget(list);
+			// One box per plugin, on the base colour so it stands off the window like a list entry.
+			auto* row = new QFrame(list);
+			row->setObjectName("PluginBox");
+			row->setFrameShape(QFrame::StyledPanel);
+			row->setFrameShadow(QFrame::Raised);
+			row->setAutoFillBackground(true);
+			row->setBackgroundRole(QPalette::Base);
 			row->setToolTip(Tooltip(plugin));
 
 			auto* name = new QLabel(QString::fromStdString(plugin.name), row);
@@ -64,7 +72,7 @@ namespace editor
 			description->setVisible(!plugin.description.empty());
 
 			auto* text = new QVBoxLayout(row);
-			text->setContentsMargins(0, 0, 0, 0);
+			text->setContentsMargins(10, 8, 10, 8);
 			text->setSpacing(2);
 			text->addWidget(name);
 			text->addWidget(description);
@@ -72,9 +80,13 @@ namespace editor
 		}
 		rows->addStretch(1);
 
+		// Scrolls once the boxes outgrow the window; the stretch keeps a short list at the top.
 		auto* scroll = new QScrollArea(this);
+		scroll->setObjectName("PluginsScroll");
 		scroll->setFrameShape(QFrame::NoFrame);
 		scroll->setWidgetResizable(true);
+		scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		scroll->setWidget(list);
 
 		auto* layout = new QVBoxLayout(this);

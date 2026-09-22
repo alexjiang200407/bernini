@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QLibrary>
 #include <QList>
+#include <QScrollArea>
 #include <QString>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -175,6 +176,8 @@ TEST_CASE("The Plugins window names each loaded plugin", "[plugins][loader]")
 	CHECK(names.front()->text() == "Named Sample");
 	CHECK(descriptions.front()->text() == "Registers one fixture kind and one panel.");
 	CHECK(names.front()->parentWidget()->toolTip().startsWith("sample.named\n"));
+	CHECK(names.front()->parentWidget()->objectName() == "PluginBox");
+	CHECK(window.findChild<QScrollArea*>("PluginsScroll") != nullptr);
 }
 
 TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins][loader]")
