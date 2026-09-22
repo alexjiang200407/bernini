@@ -12,8 +12,9 @@ namespace assetlib
 	/**
 	 * Applies `map` to every texture key `material` holds, and reports what it saw.
 	 *
-	 * A material names its textures in three places -- the triplet its last bake wrote, the sources
-	 * it routes each channel from, and the texture nodes inside `editorGraph`. The third is the one
+	 * A material names its textures in three places -- the maps its last bake wrote, the sources
+	 * it reads them from (a routed channel, the authored occlusion map), and the texture nodes
+	 * inside `editorGraph`. The third is the one
 	 * that is easy to forget and the one that wins: the editor compiles the board back into
 	 * `routes`, so a graph left naming a moved file quietly undoes the move the next time anyone
 	 * opens the material. Both the reference graph and the rename go through here so neither can

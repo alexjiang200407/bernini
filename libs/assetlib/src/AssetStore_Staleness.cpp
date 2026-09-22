@@ -33,6 +33,12 @@ namespace assetlib
 	}
 
 	bool
+	AssetStore::DrawsBakedGeometryOcclusion(const BMaterial& material) const
+	{
+		return drawsBakedGeometryOcclusion(material, *m_Files);
+	}
+
+	bool
 	AssetStore::SurfaceSlotBakeIsStale(const SurfaceTextureBinding& slot) const
 	{
 		return surfaceSlotBakeIsStale(slot, *m_Files);

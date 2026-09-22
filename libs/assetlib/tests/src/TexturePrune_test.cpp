@@ -81,6 +81,7 @@ TEST_CASE("isBakedMapName recognizes only what the bake writes", "[texture_prune
 	CHECK(isBakedMapName("basecolor_700a22db7b7ef785.ktx2"));
 	CHECK(isBakedMapName("orm_fdc537ad982f59e7.ktx2"));
 	CHECK(isBakedMapName("normal_3fd6ecf5f0d1476c.ktx2"));
+	CHECK(isBakedMapName("occlusion_3fd6ecf5f0d1476c.ktx2"));
 
 	// A texture the material bake did not write. Nothing references one of these from a material, so
 	// the name is the only thing standing between it and the sweep.
@@ -202,6 +203,39 @@ TEST_CASE("FindUnusedBakedTextures keeps a map a material samples through UV1", 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
 
 	CHECK(scan.unused.empty());
+}
+
+TEST_CASE("FindUnusedBakedTextures sweeps the occlusion map a re-bake orphaned", "[texture_prune]")
+{
+	const DataRoot root("bernini_prune_occlusion_bake");
+
+	WriteSource(root.path / "ao_a.ktx2", 16, { { 10, 60, 90, 255 } });
+	WriteSource(root.path / "ao_b.ktx2", 16, { { 90, 60, 10, 255 } });
+
+	BMaterial material;
+	material.pbr.geometryOcclusionTexture = "ao_a.ktx2";
+	StoreAt(root.path).BakeMaterial(material);
+	StoreAt(root.path).Save(material, "Authored/Materials/wall.bmaterial");
+	const std::string first = material.pbr.geometryOcclusionBakedTexture;
+
+	SECTION("the map the material names is live")
+	{
+		const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
+		CHECK(scan.unused.empty());
+		CHECK(scan.candidates == 1);
+	}
+
+	SECTION("the one it moved on from is not")
+	{
+		material.pbr.geometryOcclusionTexture = "ao_b.ktx2";
+		StoreAt(root.path).BakeMaterial(material);
+		StoreAt(root.path).Save(material, "Authored/Materials/wall.bmaterial");
+		REQUIRE(material.pbr.geometryOcclusionBakedTexture != first);
+
+		const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
+		REQUIRE(scan.unused.size() == 1);
+		CHECK(scan.unused.front().path == first);
+	}
 }
 
 TEST_CASE("FindUnusedBakedTextures keeps a stale material's baked triplet", "[texture_prune]")

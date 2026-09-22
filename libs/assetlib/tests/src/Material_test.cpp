@@ -182,6 +182,49 @@ TEST_CASE("a material without a geometry occlusion map writes no key for it", "[
 	CHECK(out.find("geometryOcclusion") == std::string::npos);
 }
 
+TEST_CASE("a BMaterial round-trips its baked geometry occlusion map", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.pbr.geometryOcclusionTexture      = "Derived/SourceTextures/wall_ao.ktx2";
+	mat.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_0123456789abcdef.ktx2";
+	mat.pbr.geometryOcclusionStamp        = { 4096, 0xfedcba9876543210ull };
+
+	const auto bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const auto text  = std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	// The authored key keeps its meaning; the bake's output and its provenance live under `baked`
+	// beside the triplet.
+	CHECK(text.find(R"("geometryOcclusion")") != std::string_view::npos);
+	CHECK(text.find("Derived/SourceTextures/wall_ao.ktx2") != std::string_view::npos);
+	CHECK(text.find(R"("geometryOcclusionSource")") != std::string_view::npos);
+
+	const auto restored = AssetCodec<BMaterial>::Deserialize(bytes);
+	REQUIRE(restored.pbr.geometryOcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
+	REQUIRE(
+		restored.pbr.geometryOcclusionBakedTexture ==
+		"Derived/BakedTextures/occlusion_0123456789abcdef.ktx2");
+	REQUIRE(restored.pbr.geometryOcclusionStamp.size == 4096);
+	REQUIRE(restored.pbr.geometryOcclusionStamp.hash == 0xfedcba9876543210ull);
+
+	SECTION("a document written before the bake existed reads as never baked")
+	{
+		const std::string legacy =
+			R"({"shadingModel":"pbr","name":"wall","geometryOcclusion":"Derived/SourceTextures/AO_MAIN.ktx2"})";
+		const auto old = AssetCodec<BMaterial>::Deserialize(
+			std::as_bytes(std::span(legacy.data(), legacy.size())));
+		CHECK(old.pbr.geometryOcclusionTexture == "Derived/SourceTextures/AO_MAIN.ktx2");
+		CHECK(old.pbr.geometryOcclusionBakedTexture.empty());
+		CHECK(old.pbr.geometryOcclusionStamp == SourceStamp{});
+
+		// And writes back without inventing the keys: unbaked is unbaked.
+		const auto again = AssetCodec<BMaterial>::Serialize(old);
+		const auto out =
+			std::string_view(reinterpret_cast<const char*>(again.data()), again.size());
+		CHECK(out.find("geometryOcclusionSource") == std::string_view::npos);
+		CHECK(out.find("baked") == std::string_view::npos);
+	}
+}
+
 TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;

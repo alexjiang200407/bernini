@@ -99,13 +99,20 @@ namespace assetlib
 		std::string normalTexture;     // path to the normal texture file (empty when absent)
 		std::string ormTexture;        // path to the occlusion/roughness/metallic texture file
 
-		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied with
-		// the ORM's own; empty when absent. Sampled whole: not routed, not baked. A surface takes the
-		// same map through a slot of its own instead.
+		// The authored occlusion map sampled through the mesh's second UV set and multiplied with
+		// the ORM's own; empty when absent. Whole, never routed: the bake reads its red channel
+		// into `geometryOcclusionBakedTexture`, and it is what draws until that map is current. A
+		// surface takes the same map through a slot of its own instead.
 		std::string geometryOcclusionTexture;
-		glm::vec4   baseColorFactor = glm::vec4(1.0f);
-		float       metallicFactor  = 1.0f;
-		float       roughnessFactor = 1.0f;
+
+		// The single-channel map the bake wrote from `geometryOcclusionTexture`, data-root-relative;
+		// empty until baked. Stamped by the source it read, so an edit to the source reads as stale.
+		std::string geometryOcclusionBakedTexture;
+		SourceStamp geometryOcclusionStamp;
+
+		glm::vec4 baseColorFactor = glm::vec4(1.0f);
+		float     metallicFactor  = 1.0f;
+		float     roughnessFactor = 1.0f;
 
 		// What baseColorFactor.a means under AlphaMode::kBlend: 0 for coverage (hair, foliage), 1 for
 		// transmission (glass, a lens), and read by no other mode. glTF's KHR_materials_transmission.
@@ -120,8 +127,8 @@ namespace assetlib
 
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;
 
-		// assetlib::c_TextureBakeToken as it stood when the triplet was baked; zero before a bake, and
-		// in a material from before it existed.
+		// assetlib::c_TextureBakeToken as it stood when the triplet and the occlusion map were baked;
+		// zero before a bake, and in a material from before it existed.
 		uint64_t bakeToken = 0;
 	};
 

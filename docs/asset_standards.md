@@ -78,6 +78,7 @@ must feed data that matches.
 | **Base color** | **sRGB** (hardware-decoded) | UASTC sRGB → **BC7 sRGB** | **BC1 sRGB** opaque · **BC7 sRGB** cutout (direct) | RGB albedo · A alpha | 1×1 white `(1,1,1,1)` |
 | **Normal** | linear | UASTC → **BC7** | **BC5 UNORM** (direct) | RG = tangent-space X/Y (**Z reconstructed** in shader) | flat `(0.5,0.5,1)` |
 | **ORM** | linear | UASTC → **BC7** | **BC7 UNORM** (direct) | R = AO · G = roughness · B = metallic | 1×1 white (AO=1; factors drive) |
+| **Geometry occlusion** (UV1) | linear | UASTC → **BC7** | **BC4 UNORM** (direct) | R = occlusion, the authored map's red | 1×1 white; white on a mesh with no UV1 |
 | **IBL irradiance** | linear (HDR) | KTX2 cube map (float, uncompressed) | — | prefiltered diffuse cube | — (required via `SetEnvironmentMap`) |
 | **IBL prefilter** | linear (HDR) | KTX2 cube map (float, uncompressed, mipped) | — | prefiltered specular cube (mip = roughness) | — |
 | **IBL BRDF LUT** | linear | KTX2 2D (float, uncompressed) | — | RG (scale, bias) | — |
@@ -103,7 +104,8 @@ There are **two producers of textures**, and they compress differently:
   per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
   transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
-  `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA`).
+  `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA` /
+  `kBC4_R`).
 
   **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
   `orm_<hash>.ktx2`, where the hash covers the group, its target format and, per channel, the source
@@ -311,7 +313,9 @@ Authoring it:
   UV1 far outside it.
 * **Bake a single channel into it.** Red is what is read; a greyscale map is the usual form. It is
   sampled clamped and trilinear, so its resolution can sit far below the tiled maps' — occlusion is
-  soft.
+  soft. The material bake keeps only that channel: it writes the map's red as `BC4_UNORM` under
+  `Derived/BakedTextures/occlusion_<hash>.ktx2`, half the bytes of the BC7 the extracted source
+  transcodes to at load, and the renderer samples the baked map while it is current.
 * **Name it as glTF does**: `material.occlusionTexture` with `texCoord: 1`. A `texCoord: 0` map
   still routes into ORM red; any set past the second is refused. `strength` is ignored with a
   warning, as for the first set: bake the map at the strength it is meant to have.
@@ -474,12 +478,20 @@ in `docs/specs/`.
   PBR key like the factors, so a surface document is cleared of it with the rest. A single-channel
   map sampled through the mesh's *second* UV set and multiplied with ORM red. It is a whole texture,
   never a channel route and never part of the baked triplet — the triplet is addressed by UV0, and a
-  map on another UV set cannot be composited into it — so no bake reads or writes it. The renderer
-  samples it directly, which is why the reference graph and the baked-map prune hold it as a baked
-  map. It scales the environment's light and never the sun's, like the AO it multiplies; on a mesh
-  with no second UV set it reads as white ([Passes](passes.md)). Absent, the key is not written, so a
-  material without one is byte-for-byte what it was before the key existed. A game surface takes the
-  same map through a slot of its own ([Game-Defined Surfaces](game_defined_surfaces.md)).
+  map on another UV set cannot be composited into it. It is instead the *source* of a fourth baked
+  map: the bake reads its red into `baked.geometryOcclusion` (`PbrParams::geometryOcclusionBakedTexture`,
+  `occlusion_<hash>.ktx2`, BC4) and records the source's stamp beside it as `baked.geometryOcclusionSource`,
+  under the same `baked.token`. The renderer samples the baked map while it is current and the
+  authored one otherwise (`drawsBakedGeometryOcclusion`) — per map, so a stale occlusion bake never
+  drags the triplet loose — and `bakeIsStale` reports either half out of date. The reference graph
+  holds the authored map as a route (what a re-bake reads) and the baked one as a baked map; the
+  prune marks both. It scales the environment's light and never the sun's, like the AO it
+  multiplies; on a mesh with no second UV set it reads as white ([Passes](passes.md)). Absent, the
+  key is not written, so a material without one is byte-for-byte what it was before the key existed;
+  a document from before the bake existed reads as never baked and bakes on the next **Bake All**.
+  `stripAuthoringData` drops the authored key with the routes and keeps the baked map, refusing a
+  material whose occlusion was never baked. A game surface takes the same map through a slot of its
+  own ([Game-Defined Surfaces](game_defined_surfaces.md)).
 
   **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
 
@@ -497,14 +509,14 @@ in `docs/specs/`.
     old cooked textures. Content, not mtime: a `git pull` or `checkout` rewrites mtimes without changing
     a byte, and a stamp that noticed would re-bake every asset and dirty the containers in git. The read
     that costs is paid once — `stampOf` memoizes against size and mtime, so a source already hashed
-    re-stamps for a stat. **Both material models bake** — the PBR triplet, and one packed map per
-    routed surface slot — and `bakeIsStale` reports each against its own routes; a surface material
+    re-stamps for a stat. **Both material models bake** — the PBR triplet and its occlusion map, and one packed map per
+    routed surface slot — and `bakeIsStale` reports each against its own sources; a surface material
     binding everything whole has no bake step and is never stale.
-  * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps` and
-    `editorGraph` — a surface material's per-slot routes and stamps included — leaving the baked maps
-    + factors + name. A shipping build carries no source-texture
+  * **Export strips authoring data.** `stripAuthoringData` clears `routes`, `routeStamps`, the
+    authored occlusion map and its stamp, and `editorGraph` — a surface material's per-slot routes
+    and stamps included — leaving the baked maps + factors + name. A shipping build carries no source-texture
     references — and with no routes there is nothing for the maps to be stale against, so a stripped
-    material always draws from them. It refuses to strip a material (or a routed slot) that was never
+    material always draws from them. It refuses to strip a material (a routed slot, or an authored occlusion map) that was never
     baked, which would leave
     nothing to render — and it refuses *before* clearing anything, so a rejected material comes out
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
@@ -954,8 +966,8 @@ a confirmation first.
 
 It is a **mark and sweep over the whole project**, and each half has a rule that is easy to get wrong:
 
-* **Mark** — every `.bmaterial` below the data root is loaded and its baked triplet marked live,
-  **whether or not the renderer is drawing from it**. A material whose bake has gone stale still names the
+* **Mark** — every `.bmaterial` below the data root is loaded and its baked maps — the triplet and
+  the occlusion map — marked live, **whether or not the renderer is drawing from it**. A material whose bake has gone stale still names the
   triplet that bake wrote, and re-stamping the sources is a valid thing to do; deleting its maps because
   the renderer happens to be drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
   rather than being skipped — an unread material is one whose references cannot be known, and the maps
@@ -989,14 +1001,15 @@ There are exactly five edges:
 | Edge | Held by | Field |
 | --- | --- | --- |
 | mesh → material | `.bmesh` | `BMesh::materials`, which `Submesh::material` indexes into |
-| material → baked map | `.bmaterial` | `PbrParams::baseColorTexture` / `normalTexture` / `ormTexture` |
-| material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel |
+| material → baked map | `.bmaterial` | `PbrParams::baseColorTexture` / `normalTexture` / `ormTexture` / `geometryOcclusionBakedTexture` |
+| material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel, and `geometryOcclusionTexture` |
 | mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
 | clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
 
-A material names textures **twice** — the triplet its last bake wrote, and the sources it routes each
-channel from. Both hold a file alive: the triplet is what the renderer samples, the routes are what a
-re-bake reads. The prune marks only the triplet, which is why it cannot answer this question.
+A material names textures **twice** — the maps its last bake wrote, and the sources it read them from
+(a routed channel, the authored occlusion map). Both hold a file alive: the baked maps are what the
+renderer samples, the sources are what a re-bake reads. The prune marks only the baked maps, which is
+why it cannot answer this question.
 
 From those edges, three rules:
 

@@ -273,6 +273,39 @@ namespace assetlib
 			}
 		}
 
+		// Compares `texture` as it is now against `baked`, the stamp taken when the bake read it.
+		// Without a data root there is nothing to stat, so only the recorded stamp is reported.
+		void
+		describeStamp(
+			std::string&                   out,
+			const std::string&             texture,
+			const SourceStamp&             baked,
+			const core::file::IFileSystem* fileSystem)
+		{
+			if (fileSystem == nullptr)
+			{
+				out += std::format(
+					"                    baked from {} B, hash {:016x}\n",
+					baked.size,
+					baked.hash);
+				return;
+			}
+
+			const SourceStamp live = stampOf(*fileSystem, texture);
+			if (live == SourceStamp{})
+				out += "                    source is missing\n";
+			else if (live == baked)
+				out += std::format("                    up to date ({} B)\n", live.size);
+			else
+				out += std::format(
+					"                    STALE: source is {} B / hash {:016x}, baked from {} B / "
+					"hash {:016x}\n",
+					live.size,
+					live.hash,
+					baked.size,
+					baked.hash);
+		}
+
 		void
 		describePbr(
 			std::string&                   out,
@@ -301,7 +334,22 @@ namespace assetlib
 			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
 			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
 			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
-			out += std::format("    geometryOcclusion {}\n", pathOr(pbr.geometryOcclusionTexture));
+			out += std::format(
+				"    geometryOcclusion {}\n",
+				pathOr(pbr.geometryOcclusionBakedTexture));
+
+			out += "\n  geometry occlusion source\n";
+			if (pbr.geometryOcclusionTexture.empty())
+				out += "    (none)\n";
+			else
+			{
+				out += std::format("    {}\n", pbr.geometryOcclusionTexture);
+				describeStamp(
+					out,
+					pbr.geometryOcclusionTexture,
+					pbr.geometryOcclusionStamp,
+					fileSystem);
+			}
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -318,33 +366,7 @@ namespace assetlib
 
 				out +=
 					std::format("    {:<15} {} [{}]\n", c_ChannelNames[i], route.texture, swizzle);
-
-				// Compare the source as it is now against the stamp taken when the bake ran. Without a
-				// data root there is nothing to stat, so only the recorded stamp is reported.
-				const SourceStamp& baked = pbr.routeStamps[i];
-				if (fileSystem == nullptr)
-				{
-					out += std::format(
-						"                    baked from {} B, hash {:016x}\n",
-						baked.size,
-						baked.hash);
-					continue;
-				}
-
-				const SourceStamp live = stampOf(*fileSystem, route.texture);
-				if (live == SourceStamp{})
-					out += "                    source is missing\n";
-				else if (live == baked)
-					out += std::format("                    up to date ({} B)\n", live.size);
-				else
-					out += std::format(
-						"                    STALE: source is {} B / hash {:016x}, baked from {} B "
-						"/ "
-						"hash {:016x}\n",
-						live.size,
-						live.hash,
-						baked.size,
-						baked.hash);
+				describeStamp(out, route.texture, pbr.routeStamps[i], fileSystem);
 			}
 		}
 

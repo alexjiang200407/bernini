@@ -493,15 +493,24 @@ namespace assetlib
 		[[nodiscard]] SourceStamp
 		StampOf(std::string_view path) const;
 
-		/** Whether `material`'s baked maps -- the triplet, or a surface's per-slot maps -- no
-		 *  longer reflect its routed sources. */
+		/** Whether `material`'s baked maps -- the triplet and the geometry occlusion map, or a
+		 *  surface's per-slot maps -- no longer reflect the sources they were read from. */
 		[[nodiscard]] bool
 		BakeIsStale(const BMaterial& material) const;
 
 		/** Whether `material` draws from its routes rather than its triplet. PBR only: a
-		 *  surface's per-slot answer is LooseSurfaceSlots. */
+		 *  surface's per-slot answer is LooseSurfaceSlots, and the occlusion map's is
+		 *  DrawsBakedGeometryOcclusion -- the triplet alone decides this. */
 		[[nodiscard]] bool
 		DrawsLoose(const BMaterial& material) const;
+
+		/**
+		 * Whether `material` samples its baked geometry occlusion map rather than the authored
+		 * one: PBR, a baked map named, and either current or with no authored map on disk to
+		 * fall back to. The occlusion twin of DrawsLoose, decided against the disk once at load.
+		 */
+		[[nodiscard]] bool
+		DrawsBakedGeometryOcclusion(const BMaterial& material) const;
 
 		/**
 		 * Which of `material`'s surface slots draw from their routes rather than a baked map,

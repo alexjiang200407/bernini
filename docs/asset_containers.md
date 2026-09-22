@@ -187,10 +187,10 @@ the document when the folder is, and a folder
 written under another revision is stale whatever the stamp says. A document from before the key
 reads as revision zero, which no revision equals, so such a folder is stale exactly once. It moves
 under the same rule as a codec's token -- any change to the bytes or to the naming rule, to a fresh
-random value -- and `TokenCanary_test` pins the chain beside it. A baked triplet carries the same revision in its
-`.bmaterial` (`baked.token`), compared by `BakeIsStale` and mixed into the map's content-addressed
-name, so a re-bake under a new revision writes a new file rather than finding the old one already
-there.
+random value -- and `TokenCanary_test` pins the chain beside it. A material's baked maps — the triplet, and the BC4 occlusion map read from the
+authored `geometryOcclusion` source — carry the same revision in its `.bmaterial` (`baked.token`),
+compared by `BakeIsStale` and mixed into each map's content-addressed name, so a re-bake under a
+new revision writes a new file rather than finding the old one already there.
 
 The token carries the naming rule because on disk the two staleness are one: a folder whose files
 carry the wrong names is as stale as one whose bytes are wrong, and nothing else can see it. The
@@ -208,7 +208,7 @@ regimes were always pointing at is available:
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
 | **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
-| **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it, and `migrate` re-bakes one lost from under a container still on disk. |
+| **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/` — the triplet and the occlusion map alike. `assetlib_cli migrate` re-bakes one whose maps its sources no longer produce, when those sources are there to cook from, as do `assetlib_cli bakematerials` and the editor's **Bake All**. Until one of those has run, a fresh checkout opens with every material stale, drawing untextured where it routes and from the extracted source where it names an occlusion map. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it, and `migrate` re-bakes one lost from under a container still on disk. |
 | **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky` or `.benvl` back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
