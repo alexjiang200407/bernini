@@ -136,20 +136,31 @@ Content Explorer and rig-editor bakes report
 
 ## Local loading
 
-A `.bproj` names its required plugin IDs in `plugins`. Machine-local `config.json` names candidate
-output directories in `pluginDirectories`; each directory contains `bernini-plugin.json` and the
-binaries it names. Opening a project with a different ordered plugin list restarts the editor, just
-as changing its surface shaders does. Missing, malformed or incompatible requirements stop startup
-with the plugin named in the error. **Window → Plugins** shows what did load: the engine build ID
-and configuration, then every plugin with its source directory, the modules it loaded and each
-kind, menu, panel, asset editor, action, importer and thumbnail provider it registered, then the
-configured directories the project did not require. It is filled once at startup, since nothing
-in the set can change without a relaunch.
+The editor loads every plugin it finds at startup, whatever project it then opens. A plugin is a
+directory holding `bernini-plugin.json` and the binaries it names. Two places are searched, in this
+order: each subdirectory of `plugins/` beside the editor executable, sorted by name, and then each
+directory named in `pluginDirectories` in the machine-local `config.json`, which is how a plugin
+built somewhere else joins in. The engine build stages the sample into `plugins/sample.document/`
+so a debug build loads it with nothing configured. A descriptor that is missing, malformed, built
+for another engine or older than the SDK stamp stops startup with the plugin named, as does a kind
+or contribution collision between two plugins: an install holds one owner per extension.
+
+A `.bproj` may name the plugin IDs it needs in `plugins`. That list loads nothing; it is a guard.
+Opening a project whose list names a plugin the editor did not load is refused, naming the plugin
+and where to put it, because a kind the store cannot read is a document the reference scan, rename,
+pack and migration silently pass over. A project that names nothing opens against whatever loaded.
+
+**Plugins → Loaded Plugins** lists what did load, one row per plugin with its name and description;
+the row's tooltip carries the ID, the directory and the module filenames. It is filled once at
+startup, since nothing in the set can change without a relaunch. The menu is the editor's own, and
+where installing a plugin will go when that lands.
 
 ```json
 {
   "version": 1,
   "id": "studio.ai",
+  "name": "Studio AI",
+  "description": "Behaviour authoring for the studio's agents.",
   "engineBuildId": "<BerniniEditorSDK_BUILD_ID>",
   "configuration": "Debug",
   "runtime": "studio_ai_runtime.dylib",
@@ -158,7 +169,8 @@ in the set can change without a relaunch.
 }
 ```
 
-`runtime` and `editor` are each optional, but at least one is present. Every file path is relative
+`name` and `description` are optional and only shown; a missing name is the ID. `runtime` and
+`editor` are each optional, but at least one is present. Every file path is relative
 to the descriptor directory and may not escape it. Plugin IDs are lower-case, dot-qualified
 components. A plugin CMake project gets the exact build-tree ID from
 `BerniniEditorSDK_BUILD_ID` after `find_package(BerniniEditorSDK CONFIG REQUIRED)` and records its

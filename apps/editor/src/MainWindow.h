@@ -186,7 +186,7 @@ private:
 	void
 	SetUpGpuTimingEntry();
 
-	// Window > Plugins: what loaded, from where, and what each contributed.
+	// The Plugins menu: what loaded, and room for what a plugin install will need later.
 	void
 	SetUpPluginsEntry();
 

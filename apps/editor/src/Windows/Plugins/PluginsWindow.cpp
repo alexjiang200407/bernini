@@ -1,124 +1,84 @@
 #include "Windows/Plugins/PluginsWindow.h"
 
 #include "Plugins/plugin_loader.h"
-#include <QAbstractItemView>
-#include <QHeaderView>
+#include <QFont>
+#include <QFrame>
 #include <QLabel>
+#include <QScrollArea>
 #include <QString>
 #include <QStringList>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <Qt>
 #include <filesystem>
+#include <qcontainerfwd.h>
 
 namespace editor
 {
 	namespace
 	{
 		QString
-		KindLabel(const plugins::ContributionKind kind)
-		{
-			switch (kind)
-			{
-			case plugins::ContributionKind::kAssetKind:
-				return "Asset kind";
-			case plugins::ContributionKind::kMenu:
-				return "Menu";
-			case plugins::ContributionKind::kPanel:
-				return "Panel";
-			case plugins::ContributionKind::kAssetEditor:
-				return "Asset editor";
-			case plugins::ContributionKind::kAction:
-				return "Action";
-			case plugins::ContributionKind::kImporter:
-				return "Importer";
-			case plugins::ContributionKind::kThumbnailProvider:
-				return "Thumbnail provider";
-			}
-			return "Contribution";
-		}
-
-		QString
 		PathText(const std::filesystem::path& path)
 		{
 			return QString::fromStdWString(path.wstring());
 		}
 
-		QTreeWidgetItem*
-		AddRow(
-			QTreeWidgetItem& parent,
-			const QString&   kind,
-			const QString&   id,
-			const QString&   detail)
+		QString
+		Tooltip(const plugins::LoadedPlugin& plugin)
 		{
-			return new QTreeWidgetItem(&parent, QStringList{ kind, id, detail });
+			QStringList lines{ QString::fromStdString(plugin.id) };
+			if (!plugin.directory.empty())
+				lines << PathText(plugin.directory);
+			if (!plugin.runtimeModule.empty())
+				lines << "Runtime: " + PathText(plugin.runtimeModule.filename());
+			if (!plugin.editorModule.empty())
+				lines << "Editor: " + PathText(plugin.editorModule.filename());
+			return lines.join('\n');
 		}
 	}
 
-	PluginsWindow::PluginsWindow(
-		const plugins::PluginSession& session,
-		const plugins::BuildIdentity& build,
-		QWidget*                      parent) : QWidget(parent, Qt::Window)
+	PluginsWindow::PluginsWindow(const plugins::PluginSession& session, QWidget* parent) :
+		QWidget(parent, Qt::Window)
 	{
 		setObjectName("PluginsWindow");
 		setWindowTitle("Plugins");
-		resize(900, 520);
+		resize(480, 360);
 
-		auto* header = new QLabel(
-			QString("Engine build %1, %2")
-				.arg(QString::fromStdString(build.id), QString::fromStdString(build.configuration)),
-			this);
-		header->setObjectName("PluginsBuild");
-
-		m_Tree = new QTreeWidget(this);
-		m_Tree->setObjectName("PluginsTree");
-		m_Tree->setHeaderLabels({ "Kind", "ID", "Detail" });
-		m_Tree->setRootIsDecorated(true);
-		m_Tree->setSelectionMode(QAbstractItemView::NoSelection);
-
+		auto* list = new QWidget(this);
+		auto* rows = new QVBoxLayout(list);
+		rows->setSpacing(12);
 		for (const plugins::LoadedPlugin& plugin : session.Plugins())
 		{
-			auto* row = new QTreeWidgetItem(
-				m_Tree,
-				QStringList{ "Plugin",
-			                 QString::fromStdString(plugin.id),
-			                 plugin.directory.empty() ? QString("Built into the editor") :
-			                                            PathText(plugin.directory) });
-			if (!plugin.runtimeModule.empty())
-				AddRow(*row, "Runtime module", PathText(plugin.runtimeModule.filename()), {});
-			if (!plugin.editorModule.empty())
-				AddRow(*row, "Editor module", PathText(plugin.editorModule.filename()), {});
-			for (const plugins::LoadedContribution& contribution : plugin.contributions)
-				AddRow(
-					*row,
-					KindLabel(contribution.kind),
-					QString::fromStdString(contribution.id),
-					QString::fromStdString(contribution.detail));
-		}
+			auto* row = new QWidget(list);
+			row->setToolTip(Tooltip(plugin));
 
-		QTreeWidgetItem* unused = nullptr;
-		for (const plugins::ConfiguredPlugin& configured : session.Configured())
-		{
-			if (configured.loaded)
-				continue;
-			if (unused == nullptr)
-				unused = new QTreeWidgetItem(
-					m_Tree,
-					QStringList{ "Configured, not required by this project", {}, {} });
-			AddRow(
-				*unused,
-				"Plugin",
-				QString::fromStdString(configured.id),
-				PathText(configured.directory));
-		}
+			auto* name = new QLabel(QString::fromStdString(plugin.name), row);
+			name->setObjectName("PluginName");
+			QFont bold = name->font();
+			bold.setBold(true);
+			name->setFont(bold);
 
-		m_Tree->expandAll();
-		m_Tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+			auto* description = new QLabel(QString::fromStdString(plugin.description), row);
+			description->setObjectName("PluginDescription");
+			description->setWordWrap(true);
+			description->setVisible(!plugin.description.empty());
+
+			auto* text = new QVBoxLayout(row);
+			text->setContentsMargins(0, 0, 0, 0);
+			text->setSpacing(2);
+			text->addWidget(name);
+			text->addWidget(description);
+			rows->addWidget(row);
+		}
+		rows->addStretch(1);
+
+		auto* scroll = new QScrollArea(this);
+		scroll->setFrameShape(QFrame::NoFrame);
+		scroll->setWidgetResizable(true);
+		scroll->setWidget(list);
 
 		auto* layout = new QVBoxLayout(this);
-		layout->addWidget(header);
-		layout->addWidget(m_Tree, 1);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->addWidget(scroll);
 	}
 }

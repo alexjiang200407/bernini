@@ -26,7 +26,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
             "${BerniniEditorSDK_DIR}/bernini-sdk.stamp")
     endforeach()
     file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/plugin/$<CONFIG>/bernini-plugin.json" CONTENT
-"{\n  \"version\": 1,\n  \"id\": \"sample.document\",\n  \"engineBuildId\": \"${BerniniEditorSDK_BUILD_ID}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"runtime\": \"$<TARGET_FILE_NAME:sample_runtime>\",\n  \"editor\": \"$<TARGET_FILE_NAME:sample_editor>\",\n  \"dependencies\": []\n}\n")
+"{\n  \"version\": 1,\n  \"id\": \"sample.document\",\n  \"name\": \"Sample Document\",\n  \"description\": \"A .bexample document kind with a project tools tab and a document tab.\",\n  \"engineBuildId\": \"${BerniniEditorSDK_BUILD_ID}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"runtime\": \"$<TARGET_FILE_NAME:sample_runtime>\",\n  \"editor\": \"$<TARGET_FILE_NAME:sample_editor>\",\n  \"dependencies\": []\n}\n")
     return()
 endif()
 

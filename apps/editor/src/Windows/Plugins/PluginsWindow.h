@@ -4,26 +4,17 @@
 #include <QWidget>
 #include <qtmetamacros.h>
 
-class QTreeWidget;
-
 namespace editor
 {
 	/**
-	 * What the editor loaded: every plugin, where it came from, which modules it loaded and what it
-	 * contributed, then the configured directories the project did not ask for. Filled once at
-	 * construction, since the set cannot change without a relaunch.
+	 * The loaded plugins, one row each: name and description, with the ID, directory and modules in
+	 * the row's tooltip. Filled once at construction, since the set cannot change without a relaunch.
 	 */
 	class PluginsWindow : public QWidget
 	{
 		Q_OBJECT
 
 	public:
-		PluginsWindow(
-			const plugins::PluginSession& session,
-			const plugins::BuildIdentity& build,
-			QWidget*                      parent = nullptr);
-
-	private:
-		QTreeWidget* m_Tree = nullptr;
+		explicit PluginsWindow(const plugins::PluginSession& session, QWidget* parent = nullptr);
 	};
 }

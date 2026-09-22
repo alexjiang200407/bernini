@@ -27,40 +27,15 @@ namespace editor::plugins
 		kNever,
 	};
 
-	enum class ContributionKind
-	{
-		kAssetKind,
-		kMenu,
-		kPanel,
-		kAssetEditor,
-		kAction,
-		kImporter,
-		kThumbnailProvider,
-	};
-
-	struct LoadedContribution
-	{
-		ContributionKind kind;
-		std::string      id;
-		std::string      detail;
-	};
-
-	/** What one plugin put into the session; `directory` is empty for the host-linked plugin. */
+	/** One loaded plugin as the Plugins window shows it; `directory` is empty for the host-linked one. */
 	struct LoadedPlugin
 	{
-		std::string                     id;
-		std::filesystem::path           directory;
-		std::filesystem::path           runtimeModule;
-		std::filesystem::path           editorModule;
-		std::vector<LoadedContribution> contributions;
-	};
-
-	/** A descriptor read from a configured directory, whether or not the project required it. */
-	struct ConfiguredPlugin
-	{
 		std::string           id;
+		std::string           name;
+		std::string           description;
 		std::filesystem::path directory;
-		bool                  loaded = false;
+		std::filesystem::path runtimeModule;
+		std::filesystem::path editorModule;
 	};
 
 	inline constexpr std::string_view c_BuiltInPluginId = "bernini.default";
@@ -77,15 +52,21 @@ namespace editor::plugins
 		PluginSession&
 		operator=(const PluginSession&) = delete;
 
+		/**
+		 * Loads every plugin in `directories`, in that order, after validating all of their
+		 * descriptors against `build`. Throws naming the plugin on a descriptor that is missing,
+		 * malformed, built for another engine or older than the SDK stamp, and on a kind or
+		 * contribution collision between two of them.
+		 */
 		[[nodiscard]] static PluginSession
 		Load(
-			std::span<const std::string>           requiredIds,
-			std::span<const std::filesystem::path> configuredDirectories,
+			std::span<const std::filesystem::path> directories,
 			const BuildIdentity&                   build,
 			const std::filesystem::path&           pluginCopyRoot,
 			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault,
 			EditorPluginPtr      builtIn  = {});
 
+		/** The loaded plugins' IDs, in load order; the host-linked plugin has none. */
 		[[nodiscard]] const std::vector<std::string>&
 		Ids() const noexcept;
 
@@ -98,13 +79,9 @@ namespace editor::plugins
 		[[nodiscard]] const EditorRegistry&
 		Contributions() const noexcept;
 
-		/** The host-linked plugin first, then the required ones in project order. */
+		/** The host-linked plugin first, then the loaded ones in load order. */
 		[[nodiscard]] std::span<const LoadedPlugin>
 		Plugins() const noexcept;
-
-		/** Every configured directory's descriptor, in configuration order. */
-		[[nodiscard]] std::span<const ConfiguredPlugin>
-		Configured() const noexcept;
 
 	private:
 		PluginSession();
@@ -119,11 +96,21 @@ namespace editor::plugins
 	[[nodiscard]] std::filesystem::path
 	DefaultPluginCopyRoot();
 
+	/** `plugins/` beside the editor executable: every subdirectory holding a descriptor is loaded. */
+	[[nodiscard]] std::filesystem::path
+	DefaultPluginRoot();
+
+	/** The subdirectories of `root` that hold a descriptor, sorted by name; none when `root` is absent. */
+	[[nodiscard]] std::vector<std::filesystem::path>
+	DiscoverPluginDirectories(const std::filesystem::path& root);
+
+	/** Directories named by `pluginDirectories` in the editor config, for a plugin built elsewhere. */
 	[[nodiscard]] std::vector<std::filesystem::path>
 	ConfiguredPluginDirectories(const std::filesystem::path& configPath);
 
-	[[nodiscard]] bool
-	OpeningNeedsPluginRelaunch(
+	/** The IDs in `required` that `loaded` lacks, in `required` order. */
+	[[nodiscard]] std::vector<std::string>
+	MissingRequiredPlugins(
 		std::span<const std::string> loaded,
-		std::span<const std::string> requested);
+		std::span<const std::string> required);
 }

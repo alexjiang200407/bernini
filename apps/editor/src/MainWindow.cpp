@@ -14,6 +14,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTabWidget>
+#include <qcontainerfwd.h>
 
 #include "Plugins/EditorHost.h"
 #include "Plugins/EditorRegistry.h"
@@ -132,10 +133,6 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		}
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
-
-		std::vector<std::string> requiredPlugins;
-		if (!startupProject.empty() && std::filesystem::is_regular_file(startupProject))
-			requiredPlugins = assetlib::Project::PluginIdsOf(startupProject);
 
 		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
 		// a headless editor still creates the device and renders, it just presents nothing.
@@ -273,10 +270,15 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (auto exposure = animSettings["exposure"])
 			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
+		std::vector<std::filesystem::path> pluginDirectories =
+			editor::plugins::DiscoverPluginDirectories(editor::plugins::DefaultPluginRoot());
+		for (std::filesystem::path& directory :
+		     editor::plugins::ConfiguredPluginDirectories(configPath))
+			pluginDirectories.push_back(std::move(directory));
+
 		m_Plugins =
 			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
-				requiredPlugins,
-				editor::plugins::ConfiguredPluginDirectories(configPath),
+				pluginDirectories,
 				editor::plugins::CurrentBuildIdentity(),
 				editor::plugins::DefaultPluginCopyRoot(),
 				editor::plugins::PluginBinaryCopyMode::kPlatformDefault,
@@ -694,25 +696,10 @@ MainWindow::OpenProject()
 MainWindow::ProjectOpening
 MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& projectFile)
 {
-	std::vector<std::string> requestedPlugins;
-	try
-	{
-		if (std::filesystem::is_regular_file(projectFile))
-			requestedPlugins = assetlib::Project::PluginIdsOf(projectFile);
-	}
-	catch (const std::exception& error)
-	{
-		QMessageBox::warning(this, title, error.what());
-		return ProjectOpening::kCancelled;
-	}
-
-	const bool pluginsDiffer =
-		editor::plugins::OpeningNeedsPluginRelaunch(m_Plugins->Ids(), requestedPlugins);
-	const bool shadersDiffer = editor::OpeningNeedsRelaunch(
-		m_SurfaceShaderDir,
-		m_SurfaceCount,
-		editor::ShadersDirectoryOf(projectFile));
-	if (!pluginsDiffer && !shadersDiffer)
+	if (!editor::OpeningNeedsRelaunch(
+			m_SurfaceShaderDir,
+			m_SurfaceCount,
+			editor::ShadersDirectoryOf(projectFile)))
 	{
 		return ProjectOpening::kHere;
 	}
@@ -721,8 +708,8 @@ MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& proj
 		this,
 		title,
 		QString(
-			"%1 requires different plugins or shaders from the ones this editor loaded at "
-			"startup. The editor will restart to open it.")
+			"%1 requires different shaders from the ones this editor loaded at startup. The "
+			"editor will restart to open it.")
 			.arg(QString::fromStdWString(projectFile.stem().wstring())),
 		QMessageBox::Ok | QMessageBox::Cancel,
 		QMessageBox::Ok);
@@ -753,6 +740,28 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 	try
 	{
 		ZoneScopedN("editor open project");
+
+		// Refused rather than opened without them: a kind the store cannot read is a document the
+		// reference scan, rename and pack silently pass over.
+		const std::vector<std::string> missing = editor::plugins::MissingRequiredPlugins(
+			m_Plugins->Ids(),
+			assetlib::Project::PluginIdsOf(path));
+		if (!missing.empty())
+		{
+			QStringList ids;
+			for (const std::string& id : missing) ids << QString::fromStdString(id);
+			QMessageBox::warning(
+				this,
+				"Open Project",
+				QString(
+					"%1 requires plugins this editor did not load: %2.\n\nPut each one in %3/<id>/ "
+					"or name its directory in pluginDirectories in config.json, then restart.")
+					.arg(
+						QString::fromStdWString(path.stem().wstring()),
+						ids.join(", "),
+						QString::fromStdWString(editor::plugins::DefaultPluginRoot().wstring())));
+			return false;
+		}
 
 		SetActiveProject(assetlib::Project::Open(path, m_Plugins->KindRegistry()));
 		return true;
@@ -1206,13 +1215,12 @@ MainWindow::SetUpGpuTimingEntry()
 void
 MainWindow::SetUpPluginsEntry()
 {
-	m_PluginsWindow =
-		new editor::PluginsWindow(*m_Plugins, editor::plugins::CurrentBuildIdentity(), this);
+	m_PluginsWindow = new editor::PluginsWindow(*m_Plugins, this);
 
-	auto* action = m_Ui.windowMenu->addAction("Plugins");
-	action->setStatusTip(
-		"List the plugins this editor loaded, where each came from and what it contributed.");
-	connect(action, &QAction::triggered, this, [this] {
+	QMenu* plugins = menuBar()->addMenu("Plugins");
+	auto*  loaded  = plugins->addAction("Loaded Plugins");
+	loaded->setStatusTip("List the plugins this editor loaded at startup.");
+	connect(loaded, &QAction::triggered, this, [this] {
 		m_PluginsWindow->show();
 		m_PluginsWindow->raise();
 		m_PluginsWindow->activateWindow();

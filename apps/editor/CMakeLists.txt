@@ -102,6 +102,20 @@ target_link_libraries(editor PRIVATE editor_lib)
 # that otherwise pull copy_assets in, and without them nothing stages assets at all.
 add_dependencies(editor copy_assets)
 
+# The editor loads every plugin under plugins/ beside its executable, so the sample the test tree
+# builds is staged there and `just run editor` finds it with nothing configured. The directory is
+# named by the plugin ID, which is what the loader's error names when a project wants one.
+if(TARGET editor_plugin_sample)
+	add_custom_target(editor_stage_sample_plugin
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>"
+			"$<TARGET_FILE_DIR:editor>/plugins/sample.document"
+		COMMENT "Staging the sample plugin beside the editor"
+		VERBATIM)
+	add_dependencies(editor_stage_sample_plugin editor_plugin_sample)
+	add_dependencies(editor editor_stage_sample_plugin)
+endif()
+
 # On the executable, NOT on editor_lib. The Agility SDK loader looks up D3D12SDKVersion /
 # D3D12SDKPath as exports of the .exe, and bgl_d3d12_agility is an OBJECT library -- CMake does not
 # carry one object library's object files through another, so linking it to editor_lib (also OBJECT)

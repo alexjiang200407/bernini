@@ -2,11 +2,10 @@
 #include "Plugins/plugin_loader.h"
 #include "Windows/Plugins/PluginsWindow.h"
 
+#include <QLabel>
 #include <QLibrary>
+#include <QList>
 #include <QString>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
-#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -102,7 +101,6 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 		WriteDescriptor(sandbox.root / "valid", "sample.valid", EDITOR_PLUGIN_FIXTURE, build);
 
 	const editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
-		std::vector<std::string>{ "sample.valid" },
 		std::vector<fs::path>{ plugin },
 		build,
 		sandbox.root / "plugin-copies",
@@ -119,63 +117,64 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 	CHECK(loaded.directory == plugin);
 	CHECK(loaded.runtimeModule.filename() == fs::path(EDITOR_PLUGIN_FIXTURE).filename());
 	CHECK(loaded.editorModule == loaded.runtimeModule);
-	CHECK(std::ranges::any_of(loaded.contributions, [](const auto& contribution) {
-		return contribution.kind == editor::plugins::ContributionKind::kAssetKind &&
-		       contribution.id == "sample.fixture";
-	}));
-	CHECK(std::ranges::any_of(loaded.contributions, [](const auto& contribution) {
-		return contribution.kind == editor::plugins::ContributionKind::kPanel &&
-		       contribution.id == "sample.fixture_panel";
-	}));
-	REQUIRE(session.Configured().size() == 1);
-	CHECK(session.Configured().front().loaded);
+	CHECK(loaded.name == "sample.valid");
+	CHECK(loaded.description.empty());
 	CHECK(
 		fs::is_regular_file(
 			sandbox.root / "plugin-copies" / "sample.valid" /
 			fs::path(EDITOR_PLUGIN_FIXTURE).filename()));
 }
 
-TEST_CASE("The Plugins window lists what loaded and what was only configured", "[plugins][loader]")
+TEST_CASE(
+	"Every directory holding a descriptor under the plugin root is discovered",
+	"[plugins][loader]")
 {
 	Sandbox sandbox;
 	auto    build  = editor::plugins::CurrentBuildIdentity();
 	build.sdkStamp = sandbox.root / "sdk.stamp";
 	SetSdkStamp(build, fs::file_time_type::clock::now() - std::chrono::hours(1));
-	const fs::path required =
-		WriteDescriptor(sandbox.root / "required", "sample.required", EDITOR_PLUGIN_FIXTURE, build);
-	const fs::path spare =
-		WriteDescriptor(sandbox.root / "spare", "sample.spare", EDITOR_PLUGIN_FIXTURE, build);
+	const fs::path root = sandbox.root / "plugins";
+	const fs::path second =
+		WriteDescriptor(root / "sample.second", "sample.second", EDITOR_PLUGIN_FIXTURE, build);
+	const fs::path first =
+		WriteDescriptor(root / "sample.first", "sample.first", EDITOR_PLUGIN_FIXTURE, build);
+	fs::create_directories(root / "no-descriptor");
+	std::ofstream(root / "stray.txt") << "not a plugin";
+
+	CHECK(
+		editor::plugins::DiscoverPluginDirectories(root) == std::vector<fs::path>{ first, second });
+	CHECK(editor::plugins::DiscoverPluginDirectories(sandbox.root / "absent").empty());
+}
+
+TEST_CASE("The Plugins window names each loaded plugin", "[plugins][loader]")
+{
+	Sandbox sandbox;
+	auto    build  = editor::plugins::CurrentBuildIdentity();
+	build.sdkStamp = sandbox.root / "sdk.stamp";
+	SetSdkStamp(build, fs::file_time_type::clock::now() - std::chrono::hours(1));
+	const fs::path plugin =
+		WriteDescriptor(sandbox.root / "named", "sample.named", EDITOR_PLUGIN_FIXTURE, build);
+	auto json = nlohmann::json::parse(std::ifstream(plugin / editor::c_PluginDescriptorFileName));
+	json["name"]        = "Named Sample";
+	json["description"] = "Registers one fixture kind and one panel.";
+	std::ofstream(plugin / editor::c_PluginDescriptorFileName) << json.dump(2);
 
 	const editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
-		std::vector<std::string>{ "sample.required" },
-		std::vector<fs::path>{ required, spare },
+		std::vector<fs::path>{ plugin },
 		build,
 		sandbox.root / "plugin-copies",
 		editor::plugins::PluginBinaryCopyMode::kNever);
+	REQUIRE(session.Plugins().size() == 1);
+	CHECK(session.Plugins().front().name == "Named Sample");
 
-	const editor::PluginsWindow window(session, build);
-	const auto*                 tree = window.findChild<QTreeWidget*>("PluginsTree");
-	REQUIRE(tree != nullptr);
-	REQUIRE(tree->topLevelItemCount() == 2);
-
-	const QTreeWidgetItem* plugin = tree->topLevelItem(0);
-	CHECK(plugin->text(0) == "Plugin");
-	CHECK(plugin->text(1) == "sample.required");
-	CHECK(plugin->text(2) == QString::fromStdWString(required.wstring()));
-	std::vector<std::string> rows;
-	for (int i = 0; i < plugin->childCount(); ++i)
-		rows.push_back((plugin->child(i)->text(0) + " " + plugin->child(i)->text(1)).toStdString());
-	CHECK(std::ranges::find(rows, "Asset kind sample.fixture") != rows.end());
-	CHECK(std::ranges::find(rows, "Panel sample.fixture_panel") != rows.end());
-	CHECK(
-		std::ranges::find(
-			rows,
-			"Runtime module " + fs::path(EDITOR_PLUGIN_FIXTURE).filename().string()) != rows.end());
-
-	const QTreeWidgetItem* unused = tree->topLevelItem(1);
-	CHECK(unused->text(0) == "Configured, not required by this project");
-	REQUIRE(unused->childCount() == 1);
-	CHECK(unused->child(0)->text(1) == "sample.spare");
+	const editor::PluginsWindow window(session);
+	const auto                  names        = window.findChildren<QLabel*>("PluginName");
+	const auto                  descriptions = window.findChildren<QLabel*>("PluginDescription");
+	REQUIRE(names.size() == 1);
+	REQUIRE(descriptions.size() == 1);
+	CHECK(names.front()->text() == "Named Sample");
+	CHECK(descriptions.front()->text() == "Registers one fixture kind and one panel.");
+	CHECK(names.front()->parentWidget()->toolTip().startsWith("sample.named\n"));
 }
 
 TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins][loader]")
@@ -200,7 +199,6 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 		std::ofstream(plugin / editor::c_PluginDescriptorFileName) << json.dump(2);
 		CHECK_THROWS_WITH(
 			editor::plugins::PluginSession::Load(
-				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
 				sandbox.root / "plugin-copies"),
@@ -212,7 +210,6 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 		SetSdkStamp(build, fs::file_time_type::clock::now() + std::chrono::hours(1));
 		CHECK_THROWS_WITH(
 			editor::plugins::PluginSession::Load(
-				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
 				sandbox.root / "plugin-copies"),
@@ -227,7 +224,6 @@ TEST_CASE("Compatibility failures do not invoke a plugin entry point", "[plugins
 		std::ofstream(plugin / editor::c_PluginDescriptorFileName) << json.dump(2);
 		CHECK_THROWS_WITH(
 			editor::plugins::PluginSession::Load(
-				std::vector<std::string>{ "sample.rejected" },
 				std::vector<fs::path>{ plugin },
 				build,
 				sandbox.root / "plugin-copies"),
@@ -253,7 +249,6 @@ TEST_CASE("A colliding module rejects the plugin session", "[plugins][loader]")
 
 	CHECK_THROWS_WITH(
 		editor::plugins::PluginSession::Load(
-			std::vector<std::string>{ "sample.first", "sample.second" },
 			std::vector<fs::path>{ first, second },
 			build,
 			sandbox.root / "plugin-copies",
@@ -284,7 +279,6 @@ TEST_CASE("Editor contribution collisions reject the private session", "[plugins
 
 	CHECK_THROWS_WITH(
 		editor::plugins::PluginSession::Load(
-			std::vector<std::string>{ "sample.first", "sample.second" },
 			std::vector<fs::path>{ first, second },
 			build,
 			sandbox.root / "plugin-copies",
@@ -293,14 +287,21 @@ TEST_CASE("Editor contribution collisions reject the private session", "[plugins
 }
 #endif
 
-TEST_CASE("Changing the project plugin list requires a restart", "[plugins][loader]")
+TEST_CASE("A project names the plugins the editor did not load", "[plugins][loader]")
 {
-	CHECK_FALSE(
-		editor::plugins::OpeningNeedsPluginRelaunch(
-			std::vector<std::string>{ "studio.ai" },
-			std::vector<std::string>{ "studio.ai" }));
 	CHECK(
-		editor::plugins::OpeningNeedsPluginRelaunch(
+		editor::plugins::MissingRequiredPlugins(
 			std::vector<std::string>{ "studio.ai" },
-			std::vector<std::string>{ "studio.quest" }));
+			std::vector<std::string>{ "studio.ai" })
+			.empty());
+	CHECK(
+		editor::plugins::MissingRequiredPlugins(
+			std::vector<std::string>{ "studio.ai" },
+			std::vector<std::string>{ "studio.quest", "studio.ai", "studio.dialogue" }) ==
+		std::vector<std::string>{ "studio.quest", "studio.dialogue" });
+	CHECK(
+		editor::plugins::MissingRequiredPlugins(
+			std::vector<std::string>{},
+			std::vector<std::string>{})
+			.empty());
 }

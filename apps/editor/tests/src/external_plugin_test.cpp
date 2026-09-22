@@ -64,10 +64,14 @@ TEST_CASE(
 	SampleProject sandbox;
 	const auto    projectFile = sandbox.root / "Sample.bproj";
 	const auto    session     = editor::plugins::PluginSession::Load(
-		assetlib::Project::PluginIdsOf(projectFile),
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
 		editor::plugins::CurrentBuildIdentity(),
 		sandbox.root / "copies");
+	CHECK(
+		editor::plugins::MissingRequiredPlugins(
+			session.Ids(),
+			assetlib::Project::PluginIdsOf(projectFile))
+			.empty());
 	const auto  project = assetlib::Project::Open(projectFile, session.KindRegistry());
 	const auto& store   = project.GetStore();
 	const auto  graph   = assetlib::AssetRefGraph::Scan(store);
@@ -118,7 +122,6 @@ TEST_CASE(
 {
 	SampleProject sandbox;
 	const auto    session = editor::plugins::PluginSession::Load(
-		std::vector<std::string>{ "sample.document" },
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
 		editor::plugins::CurrentBuildIdentity(),
 		sandbox.root / "copies");

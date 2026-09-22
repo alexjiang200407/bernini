@@ -31,8 +31,12 @@ with `--config`. The output directory is `sample-build/plugin/Debug` (or your ch
 It contains `bernini-plugin.json`, generated with the matching engine build ID and actual binary
 filenames. Never copy an ID from a different SDK or manually touch binaries to bypass freshness.
 
-Add the **absolute** output directory to `pluginDirectories` in the editor's runtime `config.json`
-(the directory printed by `just exes --target editor` contains that file):
+The engine's own build already does all of the above for the test tree: `just build editor` builds
+this sample against the current SDK and stages its output into `plugins/sample.document/` beside
+the editor executable, where the editor loads it at startup with nothing configured. A sample built
+elsewhere is reached by adding its **absolute** output directory to `pluginDirectories` in the
+editor's runtime `config.json` (the directory printed by `just exes --target editor` contains that
+file):
 
 ```json
 "pluginDirectories": ["/path/to/sample-build/plugin/Debug"]
@@ -44,9 +48,10 @@ Copy `project/` somewhere writable, then launch that copy:
 just run editor -- --project /path/to/copied-project/Sample.bproj
 ```
 
-The project already requires `sample.document`. In another project, add
-`"plugins": ["sample.document"]` to its `.bproj`, preserving any existing requirements.
-**Window → Plugins** lists `sample.document` with both modules and its contributions once it loaded.
+**Plugins → Loaded Plugins** lists it as "Sample Document" once it loaded.
+The project names `sample.document` in its `plugins` list, which loads nothing: it is what makes an
+editor without the plugin refuse the project instead of opening it with its documents unreadable.
+Another project needs no entry to use the tools; add one only to protect its `.bexample` files.
 Open **Tools → Sample tools → Project tools** to see the project tab. Open `Holder.bexample` in
 Content Explorer to see its document tab. Close the document tab before trying rename/delete:
 open documents are protected independently of their saved references. Deleting `Target.bexample`
@@ -78,9 +83,8 @@ With Ninja/Make, the SDK stamp is a link dependency, so an otherwise unchanged s
 its SDK rebuilds. Other generators require `cmake --build /path/to/sample-build --config Debug --clean-first`
 after an SDK rebuild, including changes to headers the sample does not directly include.
 Completely exit and relaunch the editor to use rebuilt code: modules remain loaded until process
-exit. On Windows the loader runs copies, leaving the original output files writable. Changing a
-project's required plugin list also requires a restart. Network installation and hot reload are
-separate features.
+exit. On Windows the loader runs copies, leaving the original output files writable. Network
+installation and hot reload are separate features.
 
 ## Verification and ownership
 
