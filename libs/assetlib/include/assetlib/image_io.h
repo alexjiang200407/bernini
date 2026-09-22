@@ -16,6 +16,7 @@ namespace assetlib
 		kBC1_RGB,
 		kBC5_RG,
 		kBC7_RGBA,
+		kBC4_R,
 	};
 
 	enum class Ktx2Decode : uint32_t

@@ -371,9 +371,10 @@ main(int argc, char** argv)
 
 	auto* bakeMaterials = app.add_subcommand(
 		"bakematerials",
-		"Composite every material in the project whose baked triplet is missing or stale down to "
-		"the baseColor/normal/orm maps it draws from. The one derived output nothing else "
-		"produces, so a checkout that ignores Textures/ opens untextured until this has run");
+		"Bake every material in the project whose baked maps are missing or stale: the "
+		"baseColor/normal/orm triplet its routes composite to, and the single-channel geometry "
+		"occlusion map read from its authored one. The one derived output nothing else produces, "
+		"so a checkout that ignores Textures/ opens untextured until this has run");
 	addProject(bakeMaterials);
 	bakeMaterials->add_flag(
 		"--dry-run",

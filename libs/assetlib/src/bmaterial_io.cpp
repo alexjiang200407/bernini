@@ -70,6 +70,10 @@ namespace assetlib
 			"routes",
 		} };
 
+		// The source an occlusion bake read, under `baked`: the stamp keys a route carries, without
+		// the route -- the map is whole, so there is no channel to name.
+		constexpr std::string_view c_OcclusionSourceKey = "geometryOcclusionSource";
+
 		constexpr std::array<std::string_view, 3> c_ShadingModelNames = { {
 			"pbr",
 			"pbrSurface",
@@ -120,6 +124,30 @@ namespace assetlib
 		}
 
 		/**
+		 * Takes the two stamp keys out of `object`, leaving anything else for the round-trip.
+		 * `label` names the object in errors.
+		 */
+		void
+		takeStamp(nlohmann::json& object, const std::string& label, SourceStamp& stamp)
+		{
+			for (const auto& [stampKey, field] :
+			     { std::pair<std::string_view, uint64_t*>{ c_RouteKeys[2], &stamp.size },
+			       { c_RouteKeys[3], &stamp.hash } })
+			{
+				if (const auto value = object.find(stampKey); value != object.end())
+				{
+					core::throw_runtime_error_if(
+						!value->is_number_unsigned(),
+						"bmaterial: {} has an invalid {}",
+						label,
+						stampKey);
+					*field = value->get<uint64_t>();
+					object.erase(value);
+				}
+			}
+		}
+
+		/**
 		 * Takes one route's known keys out of `route`, leaving anything preserved for the
 		 * round-trip. `label` names the route in errors -- "route 'ao'", or "texture 'orm'
 		 * route 'r'" -- so both halves report in their own vocabulary.
@@ -143,21 +171,7 @@ namespace assetlib
 				route.erase(channel);
 			}
 
-			for (const auto& [stampKey, field] :
-			     { std::pair<std::string_view, uint64_t*>{ "stampSize", &stamp.size },
-			       { "stampHash", &stamp.hash } })
-			{
-				if (const auto value = route.find(stampKey); value != route.end())
-				{
-					core::throw_runtime_error_if(
-						!value->is_number_unsigned(),
-						"bmaterial: {} has an invalid {}",
-						label,
-						stampKey);
-					*field = value->get<uint64_t>();
-					route.erase(value);
-				}
-			}
+			takeStamp(route, label, stamp);
 		}
 
 		/**
@@ -365,6 +379,22 @@ namespace assetlib
 			setOrErase(baked, "baseColor", pbr.baseColorTexture);
 			setOrErase(baked, "normal", pbr.normalTexture);
 			setOrErase(baked, "orm", pbr.ormTexture);
+			setOrErase(baked, "geometryOcclusion", pbr.geometryOcclusionBakedTexture);
+			if (pbr.geometryOcclusionStamp != SourceStamp{})
+			{
+				auto& source = baked[c_OcclusionSourceKey];
+				if (!source.is_object())
+					source = nlohmann::json::object();
+				source[c_RouteKeys[2]] = pbr.geometryOcclusionStamp.size;
+				source[c_RouteKeys[3]] = pbr.geometryOcclusionStamp.hash;
+			}
+			else if (const auto source = baked.find(c_OcclusionSourceKey); source != baked.end())
+			{
+				for (const std::string_view k : { c_RouteKeys[2], c_RouteKeys[3] })
+					source->erase(k);
+				if (source->empty())
+					baked.erase(source);
+			}
 			if (pbr.bakeToken != 0)
 				baked["token"] = pbr.bakeToken;
 			else
@@ -562,6 +592,20 @@ namespace assetlib
 				baked.Take("baseColor", pbr.baseColorTexture);
 				baked.Take("normal", pbr.normalTexture);
 				baked.Take("orm", pbr.ormTexture);
+				baked.Take("geometryOcclusion", pbr.geometryOcclusionBakedTexture);
+				if (const auto source = it->find(c_OcclusionSourceKey); source != it->end())
+				{
+					core::throw_runtime_error_if(
+						!source->is_object(),
+						"bmaterial: 'baked.{}' is not an object",
+						c_OcclusionSourceKey);
+					takeStamp(
+						*source,
+						std::string("baked.") + std::string(c_OcclusionSourceKey),
+						pbr.geometryOcclusionStamp);
+					if (source->empty())
+						it->erase(source);
+				}
 				if (const auto token = it->find("token"); token != it->end())
 				{
 					core::throw_runtime_error_if(
@@ -802,6 +846,86 @@ namespace assetlib
 	}
 
 	bool
+	geometryOcclusionBakeIsStale(const PbrParams& pbr, const core::file::IFileSystem& fileSystem)
+	{
+		// Nothing authored is nothing to bake. A stripped material keeps its baked map with no
+		// source beside it, and that is the shipped form rather than a stale one.
+		if (pbr.geometryOcclusionTexture.empty())
+			return false;
+
+		// A zeroed stamp means it was never baked; stampOf zeroes a missing source. Neither equals a
+		// live source's stamp, so both read as stale, exactly as a route does.
+		if (stampOf(fileSystem, pbr.geometryOcclusionTexture) != pbr.geometryOcclusionStamp)
+			return true;
+
+		if (pbr.bakeToken != c_TextureBakeToken)
+			return true;
+
+		return pbr.geometryOcclusionBakedTexture.empty() ||
+		       stampOf(fileSystem, pbr.geometryOcclusionBakedTexture).size == 0;
+	}
+
+	bool
+	drawsBakedGeometryOcclusion(
+		const BMaterial&               material,
+		const core::file::IFileSystem& fileSystem)
+	{
+		if (material.shadingModel != ShadingModel::kPbr)
+			return false;
+
+		const PbrParams& pbr = material.pbr;
+		if (pbr.geometryOcclusionBakedTexture.empty())
+			return false;
+
+		// The same guard drawsLoose has: falling back to the authored map needs it on disk, and a
+		// project shipped without its sources keeps the map it has.
+		return !geometryOcclusionBakeIsStale(pbr, fileSystem) ||
+		       stampOf(fileSystem, pbr.geometryOcclusionTexture).size == 0;
+	}
+
+	namespace
+	{
+		// The triplet half of bakeIsStale: whether the maps the routes composite still reflect them.
+		bool
+		tripletBakeIsStale(const PbrParams& pbr, const core::file::IFileSystem& fileSystem)
+		{
+			bool hasRoutes = false;
+
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
+			{
+				const ChannelRoute& route = pbr.routes[i];
+				if (route.texture.empty())
+					continue;
+
+				hasRoutes = true;
+
+				// A zeroed stamp means this route was never baked; stampOf zeroes a missing file. Neither
+				// can equal a live source's stamp, so both fall out of this comparison as stale.
+				if (stampOf(fileSystem, route.texture) != pbr.routeStamps[i])
+					return true;
+			}
+
+			// No routes: an imported, triplet-only material. It has no sources to have drifted from.
+			if (!hasRoutes)
+				return false;
+
+			if (pbr.bakeToken != c_TextureBakeToken)
+				return true;
+
+			// Routed and every source matches -- but a map deleted since leaves the triplet naming a
+			// file that is not there to sample, and a base colour missing where something routes into
+			// one is a bake that never ran.
+			//
+			// Only where something routes into one: a material tinted by its factors alone bakes no
+			// base colour and is complete without one. A glass eye is the standing example --
+			// baseColorFactor carrying its alpha, a normal and an orm map, and nothing routed to base
+			// colour at all.
+			return (groupIsRouted(pbr, c_BaseColorChannels) && pbr.baseColorTexture.empty()) ||
+			       !tripletIsOnDisk(pbr, fileSystem);
+		}
+	}
+
+	bool
 	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
 		if (isSurfaceModel(material.shadingModel))
@@ -814,48 +938,19 @@ namespace assetlib
 		if (material.shadingModel != ShadingModel::kPbr)
 			return false;
 
-		const PbrParams& pbr = material.pbr;
-
-		bool hasRoutes = false;
-
-		for (size_t i = 0; i < c_LooseChannelCount; ++i)
-		{
-			const ChannelRoute& route = pbr.routes[i];
-			if (route.texture.empty())
-				continue;
-
-			hasRoutes = true;
-
-			// A zeroed stamp means this route was never baked; stampOf zeroes a missing file. Neither
-			// can equal a live source's stamp, so both fall out of this comparison as stale.
-			if (stampOf(fileSystem, route.texture) != pbr.routeStamps[i])
-				return true;
-		}
-
-		// No routes: an imported, triplet-only material. It has no sources to have drifted from.
-		if (!hasRoutes)
-			return false;
-
-		if (pbr.bakeToken != c_TextureBakeToken)
-			return true;
-
-		// Routed and every source matches -- but a map deleted since leaves the triplet naming a file
-		// that is not there to sample, and a base colour missing where something routes into one is a
-		// bake that never ran.
-		//
-		// Only where something routes into one: a material tinted by its factors alone bakes no base
-		// colour and is complete without one. A glass eye is the standing example -- baseColorFactor
-		// carrying its alpha, a normal and an orm map, and nothing routed to base colour at all.
-		return (groupIsRouted(pbr, c_BaseColorChannels) && pbr.baseColorTexture.empty()) ||
-		       !tripletIsOnDisk(pbr, fileSystem);
+		return tripletBakeIsStale(material.pbr, fileSystem) ||
+		       geometryOcclusionBakeIsStale(material.pbr, fileSystem);
 	}
 
 	bool
 	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
 		// Loose is the renderer's per-channel PBR path; a stale *surface* slot recomposites at
-		// load instead (ADR-8), so the model is checked before `pbr` means anything.
-		return material.shadingModel == ShadingModel::kPbr && bakeIsStale(material, fileSystem) &&
+		// load instead (ADR-8), so the model is checked before `pbr` means anything. The triplet
+		// alone decides it: a stale occlusion bake falls back to its authored map on its own
+		// (drawsBakedGeometryOcclusion) rather than dragging nine channels loose with it.
+		return material.shadingModel == ShadingModel::kPbr &&
+		       tripletBakeIsStale(material.pbr, fileSystem) &&
 		       routesAreOnDisk(material.pbr, fileSystem);
 	}
 

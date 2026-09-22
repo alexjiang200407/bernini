@@ -143,6 +143,8 @@ namespace assetlib
 				return KTX_TTF_BC5_RG;
 			case Ktx2Compression::kBC7_RGBA:
 				return KTX_TTF_BC7_RGBA;
+			case Ktx2Compression::kBC4_R:
+				return KTX_TTF_BC4_R;
 			case Ktx2Compression::kNone:
 			case Ktx2Compression::kBasisUASTC:
 			default:
@@ -155,7 +157,8 @@ namespace assetlib
 		{
 			return compression == Ktx2Compression::kBC1_RGB ||
 			       compression == Ktx2Compression::kBC5_RG ||
-			       compression == Ktx2Compression::kBC7_RGBA;
+			       compression == Ktx2Compression::kBC7_RGBA ||
+			       compression == Ktx2Compression::kBC4_R;
 		}
 
 		// libktx builds its Basis codec tables on first use, guarded by a plain non-atomic

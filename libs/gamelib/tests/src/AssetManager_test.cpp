@@ -747,6 +747,14 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	baked.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
 	CHECK(game::MaterialTextures(baked, false).back() == "Textures/wall_ao.ktx2");
 
+	// The verdict picks which of the two occlusion maps ends the list: the bake's output when it
+	// is current, the authored map it was read from otherwise.
+	baked.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_abc.ktx2";
+	CHECK(game::MaterialTextures(baked, false, 0, false).back() == "Textures/wall_ao.ktx2");
+	CHECK(
+		game::MaterialTextures(baked, false, 0, true).back() ==
+		"Derived/BakedTextures/occlusion_abc.ktx2");
+
 	// A loose material is its authoring routes instead, one slot per channel, unrouted ones empty.
 	auto loose                         = assetlib::BMaterial();
 	loose.pbr.routes[0].texture        = "Textures/albedo.ktx2";

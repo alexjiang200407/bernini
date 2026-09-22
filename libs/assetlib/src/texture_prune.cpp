@@ -86,6 +86,7 @@ namespace assetlib
 						markMap(live, material.pbr.normalTexture);
 						markMap(live, material.pbr.ormTexture);
 						markMap(live, material.pbr.geometryOcclusionTexture);
+						markMap(live, material.pbr.geometryOcclusionBakedTexture);
 						break;
 
 					case ShadingModel::kPbrSurface:

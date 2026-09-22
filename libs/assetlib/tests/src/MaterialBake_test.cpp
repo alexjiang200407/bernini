@@ -24,8 +24,10 @@
 #include <ios>
 #include <mutex>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "MountAt.h"
@@ -674,11 +676,14 @@ TEST_CASE("bakeMaterial rejects an already-baked source", "[bmaterial][bake]")
 TEST_CASE("stripAuthoringData leaves only the shippable form", "[bmaterial][bake]")
 {
 	BMaterial mat;
-	mat.pbr.baseColorTexture = "m_basecolor.ktx2";
-	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
-	mat.pbr.routeStamps[0]   = { 12, 34 };
-	mat.editorGraph          = R"({"nodes":[]})";
-	mat.pbr.roughnessFactor  = 0.25f;
+	mat.pbr.baseColorTexture              = "m_basecolor.ktx2";
+	mat.pbr.routes[0]                     = { "albedo.ktx2", 0 };
+	mat.pbr.routeStamps[0]                = { 12, 34 };
+	mat.pbr.geometryOcclusionTexture      = "wall_ao.ktx2";
+	mat.pbr.geometryOcclusionBakedTexture = "m_occlusion.ktx2";
+	mat.pbr.geometryOcclusionStamp        = { 56, 78 };
+	mat.editorGraph                       = R"({"nodes":[]})";
+	mat.pbr.roughnessFactor               = 0.25f;
 
 	REQUIRE_NOTHROW(stripAuthoringData(mat));
 
@@ -686,8 +691,13 @@ TEST_CASE("stripAuthoringData leaves only the shippable form", "[bmaterial][bake
 	REQUIRE(mat.pbr.routes[0].texture.empty());
 	REQUIRE(mat.pbr.routeStamps[0] == SourceStamp{});
 
+	// The authored occlusion map is a source like a route: what ships is what was baked from it.
+	REQUIRE(mat.pbr.geometryOcclusionTexture.empty());
+	REQUIRE(mat.pbr.geometryOcclusionStamp == SourceStamp{});
+
 	// What the runtime actually needs is untouched.
 	REQUIRE(mat.pbr.baseColorTexture == "m_basecolor.ktx2");
+	REQUIRE(mat.pbr.geometryOcclusionBakedTexture == "m_occlusion.ktx2");
 	REQUIRE(mat.pbr.roughnessFactor == 0.25f);
 }
 
@@ -698,6 +708,16 @@ TEST_CASE("stripAuthoringData refuses to strip an unbaked material", "[bmaterial
 	mat.pbr.routes[0] = { "albedo.ktx2", 0 };
 
 	REQUIRE_THROWS_AS(stripAuthoringData(mat), std::runtime_error);
+
+	SECTION("an occlusion map that was never baked refuses it too")
+	{
+		BMaterial occluded;
+		occluded.pbr.baseColorTexture         = "m_basecolor.ktx2";
+		occluded.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+
+		REQUIRE_THROWS_AS(stripAuthoringData(occluded), std::runtime_error);
+		REQUIRE(occluded.pbr.geometryOcclusionTexture == "wall_ao.ktx2");
+	}
 }
 
 // The Apple case again, but with the bakes racing -- which is what Migrate's resave walk does now
@@ -791,4 +811,188 @@ TEST_CASE(
 	// And nothing half-written was left under a name the next run's stat would take for a map.
 	for (const auto& entry : std::filesystem::recursive_directory_iterator(textures))
 		CHECK(entry.path().extension() != ".tmp");
+}
+
+namespace
+{
+	// The first BC4 block of a map's top mip: its two endpoint bytes come first, and a solid-colour
+	// source encodes to a block whose endpoints are both that colour.
+	std::pair<uint8_t, uint8_t>
+	FirstBc4Endpoints(const ImageData& image)
+	{
+		REQUIRE(image.subresources.size() >= 1);
+		const size_t at = image.subresources.front().offset;
+		return { std::to_integer<uint8_t>(image.pixels[at]),
+			     std::to_integer<uint8_t>(image.pixels[at + 1]) };
+	}
+}
+
+TEST_CASE("bakeMaterial writes the geometry occlusion map single-channel", "[bmaterial][bake]")
+{
+	const BakeDir dir("bernini_bake_occlusion");
+
+	// Red is the channel the shader reads; green is loud so a map that kept it would show.
+	WriteSource(dir.path / "wall_ao.ktx2", 16, { { 77, 200, 10, 255 } });
+
+	BMaterial mat;
+	mat.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+	SECTION("a material with nothing routed still bakes it, and the bake reads as current")
+	{
+		// The imported shape: a triplet the import wrote (here none) and an AO map beside it, no
+		// routes at all. The occlusion bake does not wait on a route to exist.
+		REQUIRE_FALSE(mat.pbr.geometryOcclusionBakedTexture.empty());
+		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.geometryOcclusionBakedTexture));
+		REQUIRE(mat.pbr.bakeToken == c_TextureBakeToken);
+		REQUIRE(mat.pbr.geometryOcclusionStamp == stampOf(dir.path / "wall_ao.ktx2"));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(geometryOcclusionBakeIsStale(mat.pbr, MountAt(dir.path)));
+	}
+
+	SECTION("it lands beside the triplet, content-addressed, and the authored key is untouched")
+	{
+		REQUIRE(
+			mat.pbr.geometryOcclusionBakedTexture.starts_with("Derived/BakedTextures/occlusion_"));
+		REQUIRE(mat.pbr.geometryOcclusionBakedTexture.ends_with(".ktx2"));
+		REQUIRE(isBakedMapName(
+			std::filesystem::path(mat.pbr.geometryOcclusionBakedTexture).filename().string()));
+		REQUIRE(mat.pbr.geometryOcclusionTexture == "wall_ao.ktx2");
+	}
+
+	SECTION("it is BC4, mipped, and holds the source's red")
+	{
+		const ImageData image = loadKTX2(dir.path / mat.pbr.geometryOcclusionBakedTexture);
+		REQUIRE(image.vkFormat == VkFormat::BC4_UNORM_BLOCK);
+		REQUIRE(image.width == 16);
+		REQUIRE(image.mipLevels == 5);
+
+		const auto [r0, r1] = FirstBc4Endpoints(image);
+		CHECK(r0 == 77);
+		CHECK(r1 == 77);
+	}
+
+	SECTION("it is what the material draws, and the authored map is what it falls back to")
+	{
+		REQUIRE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir.path)));
+
+		// An edit to the source: the bake is stale, and the rebake question says so, but the
+		// draw fork for the triplet is untouched -- nothing routes, so nothing goes loose.
+		WriteSource(dir.path / "wall_ao.ktx2", 16, { { 1, 2, 3, 255 } });
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE(geometryOcclusionBakeIsStale(mat.pbr, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir.path)));
+	}
+
+	SECTION("a stale occlusion bake does not drag a current triplet loose")
+	{
+		WriteSource(dir.path / "albedo.ktx2", 16, { { 200, 100, 50, 255 } });
+		mat.pbr.routes[0] = { "albedo.ktx2", 0 };
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+
+		WriteSource(dir.path / "wall_ao.ktx2", 16, { { 1, 2, 3, 255 } });
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsLoose(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+	}
+
+	SECTION("the same source in another material names the same file")
+	{
+		BMaterial other;
+		other.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(other));
+		REQUIRE(other.pbr.geometryOcclusionBakedTexture == mat.pbr.geometryOcclusionBakedTexture);
+	}
+
+	SECTION("an edited source names a different map")
+	{
+		const std::string before = mat.pbr.geometryOcclusionBakedTexture;
+		WriteSource(dir.path / "wall_ao.ktx2", 16, { { 1, 2, 3, 255 } });
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+		REQUIRE(mat.pbr.geometryOcclusionBakedTexture != before);
+		REQUIRE(std::filesystem::exists(dir.path / before));
+	}
+
+	SECTION("a map already there is reused without a decode")
+	{
+		// Overwrite it with bytes that are not an image: a bake that composited would throw out
+		// of loadKTX2, so one that succeeds never read them.
+		{
+			std::ofstream out(dir.path / "wall_ao.ktx2", std::ios::binary | std::ios::trunc);
+			out << "not a ktx2";
+		}
+		BMaterial again;
+		again.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+		REQUIRE_NOTHROW(StoreAt(dir.path).ResolveMaterialBake(again));
+		std::filesystem::create_directories(
+			(dir.path / again.pbr.geometryOcclusionBakedTexture).parent_path());
+		{
+			std::ofstream out(dir.path / again.pbr.geometryOcclusionBakedTexture, std::ios::binary);
+			out << "ALREADY BAKED";
+		}
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
+	}
+
+	SECTION("a de-authored map loses its bake")
+	{
+		// Nothing samples it any more: a kept path would draw a map the document does not name,
+		// and hold it live for the prune.
+		mat.pbr.geometryOcclusionTexture.clear();
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+		REQUIRE(mat.pbr.geometryOcclusionBakedTexture.empty());
+		REQUIRE(mat.pbr.geometryOcclusionStamp == SourceStamp{});
+		REQUIRE_FALSE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+	}
+
+	SECTION("a stripped material draws its baked map with no source to compare")
+	{
+		REQUIRE_NOTHROW(stripAuthoringData(mat));
+		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+	}
+}
+
+TEST_CASE("the geometry occlusion bake is stale on what the triplet's is", "[bmaterial][bake]")
+{
+	const BakeDir dir("bernini_bake_occlusion_stale");
+	WriteSource(dir.path / "wall_ao.ktx2", 16, { { 77, 77, 77, 255 } });
+
+	BMaterial mat;
+	mat.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+	REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+
+	SECTION("a map baked at another revision")
+	{
+		mat.pbr.bakeToken = 0;
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+	}
+
+	SECTION("an authored map that was never baked")
+	{
+		BMaterial unbaked;
+		unbaked.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
+		REQUIRE(bakeIsStale(unbaked, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsBakedGeometryOcclusion(unbaked, MountAt(dir.path)));
+	}
+
+	SECTION("a baked map deleted since")
+	{
+		std::filesystem::remove(dir.path / mat.pbr.geometryOcclusionBakedTexture);
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE_FALSE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+	}
+
+	SECTION("a source deleted since keeps the baked map drawing")
+	{
+		// The shipped shape when the key was not stripped: the bake is stale, but falling back
+		// needs somewhere to fall back to.
+		std::filesystem::remove(dir.path / "wall_ao.ktx2");
+		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+		REQUIRE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
+	}
 }

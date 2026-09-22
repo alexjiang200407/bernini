@@ -16,6 +16,7 @@ namespace assetlib
 	struct EnvMapRoute;
 	struct ImageData;
 	struct MeshRefs;
+	struct PbrParams;
 	struct ResolvedEnvironment;
 	struct SourceStamp;
 	struct SurfaceTextureBinding;
@@ -88,6 +89,14 @@ namespace assetlib
 
 	[[nodiscard]] bool
 	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem);
+
+	[[nodiscard]] bool
+	geometryOcclusionBakeIsStale(const PbrParams& pbr, const core::file::IFileSystem& fileSystem);
+
+	[[nodiscard]] bool
+	drawsBakedGeometryOcclusion(
+		const BMaterial&               material,
+		const core::file::IFileSystem& fileSystem);
 
 	[[nodiscard]] bool
 	isSkyBakeStale(const BSky& sky, const core::file::IFileSystem& fileSystem);

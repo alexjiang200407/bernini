@@ -91,6 +91,12 @@ namespace assetlib
 		constexpr uint8_t         c_SlotFallback    = 0xFF;
 		constexpr Ktx2Compression c_SlotCompression = Ktx2Compression::kBC7_RGBA;
 
+		// The geometry occlusion map: the authored map's red, alone, single-channel on disk. Only
+		// red is ever read (MaterialData.slang), so the other three channels are not stored.
+		constexpr std::string_view c_OcclusionBakePrefix  = "occlusion";
+		constexpr uint8_t          c_OcclusionFallback    = 0xFF;
+		constexpr Ktx2Compression  c_OcclusionCompression = Ktx2Compression::kBC4_R;
+
 		bool
 		isRgba8(VkFormat vk)
 		{
@@ -431,8 +437,22 @@ namespace assetlib
 		const MaterialLayer& layer = material.layer;
 		PbrParams&           pbr   = material.pbr;
 
+		// The authored occlusion map is one more source, read through the one-route shape the
+		// groups use so its key, extent and compose are the ones every other map has.
+		const std::array<ChannelRoute, 1> occlusionRoute = { { { pbr.geometryOcclusionTexture,
+			                                                     0 } } };
+
+		// A de-authored map loses its bake before anything else is decided: nothing samples it, and
+		// a kept path would draw a map the document no longer names and hold it live for the prune.
+		if (!anyRouted(occlusionRoute))
+		{
+			pbr.geometryOcclusionBakedTexture.clear();
+			pbr.geometryOcclusionStamp = {};
+		}
+
 		auto stamps = core::str::unordered_str_map<SourceStamp>();
 		stampRoutes(pbr.routes, desc.dataRoot, stamps);
+		stampRoutes(occlusionRoute, desc.dataRoot, stamps);
 
 		// Routing nothing is a complete material, not a failed one: its factors are the whole
 		// description, and the triplet it may already carry is what draws it. Nothing to composite is
@@ -515,6 +535,34 @@ namespace assetlib
 		for (size_t g = 0; g < c_Groups.size(); ++g)
 			if (!baked[g].empty())
 				*outputs[g] = baked[g];
+
+		if (anyRouted(occlusionRoute))
+		{
+			throwIfCancelled(cancel);
+
+			const std::string name = bakedMapFileName(
+				c_OcclusionBakePrefix,
+				bakeKey(
+					keyLead(c_OcclusionBakePrefix, c_OcclusionCompression),
+					occlusionRoute,
+					stamps,
+					c_OcclusionFallback));
+			const auto target = outDir / name;
+
+			if (desc.write && !hasBytes(target))
+			{
+				const auto [width, height] = mapExtent(occlusionRoute, sources);
+
+				const Rgba8 composed =
+					compose(occlusionRoute, c_OcclusionFallback, sources, width, height);
+				const ImageData image = rgba8ToImage(composed, width, height, std::nullopt, false);
+
+				writeKTX2(image, target, false, c_OcclusionCompression);
+			}
+
+			pbr.geometryOcclusionBakedTexture = (desc.textureDir / name).generic_string();
+			pbr.geometryOcclusionStamp        = stamps.at(pbr.geometryOcclusionTexture);
+		}
 
 		// Record what each source measured, so a later edit to one of them shows up as a stale bake.
 		for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -618,11 +666,12 @@ namespace assetlib
 	bool
 	isBakedMapName(std::string_view fileName) noexcept
 	{
-		static constexpr std::array<std::string_view, c_Groups.size() + 1> c_Names = { {
+		static constexpr std::array<std::string_view, c_Groups.size() + 2> c_Names = { {
 			c_Groups[0].name,
 			c_Groups[1].name,
 			c_Groups[2].name,
 			c_SurfaceSlotBakePrefix,
+			c_OcclusionBakePrefix,
 		} };
 		return isBakedNameAmong(fileName, c_Names);
 	}
@@ -651,6 +700,11 @@ namespace assetlib
 					"its "
 					"routes would leave nothing to render");
 			}
+
+			core::throw_runtime_error_if(
+				!pbr.geometryOcclusionTexture.empty() && pbr.geometryOcclusionBakedTexture.empty(),
+				"assetlib::stripAuthoringData: the geometry occlusion map has never been baked; "
+				"stripping its source would leave nothing to sample through UV1");
 		}
 
 		if (isSurface)
@@ -667,6 +721,11 @@ namespace assetlib
 		{
 			material.pbr.routes      = {};
 			material.pbr.routeStamps = {};
+
+			// The baked map is what ships; the source it was read from is authoring data like a
+			// route, and a kept key would report the bake stale in a tree that has no sources.
+			material.pbr.geometryOcclusionTexture.clear();
+			material.pbr.geometryOcclusionStamp = {};
 		}
 
 		if (isSurface)

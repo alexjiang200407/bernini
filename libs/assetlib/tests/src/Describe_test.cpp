@@ -128,11 +128,18 @@ TEST_CASE(
 {
 	BMaterial material = RoutedMaterial();
 	CHECK(describe(material).find("geometryOcclusion (none)") != std::string::npos);
+	CHECK(describe(material).find("geometry occlusion source\n    (none)") != std::string::npos);
 
-	material.pbr.geometryOcclusionTexture = "Derived/SourceTextures/skin_ao.ktx2";
+	// The authored map is the bake's source and is reported with its stamp like a route; the map
+	// baked from it sits with the triplet.
+	material.pbr.geometryOcclusionTexture      = "Derived/SourceTextures/skin_ao.ktx2";
+	material.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_beef.ktx2";
+	const std::string text                     = describe(material);
 	CHECK(
-		describe(material).find("geometryOcclusion Derived/SourceTextures/skin_ao.ktx2") !=
+		text.find("geometryOcclusion Derived/BakedTextures/occlusion_beef.ktx2") !=
 		std::string::npos);
+	CHECK(text.find("    Derived/SourceTextures/skin_ao.ktx2\n") != std::string::npos);
+	CHECK(text.find("baked from 0 B") != std::string::npos);
 }
 
 // With a data root, each routed source is stat'd and compared against the stamp taken at bake time.

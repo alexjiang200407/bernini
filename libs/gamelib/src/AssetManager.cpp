@@ -243,7 +243,8 @@ namespace game
 	MaterialTextures(
 		const assetlib::BMaterial& material,
 		const bool                 loose,
-		const uint32_t             looseSlots)
+		const uint32_t             looseSlots,
+		const bool                 bakedOcclusion)
 	{
 		auto paths = std::vector<std::string>();
 
@@ -282,7 +283,9 @@ namespace game
 				      material.pbr.ormTexture };
 		}
 
-		paths.push_back(material.pbr.geometryOcclusionTexture);
+		paths.push_back(
+			bakedOcclusion ? material.pbr.geometryOcclusionBakedTexture :
+							 material.pbr.geometryOcclusionTexture);
 		return paths;
 	}
 
@@ -487,22 +490,25 @@ namespace game
 		// are still there to fall back to. A surface answers per slot: one whose bake is stale or
 		// absent draws each channel from its own source through the record's routes, so nothing
 		// is composited at load and the material renders the same however it is loaded.
-		const bool     loose      = !surface && m_Store.DrawsLoose(material);
-		const uint32_t looseSlots = surface ? m_Store.LooseSurfaceSlots(material) : 0;
+		const bool     loose          = !surface && m_Store.DrawsLoose(material);
+		const uint32_t looseSlots     = surface ? m_Store.LooseSurfaceSlots(material) : 0;
+		const bool     bakedOcclusion = !surface && m_Store.DrawsBakedGeometryOcclusion(material);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = MaterialTextures(material, loose, looseSlots);
+		const std::vector<std::string> paths =
+			MaterialTextures(material, loose, looseSlots, bakedOcclusion);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
 		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
 
-		auto record       = MaterialRecord();
-		record.key        = key;
-		record.source     = material;
-		record.textures   = std::move(textures);
-		record.loose      = loose;
-		record.looseSlots = looseSlots;
-		record.refCount   = 1;
+		auto record           = MaterialRecord();
+		record.key            = key;
+		record.source         = material;
+		record.textures       = std::move(textures);
+		record.loose          = loose;
+		record.looseSlots     = looseSlots;
+		record.bakedOcclusion = bakedOcclusion;
+		record.refCount       = 1;
 
 		if (surface)
 			record.handle = m_Scene->CreateSurfaceMaterial(SurfaceDesc(record));
@@ -1549,7 +1555,7 @@ namespace game
 	AssetManager::RebuildMaterial(MaterialRecord& record)
 	{
 		const std::vector<std::string> paths =
-			MaterialTextures(record.source, record.loose, record.looseSlots);
+			MaterialTextures(record.source, record.loose, record.looseSlots, record.bakedOcclusion);
 
 		// Acquire the new set before releasing the old: a texture that survives the swap -- the two
 		// maps the edit did not touch, or the same path reassigned -- must not be deleted and
