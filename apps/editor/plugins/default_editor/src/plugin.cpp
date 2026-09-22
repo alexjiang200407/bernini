@@ -2,9 +2,9 @@
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include <default_editor/plugin.h>
-#include <editor_api/IAssetEditorFactory.h>
-#include <editor_api/IEditorPanelFactory.h>
-#include <editor_api/IEditorRegistry.h>
+#include <editor_plugin_api/IAssetEditorFactory.h>
+#include <editor_plugin_api/IEditorPanelFactory.h>
+#include <editor_plugin_api/IEditorRegistry.h>
 #include <memory>
 #include <utility>
 namespace editor::defaults

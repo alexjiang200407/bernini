@@ -9,8 +9,8 @@
 #include <assetlib_structs/Node.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/SceneDesc.h>
-#include <editor_api/IEditorViewport.h>
-#include <editor_api/IThumbnailProvider.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/IThumbnailProvider.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <memory>
 
@@ -33,8 +33,8 @@
 
 #include "StoreAt.h"
 #include <catch2/catch_test_macros.hpp>
-#include <editor_api/IEditorRegistry.h>
-#include <editor_api/Thumbnail.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/Thumbnail.h>
 #include <ios>
 #include <mutex>
 #include <optional>

@@ -1,10 +1,10 @@
-#include <editor_api/LanguageResolver.h>
+#include <editor_plugin_api/LanguageResolver.h>
 
 #include "translation_validation.h"
 
 #include <QString>
-#include <editor_api/LocalizedText.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>

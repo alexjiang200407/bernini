@@ -28,7 +28,7 @@ endif()
 file(GLOB_RECURSE DEFAULT_EDITOR_SOURCES CONFIGURE_DEPENDS src/*.cpp src/*.h include/*.h)
 add_library(default_editor STATIC ${DEFAULT_EDITOR_SOURCES})
 target_include_directories(default_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(default_editor PUBLIC editor_api editor_sdk PRIVATE QtNodes::QtNodes nlohmann_json::nlohmann_json)
+target_link_libraries(default_editor PUBLIC editor_plugin_api editor_sdk PRIVATE QtNodes::QtNodes nlohmann_json::nlohmann_json)
 enable_coverage(default_editor)
 
 set_target_properties(default_editor PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <editor_api/IEditorPlugin.h>
-#include <editor_api/IEditorRegistry.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <span>
 #include <string_view>
 #include <vector>

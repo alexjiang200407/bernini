@@ -2,9 +2,9 @@
 
 #include <QString>
 #include <core/str/str.h>
-#include <editor_api/ILanguageResolver.h>
-#include <editor_api/LocalizedText.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <string>
 
 namespace editor

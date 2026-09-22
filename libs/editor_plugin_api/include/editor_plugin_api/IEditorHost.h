@@ -2,8 +2,8 @@
 
 #include <QWidget>
 #include <assetlib/AssetStore.h>
-#include <editor_api/IEditorViewport.h>
-#include <editor_api/ILanguageResolver.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <string_view>
 
 namespace editor

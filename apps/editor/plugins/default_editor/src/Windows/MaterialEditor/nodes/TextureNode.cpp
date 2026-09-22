@@ -27,7 +27,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/TexturePreviewCache.h>
 

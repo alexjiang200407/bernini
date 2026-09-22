@@ -1,6 +1,6 @@
 #pragma once
 
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <string_view>
 
 namespace editor

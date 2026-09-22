@@ -19,7 +19,7 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RenderJob.h>
 #include <cstdint>
-#include <editor_api/IEditorRegistry.h>
+#include <editor_plugin_api/IEditorRegistry.h>
 #include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>

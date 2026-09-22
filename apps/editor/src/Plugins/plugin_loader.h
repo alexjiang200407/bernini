@@ -2,7 +2,7 @@
 
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/Project.h>
-#include <editor_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorPlugin.h>
 #include <filesystem>
 #include <memory>
 #include <span>

@@ -12,7 +12,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
 #include <cstdint>
-#include <editor_api/PluginDescriptor.h>
+#include <editor_plugin_api/PluginDescriptor.h>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>

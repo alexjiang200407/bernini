@@ -9,7 +9,7 @@
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include <bgl/LayerType.h>
 #include <bgl/SurfaceType.h>
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorHost.h>
 
 #include <QDebug>
 #include <qobject.h>

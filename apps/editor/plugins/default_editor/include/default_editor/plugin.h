@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
-#include <editor_api/IEditorPlugin.h>
-#include <editor_api/IEditorViewport.h>
+#include <editor_plugin_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/environment.h>
 #include <string_view>
 namespace editor::defaults

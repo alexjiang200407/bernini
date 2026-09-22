@@ -11,8 +11,8 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <cctype>
 #include <cstddef>
-#include <editor_api/IEditorRegistry.h>
-#include <editor_api/Thumbnail.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/Thumbnail.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/environment.h>

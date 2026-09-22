@@ -1,12 +1,12 @@
 #include "Plugins/EditorRegistry.h"
-#include <editor_api/IEditorPlugin.h>
-#include <editor_api/IEditorRegistry.h>
-#include <editor_api/LocalizedText.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 
 #include <algorithm>
 #include <cstddef>
-#include <editor_api/LanguageResolver.h>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <span>
 #include <stdexcept>
 #include <string>

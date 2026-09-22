@@ -15,11 +15,11 @@
 #include <assetlib/pak.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <editor_api/EditorPanel.h>
-#include <editor_api/IAssetEditorFactory.h>
-#include <editor_api/IEditorAction.h>
-#include <editor_api/IEditorPanelFactory.h>
-#include <editor_api/IEditorRegistry.h>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IAssetEditorFactory.h>
+#include <editor_plugin_api/IEditorAction.h>
+#include <editor_plugin_api/IEditorPanelFactory.h>
+#include <editor_plugin_api/IEditorRegistry.h>
 #include <filesystem>
 #include <fstream>
 #include <memory>

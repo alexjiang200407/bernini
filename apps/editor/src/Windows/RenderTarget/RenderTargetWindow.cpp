@@ -6,7 +6,7 @@
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
-#include <editor_api/IEditorViewport.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <format>
 #include <qcoreevent.h>
 #include <qlogging.h>

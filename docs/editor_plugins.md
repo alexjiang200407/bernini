@@ -1,7 +1,7 @@
 # Editor plugin contracts
 
-`editor_api` defines the public C++ contracts for native editor extensions. A top-level renderer
-build also writes a build-tree `BerniniEditorSDK` CMake package whose `Bernini::editor_api` target
+`editor_plugin_api` defines the public C++ contracts for native editor extensions. A top-level renderer
+build also writes a build-tree `BerniniEditorSDK` CMake package whose `Bernini::editor_plugin_api` target
 is consumed by a separately configured plugin project. The editor loads the local modules required
 by its startup project before that project's store opens. Runtime kinds already participate in the
 store, graph, rename, migrate and pack paths. The editor validates and owns presentation
@@ -39,13 +39,13 @@ and fix the map.
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions. The loader checks the engine build ID, configuration, dependency
   files and SDK freshness before loading a module or calling either factory.
-  `editor_api` carries gamelib's public dependencies so clients can use the borrowed manager and
+  `editor_plugin_api` carries gamelib's public dependencies so clients can use the borrowed manager and
   store. In SDK builds, assetlib and gamelib are shared and RmlUi/Lua live inside gamelib rather
   than being linked into every plugin. `core` remains static; its process state is already owned by
   shared `core_process`. Windows SDK builds require shared RmlUi targets, because a DLL cannot
   re-export every symbol from an imported static archive automatically.
 - **The SDK is a build-tree package.** Configure a plugin with
-  `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_api`; link
+  `-DBerniniEditorSDK_DIR=<engine-build>/editor_sdk` and link `Bernini::editor_plugin_api`; link
   `Bernini::editor_sdk` as well when using the optional Qt helpers. This package
   names the exact libraries and dependency tree of that engine build; it is not an installed,
   version-independent engine package. Top-level editor builds enable it by default. Builds without
@@ -57,20 +57,20 @@ and fix the map.
 | Contract | Header | Role |
 |---|---|---|
 | `IAssetPlugin`, `IAssetKindRegistry`, `IAssetKind` | [IAssetPlugin.h](libs/assetlib/include/assetlib/IAssetPlugin.h) | Qt-free authored-kind registration and document operations |
-| `IEditorPlugin` | [IEditorPlugin.h](libs/editor_api/include/editor_api/IEditorPlugin.h) | Register editor contributions at startup |
-| Descriptor constants | [PluginDescriptor.h](libs/editor_api/include/editor_api/PluginDescriptor.h) | Descriptor filename and schema version |
-| `IEditorPanelFactory`, `IAssetEditorFactory` | [IEditorPanelFactory.h](libs/editor_api/include/editor_api/IEditorPanelFactory.h), [IAssetEditorFactory.h](libs/editor_api/include/editor_api/IAssetEditorFactory.h) | Owned deferred factories for project widgets |
-| `IEditorAction` | [IEditorAction.h](libs/editor_api/include/editor_api/IEditorAction.h) | Owned action with enablement and invocation |
-| `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_api/include/editor_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_api/include/editor_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
-| `IEditorRegistry` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
-| `LocalizedText` | [LocalizedText.h](libs/editor_api/include/editor_api/LocalizedText.h) | Deferred label lookup with fallback |
-| `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_api/include/editor_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_api/include/editor_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
-| `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_api/include/editor_api/TranslationCatalog.h), [translation_csv.h](libs/editor_api/include/editor_api/translation_csv.h) | Module data and optional CSV ingestion |
-| `MenuDesc` | [IEditorRegistry.h](libs/editor_api/include/editor_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
-| `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_api/include/editor_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
-| `IEditorHost` | [IEditorHost.h](libs/editor_api/include/editor_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
-| `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_api/include/editor_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
-| `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_api/include/editor_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
+| `IEditorPlugin` | [IEditorPlugin.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorPlugin.h) | Register editor contributions at startup |
+| Descriptor constants | [PluginDescriptor.h](libs/editor_plugin_api/include/editor_plugin_api/PluginDescriptor.h) | Descriptor filename and schema version |
+| `IEditorPanelFactory`, `IAssetEditorFactory` | [IEditorPanelFactory.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorPanelFactory.h), [IAssetEditorFactory.h](libs/editor_plugin_api/include/editor_plugin_api/IAssetEditorFactory.h) | Owned deferred factories for project widgets |
+| `IEditorAction` | [IEditorAction.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorAction.h) | Owned action with enablement and invocation |
+| `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_plugin_api/include/editor_plugin_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
+| `IEditorRegistry` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
+| `LocalizedText` | [LocalizedText.h](libs/editor_plugin_api/include/editor_plugin_api/LocalizedText.h) | Deferred label lookup with fallback |
+| `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
+| `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_plugin_api/include/editor_plugin_api/TranslationCatalog.h), [translation_csv.h](libs/editor_plugin_api/include/editor_plugin_api/translation_csv.h) | Module data and optional CSV ingestion |
+| `MenuDesc` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
+| `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_plugin_api/include/editor_plugin_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
+| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
+| `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
+| `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_plugin_api/include/editor_plugin_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
 | Loading-screen tasks | [BackgroundTask.h](../libs/editor_sdk/include/editor_sdk/BackgroundTask.h) | Scoped worker execution with GUI-thread progress and cooperative cancellation |
 | CPU preview caches | [TexturePreviewCache.h](../libs/editor_sdk/include/editor_sdk/TexturePreviewCache.h), [StampedPixmapCache.h](../libs/editor_sdk/include/editor_sdk/StampedPixmapCache.h) | Per-object decode and file-stamp cache state; no GPU ownership |
 | Asset UI helpers | [asset_paths.h](../libs/editor_sdk/include/editor_sdk/asset_paths.h), [source_mesh.h](../libs/editor_sdk/include/editor_sdk/source_mesh.h), [mime_files.h](../libs/editor_sdk/include/editor_sdk/mime_files.h), [mesh_drop.h](../libs/editor_sdk/include/editor_sdk/mesh_drop.h) | Path containment, imported-source lookup and Qt drag payloads |
@@ -256,7 +256,7 @@ exercise both services through the end of viewport teardown.
   Locale tokens begin with an ASCII letter and contain only ASCII letters, digits, `_` or `-`;
   matching is case-sensitive, without normalization or regional fallback.
 - **Resolver ownership:** link the static `editor_localization` target in the host. It depends only
-  on core and Qt Core; `editor_api` does not link its implementation into every client. Plugins borrow the
+  on core and Qt Core; `editor_plugin_api` does not link its implementation into every client. Plugins borrow the
   const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
   through that interface. All calls, including catalog registration and locale changes, run on the
   GUI thread. The resolver outlives its borrowers; independent hosts may choose different locales.
@@ -334,7 +334,7 @@ without the editor module. The README supplies the local configure, rebuild and 
 replacement, optional asset-change handling, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.
 Each public editor header is also compiled alone, with no PCH. The asset plugin header compiles
 against its Qt-free target alone. A separately configured project builds a real shared fixture from
-`Bernini::editor_api`; the host loads it through the declared entry-point names and checks that its
+`Bernini::editor_plugin_api`; the host loads it through the declared entry-point names and checks that its
 logger, allocation-id sequence and RmlUi lifetime are the host's. `editor_tests` refuses mismatched
 and stale modules and missing declared dependencies before factory invocation, checks duplicate kind
 batches, and forces the plugin binary copy path. Headless tests cover host viewport and thumbnail

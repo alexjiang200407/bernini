@@ -2,7 +2,7 @@
 
 #include <QObject>
 #include <QString>
-#include <editor_api/EditorPanel.h>
+#include <editor_plugin_api/EditorPanel.h>
 #include <qcontainerfwd.h>
 #include <string>
 

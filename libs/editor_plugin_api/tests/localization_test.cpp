@@ -1,10 +1,10 @@
 #include <QByteArray>
 #include <QString>
 #include <catch2/catch_test_macros.hpp>
-#include <editor_api/LanguageResolver.h>
-#include <editor_api/LocalizedText.h>
-#include <editor_api/TranslationCatalog.h>
-#include <editor_api/translation_csv.h>
+#include <editor_plugin_api/LanguageResolver.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
+#include <editor_plugin_api/translation_csv.h>
 #include <string>
 
 TEST_CASE(

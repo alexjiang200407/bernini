@@ -38,8 +38,8 @@
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
 #include <default_editor/plugin.h>
-#include <editor_api/IEditorRegistry.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/environment.h>
 
@@ -60,8 +60,8 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <editor_api/EditorPanel.h>
-#include <editor_api/LanguageResolver.h>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <exception>
 #include <filesystem>
 #include <functional>

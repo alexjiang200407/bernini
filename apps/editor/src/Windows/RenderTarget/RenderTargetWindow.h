@@ -8,7 +8,7 @@
 #include <bgl/PassTiming.h>
 #include <cstddef>
 #include <cstdint>
-#include <editor_api/IEditorViewport.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <qcoreevent.h>
 #include <qpaintdevice.h>
 #include <qtmetamacros.h>

@@ -26,9 +26,9 @@
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
 #include <cstdint>
-#include <editor_api/EditorPanel.h>
-#include <editor_api/IEditorViewport.h>
-#include <editor_api/PluginDescriptor.h>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/PluginDescriptor.h>
 #include <gamelib/AssetManager.h>
 
 #include <QAction>

@@ -1,11 +1,11 @@
 #pragma once
 
 #include <assetlib/AssetStore.h>
-#include <editor_api/IEditorHost.h>
-#include <editor_api/IEditorViewport.h>
-#include <editor_api/ILanguageResolver.h>
-#include <editor_api/LanguageResolver.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/LanguageResolver.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <qwidget.h>

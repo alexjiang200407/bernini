@@ -1,6 +1,6 @@
 #include "sample.h"
 
-#include <editor_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorPlugin.h>
 
 #if defined(_WIN32)
 #	define SAMPLE_EXPORT __declspec(dllexport)

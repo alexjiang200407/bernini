@@ -1,6 +1,6 @@
 #pragma once
 
-#include <editor_api/IEditorRegistry.h>
+#include <editor_plugin_api/IEditorRegistry.h>
 #include <memory>
 #include <string_view>
 

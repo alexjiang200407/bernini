@@ -66,7 +66,7 @@
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/TexturePreviewCache.h>
 

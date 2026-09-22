@@ -100,7 +100,7 @@ under `tests/editor_sdk_consumer` test process services and loader failure cases
 
 Contract tests also compile these sources as a static fixture against a fake host. Neither build
 uses a PCH or includes `apps/editor/src`. The runtime links only the Qt-free contract and a private
-JSON parser; the editor links the public editor API. See [the contracts](../../docs/editor_plugins.md)
+JSON parser; the editor links the public plugin API. See [the contracts](../../docs/editor_plugins.md)
 for ownership and threading.
 
 Factories and actions are owned, nonmovable contribution objects. Configuration is stored by

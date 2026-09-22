@@ -1,22 +1,22 @@
-add_library(editor_api INTERFACE)
-target_include_directories(editor_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(editor_api INTERFACE assetlib_plugin_api gamelib Qt6::Widgets)
+add_library(editor_plugin_api INTERFACE)
+target_include_directories(editor_plugin_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(editor_plugin_api INTERFACE assetlib_plugin_api gamelib Qt6::Widgets)
 
 add_subdirectory(localization)
 add_subdirectory(${BERNINI_ROOT}/libs/editor_sdk ${CMAKE_BINARY_DIR}/libs/editor_sdk)
 
-file(GLOB_RECURSE EDITOR_API_HEADERS CONFIGURE_DEPENDS
+file(GLOB_RECURSE EDITOR_PLUGIN_API_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
-foreach(header IN LISTS EDITOR_API_HEADERS)
+foreach(header IN LISTS EDITOR_PLUGIN_API_HEADERS)
     file(RELATIVE_PATH relative_header ${CMAKE_CURRENT_SOURCE_DIR}/include ${header})
     string(MAKE_C_IDENTIFIER "${relative_header}" check_name)
     set(check_source "${CMAKE_CURRENT_BINARY_DIR}/selfcheck/${check_name}.cpp")
     file(GENERATE OUTPUT ${check_source} CONTENT "#include <${relative_header}>\n")
-    list(APPEND EDITOR_API_CHECKS ${check_source})
+    list(APPEND EDITOR_PLUGIN_API_CHECKS ${check_source})
 endforeach()
-add_library(editor_api_selfcheck STATIC ${EDITOR_API_CHECKS})
-target_link_libraries(editor_api_selfcheck PRIVATE editor_api)
-set_target_properties(editor_api_selfcheck PROPERTIES
+add_library(editor_plugin_api_selfcheck STATIC ${EDITOR_PLUGIN_API_CHECKS})
+target_link_libraries(editor_plugin_api_selfcheck PRIVATE editor_plugin_api)
+set_target_properties(editor_plugin_api_selfcheck PROPERTIES
     AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
 
 if(BERNINI_EDITOR_SDK)
@@ -26,13 +26,13 @@ if(BERNINI_EDITOR_SDK)
         "${BERNINI_ROOT}/libs/bgl/include/*.h"
         "${BERNINI_ROOT}/libs/assetlib/include/*.h"
         "${BERNINI_ROOT}/libs/gamelib/include/*.h"
-        "${BERNINI_ROOT}/libs/editor_api/include/*.h"
+        "${BERNINI_ROOT}/libs/editor_plugin_api/include/*.h"
         "${BERNINI_ROOT}/libs/editor_sdk/include/*.h")
     set(BERNINI_EDITOR_SDK_DIR "${CMAKE_BINARY_DIR}/editor_sdk" CACHE INTERNAL
         "Build-tree package directory for native editor plugins")
     file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
     export(TARGETS
-        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_api editor_sdk
+        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_plugin_api editor_sdk
         NAMESPACE Bernini::
         FILE "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKTargets.cmake")
     configure_file(

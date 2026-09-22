@@ -14,8 +14,8 @@
 #include <core/err/util.h>
 #include <core/platform/util.h>
 #include <cstdint>
-#include <editor_api/IEditorPlugin.h>
-#include <editor_api/PluginDescriptor.h>
+#include <editor_plugin_api/IEditorPlugin.h>
+#include <editor_plugin_api/PluginDescriptor.h>
 #include <filesystem>
 #include <fstream>
 #include <map>

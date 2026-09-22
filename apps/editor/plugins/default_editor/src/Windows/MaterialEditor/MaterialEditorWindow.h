@@ -4,8 +4,8 @@
 
 #include <QWidget>
 
-#include <editor_api/EditorPanel.h>
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IEditorHost.h>
 
 #include <cstdint>
 #include <filesystem>

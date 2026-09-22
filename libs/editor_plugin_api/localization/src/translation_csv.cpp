@@ -1,11 +1,11 @@
-#include <editor_api/translation_csv.h>
+#include <editor_plugin_api/translation_csv.h>
 
 #include "translation_validation.h"
 
 #include <QByteArray>
 #include <QString>
 #include <cstddef>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <qtypes.h>
 #include <set>
 #include <stdexcept>

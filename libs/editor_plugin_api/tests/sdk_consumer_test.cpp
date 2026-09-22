@@ -4,7 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <core/profiling/memory.h>
 #include <cstdint>
-#include <editor_api/IEditorPlugin.h>
+#include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/TexturePreviewCache.h>
 #include <filesystem>

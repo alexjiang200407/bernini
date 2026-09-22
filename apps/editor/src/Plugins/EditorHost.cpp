@@ -2,11 +2,11 @@
 
 #include "Render/Renderer.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include <editor_api/ILanguageResolver.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 
 #include <assetlib/AssetStore.h>
-#include <editor_api/IEditorViewport.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <qwidget.h>

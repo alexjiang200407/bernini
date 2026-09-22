@@ -1,12 +1,12 @@
 #pragma once
 
-#include <editor_api/IAssetEditorFactory.h>
-#include <editor_api/IEditorAction.h>
-#include <editor_api/IEditorImporter.h>
-#include <editor_api/IEditorPanelFactory.h>
-#include <editor_api/IThumbnailProvider.h>
-#include <editor_api/LocalizedText.h>
-#include <editor_api/TranslationCatalog.h>
+#include <editor_plugin_api/IAssetEditorFactory.h>
+#include <editor_plugin_api/IEditorAction.h>
+#include <editor_plugin_api/IEditorImporter.h>
+#include <editor_plugin_api/IEditorPanelFactory.h>
+#include <editor_plugin_api/IThumbnailProvider.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <memory>
 #include <string>
 #include <string_view>

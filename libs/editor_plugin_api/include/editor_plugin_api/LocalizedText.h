@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QString>
-#include <editor_api/ILanguageResolver.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <string>
 
 namespace editor

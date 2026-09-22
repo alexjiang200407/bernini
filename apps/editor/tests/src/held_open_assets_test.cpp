@@ -1,7 +1,7 @@
 #include "util/held_open_assets.h"
 
 #include <QObject>
-#include <editor_api/EditorPanel.h>
+#include <editor_plugin_api/EditorPanel.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <qcontainerfwd.h>

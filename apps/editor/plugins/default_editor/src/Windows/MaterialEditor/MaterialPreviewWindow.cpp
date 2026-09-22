@@ -3,7 +3,7 @@
 #include <QVBoxLayout>
 #include <editor_sdk/mesh_load.h>
 
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <editor_sdk/environment.h>
 
 #include <assetlib_structs/Mesh.h>

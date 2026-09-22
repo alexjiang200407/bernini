@@ -1,7 +1,7 @@
 #pragma once
 
-#include <editor_api/IEditorHost.h>
-#include <editor_api/IEditorViewport.h>
+#include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/OrbitCamera.h>
 #include <editor_sdk/environment.h>
 

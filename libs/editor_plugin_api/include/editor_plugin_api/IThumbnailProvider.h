@@ -1,7 +1,7 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <concepts>
-#include <editor_api/Thumbnail.h>
+#include <editor_plugin_api/Thumbnail.h>
 #include <memory>
 #include <string_view>
 

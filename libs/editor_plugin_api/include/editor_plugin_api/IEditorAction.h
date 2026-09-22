@@ -1,6 +1,6 @@
 #pragma once
 #include <concepts>
-#include <editor_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <memory>
 #include <span>
 #include <string>
