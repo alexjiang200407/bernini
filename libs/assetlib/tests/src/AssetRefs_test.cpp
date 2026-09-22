@@ -803,3 +803,43 @@ TEST_CASE("The escape check is public, and refuses what leaves the data root", "
 		CHECK_THROWS_AS(requireInsideDataRoot("ui", normalizePath(escape)), std::runtime_error);
 	}
 }
+
+// The lit model walks the surface shape (isSurfaceModel), so its references are edges exactly as a
+// pbrSurface material's. The case exists because an unmapped reference fails silently: a rename
+// orphans it and a deletion never refuses it.
+TEST_CASE("A lit surface material's textures are references", "[assetrefs][surface]")
+{
+	const DataRoot root("bernini_refs_lit_surface");
+
+	WriteSource(root.path / "Derived/SourceTextures" / "band.ktx2", { { 180, 120, 40, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "mask.ktx2", { { 255, 255, 255, 255 } });
+
+	BMaterial material;
+	material.shadingModel = ShadingModel::kLitSurface;
+	material.surface.name = "Toon";
+
+	SurfaceTextureBinding base;
+	base.name        = "baseColor";
+	base.texturePath = "Derived/SourceTextures/band.ktx2";
+
+	SurfaceTextureBinding wear;
+	wear.name      = "wear";
+	wear.routes[0] = { "Derived/SourceTextures/mask.ktx2", 0 };
+	wear.bakedPath = "Derived/BakedTextures/slot_0000000000000000.ktx2";
+
+	material.surface.textures = { base, wear };
+	StoreAt(root.path).Save(material, "Authored/Materials/toon.bmaterial");
+
+	const AssetRefGraph graph = root.Scan();
+	REQUIRE(graph.materialsScanned == 1);
+
+	for (const char* texture : { "Derived/SourceTextures/band.ktx2",
+	                             "Derived/SourceTextures/mask.ktx2",
+	                             "Derived/BakedTextures/slot_0000000000000000.ktx2" })
+	{
+		INFO("texture: " << texture);
+		const auto referrers = graph.ReferrersOf(texture);
+		REQUIRE(referrers.size() == 1);
+		CHECK(referrers[0].referrer == "Authored/Materials/toon.bmaterial");
+	}
+}

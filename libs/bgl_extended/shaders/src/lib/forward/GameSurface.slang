@@ -10,6 +10,7 @@ import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
 import lib.forward.common;
 import lib.math.HashedAlpha;
+import lib.math.PbrShading;
 import lib.types.Texture;
 
 // A data slot gathered from its record's channel routes: component c of slot `slot` reads the
@@ -186,15 +187,16 @@ public struct MaterialSurfaceLight : ISurfaceLight
 
     public float3 Irradiance(float3 dir) { return materialData.GetSurfaceEnv().Irradiance(mul(float3x3(materialData.envRotation), dir)); }
 
-    // The prefilter chain indexes roughness across its seven mips (docs/envmaps.md), so the
-    // contract's roughness maps onto the chain's highest mip index directly. The PBR path's
-    // screen-space-footprint floor (PbrShading.slang) is deliberately not carried over: it needs
-    // the reflection vector's derivatives, which this seam does not have -- a lit surface asking
-    // for a sharp reflection on a small distant object inherits the grain that floor guards
-    // against.
+    // The contract's roughness maps onto the prefilter chain's highest mip index directly. The
+    // PBR path's screen-space-footprint floor (PbrShading.slang) is deliberately not carried
+    // over: it needs the reflection vector's derivatives, which this seam does not have -- a lit
+    // surface asking for a sharp reflection on a small distant object inherits the grain that
+    // floor guards against.
     public float3 Reflection(float3 dir, float roughness)
     {
-        return materialData.GetSurfaceEnv().Prefiltered(mul(float3x3(materialData.envRotation), dir), saturate(roughness) * 6.0);
+        return materialData.GetSurfaceEnv().Prefiltered(
+            mul(float3x3(materialData.envRotation), dir), saturate(roughness) * c_PrefilterMaxLod
+        );
     }
 }
 
