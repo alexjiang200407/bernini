@@ -564,8 +564,9 @@ in `docs/specs/`.
     not trigger.
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
     ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
-    routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
-    `Derived/BakedTextures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
+    routed float-cube intermediates and encode them into content-addressed `.ktx2` under
+    `Derived/BakedTextures/` — BC7 sRGB for an LDR sky or prefilter, RGB9E5 otherwise; the rule and
+    its reasons are in [Environment Maps](envmaps.md). The convolutions
     themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
   * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
     maps, so it must move whenever they do.
@@ -798,8 +799,10 @@ both file and VRAM.
   Pass `Ktx2Decode::kRgba8` to transcode to `KTX_TTF_RGBA32` instead — for code that must *read* texels
   rather than draw them, i.e. the material bake compositing its sources. An already-block-compressed
   file (a baked map) cannot be decoded that way and is rejected: BC blocks do not transcode back.
-* **HDR/IBL stays uncompressed.** Basis Universal is LDR-only, so float cube/2D maps skip compression
-  and keep their `R16/R32` float formats (BC6H HDR compression is a possible follow-up).
+* **HDR stays uncompressed.** Basis Universal is LDR-only, so a float image skips compression and keeps
+  its float format; an environment bake packs one RGB9E5. An environment map whose values all fit
+  [0, 1] is quantized to 8-bit sRGB first and bakes BC7 like any LDR texture — see
+  [Environment Maps](envmaps.md). BC6H, for HDR, has no encoder in this build.
 * **Per-map targets are chosen at bake, not at load.** `loadKTX2` still needs no per-map role: a mesh
   import's UASTC textures all transcode to BC7, and a material bake's textures already carry their
   block format (`BC1_RGB_SRGB` / `BC5_UNORM` / `BC7_UNORM`), so nothing about the file has to be
