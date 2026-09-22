@@ -153,6 +153,14 @@ namespace assetlib
 	inline constexpr uint64_t c_TextureBakeToken = 0x4f1a83c05e7b29d6ull;
 
 	/**
+	 * The revision of how a bake stores those texels: which block format each map role takes and
+	 * what the encoder makes of it. The half of a baked map's identity c_TextureBakeToken does not
+	 * cover. Bumped to a fresh random value on any change to a role's format or to the encoded
+	 * bytes -- a libktx upgrade included; TokenCanary_test pins it.
+	 */
+	inline constexpr uint64_t c_TextureEncodingToken = 0x5f497f4931e9cfb8ull;
+
+	/**
 	 * Encodes an ImageData (its mips and array/cube faces) into a `.ktx2` file on disk. The inverse of
 	 * loadKTX2; used to bake extracted asset textures to standalone files.
 	 *
