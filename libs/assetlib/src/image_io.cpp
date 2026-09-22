@@ -16,6 +16,7 @@
 #include <ktx.h>
 
 #include "mounted_io.h"
+#include "texture_encoding.h"
 #include <assetlib_structs/VkFormat.h>
 #include <core/containers/fixed_buffer.h>
 #include <core/file/IFileSystem.h>
@@ -131,7 +132,7 @@ namespace assetlib
 			throw std::runtime_error(message);
 		}
 
-		// The block format a bake target transcodes to. kNone / kBasisUASTC never reach here.
+		// The libktx target for a block format. kNone / kBasisUASTC never reach here.
 		ktx_transcode_fmt_e
 		transcodeTarget(Ktx2Compression compression)
 		{
@@ -148,7 +149,7 @@ namespace assetlib
 			case Ktx2Compression::kNone:
 			case Ktx2Compression::kBasisUASTC:
 			default:
-				throw std::runtime_error("assetlib::writeKTX2: not a block-compressed target");
+				throw std::runtime_error("assetlib: not a block-compressed target");
 			}
 		}
 
@@ -276,7 +277,9 @@ namespace assetlib
 		if (ktxTexture2_NeedsTranscoding(texture))
 		{
 			const ktx_transcode_fmt_e target =
-				decode == Ktx2Decode::kRgba8 ? KTX_TTF_RGBA32 : KTX_TTF_BC7_RGBA;
+				decode == Ktx2Decode::kRgba8 ?
+					KTX_TTF_RGBA32 :
+					transcodeTarget(textureEncoding(TextureRole::kTranscodeAtLoad).compression);
 
 			const ktx_error_code_e tc = transcodeBasis(texture, target);
 			if (tc != KTX_SUCCESS)

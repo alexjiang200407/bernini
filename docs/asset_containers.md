@@ -192,6 +192,13 @@ authored `geometryOcclusion` source — carry the same revision in its `.bmateri
 compared by `BakeIsStale` and mixed into each map's content-addressed name, so a re-bake under a
 new revision writes a new file rather than finding the old one already there.
 
+`c_TextureBakeToken` stops at the 8-bit chain; how that chain is *stored* is a second revision,
+`c_TextureEncodingToken` beside it. It covers the encoding table (`textureEncoding`, one row per map
+role) and what the encoder makes of each row, so it moves on an edited row and on a libktx upgrade
+that changes the blocks alike. `TokenCanary_test` pins it against every row's tag and the bytes the
+GPU receives for the canary chain -- which holds only because basisu encodes identically on every
+platform the suite runs on.
+
 The token carries the naming rule because on disk the two staleness are one: a folder whose files
 carry the wrong names is as stale as one whose bytes are wrong, and nothing else can see it. The
 positional names before it were the exception -- `tex<N>.ktx2` is a shape a filename sniff can find,

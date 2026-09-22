@@ -28,6 +28,7 @@
 #include <core/file/IFileSystem.h>
 
 #include "mounted_io.h"
+#include "texture_encoding.h"
 
 namespace assetlib
 {
@@ -43,25 +44,6 @@ namespace assetlib
 			c_IrradianceGroup,
 		};
 
-		enum class EnvMapEncoding : uint8_t
-		{
-			kRgb9e5,
-			kBc7Srgb,
-		};
-
-		std::string_view
-		encodingTag(EnvMapEncoding encoding) noexcept
-		{
-			switch (encoding)
-			{
-			case EnvMapEncoding::kRgb9e5:
-				return "rgb9e5";
-			case EnvMapEncoding::kBc7Srgb:
-				return "bc7srgb";
-			}
-			return {};
-		}
-
 		bool
 		isLowDynamicRange(const ImageData& cube)
 		{
@@ -75,33 +57,29 @@ namespace assetlib
 		}
 
 		/**
-		 * BC7 for a sky or prefilter whose every value fits it, RGB9E5 otherwise. The irradiance map
-		 * is one small mip and stays RGB9E5 whatever it holds; a face that is not a multiple of the
-		 * 4x4 block is refused by D3D12 as a block-compressed top level.
+		 * The LDR role for a sky or prefilter whose every value fits in [0, 1], the HDR role otherwise.
+		 * The irradiance map is one small mip and stays HDR whatever it holds; a face that is not a
+		 * multiple of the 4x4 block is refused by D3D12 as a block-compressed top level.
 		 */
-		EnvMapEncoding
-		encodingFor(const ImageData& cube, std::string_view group)
+		TextureRole
+		roleFor(const ImageData& cube, std::string_view group)
 		{
 			if (group == c_IrradianceGroup || cube.width % 4 != 0 || cube.height % 4 != 0)
-				return EnvMapEncoding::kRgb9e5;
-			return isLowDynamicRange(cube) ? EnvMapEncoding::kBc7Srgb : EnvMapEncoding::kRgb9e5;
+				return TextureRole::kEnvironmentHdr;
+			return isLowDynamicRange(cube) ? TextureRole::kEnvironmentLdr :
+			                                 TextureRole::kEnvironmentHdr;
 		}
 
 		void
 		writeEnvMap(
 			const ImageData&             cube,
-			EnvMapEncoding               encoding,
+			const TextureEncoding&       encoding,
 			const std::filesystem::path& target)
 		{
-			switch (encoding)
-			{
-			case EnvMapEncoding::kRgb9e5:
+			if (encoding.compression == Ktx2Compression::kNone)
 				writeKTX2(packRgb9e5(cube), target, false, Ktx2Compression::kNone);
-				return;
-			case EnvMapEncoding::kBc7Srgb:
-				writeKTX2(quantizeSrgb8(cube), target, true, Ktx2Compression::kBC7_RGBA);
-				return;
-			}
+			else
+				writeKTX2(quantizeSrgb8(cube), target, true, encoding.compression);
 		}
 
 		bool
@@ -127,13 +105,13 @@ namespace assetlib
 			uint64_t                     parametersHash,
 			const std::filesystem::path& dataRoot)
 		{
-			const EnvMapEncoding encoding = encodingFor(image, group);
-			const std::string    name     = bakedMapFileName(
+			const TextureEncoding encoding = textureEncoding(roleFor(image, group));
+			const std::string     name     = bakedMapFileName(
 				group,
 				std::format(
 					"{}|{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
 					group,
-					encodingTag(encoding),
+					encoding.tag,
 					route.source,
 					stamp.size,
 					stamp.hash,
