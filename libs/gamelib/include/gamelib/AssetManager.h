@@ -449,7 +449,7 @@ namespace game
 
 		/**
 		 * Overrides one submesh of ONE instance with the material its mesh registered under `name`
-		 * (see assetlib::ImportDocument::overrides) -- a look the asset ships with, where
+		 * (see assetlib::ImportDocument::materialOverrides) -- a look the asset ships with, where
 		 * SetInstanceSubmeshMaterial takes any material. The same reference, released by the same
 		 * ClearInstanceSubmeshMaterial.
 		 *
@@ -457,7 +457,7 @@ namespace game
 		 *         submesh index is out of range, or that submesh registers no override `name`.
 		 */
 		void
-		SetInstanceSubmeshOverride(
+		SetInstanceSubmeshMaterialOverride(
 			bgl::SceneViewRef       view,
 			bgl::MeshInstanceHandle instance,
 			uint32_t                submeshIndex,
@@ -570,7 +570,7 @@ namespace game
 			uint64_t skeletonSignature = 0;
 		};
 
-		struct RegisteredOverride
+		struct RegisteredMaterialOverride
 		{
 			uint32_t    submesh;
 			std::string name;
@@ -587,7 +587,7 @@ namespace game
 
 			// The looks the mesh registers, by geom-local submesh; loaded only when an instance
 			// wears one.
-			std::vector<RegisteredOverride> submeshOverrides;
+			std::vector<RegisteredMaterialOverride> submeshMaterialOverrides;
 
 			// Skinned only: the clip table a shared acquire hands back without re-reading the
 			// container, and the normalized .banim path it came from -- what a shared acquire is
@@ -621,8 +621,8 @@ namespace game
 		};
 
 		/** `mesh`'s registered overrides for the submeshes of `entry`, rebased to the geom's own. */
-		[[nodiscard]] static std::vector<RegisteredOverride>
-		OverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry);
+		[[nodiscard]] static std::vector<RegisteredMaterialOverride>
+		MaterialOverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry);
 
 		// Every kind now shares one arena, so a byte offset already identifies a material on its
 		// own. The type stays in the key regardless: a handle whose type disagrees with the record

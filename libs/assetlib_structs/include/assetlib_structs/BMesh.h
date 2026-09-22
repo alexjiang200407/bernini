@@ -11,7 +11,7 @@
 
 namespace assetlib
 {
-	/** A named alternative material registered for one submesh; see ImportDocument::overrides. */
+	/** A named alternative material registered for one submesh; see ImportDocument::materialOverrides. */
 	struct SubmeshMaterialOverride
 	{
 		uint32_t    submesh;   // index into BMesh::submeshes

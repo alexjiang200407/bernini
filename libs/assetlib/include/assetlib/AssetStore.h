@@ -800,7 +800,7 @@ namespace assetlib
 		 *         malformed, or the write fails.
 		 */
 		void
-		SetSubmeshOverrideInDocument(
+		SetSubmeshMaterialOverrideInDocument(
 			std::string_view sourceKey,
 			std::string_view submesh,
 			std::string_view name,
@@ -814,7 +814,7 @@ namespace assetlib
 		 *         document is absent or malformed, or the write fails.
 		 */
 		void
-		RemoveSubmeshOverrideInDocument(
+		RemoveSubmeshMaterialOverrideInDocument(
 			std::string_view sourceKey,
 			std::string_view submesh,
 			std::string_view name) const;

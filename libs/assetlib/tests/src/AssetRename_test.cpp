@@ -771,7 +771,7 @@ TEST_CASE(
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.overrides = { { "kirk[0]", "Burnt", "Authored/Materials/old.bmaterial" } };
+	document.materialOverrides = { { "kirk[0]", "Burnt", "Authored/Materials/old.bmaterial" } };
 	fs::create_directories(root.path / "Authored/Meshes");
 	core::file::write_atomic(
 		root.path / "Authored/Meshes" / "kirk.bimport",
@@ -786,9 +786,9 @@ TEST_CASE(
 
 	const ImportDocument rewritten =
 		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/kirk.bimport");
-	REQUIRE(rewritten.overrides.size() == 1);
+	REQUIRE(rewritten.materialOverrides.size() == 1);
 	CHECK(
-		rewritten.overrides[0] ==
+		rewritten.materialOverrides[0] ==
 		MaterialOverrideBinding{ "kirk[0]", "Burnt", "Authored/Materials/new.bmaterial" });
 }
 

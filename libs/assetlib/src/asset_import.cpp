@@ -127,7 +127,7 @@ namespace assetlib
 					const ImportDocument authored = loadImportDocument(existing);
 					document.clipFloors           = authored.clipFloors;
 					document.extraParametersJson  = authored.extraParametersJson;
-					document.overrides            = authored.overrides;
+					document.materialOverrides    = authored.materialOverrides;
 				}
 			}
 			catch (const std::exception&)
@@ -281,7 +281,7 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	applyBindings(
+	rebuildMaterialSlots(
 		BMesh&                                   mesh,
 		std::span<const MaterialBinding>         bindings,
 		std::span<const MaterialOverrideBinding> overrides)
@@ -377,7 +377,7 @@ namespace assetlib
 	}
 
 	void
-	AssetStore::SetSubmeshOverrideInDocument(
+	AssetStore::SetSubmeshMaterialOverrideInDocument(
 		std::string_view sourceKey,
 		std::string_view submesh,
 		std::string_view name,
@@ -386,14 +386,15 @@ namespace assetlib
 		core::throw_runtime_error_if(name.empty(), "'{}': an override needs a name", submesh);
 		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
 
-		const auto found =
-			std::ranges::find_if(document.overrides, [&](const MaterialOverrideBinding& entry) {
+		const auto found = std::ranges::find_if(
+			document.materialOverrides,
+			[&](const MaterialOverrideBinding& entry) {
 				return entry.submesh == submesh && entry.name == name;
 			});
-		if (found != document.overrides.end())
+		if (found != document.materialOverrides.end())
 			found->material = std::string(material);
 		else
-			document.overrides.emplace_back(
+			document.materialOverrides.emplace_back(
 				std::string(submesh),
 				std::string(name),
 				std::string(material));
@@ -404,7 +405,7 @@ namespace assetlib
 	}
 
 	void
-	AssetStore::RemoveSubmeshOverrideInDocument(
+	AssetStore::RemoveSubmeshMaterialOverrideInDocument(
 		std::string_view sourceKey,
 		std::string_view submesh,
 		std::string_view name) const
@@ -412,7 +413,7 @@ namespace assetlib
 		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
 
 		const size_t removed =
-			std::erase_if(document.overrides, [&](const MaterialOverrideBinding& entry) {
+			std::erase_if(document.materialOverrides, [&](const MaterialOverrideBinding& entry) {
 				return entry.submesh == submesh && entry.name == name;
 			});
 		core::throw_runtime_error_if(

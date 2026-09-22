@@ -28,24 +28,24 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_ParametersKey       = "parameters";
-		constexpr std::string_view c_SampleRateKey       = "sampleRate";
-		constexpr std::string_view c_ClipFloorKey        = "clipFloor";
-		constexpr std::string_view c_BindingsKey         = "bindings";
-		constexpr std::string_view c_OverridesKey        = "overrides";
-		constexpr std::string_view c_TextureDirKey       = "textureDir";
-		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
-		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
-		constexpr std::string_view c_TextureBakeTokenKey = "textureBakeToken";
-		constexpr std::string_view c_SkeletonKey         = "skeleton";
-		constexpr std::string_view c_OutputsKey          = "outputs";
-		constexpr std::string_view c_SourceKey           = "source";
-		constexpr std::string_view c_EnvironmentKey      = "environment";
-		constexpr std::string_view c_EnvStampSizeKey     = "envSourceStampSize";
-		constexpr std::string_view c_EnvStampHashKey     = "envSourceStampHash";
-		constexpr std::string_view c_EnvBakeTokenKey     = "envSourceBakeToken";
-		constexpr std::string_view c_EnvSkyHashKey       = "envSkyParametersHash";
-		constexpr std::string_view c_EnvLightingHashKey  = "envLightingParametersHash";
+		constexpr std::string_view c_ParametersKey        = "parameters";
+		constexpr std::string_view c_SampleRateKey        = "sampleRate";
+		constexpr std::string_view c_ClipFloorKey         = "clipFloor";
+		constexpr std::string_view c_BindingsKey          = "bindings";
+		constexpr std::string_view c_MaterialOverridesKey = "materialOverrides";
+		constexpr std::string_view c_TextureDirKey        = "textureDir";
+		constexpr std::string_view c_TextureStampSizeKey  = "textureStampSize";
+		constexpr std::string_view c_TextureStampHashKey  = "textureStampHash";
+		constexpr std::string_view c_TextureBakeTokenKey  = "textureBakeToken";
+		constexpr std::string_view c_SkeletonKey          = "skeleton";
+		constexpr std::string_view c_OutputsKey           = "outputs";
+		constexpr std::string_view c_SourceKey            = "source";
+		constexpr std::string_view c_EnvironmentKey       = "environment";
+		constexpr std::string_view c_EnvStampSizeKey      = "envSourceStampSize";
+		constexpr std::string_view c_EnvStampHashKey      = "envSourceStampHash";
+		constexpr std::string_view c_EnvBakeTokenKey      = "envSourceBakeToken";
+		constexpr std::string_view c_EnvSkyHashKey        = "envSkyParametersHash";
+		constexpr std::string_view c_EnvLightingHashKey   = "envLightingParametersHash";
 
 		struct EnvironmentField
 		{
@@ -290,12 +290,12 @@ namespace assetlib
 			json.erase(it);
 		}
 
-		if (auto it = json.find(c_OverridesKey); it != json.end())
+		if (auto it = json.find(c_MaterialOverridesKey); it != json.end())
 		{
 			core::throw_runtime_error_if(
 				!it->is_object(),
 				"import document: '{}' is not an object",
-				c_OverridesKey);
+				c_MaterialOverridesKey);
 			for (const auto& [submesh, named] : it->items())
 			{
 				core::throw_runtime_error_if(
@@ -313,7 +313,8 @@ namespace assetlib
 						"import document: override '{}' of '{}' is not a string",
 						name,
 						submesh);
-					document.overrides.push_back({ submesh, name, material.get<std::string>() });
+					document.materialOverrides.push_back(
+						{ submesh, name, material.get<std::string>() });
 				}
 			}
 			json.erase(it);
@@ -388,10 +389,10 @@ namespace assetlib
 		json[c_BindingsKey] = std::move(bindings);
 
 		// Omitted rather than written empty, so a document with none stays byte-identical.
-		if (!document.overrides.empty())
+		if (!document.materialOverrides.empty())
 		{
 			auto overrides = nlohmann::json::object();
-			for (const MaterialOverrideBinding& entry : document.overrides)
+			for (const MaterialOverrideBinding& entry : document.materialOverrides)
 			{
 				core::throw_runtime_error_if(
 					entry.name.empty(),
@@ -405,7 +406,7 @@ namespace assetlib
 					entry.submesh);
 				named[entry.name] = entry.material;
 			}
-			json[c_OverridesKey] = std::move(overrides);
+			json[c_MaterialOverridesKey] = std::move(overrides);
 		}
 
 		const std::string text = doc::canonicalDump(json);

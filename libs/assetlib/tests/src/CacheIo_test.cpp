@@ -104,7 +104,7 @@ TEST_CASE("a ranged read fetches the asked-for chunks and the key alone", "[cach
 	fs::remove(at);
 }
 
-TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importdoc]")
+TEST_CASE("rebuildMaterialSlots is a pure function of the document", "[cacheio][importdoc]")
 {
 	BMesh mesh;
 	for (const char* name : { "hull", "sail", "flag" })
@@ -121,7 +121,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		{ "hull", "Authored/Materials/wood.bmaterial" },
 		{ "sail", "Authored/Materials/cloth.bmaterial" },
 	};
-	CHECK(applyBindings(mesh, bindings, {}).empty());
+	CHECK(rebuildMaterialSlots(mesh, bindings, {}).empty());
 
 	// First-appearance order over the submeshes, stale entries gone, shared materials shared.
 	CHECK(
@@ -134,13 +134,13 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	SECTION("a second application of the same document is a no-op")
 	{
 		BMesh again = mesh;
-		CHECK(applyBindings(again, bindings, {}).empty());
+		CHECK(rebuildMaterialSlots(again, bindings, {}).empty());
 		CHECK(again.materials == mesh.materials);
 	}
 
 	SECTION("an unbound submesh is unbound, not defaulted")
 	{
-		CHECK(applyBindings(
+		CHECK(rebuildMaterialSlots(
 				  mesh,
 				  std::vector<MaterialBinding>{ { "hull", "Authored/Materials/wood.bmaterial" } },
 				  {})
@@ -150,7 +150,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 
 	SECTION("a binding whose submesh vanished is reported, never guessed at")
 	{
-		const std::vector<std::string> unbound = applyBindings(
+		const std::vector<std::string> unbound = rebuildMaterialSlots(
 			mesh,
 			std::vector<MaterialBinding>{ { "anchor", "Authored/Materials/iron.bmaterial" },
 		                                  { "hull", "Authored/Materials/wood.bmaterial" } },
@@ -167,7 +167,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 			{ "hull", "Painted", "Authored/Materials/paint.bmaterial" },
 			{ "hull", "Burnt", "Authored/Materials/cloth.bmaterial" },
 		};
-		CHECK(applyBindings(mesh, bindings, overrides).empty());
+		CHECK(rebuildMaterialSlots(mesh, bindings, overrides).empty());
 
 		CHECK(
 			mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial",
@@ -185,7 +185,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 
 	SECTION("an override whose submesh vanished is reported once")
 	{
-		const std::vector<std::string> unbound = applyBindings(
+		const std::vector<std::string> unbound = rebuildMaterialSlots(
 			mesh,
 			bindings,
 			std::vector<MaterialOverrideBinding>{
@@ -200,7 +200,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		const std::vector<std::byte> plain = AssetCodec<BMesh>::Serialize(mesh);
 		CHECK(AssetCodec<BMesh>::Deserialize(plain).materialOverrides.empty());
 
-		REQUIRE(applyBindings(
+		REQUIRE(rebuildMaterialSlots(
 					mesh,
 					bindings,
 					std::vector<MaterialOverrideBinding>{

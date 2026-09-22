@@ -86,7 +86,7 @@ namespace assetlib
 	 *         fails the file, `pack` fails the pack.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	applyBindings(
+	rebuildMaterialSlots(
 		BMesh&                                   mesh,
 		std::span<const MaterialBinding>         bindings,
 		std::span<const MaterialOverrideBinding> overrides);

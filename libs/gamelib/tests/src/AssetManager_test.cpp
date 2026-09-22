@@ -681,7 +681,7 @@ TEST_CASE(
 	const bgl::MaterialHandle probe = (*fx).AcquireMaterial("Authored/Materials/rust.bmaterial");
 	REQUIRE((*fx).MaterialRefCount(probe) == 1);
 
-	(*fx).SetInstanceSubmeshOverride(fx.view, worn, 1, "Rusty");
+	(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 1, "Rusty");
 	CHECK((*fx).MaterialRefCount(probe) == 2);
 	CHECK((*fx).MaterialRefCount(m0) == 2);  // both submeshes' defaults, untouched
 
@@ -694,10 +694,10 @@ TEST_CASE(
 	SECTION("a name the submesh does not register throws, and wears nothing")
 	{
 		CHECK_THROWS_AS(
-			(*fx).SetInstanceSubmeshOverride(fx.view, worn, 0, "Rusty"),
+			(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 0, "Rusty"),
 			bgl::SceneError);
 		CHECK_THROWS_AS(
-			(*fx).SetInstanceSubmeshOverride(fx.view, worn, 1, "Gilded"),
+			(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 1, "Gilded"),
 			bgl::SceneError);
 		CHECK((*fx).MaterialRefCount(probe) == 2);
 	}

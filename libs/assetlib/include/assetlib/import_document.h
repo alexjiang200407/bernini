@@ -25,7 +25,7 @@ namespace assetlib
 
 	/**
 	 * One named alternative material registered for a submesh -- a look a game may switch an
-	 * instance to by name (game::AssetManager::SetInstanceSubmeshOverride). The submesh's default
+	 * instance to by name (game::AssetManager::SetInstanceSubmeshMaterialOverride). The submesh's default
 	 * stays its MaterialBinding.
 	 */
 	struct MaterialOverrideBinding
@@ -45,7 +45,7 @@ namespace assetlib
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
-	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `overrides`,
+	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `materialOverrides`,
 	 * `skeleton`,
 	 * `outputs`, `textureDir`, the two stamp-and-token pairs and the per-part hashes an environment
 	 * was written with never key -- none of them changes what the importer computes. Keys a reader
@@ -108,7 +108,7 @@ namespace assetlib
 		std::vector<MaterialBinding> bindings;
 
 		// Sorted by submesh, then name, as the document stores them.
-		std::vector<MaterialOverrideBinding> overrides;
+		std::vector<MaterialOverrideBinding> materialOverrides;
 
 		std::string extraParametersJson = "{}";
 		std::string extraJson           = "{}";

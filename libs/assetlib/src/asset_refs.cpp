@@ -134,7 +134,7 @@ namespace assetlib
 				RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
 				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
-			for (const MaterialOverrideBinding& entry : document.overrides)
+			for (const MaterialOverrideBinding& entry : document.materialOverrides)
 				addEdge(edges, referrer, entry.material, RefKind::kSubmeshMaterial);
 
 			if (!document.skeleton.empty())
