@@ -310,3 +310,32 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 	CHECK(AssetStore(root.path).DeleteUnusedBakedTextures(scan).deleted == 1);
 	CHECK_FALSE(std::filesystem::exists(root.path / orphan));
 }
+
+// The mark phase walks a lit material through the same surface arm (isSurfaceModel). This is the
+// arm's one shipping hazard: an unmarked map is swept as garbage, so a miss here deletes a lit
+// material's composited slot the first time anyone prunes.
+TEST_CASE("FindUnusedBakedTextures keeps a lit surface material's baked slot", "[texture_prune]")
+{
+	const DataRoot root("bernini_prune_lit");
+
+	WriteSource(root.path / "mask.ktx2", 16, { { 200, 200, 200, 255 } });
+
+	BMaterial material;
+	material.shadingModel = ShadingModel::kLitSurface;
+	material.surface.name = "Toon";
+
+	SurfaceTextureBinding wear;
+	wear.name                 = "wear";
+	wear.routes[0]            = { "mask.ktx2", 0 };
+	material.surface.textures = { wear };
+
+	StoreAt(root.path).BakeMaterial(material);
+	StoreAt(root.path).Save(material, "Authored/Materials/toon.bmaterial");
+
+	REQUIRE_FALSE(material.surface.textures[0].bakedPath.empty());
+	REQUIRE(CountMaps(root.Textures()) == 1);
+
+	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
+	CHECK(scan.unused.empty());
+	CHECK(scan.bytes == 0);
+}
