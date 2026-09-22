@@ -6,8 +6,10 @@
 #include <assetlib/import_document.h>
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <core/err/util.h>
+#include <core/file/IFileSystem.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -17,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+#include "MountedFileReader.h"
+#include "cache_io.h"
 #include "env_parts.h"
 #include "env_produce.h"
 #include "progress_report.h"
@@ -53,16 +57,55 @@ namespace assetlib
 		}
 
 		/**
+		 * Whether `output`, `part`'s container, is on disk as one this build cannot read: written at
+		 * another codec revision, or not a container at all. The document is committed and the
+		 * container is not, so a checkout that pulls a document another machine re-cooked holds
+		 * exactly this -- and only a re-cook puts it right, since Reimport produces what is absent
+		 * and the re-save walk cannot read what it would re-save.
+		 *
+		 * A header that will not read is stale rather than an error: a re-cook is what repairs one,
+		 * and what it costs is time, never work.
+		 */
+		bool
+		writtenAtAnotherRevision(
+			const AssetStore&  store,
+			const std::string& output,
+			EnvironmentPart    part)
+		{
+			if (!store.Exists(output))
+				return false;
+
+			const bool     sky = part == EnvironmentPart::kSky;
+			const uint32_t magic =
+				sky ? AssetCodec<BSky>::c_Magic : AssetCodec<BEnvLighting>::c_Magic;
+			const uint64_t token =
+				sky ? AssetCodec<BSky>::c_BakeToken : AssetCodec<BEnvLighting>::c_BakeToken;
+			const std::string_view what = sky ? "bsky" : "benvl";
+			try
+			{
+				MountedFileReader reader(store.GetFiles(), output, what);
+				return cache::peekKey(reader, magic, what).bakeToken != token;
+			}
+			catch (const std::exception&)
+			{
+				return true;
+			}
+		}
+
+		/**
 		 * Which of the parts `document` claims no longer match it: all of them when the copied
 		 * source or the bake's revision moved, and otherwise each one whose parameters were
-		 * edited since it was written. An absent source stales nothing, the rule the geometry
-		 * cache keys follow.
+		 * edited since it was written or whose container is on disk at another revision. An
+		 * absent source stales nothing, the rule the geometry cache keys follow.
 		 *
 		 * @param stamp The source as it stands, taken by the caller so the one that decides this is
 		 *        the one a refresh records.
 		 */
 		StaleParts
-		staleParts(const SourceStamp& stamp, const ImportDocument& document)
+		staleParts(
+			const AssetStore&     store,
+			const SourceStamp&    stamp,
+			const ImportDocument& document)
 		{
 			if (!document.environment || stamp == SourceStamp())
 				return {};
@@ -71,13 +114,18 @@ namespace assetlib
 			                         document.envSourceBakeToken != c_EnvSourceBakeToken;
 
 			const auto stale = [&](EnvironmentPart part) {
-				const bool claimed =
-					std::ranges::any_of(document.outputs, [part](const std::string& output) {
-						return isPartOutput(output, part);
-					});
-				return claimed &&
-				       (sourceMoved || partParametersHashOf(*document.environment, part) !=
-				                           writtenHash(document, part));
+				bool claimed  = false;
+				bool unusable = false;
+				for (const std::string& output : document.outputs)
+				{
+					if (!isPartOutput(output, part))
+						continue;
+					claimed  = true;
+					unusable = unusable || writtenAtAnotherRevision(store, output, part);
+				}
+				return claimed && (sourceMoved || unusable ||
+				                   partParametersHashOf(*document.environment, part) !=
+				                       writtenHash(document, part));
 			};
 
 			return { .sky      = stale(EnvironmentPart::kSky),
@@ -113,7 +161,7 @@ namespace assetlib
 			}
 
 			const std::string sourceKey = importedSourceKeyFor(key, document);
-			if (staleParts(StampOf(sourceKey), document).Any())
+			if (staleParts(*this, StampOf(sourceKey), document).Any())
 				stale.push_back(sourceKey);
 		}
 
@@ -151,7 +199,7 @@ namespace assetlib
 		// again afterwards, never as the file those pixels were made from.
 		const SourceStamp    stamp    = StampOf(sourceKey);
 		const ImportDocument document = loadImportDocument(GetFiles(), documentKey);
-		const StaleParts     stale    = staleParts(stamp, document);
+		const StaleParts     stale    = staleParts(*this, stamp, document);
 		if (!stale.Any())
 			return {};
 

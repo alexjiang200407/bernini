@@ -828,9 +828,11 @@ namespace assetlib
 
 		/**
 		 * Every environment source whose derived files no longer match its import document, as
-		 * mount keys, sorted: the copy re-stamped, `c_EnvSourceBakeToken` moved, or a part's
-		 * parameters edited since that part was written. A stat, a hash and a document read apiece
-		 * -- no convolution -- so it is a question a project can afford to ask as it opens.
+		 * mount keys, sorted: the copy re-stamped, `c_EnvSourceBakeToken` moved, a part's
+		 * parameters edited since that part was written, or a part's container on disk at another
+		 * codec revision -- what a checkout holds after pulling a document another machine
+		 * re-cooked. A stat, a hash, a document and two container headers apiece -- no
+		 * convolution -- so it is a question a project can afford to ask as it opens.
 		 *
 		 * An absent source stales nothing. Always empty on a read-only store.
 		 *
