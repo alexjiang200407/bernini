@@ -182,23 +182,28 @@ QtNodes::NodeDataType
 MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
 	if (port == GeometryOcclusionPort())
-		return ChannelData::Type(1);
+		return ChannelData::ScalarType();
 
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
-		return ChannelData::Type(1);
+		return ChannelData::ScalarType();
 
 	// One wide port takes the whole group; expanded, each port takes a single channel. The opaque
 	// node's base color is a 3-wide RGB port, so a texture's RGBA bundle will not connect to it.
-	return ChannelData::Type(IsCollapsed(ref.group) ? m_GroupSizes[ref.group] : 1);
+	return IsCollapsed(ref.group) ? ChannelData::Type(m_GroupSizes[ref.group]) :
+	                                ChannelData::ScalarType();
 }
 
 void
 MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
+	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
+	// A wire is refused unless its type matches the port's, so a live payload is a ChannelData.
+	auto channelData = std::dynamic_pointer_cast<ChannelData>(data);
+
 	if (port == GeometryOcclusionPort())
 	{
-		m_GeometryOcclusion = std::dynamic_pointer_cast<ChannelData>(data);
+		m_GeometryOcclusion = std::move(channelData);
 		Q_EMIT Changed();
 		return;
 	}
@@ -206,9 +211,6 @@ MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return;
-
-	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
-	auto channelData = std::dynamic_pointer_cast<ChannelData>(data);
 
 	if (IsCollapsed(ref.group))
 		m_Bundles[ref.group] = std::move(channelData);

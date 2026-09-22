@@ -22,6 +22,30 @@ using QtNodes::PortIndex;
 using QtNodes::PortRole;
 using QtNodes::PortType;
 
+namespace
+{
+	/** Where `sink` takes the geometry occlusion map, or InvalidPortIndex for a sink with no such port. */
+	PortIndex
+	GeometryOcclusionPortOf(const MaterialSinkNode* sink)
+	{
+		const auto* pbr = qobject_cast<const MaterialOutputNode*>(sink);
+		return pbr != nullptr ? pbr->GeometryOcclusionPort() : InvalidPortIndex;
+	}
+
+	/**
+	 * The port a wire into `from` lands on once the sink is swapped, or InvalidPortIndex to drop it.
+	 * The port follows the channel groups, whose count differs between sinks, so the geometry
+	 * occlusion wire moves by what it is, and nothing else may land where that port now sits.
+	 */
+	PortIndex
+	MovedPort(PortIndex from, PortIndex oldGeometryOcclusion, PortIndex newGeometryOcclusion)
+	{
+		if (oldGeometryOcclusion != InvalidPortIndex && from == oldGeometryOcclusion)
+			return newGeometryOcclusion;
+		return from == newGeometryOcclusion ? InvalidPortIndex : from;
+	}
+}
+
 QtNodes::NodeId
 MaterialGraphModel::OutputNodeId()
 {
@@ -102,11 +126,7 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// "internal-data" envelope, and load() expects the state itself.
 	const QJsonObject state = old->save();
 
-	// Its index follows the PBR sink's group ports, which differ between sinks, so it is moved by
-	// what it is rather than by where it was. A surface's sink has none.
-	const auto*     oldPbr = qobject_cast<const MaterialOutputNode*>(old);
-	const PortIndex oldGeometryOcclusionPort =
-		oldPbr != nullptr ? oldPbr->GeometryOcclusionPort() : InvalidPortIndex;
+	const PortIndex oldGeometryOcclusionPort = GeometryOcclusionPortOf(old);
 
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
@@ -131,17 +151,13 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	if (sink != nullptr)
 		sink->load(state);
 
-	const auto*     newPbr = qobject_cast<const MaterialOutputNode*>(sink);
-	const PortIndex newGeometryOcclusionPort =
-		newPbr != nullptr ? newPbr->GeometryOcclusionPort() : InvalidPortIndex;
+	const PortIndex newGeometryOcclusionPort = GeometryOcclusionPortOf(sink);
 
 	for (const ConnectionId& wire : incoming)
 	{
-		const bool      isGeometryOcclusion = oldGeometryOcclusionPort != InvalidPortIndex &&
-		                                      wire.inPortIndex == oldGeometryOcclusionPort;
-		const PortIndex inPort = isGeometryOcclusion ? newGeometryOcclusionPort : wire.inPortIndex;
-		if (inPort == InvalidPortIndex ||
-		    (!isGeometryOcclusion && inPort == newGeometryOcclusionPort))
+		const PortIndex inPort =
+			MovedPort(wire.inPortIndex, oldGeometryOcclusionPort, newGeometryOcclusionPort);
+		if (inPort == InvalidPortIndex)
 			continue;
 
 		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, inPort };
