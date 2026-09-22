@@ -73,7 +73,8 @@ namespace editor
 			return {};
 
 		const assetlib::PbrParams& pbr = material.pbr;
-		if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty())
+		if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty() &&
+		    pbr.geometryOcclusionBakedTexture.empty())
 			return {};
 
 		const auto line = [](const char* label, const std::string& path) {
@@ -82,11 +83,12 @@ namespace editor
 				path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
 		};
 
-		return QStringLiteral("Baked textures\n%1\n%2\n%3")
+		return QStringLiteral("Baked textures\n%1\n%2\n%3\n%4")
 		    .arg(
 				line("Base color", pbr.baseColorTexture),
 				line("Normal", pbr.normalTexture),
-				line("ORM", pbr.ormTexture));
+				line("ORM", pbr.ormTexture),
+				line("Geometry occlusion", pbr.geometryOcclusionBakedTexture));
 	}
 
 	assetlib::BMaterial
@@ -110,6 +112,17 @@ namespace editor
 				material.pbr.ormTexture       = existing.pbr.ormTexture;
 				material.pbr.routeStamps      = existing.pbr.routeStamps;
 				material.pbr.bakeToken        = existing.pbr.bakeToken;
+
+				// The occlusion map's bake output and stamp are the bake's, not the board's, exactly
+				// as the triplet's: a rewired authored map's stale stamp is what reports it. A board
+				// that dropped the map drops its bake here too, since a baked map with no source
+				// beside it is the stripped shape and reads as current.
+				if (!material.pbr.geometryOcclusionTexture.empty())
+				{
+					material.pbr.geometryOcclusionBakedTexture =
+						existing.pbr.geometryOcclusionBakedTexture;
+					material.pbr.geometryOcclusionStamp = existing.pbr.geometryOcclusionStamp;
+				}
 
 				// The surface twin of the triplet lines above: the board authors the routes, the
 				// bake owns the stamps and the map. A rewired slot's stale stamps are what report

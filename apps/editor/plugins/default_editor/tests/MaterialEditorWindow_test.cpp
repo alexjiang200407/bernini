@@ -422,6 +422,59 @@ TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]"
 	CHECK(slot.bakeToken == 42u);
 }
 
+TEST_CASE(
+	"A save keeps the occlusion map's bake only while the board names the map",
+	"[materialeditor]")
+{
+	// The bake's output and stamp are carried over from disk like the triplet's. Unlike the triplet,
+	// a baked map with no source beside it is the stripped shape and reads as current -- so a board
+	// that dropped the map has to drop its bake with it, or the old map draws forever.
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/wall.bmaterial");
+
+	auto onDisk                              = assetlib::BMaterial();
+	onDisk.name                              = "wall";
+	onDisk.pbr.geometryOcclusionTexture      = "Derived/SourceTextures/wall_ao.ktx2";
+	onDisk.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_abc.ktx2";
+	onDisk.pbr.geometryOcclusionStamp        = { 123, 456 };
+	onDisk.pbr.bakeToken                     = 42;
+	assetlib::AssetStore(root).Save(onDisk, "Authored/Materials/wall.bmaterial");
+
+	SECTION("a board still wiring the map keeps the bake")
+	{
+		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		BuildPbrMaterialGraph(model, onDisk, root);
+
+		const assetlib::BMaterial saved =
+			editor::BuildMaterial(model, path, assetlib::AssetStore(root));
+
+		CHECK(saved.pbr.geometryOcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
+		CHECK(
+			saved.pbr.geometryOcclusionBakedTexture == "Derived/BakedTextures/occlusion_abc.ktx2");
+		CHECK(saved.pbr.geometryOcclusionStamp.size == 123u);
+		CHECK(saved.pbr.bakeToken == 42u);
+	}
+
+	SECTION("a board that dropped the map drops the bake")
+	{
+		auto dropped = onDisk;
+		dropped.pbr.geometryOcclusionTexture.clear();
+
+		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		BuildPbrMaterialGraph(model, dropped, root);
+
+		const assetlib::BMaterial saved =
+			editor::BuildMaterial(model, path, assetlib::AssetStore(root));
+
+		CHECK(saved.pbr.geometryOcclusionTexture.empty());
+		CHECK(saved.pbr.geometryOcclusionBakedTexture.empty());
+		CHECK(saved.pbr.geometryOcclusionStamp == assetlib::SourceStamp{});
+	}
+}
+
 // A surface material previews from its live board. What the renderer gets has to say what the
 // panel shows -- values as dialled in, layer as chosen, textures as wired -- and this is the
 // translation that does it, bar the texture upload the Texture nodes own.

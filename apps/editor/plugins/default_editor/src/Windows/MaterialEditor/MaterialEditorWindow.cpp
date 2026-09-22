@@ -1018,6 +1018,10 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	else
 	{
 		ResetGraph(graphIndex, graph);
+
+		// A board saved before the port existed has no wire for the map the document names, and
+		// Save compiles the board -- so without this the first save after opening drops the key.
+		WireGeometryOcclusion(*m_Graphs.At(graphIndex).model, material, m_DataRoot);
 	}
 
 	m_Graphs.At(graphIndex).materialPath = path;

@@ -117,7 +117,8 @@ namespace
 		for (const std::string& texture : game::MaterialTextures(
 				 material,
 				 store.DrawsLoose(material),
-				 store.LooseSurfaceSlots(material)))
+				 store.LooseSurfaceSlots(material),
+				 store.DrawsBakedGeometryOcclusion(material)))
 		{
 			if (texture.empty() || out.contains(texture))
 				continue;
