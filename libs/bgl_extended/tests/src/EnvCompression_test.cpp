@@ -80,6 +80,21 @@ namespace
 		assetlib::ImageData sky;
 		assetlib::ImageData prefilter;
 		assetlib::ImageData irradiance;
+
+		// Move-only, following ImageData.
+		EnvMaps(
+			assetlib::ImageData skyMap,
+			assetlib::ImageData prefilterMap,
+			assetlib::ImageData irradianceMap) :
+			sky(std::move(skyMap)), prefilter(std::move(prefilterMap)),
+			irradiance(std::move(irradianceMap))
+		{}
+		EnvMaps(EnvMaps&&) noexcept = default;
+		EnvMaps(const EnvMaps&)     = delete;
+		EnvMaps&
+		operator=(EnvMaps&&) noexcept = default;
+		EnvMaps&
+		operator=(const EnvMaps&) = delete;
 	};
 
 	/** The float cubes one environment bakes from, written where a route can name them. */
@@ -121,16 +136,16 @@ namespace
 		{
 			const auto store = assetlib::AssetStore(root);
 
-			auto sky       = assetlib::BSky();
-			sky.sky.source = c_SkyKey;
-			store.BakeSky(sky);
+			auto bakedSky       = assetlib::BSky();
+			bakedSky.sky.source = c_SkyKey;
+			store.BakeSky(bakedSky);
 
 			auto lighting              = assetlib::BEnvLighting();
 			lighting.prefilter.source  = c_PrefilterKey;
 			lighting.irradiance.source = c_IrradianceKey;
 			store.BakeEnvLighting(lighting);
 
-			return { assetlib::loadKTX2(root / sky.sky.baked),
+			return { assetlib::loadKTX2(root / bakedSky.sky.baked),
 				     assetlib::loadKTX2(root / lighting.prefilter.baked),
 				     assetlib::loadKTX2(root / lighting.irradiance.baked) };
 		}
