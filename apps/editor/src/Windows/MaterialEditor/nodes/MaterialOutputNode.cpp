@@ -113,7 +113,7 @@ MaterialOutputNode::CompileInto(
 			"rgba"[uv1.channel & 3u],
 			qPrintable(uv1.path));
 	}
-	material.uv1OcclusionTexture = Rebase(uv1.path, dataRoot, true).toStdString();
+	material.pbr.uv1OcclusionTexture = Rebase(uv1.path, dataRoot, true).toStdString();
 }
 
 unsigned int

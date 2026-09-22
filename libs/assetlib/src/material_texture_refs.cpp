@@ -40,14 +40,13 @@ namespace assetlib
 	{
 		auto seen = std::vector<std::pair<std::string, RefKind>>();
 
-		mapOne(material.uv1OcclusionTexture, RefKind::kBakedMap, map, seen);
-
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
 			mapOne(material.pbr.baseColorTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.normalTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.ormTexture, RefKind::kBakedMap, map, seen);
+			mapOne(material.pbr.uv1OcclusionTexture, RefKind::kBakedMap, map, seen);
 			for (ChannelRoute& route : material.pbr.routes)
 				mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			break;

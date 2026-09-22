@@ -94,6 +94,11 @@ namespace assetlib
 		std::string baseColorTexture;  // path to the base-color texture file (empty when absent)
 		std::string normalTexture;     // path to the normal texture file (empty when absent)
 		std::string ormTexture;        // path to the occlusion/roughness/metallic texture file
+
+		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied with
+		// the ORM's own; empty when absent. Sampled whole: not routed, not baked. A surface takes the
+		// same map through a slot of its own instead.
+		std::string uv1OcclusionTexture;
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;
@@ -194,10 +199,6 @@ namespace assetlib
 		ShadingModel shadingModel = ShadingModel::kPbr;
 
 		MaterialLayer layer;
-
-		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied
-		// with the model's own AO. Read under every model; empty when absent.
-		std::string uv1OcclusionTexture;
 
 		std::string editorGraph;
 

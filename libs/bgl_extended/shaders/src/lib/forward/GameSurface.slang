@@ -7,6 +7,7 @@ import idl.RawEntry;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
 import lib.forward.common;
+import lib.geom.vertexdecode;
 import lib.math.HashedAlpha;
 import lib.types.Texture;
 
@@ -77,6 +78,8 @@ public struct MaterialArenaReader : IMaterialReader
     }
 
     public float2 Uv() { return input.uv; }
+    public float2 Uv1() { return input.uv1; }
+    public bool HasUv1() { return HasUv1(input.uv1); }
     public float3 WorldPos() { return input.worldPos; }
 
     // The shaded face's normal, as the contract promises: a back face reads the interpolant
@@ -109,6 +112,8 @@ public struct BiasedArenaReader : IMaterialReader
     }
 
     public float2 Uv() { return inner.Uv(); }
+    public float2 Uv1() { return inner.Uv1(); }
+    public bool HasUv1() { return inner.HasUv1(); }
     public float3 WorldPos() { return inner.WorldPos(); }
     public float3 WorldNormal() { return inner.WorldNormal(); }
     public float4 WorldTangent() { return inner.WorldTangent(); }
@@ -150,12 +155,7 @@ public struct GameRecord<G : ISurfaceSource>
     }
 
     public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
-    public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace)
-    {
-        PbrSurface surface = G.Evaluate(Reader(input, isFrontFace), params);
-        surface.orm.r *= materialData.SampleUv1Occlusion(materialData.GetTextureAt(byteOffset, cGameSurfaceUv1OcclusionIndex), input.uv1);
-        return surface;
-    }
+    public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace) { return G.Evaluate(Reader(input, isFrontFace), params); }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 
     public float CoverageAtBias(ForwardVSOut input, bool isFrontFace, float lodBias)
