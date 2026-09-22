@@ -79,7 +79,7 @@ and fix the map.
 | Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
 | Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Supplied project store with a plain-file fallback for external meshes |
 | Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
-| Default plugin | [plugin.h](../plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
+| Default plugin | [plugin.h](../apps/editor/plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
 `EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
@@ -118,7 +118,7 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-`plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
+`apps/editor/plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;
 its target has no editor-host implementation include path. The host supplies configuration by value
 and opens its three startup contributions once the project host exists. Material and Animation
@@ -136,16 +136,31 @@ Content Explorer and rig-editor bakes report
 
 ## Local loading
 
-A `.bproj` names its required plugin IDs in `plugins`. Machine-local `config.json` names candidate
-output directories in `pluginDirectories`; each directory contains `bernini-plugin.json` and the
-binaries it names. Opening a project with a different ordered plugin list restarts the editor, just
-as changing its surface shaders does. Missing, malformed or incompatible requirements stop startup
-with the plugin named in the error.
+The editor loads every plugin it finds at startup, whatever project it then opens. A plugin is a
+directory holding `bernini-plugin.json` and the binaries it names. Two places are searched, in this
+order: each subdirectory of `plugins/` beside the editor executable, sorted by name, and then each
+directory named in `pluginDirectories` in the machine-local `config.json`, which is how a plugin
+built somewhere else joins in. The engine build stages the sample into `plugins/sample.document/`
+so a debug build loads it with nothing configured. A descriptor that is missing, malformed, built
+for another engine or older than the SDK stamp stops startup with the plugin named, as does a kind
+or contribution collision between two plugins: an install holds one owner per extension.
+
+A `.bproj` may name the plugin IDs it needs in `plugins`. That list loads nothing; it is a guard.
+Opening a project whose list names a plugin the editor did not load is refused, naming the plugin
+and where to put it, because a kind the store cannot read is a document the reference scan, rename,
+pack and migration silently pass over. A project that names nothing opens against whatever loaded.
+
+**Plugins → Loaded Plugins** lists what did load, one row per plugin with its name and description;
+the row's tooltip carries the ID, the directory and the module filenames. It is filled once at
+startup, since nothing in the set can change without a relaunch. The menu is the editor's own, and
+where installing a plugin will go when that lands.
 
 ```json
 {
   "version": 1,
   "id": "studio.ai",
+  "name": "Studio AI",
+  "description": "Behaviour authoring for the studio's agents.",
   "engineBuildId": "<BerniniEditorSDK_BUILD_ID>",
   "configuration": "Debug",
   "runtime": "studio_ai_runtime.dylib",
@@ -154,7 +169,8 @@ with the plugin named in the error.
 }
 ```
 
-`runtime` and `editor` are each optional, but at least one is present. Every file path is relative
+`name` and `description` are optional and only shown; a missing name is the ID. `runtime` and
+`editor` are each optional, but at least one is present. Every file path is relative
 to the descriptor directory and may not escape it. Plugin IDs are lower-case, dot-qualified
 components. A plugin CMake project gets the exact build-tree ID from
 `BerniniEditorSDK_BUILD_ID` after `find_package(BerniniEditorSDK CONFIG REQUIRED)` and records its
@@ -303,11 +319,13 @@ auto* panel = registry.FindPanel("sample.overview")->factory->Create(host, &proj
 panel->SetActive(true);
 ```
 
-See the compiled [sample](examples/editor_plugin/sample.cpp) and its
-[README](examples/editor_plugin/README.md). It links only the public API and a private JSON parser;
-it has no editor implementation include path. It currently displays a selected document key, not
-a working document editor. Its contracts still use a fake host; `editor_tests` exercises the same
-plugin through the production registry and project host.
+The independently configured [sample](examples/editor_plugin/README.md) builds separate runtime
+and editor modules through the exported SDK, with a generated local descriptor. The same sources
+also serve the fake-host contracts. Its project tab and selected-document tab use only the public
+API; the latter displays a key rather than editing JSON. Production-loader tests follow custom
+references through deletion protection, rename and migration, then pack the project, remove the
+loose files and read it in a Qt-free archive reader. The reader compiles the runtime implementation
+without the editor module. The README supplies the local configure, rebuild and restart loop.
 
 `just test editor_plugin` exercises deferred registration, Qt ownership, stable contribution addresses, exclusive destruction, tab activation, held asset
 replacement, optional asset-change handling, deferred label lookup/fallback with unchanged menu routing, malformed-document refusal, reference rewriting and preservation of unknown fields.

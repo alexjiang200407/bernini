@@ -34,6 +34,25 @@ if(BERNINI_EDITOR_SDK)
         $<TARGET_PROPERTY:RmlUi::Core,INTERFACE_INCLUDE_DIRECTORIES>)
     target_compile_definitions(editor_plugin_tests PRIVATE
         EDITOR_SDK_FIXTURE="$<TARGET_FILE_DIR:editor_plugin_tests>/editor_sdk_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(EDITOR_PLUGIN_SAMPLE_BUILD "${CMAKE_CURRENT_BINARY_DIR}/sample_plugin" CACHE INTERNAL
+        "Independent local sample plugin build")
+    ExternalProject_Add(editor_plugin_sample
+        SOURCE_DIR "${BERNINI_ROOT}/examples/editor_plugin"
+        BINARY_DIR "${EDITOR_PLUGIN_SAMPLE_BUILD}"
+        CMAKE_ARGS
+            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            "-DBerniniEditorSDK_DIR=${BERNINI_EDITOR_SDK_DIR}"
+            "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+            "-DCMAKE_CONFIGURATION_TYPES=${EDITOR_SDK_CONFIGURATION_TYPES}"
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}"
+            "-DCMAKE_PREFIX_PATH=${EDITOR_SDK_PREFIX_PATH}"
+            "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"
+            "-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}"
+        BUILD_ALWAYS TRUE
+        LIST_SEPARATOR "|"
+        INSTALL_COMMAND ""
+        DEPENDS editor_sdk_stamp)
+    add_dependencies(editor_plugin_tests editor_plugin_sample)
 endif()
 enable_coverage(editor_plugin_tests)
 if(WIN32)

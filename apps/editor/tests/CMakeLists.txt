@@ -8,7 +8,7 @@ find_package(Qt6 CONFIG REQUIRED COMPONENTS Test)
 file(GLOB_RECURSE EDITOR_TESTS_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
-	${BERNINI_ROOT}/plugins/default_editor/tests/*.cpp
+	${BERNINI_ROOT}/apps/editor/plugins/default_editor/tests/*.cpp
 )
 
 # Not qt_add_executable: that would apply WIN32_EXECUTABLE-style finalization, and a test binary
@@ -25,7 +25,7 @@ set_target_properties(editor_tests PROPERTIES
 
 target_include_directories(editor_tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/src
-	${BERNINI_ROOT}/plugins/default_editor/src
+	${BERNINI_ROOT}/apps/editor/plugins/default_editor/src
 )
 
 # editor_lib carries the editor's own objects, its include dirs, its PCH and its Qt/bgl/assetlib link
@@ -42,8 +42,10 @@ target_link_libraries(editor_tests PRIVATE
 )
 
 if(BERNINI_EDITOR_SDK)
-	add_dependencies(editor_tests editor_sdk_consumer)
+	add_dependencies(editor_tests editor_sdk_consumer editor_plugin_sample)
 	target_compile_definitions(editor_tests PRIVATE
+		EDITOR_PLUGIN_SAMPLE_DIR="${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>"
+		EDITOR_PLUGIN_SAMPLE_READER="${EDITOR_PLUGIN_SAMPLE_BUILD}/plugin/$<CONFIG>/sample_readback${CMAKE_EXECUTABLE_SUFFIX}"
 		EDITOR_PLUGIN_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
 		EDITOR_PLUGIN_COLLISION_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_collision_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}"
 		EDITOR_PLUGIN_REJECTED_FIXTURE="$<TARGET_FILE_DIR:editor_tests>/editor_sdk_rejected_fixture${CMAKE_SHARED_LIBRARY_SUFFIX}")

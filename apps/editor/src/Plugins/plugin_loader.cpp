@@ -11,7 +11,6 @@
 #include <assetlib/IAssetPlugin.h>
 #include <core/err/util.h>
 #include <core/platform/util.h>
-#include <core/str/str.h>
 #include <cstdint>
 #include <editor_api/IEditorPlugin.h>
 #include <editor_api/PluginDescriptor.h>
@@ -35,6 +34,8 @@ namespace editor::plugins
 		struct Descriptor
 		{
 			std::string                        id;
+			std::string                        name;
+			std::string                        description;
 			std::string                        engineBuildId;
 			std::string                        configuration;
 			std::filesystem::path              directory;
@@ -96,6 +97,8 @@ namespace editor::plugins
 
 				Descriptor descriptor;
 				descriptor.id            = json.at("id").get<std::string>();
+				descriptor.name          = json.value("name", descriptor.id);
+				descriptor.description   = json.value("description", std::string());
 				descriptor.engineBuildId = json.at("engineBuildId").get<std::string>();
 				descriptor.configuration = json.at("configuration").get<std::string>();
 				descriptor.directory     = directory;
@@ -235,7 +238,8 @@ namespace editor::plugins
 		EditorRegistry                               contributions;
 		std::shared_ptr<assetlib::AssetKindRegistry> kinds =
 			std::make_shared<assetlib::AssetKindRegistry>();
-		std::vector<std::string> ids;
+		std::vector<std::string>  ids;
+		std::vector<LoadedPlugin> plugins;
 	};
 
 	PluginSession::PluginSession() : m_Impl(std::make_unique<Impl>()) {}
@@ -268,6 +272,12 @@ namespace editor::plugins
 		return m_Impl->contributions;
 	}
 
+	std::span<const LoadedPlugin>
+	PluginSession::Plugins() const noexcept
+	{
+		return m_Impl->plugins;
+	}
+
 	BuildIdentity
 	CurrentBuildIdentity()
 	{
@@ -281,6 +291,29 @@ namespace editor::plugins
 	{
 		return std::filesystem::temp_directory_path() / "bernini-editor-plugins" /
 		       std::to_string(QCoreApplication::applicationPid());
+	}
+
+	std::filesystem::path
+	DefaultPluginRoot()
+	{
+		return std::filesystem::path(QCoreApplication::applicationDirPath().toStdWString()) /
+		       "plugins";
+	}
+
+	std::vector<std::filesystem::path>
+	DiscoverPluginDirectories(const std::filesystem::path& root)
+	{
+		std::vector<std::filesystem::path> directories;
+		std::error_code                    ec;
+		for (const auto& entry : std::filesystem::directory_iterator(root, ec))
+		{
+			if (entry.is_directory(ec) && std::filesystem::is_regular_file(
+											  entry.path() / editor::c_PluginDescriptorFileName,
+											  ec))
+				directories.push_back(entry.path());
+		}
+		std::ranges::sort(directories);
+		return directories;
 	}
 
 	std::vector<std::filesystem::path>
@@ -308,33 +341,24 @@ namespace editor::plugins
 
 	PluginSession
 	PluginSession::Load(
-		std::span<const std::string>           requiredIds,
-		std::span<const std::filesystem::path> configuredDirectories,
+		std::span<const std::filesystem::path> directories,
 		const BuildIdentity&                   build,
 		const std::filesystem::path&           pluginCopyRoot,
 		PluginBinaryCopyMode                   copyMode,
 		EditorPluginPtr                        builtIn)
 	{
-		core::str::unordered_str_map<Descriptor> available;
-		for (const std::filesystem::path& directory : configuredDirectories)
-		{
-			Descriptor        descriptor = ReadDescriptor(directory);
-			const std::string id         = descriptor.id;
-			if (!available.emplace(id, std::move(descriptor)).second)
-				core::throw_runtime_error("Plugin ID has more than one configured directory");
-		}
-
 		std::vector<Descriptor>         selected;
 		std::unordered_set<std::string> seen;
-		for (const std::string& id : requiredIds)
+		for (const std::filesystem::path& directory : directories)
 		{
-			if (!seen.emplace(id).second)
-				core::throw_runtime_error("Project requires plugin more than once: {}", id);
-			const auto found = available.find(id);
-			if (found == available.end())
-				core::throw_runtime_error("Project requires an unconfigured plugin: {}", id);
-			ValidateDescriptor(found->second, build);
-			selected.push_back(found->second);
+			Descriptor descriptor = ReadDescriptor(directory);
+			if (!seen.emplace(descriptor.id).second)
+				core::throw_runtime_error(
+					"Plugin {} is in more than one directory: {}",
+					descriptor.id,
+					directory.string());
+			ValidateDescriptor(descriptor, build);
+			selected.push_back(std::move(descriptor));
 		}
 
 		PluginSession session;
@@ -342,6 +366,10 @@ namespace editor::plugins
 		{
 			session.m_Impl->editorPlugins.push_back(std::move(builtIn));
 			session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
+			session.m_Impl->plugins.push_back(
+				{ std::string(c_BuiltInPluginId),
+			      "Bernini Editors",
+			      "The Material, Animation and Blend Space editors built into this editor." });
 		}
 
 		std::map<std::filesystem::path, QLibrary*> loadedModules;
@@ -366,6 +394,11 @@ namespace editor::plugins
 		for (const Descriptor& original : selected)
 		{
 			const Descriptor descriptor = PreparePluginBinaries(original, pluginCopyRoot, copyMode);
+			LoadedPlugin     loaded;
+			loaded.id          = descriptor.id;
+			loaded.name        = descriptor.name;
+			loaded.description = descriptor.description;
+			loaded.directory   = original.directory;
 			if (!descriptor.runtime.empty())
 			{
 				QLibrary&  module = loadModule(descriptor.directory / descriptor.runtime);
@@ -385,6 +418,7 @@ namespace editor::plugins
 				plugin->RegisterKinds(staged);
 				session.m_Impl->kinds->Merge(std::move(staged));
 				session.m_Impl->assetPlugins.push_back(std::move(plugin));
+				loaded.runtimeModule = descriptor.directory / descriptor.runtime;
 			}
 
 			if (!descriptor.editor.empty())
@@ -403,18 +437,24 @@ namespace editor::plugins
 						descriptor.id);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
 				session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
+				loaded.editorModule = descriptor.directory / descriptor.editor;
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
+			session.m_Impl->plugins.push_back(std::move(loaded));
 		}
 
 		return session;
 	}
 
-	bool
-	OpeningNeedsPluginRelaunch(
-		std::span<const std::string> loaded,
-		std::span<const std::string> requested)
+	std::vector<std::string>
+	MissingRequiredPlugins(
+		const std::span<const std::string> loaded,
+		const std::span<const std::string> required)
 	{
-		return !std::ranges::equal(loaded, requested);
+		std::vector<std::string> missing;
+		for (const std::string& id : required)
+			if (std::ranges::find(loaded, id) == loaded.end())
+				missing.push_back(id);
+		return missing;
 	}
 }

@@ -542,7 +542,7 @@ to keep in agreement beyond the one below.
   The write is `editor::CreateEmptyAvatar`, free of the window so a test can drive it. The explorer
   then shows the file where it landed, under `Authored/Skeletons`, not where the action was taken.
 
-* **The rig panels belong to `plugins/default_editor`.** Their shared `AnimationPreviewWindow`
+* **The rig panels belong to `apps/editor/plugins/default_editor`.** Their shared `AnimationPreviewWindow`
   composes a host-created viewport and borrows rendering services only during synchronous calls.
   `editor_tests` constructs the registered panels headlessly and covers project teardown, tab reset,
   held assets, environment input and Blend Space document dispatch. Plugin-owned CPU tests cover
