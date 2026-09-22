@@ -550,6 +550,55 @@ namespace assetlib
 			}
 		}
 
+		/**
+		 * The primitive's TEXCOORD_1, when its material samples a map through it -- the only reason
+		 * one is carried. A set nothing samples is dropped: exporters emit degenerate ones, every
+		 * vertex at the same UV, and a mesh carrying it would pay the bytes for nothing.
+		 */
+		AttributeView
+		uv1View(
+			const tinygltf::Model&     model,
+			const tinygltf::Primitive& primitive,
+			size_t                     vertexCount)
+		{
+			if (primitive.material < 0)
+				return {};
+
+			const tinygltf::Material& material =
+				model.materials[static_cast<size_t>(primitive.material)];
+			if (material.occlusionTexture.index < 0 || material.occlusionTexture.texCoord != 1)
+				return {};
+
+			const AttributeView view = makeView(model, primitive, "TEXCOORD_1");
+			if (!view.Present())
+			{
+				spdlog::warn(
+					"material '{}' samples TEXCOORD_1, and a primitive drawn with it has "
+					"none; that primitive draws unoccluded",
+					material.name);
+				return {};
+			}
+
+			// The renderer tells a mesh with no second set by a UV1 far outside the unit square, so a
+			// set that strays out of it can be mistaken for none.
+			for (size_t i = 0; i < vertexCount; ++i)
+			{
+				const auto uv = view.At<glm::vec2>(i);
+				if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+				{
+					spdlog::warn(
+						"material '{}': a TEXCOORD_1 leaves the unit square at ({}, {}); "
+						"an occlusion unwrap is expected to fill it without wrapping",
+						material.name,
+						uv.x,
+						uv.y);
+					break;
+				}
+			}
+
+			return view;
+		}
+
 		void
 		buildSubmesh(
 			BMeshImport&               mesh,
@@ -590,6 +639,10 @@ namespace assetlib
 				  VertexFormat::kFloat32x4,
 				  makeView(model, primitive, "TANGENT"),
 				  4 },
+				{ VertexSemantic::kTexCoord1,
+				  VertexFormat::kFloat32x2,
+				  uv1View(model, primitive, vertexCount),
+				  2 },
 			};
 
 			std::vector<uint16_t> joints;
@@ -1038,8 +1091,8 @@ namespace assetlib
 		/**
 		 * The glTF image a material's `specularGlossinessTexture` names, or nullptr.
 		 *
-		 * A texCoord other than 0 names none, for readOcclusion's reason: TEXCOORD_0 is the only set
-		 * read, and honouring the index against the wrong parameterisation is confident garbage.
+		 * A texCoord other than 0 names none: the ORM it packs into is sampled through TEXCOORD_0, and
+		 * honouring the index against the wrong parameterisation is confident garbage.
 		 */
 		const tinygltf::Image*
 		glossinessImage(
@@ -1059,9 +1112,8 @@ namespace assetlib
 			if (texCoord != 0)
 			{
 				spdlog::warn(
-					"material '{}': glossiness map dropped, it is addressed by TEXCOORD_{} and "
-					"only "
-					"TEXCOORD_0 is read",
+					"material '{}': glossiness map dropped, it is addressed by TEXCOORD_{} and the "
+					"ORM it packs into is sampled through TEXCOORD_0",
 					material.name,
 					texCoord);
 				return nullptr;
@@ -1264,31 +1316,32 @@ namespace assetlib
 		}
 
 		/**
-		 * The occlusion map a glTF material names, mapped into imp::BMeshImport::textures.
+		 * The occlusion map a glTF material names, mapped into imp::BMeshImport::textures and filed
+		 * by the UV set that addresses it: TEXCOORD_0 into `occlusionTexture`, which takes ORM red,
+		 * and TEXCOORD_1 into `geometryOcclusionTexture`, which multiplies it.
 		 *
-		 * @return c_InvalidIndex when the material names none, or when it names one this importer
-		 *         cannot honour: a texCoord other than 0 is refused rather than sampled through
-		 *         TEXCOORD_0, which is the only set read (see readVertices) and the wrong
-		 *         parameterisation for a map baked against another.
+		 * Any other set is refused rather than sampled through one of those two, which would be the
+		 * wrong parameterisation for a map baked against another.
 		 */
-		uint32_t
+		void
 		readOcclusion(
 			const tinygltf::Material&    gltfMat,
 			const tinygltf::Model&       model,
-			const std::vector<uint32_t>& imageToTexture)
+			const std::vector<uint32_t>& imageToTexture,
+			BMaterialImport&             material)
 		{
 			const tinygltf::OcclusionTextureInfo& occlusion = gltfMat.occlusionTexture;
 			if (occlusion.index < 0)
-				return c_InvalidIndex;
+				return;
 
-			if (occlusion.texCoord != 0)
+			if (occlusion.texCoord != 0 && occlusion.texCoord != 1)
 			{
 				spdlog::warn(
 					"material '{}': occlusion map dropped, it is addressed by TEXCOORD_{} and only "
-					"TEXCOORD_0 is read",
+					"TEXCOORD_0 and TEXCOORD_1 are read",
 					gltfMat.name,
 					occlusion.texCoord);
-				return c_InvalidIndex;
+				return;
 			}
 
 			if (occlusion.strength != 1.0)
@@ -1298,7 +1351,11 @@ namespace assetlib
 					gltfMat.name,
 					occlusion.strength);
 
-			return mapTexture(model, occlusion.index, imageToTexture);
+			const uint32_t texture = mapTexture(model, occlusion.index, imageToTexture);
+			if (occlusion.texCoord == 1)
+				material.geometryOcclusionTexture = texture;
+			else
+				material.occlusionTexture = texture;
 		}
 
 		AlphaMode
@@ -1360,7 +1417,7 @@ namespace assetlib
 
 				// Outside that block on purpose: occlusionTexture is a sibling of
 				// pbrMetallicRoughness, so a specular-glossiness material can carry one.
-				material.occlusionTexture = readOcclusion(gltfMat, model, imageToTexture);
+				readOcclusion(gltfMat, model, imageToTexture, material);
 
 				material.nameOffset = mesh.stringPool.add(gltfMat.name);
 

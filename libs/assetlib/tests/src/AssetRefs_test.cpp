@@ -124,6 +124,28 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 	}
 }
 
+// The renderer samples the geometry occlusion map directly, so it is held like a baked map rather than like a
+// source the bake reads.
+TEST_CASE("A PBR material's geometry occlusion map is held", "[assetrefs]")
+{
+	const DataRoot root("bernini_refs_geometry_occlusion");
+
+	const std::string map = "Derived/SourceTextures/wall_ao.ktx2";
+	WriteSource(root.path / map, { { 128, 128, 128, 255 } });
+
+	BMaterial material;
+	material.pbr.geometryOcclusionTexture = map;
+	StoreAt(root.path).Save(material, "Authored/Materials/wall.bmaterial");
+
+	const AssetRefGraph graph     = root.Scan();
+	const auto          referrers = graph.ReferrersOf(map);
+
+	REQUIRE(referrers.size() == 1);
+	CHECK(referrers[0].referrer == "Authored/Materials/wall.bmaterial");
+	CHECK(referrers[0].kind == RefKind::kBakedMap);
+	CHECK_FALSE(planDeletion(graph, map).Allowed());
+}
+
 TEST_CASE("A texture no material names can be deleted", "[assetrefs]")
 {
 	const DataRoot root("bernini_refs_unused");

@@ -46,6 +46,7 @@ namespace assetlib
 			mapOne(material.pbr.baseColorTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.normalTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.ormTexture, RefKind::kBakedMap, map, seen);
+			mapOne(material.pbr.geometryOcclusionTexture, RefKind::kBakedMap, map, seen);
 			for (ChannelRoute& route : material.pbr.routes)
 				mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			break;

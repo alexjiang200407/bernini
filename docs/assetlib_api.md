@@ -225,6 +225,11 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   into a missing root is a mistyped root rather than a new subfolder.
 * **`Save` refuses a key that escapes the data root**, which is `ResolveWritePath`'s boundary. A
   key typed on a command line cannot climb out of the project.
+* **`loadFromGltf` reads `TEXCOORD_1` only for a primitive whose material samples occlusion
+  through it** (`occlusionTexture.texCoord == 1`), and files that map as
+  `BMaterialImport::geometryOcclusionTexture` rather than routing it into ORM red. Every other second
+  UV set is dropped, so a mesh whose materials sample none imports byte-for-byte as it did before
+  the set was read. See [Asset Standards § Geometry AO](asset_standards.md#geometry-ao-on-a-second-uv-set).
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;

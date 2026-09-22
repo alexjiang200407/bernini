@@ -385,6 +385,27 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 	}
 }
 
+TEST_CASE("Renaming a texture re-points the material's geometry occlusion map", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_geometry_occlusion");
+
+	WriteSource(root.path / "Derived/SourceTextures" / "ao.ktx2", { { 128, 128, 128, 255 } });
+
+	BMaterial material;
+	material.pbr.geometryOcclusionTexture = "Derived/SourceTextures/ao.ktx2";
+	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
+
+	REQUIRE(
+		Rename(root, "Derived/SourceTextures/ao.ktx2", "Derived/SourceTextures/wall_ao.ktx2")
+			.status == RenameStatus::kRenamed);
+
+	CHECK(
+		StoreAt(root.path)
+			.Load<BMaterial>("Authored/Materials/mat.bmaterial")
+			.pbr.geometryOcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
+	CHECK(root.Scan().broken.empty());
+}
+
 TEST_CASE("Renaming an environment part re-points its whole family", "[assetrename]")
 {
 	const DataRoot    root("bernini_rename_env");

@@ -371,6 +371,28 @@ TEST_CASE("AssetManager acquires a material's textures with it", "[gamelib][asse
 	}
 }
 
+// The map is every model's, so it rides the record whatever else the material draws from, and is
+// held and let go with it like the rest.
+TEST_CASE("AssetManager holds a material's geometry occlusion map with it", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_geometry_occlusion");
+	WriteTexture(fx.root.path / "Textures" / "wall_ao.ktx2");
+
+	auto material                         = assetlib::BMaterial();
+	material.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
+	SaveAt(material, fx.root.path / "Authored/Materials" / "wall.bmaterial");
+
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/wall.bmaterial");
+	REQUIRE(mat.IsValid());
+
+	const auto tex = (*fx).AcquireTexture("Textures/wall_ao.ktx2");
+	(*fx).ReleaseTexture(tex);
+	CHECK((*fx).TextureRefCount(tex) == 1);  // held by the material alone
+
+	(*fx).ReleaseMaterial(mat);
+	CHECK((*fx).TextureRefCount(tex) == 0);
+}
+
 TEST_CASE("AssetManager acquires a mesh's whole tree", "[gamelib][assets]")
 {
 	Fixture fx("bernini_am_mesh");
@@ -715,21 +737,30 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	baked.pbr.normalTexture    = "Textures/nrm.ktx2";
 	baked.pbr.ormTexture       = "Textures/orm.ktx2";
 
+	// The geometry occlusion map follows, last in both PBR cases, empty when the material names none.
 	CHECK(
-		game::MaterialTextures(baked, false) ==
-		std::vector<std::string>{ "Textures/base.ktx2", "Textures/nrm.ktx2", "Textures/orm.ktx2" });
+		game::MaterialTextures(baked, false) == std::vector<std::string>{ "Textures/base.ktx2",
+	                                                                      "Textures/nrm.ktx2",
+	                                                                      "Textures/orm.ktx2",
+	                                                                      "" });
+
+	baked.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
+	CHECK(game::MaterialTextures(baked, false).back() == "Textures/wall_ao.ktx2");
 
 	// A loose material is its authoring routes instead, one slot per channel, unrouted ones empty.
-	auto loose                        = assetlib::BMaterial();
-	loose.pbr.routes[0].texture       = "Textures/albedo.ktx2";
-	const std::vector<std::string> ch = game::MaterialTextures(loose, true);
+	auto loose                         = assetlib::BMaterial();
+	loose.pbr.routes[0].texture        = "Textures/albedo.ktx2";
+	loose.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
+	const std::vector<std::string> ch  = game::MaterialTextures(loose, true);
 
-	REQUIRE(ch.size() == assetlib::c_LooseChannelCount);
+	REQUIRE(ch.size() == assetlib::c_LooseChannelCount + 1);
 	CHECK(ch[0] == "Textures/albedo.ktx2");
 	CHECK(ch[1].empty());
+	CHECK(ch.back() == "Textures/wall_ao.ktx2");
 
-	// A surface material is its slots in document order; a routed slot names its composited map,
-	// never a source, and the routes win where a document carries a whole binding too.
+	// A surface material is its slots in document order, and nothing after them: it takes a UV1
+	// occlusion map through a slot of its own. A routed slot names its composited map, never a
+	// source, and the routes win where a document carries a whole binding too.
 	auto surface         = assetlib::BMaterial();
 	surface.shadingModel = assetlib::ShadingModel::kPbrSurface;
 

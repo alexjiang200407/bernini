@@ -122,6 +122,19 @@ TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 	CHECK(text.find("orm             (none)") != std::string::npos);
 }
 
+TEST_CASE(
+	"describe(BMaterial) names the geometry occlusion map, or says there is none",
+	"[describe]")
+{
+	BMaterial material = RoutedMaterial();
+	CHECK(describe(material).find("geometryOcclusion (none)") != std::string::npos);
+
+	material.pbr.geometryOcclusionTexture = "Derived/SourceTextures/skin_ao.ktx2";
+	CHECK(
+		describe(material).find("geometryOcclusion Derived/SourceTextures/skin_ao.ktx2") !=
+		std::string::npos);
+}
+
 // With a data root, each routed source is stat'd and compared against the stamp taken at bake time.
 TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[describe]")
 {

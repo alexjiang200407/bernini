@@ -1929,6 +1929,17 @@ namespace bgl
 		}
 	}
 
+	idl::RawTextureHandle
+	Scene::ResolveTexture(TextureAssetHandle texture, core::slot_handle fallback) const
+	{
+		// The descriptor comes from the resource manager, not the slot: this one is read straight out
+		// of GPU memory, so it has to be whatever the backend's shader can dereference -- as bytes,
+		// since the record it lands in is raw-loaded and the arena's typed view is what samples them.
+		const core::slot_handle slot = texture.textureSlot ? texture.textureSlot : fallback;
+
+		return RawHandleOf(m_Textures.GetDescriptor(slot));
+	}
+
 	idl::PbrMaterial
 	Scene::BuildPbrMaterial(const PbrMaterialDesc& desc) const
 	{
@@ -1936,24 +1947,14 @@ namespace bgl
 		const auto flatNormal =
 			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
 
-		// A caller-supplied texture resolves to its bindless descriptor; an invalid
-		// (default-constructed) handle falls back to the given default texture. The descriptor comes
-		// from the resource manager, not the slot: this one is read straight out of GPU memory, so it
-		// has to be whatever the backend's shader can dereference -- as bytes, since the record it
-		// lands in is raw-loaded and the arena's typed view is what samples them.
-		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
-			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-
-			return RawHandleOf(m_Textures.GetDescriptor(slot));
-		};
-
 		idl::PbrMaterial material{};
-		material.baseColorTexture   = resolve(desc.baseColorTexture, white);
-		material.normalTexture      = resolve(desc.normalTexture, flatNormal);
-		material.ormTexture         = resolve(desc.ormTexture, white);
-		material.baseColorFactor    = desc.baseColorFactor;
-		material.metallicFactor     = desc.metallicFactor;
-		material.roughnessFactor    = desc.roughnessFactor;
+		material.baseColorTexture         = ResolveTexture(desc.baseColorTexture, white);
+		material.normalTexture            = ResolveTexture(desc.normalTexture, flatNormal);
+		material.ormTexture               = ResolveTexture(desc.ormTexture, white);
+		material.geometryOcclusionTexture = ResolveTexture(desc.geometryOcclusionTexture, white);
+		material.baseColorFactor          = desc.baseColorFactor;
+		material.metallicFactor           = desc.metallicFactor;
+		material.roughnessFactor          = desc.roughnessFactor;
 		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
 		material.transmissionFactor = desc.transmissionFactor;
 		material.alphaCutoff        = desc.alphaCutoff;
@@ -2323,9 +2324,15 @@ namespace bgl
 		static_assert(offsetof(idl::PbrMaterial, baseColorTexture) == 0);
 		static_assert(offsetof(idl::PbrMaterial, normalTexture) == sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::PbrMaterial, ormTexture) == 2 * sizeof(idl::RawTextureHandle));
+		static_assert(
+			offsetof(idl::PbrMaterial, geometryOcclusionTexture) ==
+			3 * sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::LoosePbrMaterial, textures) == 0);
 		static_assert(
 			sizeof(idl::LoosePbrMaterial::textures) ==
+			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
+		static_assert(
+			offsetof(idl::LoosePbrMaterial, geometryOcclusionTexture) ==
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
 		static_assert(offsetof(idl::GameSurfaceRecord, textures) == 0);
 		static_assert(
@@ -2389,6 +2396,8 @@ namespace bgl
 		// Normal X,Y -> flat-normal texture (R = 0.5, G = 0.5) -> decoded (0,0,1).
 		resolve(material, idl::PbrChannel::kNormalX, desc.normal[0], flatNormal, 0);
 		resolve(material, idl::PbrChannel::kNormalY, desc.normal[1], flatNormal, 1);
+
+		material.geometryOcclusionTexture = ResolveTexture(desc.geometryOcclusionTexture, white);
 
 		material.baseColorFactor    = desc.baseColorFactor;
 		material.metallicFactor     = desc.metallicFactor;

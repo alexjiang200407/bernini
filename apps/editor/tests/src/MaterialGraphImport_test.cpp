@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
@@ -11,6 +12,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QDoubleSpinBox>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cstddef>
@@ -604,4 +606,106 @@ TEST_CASE("A PBR material saved with no graph opens with its textures wired", "[
 	// The opaque sink has no alpha port, exactly as an import leaves it.
 	CHECK(Route(reopened, PbrChannel::kBaseColorA).texture.empty());
 	CHECK(reopened.pbr.roughnessFactor == Catch::Approx(0.6f));
+}
+
+namespace
+{
+	const QString c_GeometryOcclusion =
+		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex4.ktx2");
+}
+
+TEST_CASE(
+	"A texCoord-1 occlusion map feeds the geometry occlusion port, and ORM red keeps the "
+	"texCoord-0 one",
+	"[materialimport][geometryao]")
+{
+	const assetlib::BMaterial material = Import(
+		{},
+		ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion, c_GeometryOcclusion });
+
+	CHECK(material.pbr.geometryOcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
+	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
+}
+
+TEST_CASE(
+	"A material with no geometry occlusion map compiles to none",
+	"[materialimport][geometryao]")
+{
+	CHECK(Import({}, AllMaps()).pbr.geometryOcclusionTexture.empty());
+}
+
+TEST_CASE(
+	"A geometry occlusion board reopens as the board that produced it",
+	"[materialimport][geometryao]")
+{
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, {}, c_GeometryOcclusion });
+
+	QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
+	RebaseGraphTextures(graph, c_DataRoot, false);
+
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	reopened.load(graph);
+
+	CHECK(
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == material.pbr.geometryOcclusionTexture);
+}
+
+TEST_CASE(
+	"A board with no geometry occlusion wire keeps the map its document names",
+	"[materialimport][geometryao]")
+{
+	// A board saved before the port existed, or a document the editor never wrote: Save compiles
+	// the board, so a map the board does not show would be dropped on the first save after opening.
+	const assetlib::BMaterial withoutWire = Import({}, AllMaps());
+
+	QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(withoutWire.editorGraph)).object();
+	RebaseGraphTextures(graph, c_DataRoot, false);
+
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	reopened.load(graph);
+
+	auto document                         = withoutWire;
+	document.pbr.geometryOcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
+
+	WireGeometryOcclusion(reopened, document, c_DataRoot);
+	const size_t nodes = reopened.allNodeIds().size();
+
+	CHECK(
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == document.pbr.geometryOcclusionTexture);
+
+	// Once wired it is the board's, and a second pass places nothing more.
+	WireGeometryOcclusion(reopened, document, c_DataRoot);
+	CHECK(reopened.allNodeIds().size() == nodes);
+}
+
+TEST_CASE(
+	"Switching the sink keeps the geometry occlusion wire where the ports before it moved",
+	"[materialimport][geometryao]")
+{
+	// A split base colour is three ports on the opaque sink and four on a cutout, so the geometry occlusion port
+	// sits one further along after the switch: moved by index, the wire would land on ORM.
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId outputId = model.addNode(QStringLiteral("MaterialOutput"));
+	PbrSink(model)->load(QJsonObject{ { "split", QJsonArray{ true, false, false } } });
+
+	const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+	model.delegateModel<TextureNode>(textureId)->SetTexturePath(c_GeometryOcclusion);
+	model.addConnection(
+		QtNodes::ConnectionId{ textureId,
+	                           3,  // TextureNode's R port
+	                           outputId,
+	                           PbrSink(model)->GeometryOcclusionPort() });
+	REQUIRE(PbrSink(model)->HasGeometryOcclusion());
+
+	REQUIRE(model.SetOutputType(QStringLiteral("AlphaTestedMaterialOutput")));
+
+	CHECK(PbrSink(model)->HasGeometryOcclusion());
+	CHECK(
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
 }

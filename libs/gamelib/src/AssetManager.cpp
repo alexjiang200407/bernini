@@ -236,18 +236,19 @@ namespace game
 	}
 
 	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
-	// them (a loose slot expanding to its four route sources in place), the baked triplet, or the
-	// nine authoring routes. One order per case, in one place, so the record's texture references
-	// and the desc it rebuilds can never fall out of step.
+	// them (a loose slot expanding to its four route sources in place), or the baked triplet or the
+	// nine authoring routes followed by the geometry occlusion map. One order per case, in one place, so
+	// the record's texture references and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
 	MaterialTextures(
 		const assetlib::BMaterial& material,
 		const bool                 loose,
 		const uint32_t             looseSlots)
 	{
+		auto paths = std::vector<std::string>();
+
 		if (assetlib::isSurfaceModel(material.shadingModel))
 		{
-			auto paths = std::vector<std::string>();
 			paths.reserve(material.surface.textures.size());
 			for (size_t i = 0; i < material.surface.textures.size(); ++i)
 			{
@@ -268,17 +269,21 @@ namespace game
 			return paths;
 		}
 
-		const assetlib::PbrParams& pbr = material.pbr;
-
 		if (loose)
 		{
-			auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
-			for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
-				paths[i] = pbr.routes[i].texture;
-			return paths;
+			paths.reserve(assetlib::c_LooseChannelCount + 1);
+			for (const assetlib::ChannelRoute& route : material.pbr.routes)
+				paths.push_back(route.texture);
+		}
+		else
+		{
+			paths = { material.pbr.baseColorTexture,
+				      material.pbr.normalTexture,
+				      material.pbr.ormTexture };
 		}
 
-		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
+		paths.push_back(material.pbr.geometryOcclusionTexture);
+		return paths;
 	}
 
 	AssetManager::AssetManager(
@@ -1588,6 +1593,8 @@ namespace game
 		desc.normalTexture    = record.textures[1];
 		desc.ormTexture       = record.textures[2];
 
+		desc.geometryOcclusionTexture = record.textures.back();
+
 		return desc;
 	}
 
@@ -1681,6 +1688,8 @@ namespace game
 			desc.orm[i] = route(assetlib::channelIndex(assetlib::c_OrmChannels, i));
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(assetlib::channelIndex(assetlib::c_NormalChannels, i));
+
+		desc.geometryOcclusionTexture = record.textures.back();
 
 		return desc;
 	}

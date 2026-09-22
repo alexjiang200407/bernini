@@ -160,7 +160,7 @@ SurfaceOutputNode::ChannelPortFor(size_t slot, uint32_t component) const
 QtNodes::NodeDataType
 SurfaceOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::Type(1);
+	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::ScalarType();
 }
 
 void

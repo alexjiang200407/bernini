@@ -133,6 +133,55 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 	CHECK(defaulted.pbr.specularColorFactor == glm::vec3(1.0f));
 }
 
+// The key is the PBR model's: a surface takes the map through a slot of its own, so a surface
+// document carries none -- written or read -- however its struct was filled.
+TEST_CASE(
+	"a PBR material's geometry occlusion map round-trips, and a surface's is dropped",
+	"[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name                         = "wall";
+	mat.pbr.geometryOcclusionTexture = "Derived/SourceTextures/wall_ao.ktx2";
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	// One tab of indent is the top level of a canonical document.
+	CHECK(
+		out.find("\n\t\"geometryOcclusion\": \"Derived/SourceTextures/wall_ao.ktx2\"") !=
+		std::string::npos);
+	CHECK(
+		AssetCodec<BMaterial>::Deserialize(bytes).pbr.geometryOcclusionTexture ==
+		mat.pbr.geometryOcclusionTexture);
+
+	BMaterial surface              = mat;
+	surface.shadingModel           = ShadingModel::kPbrSurface;
+	surface.surface.name           = "Rim";
+	const auto        surfaceBytes = AssetCodec<BMaterial>::Serialize(surface);
+	const std::string surfaceOut(
+		reinterpret_cast<const char*>(surfaceBytes.data()),
+		surfaceBytes.size());
+	CHECK(surfaceOut.find("geometryOcclusion") == std::string::npos);
+
+	const std::string text =
+		R"({"shadingModel":"pbrSurface","surface":"Rim","geometryOcclusion":"a.ktx2"})";
+	CHECK(
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())))
+			.pbr.geometryOcclusionTexture.empty());
+}
+
+// Every material written before the key existed must load, and re-save, exactly as it did.
+TEST_CASE("a material without a geometry occlusion map writes no key for it", "[bmaterial][io]")
+{
+	const std::string text = R"({"shadingModel":"pbr","name":"plain"})";
+	const auto        legacy =
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(legacy.pbr.geometryOcclusionTexture.empty());
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(legacy);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	CHECK(out.find("geometryOcclusion") == std::string::npos);
+}
+
 TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;
