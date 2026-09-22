@@ -20,48 +20,82 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr const char* c_SurfaceInterface = "ISurfaceSource";
+		constexpr const char* c_SurfaceInterface    = "ISurfaceSource";
+		constexpr const char* c_LitSurfaceInterface = "ILitSurfaceSource";
 
-		slang::TypeReflection*
+		struct FoundSurface
+		{
+			slang::TypeReflection* type;
+			SurfaceShading         shading;
+		};
+
+		const char*
+		InterfaceName(SurfaceShading shading) noexcept
+		{
+			return shading == SurfaceShading::kLit ? c_LitSurfaceInterface : c_SurfaceInterface;
+		}
+
+		std::optional<FoundSurface>
 		FindSurfaceStruct(
 			slang::IModule*       slangModule,
 			slang::ProgramLayout* layout,
 			std::string_view      surfaceName)
 		{
-			// Null when the module never imported the contract, which is how a module that is not a
-			// surface at all says so.
-			slang::TypeReflection* iface = layout->findTypeByName(c_SurfaceInterface);
-			if (iface == nullptr)
-				return nullptr;
+			// Null when the module never imported that contract, which is how a module that is not
+			// a surface at all says so: neither interface resolves, and there is nothing to hold
+			// the module to.
+			slang::TypeReflection* pbrIface = layout->findTypeByName(c_SurfaceInterface);
+			slang::TypeReflection* litIface = layout->findTypeByName(c_LitSurfaceInterface);
+			if (pbrIface == nullptr && litIface == nullptr)
+				return std::nullopt;
 
 			std::vector<slang::DeclReflection*> structs;
 			CollectStructDecls(slangModule->getModuleReflection(), structs);
 
-			slang::TypeReflection* found = nullptr;
+			std::optional<FoundSurface> found;
 			for (slang::DeclReflection* decl : structs)
 			{
 				slang::TypeReflection* type = decl->getType();
-				if (!layout->isSubType(type, iface))
+
+				const bool pbr = pbrIface != nullptr && layout->isSubType(type, pbrIface);
+				const bool lit = litIface != nullptr && layout->isSubType(type, litIface);
+				if (!pbr && !lit)
 					continue;
 
-				if (found != nullptr)
+				if (pbr && lit)
+				{
+					core::throw_runtime_error(
+						"surface '{}': '{}' conforms to {} and {}; a surface owns one contract",
+						surfaceName,
+						FullTypeName(type),
+						c_SurfaceInterface,
+						c_LitSurfaceInterface);
+				}
+
+				const SurfaceShading shading =
+					lit ? SurfaceShading::kLit : SurfaceShading::kPbrSurface;
+				if (found.has_value())
 				{
 					core::throw_runtime_error(
 						"surface '{}': '{}' and '{}' both conform to {}; a file declares one",
 						surfaceName,
-						FullTypeName(found),
+						FullTypeName(found->type),
 						FullTypeName(type),
-						c_SurfaceInterface);
+						found->shading == shading ? InterfaceName(shading) : "a surface contract");
 				}
-				found = type;
+				found = FoundSurface{ type, shading };
 			}
 
-			if (found == nullptr)
+			if (!found.has_value())
 			{
+				const char* imported = pbrIface != nullptr && litIface != nullptr ?
+				                           "ISurfaceSource or ILitSurfaceSource" :
+				                       pbrIface != nullptr ? c_SurfaceInterface :
+				                                             c_LitSurfaceInterface;
 				core::throw_runtime_error(
 					"surface '{}': no struct in the module conforms to {}",
 					surfaceName,
-					c_SurfaceInterface);
+					imported);
 			}
 			return found;
 		}
@@ -196,9 +230,12 @@ namespace bgl
 				text);
 		}
 
-		slang::TypeReflection* surface = FindSurfaceStruct(slangModule, layout, surfaceName);
-		if (surface == nullptr)
+		const std::optional<FoundSurface> found =
+			FindSurfaceStruct(slangModule, layout, surfaceName);
+		if (!found.has_value())
 			return std::nullopt;
+
+		slang::TypeReflection* surface = found->type;
 
 		const std::string      paramsName = FullTypeName(surface) + ".MaterialParams";
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
@@ -214,6 +251,7 @@ namespace bgl
 
 		SurfaceType reflected;
 		reflected.name            = std::string(surfaceName);
+		reflected.shading         = found->shading;
 		reflected.params.byteSize = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)

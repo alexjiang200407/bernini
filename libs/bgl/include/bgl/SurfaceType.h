@@ -37,6 +37,17 @@ namespace bgl
 	};
 
 	/**
+	 * Which contract the surface's module conforms to. `kPbrSurface` supplies the material half of
+	 * the engine's PBR lighting (`ISurfaceSource`); `kLit` owns its lighting and returns radiance
+	 * (`ILitSurfaceSource`).
+	 */
+	enum class SurfaceShading : uint8_t
+	{
+		kPbrSurface,
+		kLit,
+	};
+
+	/**
 	 * What a surface value may be. A material writes one number or a list of them.
 	 *
 	 * Declared in component order, and read that way in both directions: the count is the
@@ -122,6 +133,9 @@ namespace bgl
 		// and the kind a material handle of this surface carries.
 		// Assigned by registration; reflection leaves it invalid.
 		MaterialType kind = MaterialType::kInvalid;
+
+		// Which contract the module conforms to, read off the module by reflection.
+		SurfaceShading shading = SurfaceShading::kPbrSurface;
 
 		SurfaceParams params;
 	};

@@ -610,7 +610,9 @@ whatever the layer. A draw bucket exists only once something resolves to it: the
 first use, so a scene pays for the combinations it draws, not for the product. A surface's
 programs, and the shared blend program's arm for it, are generated when it registers, each a call
 into [lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)
-on the surface its slot's `game.slotN` binding aliases -- see
+on the surface its slot's `game.slotN` binding aliases — the engine-lit family for a surface on
+`ISurfaceSource`, the lit family (`ShadeGameLit*`, which never calls `ShadeSurface`) for one on
+`ILitSurfaceSource` -- see
 [Game-Defined Surfaces](docs/game_defined_surfaces.md). The
 two tiers' draw buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
 material offset, and neither says which tier filled them.

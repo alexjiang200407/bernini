@@ -74,8 +74,10 @@ disagrees, trust the header, then fix this doc.
   `BEnv::skyMipLevel`, authored on the document and clamped at resolve to what the baked chain holds.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
-  not of any environment. bgl_extended renders its own 256² `RG16_FLOAT` copy once at device init
-  ([libs/bgl_extended/src/passes/BrdfLutGenPass.cpp](libs/bgl_extended/src/passes/BrdfLutGenPass.cpp)), so there is no file to ship, to
+  not of any environment. bgl_extended renders its own 256² `RG16_FLOAT` copy at most once per
+  device — on the first frame that draws a PBR-lit bucket, so a scene shaded entirely by lit game
+  surfaces never builds it
+  ([libs/bgl_extended/src/passes/BrdfLutGenPass.cpp](libs/bgl_extended/src/passes/BrdfLutGenPass.cpp)) — so there is no file to ship, to
   configure, or to get out of step with the shader that samples it.
 
 ## Interface Index
@@ -120,7 +122,7 @@ flowchart TD
 
     EDITOR -- "SetEnvironmentMap / SetSkyBox" --> VIEW["bgl::ISceneView"]
     GAME -- "SetEnvironmentMap / SetSkyBox" --> VIEW
-    LUT["BrdfLut (device init)"] -- "no file" --> VIEW
+    LUT["BrdfLut (first PBR draw)"] -- "no file" --> VIEW
 ```
 
 ## Risky / Non-obvious Method Contracts

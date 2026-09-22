@@ -123,7 +123,10 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 	                     { "metallicFactor", glm::vec4(0.6f) } },
 		});
 
-	CHECK(material.materialType == MaterialType::kGameStart);
+	// Slot 1: the staged directory is filename-ordered and Band sits ahead of PbrLike.
+	CHECK(
+		material.materialType ==
+		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 1u));
 
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, material);
 	view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
@@ -421,6 +424,26 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 			scene->CreateSurfaceMaterial({ .surface = "Nowhere" }),
 			SceneError,
 			MessageMatches(ContainsSubstring("no surface named 'Nowhere' is registered")));
+	}
+
+	// ADR-5: a caller that states its contract is refused the other one; no expectation stated
+	// takes the surface as it is, which is what every call above this section does.
+	SECTION("a contract expectation the surface does not meet")
+	{
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial(
+				{ .surface = "Unlit", .shading = SurfaceShading::kPbrSurface }),
+			SceneError,
+			MessageMatches(ContainsSubstring("surface 'Unlit' owns its lighting")));
+
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial({ .surface = "Rim", .shading = SurfaceShading::kLit }),
+			SceneError,
+			MessageMatches(ContainsSubstring("surface 'Rim' is lit by the engine")));
+
+		// The stated expectation that matches is not a refusal.
+		CHECK_NOTHROW(
+			scene->CreateSurfaceMaterial({ .surface = "Unlit", .shading = SurfaceShading::kLit }));
 	}
 
 	SECTION("a value the surface does not declare")
@@ -834,4 +857,141 @@ TEST_CASE("A double-sided surface shades its back face as its front", "[surface]
 	{
 		std::filesystem::remove("assets/golden/surface_facing_front.got.png");
 	}
+}
+
+// The lit contract end to end: a surface whose Shade is the whole lighting. No environment is
+// applied, which is exactly the point -- the unlit sphere's colour reaches the screen with only
+// the exposure between, and the banded sphere's terminator falls where the sun the view set puts
+// it. Nothing here could render at all if the lit programs still routed through ShadeSurface,
+// which without an environment answers near black.
+TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
+{
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	view->SetDirectionalLight(
+		{
+			.direction = glm::normalize(glm::vec3(-1.0f, -0.4f, -1.0f)),
+			.color     = glm::vec3(1.0f),
+			.intensity = 1.0f,
+		});
+
+	auto unlit = scene->CreateSurfaceMaterial(
+		{
+			.surface = "Unlit",
+			.values  = { { "color", glm::vec4(0.9f, 0.3f, 0.1f, 0.0f) } },
+		});
+
+	// Every parameter left at the defaults the surface declared, so a default that failed to land
+	// shows as the wrong ramp.
+	auto band = scene->CreateSurfaceMaterial({ .surface = "Band" });
+
+	view->CreateStaticMeshInstance(
+		scene->AddSphereGeom(24, 24, 3.5f, unlit),
+		glm::translate(glm::mat4(1.0f), glm::vec3(-5.5f, 0.0f, 0.0f)));
+	view->CreateStaticMeshInstance(
+		scene->AddSphereGeom(24, 24, 3.5f, band),
+		glm::translate(glm::mat4(1.0f), glm::vec3(5.5f, 0.0f, 0.0f)));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = SphereCamera();
+	job.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+
+	gfx->ScreenshotPng(target, "assets/golden/surface_lit.got.png");
+
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/surface_lit.exp.png",
+			"assets/golden/surface_lit.got.png"));
+}
+
+// Both contracts in one frame, opaque and blended. The blended pair is the load-bearing one: the
+// lit record and the PBR-surface record resolve inside the one shared transparent program, so the
+// golden only matches if its switch picks the arm by each record's own kind -- a lit record
+// through the PBR arm would come back lit by the environment it never asked for.
+TEST_CASE("A lit surface draws beside PBR across layers", "[surface][lit][render]")
+{
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto pbrOpaque = scene->CreateSurfaceMaterial(
+		{
+			.surface = "PbrLike",
+			.values  = { { "baseColorFactor", glm::vec4(1.0f) },
+	                     { "roughnessFactor", glm::vec4(0.3f) },
+	                     { "metallicFactor", glm::vec4(0.6f) } },
+		});
+
+	auto unlitOpaque = scene->CreateSurfaceMaterial(
+		{
+			.surface = "Unlit",
+			.values  = { { "color", glm::vec4(0.1f, 0.6f, 0.9f, 0.0f) } },
+		});
+
+	auto unlitBlend = scene->CreateSurfaceMaterial(
+		{
+			.surface     = "Unlit",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
+			.values      = { { "color", glm::vec4(0.9f, 0.8f, 0.1f, 0.0f) },
+	                         { "opacity", glm::vec4(0.5f) } },
+		});
+
+	auto rimBlend = scene->CreateSurfaceMaterial(
+		{
+			.surface     = "Rim",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
+		});
+
+	const std::array spheres = {
+		std::pair{ scene->AddSphereGeom(24, 24, 2.4f, pbrOpaque), -10.5f },
+		std::pair{ scene->AddSphereGeom(24, 24, 2.4f, unlitBlend), -3.5f },
+		std::pair{ scene->AddSphereGeom(24, 24, 2.4f, rimBlend), 3.5f },
+		std::pair{ scene->AddSphereGeom(24, 24, 2.4f, unlitOpaque), 10.5f },
+	};
+
+	for (const auto& [geom, x] : spheres)
+		view->CreateStaticMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = SphereCamera();
+	job.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+
+	gfx->ScreenshotPng(target, "assets/golden/surface_lit_mixed.got.png");
+
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/surface_lit_mixed.exp.png",
+			"assets/golden/surface_lit_mixed.got.png"));
 }

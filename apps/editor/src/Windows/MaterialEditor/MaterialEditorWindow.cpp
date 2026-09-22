@@ -979,7 +979,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 
 	// A surface document never opens behind a PBR board: Save compiles the board, so the board is
 	// the surface's or nothing -- the fallback PBR seed would be compiled into a demotion.
-	if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+	if (assetlib::isSurfaceModel(material.shadingModel))
 	{
 		const QString sinkName = SurfaceOutputNode::ModelNameFor(material.surface.name);
 		if (m_Registry->registeredModelCreators().count(sinkName) == 0)

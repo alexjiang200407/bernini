@@ -51,6 +51,7 @@ namespace assetlib
 			break;
 
 		case ShadingModel::kPbrSurface:
+		case ShadingModel::kLitSurface:
 			// The PBR shape per slot: a whole binding or a composited map is what the renderer
 			// samples, and a route is what the bake reads (ADR-7).
 			for (SurfaceTextureBinding& texture : material.surface.textures)

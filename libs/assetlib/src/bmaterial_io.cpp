@@ -69,9 +69,10 @@ namespace assetlib
 			"routes",
 		} };
 
-		constexpr std::array<std::string_view, 2> c_ShadingModelNames = { {
+		constexpr std::array<std::string_view, 3> c_ShadingModelNames = { {
 			"pbr",
 			"pbrSurface",
+			"litSurface",
 		} };
 
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
@@ -398,7 +399,7 @@ namespace assetlib
 		{
 			const SurfaceParams& surface = material.surface;
 
-			if (material.shadingModel != ShadingModel::kPbrSurface)
+			if (!isSurfaceModel(material.shadingModel))
 			{
 				json.erase("surface");
 				json.erase("parameters");
@@ -544,7 +545,7 @@ namespace assetlib
 
 			// Taken, then dropped: the keys are not this material's, and a struct still holding
 			// them would say it is drawn by a surface that its own model denies.
-			if (material.shadingModel != ShadingModel::kPbrSurface)
+			if (!isSurfaceModel(material.shadingModel))
 				material.surface = SurfaceParams();
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
@@ -620,6 +621,7 @@ namespace assetlib
 		{
 		case ShadingModel::kPbr:
 		case ShadingModel::kPbrSurface:
+		case ShadingModel::kLitSurface:
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:
@@ -799,7 +801,7 @@ namespace assetlib
 	bool
 	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
-		if (material.shadingModel == ShadingModel::kPbrSurface)
+		if (isSurfaceModel(material.shadingModel))
 			return std::ranges::any_of(
 				material.surface.textures,
 				[&](const SurfaceTextureBinding& slot) {

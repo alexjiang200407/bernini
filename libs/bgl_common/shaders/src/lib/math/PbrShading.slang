@@ -98,6 +98,10 @@ float3 ToEnvSpace(float3 dir, float3x3 envRotation)
     return mul(envRotation, dir);
 }
 
+/// Highest mip index of the 7-level prefilter chain: mip N is convolved for roughness N/6, so
+/// every reader maps roughness onto the chain by this and nothing else (docs/envmaps.md).
+public static const float c_PrefilterMaxLod = 6.0;
+
 /**
  * The two ambient lobes of a surface, kept apart because a blended surface weights them differently
  * (docs/passes.md#blended-surfaces). Summed, the pair is the opaque answer.
@@ -173,8 +177,6 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     let irradiance = env.Irradiance(ToEnvSpace(N, params.envRotation));
     let diffuse = irradiance * albedo;
 
-    const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
-
     // Roughness alone is not enough to pick the mip. A mirror asks for mip 0 at every distance, so a
     // sphere small on screen has each pixel covering a wide cone of the reflection while still
     // fetching full resolution -- which aliases into grain. The chain's mips exist; an explicit
@@ -210,9 +212,9 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     const float footprint = max(length(ddx(R)), length(ddy(R)));
     const float texel0 = 1.5707963f / float(env.PrefilterFaceTexels());
     const float excess = max(footprint - texel0 * 3.0f, 0.0f);
-    const float areaLod = min(sqrt(excess) * MAX_REFLECTION_LOD, c_AreaLodCap);
+    const float areaLod = min(sqrt(excess) * c_PrefilterMaxLod, c_AreaLodCap);
 
-    const float lod = min(max(roughness * MAX_REFLECTION_LOD, areaLod), MAX_REFLECTION_LOD);
+    const float lod = min(max(roughness * c_PrefilterMaxLod, areaLod), c_PrefilterMaxLod);
     let prefilteredColor = env.Prefiltered(ToEnvSpace(R, params.envRotation), lod);
     float2 envBRDF = env.BrdfLut(cosTheta, roughness);
 
