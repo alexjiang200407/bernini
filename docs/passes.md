@@ -259,7 +259,9 @@ tiled UV0 cannot hold ([Asset Standards](asset_standards.md)). The PBR records m
 It is sampled on every PBR draw, an absent map reading the white default as every other slot does — about
 1.5% of Forward in `[.forwardcost]`, the price of not splitting every pipeline on it. A mesh with no
 second UV set decodes `cNoUv1`, which `SampleGeometryOcclusion` reads as unoccluded, so a material shared
-with such a mesh draws it as though the map were white. The interpolant is `SECONDUV` and never
+with such a mesh draws it as though the map were white. The skinned tier writes `uv1` through the
+same decode, so a skinned mesh carrying the set would draw the map, but no test pins that: static
+environment art is what it is for, and a bake is only right in the pose it was baked in. The interpolant is `SECONDUV` and never
 `TEXCOORD1`: on Metal, Slang names a numbered semantic differently as a mesh output than as a
 fragment input, and the pipeline is refused.
 
