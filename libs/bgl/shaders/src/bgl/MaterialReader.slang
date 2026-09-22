@@ -77,11 +77,19 @@ public struct ColorAttribute
  * reads the interpolated normal negated, the same flip the engine applies to its own lighting.
  * A view-dependent term written against it is therefore correct on both faces without the
  * surface ever seeing a facing bit.
+ *
+ * Uv1 is the mesh's second UV set -- a unique, lightmap-style unwrap, where geometry AO is baked --
+ * and HasUv1 says whether the mesh has one. A mesh without it hands back a Uv1 far outside the unit
+ * square, so a surface sampling through it answers the absent case itself, as the engine's PBR does:
+ * sample first, then select, so the sample stays in uniform control flow --
+ * `let ao = reader.Sample(params.occlusion, reader.Uv1()).r; surface.orm.r *= reader.HasUv1() ? ao : 1.0;`
  */
 public interface IMaterialReader
 {
     float4 Sample<S : ISlot>(S slot, float2 uv);
     float2 Uv();
+    float2 Uv1();
+    bool HasUv1();
     float3 WorldPos();
     float3 WorldNormal();
     float4 WorldTangent();

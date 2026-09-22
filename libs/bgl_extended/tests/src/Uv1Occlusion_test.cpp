@@ -87,15 +87,19 @@ namespace
 			const std::array<float, 3> position = {
 				{ c.x * c_HalfExtent, c.y * c_HalfExtent, 0.0f }
 			};
-			const std::array<float, 3> normal   = { { 0.0f, 0.0f, 1.0f } };
-			const std::array<float, 2> texcoord = { { uv.x, uv.y } };
+			const std::array<float, 3> normal = { { 0.0f, 0.0f, 1.0f } };
+
+			// The first set mirrored across the second, so a read of the wrong one swaps which half
+			// the map darkens and fails both boxes.
+			const std::array<float, 2> texcoord0 = { { 1.0f - uv.x, uv.y } };
+			const std::array<float, 2> texcoord1 = { { uv.x, uv.y } };
 
 			const size_t at = i * stride;
 			bgl::test::PutFloats(mesh.vertexData, at, position);
 			bgl::test::PutFloats(mesh.vertexData, at + 12, normal);
-			bgl::test::PutFloats(mesh.vertexData, at + 24, texcoord);
+			bgl::test::PutFloats(mesh.vertexData, at + 24, texcoord0);
 			if (withUv1)
-				bgl::test::PutFloats(mesh.vertexData, at + 32, texcoord);
+				bgl::test::PutFloats(mesh.vertexData, at + 32, texcoord1);
 		}
 
 		auto meshlet           = assetlib::Meshlet();
@@ -318,13 +322,15 @@ namespace
 			  } },
 			{ "surface",
 			  [](bgl::IScene& scene, bgl::TextureAssetHandle map) {
-				  auto desc                = bgl::SurfaceMaterialDesc();
-				  desc.surface             = "PbrLike";
-				  desc.values              = { { "baseColorFactor",
-				                                 glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f) },
-				                               { "roughnessFactor", glm::vec4(1.0f) },
-				                               { "metallicFactor", glm::vec4(0.0f) } };
-				  desc.uv1OcclusionTexture = map;
+				  auto desc    = bgl::SurfaceMaterialDesc();
+				  desc.surface = "PbrLike";
+				  desc.values  = { { "baseColorFactor",
+				                     glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f) },
+				                   { "roughnessFactor", glm::vec4(1.0f) },
+				                   { "metallicFactor", glm::vec4(0.0f) } };
+				  // A surface takes the map through a slot it declares, bound by name like any other.
+				  if (map.textureSlot)
+					  desc.textures.push_back({ .name = "uv1Occlusion", .texture = map });
 				  return scene.CreateSurfaceMaterial(desc);
 			  } },
 		};

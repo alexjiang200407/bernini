@@ -465,7 +465,7 @@ BuildPbrMaterialGraph(
 			fileOf(assetlib::PbrChannel::kNormalX),
 			fileOf(assetlib::PbrChannel::kRoughness),
 			fileOf(assetlib::PbrChannel::kAo),
-			Rebase(QString::fromStdString(material.uv1OcclusionTexture), dataRoot, false) });
+			Rebase(QString::fromStdString(material.pbr.uv1OcclusionTexture), dataRoot, false) });
 }
 
 void
@@ -474,7 +474,7 @@ WireUv1Occlusion(
 	const assetlib::BMaterial&   material,
 	const std::filesystem::path& dataRoot)
 {
-	if (material.uv1OcclusionTexture.empty())
+	if (material.pbr.uv1OcclusionTexture.empty())
 		return;
 
 	const QtNodes::NodeId     outputId = model.OutputNodeId();
@@ -494,7 +494,7 @@ WireUv1Occlusion(
 	model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, lowest));
 	if (auto* texture = model.delegateModel<TextureNode>(textureId))
 		texture->SetTexturePath(
-			Rebase(QString::fromStdString(material.uv1OcclusionTexture), dataRoot, false));
+			Rebase(QString::fromStdString(material.pbr.uv1OcclusionTexture), dataRoot, false));
 
 	model.addConnection(
 		QtNodes::ConnectionId{ textureId,

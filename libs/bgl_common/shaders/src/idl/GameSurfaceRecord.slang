@@ -11,24 +11,20 @@ public static const uint cGameSurfaceTextureSlots = 8;
 // returns. Not a knob -- the count is the width of the sample.
 public static const uint cGameSurfaceRouteChannels = 4;
 
-// The typed view's index of `uv1OcclusionTexture`: past the slot handles and their routes.
-public static const uint cGameSurfaceUv1OcclusionIndex = cGameSurfaceTextureSlots * (1 + cGameSurfaceRouteChannels);
-
 // Where a slot's channel selectors start, measured as cGameSurfaceParamsByteOffset is: past
-// cRawPayloadOffset, at the end of the handles -- which sit first and contiguous, as in
+// cRawPayloadOffset, at the end of the two handle arrays -- which sit first and contiguous, as in
 // LoosePbrMaterial, so the arena's typed view reaches every route by index. The C++ side asserts
 // the arithmetic.
-public static const uint cGameSurfaceRouteChannelsByteOffset = 344;
+public static const uint cGameSurfaceRouteChannelsByteOffset = 336;
 
 // Where `routedMask` sits, measured as the two offsets around it are. The C++ side asserts the
 // arithmetic.
-public static const uint cGameSurfaceRoutedMaskByteOffset = 484;
+public static const uint cGameSurfaceRoutedMaskByteOffset = 476;
 
 // Where a game surface's parameters start, measured from the record's header: past
-// cRawPayloadOffset and this struct -- 16 + 8 slot handles (64) + 32 route handles (256) + the UV1
-// occlusion handle (8) + 32 channel selectors (128) + the four tail scalars (16). The C++ side
-// asserts the arithmetic.
-public static const uint cGameSurfaceParamsByteOffset = 488;
+// cRawPayloadOffset and this struct -- 16 + 8 slot handles (64) + 32 route handles (256) + 32
+// channel selectors (128) + the four tail scalars (16). The C++ side asserts the arithmetic.
+public static const uint cGameSurfaceParamsByteOffset = 480;
 
 // What `coverageSlot` holds for a surface declaring no texture hashed alpha could measure against.
 // Only the hashed rows read the field, and a material reaches one only through a surface that has a
@@ -50,10 +46,6 @@ public struct GameSurfaceRecord
     // -- so there is one record shape. Only the reader's DataSlot specialization reads these;
     // the other slot kinds sample `textures` whole.
     public RawTextureHandle routeTextures[cGameSurfaceTextureSlots * cGameSurfaceRouteChannels];
-
-    // The engine's, not the surface's: multiplied into the AO the surface returns, sampled through
-    // the second UV set the surface never sees.
-    public RawTextureHandle uv1OcclusionTexture;
 
     public uint routeChannels[cGameSurfaceTextureSlots * cGameSurfaceRouteChannels];
 

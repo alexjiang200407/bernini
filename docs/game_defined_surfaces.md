@@ -76,9 +76,8 @@ when a material names it, and still by name.
 
 `Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
 lighting then reads. A surface chooses what a pixel *is*, not how it is lit; there is no
-game-defined lighting model. One thing reaches the surface's answer after it returns: the
-material's UV1 occlusion map, which the engine multiplies into `orm.r` through the second UV set
-the surface never sees ([Passes](passes.md)).
+game-defined lighting model. Nothing reaches the answer after it returns: geometry AO baked on a
+second UV set is the surface's to take, like any other map (below).
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque
@@ -151,6 +150,24 @@ runs, a skinned vertex is a world-space position like any other.
 `WorldNormal` is the normal of the face being shaded: on a double-sided material a back face reads
 the interpolated normal negated — the same flip the engine applies to its own lighting — so a
 view-dependent term is correct on both faces and a surface never sees a facing bit.
+
+`Uv1` is the mesh's second UV set, where geometry AO is baked on a unique unwrap
+([Asset Standards](asset_standards.md#geometry-ao-on-a-second-uv-set)), and `HasUv1` says whether the
+mesh carries one. A surface that wants that AO declares a slot for it and samples it itself, exactly
+as it samples a normal map — the engine applies nothing on its behalf, so a surface that declares no
+such slot neither gets the AO nor shows a port for it in the editor. Sample first and select after,
+so the sample stays in uniform control flow, and answer the absent case, which hands back a `Uv1`
+far outside the unit square:
+
+```slang
+DataSlot occlusion;   // in the params
+...
+let ao = reader.Sample(params.occlusion, reader.Uv1()).r;
+surface.orm.r *= reader.HasUv1() ? ao : 1.0;
+```
+
+The map binds by the slot's name, like any other. Multiplying it into `orm.r` keeps it off the sun,
+which the engine scales by no AO ([Passes](passes.md)).
 
 ## Hashed alpha
 

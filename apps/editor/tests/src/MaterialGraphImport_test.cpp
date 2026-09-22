@@ -622,13 +622,13 @@ TEST_CASE(
 		{},
 		ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion, c_Uv1Occlusion });
 
-	CHECK(material.uv1OcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
+	CHECK(material.pbr.uv1OcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
 	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
 }
 
 TEST_CASE("A material with no UV1 occlusion map compiles to none", "[materialimport][uv1]")
 {
-	CHECK(Import({}, AllMaps()).uv1OcclusionTexture.empty());
+	CHECK(Import({}, AllMaps()).pbr.uv1OcclusionTexture.empty());
 }
 
 TEST_CASE("A UV1 occlusion board reopens as the board that produced it", "[materialimport][uv1]")
@@ -644,8 +644,8 @@ TEST_CASE("A UV1 occlusion board reopens as the board that produced it", "[mater
 	reopened.load(graph);
 
 	CHECK(
-		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
-		material.uv1OcclusionTexture);
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
+		material.pbr.uv1OcclusionTexture);
 }
 
 TEST_CASE("A board with no UV1 wire keeps the map its document names", "[materialimport][uv1]")
@@ -661,15 +661,15 @@ TEST_CASE("A board with no UV1 wire keeps the map its document names", "[materia
 	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
 	reopened.load(graph);
 
-	auto document                = withoutWire;
-	document.uv1OcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
+	auto document                    = withoutWire;
+	document.pbr.uv1OcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
 
 	WireUv1Occlusion(reopened, document, c_DataRoot);
 	const size_t nodes = reopened.allNodeIds().size();
 
 	CHECK(
-		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
-		document.uv1OcclusionTexture);
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
+		document.pbr.uv1OcclusionTexture);
 
 	// Once wired it is the board's, and a second pass places nothing more.
 	WireUv1Occlusion(reopened, document, c_DataRoot);
@@ -699,6 +699,6 @@ TEST_CASE(
 
 	CHECK(PbrSink(model)->HasUv1Occlusion());
 	CHECK(
-		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
 		"Derived/SourceTextures/hydrant/tex4.ktx2");
 }

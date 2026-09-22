@@ -79,14 +79,13 @@ namespace assetlib
 
 					++live.materials;
 
-					markMap(live, material.uv1OcclusionTexture);
-
 					switch (material.shadingModel)
 					{
 					case ShadingModel::kPbr:
 						markMap(live, material.pbr.baseColorTexture);
 						markMap(live, material.pbr.normalTexture);
 						markMap(live, material.pbr.ormTexture);
+						markMap(live, material.pbr.uv1OcclusionTexture);
 						break;
 
 					case ShadingModel::kPbrSurface:

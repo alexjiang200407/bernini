@@ -42,6 +42,8 @@ struct ConstantReader : IMaterialReader
 {
     float4 Sample<S : ISlot>(S slot, float2 uv) { return float4(0.25 * float(slot.Index() + 1u), 0.0, 0.0, 1.0); }
     float2 Uv() { return float2(0.0, 0.0); }
+    float2 Uv1() { return float2(0.0, 0.0); }
+    bool HasUv1() { return false; }
     float3 WorldPos() { return float3(0.0, 0.0, 0.0); }
     float3 WorldNormal() { return float3(0.0, 1.0, 0.0); }
     float4 WorldTangent() { return float4(1.0, 0.0, 0.0, 1.0); }
