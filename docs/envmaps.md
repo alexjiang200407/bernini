@@ -43,12 +43,24 @@ disagrees, trust the header, then fix this doc.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.
-* **Sources are float, shipped maps are `RGB9E5`.** The import writes `R32G32B32A32_SFLOAT` cubes into
-  `Derived/SourceTextures/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
-  `Derived/BakedTextures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
-  `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float`. Preferred over BC6H, whose 1 byte a
-  texel is unreachable on Apple GPUs; `R11G11B10` is the same size but bands in sky gradients, its blue
-  channel carrying only 5 mantissa bits.
+* **Sources are float; a shipped map is BC7 when it can be, `RGB9E5` when it cannot.** The import
+  writes `R32G32B32A32_SFLOAT` cubes into `Derived/SourceTextures/` as the routed sources, and the
+  bake encodes each under `Derived/BakedTextures/` by what it holds:
+
+  | Map | Every channel ≤ 1, faces a multiple of 4 | Otherwise |
+  |---|---|---|
+  | sky, prefilter | `BC7_SRGB_BLOCK`, 1 byte a texel | `E5B9G9R9_UFLOAT_PACK32`, 4 bytes |
+  | irradiance | `E5B9G9R9_UFLOAT_PACK32` | the same |
+
+  The range is measured, not declared, so a painted sky imported through a `.hdr` still bakes BC7.
+  BC7 holds [0, 1] and nothing above; an HDR map — a sun at thousands — needs a float format, and
+  BC6H, the standard one, has no encoder in this build (libktx cannot write it). `R11G11B10` is
+  RGB9E5's size but bands in sky gradients, its blue channel carrying only 5 mantissa bits. The
+  irradiance is one 128² mip, 0.4 MB, and not worth a second path. The format is chosen per bake,
+  and a baked map is regenerated per platform, so what one backend can sample constrains only its
+  own bake — BC7 is sampled natively by both D3D12 and Metal on Apple silicon.
+* **A compressed sky is held to 40 dB.** 8-bit sRGB PSNR per face against the RGB9E5 bake of the same
+  source — the space a painted sky was authored in — pinned by `EnvBake_test`.
 * **Baked maps are shared, not owned.** The name is content-addressed from the route, so two skies
   routing the same source name one file. Nothing deletes a baked map implicitly; reclaiming orphans is
   the whole-project mark and sweep in
@@ -105,7 +117,7 @@ disagrees, trust the header, then fix this doc.
 flowchart TD
     HDR[".hdr or float cube"] -- "ImportEnvironment (copied)" --> COPY["Authored/EnvSources/*.hdr + .bimport"]
     COPY -- "projected, convolved" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
-    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (RGB9E5, content-addressed)"]
+    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (BC7 or RGB9E5, content-addressed)"]
 
     SRC -- "routed by" --> BSKY[".bsky"]
     SRC -- "routed by" --> BENVL[".benvl"]
@@ -188,14 +200,14 @@ flowchart TD
 
 * **The baked-vs-source branch, in one place**, because two consumers ask it: `resolveEnvironment`
   (the editor) and `game::AssetManager::AcquireEnvironment` (the runtime). It is the environment's
-  copy of a material's `drawsLoose`, and follows the same rule — the baked RGB9E5 while it is on disk
+  copy of a material's `drawsLoose`, and follows the same rule — the baked map while it is on disk
   and current, the float source it was compiled from while it is not, and the baked map anyway when
   the source has gone, because a route with neither cannot be drawn at all.
 * **This is what makes a fresh checkout work.** `Data/Derived/BakedTextures/` is git-ignored by
   design — baked output is regenerated per platform — so a clone has every `Derived/SourceTextures/`
   source and no bake. Before this branch existed, every environment in such a project failed to load
   while its materials drew fine, because materials already had the fallback.
-* The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5, four times the bytes) and is not
+* The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5 or BC7, four or sixteen times the bytes) and is not
   what ships. It is not a different *image*: the source is exactly what the bake compiled, blur and
   all.
 

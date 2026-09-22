@@ -10,7 +10,10 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <format>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -60,10 +63,71 @@ namespace assetlib
 			return image;
 		}
 
+		enum class EnvMapEncoding : uint8_t
+		{
+			kRgb9e5,
+			kBc7Srgb,
+		};
+
+		std::string_view
+		encodingTag(EnvMapEncoding encoding) noexcept
+		{
+			switch (encoding)
+			{
+			case EnvMapEncoding::kRgb9e5:
+				return "rgb9e5";
+			case EnvMapEncoding::kBc7Srgb:
+				return "bc7srgb";
+			}
+			return {};
+		}
+
+		bool
+		isLowDynamicRange(const ImageData& cube)
+		{
+			const auto*  texels = reinterpret_cast<const float*>(cube.pixels.data());
+			const size_t count  = cube.pixels.size() / (sizeof(float) * 4);
+			for (size_t t = 0; t < count; ++t)
+				for (size_t c = 0; c < 3; ++c)
+					if (!(texels[t * 4 + c] <= 1.0f))
+						return false;
+			return true;
+		}
+
 		/**
-		 * Bakes one route: packs its already-loaded float cube as RGB9E5 into the content-addressed
-		 * target, unless the target is already newer than the source. Returns the updated route;
-		 * the caller assigns it, so a failure part-way leaves the asset untouched.
+		 * BC7 for a sky or prefilter whose every value fits it, RGB9E5 otherwise. The irradiance map
+		 * is one small mip and stays RGB9E5 whatever it holds; a face that is not a multiple of the
+		 * 4x4 block is refused by D3D12 as a block-compressed top level.
+		 */
+		EnvMapEncoding
+		encodingFor(const ImageData& cube, std::string_view group)
+		{
+			if (group == c_IrradianceGroup || cube.width % 4 != 0 || cube.height % 4 != 0)
+				return EnvMapEncoding::kRgb9e5;
+			return isLowDynamicRange(cube) ? EnvMapEncoding::kBc7Srgb : EnvMapEncoding::kRgb9e5;
+		}
+
+		void
+		writeEnvMap(
+			const ImageData&             cube,
+			EnvMapEncoding               encoding,
+			const std::filesystem::path& target)
+		{
+			switch (encoding)
+			{
+			case EnvMapEncoding::kRgb9e5:
+				writeKTX2(packRgb9e5(cube), target, false, Ktx2Compression::kNone);
+				return;
+			case EnvMapEncoding::kBc7Srgb:
+				writeKTX2(quantizeSrgb8(cube), target, true, Ktx2Compression::kBC7_RGBA);
+				return;
+			}
+		}
+
+		/**
+		 * Bakes one route: encodes its already-loaded float cube into the content-addressed target,
+		 * unless the target is already newer than the source. Returns the updated route; the caller
+		 * assigns it, so a failure part-way leaves the asset untouched.
 		 */
 		EnvMapRoute
 		bakeRoute(
@@ -72,8 +136,12 @@ namespace assetlib
 			std::string_view   group,
 			const BakeDesc&    desc)
 		{
-			const std::string name =
-				bakedMapFileName(group, std::string(group) + '|' + route.source);
+			// The encoding is in the name so a re-bake that changes it never reuses the old file,
+			// which the mtime test below would otherwise take as current.
+			const EnvMapEncoding encoding = encodingFor(source, group);
+			const std::string    name     = bakedMapFileName(
+				group,
+				std::format("{}|{}|{}", group, encodingTag(encoding), route.source));
 
 			const std::filesystem::path outDir = desc.dataRoot / desc.textureDir;
 			createDirectories(outDir);
@@ -91,7 +159,7 @@ namespace assetlib
 			const std::optional<std::filesystem::file_time_type> touched = mtimeOf(sourcePath);
 
 			if (stampOf(target).size == 0 || !written || !touched || *touched > *written)
-				writeKTX2(packRgb9e5(source), target, false, Ktx2Compression::kNone);
+				writeEnvMap(source, encoding, target);
 
 			EnvMapRoute baked = route;
 			baked.baked       = (desc.textureDir / name).generic_string();

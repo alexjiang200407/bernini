@@ -61,11 +61,9 @@ namespace assetlib
 	 * Repacks a float image as `E5B9G9R9_UFLOAT_PACK32`: a 5-bit exponent shared across a 9-bit
 	 * mantissa per channel, 4 bytes a texel instead of 16.
 	 *
-	 * This is the format HDR maps ship in. It is filterable on every backend without an optional
-	 * feature -- WebGPU core `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float` -- which
-	 * is why it is preferred over BC6H, four times smaller again but unreachable on Apple GPUs, and
-	 * over `R11G11B10`, the same size but carrying only 5 mantissa bits on blue, which bands in a sky
-	 * gradient.
+	 * This is the format an HDR environment map ships in: `R11G11B10` is the same size but carries
+	 * only 5 mantissa bits on blue, which bands in a sky gradient, and BC6H, a quarter the size, has
+	 * no encoder in this build.
 	 *
 	 * Alpha is dropped: the format has no alpha, and radiance has no use for one.
 	 *
@@ -90,6 +88,20 @@ namespace assetlib
 	 */
 	[[nodiscard]] ImageData
 	unpackRgb9e5(const ImageData& image);
+
+	/**
+	 * Quantizes a linear float image to 8-bit sRGB, `R8G8B8A8_SRGB`: each colour channel clamped to
+	 * [0, 1], sRGB-encoded and rounded; alpha clamped and rounded without the curve.
+	 *
+	 * What an LDR float image becomes before `writeKTX2` can block-compress it, since the Basis
+	 * encoder takes only 8-bit input. A value above 1 is clipped, so this is lossless in range only
+	 * for an image that has none.
+	 *
+	 * @param image A `R32G32B32A32_SFLOAT` image; geometry, mips and faces are preserved.
+	 * @throws std::runtime_error if `image` is not that format.
+	 */
+	[[nodiscard]] ImageData
+	quantizeSrgb8(const ImageData& image);
 
 	/**
 	 * writeKTX2 into a buffer instead of a file, for embedding in a container.
