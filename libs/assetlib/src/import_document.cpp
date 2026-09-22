@@ -32,6 +32,7 @@ namespace assetlib
 		constexpr std::string_view c_SampleRateKey       = "sampleRate";
 		constexpr std::string_view c_ClipFloorKey        = "clipFloor";
 		constexpr std::string_view c_BindingsKey         = "bindings";
+		constexpr std::string_view c_OverridesKey        = "overrides";
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
@@ -289,6 +290,35 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_OverridesKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"import document: '{}' is not an object",
+				c_OverridesKey);
+			for (const auto& [submesh, named] : it->items())
+			{
+				core::throw_runtime_error_if(
+					!named.is_object(),
+					"import document: overrides of '{}' are not an object",
+					submesh);
+				for (const auto& [name, material] : named.items())
+				{
+					core::throw_runtime_error_if(
+						name.empty(),
+						"import document: an override of '{}' has no name",
+						submesh);
+					core::throw_runtime_error_if(
+						!material.is_string(),
+						"import document: override '{}' of '{}' is not a string",
+						name,
+						submesh);
+					document.overrides.push_back({ submesh, name, material.get<std::string>() });
+				}
+			}
+			json.erase(it);
+		}
+
 		if (document.environment)
 			std::erase_if(document.outputs, [](const std::string& output) {
 				return isRetiredEnvironmentOutput(output);
@@ -356,6 +386,27 @@ namespace assetlib
 			bindings[binding.submesh] = binding.material;
 		}
 		json[c_BindingsKey] = std::move(bindings);
+
+		// Omitted rather than written empty, so a document with none stays byte-identical.
+		if (!document.overrides.empty())
+		{
+			auto overrides = nlohmann::json::object();
+			for (const MaterialOverrideBinding& entry : document.overrides)
+			{
+				core::throw_runtime_error_if(
+					entry.name.empty(),
+					"import document: an override of '{}' has no name",
+					entry.submesh);
+				nlohmann::json& named = overrides[entry.submesh];
+				core::throw_runtime_error_if(
+					named.contains(entry.name),
+					"import document: two overrides named '{}' for submesh '{}'",
+					entry.name,
+					entry.submesh);
+				named[entry.name] = entry.material;
+			}
+			json[c_OverridesKey] = std::move(overrides);
+		}
 
 		const std::string text = doc::canonicalDump(json);
 

@@ -9,6 +9,7 @@ namespace assetlib
 {
 	struct BMesh;
 	struct MaterialBinding;
+	struct MaterialOverrideBinding;
 	struct Skeleton;
 	struct SourceRef;
 
@@ -74,16 +75,21 @@ namespace assetlib
 	};
 
 	/**
-	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
-	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
-	 * one document hold one array. A submesh the document does not name is unbound.
+	 * Rebuilds `mesh.materials`, every `Submesh::material` and `mesh.materialOverrides`
+	 * canonically from the document's bindings and overrides -- a pure function of the document,
+	 * never a mutation of what was loaded, so two checkouts with one document hold one array. A
+	 * submesh the document does not name is unbound and has no overrides. Override-only materials
+	 * follow every default in `mesh.materials`.
 	 *
-	 * @return The submeshes named by bindings this mesh does not have -- the source changed shape
-	 *         under the document. Never guessed at: the editor warns, `migrate` fails the file,
-	 *         `pack` fails the pack.
+	 * @return The submeshes named by bindings or overrides this mesh does not have -- the source
+	 *         changed shape under the document. Never guessed at: the editor warns, `migrate`
+	 *         fails the file, `pack` fails the pack.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+	applyBindings(
+		BMesh&                                   mesh,
+		std::span<const MaterialBinding>         bindings,
+		std::span<const MaterialOverrideBinding> overrides);
 
 	/** What happened to one import document under `AssetStore::ReauthorImportDocuments`. */
 	struct ReauthoredDocument

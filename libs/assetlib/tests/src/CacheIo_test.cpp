@@ -4,6 +4,7 @@
 #include "CheckedFileReader.h"
 #include "cache_io.h"
 #include <assetlib/asset_import.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 using namespace assetlib;
@@ -119,7 +121,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		{ "hull", "Authored/Materials/wood.bmaterial" },
 		{ "sail", "Authored/Materials/cloth.bmaterial" },
 	};
-	CHECK(applyBindings(mesh, bindings).empty());
+	CHECK(applyBindings(mesh, bindings, {}).empty());
 
 	// First-appearance order over the submeshes, stale entries gone, shared materials shared.
 	CHECK(
@@ -132,7 +134,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	SECTION("a second application of the same document is a no-op")
 	{
 		BMesh again = mesh;
-		CHECK(applyBindings(again, bindings).empty());
+		CHECK(applyBindings(again, bindings, {}).empty());
 		CHECK(again.materials == mesh.materials);
 	}
 
@@ -140,7 +142,8 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	{
 		CHECK(applyBindings(
 				  mesh,
-				  std::vector<MaterialBinding>{ { "hull", "Authored/Materials/wood.bmaterial" } })
+				  std::vector<MaterialBinding>{ { "hull", "Authored/Materials/wood.bmaterial" } },
+				  {})
 		          .empty());
 		CHECK(mesh.submeshes[1].material == c_InvalidIndex);
 	}
@@ -150,9 +153,64 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		const std::vector<std::string> unbound = applyBindings(
 			mesh,
 			std::vector<MaterialBinding>{ { "anchor", "Authored/Materials/iron.bmaterial" },
-		                                  { "hull", "Authored/Materials/wood.bmaterial" } });
+		                                  { "hull", "Authored/Materials/wood.bmaterial" } },
+			{});
 		CHECK(unbound == std::vector<std::string>{ "anchor" });
 		// The bindings that do match still land; the report is the caller's to escalate.
 		CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial" });
+	}
+
+	SECTION("overrides land after every default, sorted, sharing a default's slot")
+	{
+		const std::vector<MaterialOverrideBinding> overrides = {
+			{ "sail", "Torn", "Authored/Materials/torn.bmaterial" },
+			{ "hull", "Painted", "Authored/Materials/paint.bmaterial" },
+			{ "hull", "Burnt", "Authored/Materials/cloth.bmaterial" },
+		};
+		CHECK(applyBindings(mesh, bindings, overrides).empty());
+
+		CHECK(
+			mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial",
+		                                                "Authored/Materials/cloth.bmaterial",
+		                                                "Authored/Materials/torn.bmaterial",
+		                                                "Authored/Materials/paint.bmaterial" });
+		CHECK(
+			mesh.materialOverrides == std::vector<SubmeshMaterialOverride>{ { 0, "Burnt", 1 },
+		                                                                    { 0, "Painted", 3 },
+		                                                                    { 1, "Torn", 2 } });
+		// Registering a look never changes what the submesh draws by default.
+		CHECK(mesh.submeshes[0].material == 0);
+		CHECK(mesh.submeshes[2].material == 1);
+	}
+
+	SECTION("an override whose submesh vanished is reported once")
+	{
+		const std::vector<std::string> unbound = applyBindings(
+			mesh,
+			bindings,
+			std::vector<MaterialOverrideBinding>{
+				{ "anchor", "Rusty", "Authored/Materials/rust.bmaterial" },
+				{ "anchor", "Gilded", "Authored/Materials/gold.bmaterial" } });
+		CHECK(unbound == std::vector<std::string>{ "anchor" });
+		CHECK(mesh.materialOverrides.empty());
+	}
+
+	SECTION("overrides survive the codec; a mesh with none writes no chunk")
+	{
+		const std::vector<std::byte> plain = AssetCodec<BMesh>::Serialize(mesh);
+		CHECK(AssetCodec<BMesh>::Deserialize(plain).materialOverrides.empty());
+
+		REQUIRE(applyBindings(
+					mesh,
+					bindings,
+					std::vector<MaterialOverrideBinding>{
+						{ "flag", "Pirate", "Authored/Materials/black.bmaterial" } })
+		            .empty());
+		const std::vector<std::byte> withOverride = AssetCodec<BMesh>::Serialize(mesh);
+		CHECK(withOverride.size() > plain.size());
+
+		const BMesh read = AssetCodec<BMesh>::Deserialize(withOverride);
+		CHECK(read.materialOverrides == mesh.materialOverrides);
+		CHECK(read.materials == mesh.materials);
 	}
 }

@@ -127,8 +127,15 @@ sources are keyed the way a mesh's extracted textures are, below: `envSourceStam
 `c_EnvSourceBakeToken` has no canary pin — the stages it covers run through libm trigonometry, whose
 last bits differ by platform — so its bump is the author's to remember.
 
-`source`, `skeleton` and `outputs` sit outside `parameters`, with `bindings`: none of them changes
-what the importer computes.
+`source`, `skeleton` and `outputs` sit outside `parameters`, with `bindings` and `overrides`: none of
+them changes what the importer computes.
+
+`bindings` names each submesh's default material; `overrides` registers named alternatives per
+submesh (`{"crate[0]": {"Rusty": "Authored/Materials/rust.bmaterial"}}`), omitted when there are
+none. Both are applied over every regenerated mesh by `applyBindings` and carried in the `.bmesh`,
+since `pack` leaves the document behind; an override-only material still takes a slot in the mesh's
+`materials`, so it is a reference the scan, a rename and a deletion see. A re-import keeps the
+overrides — nothing in the source can put them back.
 `outputs` is what makes the derived set answerable from the authored side, which is the only way to
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.
