@@ -1037,6 +1037,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	else
 	{
 		ResetGraph(graphIndex, graph);
+		WireUv1Occlusion(*m_Graphs.At(graphIndex).model, material, m_DataRoot);
 	}
 
 	m_Graphs.At(graphIndex).materialPath = path;

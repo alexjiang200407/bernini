@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
@@ -11,6 +12,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QDoubleSpinBox>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cstddef>
@@ -604,4 +606,99 @@ TEST_CASE("A PBR material saved with no graph opens with its textures wired", "[
 	// The opaque sink has no alpha port, exactly as an import leaves it.
 	CHECK(Route(reopened, PbrChannel::kBaseColorA).texture.empty());
 	CHECK(reopened.pbr.roughnessFactor == Catch::Approx(0.6f));
+}
+
+namespace
+{
+	const QString c_Uv1Occlusion =
+		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex4.ktx2");
+}
+
+TEST_CASE(
+	"A texCoord-1 occlusion map feeds the UV1 port, and ORM red keeps the texCoord-0 one",
+	"[materialimport][uv1]")
+{
+	const assetlib::BMaterial material = Import(
+		{},
+		ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion, c_Uv1Occlusion });
+
+	CHECK(material.uv1OcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
+	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
+}
+
+TEST_CASE("A material with no UV1 occlusion map compiles to none", "[materialimport][uv1]")
+{
+	CHECK(Import({}, AllMaps()).uv1OcclusionTexture.empty());
+}
+
+TEST_CASE("A UV1 occlusion board reopens as the board that produced it", "[materialimport][uv1]")
+{
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, {}, c_Uv1Occlusion });
+
+	QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
+	RebaseGraphTextures(graph, c_DataRoot, false);
+
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	reopened.load(graph);
+
+	CHECK(
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
+		material.uv1OcclusionTexture);
+}
+
+TEST_CASE("A board with no UV1 wire keeps the map its document names", "[materialimport][uv1]")
+{
+	// A board saved before the port existed, or a document the editor never wrote: Save compiles
+	// the board, so a map the board does not show would be dropped on the first save after opening.
+	const assetlib::BMaterial withoutWire = Import({}, AllMaps());
+
+	QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(withoutWire.editorGraph)).object();
+	RebaseGraphTextures(graph, c_DataRoot, false);
+
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	reopened.load(graph);
+
+	auto document                = withoutWire;
+	document.uv1OcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
+
+	WireUv1Occlusion(reopened, document, c_DataRoot);
+	const size_t nodes = reopened.allNodeIds().size();
+
+	CHECK(
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
+		document.uv1OcclusionTexture);
+
+	// Once wired it is the board's, and a second pass places nothing more.
+	WireUv1Occlusion(reopened, document, c_DataRoot);
+	CHECK(reopened.allNodeIds().size() == nodes);
+}
+
+TEST_CASE(
+	"Switching the sink keeps the UV1 wire where the ports before it moved",
+	"[materialimport][uv1]")
+{
+	// A split base colour is three ports on the opaque sink and four on a cutout, so the UV1 port
+	// sits one further along after the switch: moved by index, the wire would land on ORM.
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId outputId = model.addNode(QStringLiteral("MaterialOutput"));
+	PbrSink(model)->load(QJsonObject{ { "split", QJsonArray{ true, false, false } } });
+
+	const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+	model.delegateModel<TextureNode>(textureId)->SetTexturePath(c_Uv1Occlusion);
+	model.addConnection(
+		QtNodes::ConnectionId{ textureId,
+	                           3,  // TextureNode's R port
+	                           outputId,
+	                           PbrSink(model)->Uv1OcclusionPort() });
+	REQUIRE(PbrSink(model)->HasUv1Occlusion());
+
+	REQUIRE(model.SetOutputType(QStringLiteral("AlphaTestedMaterialOutput")));
+
+	CHECK(PbrSink(model)->HasUv1Occlusion());
+	CHECK(
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot).uv1OcclusionTexture ==
+		"Derived/SourceTextures/hydrant/tex4.ktx2");
 }

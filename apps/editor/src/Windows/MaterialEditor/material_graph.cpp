@@ -428,6 +428,9 @@ BuildImportedMaterialGraph(
 		wires.push_back({ maps.orm, c_TextureRgb, output->GroupPort(c_OrmGroup, 0) });
 	}
 
+	wires.push_back(
+		{ maps.uv1Occlusion, c_TextureR, static_cast<unsigned int>(output->Uv1OcclusionPort()) });
+
 	PlaceTextureWires(model, outputId, wires);
 }
 
@@ -457,10 +460,47 @@ BuildPbrMaterialGraph(
 	BuildImportedMaterialGraph(
 		model,
 		imported,
-		ImportedMaterialMaps{ fileOf(assetlib::PbrChannel::kBaseColorR),
-	                          fileOf(assetlib::PbrChannel::kNormalX),
-	                          fileOf(assetlib::PbrChannel::kRoughness),
-	                          fileOf(assetlib::PbrChannel::kAo) });
+		ImportedMaterialMaps{
+			fileOf(assetlib::PbrChannel::kBaseColorR),
+			fileOf(assetlib::PbrChannel::kNormalX),
+			fileOf(assetlib::PbrChannel::kRoughness),
+			fileOf(assetlib::PbrChannel::kAo),
+			Rebase(QString::fromStdString(material.uv1OcclusionTexture), dataRoot, false) });
+}
+
+void
+WireUv1Occlusion(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot)
+{
+	if (material.uv1OcclusionTexture.empty())
+		return;
+
+	const QtNodes::NodeId     outputId = model.OutputNodeId();
+	const MaterialOutputNode* sink = qobject_cast<const MaterialOutputNode*>(model.OutputNode());
+	if (sink == nullptr || sink->HasUv1Occlusion())
+		return;
+
+	double lowest = c_OutputNodeY;
+	for (const QtNodes::NodeId nodeId : model.allNodeIds())
+	{
+		const QPointF position =
+			model.nodeData(nodeId, QtNodes::NodeRole::Position).value<QPointF>();
+		lowest = std::max(lowest, position.y() + c_TextureNodeGap);
+	}
+
+	const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+	model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, lowest));
+	if (auto* texture = model.delegateModel<TextureNode>(textureId))
+		texture->SetTexturePath(
+			Rebase(QString::fromStdString(material.uv1OcclusionTexture), dataRoot, false));
+
+	model.addConnection(
+		QtNodes::ConnectionId{ textureId,
+	                           static_cast<QtNodes::PortIndex>(c_TextureR),
+	                           outputId,
+	                           sink->Uv1OcclusionPort() });
 }
 
 std::optional<QPointF>
