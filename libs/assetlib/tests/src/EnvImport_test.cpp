@@ -1006,6 +1006,31 @@ TEST_CASE("Migrate re-cooks a stale environment; a dry run only names it", "[env
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
+// The document is committed and the container is not, so a checkout that pulls a document another
+// machine re-cooked holds a current document over a container at the old revision. Nothing else
+// rebuilds it: Reimport produces only what is absent, and the re-save walk cannot read it.
+TEST_CASE("A container written at another revision re-cooks its part alone", "[envimport][stale]")
+{
+	const Sandbox sandbox("bernini_envstale_revision");
+	static_cast<void>(ImportGradient(sandbox));
+	const auto lightingAt = WrittenAll(sandbox, c_LightingOutputs);
+
+	// The header's bake token, eight bytes after the magic and the header version.
+	std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
+	REQUIRE(sky.size() > 16);
+	sky[8] = static_cast<std::byte>(static_cast<uint8_t>(sky[8]) ^ 0xffu);
+	core::file::write_atomic(sandbox.DataRoot() / "Derived/Sky/forest.bsky", sky);
+	REQUIRE_THROWS(StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"));
+
+	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
+
+	const MigrateReport report = sandbox.Store().Migrate(false);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK_NOTHROW(StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"));
+	CHECK(WrittenAll(sandbox, c_LightingOutputs) == lightingAt);
+	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
+}
+
 // Reimport would convolve a missing part at the edited parameters, and the refresh would then convolve
 // it whole again: minutes, twice. The refresh runs first, so `Reimport` finds nothing left to write.
 TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]")

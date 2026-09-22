@@ -254,7 +254,11 @@ before any of it runs, which is what makes the count the sink is stepped through
 an environment's key lives in the `.bimport`: the copied source's stamp and `c_EnvSourceBakeToken`
 for the whole document, and a hash of the parameters each part was written with. A source
 re-exported in place or a moved token stales every part the document claims; a hand-edited
-parameter stales only its own part, so re-shaping the sky never re-convolves the lighting. The
+parameter stales only its own part, so re-shaping the sky never re-convolves the lighting. So does
+a part whose container is on disk at another codec revision, read off its header. That is what every
+other checkout holds once one machine has re-cooked and committed the document — the document is
+current and the container is not — and nothing else would rebuild it: `Reimport` produces only
+what is absent, and the re-save walk cannot read what it would re-save. The
 refresh re-cooks the stale parts — each container and the maps it names — and writes the document
 last, so a refresh that fails part-way is still reported stale. `migrate` runs it before its re-save
 walk, which is why a moved codec token on `.bsky` or `.benvl` is safe to ship with the moved
