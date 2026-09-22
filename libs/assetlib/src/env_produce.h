@@ -63,6 +63,15 @@ namespace assetlib
 	{
 		ImageData prefilter;
 		ImageData irradiance;
+
+		// Move-only, following ImageData.
+		LightingMaps()                        = default;
+		LightingMaps(LightingMaps&&) noexcept = default;
+		LightingMaps(const LightingMaps&)     = delete;
+		LightingMaps&
+		operator=(LightingMaps&&) noexcept = default;
+		LightingMaps&
+		operator=(const LightingMaps&) = delete;
 	};
 
 	/** The lighting's counterpart of skyChainOf: minutes of convolution, not seconds. */

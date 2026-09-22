@@ -105,8 +105,10 @@ namespace assetlib
 		prefilterDesc.samples   = parameters.prefilterSamples;
 		prefilterDesc.threads   = threads;
 
-		return { .prefilter  = prefilterRadiance(radiance, prefilterDesc),
-			     .irradiance = irradianceSh(radiance, parameters.irradianceFaceSize) };
+		auto maps       = LightingMaps();
+		maps.prefilter  = prefilterRadiance(radiance, prefilterDesc);
+		maps.irradiance = irradianceSh(radiance, parameters.irradianceFaceSize);
+		return maps;
 	}
 
 	void
