@@ -59,7 +59,7 @@ namespace assetlib
 		// Every top-level key the PBR half owns, so a material of another model can be cleared of
 		// them by name rather than by whatever the writer below happens to emit.
 		constexpr std::array<std::string_view, 9> c_PbrKeys = { {
-			"uv1Occlusion",
+			"geometryOcclusion",
 			"baseColorFactor",
 			"metallicFactor",
 			"roughnessFactor",
@@ -355,7 +355,7 @@ namespace assetlib
 			json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
 			json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
 			json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
-			setOrErase(json, "uv1Occlusion", pbr.uv1OcclusionTexture);
+			setOrErase(json, "geometryOcclusion", pbr.geometryOcclusionTexture);
 
 			// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
 			// key inside `baked` or a route survives this writer too.
@@ -538,7 +538,7 @@ namespace assetlib
 			taker.Take("transmissionFactor", pbr.transmissionFactor);
 			taker.Take("specularColorFactor", pbr.specularColorFactor);
 			taker.Take("specularFactor", pbr.specularFactor);
-			taker.Take("uv1Occlusion", pbr.uv1OcclusionTexture);
+			taker.Take("geometryOcclusion", pbr.geometryOcclusionTexture);
 
 			// Taken whatever the model is, so a surface's keys never ride `extraJson` back out
 			// beside the ones written from the struct.

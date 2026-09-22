@@ -373,13 +373,13 @@ TEST_CASE("AssetManager acquires a material's textures with it", "[gamelib][asse
 
 // The map is every model's, so it rides the record whatever else the material draws from, and is
 // held and let go with it like the rest.
-TEST_CASE("AssetManager holds a material's UV1 occlusion map with it", "[gamelib][assets]")
+TEST_CASE("AssetManager holds a material's geometry occlusion map with it", "[gamelib][assets]")
 {
-	Fixture fx("bernini_am_uv1_occlusion");
+	Fixture fx("bernini_am_geometry_occlusion");
 	WriteTexture(fx.root.path / "Textures" / "wall_ao.ktx2");
 
-	auto material                    = assetlib::BMaterial();
-	material.pbr.uv1OcclusionTexture = "Textures/wall_ao.ktx2";
+	auto material                         = assetlib::BMaterial();
+	material.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
 	SaveAt(material, fx.root.path / "Authored/Materials" / "wall.bmaterial");
 
 	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/wall.bmaterial");
@@ -737,21 +737,21 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	baked.pbr.normalTexture    = "Textures/nrm.ktx2";
 	baked.pbr.ormTexture       = "Textures/orm.ktx2";
 
-	// The UV1 occlusion map follows, last in both PBR cases, empty when the material names none.
+	// The geometry occlusion map follows, last in both PBR cases, empty when the material names none.
 	CHECK(
 		game::MaterialTextures(baked, false) == std::vector<std::string>{ "Textures/base.ktx2",
 	                                                                      "Textures/nrm.ktx2",
 	                                                                      "Textures/orm.ktx2",
 	                                                                      "" });
 
-	baked.pbr.uv1OcclusionTexture = "Textures/wall_ao.ktx2";
+	baked.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
 	CHECK(game::MaterialTextures(baked, false).back() == "Textures/wall_ao.ktx2");
 
 	// A loose material is its authoring routes instead, one slot per channel, unrouted ones empty.
-	auto loose                        = assetlib::BMaterial();
-	loose.pbr.routes[0].texture       = "Textures/albedo.ktx2";
-	loose.pbr.uv1OcclusionTexture     = "Textures/wall_ao.ktx2";
-	const std::vector<std::string> ch = game::MaterialTextures(loose, true);
+	auto loose                         = assetlib::BMaterial();
+	loose.pbr.routes[0].texture        = "Textures/albedo.ktx2";
+	loose.pbr.geometryOcclusionTexture = "Textures/wall_ao.ktx2";
+	const std::vector<std::string> ch  = game::MaterialTextures(loose, true);
 
 	REQUIRE(ch.size() == assetlib::c_LooseChannelCount + 1);
 	CHECK(ch[0] == "Textures/albedo.ktx2");

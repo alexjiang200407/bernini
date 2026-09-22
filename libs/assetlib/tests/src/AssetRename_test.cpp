@@ -385,14 +385,14 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 	}
 }
 
-TEST_CASE("Renaming a texture re-points the material's UV1 occlusion map", "[assetrename]")
+TEST_CASE("Renaming a texture re-points the material's geometry occlusion map", "[assetrename]")
 {
-	const DataRoot root("bernini_rename_uv1_occlusion");
+	const DataRoot root("bernini_rename_geometry_occlusion");
 
 	WriteSource(root.path / "Derived/SourceTextures" / "ao.ktx2", { { 128, 128, 128, 255 } });
 
 	BMaterial material;
-	material.pbr.uv1OcclusionTexture = "Derived/SourceTextures/ao.ktx2";
+	material.pbr.geometryOcclusionTexture = "Derived/SourceTextures/ao.ktx2";
 	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
 
 	REQUIRE(
@@ -402,7 +402,7 @@ TEST_CASE("Renaming a texture re-points the material's UV1 occlusion map", "[ass
 	CHECK(
 		StoreAt(root.path)
 			.Load<BMaterial>("Authored/Materials/mat.bmaterial")
-			.pbr.uv1OcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
+			.pbr.geometryOcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
 	CHECK(root.Scan().broken.empty());
 }
 

@@ -1318,7 +1318,7 @@ namespace assetlib
 		/**
 		 * The occlusion map a glTF material names, mapped into imp::BMeshImport::textures and filed
 		 * by the UV set that addresses it: TEXCOORD_0 into `occlusionTexture`, which takes ORM red,
-		 * and TEXCOORD_1 into `uv1OcclusionTexture`, which multiplies it.
+		 * and TEXCOORD_1 into `geometryOcclusionTexture`, which multiplies it.
 		 *
 		 * Any other set is refused rather than sampled through one of those two, which would be the
 		 * wrong parameterisation for a map baked against another.
@@ -1353,7 +1353,7 @@ namespace assetlib
 
 			const uint32_t texture = mapTexture(model, occlusion.index, imageToTexture);
 			if (occlusion.texCoord == 1)
-				material.uv1OcclusionTexture = texture;
+				material.geometryOcclusionTexture = texture;
 			else
 				material.occlusionTexture = texture;
 		}

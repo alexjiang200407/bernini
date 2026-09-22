@@ -73,7 +73,7 @@ namespace editor
 			                          texturePath(source.normalTexture),
 			                          texturePath(source.ormTexture),
 			                          texturePath(source.occlusionTexture),
-			                          texturePath(source.uv1OcclusionTexture) });
+			                          texturePath(source.geometryOcclusionTexture) });
 
 			const assetlib::AssetStore store(dataRoot);
 			store.Save(CompileMaterial(model, stem, dataRoot), store.KeyFor(file));

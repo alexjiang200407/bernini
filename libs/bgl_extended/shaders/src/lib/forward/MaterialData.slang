@@ -56,7 +56,7 @@ public struct MaterialData
     // The occlusion `map` holds at `uv1`, or 1 on a mesh without a second UV set. Sampled either
     // way, so the implicit derivatives stay in uniform control flow. Clamped rather than wrapped:
     // a unique unwrap has no neighbour across its edge.
-    public float SampleUv1Occlusion(Texture2D.Handle map, float2 uv1)
+    public float SampleGeometryOcclusion(Texture2D.Handle map, float2 uv1)
     {
         let occlusion = map.Sample(linearClampSampler, uv1).r;
         return HasUv1(uv1) ? occlusion : 1.0;
@@ -141,7 +141,7 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     float2 GetNormalXY(float2 uv) { return materialData.GetTextureAt(byteOffset, 1).Sample(materialData.anisoLinearWrapSampler, uv).xy; }
 
-    float GetUv1Occlusion(float2 uv1) { return materialData.SampleUv1Occlusion(materialData.GetTextureAt(byteOffset, 3), uv1); }
+    float GetGeometryOcclusion(float2 uv1) { return materialData.SampleGeometryOcclusion(materialData.GetTextureAt(byteOffset, 3), uv1); }
 
     float GetAlphaCutoff() { return payload.alphaCutoff; }
 
@@ -223,9 +223,9 @@ public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
         ); // Y
     }
 
-    float GetUv1Occlusion(float2 uv1)
+    float GetGeometryOcclusion(float2 uv1)
     {
-        return materialData.SampleUv1Occlusion(materialData.GetTextureAt(byteOffset, cLooseChannelCount), uv1);
+        return materialData.SampleGeometryOcclusion(materialData.GetTextureAt(byteOffset, cLooseChannelCount), uv1);
     }
 
     float GetAlphaCutoff() { return payload.alphaCutoff; }

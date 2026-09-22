@@ -21,7 +21,7 @@ struct PbrLikeParams
     NormalSlot normal;
 
     // Geometry AO through the second UV set, taken the way a game's surface takes any map.
-    DataSlot uv1Occlusion;
+    DataSlot geometryOcclusion;
 };
 
 struct PbrLikeSurface : ISurfaceSource
@@ -41,8 +41,8 @@ struct PbrLikeSurface : ISurfaceSource
         surface.baseColor = reader.Sample(params.baseColor, uv) * params.baseColorFactor;
         surface.orm = reader.Sample(params.orm, uv).rgb * float3(1.0, params.roughnessFactor, params.metallicFactor);
 
-        let uv1Occlusion = reader.Sample(params.uv1Occlusion, reader.Uv1()).r;
-        surface.orm.r *= reader.HasUv1() ? uv1Occlusion : 1.0;
+        let geometryOcclusion = reader.Sample(params.geometryOcclusion, reader.Uv1()).r;
+        surface.orm.r *= reader.HasUv1() ? geometryOcclusion : 1.0;
         surface.normalXY = reader.Sample(params.normal, uv).xy;
         return surface;
     }

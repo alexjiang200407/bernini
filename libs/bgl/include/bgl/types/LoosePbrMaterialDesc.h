@@ -33,6 +33,6 @@ namespace bgl
 		std::array<ChannelRouteDesc, 2> normal;     // X, Y (Z reconstructed in shader)
 
 		// Sampled whole, never routed; see PbrMaterialDesc.
-		TextureAssetHandle uv1OcclusionTexture;
+		TextureAssetHandle geometryOcclusionTexture;
 	};
 }

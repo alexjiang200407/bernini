@@ -102,7 +102,7 @@ namespace assetlib
 		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied with
 		// the ORM's own; empty when absent. Sampled whole: not routed, not baked. A surface takes the
 		// same map through a slot of its own instead.
-		std::string uv1OcclusionTexture;
+		std::string geometryOcclusionTexture;
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;

@@ -306,7 +306,7 @@ TEST_CASE("Switching the output type keeps the sink's settings", "[materialgraph
 	REQUIRE(sink->RoughnessFactor() == 0.75f);
 
 	// And so does the port layout: a cutout's base colour splits into four, not the opaque three --
-	// then ORM, normal and the UV1 occlusion port.
+	// then ORM, normal and the geometry occlusion port.
 	REQUIRE(sink->nPorts(QtNodes::PortType::In) == 7u);
 }
 

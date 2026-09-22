@@ -75,7 +75,7 @@ TEST_CASE("A material output starts with one port per group", "[materialoutput]"
 	const MaterialOutputNode node;
 
 	// A group of more than one channel shows one wide port until it is split, so three groups are
-	// three ports -- not the nine channels behind them -- and the UV1 occlusion port follows them.
+	// three ports -- not the nine channels behind them -- and the geometry occlusion port follows them.
 	REQUIRE(node.nPorts(PortType::In) == 4u);
 
 	SECTION("and each collapsed port takes its whole group's width")
@@ -92,7 +92,7 @@ TEST_CASE("A material output starts with one port per group", "[materialoutput]"
 		REQUIRE(node.portCaption(PortType::In, kBaseColorPort) == QString("Base Color"));
 		REQUIRE(node.portCaption(PortType::In, kOrmPort) == QString("ORM"));
 		REQUIRE(node.portCaption(PortType::In, kNormalPort) == QString("Normal"));
-		REQUIRE(node.portCaption(PortType::In, 3) == QString("Occlusion (UV1)"));
+		REQUIRE(node.portCaption(PortType::In, 3) == QString("Geometry Occlusion (UV1)"));
 		REQUIRE(node.portCaption(PortType::In, 4).isEmpty());
 	}
 
@@ -215,7 +215,7 @@ TEST_CASE("Splitting a group gives it a port per channel", "[materialoutput]")
 	{
 		node.load(State(true, true, true));
 
-		// 3 base + 3 ORM + 2 normal, then UV1 occlusion. No opaque base alpha.
+		// 3 base + 3 ORM + 2 normal, then geometry occlusion. No opaque base alpha.
 		REQUIRE(node.nPorts(PortType::In) == 9u);
 
 		const QStringList expected = { "Base R",    "Base G",   "Base B",   "AO",
@@ -305,7 +305,7 @@ TEST_CASE("A material output round-trips its factors and its splits", "[material
 	REQUIRE(reloaded.RoughnessFactor() == 0.875f);
 
 	// The split state has to survive too, or a reloaded graph would have fewer ports than the
-	// connections saved alongside it refer to. 3 base + 1 ORM + 2 normal + UV1 occlusion.
+	// connections saved alongside it refer to. 3 base + 1 ORM + 2 normal + geometry occlusion.
 	REQUIRE(reloaded.nPorts(PortType::In) == saved.nPorts(PortType::In));
 	REQUIRE(reloaded.nPorts(PortType::In) == 7u);
 }

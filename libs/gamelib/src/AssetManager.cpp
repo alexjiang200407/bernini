@@ -237,7 +237,7 @@ namespace game
 
 	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
 	// them (a loose slot expanding to its four route sources in place), or the baked triplet or the
-	// nine authoring routes followed by the UV1 occlusion map. One order per case, in one place, so
+	// nine authoring routes followed by the geometry occlusion map. One order per case, in one place, so
 	// the record's texture references and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
 	MaterialTextures(
@@ -282,7 +282,7 @@ namespace game
 				      material.pbr.ormTexture };
 		}
 
-		paths.push_back(material.pbr.uv1OcclusionTexture);
+		paths.push_back(material.pbr.geometryOcclusionTexture);
 		return paths;
 	}
 
@@ -1593,7 +1593,7 @@ namespace game
 		desc.normalTexture    = record.textures[1];
 		desc.ormTexture       = record.textures[2];
 
-		desc.uv1OcclusionTexture = record.textures.back();
+		desc.geometryOcclusionTexture = record.textures.back();
 
 		return desc;
 	}
@@ -1689,7 +1689,7 @@ namespace game
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(assetlib::channelIndex(assetlib::c_NormalChannels, i));
 
-		desc.uv1OcclusionTexture = record.textures.back();
+		desc.geometryOcclusionTexture = record.textures.back();
 
 		return desc;
 	}

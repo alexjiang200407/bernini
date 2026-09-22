@@ -184,19 +184,19 @@ TEST_CASE("FindUnusedBakedTextures keeps a map another material still shares", "
 
 TEST_CASE("FindUnusedBakedTextures keeps a map a material samples through UV1", "[texture_prune]")
 {
-	const DataRoot root("bernini_prune_uv1_occlusion");
+	const DataRoot root("bernini_prune_geometry_occlusion");
 
 	WriteSource(root.path / "a.ktx2", 16, { { 10, 60, 90, 255 } });
 	WriteSource(root.path / "b.ktx2", 16, { { 90, 60, 10, 255 } });
 
-	// A baked map, then the material that baked it moves on -- only the UV1 key still names it.
+	// A baked map, then the material that baked it moves on -- only the geometry occlusion key still names it.
 	BMaterial  rebaked = BakeAndSave(root, "rebaked.bmaterial", "a.ktx2");
 	const auto map     = rebaked.pbr.baseColorTexture;
 	rebaked            = BakeAndSave(root, "rebaked.bmaterial", "b.ktx2");
 	REQUIRE(rebaked.pbr.baseColorTexture != map);
 
 	BMaterial occluded;
-	occluded.pbr.uv1OcclusionTexture = map;
+	occluded.pbr.geometryOcclusionTexture = map;
 	StoreAt(root.path).Save(occluded, "Authored/Materials/occluded.bmaterial");
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();

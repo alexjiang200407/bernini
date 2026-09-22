@@ -124,17 +124,17 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 	}
 }
 
-// The renderer samples the UV1 map directly, so it is held like a baked map rather than like a
+// The renderer samples the geometry occlusion map directly, so it is held like a baked map rather than like a
 // source the bake reads.
-TEST_CASE("A PBR material's UV1 occlusion map is held", "[assetrefs]")
+TEST_CASE("A PBR material's geometry occlusion map is held", "[assetrefs]")
 {
-	const DataRoot root("bernini_refs_uv1_occlusion");
+	const DataRoot root("bernini_refs_geometry_occlusion");
 
 	const std::string map = "Derived/SourceTextures/wall_ao.ktx2";
 	WriteSource(root.path / map, { { 128, 128, 128, 255 } });
 
 	BMaterial material;
-	material.pbr.uv1OcclusionTexture = map;
+	material.pbr.geometryOcclusionTexture = map;
 	StoreAt(root.path).Save(material, "Authored/Materials/wall.bmaterial");
 
 	const AssetRefGraph graph     = root.Scan();

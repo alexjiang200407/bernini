@@ -105,9 +105,9 @@ struct ImportedMaterialMaps
 	// material that names none.
 	QString occlusion;
 
-	// The occlusion map addressed through TEXCOORD_1, which feeds the sink's UV1 port rather than
+	// The occlusion map addressed through TEXCOORD_1, which feeds the sink's geometry occlusion port rather than
 	// ORM red.
-	QString uv1Occlusion;
+	QString geometryOcclusion;
 };
 
 /** Whether a saved board holds a node of the registered node type `modelName` -- QtNodes' model
@@ -144,13 +144,13 @@ BuildPbrMaterialGraph(
 	const std::filesystem::path& dataRoot);
 
 /**
- * Wires `material`'s UV1 occlusion map into the PBR sink of `model` when the document names one and
+ * Wires `material`'s geometry occlusion map into the PBR sink of `model` when the document names one and
  * the board does not: a board saved before the port existed, or by a document the editor never
  * wrote, would otherwise compile the map away on its next Save. A Texture node is placed below the
  * rest. A surface's sink has no such port and is left alone.
  */
 void
-WireUv1Occlusion(
+WireGeometryOcclusion(
 	MaterialGraphModel&          model,
 	const assetlib::BMaterial&   material,
 	const std::filesystem::path& dataRoot);

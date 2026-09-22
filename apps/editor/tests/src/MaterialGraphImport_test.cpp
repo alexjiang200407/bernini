@@ -610,31 +610,36 @@ TEST_CASE("A PBR material saved with no graph opens with its textures wired", "[
 
 namespace
 {
-	const QString c_Uv1Occlusion =
+	const QString c_GeometryOcclusion =
 		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex4.ktx2");
 }
 
 TEST_CASE(
-	"A texCoord-1 occlusion map feeds the UV1 port, and ORM red keeps the texCoord-0 one",
-	"[materialimport][uv1]")
+	"A texCoord-1 occlusion map feeds the geometry occlusion port, and ORM red keeps the "
+	"texCoord-0 one",
+	"[materialimport][geometryao]")
 {
 	const assetlib::BMaterial material = Import(
 		{},
-		ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion, c_Uv1Occlusion });
+		ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion, c_GeometryOcclusion });
 
-	CHECK(material.pbr.uv1OcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
+	CHECK(material.pbr.geometryOcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
 	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
 }
 
-TEST_CASE("A material with no UV1 occlusion map compiles to none", "[materialimport][uv1]")
+TEST_CASE(
+	"A material with no geometry occlusion map compiles to none",
+	"[materialimport][geometryao]")
 {
-	CHECK(Import({}, AllMaps()).pbr.uv1OcclusionTexture.empty());
+	CHECK(Import({}, AllMaps()).pbr.geometryOcclusionTexture.empty());
 }
 
-TEST_CASE("A UV1 occlusion board reopens as the board that produced it", "[materialimport][uv1]")
+TEST_CASE(
+	"A geometry occlusion board reopens as the board that produced it",
+	"[materialimport][geometryao]")
 {
 	const assetlib::BMaterial material =
-		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, {}, c_Uv1Occlusion });
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, {}, c_GeometryOcclusion });
 
 	QJsonObject graph =
 		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
@@ -644,11 +649,13 @@ TEST_CASE("A UV1 occlusion board reopens as the board that produced it", "[mater
 	reopened.load(graph);
 
 	CHECK(
-		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
-		material.pbr.uv1OcclusionTexture);
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == material.pbr.geometryOcclusionTexture);
 }
 
-TEST_CASE("A board with no UV1 wire keeps the map its document names", "[materialimport][uv1]")
+TEST_CASE(
+	"A board with no geometry occlusion wire keeps the map its document names",
+	"[materialimport][geometryao]")
 {
 	// A board saved before the port existed, or a document the editor never wrote: Save compiles
 	// the board, so a map the board does not show would be dropped on the first save after opening.
@@ -661,44 +668,44 @@ TEST_CASE("A board with no UV1 wire keeps the map its document names", "[materia
 	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
 	reopened.load(graph);
 
-	auto document                    = withoutWire;
-	document.pbr.uv1OcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
+	auto document                         = withoutWire;
+	document.pbr.geometryOcclusionTexture = "Derived/SourceTextures/hydrant/tex4.ktx2";
 
-	WireUv1Occlusion(reopened, document, c_DataRoot);
+	WireGeometryOcclusion(reopened, document, c_DataRoot);
 	const size_t nodes = reopened.allNodeIds().size();
 
 	CHECK(
-		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
-		document.pbr.uv1OcclusionTexture);
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == document.pbr.geometryOcclusionTexture);
 
 	// Once wired it is the board's, and a second pass places nothing more.
-	WireUv1Occlusion(reopened, document, c_DataRoot);
+	WireGeometryOcclusion(reopened, document, c_DataRoot);
 	CHECK(reopened.allNodeIds().size() == nodes);
 }
 
 TEST_CASE(
-	"Switching the sink keeps the UV1 wire where the ports before it moved",
-	"[materialimport][uv1]")
+	"Switching the sink keeps the geometry occlusion wire where the ports before it moved",
+	"[materialimport][geometryao]")
 {
-	// A split base colour is three ports on the opaque sink and four on a cutout, so the UV1 port
+	// A split base colour is three ports on the opaque sink and four on a cutout, so the geometry occlusion port
 	// sits one further along after the switch: moved by index, the wire would land on ORM.
 	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
 	const QtNodes::NodeId outputId = model.addNode(QStringLiteral("MaterialOutput"));
 	PbrSink(model)->load(QJsonObject{ { "split", QJsonArray{ true, false, false } } });
 
 	const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
-	model.delegateModel<TextureNode>(textureId)->SetTexturePath(c_Uv1Occlusion);
+	model.delegateModel<TextureNode>(textureId)->SetTexturePath(c_GeometryOcclusion);
 	model.addConnection(
 		QtNodes::ConnectionId{ textureId,
 	                           3,  // TextureNode's R port
 	                           outputId,
-	                           PbrSink(model)->Uv1OcclusionPort() });
-	REQUIRE(PbrSink(model)->HasUv1Occlusion());
+	                           PbrSink(model)->GeometryOcclusionPort() });
+	REQUIRE(PbrSink(model)->HasGeometryOcclusion());
 
 	REQUIRE(model.SetOutputType(QStringLiteral("AlphaTestedMaterialOutput")));
 
-	CHECK(PbrSink(model)->HasUv1Occlusion());
+	CHECK(PbrSink(model)->HasGeometryOcclusion());
 	CHECK(
-		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot).pbr.uv1OcclusionTexture ==
-		"Derived/SourceTextures/hydrant/tex4.ktx2");
+		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot)
+			.pbr.geometryOcclusionTexture == "Derived/SourceTextures/hydrant/tex4.ktx2");
 }
