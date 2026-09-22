@@ -5,6 +5,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <gamelib/shading_model.h>
 
 #include <QColor>
 #include <QColorDialog>
@@ -159,7 +160,7 @@ SurfaceOutputNode::ChannelPortFor(size_t slot, uint32_t component) const
 QtNodes::NodeDataType
 SurfaceOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::Type(1);
+	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::ScalarType();
 }
 
 void
@@ -494,7 +495,9 @@ void
 SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
 	const
 {
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	// The registered surface's own contract decides the model, so a lit surface's document says
+	// what its module says and a save never demotes one to the engine-lit model.
+	material.shadingModel = game::ToShadingModel(m_Surface.shading);
 
 	material.layer.alphaMode   = m_AlphaMode;
 	material.layer.alphaCutoff = m_AlphaCutoff;

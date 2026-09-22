@@ -26,9 +26,10 @@ namespace assetlib
 		std::vector<Mesh>     meshes;
 		std::vector<Submesh>  submeshes;
 
-		std::vector<Meshlet>  meshlets;
-		std::vector<uint32_t> meshletVertices;   // meshopt vertex remap
-		std::vector<uint8_t>  meshletTriangles;  // meshopt local indices, 3 per triangle
+		std::vector<Meshlet>      meshlets;
+		std::vector<MeshletGroup> meshletGroups;     // one bound per c_MeshletsPerGroup meshlets
+		std::vector<uint32_t>     meshletVertices;   // meshopt vertex remap
+		std::vector<uint8_t>      meshletTriangles;  // meshopt local indices, 3 per triangle
 
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
 		std::vector<std::byte> indexData;   // all index buffers; unread by bgl, see Submesh

@@ -15,7 +15,6 @@
 #include <core/err/util.h>
 #include <cstdint>
 #include <filesystem>
-#include <initializer_list>
 #include <optional>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -23,8 +22,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "env_bake.h"
 #include "env_parts.h"
-#include "fs_util.h"
 #include "ref_paths.h"
 
 namespace assetlib
@@ -40,14 +39,6 @@ namespace assetlib
 			if (sink)
 				sink(key);
 		}
-
-		void
-		writeFloatCube(const AssetStore& store, const std::string& key, const ImageData& image)
-		{
-			const std::filesystem::path path = store.ResolveWritePath(key);
-			createDirectories(path.parent_path());
-			writeKTX2(image, path, false, Ktx2Compression::kNone);
-		}
 	}
 
 	EnvironmentInput::EnvironmentInput(const std::filesystem::path& source) :
@@ -55,8 +46,8 @@ namespace assetlib
 	{
 		m_Input = m_Equirect ? loadRadianceHdr(source) : loadKTX2(source);
 
-		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
-		// gone. Re-convolving one is a recovery path, not the one to reach for.
+		// A baked map imported as a source is a recovery path, not the one to reach for: re-convolving
+		// it quantizes a second time.
 		if (m_Input.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
 		{
 			spdlog::warn(
@@ -79,6 +70,47 @@ namespace assetlib
 		return it->second;
 	}
 
+	ImageData
+	skyChainOf(
+		EnvironmentInput&                  input,
+		const EnvironmentImportParameters& parameters,
+		uint32_t                           threads)
+	{
+		// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it belongs
+		// on the `.benv` document where a viewer can change it.
+		//
+		// Clamped rather than refused: a sky too small for the requested chain is a small sky, not a
+		// bad request.
+		const auto maxMips =
+			static_cast<uint32_t>(std::bit_width(std::max(parameters.skyFaceSize, 1u)));
+		return skyChain(
+			input.CubeAt(parameters.skyFaceSize),
+			parameters.skyFaceSize,
+			std::clamp(parameters.skyMips, 1u, maxMips),
+			c_SkyChainSamples,
+			threads);
+	}
+
+	LightingMaps
+	lightingMapsOf(
+		EnvironmentInput&                  input,
+		const EnvironmentImportParameters& parameters,
+		uint32_t                           threads)
+	{
+		const ImageData& radiance = input.CubeAt(lightingProjectionSize(parameters));
+
+		auto prefilterDesc      = PrefilterDesc();
+		prefilterDesc.faceSize  = parameters.prefilterFaceSize;
+		prefilterDesc.mipLevels = parameters.prefilterMips;
+		prefilterDesc.samples   = parameters.prefilterSamples;
+		prefilterDesc.threads   = threads;
+
+		auto maps       = LightingMaps();
+		maps.prefilter  = prefilterRadiance(radiance, prefilterDesc);
+		maps.irradiance = irradianceSh(radiance, parameters.irradianceFaceSize);
+		return maps;
+	}
+
 	void
 	produceSky(
 		const AssetStore&                  store,
@@ -86,104 +118,67 @@ namespace assetlib
 		const EnvironmentImportParameters& parameters,
 		uint32_t                           threads,
 		std::string_view                   name,
-		const SkyTargets&                  targets,
+		const std::string&                 sourceKey,
+		const SourceStamp&                 stamp,
+		const std::string&                 containerKey,
 		const EnvironmentFileSink&         beforeWrite,
 		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel)
 	{
-		if (targets.source.write)
-		{
-			throwIfCancelled(cancel);
+		throwIfCancelled(cancel);
+		const ImageData chain = skyChainOf(input, parameters, threads);
 
-			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
-			// belongs on the `.benv` document where a viewer can change it.
-			//
-			// Clamped rather than refused: a sky too small for the requested chain is a small sky,
-			// not a bad request.
-			const auto maxMips =
-				static_cast<uint32_t>(std::bit_width(std::max(parameters.skyFaceSize, 1u)));
-			const ImageData chain = skyChain(
-				input.CubeAt(parameters.skyFaceSize),
-				parameters.skyFaceSize,
-				std::clamp(parameters.skyMips, 1u, maxMips),
-				c_SkyChainSamples,
-				threads);
+		auto bsky       = BSky();
+		bsky.name       = std::string(name);
+		bsky.sky.source = sourceKey;
 
-			notify(beforeWrite, targets.source.key);
-			writeFloatCube(store, targets.source.key, chain);
-			notify(afterWrite, targets.source.key);
-		}
+		throwIfCancelled(cancel);
+		bakeSkyFrom(
+			bsky,
+			chain,
+			stamp,
+			partParametersHashOf(parameters, EnvironmentPart::kSky),
+			store.GetDataRoot());
 
-		if (targets.container.write)
-		{
-			auto bsky       = BSky();
-			bsky.name       = std::string(name);
-			bsky.sky.source = targets.source.key;
-
-			throwIfCancelled(cancel);
-			store.BakeSky(bsky, cancel);
-
-			notify(beforeWrite, targets.container.key);
-			store.Save(bsky, targets.container.key);
-			notify(afterWrite, targets.container.key);
-		}
+		notify(beforeWrite, containerKey);
+		store.Save(bsky, containerKey);
+		notify(afterWrite, containerKey);
 	}
 
-	std::optional<float>
+	float
 	produceLighting(
 		const AssetStore&                  store,
 		EnvironmentInput&                  input,
 		const EnvironmentImportParameters& parameters,
 		uint32_t                           threads,
 		std::string_view                   name,
-		const LightingTargets&             targets,
+		const std::string&                 sourceKey,
+		const SourceStamp&                 stamp,
+		const std::string&                 containerKey,
 		const EnvironmentFileSink&         beforeWrite,
 		const EnvironmentFileSink&         afterWrite,
 		const CancelToken&                 cancel)
 	{
-		if (targets.irradiance.write)
-		{
-			throwIfCancelled(cancel);
-			const ImageData irradiance = irradianceSh(
-				input.CubeAt(lightingProjectionSize(parameters)),
-				parameters.irradianceFaceSize);
-
-			notify(beforeWrite, targets.irradiance.key);
-			writeFloatCube(store, targets.irradiance.key, irradiance);
-			notify(afterWrite, targets.irradiance.key);
-		}
-
-		if (targets.prefilter.write)
-		{
-			auto prefilterDesc      = PrefilterDesc();
-			prefilterDesc.faceSize  = parameters.prefilterFaceSize;
-			prefilterDesc.mipLevels = parameters.prefilterMips;
-			prefilterDesc.samples   = parameters.prefilterSamples;
-			prefilterDesc.threads   = threads;
-
-			throwIfCancelled(cancel);
-			const ImageData prefilter =
-				prefilterRadiance(input.CubeAt(lightingProjectionSize(parameters)), prefilterDesc);
-
-			notify(beforeWrite, targets.prefilter.key);
-			writeFloatCube(store, targets.prefilter.key, prefilter);
-			notify(afterWrite, targets.prefilter.key);
-		}
-
-		if (!targets.container.write)
-			return std::nullopt;
+		throwIfCancelled(cancel);
+		const LightingMaps maps = lightingMapsOf(input, parameters, threads);
 
 		auto lighting              = BEnvLighting();
 		lighting.name              = std::string(name);
-		lighting.prefilter.source  = targets.prefilter.key;
-		lighting.irradiance.source = targets.irradiance.key;
+		lighting.prefilter.source  = sourceKey;
+		lighting.irradiance.source = sourceKey;
 
 		throwIfCancelled(cancel);
-		store.BakeEnvLighting(lighting, cancel);
+		bakeEnvLightingFrom(
+			lighting,
+			maps.prefilter,
+			maps.irradiance,
+			stamp,
+			partParametersHashOf(parameters, EnvironmentPart::kLighting),
+			store.GetDataRoot());
 
-		notify(beforeWrite, targets.container.key);
-		store.Save(lighting, targets.container.key);
-		notify(afterWrite, targets.container.key);
+		notify(beforeWrite, containerKey);
+		store.Save(lighting, containerKey);
+		notify(afterWrite, containerKey);
 		return lighting.exposure;
 	}
 
@@ -202,73 +197,64 @@ namespace assetlib
 			"'{}': its import document records no environment parameters",
 			sourceKey);
 
-		auto keys = std::unordered_map<EnvironmentOutput, std::string>();
+		auto keys = std::unordered_map<EnvironmentPart, std::string>();
 		for (const std::string& output : document.outputs)
 		{
-			const std::optional<EnvironmentOutput> role = environmentOutputOf(output);
+			const std::optional<EnvironmentPart> part = environmentPartOf(output);
 			core::throw_runtime_error_if(
-				!role,
+				!part,
 				"'{}': its import document claims '{}', which no environment import writes",
 				sourceKey,
 				output);
-			keys[*role] = output;
+			keys[*part] = output;
 		}
 
-		const auto target = [&](EnvironmentOutput role) -> EnvironmentTarget {
-			const std::string& key = keys[role];
-			return { key, std::ranges::find(wanted, key) != wanted.end() };
+		const auto wants = [&](EnvironmentPart part) {
+			const auto found = keys.find(part);
+			return found != keys.end() && std::ranges::find(wanted, found->second) != wanted.end();
 		};
 
-		// A container bakes from the float cubes it routes, so it cannot be produced without
-		// knowing their names.
-		const auto requireFeeds = [&](EnvironmentOutput                        container,
-		                              std::initializer_list<EnvironmentOutput> feeds) {
-			if (keys[container].empty())
-				return;
-			for (const EnvironmentOutput feed : feeds)
-				core::throw_runtime_error_if(
-					keys[feed].empty(),
-					"'{}': its import document claims '{}' but not the float cube it bakes "
-					"from",
-					sourceKey,
-					keys[container]);
-		};
-		requireFeeds(EnvironmentOutput::kSky, { EnvironmentOutput::kSkySource });
-		requireFeeds(
-			EnvironmentOutput::kLighting,
-			{ EnvironmentOutput::kPrefilterSource, EnvironmentOutput::kIrradianceSource });
+		if (!wants(EnvironmentPart::kSky) && !wants(EnvironmentPart::kLighting))
+			return;
 
-		auto input = EnvironmentInput(store.ResolveWritePath(sourceKey));
+		// Taken before the cook, so a source rewritten while a part convolves reads as stale
+		// afterwards rather than as the file those pixels came from.
+		const SourceStamp stamp = store.StampOf(sourceKey);
+		auto              input = EnvironmentInput(store.ResolveWritePath(sourceKey));
 		const EnvironmentImportParameters& parameters = *document.environment;
 
-		const SkyTargets sky = { .source    = target(EnvironmentOutput::kSkySource),
-			                     .container = target(EnvironmentOutput::kSky) };
-		if (sky.source.write || sky.container.write)
+		if (wants(EnvironmentPart::kSky))
+		{
+			const std::string& key = keys[EnvironmentPart::kSky];
 			produceSky(
 				store,
 				input,
 				parameters,
 				0,
-				stemOf(sky.container.key),
-				sky,
+				stemOf(key),
+				sourceKey,
+				stamp,
+				key,
 				beforeWrite,
 				onWritten,
 				cancel);
+		}
 
-		const LightingTargets lighting = { .prefilter = target(EnvironmentOutput::kPrefilterSource),
-			                               .irradiance =
-			                                   target(EnvironmentOutput::kIrradianceSource),
-			                               .container = target(EnvironmentOutput::kLighting) };
-		if (lighting.prefilter.write || lighting.irradiance.write || lighting.container.write)
+		if (wants(EnvironmentPart::kLighting))
+		{
+			const std::string& key = keys[EnvironmentPart::kLighting];
 			static_cast<void>(produceLighting(
 				store,
 				input,
 				parameters,
 				0,
-				stemOf(lighting.container.key),
-				lighting,
+				stemOf(key),
+				sourceKey,
+				stamp,
+				key,
 				beforeWrite,
 				onWritten,
 				cancel));
+		}
 	}
 }

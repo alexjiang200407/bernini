@@ -182,6 +182,28 @@ TEST_CASE("FindUnusedBakedTextures keeps a map another material still shares", "
 	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
 }
 
+TEST_CASE("FindUnusedBakedTextures keeps a map a material samples through UV1", "[texture_prune]")
+{
+	const DataRoot root("bernini_prune_geometry_occlusion");
+
+	WriteSource(root.path / "a.ktx2", 16, { { 10, 60, 90, 255 } });
+	WriteSource(root.path / "b.ktx2", 16, { { 90, 60, 10, 255 } });
+
+	// A baked map, then the material that baked it moves on -- only the geometry occlusion key still names it.
+	BMaterial  rebaked = BakeAndSave(root, "rebaked.bmaterial", "a.ktx2");
+	const auto map     = rebaked.pbr.baseColorTexture;
+	rebaked            = BakeAndSave(root, "rebaked.bmaterial", "b.ktx2");
+	REQUIRE(rebaked.pbr.baseColorTexture != map);
+
+	BMaterial occluded;
+	occluded.pbr.geometryOcclusionTexture = map;
+	StoreAt(root.path).Save(occluded, "Authored/Materials/occluded.bmaterial");
+
+	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
+
+	CHECK(scan.unused.empty());
+}
+
 TEST_CASE("FindUnusedBakedTextures keeps a stale material's baked triplet", "[texture_prune]")
 {
 	// A material whose bake has gone stale renders from its routes, but it still carries the triplet
@@ -309,4 +331,33 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 
 	CHECK(AssetStore(root.path).DeleteUnusedBakedTextures(scan).deleted == 1);
 	CHECK_FALSE(std::filesystem::exists(root.path / orphan));
+}
+
+// The mark phase walks a lit material through the same surface arm (isSurfaceModel). This is the
+// arm's one shipping hazard: an unmarked map is swept as garbage, so a miss here deletes a lit
+// material's composited slot the first time anyone prunes.
+TEST_CASE("FindUnusedBakedTextures keeps a lit surface material's baked slot", "[texture_prune]")
+{
+	const DataRoot root("bernini_prune_lit");
+
+	WriteSource(root.path / "mask.ktx2", 16, { { 200, 200, 200, 255 } });
+
+	BMaterial material;
+	material.shadingModel = ShadingModel::kLitSurface;
+	material.surface.name = "Toon";
+
+	SurfaceTextureBinding wear;
+	wear.name                 = "wear";
+	wear.routes[0]            = { "mask.ktx2", 0 };
+	material.surface.textures = { wear };
+
+	StoreAt(root.path).BakeMaterial(material);
+	StoreAt(root.path).Save(material, "Authored/Materials/toon.bmaterial");
+
+	REQUIRE_FALSE(material.surface.textures[0].bakedPath.empty());
+	REQUIRE(CountMaps(root.Textures()) == 1);
+
+	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
+	CHECK(scan.unused.empty());
+	CHECK(scan.bytes == 0);
 }

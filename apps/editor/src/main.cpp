@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QDialog>
 #include <QMessageBox>
 #include <QProcess>
 #include <QString>
@@ -9,6 +10,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <qbytearrayview.h>
 #include <qcontainerfwd.h>
@@ -22,12 +24,18 @@
 #include <spdlog/common.h>
 #include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 #include "EditorStyle.h"
 #include "MainWindow.h"
+#include "Plugins/plugin_loader.h"
+#include "Startup/ProjectLauncher.h"
 #include "Startup/StartupScreen.h"
+#include "Startup/startup_project.h"
 #include "util/editor_config.h"
 #include "util/qt_logging.h"
+#include "util/recent_projects.h"
 
 namespace
 {
@@ -92,10 +100,73 @@ main(int argc, char* argv[])
 	//
 	// A named path is an explicit ask and outranks the config, which is the precedence every other
 	// setting here follows.
+	const std::filesystem::path configPath   = editor::DefaultConfigPath();
 	const std::filesystem::path reportPath   = MemoryReportPath(argc, argv);
 	auto                        memoryReport = std::optional<core::profiling::MemoryReport>();
-	if (!reportPath.empty() || editor::MemoryReportEnabled(editor::DefaultConfigPath()))
+	if (!reportPath.empty() || editor::MemoryReportEnabled(configPath))
 		memoryReport.emplace(reportPath);
+
+	const auto couldNotStart = [&directory](const std::exception& e) {
+		qCritical("Editor: could not start: %s", e.what());
+
+		QMessageBox::critical(
+			nullptr,
+			QStringLiteral("Bernini Editor"),
+			QStringLiteral("The editor could not start:\n\n%1\n\nSee %2/editor.log.")
+				.arg(QString::fromUtf8(e.what()), directory));
+	};
+
+	// Plugins first, because a project opens against their kinds: every descriptor under plugins/
+	// beside the executable, then whatever config.json adds. The window registers their editor
+	// halves once it builds.
+	auto plugins = std::unique_ptr<editor::plugins::PluginSession>();
+	try
+	{
+		std::vector<std::filesystem::path> directories =
+			editor::plugins::DiscoverPluginDirectories(editor::plugins::DefaultPluginRoot());
+		for (std::filesystem::path& directory :
+		     editor::plugins::ConfiguredPluginDirectories(configPath))
+			directories.push_back(std::move(directory));
+		plugins =
+			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
+				directories,
+				editor::plugins::CurrentBuildIdentity(),
+				editor::plugins::DefaultPluginCopyRoot()));
+	}
+	catch (const std::exception& e)
+	{
+		couldNotStart(e);
+		return 1;
+	}
+
+	// Opened before anything is built, because the project decides which surfaces the renderer
+	// compiles: without one there is nothing to compile for, and the landing page asks instead.
+	auto startupProject = editor::StartupProject();
+	try
+	{
+		startupProject = editor::OpenStartupProject(ProjectArgument(), configPath, *plugins);
+	}
+	catch (const std::exception& e)
+	{
+		couldNotStart(e);
+		return 1;
+	}
+
+	if (!startupProject.project)
+	{
+		// Nothing is on screen between the launcher closing on a choice and the startup screen
+		// showing, which Qt may take for the last window closing and quit on.
+		QApplication::setQuitOnLastWindowClosed(false);
+
+		editor::ProjectLauncher launcher(
+			editor::ReadRecentProjects(editor::RecentProjectsFileBeside(configPath)),
+			*plugins,
+			startupProject.failure);
+		if (launcher.exec() != QDialog::Accepted)
+			return 0;
+
+		startupProject.project.emplace(launcher.TakeProject());
+	}
 
 	// Up before the window, because building the window is what takes the time: the renderer
 	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
@@ -103,10 +174,9 @@ main(int argc, char* argv[])
 	editor::StartupScreen startup(QStringLiteral("Bernini Editor"));
 	startup.show();
 
-	// Building the window reads config.json and creates the device, and both fail on a machine rather
-	// than in the code -- an unusable config, a driver that will not create a device, a budget too
-	// large to allocate. Reported rather than left to terminate: a crash log is what a bug leaves,
-	// and none of these is one.
+	// Building the window creates the device, which fails on a machine rather than in the code -- a
+	// driver that will not create a device, a budget too large to allocate. Reported rather than left
+	// to terminate: a crash log is what a bug leaves, and none of these is one.
 	auto window = std::optional<MainWindow>();
 	try
 	{
@@ -115,26 +185,23 @@ main(int argc, char* argv[])
 		// wall clock of a cold start is made of nests under this.
 		ZoneScopedN("editor startup");
 
-		window.emplace(nullptr, std::filesystem::path(), startup.Sink(), ProjectArgument());
+		window.emplace(
+			std::move(plugins),
+			std::move(*startupProject.project),
+			configPath,
+			startup.Sink());
 	}
 	catch (const std::exception& e)
 	{
-		qCritical("Editor: could not start: %s", e.what());
-
 		startup.hide();
-
-		QMessageBox::critical(
-			nullptr,
-			QStringLiteral("Bernini Editor"),
-			QStringLiteral("The editor could not start:\n\n%1\n\nSee %2/editor.log.")
-				.arg(QString::fromUtf8(e.what()), directory));
-
+		couldNotStart(e);
 		return 1;
 	}
 
 	// Hidden only once the window is up, so the desktop is never showing neither of them.
 	window->show();
 	startup.hide();
+	QApplication::setQuitOnLastWindowClosed(true);
 
 	const int status = app.exec();
 

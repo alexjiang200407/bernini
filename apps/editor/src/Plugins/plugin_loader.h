@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assetlib/AssetKindRegistry.h>
+#include <assetlib/Project.h>
 #include <editor_api/IEditorPlugin.h>
 #include <filesystem>
 #include <memory>
@@ -54,17 +55,25 @@ namespace editor::plugins
 
 		/**
 		 * Loads every plugin in `directories`, in that order, after validating all of their
-		 * descriptors against `build`. Throws naming the plugin on a descriptor that is missing,
-		 * malformed, built for another engine or older than the SDK stamp, and on a kind or
-		 * contribution collision between two of them.
+		 * descriptors against `build`, and registers their runtime kinds. Throws naming the plugin
+		 * on a descriptor that is missing, malformed, built for another engine or older than the
+		 * SDK stamp, and on a kind collision between two of them. Editor contributions wait for
+		 * RegisterEditorPlugins: this runs before any project or window exists.
 		 */
 		[[nodiscard]] static PluginSession
 		Load(
 			std::span<const std::filesystem::path> directories,
 			const BuildIdentity&                   build,
 			const std::filesystem::path&           pluginCopyRoot,
-			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault,
-			EditorPluginPtr      builtIn  = {});
+			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault);
+
+		/**
+		 * Registers the host-linked plugin, then every loaded editor module, into Contributions().
+		 * GUI thread, once, as the window builds; throws on a contribution collision, leaving the
+		 * earlier registrations standing.
+		 */
+		void
+		RegisterEditorPlugins(EditorPluginPtr builtIn = {});
 
 		/** The loaded plugins' IDs, in load order; the host-linked plugin has none. */
 		[[nodiscard]] const std::vector<std::string>&
@@ -113,4 +122,12 @@ namespace editor::plugins
 	MissingRequiredPlugins(
 		std::span<const std::string> loaded,
 		std::span<const std::string> required);
+
+	/**
+	 * Opens `projectFile` against the session's kinds. Throws, naming the plugins and where to put
+	 * them, when the project lists one the session did not load: a kind the store cannot read is a
+	 * document the reference scan, rename and pack silently pass over.
+	 */
+	[[nodiscard]] assetlib::Project
+	OpenProjectWithPlugins(const std::filesystem::path& projectFile, const PluginSession& session);
 }

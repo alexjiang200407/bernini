@@ -28,7 +28,6 @@
 #include <utility>
 #include <vector>
 
-#include "env_parts.h"
 #include "fs_util.h"
 #include "ref_paths.h"
 
@@ -144,12 +143,12 @@ namespace assetlib
 			{
 				if (ref.kind != RefKind::kImportedSource)
 					continue;
-				core::throw_runtime_error_if(
-					found.has_value(),
-					"assetlib::planRename: '{}' and '{}' both record '{}' as their source",
-					*found,
-					ref.referrer,
-					key);
+				if (found.has_value())
+					core::throw_runtime_error(
+						"assetlib::planRename: '{}' and '{}' both record '{}' as their source",
+						*found,
+						ref.referrer,
+						key);
 				found = ref.referrer;
 			}
 			return found;
@@ -192,18 +191,12 @@ namespace assetlib
 			{
 				const std::string key = normalizeRef(output);
 
-				// An environment names its cubes after the source plus the part they belong to, and
-				// that suffix is how a cube's part is told, so it survives the move.
-				const std::optional<EnvironmentOutput> role =
-					document.environment ? environmentOutputOf(key) : std::nullopt;
-				const std::string_view suffix = role ? outputStemSuffix(*role) : std::string_view();
-
 				// An output already taken off the source's stem by a rename of its own is not this
 				// source's to move: its name no longer says it came from here.
-				if (stemOf(key) != std::string(was).append(suffix))
+				if (stemOf(key) != was)
 					continue;
 
-				plan.outputs.push_back({ key, reStem(key, std::string(now).append(suffix)) });
+				plan.outputs.push_back({ key, reStem(key, std::string(now)) });
 			}
 
 			for (const RenameMove& output : plan.outputs)

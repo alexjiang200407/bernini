@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/api.h>
+#include <bgl/glm.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -32,6 +33,47 @@ namespace bgl
 		// backbuffer is sRGB-encoded, and the window's colour space must be set to sRGB explicitly
 		// or the layer is composited unmatched (docs/known_issues.md).
 		void* wnd = nullptr;
+	};
+
+	/** How a target blooms. Per-frame constants: a change reallocates nothing. */
+	struct BloomSettings
+	{
+		// sceneColor + intensity * bloom.
+		float intensity = 0.25f;
+
+		// Linear radiance after exposure, which puts a scene's average near 0.18.
+		float threshold = 0.5f;
+
+		// The threshold's fade-in, as a share of it: 0 is a hard cut.
+		float softKnee = 0.5f;
+
+		// How far the glow spreads: the coarser level's weight at each upsample.
+		float scatter = 0.7f;
+	};
+
+	/**
+	 * How a target grades its image on the way to the display curve. Per-frame constants: a change
+	 * reallocates nothing. Every default is neutral. See docs/passes.md for where each step runs.
+	 */
+	struct ColorGradeSettings
+	{
+		// Within [-100, 100]. Positive is warmer, and positive tint is more magenta than green.
+		float temperature = 0.0f;
+		float tint        = 0.0f;
+
+		// The ASC CDL, applied in the tone map's log encoding: (x * slope + offset) ^ power, then
+		// saturation about Rec.709 luma.
+		glm::vec3 slope{ 1.0f };
+		glm::vec3 offset{ 0.0f };
+		glm::vec3 power{ 1.0f };
+		float     saturation = 1.0f;
+
+		// About middle grey in the same encoding, so 0.18 stays where the curve put it.
+		float contrast = 1.0f;
+
+		// How far a frame corner darkens, and how gradually from the centre.
+		float vignetteIntensity  = 0.0f;
+		float vignetteSmoothness = 0.2f;
 	};
 
 	/**
@@ -118,6 +160,47 @@ namespace bgl
 		 */
 		virtual void
 		SetOutlineEnabled(bool enabled) noexcept = 0;
+
+		/** Whether bloom runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsBloomEnabled() const noexcept = 0;
+
+		/**
+		 * Turns bloom on or off for subsequent frames. The chain is allocated at the first frame
+		 * that blooms and kept when turned off (~11 MiB at 1080p, ~44 MiB at 4K).
+		 */
+		virtual void
+		SetBloomEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual BloomSettings
+		GetBloomSettings() const noexcept = 0;
+
+		/**
+		 * @throws GraphicsError if `intensity` or `threshold` is negative or not finite, or
+		 *         `softKnee` or `scatter` is outside [0, 1].
+		 */
+		virtual void
+		SetBloomSettings(const BloomSettings& settings) = 0;
+
+		/** Whether the colour grade runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsColorGradeEnabled() const noexcept = 0;
+
+		/** Turns the grade on or off for subsequent frames. Nothing is allocated either way. */
+		virtual void
+		SetColorGradeEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual ColorGradeSettings
+		GetColorGradeSettings() const noexcept = 0;
+
+		/**
+		 * @throws GraphicsError if `temperature` or `tint` is outside [-100, 100], a `slope`
+		 *         component or `saturation` or `contrast` is negative or not finite, an `offset`
+		 *         component is outside [-1, 1], a `power` component is not positive and finite,
+		 *         `vignetteIntensity` is outside [0, 1], or `vignetteSmoothness` is outside (0, 1].
+		 */
+		virtual void
+		SetColorGradeSettings(const ColorGradeSettings& settings) = 0;
 
 		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
 		[[nodiscard]] virtual bool

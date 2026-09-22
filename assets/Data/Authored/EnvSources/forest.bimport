@@ -1,8 +1,14 @@
 {
 	"bindings": {},
-	"envSourceBakeToken": 1106924893425623401,
+	"envLightingParametersHash": 18351138467555256008,
+	"envSkyParametersHash": 16944354758440303769,
+	"envSourceBakeToken": 10183196526404056724,
 	"envSourceStampHash": 1908233242519146849,
 	"envSourceStampSize": 1881948,
+	"outputs": [
+		"Derived/EnvLighting/forest.benvl",
+		"Derived/Sky/forest.bsky"
+	],
 	"parameters": {
 		"environment": {
 			"irradianceFaceSize": 128,

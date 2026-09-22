@@ -122,6 +122,19 @@ TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 	CHECK(text.find("orm             (none)") != std::string::npos);
 }
 
+TEST_CASE(
+	"describe(BMaterial) names the geometry occlusion map, or says there is none",
+	"[describe]")
+{
+	BMaterial material = RoutedMaterial();
+	CHECK(describe(material).find("geometryOcclusion (none)") != std::string::npos);
+
+	material.pbr.geometryOcclusionTexture = "Derived/SourceTextures/skin_ao.ktx2";
+	CHECK(
+		describe(material).find("geometryOcclusion Derived/SourceTextures/skin_ao.ktx2") !=
+		std::string::npos);
+}
+
 // With a data root, each routed source is stat'd and compared against the stamp taken at bake time.
 TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[describe]")
 {
@@ -206,6 +219,34 @@ TEST_CASE("describe(BMaterial) names the shading model a document takes", "[desc
 		std::as_bytes(std::span(document.data(), document.size())));
 
 	CHECK(restored.shadingModel == ShadingModel::kPbrSurface);
+}
+
+// The lit model's label round-trips through the parser exactly as the case above pins for
+// pbrSurface: what describe prints is a word the reader accepts.
+TEST_CASE("describe(BMaterial) names the lit model the parser accepts", "[describe][surface]")
+{
+	BMaterial material;
+	material.name         = "banded";
+	material.shadingModel = ShadingModel::kLitSurface;
+	material.surface.name = "Toon";
+
+	const std::string text = describe(material);
+
+	CHECK(text.find("  surface           Toon\n") != std::string::npos);
+
+	constexpr std::string_view c_Label = "  shadingModel      ";
+	const size_t               at      = text.find(c_Label);
+	REQUIRE(at != std::string::npos);
+
+	const size_t      start = at + c_Label.size();
+	const std::string token = text.substr(start, text.find('\n', start) - start);
+
+	const std::string document =
+		std::format(R"({{"name": "banded", "shadingModel": "{}"}})", token);
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(
+		std::as_bytes(std::span(document.data(), document.size())));
+
+	CHECK(restored.shadingModel == ShadingModel::kLitSurface);
 }
 
 // A submesh whose material index is out of range draws with the renderer's default material. That is

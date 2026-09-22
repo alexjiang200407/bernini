@@ -67,6 +67,27 @@ struct FillerSurface : ISurfaceSource
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, FillerParams params) { return PbrSurface(); }
 };
 )";
+
+	void
+	WriteLitSurface(const std::filesystem::path& path, std::string_view body)
+	{
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		REQUIRE(out.is_open());
+		out << "import bgl.MaterialReader;\nimport bgl.SurfaceLight;\nimport "
+			   "bgl.LitSurfaceSource;\n"
+			<< body;
+	}
+
+	// c_Trivial's twin on the lit contract.
+	constexpr std::string_view c_TrivialLit = R"(struct LitFillerParams { float unused; };
+
+struct LitFillerSurface : ILitSurfaceSource
+{
+    typealias MaterialParams = LitFillerParams;
+    static float Coverage<R : IMaterialReader>(R reader, LitFillerParams params) { return 1.0; }
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, LitFillerParams params) { return float4(0.0); }
+};
+)";
 }
 
 // The whole registration path: each surface is reflected, bound to a slot and given the programs
@@ -77,18 +98,24 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
-	REQUIRE(types.size() == 3u);
+	REQUIRE(types.size() == 5u);
 
-	// Filename order, so the directory alone decides which slot a surface lands in.
-	CHECK(types[0].name == "PbrLike");
+	// Filename order, so the directory alone decides which slot a surface lands in -- and the two
+	// contracts share the one namespace, so a lit surface takes a slot exactly as a PBR one does.
+	CHECK(types[0].name == "Band");
 	CHECK(types[0].kind == MaterialType::kGameStart);
-	CHECK(types[1].name == "Rim");
-	CHECK(types[2].name == "Tint");
+	CHECK(types[0].shading == SurfaceShading::kLit);
+	CHECK(types[1].name == "PbrLike");
+	CHECK(types[1].shading == SurfaceShading::kPbrSurface);
+	CHECK(types[2].name == "Rim");
+	CHECK(types[3].name == "Tint");
 	CHECK(
-		types[2].kind ==
-		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 2u));
+		types[3].kind ==
+		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 3u));
+	CHECK(types[4].name == "Unlit");
+	CHECK(types[4].shading == SurfaceShading::kLit);
 
-	const SurfaceParams& rim = types[1].params;
+	const SurfaceParams& rim = types[2].params;
 	REQUIRE(rim.values.size() == 3u);
 	CHECK(rim.values[0].name == "rimColor");
 	CHECK(rim.values[0].type == SurfaceValueType::kFloat3);
@@ -107,18 +134,21 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 	CHECK(rim.textures[0].index == 0u);
 
 	// A surface with no texture at all still registers; the record's handles simply go unread.
-	CHECK(types[2].params.textures.empty());
-	REQUIRE(types[2].params.values.size() == 1u);
-	CHECK(types[2].params.values[0].name == "tint");
+	CHECK(types[3].params.textures.empty());
+	REQUIRE(types[3].params.values.size() == 1u);
+	CHECK(types[3].params.values[0].name == "tint");
 }
 
 // A surface's programs are generated at registration, so the count is bounded only by the
-// draw-bucket ceiling -- six here, each a kind of its own in filename order.
+// draw-bucket ceiling -- six here, each a kind of its own in filename order, the contracts
+// interleaved to prove neither perturbs the other's slots.
 TEST_CASE("More than four surfaces register, each a kind of its own", "[surface][registry]")
 {
 	const std::filesystem::path dir = FreshDir("bernini_surfaces_six");
-	for (const char* name : { "A", "B", "C", "D", "E", "F" })
+	for (const char* name : { "A", "C", "E" })
 		WriteSurface(dir / (std::string(name) + ".slang"), c_Trivial);
+	for (const char* name : { "B", "D", "F" })
+		WriteLitSurface(dir / (std::string(name) + ".slang"), c_TrivialLit);
 
 	auto gfx = bgl::CreateGraphics(SurfaceOptions(dir));
 	REQUIRE(gfx != nullptr);
@@ -128,6 +158,9 @@ TEST_CASE("More than four surfaces register, each a kind of its own", "[surface]
 	for (uint32_t slot = 0; slot < types.size(); ++slot)
 	{
 		CHECK(types[slot].kind == GameSlotKind(slot));
+		CHECK(
+			types[slot].shading ==
+			(slot % 2 == 0 ? SurfaceShading::kPbrSurface : SurfaceShading::kLit));
 	}
 	CHECK(types[5].name == "F");
 }

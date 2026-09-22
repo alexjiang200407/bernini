@@ -24,7 +24,6 @@
 
 #include "env_parts.h"
 #include "env_produce.h"
-#include "fs_util.h"
 #include "ref_paths.h"
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
@@ -109,17 +108,12 @@ namespace assetlib
 				extensionOf(desc.source.generic_string()).c_str());
 		}
 
-		/** The files one part writes, in the order it writes them. */
-		std::vector<std::string>
-		partOutputs(const EnvImportDesc& desc, EnvironmentPart part)
+		/** The container one part writes. */
+		std::string
+		partOutput(const EnvImportDesc& desc, EnvironmentPart part)
 		{
-			if (part == EnvironmentPart::kSky)
-				return { assetRef(desc.sourceDir, desc.name, c_SkySourceSuffix.data()),
-					     assetRef(desc.skyDir, desc.name, ".bsky") };
-
-			return { assetRef(desc.sourceDir, desc.name, c_PrefilterSourceSuffix.data()),
-				     assetRef(desc.sourceDir, desc.name, c_IrradianceSourceSuffix.data()),
-				     assetRef(desc.lightingDir, desc.name, ".benvl") };
+			return part == EnvironmentPart::kSky ? assetRef(desc.skyDir, desc.name, ".bsky") :
+			                                       assetRef(desc.lightingDir, desc.name, ".benvl");
 		}
 
 		bool
@@ -165,9 +159,7 @@ namespace assetlib
 				if (writes(desc, part))
 				{
 					hash = partParametersHashOf(desc.parameters, part);
-					std::ranges::copy(
-						partOutputs(desc, part),
-						std::back_inserter(document.outputs));
+					document.outputs.push_back(partOutput(desc, part));
 					continue;
 				}
 
@@ -210,7 +202,7 @@ namespace assetlib
 
 		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
 			if (writes(desc, part))
-				std::ranges::copy(partOutputs(desc, part), std::back_inserter(out));
+				out.push_back(partOutput(desc, part));
 
 		if (desc.environment && (desc.sky || desc.lighting))
 			out.push_back(assetRef(desc.environmentDir, desc.name, ".benv"));
@@ -250,11 +242,7 @@ namespace assetlib
 			c_TextureExtension);
 
 		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
-		// `.benvl` until they were spent. The float intermediates never reach Save at all.
-		requireOrigin(
-			desc.sourceDir.generic_string(),
-			AssetOrigin::kDerived,
-			"environment sources");
+		// `.benvl` until they were spent.
 		if (desc.sky)
 			requireOrigin(desc.skyDir.generic_string(), AssetOrigin::kDerived, "bsky");
 		if (desc.lighting)
@@ -294,10 +282,6 @@ namespace assetlib
 				part == EnvironmentPart::kSky ? "sky" : "lighting");
 		}
 
-		// The float intermediates are written straight to the host by writeKTX2, which makes no
-		// directory; the three containers go through the store, which makes its own.
-		createDirectories(GetDataRoot() / desc.sourceDir);
-
 		auto created = CreatedFiles(GetDataRoot());
 		auto result  = EnvImportResult();
 
@@ -316,36 +300,36 @@ namespace assetlib
 
 		if (desc.sky)
 		{
-			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kSky);
+			result.sky = partOutput(desc, EnvironmentPart::kSky);
 			produceSky(
 				*this,
 				input,
 				desc.parameters,
 				desc.threads,
 				desc.name,
-				SkyTargets{ .source = { keys[0] }, .container = { keys[1] } },
+				sourceKey,
+				copiedStamp,
+				result.sky,
 				beforeWrite,
 				{},
 				cancel);
-			result.sky = keys[1];
 		}
 
 		if (desc.lighting)
 		{
-			const std::vector<std::string> keys = partOutputs(desc, EnvironmentPart::kLighting);
-			result.exposure                     = *produceLighting(
+			result.lighting = partOutput(desc, EnvironmentPart::kLighting);
+			result.exposure = produceLighting(
 				*this,
 				input,
 				desc.parameters,
 				desc.threads,
 				desc.name,
-				LightingTargets{ .prefilter  = { keys[0] },
-			                     .irradiance = { keys[1] },
-			                     .container  = { keys[2] } },
+				sourceKey,
+				copiedStamp,
+				result.lighting,
 				beforeWrite,
 				{},
 				cancel);
-			result.lighting = keys[2];
 		}
 
 		if (desc.environment)

@@ -177,6 +177,7 @@ namespace bgl
 				m_Device,
 				m_ResourceManager,
 				m_DrawBucketTable,
+				m_SurfaceTypes,
 				opts.enableDebugLayer);
 
 			// The always-on set is built by the RenderContext above; the per-bucket kernels are built

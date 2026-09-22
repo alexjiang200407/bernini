@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    project(BerniniSamplePlugin LANGUAGES CXX)
+# Its own project either way: standalone it is the whole build, and under the engine's test tree it
+# is a fixture, which PROJECT_IS_TOP_LEVEL tells apart without naming the build's root.
+project(BerniniSamplePlugin LANGUAGES CXX)
+
+if(PROJECT_IS_TOP_LEVEL)
     find_package(BerniniEditorSDK CONFIG REQUIRED)
     find_package(nlohmann_json CONFIG REQUIRED)
 

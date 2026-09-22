@@ -158,6 +158,7 @@ compile_shader(
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "ms_6_6"
+    DXC          "${SLANG_DXC}"
     INCLUDES     ${SLANG_SOURCE_ROOT}
     ENTRY_POINTS "MSMain"
 )

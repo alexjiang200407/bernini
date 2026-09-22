@@ -115,7 +115,8 @@ namespace assetlib
 			kSkeletonPath,
 			kSkeletonSignature,
 			kSkeletonBoneNames,  // the cooked rig's bone names, in bone order
-			kGeometrySignature   // the vertex blob and the tables addressing it, hashed at cook
+			kGeometrySignature,  // the vertex blob and the tables addressing it, hashed at cook
+			kMeshletGroups       // one bound per run of c_MeshletsPerGroup meshlets
 		};
 
 		bool
@@ -158,6 +159,7 @@ namespace assetlib
 		writer.Add(ChunkId::kMeshes, mesh.meshes);
 		writer.Add(ChunkId::kSubmeshes, mesh.submeshes);
 		writer.Add(ChunkId::kMeshlets, mesh.meshlets);
+		writer.Add(ChunkId::kMeshletGroups, mesh.meshletGroups);
 		writer.Add(ChunkId::kMeshletVertices, mesh.meshletVertices);
 		writer.Add(ChunkId::kMeshletTriangles, mesh.meshletTriangles);
 		writer.Add(ChunkId::kVertexData, mesh.vertexData);
@@ -189,6 +191,7 @@ namespace assetlib
 		mesh.roots            = reader.Read<uint32_t>(ChunkId::kRoots);
 		mesh.submeshes        = reader.Read<Submesh>(ChunkId::kSubmeshes);
 		mesh.meshlets         = reader.Read<Meshlet>(ChunkId::kMeshlets);
+		mesh.meshletGroups    = reader.Read<MeshletGroup>(ChunkId::kMeshletGroups);
 		mesh.meshletVertices  = reader.Read<uint32_t>(ChunkId::kMeshletVertices);
 		mesh.meshletTriangles = reader.Read<uint8_t>(ChunkId::kMeshletTriangles);
 		mesh.vertexData       = reader.Read<std::byte>(ChunkId::kVertexData);
@@ -269,6 +272,7 @@ namespace assetlib
 		out.meshes           = mesh.meshes;
 		out.submeshes        = mesh.submeshes;
 		out.meshlets         = mesh.meshlets;
+		out.meshletGroups    = mesh.meshletGroups;
 		out.meshletVertices  = mesh.meshletVertices;
 		out.meshletTriangles = mesh.meshletTriangles;
 		out.vertexData       = mesh.vertexData;

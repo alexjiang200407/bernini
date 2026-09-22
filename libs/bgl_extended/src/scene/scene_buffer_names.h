@@ -7,12 +7,15 @@ namespace bgl
 	// string, so both ends spell it from here: a mistyped one is then a compile error rather than a
 	// read that resolves to nothing until draw time.
 
-	constexpr std::string_view c_GeomBufferName       = "scene.geomBuffer"sv;
-	constexpr std::string_view c_SubmeshBufferName    = "scene.submeshBuffer"sv;
-	constexpr std::string_view c_MeshletBufferName    = "scene.meshletBuffer"sv;
-	constexpr std::string_view c_VertexMapBufferName  = "scene.vertexMapBuffer"sv;
-	constexpr std::string_view c_VertexDataBufferName = "scene.vertexDataBuffer"sv;
-	constexpr std::string_view c_IndexBufferName      = "scene.indexBuffer"sv;
+	constexpr std::string_view c_GeomBufferName    = "scene.geomBuffer"sv;
+	constexpr std::string_view c_SubmeshBufferName = "scene.submeshBuffer"sv;
+	constexpr std::string_view c_MeshletBufferName = "scene.meshletBuffer"sv;
+	// One bound per run of idl::cMeshletsPerGroup meshlets, packed so the static tier's cull streams
+	// them rather than gathering them out of the meshlets.
+	constexpr std::string_view c_MeshletGroupBufferName = "scene.meshletGroupBuffer"sv;
+	constexpr std::string_view c_VertexMapBufferName    = "scene.vertexMapBuffer"sv;
+	constexpr std::string_view c_VertexDataBufferName   = "scene.vertexDataBuffer"sv;
+	constexpr std::string_view c_IndexBufferName        = "scene.indexBuffer"sv;
 
 	constexpr std::string_view c_MaterialArenaBufferName = "scene.materialArenaBuffer"sv;
 

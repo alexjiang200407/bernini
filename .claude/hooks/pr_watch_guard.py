@@ -34,7 +34,14 @@ def main():
     if not entries:
         return 0
 
-    lines = "\n".join(f"    just watch-pr {e['pr']}    # {e.get('url', '')}" for e in entries)
+    codex = bool(os.environ.get("CODEX_THREAD_ID"))
+    if codex:
+        lines = "\n".join(
+            f"    mkdir -p .claude/features && just watch-pr {e['pr']} --notify-codex "
+            f">.claude/features/pr-{e['pr']}.watch.log 2>&1 &    # {e.get('url', '')}"
+            for e in entries)
+    else:
+        lines = "\n".join(f"    just watch-pr {e['pr']}    # {e.get('url', '')}" for e in entries)
     print("Blocked by .claude/hooks/pr_watch_guard.py.\n\n"
           "A pull request you wrote to this turn has nothing waiting on it, so a review "
           "would land in silence.\nStart the watcher -- in the BACKGROUND, so this turn ends "

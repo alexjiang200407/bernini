@@ -3,8 +3,6 @@
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDockWidget>
-#include <QFileDialog>
-#include <QInputDialog>
 #include <QLabel>
 #include <QLocale>
 #include <QMessageBox>
@@ -30,6 +28,8 @@
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/panel_visibility.h"
+#include "util/project_dialogs.h"
+#include "util/recent_projects.h"
 #include "util/surface_relaunch.h"
 #include "util/window_title.h"
 #include <algorithm>
@@ -51,8 +51,9 @@
 #include <assetlib/reimport.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
-#include <core/platform/util.h>
+#include <core/glm.h>
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
@@ -90,14 +91,16 @@
 #include <vector>
 
 MainWindow::MainWindow(
-	QWidget*                 parent,
-	std::filesystem::path    configPath,
-	background::ProgressSink startup,
-	std::filesystem::path    project) : QMainWindow(parent), m_StartupProgress(std::move(startup))
+	std::unique_ptr<editor::plugins::PluginSession> plugins,
+	assetlib::Project                               project,
+	std::filesystem::path                           configPath,
+	background::ProgressSink                        startup,
+	QWidget*                                        parent) :
+	QMainWindow(parent), m_StartupProgress(std::move(startup)), m_Plugins(std::move(plugins))
 {
 	try
 	{
-		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath, project);
+		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath, std::move(project));
 	}
 	catch (...)
 	{
@@ -111,7 +114,7 @@ MainWindow::MainWindow(
 }
 
 void
-MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem::path& project)
+MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project project)
 {
 	ZoneScopedN("editor build window");
 
@@ -122,15 +125,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	connect(m_Ui.cleanUnusedTextures, &QAction::triggered, this, &MainWindow::CleanUnusedTextures);
 	connect(m_Ui.exit, &QAction::triggered, this, &QWidget::close);
 
-	std::filesystem::path startupProject = project;
+	m_RecentProjectsFile = editor::RecentProjectsFileBeside(configPath);
+
 	{
 		core::Settings settings(configPath);
 
-		if (startupProject.empty())
-		{
-			startupProject = std::filesystem::path(
-				core::expand_home(settings["startupProject"].GetOrDefault(std::string())));
-		}
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
 
@@ -159,12 +158,11 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
-		// The startup project's alone. Surfaces are registered inside CreateGraphics and their
-		// programs are generated from what was there then, so a project with other shaders is opened
-		// by restarting into it -- see RelaunchInsteadOfOpening.
-		if (!startupProject.empty())
-			gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(startupProject);
-		m_SurfaceShaderDir = gfxOpts.surfaceShaderDir;
+		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are
+		// generated from what was there then, so a project with other shaders is opened by
+		// restarting into it -- see AskHowToOpen.
+		gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(project.GetProjectFile());
+		m_SurfaceShaderDir       = gfxOpts.surfaceShaderDir;
 
 		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
@@ -213,17 +211,67 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 			return sky;
 		};
 
+		// Each absent key keeps the default, so a partial section overrides only what it names.
+		// Range checks are the viewport's, at creation.
+		const auto readBloom = [](const auto& section) {
+			auto       bloom = BloomConfig();
+			const auto node  = section["bloom"];
+			bloom.enabled    = node["enabled"].GetOrDefault(bloom.enabled);
+			auto& s          = bloom.settings;
+			s.intensity      = node["intensity"].GetOrDefault(s.intensity);
+			s.threshold      = node["threshold"].GetOrDefault(s.threshold);
+			s.softKnee       = node["softKnee"].GetOrDefault(s.softKnee);
+			s.scatter        = node["scatter"].GetOrDefault(s.scatter);
+			return bloom;
+		};
+
+		// The CDL's per-channel values are objects -- { "r": .., "g": .., "b": .. } -- so a partial
+		// one overrides only the channels it names, like the rest of the section.
+		const auto readRgb = [](const auto& node, glm::vec3 rgb) {
+			rgb.r = node["r"].GetOrDefault(rgb.r);
+			rgb.g = node["g"].GetOrDefault(rgb.g);
+			rgb.b = node["b"].GetOrDefault(rgb.b);
+			return rgb;
+		};
+
+		const auto readColorGrade = [&readRgb](const auto& section) {
+			auto       grade     = ColorGradeConfig();
+			const auto node      = section["colorGrade"];
+			grade.enabled        = node["enabled"].GetOrDefault(grade.enabled);
+			auto& s              = grade.settings;
+			s.temperature        = node["temperature"].GetOrDefault(s.temperature);
+			s.tint               = node["tint"].GetOrDefault(s.tint);
+			s.slope              = readRgb(node["slope"], s.slope);
+			s.offset             = readRgb(node["offset"], s.offset);
+			s.power              = readRgb(node["power"], s.power);
+			s.saturation         = node["saturation"].GetOrDefault(s.saturation);
+			s.contrast           = node["contrast"].GetOrDefault(s.contrast);
+			s.vignetteIntensity  = node["vignetteIntensity"].GetOrDefault(s.vignetteIntensity);
+			s.vignetteSmoothness = node["vignetteSmoothness"].GetOrDefault(s.vignetteSmoothness);
+			return grade;
+		};
+
 		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
 		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
 		// is a whole editor built without windows, which is the only shape a test can construct.
-		auto matSettings   = settings["materialEditor"];
-		auto defaultConfig = editor::defaults::Config();
-		defaultConfig.materialViewport.initialInstances =
-			matSettings["initialPreviewInstances"].GetOrDefault(16u);
-		defaultConfig.materialViewport.taaEnabled  = matSettings["temporalAA"].GetOrDefault(true);
-		defaultConfig.materialViewport.renderScale = matSettings["renderScale"].GetOrDefault(1.0f);
-		defaultConfig.materialViewport.taaReconstructionWidth =
-			matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		const auto readViewport = [&](const auto& section) {
+			auto       viewport             = editor::ViewportDesc();
+			const auto bloom                = readBloom(section);
+			const auto grade                = readColorGrade(section);
+			viewport.initialInstances       = section["initialPreviewInstances"].GetOrDefault(16u);
+			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
+			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
+			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
+			viewport.bloomEnabled           = bloom.enabled;
+			viewport.bloom                  = bloom.settings;
+			viewport.colorGradeEnabled      = grade.enabled;
+			viewport.colorGrade             = grade.settings;
+			return viewport;
+		};
+
+		auto matSettings               = settings["materialEditor"];
+		auto defaultConfig             = editor::defaults::Config();
+		defaultConfig.materialViewport = readViewport(matSettings);
 		defaultConfig.materialEnvironment.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		defaultConfig.materialEnvironment.dataRoot =
@@ -249,13 +297,8 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		auto animSettings = settings["animationEditor"];
-		defaultConfig.rigViewport.initialInstances =
-			animSettings["initialPreviewInstances"].GetOrDefault(16u);
-		defaultConfig.rigViewport.taaEnabled  = animSettings["temporalAA"].GetOrDefault(true);
-		defaultConfig.rigViewport.renderScale = animSettings["renderScale"].GetOrDefault(1.0f);
-		defaultConfig.rigViewport.taaReconstructionWidth =
-			animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		auto animSettings         = settings["animationEditor"];
+		defaultConfig.rigViewport = readViewport(animSettings);
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
@@ -270,19 +313,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 		if (auto exposure = animSettings["exposure"])
 			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		std::vector<std::filesystem::path> pluginDirectories =
-			editor::plugins::DiscoverPluginDirectories(editor::plugins::DefaultPluginRoot());
-		for (std::filesystem::path& directory :
-		     editor::plugins::ConfiguredPluginDirectories(configPath))
-			pluginDirectories.push_back(std::move(directory));
-
-		m_Plugins =
-			std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
-				pluginDirectories,
-				editor::plugins::CurrentBuildIdentity(),
-				editor::plugins::DefaultPluginCopyRoot(),
-				editor::plugins::PluginBinaryCopyMode::kPlatformDefault,
-				editor::defaults::CreatePlugin(defaultConfig)));
+		m_Plugins->RegisterEditorPlugins(editor::defaults::CreatePlugin(defaultConfig));
 
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
@@ -401,11 +432,7 @@ MainWindow::Build(const std::filesystem::path& configPath, const std::filesystem
 	SetUpPluginsEntry();
 	SetUpPluginContributions();
 
-	// config.json may name a project to open on launch, so working on one does not mean reopening
-	// it every run. It is machine-local (the file is git-ignored), which is what makes naming an
-	// absolute path in it reasonable.
-	if (startupProject.empty() || !OpenProjectAt(startupProject))
-		ShowEmptyState();
+	SetActiveProject(std::move(project));
 
 	SetUpRenderMenu();
 
@@ -476,6 +503,43 @@ MainWindow::SetUpRenderMenu()
 		m_OutlineEnabled = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
+	});
+
+	// On and off only: how a viewport blooms is config.json's, so a comparison against itself is
+	// the one thing asked of the menu. Checked when config.json started any viewport with it.
+	bool anyBloom = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyBloom = anyBloom || view->IsBloomEnabled();
+
+	auto* bloom = render->addAction("Bloom");
+	bloom->setCheckable(true);
+	bloom->setChecked(anyBloom);
+	bloom->setStatusTip(
+		"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
+		"bloom is each viewport's `bloom` section in config.json.");
+
+	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
+		m_BloomOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetBloomEnabled(enabled);
+	});
+
+	// As bloom: the grade itself is each viewport's config.json section.
+	bool anyGrade = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		anyGrade = anyGrade || view->IsColorGradeEnabled();
+
+	auto* grade = render->addAction("Color Grade");
+	grade->setCheckable(true);
+	grade->setChecked(anyGrade);
+	grade->setStatusTip(
+		"White-balance and grade the viewports ahead of the display curve. The grade is each "
+		"viewport's `colorGrade` section in config.json.");
+
+	connect(grade, &QAction::toggled, this, [this](bool enabled) {
+		m_ColorGradeOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetColorGradeEnabled(enabled);
 	});
 
 	auto* timing = render->addAction("GPU Pass Timing");
@@ -635,30 +699,24 @@ MainWindow::ReleaseRenderResources() noexcept
 void
 MainWindow::NewProject()
 {
-	const auto name = QInputDialog::getText(this, "New Project", "Project name:").trimmed();
-	if (name.isEmpty())
+	const std::optional<editor::NewProjectRequest> request = editor::AskForNewProject(this);
+	if (!request)
 		return;
 
-	const auto location = QFileDialog::getExistingDirectory(this, "Select Project Location");
-	if (location.isEmpty())
-		return;
-
-	const auto root        = std::filesystem::path(location.toStdWString()) / name.toStdString();
-	const auto projectFile = root / (name.toStdString() + assetlib::Project::c_FileExtension);
 	if (!CanClosePluginPanels())
 		return;
 
 	// Asked before Create, so declining writes nothing.
-	const ProjectOpening opening = AskHowToOpen("New Project", projectFile);
+	const ProjectOpening opening = AskHowToOpen("New Project", request->projectFile);
 	if (opening == ProjectOpening::kCancelled)
 		return;
 
 	try
 	{
-		auto project = assetlib::Project::Create(projectFile, name.toStdString());
+		auto project = assetlib::Project::Create(request->projectFile, request->name);
 		if (opening == ProjectOpening::kRestart)
 		{
-			RestartInto(projectFile);
+			RestartInto(request->projectFile);
 			return;
 		}
 
@@ -673,13 +731,10 @@ MainWindow::NewProject()
 void
 MainWindow::OpenProject()
 {
-	const auto filter =
-		QString("Bernini Project (*%1)").arg(QString::fromUtf8(assetlib::Project::c_FileExtension));
-	const auto file = QFileDialog::getOpenFileName(this, "Open Project", QString(), filter);
-	if (file.isEmpty())
+	const std::filesystem::path path = editor::AskForProjectToOpen(this);
+	if (path.empty())
 		return;
 
-	const auto path = std::filesystem::path(file.toStdWString());
 	switch (AskHowToOpen("Open Project", path))
 	{
 	case ProjectOpening::kHere:
@@ -741,29 +796,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 	{
 		ZoneScopedN("editor open project");
 
-		// Refused rather than opened without them: a kind the store cannot read is a document the
-		// reference scan, rename and pack silently pass over.
-		const std::vector<std::string> missing = editor::plugins::MissingRequiredPlugins(
-			m_Plugins->Ids(),
-			assetlib::Project::PluginIdsOf(path));
-		if (!missing.empty())
-		{
-			QStringList ids;
-			for (const std::string& id : missing) ids << QString::fromStdString(id);
-			QMessageBox::warning(
-				this,
-				"Open Project",
-				QString(
-					"%1 requires plugins this editor did not load: %2.\n\nPut each one in %3/<id>/ "
-					"or name its directory in pluginDirectories in config.json, then restart.")
-					.arg(
-						QString::fromStdWString(path.stem().wstring()),
-						ids.join(", "),
-						QString::fromStdWString(editor::plugins::DefaultPluginRoot().wstring())));
-			return false;
-		}
-
-		SetActiveProject(assetlib::Project::Open(path, m_Plugins->KindRegistry()));
+		SetActiveProject(editor::plugins::OpenProjectWithPlugins(path, *m_Plugins));
 		return true;
 	}
 	catch (const std::exception& e)
@@ -1089,7 +1122,8 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	// Panel teardown drains render work before the borrowed manager is released on its thread.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
 
-	m_Project          = std::make_unique<assetlib::Project>(std::move(project));
+	m_Project = std::make_unique<assetlib::Project>(std::move(project));
+	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
@@ -1519,42 +1553,11 @@ MainWindow::SetUpFrameStats()
 }
 
 void
-MainWindow::ShowEmptyState()
-{
-	setWindowTitle(editor::WindowTitle(m_InstanceName, QString()));
-
-	if (m_EditorDockAnchor)
-		m_EditorDockAnchor->hide();
-	m_ContentExplorerDock->hide();
-
-	m_Ui.save->setEnabled(false);
-	m_Ui.cleanUnusedTextures->setEnabled(false);
-	m_Ui.editMenu->setEnabled(false);
-	m_Ui.windowMenu->setEnabled(false);
-
-	auto* placeholder = new QLabel(
-		"Open a project to get started.\n\nFile ▸ New Project…   or   File ▸ Open Project…",
-		this);
-	placeholder->setObjectName("EmptyStatePlaceholder");
-	placeholder->setAlignment(Qt::AlignCenter);
-	placeholder->setEnabled(false);
-
-	setCentralWidget(placeholder);
-}
-
-void
 MainWindow::ShowProjectState()
 {
-	setCentralWidget(nullptr);
-
 	m_EditorDockAnchor->show();
 	m_ContentExplorerDock->show();
 	m_EditorDockAnchor->raise();
-
-	m_Ui.save->setEnabled(true);
-	m_Ui.cleanUnusedTextures->setEnabled(true);
-	m_Ui.editMenu->setEnabled(true);
-	m_Ui.windowMenu->setEnabled(true);
 
 	resizeDocks({ m_EditorDockAnchor, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
@@ -1568,6 +1571,10 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetRenderScale(*m_RenderScaleOverride);
 	if (m_ReconstructionWidthOverride)
 		view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+	if (m_BloomOverride)
+		view.SetBloomEnabled(*m_BloomOverride);
+	if (m_ColorGradeOverride)
+		view.SetColorGradeEnabled(*m_ColorGradeOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);
 	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
 }

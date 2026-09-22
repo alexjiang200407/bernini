@@ -12,6 +12,7 @@ import idl.Constants;
 import idl.Geom;
 import idl.MeshInstance;
 import idl.Meshlet;
+import idl.MeshletGroup;
 import idl.Submesh;
 import idl.VertexLayout;
 import lib.debug.dbg;
@@ -20,6 +21,7 @@ import lib.forward.ExpansionData;
 import lib.forward.ForwardData;
 import lib.forward.MaterialData;
 import lib.geom.vertexdecode;
+import lib.math.frustum;
 import lib.data.ViewData;
 import lib.data.SubmeshInstance;
 
@@ -93,7 +95,89 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     return submesh.GetMeshletCount();
 }
 
-public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
+// Whether any of `sphere`, in the placement's local space, can reach the draw's cull frustum. The
+// test is the one CullInstances passes the instance by, against the same planes -- built from the
+// jittered view-projection the raster uses -- so it only ever rejects geometry the raster would clip
+// whole. Shared by the meshlet group the amplification stage keeps and the meshlet the mesh stage
+// draws.
+public bool LocalSphereInCullFrustum(MeshInstance mesh, float4 sphere)
+{
+    let world = mesh.TransformSphere(sphere);
+    return SphereInFrustum(expansionData.cullView[0].frustumPlanes, world.xyz, world.w);
+}
+
+public groupshared CulledPayload gCulledPayload;
+groupshared uint gSurvivors;
+
+// The instance this amplification group covers, and how many meshlets it dispatches: every meshlet
+// of every group whose cooked sphere LocalSphereInCullFrustum keeps, marked in gCulledPayload so the
+// mesh stage draws them in meshlet order, the order an unculled draw has. A kept group dispatches
+// all cMeshletsPerGroup of its meshlets and the mesh stage tests each on its own, so a group is
+// tested once where a meshlet list would have been read cMeshletsPerGroup times. Every lane of the
+// group calls it.
+public uint CullMeshlets(uint gid, uint lane)
+{
+    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
+    let geom = forwardData.geomBuffer.Get(mesh.geom);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    let meshletCount = submesh.GetMeshletCount();
+    let groupCount = MeshletGroupCount(meshletCount);
+
+    if (lane == 0u)
+    {
+        gCulledPayload.instance = instance;
+        gCulledPayload.meshletCount = meshletCount;
+    }
+
+    let maskWords = (groupCount + 31u) / 32u;
+
+    for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
+    {
+        gCulledPayload.survivorMask[w] = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    for (uint groupIdx = lane; groupIdx < groupCount; groupIdx += cMeshletCullGroupSize)
+    {
+        let bound = forwardData.meshletGroupBuffer.Get(submesh.meshletGroups, groupIdx);
+        if (LocalSphereInCullFrustum(mesh, bound.boundingSphere))
+        {
+            InterlockedOr(gCulledPayload.survivorMask[groupIdx / 32u], 1u << (groupIdx % 32u));
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // A running count over at most 256 words, two to a packed word. One lane: the scan is serial and
+    // shorter than the barriers a parallel one would need.
+    if (lane == 0u)
+    {
+        uint survivors = 0u;
+        for (uint w = 0u; w < maskWords; w += 2u)
+        {
+            let second = survivors + countbits(gCulledPayload.survivorMask[w]);
+            gCulledPayload.survivorsBefore[w / 2u] = survivors | (second << 16u);
+            survivors = second + (w + 1u < maskWords ? countbits(gCulledPayload.survivorMask[w + 1u]) : 0u);
+        }
+        gSurvivors = survivors;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    let survivors = gSurvivors;
+
+#if defined(BERNINI_GPU_DEBUG)
+    if (lane == 0u)
+    {
+        expansionData.stats[0].meshletGroupsTested.add(groupCount);
+        expansionData.stats[0].meshletGroupsCulled.add(groupCount - survivors);
+    }
+#endif
+
+    return survivors * cMeshletsPerGroup;
+}
+
+public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)
 {
     MeshletContext ctx;
     ctx.mesh = forwardData.meshBuffer.Get(instance.meshInstance);
@@ -110,7 +194,11 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
     dbg_assert(
-        gid < ctx.submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex, gid, ctx.submesh.GetMeshletCount(), instance.submeshIndex
+        meshletIdx < ctx.submesh.GetMeshletCount(),
+        ErrorCode.kInvalidMeshletIndex,
+        meshletIdx,
+        ctx.submesh.GetMeshletCount(),
+        instance.submeshIndex
     );
     dbg_assert(ctx.submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout, ctx.submesh.layout.stride, 0, instance.submeshIndex);
     // Position is the only attribute a mesh cannot render without; every other decodes to a default.
@@ -127,7 +215,7 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     // everything past it.
     dbg_assert(!ctx.submesh.vertexData.Null(), ErrorCode.kNullRawDeref, 0, 0, instance.submeshIndex);
 
-    ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, gid);
+    ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, meshletIdx);
 
     // The material record is read only on a draw that culls here, and never for a submesh with no
     // material: the reserved null entry at offset zero must not be dereferenced, and an `||` would
@@ -144,14 +232,14 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
         ErrorCode.kMeshletVertexOverflow,
         ctx.meshlet.vertexCount,
         cMaxVerticesPerMeshlet,
-        gid
+        meshletIdx
     );
     dbg_assert(
         ctx.meshlet.triangleCount <= cMaxPrimsPerMeshlet,
         ErrorCode.kMeshletPrimitiveOverflow,
         ctx.meshlet.triangleCount,
         cMaxPrimsPerMeshlet,
-        gid
+        meshletIdx
     );
 
     return ctx;
@@ -190,6 +278,9 @@ public void ProjectVertex(inout ForwardVSOut vertexOut, float4 worldPos, float4 
 
     vertexOut.prevClip = mul(viewData.prevViewProj, prevWorldPos);
     vertexOut.prevClip.xy -= viewData.prevJitter * vertexOut.prevClip.w;
+
+    vertexOut.cameraPrevClip = mul(viewData.prevViewProj, worldPos);
+    vertexOut.cameraPrevClip.xy -= viewData.prevJitter * vertexOut.cameraPrevClip.w;
 
     vertexOut.worldPos = worldPos.xyz;
 }

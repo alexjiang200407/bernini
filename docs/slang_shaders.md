@@ -10,7 +10,7 @@ libs/bgl/shaders/src/                 the contract: what a game surface conforms
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
   idl/                                the IDL modules, the one source bgl_idlgen mirrors to C++; see docs/idlgen.md
-  lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, affine transform maths; vertex decode; plain view structs
+  lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's clipped screen bounds, affine transform maths; vertex decode; plain view structs
 libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
   lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
@@ -188,6 +188,11 @@ This is worth knowing because the check that catches it runs in one place only:
 [libs/bgl_extended/shaders/CMakeLists.txt](../libs/bgl_extended/shaders/CMakeLists.txt) validates to DXIL at build
 time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
 run, and a Windows build is what catches this class of bug.
+
+The DXC that validation runs is the `directx-dxc` port's — the one the runtime stages beside the
+executable — named to slangc with `-dxc-path`. Left to itself slangc loads whichever
+`dxcompiler.dll` PATH reaches first, and a developer prompt puts the Windows SDK's there: DXC 1.6,
+which predates `select`, so a shader the runtime compiles would fail the build.
 
 It used to be narrower still. The list of what to validate was written out by hand, so a shader
 nobody remembered to add was checked by nothing until it reached a Windows runtime — which is how

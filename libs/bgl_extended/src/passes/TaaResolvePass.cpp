@@ -36,12 +36,12 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 20> c_Fields = {
-			"sceneColor"sv,      "history"sv,         "motionVectors"sv,  "depth"sv,
-			"clipToView"sv,      "viewToPrevClip"sv,  "viewToPrevView"sv, "jitter"sv,
-			"cameraPairValid"sv, "pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,
-			"renderTexelSize"sv, "outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,
-			"resampling"sv,      "sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
+		constexpr std::array<std::string_view, 19> c_Fields = {
+			"sceneColor"sv,      "history"sv,        "motionVectors"sv, "depth"sv,
+			"clipToView"sv,      "viewToPrevView"sv, "jitter"sv,        "cameraPairValid"sv,
+			"pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,    "renderTexelSize"sv,
+			"outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,     "resampling"sv,
+			"sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
 		};
 
 		// Valid history retains subpixel detail; disoccluded pixels bypass accumulation.
@@ -133,8 +133,8 @@ namespace bgl
 			args.renderSize.x > 0.0f && args.renderSize.y > 0.0f,
 			"TaaResolve needs a non-degenerate render size");
 
-		// The jitter reaches the shader twice over: in NDC, which is where CameraMotion undoes it,
-		// and in render texels, which is where the sample it moved actually landed.
+		// The jitter reaches the shader twice over: in NDC, where the resolve undoes it to rebuild a
+		// pixel's view depth, and in render texels, which is where the sample it moved landed.
 		const glm::vec2 jitterTexels = args.jitter * glm::vec2(0.5f, -0.5f) * args.renderSize;
 
 		gassert(
@@ -156,7 +156,6 @@ namespace bgl
 			taa["motionVectors"].SetIfValid(args.motionVectors);
 			taa["depth"].SetIfValid(args.depth);
 			taa["clipToView"].SetIfValid(args.clipToView);
-			taa["viewToPrevClip"].SetIfValid(args.viewToPrevClip);
 			taa["viewToPrevView"].SetIfValid(args.viewToPrevView);
 			taa["jitter"].SetIfValid(args.jitter);
 			taa["cameraPairValid"].SetIfValid(args.cameraPairValid ? 1.0f : 0.0f);

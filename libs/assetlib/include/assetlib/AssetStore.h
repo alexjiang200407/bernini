@@ -255,11 +255,27 @@ namespace assetlib
 		[[nodiscard]] ImageData
 		ComposeSurfaceSlot(const BMaterial& material, std::string_view slotName) const;
 
-		/** @throws std::runtime_error / Cancelled as bakeSky. */
+		/**
+		 * Cooks `sky`'s routed environment source -- projection and defocus chain, at the parameters
+		 * the `.bimport` beside it records -- and bakes the result into a content-addressed map under
+		 * `Derived/BakedTextures/`, updating the route. BC7 sRGB when the chain fits [0, 1], RGB9E5
+		 * otherwise; see docs/envmaps.md.
+		 *
+		 * @throws std::runtime_error if nothing is routed, the source will not read, or it has no
+		 *         import document naming environment parameters; `sky` is untouched then.
+		 * @throws Cancelled if `cancel` is signalled.
+		 */
 		void
 		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
 
-		/** @throws std::runtime_error / Cancelled as bakeEnvLighting. */
+		/**
+		 * BakeSky for the lighting: both routes name one source, convolved into the prefilter chain
+		 * and the irradiance map, and `lighting.exposure` re-derived from the latter. Minutes, not
+		 * seconds.
+		 *
+		 * @throws std::runtime_error as BakeSky, and if the two routes name different sources.
+		 * @throws Cancelled if `cancel` is signalled.
+		 */
 		void
 		BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel = {}) const;
 
@@ -507,7 +523,10 @@ namespace assetlib
 		[[nodiscard]] bool
 		IsEnvLightingBakeStale(const BEnvLighting& lighting) const;
 
-		/** The map a consumer draws for `route`. @throws std::runtime_error if neither is present. */
+		/**
+		 * The map a consumer draws for `route`: its baked map, stale or not -- never its source.
+		 * @throws std::runtime_error if the baked map is not on disk.
+		 */
 		[[nodiscard]] const std::string&
 		EnvMapToDraw(const EnvMapRoute& route) const;
 
@@ -777,8 +796,8 @@ namespace assetlib
 
 		/**
 		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing
-		 * them, writing the float intermediates into `Derived/SourceTextures/` as the routed
-		 * sources and baking each into `Derived/BakedTextures/`.
+		 * them, each part projected and convolved in memory from the copied source and baked into
+		 * `Derived/BakedTextures/`. The routes name that copy: nothing float is kept.
 		 *
 		 * The source is copied under `Authored/EnvSources/` and read from the copy, and a
 		 * `.bimport` beside it records the parameters, the copy's stamp and every derived file
@@ -830,8 +849,8 @@ namespace assetlib
 		GetStaleEnvironmentSources() const;
 
 		/**
-		 * Re-cooks the stale parts of `sourceKey`'s environment -- the float cubes and the
-		 * containers baked from them -- and then records, in its import document, the source's
+		 * Re-cooks the stale parts of `sourceKey`'s environment -- the containers and the maps they
+		 * name -- and then records, in its import document, the source's
 		 * stamp, the current `c_EnvSourceBakeToken` and each refreshed part's parameters. A part
 		 * that is current is left as it is.
 		 *

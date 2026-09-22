@@ -52,7 +52,7 @@ namespace bgl
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
-		pipelineDesc.AddRtvFormat(Format::RG16_FLOAT);
+		pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
 		pipelineDesc.SetDsvFormat(Format::D24S8);
 
 		auto raster = RasterState();

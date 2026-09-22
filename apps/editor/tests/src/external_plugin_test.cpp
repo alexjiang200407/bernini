@@ -63,10 +63,11 @@ TEST_CASE(
 {
 	SampleProject sandbox;
 	const auto    projectFile = sandbox.root / "Sample.bproj";
-	const auto    session     = editor::plugins::PluginSession::Load(
+	auto          session     = editor::plugins::PluginSession::Load(
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
 		editor::plugins::CurrentBuildIdentity(),
 		sandbox.root / "copies");
+	session.RegisterEditorPlugins();
 	CHECK(
 		editor::plugins::MissingRequiredPlugins(
 			session.Ids(),
@@ -121,10 +122,11 @@ TEST_CASE(
 	"[plugins][sample]")
 {
 	SampleProject sandbox;
-	const auto    session = editor::plugins::PluginSession::Load(
+	auto          session = editor::plugins::PluginSession::Load(
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
 		editor::plugins::CurrentBuildIdentity(),
 		sandbox.root / "copies");
+	session.RegisterEditorPlugins();
 	const auto project =
 		assetlib::Project::Open(sandbox.root / "Sample.bproj", session.KindRegistry());
 	const auto&                 registry = session.Contributions();

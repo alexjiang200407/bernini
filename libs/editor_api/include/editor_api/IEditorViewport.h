@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <cstdint>
@@ -28,6 +29,12 @@ namespace editor
 		bool     taaEnabled             = true;
 		float    renderScale            = 1.0f;
 		float    taaReconstructionWidth = 0.4f;
+
+		// Off by default with bgl's identity settings; the host clamps and warns like the render scale.
+		bool                    bloomEnabled = false;
+		bgl::BloomSettings      bloom;
+		bool                    colorGradeEnabled = false;
+		bgl::ColorGradeSettings colorGrade;
 		ViewportDesc&
 		SetInitialInstances(uint32_t value) & noexcept
 		{
@@ -81,6 +88,62 @@ namespace editor
 		SetTaaReconstructionWidth(float value) && noexcept
 		{
 			SetTaaReconstructionWidth(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetBloomEnabled(bool value) & noexcept
+		{
+			bloomEnabled = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetBloomEnabled(bool value) && noexcept
+		{
+			SetBloomEnabled(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetBloom(bgl::BloomSettings value) & noexcept
+		{
+			bloom = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetBloom(bgl::BloomSettings value) && noexcept
+		{
+			SetBloom(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetColorGradeEnabled(bool value) & noexcept
+		{
+			colorGradeEnabled = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetColorGradeEnabled(bool value) && noexcept
+		{
+			SetColorGradeEnabled(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetColorGrade(bgl::ColorGradeSettings value) & noexcept
+		{
+			colorGrade = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetColorGrade(bgl::ColorGradeSettings value) && noexcept
+		{
+			SetColorGrade(value);
 			return std::move(*this);
 		}
 	};

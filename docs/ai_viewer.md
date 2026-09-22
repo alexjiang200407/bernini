@@ -36,6 +36,8 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
+| `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
+| `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
@@ -76,7 +78,15 @@ the CSV's path. It exits non-zero only when it could not render.
   reaches nothing the camera can see — an image indistinguishable from `--sun 0`.
 - **The camera is not a choice.** The model is framed on its bounding sphere from one fixed
   three-quarter view — a skinned mesh on the box its clip set's poses fill, so the character stays
-  in frame through every clip.
+  in frame through every clip. A clip set with root motion walks that box far past any one pose,
+  and the character is a speck in the middle of it; `--frame-clip` frames the box of the playing
+  clip alone, measured the same way over a set holding only that clip. The box the geometry culls
+  by is the whole set's either way.
+- **A project's own surfaces are registered.** Materials may shade through a surface the project
+  authors under `Authored/Shaders` ([Game-defined surfaces](game_defined_surfaces.md)), and the
+  renderer registers surfaces only when it is created, so the viewer hands it `--project`'s
+  directory whenever there is one. Without it such a material is refused at load, naming the
+  surface.
 
 ## What it does not do
 

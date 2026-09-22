@@ -28,7 +28,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_Skybox`, `m_TransparentSort`,
 `m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
-`m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
+`m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -48,7 +48,8 @@ flowchart TD
         FWD --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
-    TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
+    TAA --> BLM["Bloom (only when the target blooms; one pass per chain level each way)"]
+    BLM --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
     PPX --> OVL["Overlay (only when the frame submitted 2D draws; reads any target it borrowed)"]
     OVL --> PP["PreparePresent (backbuffer, and every borrowed target, to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
@@ -59,8 +60,9 @@ render targets and the imported `depth` texture as their depth attachment — **
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
-writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and writes
-the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
+writes the next one; `Bloom`, on a target that blooms, reads whichever of the two the last HDR
+stage produced and renders its ladder (`bloomDown0..`, `bloomUp0..`); `PostProcess` reads the same
+source — plus the finished `bloomUp0` when bloom ran — and writes the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
 last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
 transitions the backbuffer — and each of those borrowed backbuffers — to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
@@ -99,7 +101,7 @@ that is what `AgX` does: the Rec.709-to-E-Gamut matrix and the 25-stop log encod
 config's view transform written out, the LUT is `AgX_Base_sRGB.cube` from the Blender install
 converted by `scripts/gen_agx_lut.py` into
 [shaders/src/luts/agx_base_srgb.bin](libs/bgl_extended/shaders/src/luts/agx_base_srgb.bin), and
-`TonemapLut` ([gfx/TonemapLut.h](libs/bgl_extended/src/gfx/TonemapLut.h)) uploads it once at device
+`TonemapLut` ([postprocess/TonemapLut.h](libs/bgl_extended/src/postprocess/TonemapLut.h)) uploads it once at device
 init. The file is a 2D strip of 57 slices rather than a 3D texture because neither backend's
 `WriteTexture` fills one yet; `StripLutTaps3D` in the same module is the trilinear read over that
 layout, shared so a second renderer's `ITonemapLut` does not re-derive it. The datafile reaches the
@@ -171,6 +173,52 @@ sort: the fix is `doubleSided = false` where a translucent solid has no inside w
 
 ---
 
+## Meshlet culling
+
+Below the instance, the static tier culls meshlets, and the unit it culls in is a **group** of
+`cMeshletsPerGroup` (8) consecutive ones. `CullInstances` keeps an instance whose sphere meets the
+frustum; `programs.forward.StaticMesh`'s amplification stage then tests each of that instance's
+meshlet groups against the **same** `cull.view` planes -- built from the jittered view-projection
+the raster draws with -- using the group's cooked sphere placed by the same
+`MeshInstance::TransformSphere`. A sphere test only rejects geometry wholly outside a plane, and a
+group's sphere encloses every vertex under it, so a meshlet with any pixel in view survives, jitter
+included, and so does every receiver a blob-shadow decal reads out of Static Depth, which draws from
+the same camera. Both Forward's static buckets and Static Depth dispatch through it; the skinned tier
+and `AnyMesh` (the transparent list, the outline mask) cull nothing below the instance, since a posed
+meshlet leaves its bind-pose sphere.
+
+The survivors are **compacted** in the amplification group (`CullMeshlets` in
+[lib/forward/mesh_stage.slang](libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang)): one
+lane per group marks a bit, one lane writes a running count per mask word, and the group dispatches
+`cMeshletsPerGroup` mesh groups per survivor, each finding its group by a binary search over the
+counts and its meshlet within that group by the remainder. They are dispatched in meshlet order, the
+order an unculled draw has, and the last group of a submesh whose meshlet count does not divide
+stands for meshlets that do not exist -- those mesh groups emit nothing.
+
+**The mesh stage then tests the meshlet it draws**, against the same planes and its own cooked
+sphere, and emits nothing when it fails: a kept group is launched whole, so the meshlets of it that
+are off screen are rejected here. The vertex work and the raster setup are saved; the mesh-group
+launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
+spheres, and pays for it in launches that draw nothing.
+
+**The payload is kept small on purpose.** It is copied out whole for every instance drawn -- on Metal,
+Slang lowers `DispatchMesh` to a copy from groupshared memory by every lane -- so its size is paid by
+every static instance, visible or not: a 16 KiB list of indices made animal-run six times slower, an
+8 KiB one cost 3 ms a pass, 2 KiB nothing. At a bit and a half per *group* it covers
+`cMaxCompactedGroups` (8192) of them, which is 65536 meshlets -- more than the 65535 thread groups
+one `DispatchMesh` can launch. So every submesh a scene will hold compacts, and there is no
+dispatch-everything path: `Scene` refuses a submesh past the largest multiple of the group size a
+dispatch can reach.
+
+In `BERNINI_GPU_DEBUG` builds the amplification stage adds to `cull.stats`' `meshletGroupsTested` and
+`meshletGroupsCulled`; the mesh stage's own test counts nothing.
+
+The group bounds come from the cook (`buildMeshlets` in
+[assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), fitted to the vertices themselves
+and stored in the `.bmesh` beside the meshlets. Geometry that never passed through a cook -- a
+procedural primitive, a `BMesh` built in memory -- has `Scene` fold a bound out of the meshlet
+spheres instead, which encloses the same geometry a little less tightly.
+
 ## Blended surfaces
 
 `LayerType::kBlend` resolves to a transparent draw bucket — one per (tier, material kind) pair that
@@ -202,6 +250,20 @@ own ratio — a blended surface raises its coverage by it, and a sun's radiance 
 anything. The sun is scaled by neither the material's ambient occlusion nor a shadow, because there
 is no shadow pass; what it is scaled by, and in which units, is
 [bgl_api.md](bgl_api.md)'s `SetDirectionalLight`.
+
+**Ambient occlusion has two sources, multiplied.** `PbrSurface::orm.r` is the material's own AO,
+read through UV0, times its geometry occlusion map — geometry AO baked on a unique second UV set, which a
+tiled UV0 cannot hold ([Asset Standards](asset_standards.md)). The PBR records multiply it in
+`SurfaceOf`; a game surface takes it through a slot of its own, sampling `IMaterialReader::Uv1`
+([Game-Defined Surfaces](game_defined_surfaces.md)), and the engine adds nothing after it returns.
+It is sampled on every PBR draw, an absent map reading the white default as every other slot does — about
+1.5% of Forward in `[.forwardcost]`, the price of not splitting every pipeline on it. A mesh with no
+second UV set decodes `cNoUv1`, which `SampleGeometryOcclusion` reads as unoccluded, so a material shared
+with such a mesh draws it as though the map were white. The skinned tier writes `uv1` through the
+same decode, so a skinned mesh carrying the set would draw the map, but no test pins that: static
+environment art is what it is for, and a bake is only right in the pose it was baked in. The interpolant is `SECONDUV` and never
+`TEXCOORD1`: on Metal, Slang names a numbered semantic differently as a mesh output than as a
+fragment input, and the pipeline is refused.
 
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `PbrSurface` — the
 material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
@@ -250,8 +312,13 @@ coverage. **A single frame of this is noise by design**; it is only correct once
 
 The forward pass writes a screen-space velocity buffer alongside colour, as MRT slot 1: for each
 pixel, the UV displacement from where its surface sat last frame to where it sits now, so a consumer
-samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
-buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
+samples history at `uv - motion`. Beside it, in BA, is the part of that displacement the surface
+made on its own: the velocity less the one the camera alone gives this frame's world position, from
+a third clip position (`cameraPrevClip`, the current world position under `prevViewProj`). The two
+clip positions are projected by identical math, so anything nobody moved reports an own motion of
+exactly zero under any camera, and the sky writes zero outright. The format is `RGBA16_FLOAT`
+(`c_MotionVectorFormat`, in `constants/constants.h`). The texture is owned by the render target
+beside the depth buffer and cleared to zero each frame, so a pixel nothing drew reads as static.
 
 A placement carries the transform the previous frame drew it with as well as its current one
 (`ISceneView::SetInstanceTransform` writes the second and rolls the first), so the mesh shader
@@ -337,7 +404,9 @@ dense from 0 in first-use order; nothing in this chain derives or assumes one. O
 under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
 `CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
-in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
+in `BERNINI_GPU_DEBUG` builds -- here per instance, and per meshlet by the static tier's
+amplification stage in Static Depth and Forward ([Meshlet culling](#meshlet-culling)) -- and read by
+nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
@@ -516,8 +585,9 @@ beneath its caster — and statics are therefore drawn twice per frame, a cost t
 repays when this is promoted into the shared depth prepass the roadmap already assumes.
 
 * **In:** `compactDispatchArgs` as indirect args; the `c_ForwardDataBuffers` scene buffers, the
-  two `c_ExpansionBuffers`, and the material arena (`c_MaterialBuffers`) for `doubleSided` and the
-  coverage stages.
+  two `c_ExpansionBuffers`, `cull.view` and `cull.stats` for [meshlet culling](#meshlet-culling)
+  (`DeclareMeshletCullBuffers`), and the material arena (`c_MaterialBuffers`) for `doubleSided` and
+  the coverage stages.
 * **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
   `BlobShadowPhase`).
 * **Skipped** when the view's instance count is 0.
@@ -554,7 +624,9 @@ whatever the layer. A draw bucket exists only once something resolves to it: the
 first use, so a scene pays for the combinations it draws, not for the product. A surface's
 programs, and the shared blend program's arm for it, are generated when it registers, each a call
 into [lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)
-on the surface its slot's `game.slotN` binding aliases -- see
+on the surface its slot's `game.slotN` binding aliases — the engine-lit family for a surface on
+`ISurfaceSource`, the lit family (`ShadeGameLit*`, which never calls `ShadeSurface`) for one on
+`ILitSurfaceSource` -- see
 [Game-Defined Surfaces](docs/game_defined_surfaces.md). The
 two tiers' draw buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
 material offset, and neither says which tier filled them.
@@ -579,7 +651,10 @@ per disc (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
 `BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
 projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
-normal), and the pixel shader reconstructs the static surface under each pixel from the
+normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
+bounded by where its edges cross it; a volume wholly outside any
+one frustum plane — most often, all of it behind the camera — emits no quad at all
+(`lib.math.box_bounds`). The pixel shader reconstructs the static surface under each pixel from the
 [Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
@@ -634,8 +709,8 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`,
-  `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
+  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`, `cull.view` and
+  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
   one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
@@ -681,14 +756,15 @@ and why the resolve writes history rather than the backbuffer.
 `depth` are on the render grid; the history it writes is on the output one, and it rasterizes over
 the latter. So a render scale is *reconstructed* here rather than stretched at present: each output
 pixel takes the render sample whose jitter landed nearest it, weighted by how near, while the
-neighbourhood clamp and both motion discriminators stay on the render 3x3 around that sample. Where
+neighbourhood clamp's 3x3 and the dilation's cross stay on the render grid around that sample. Where
 the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
 has always been.
 
 * **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
   point sampler for the three read at their own texel centres and a linear one for the reprojected
-  history, both owned by `RenderContext`. Depth is read for one thing: what the camera alone would
-  move each pixel by, which is subtracted from the written velocity to find a surface's own motion
+  history, both owned by `RenderContext`. Depth is read for the nearest surface in the cross, whose
+  vector the pixel reprojects by, and for the view depth history keeps for disocclusion. The
+  velocity buffer's own-motion half is what keeps an animating surface out of that test
   ([Temporal Antialiasing](docs/taa.md)).
 * **Out:** the current history, at the target's output size. `PostProcess` is then pointed at it
   instead of `sceneColor`.
@@ -699,19 +775,64 @@ has always been.
 * The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
   declaration in `programs/screen/TaaResolve.slang`.
 
+### Bloom — [passes/BloomPass.{h,cpp}](libs/bgl_extended/src/passes/BloomPass.cpp)
+
+Renders the glow the [PostProcess](#postprocess) combine adds: a ladder of half-resolution levels
+(`postprocess/BloomChain.h`, starting at half the *output* size, halving to a floor of eight texels or six
+levels), walked down with the 13-tap Jimenez downsample and back up with a 9-tap tent, one graph
+pass per level in each direction (`BloomDown0..`, `BloomUp0..`), each a full-screen triangle from
+the `programs.screen.Bloom` module sharing `programs.screen.FullscreenRect`'s mesh stage. Added in
+`EndFrame` between the resolve and `PostProcess`, and **only when the target has
+`SetBloomEnabled`** — the chain is created lazily at the first frame that blooms and rebuilt on
+resize, so enabling costs nothing at target creation.
+
+The first downsample owns the two scene-facing decisions: the threshold with its quadratic soft
+knee (at threshold zero it degenerates to identity, so "bloom everything" is a setting rather than
+a branch), and a Karis-weighted quad average, so one firefly the jitter moves every frame cannot
+own the whole chain. Each upsample folds the coarser level in by `scatter` as a lerp rather than an
+add, which keeps the chain energy-conserving and leaves `intensity` — applied in the combine, not
+here — the one brightness knob.
+
+* **In:** whatever the last HDR stage produced — `sceneColor`, or the freshly resolved history on a
+  TAA target — and its own levels; the render context's linear-clamp sampler. The
+  `gBloomDownsampleData` / `gBloomUpsampleData` cbuffer names are matched against Slang reflection,
+  so they must track the declarations in `programs/screen/Bloom.slang`.
+* **Out:** `bloomUp0` (or `bloomDown0` on a target too small for a second level), which
+  `PostProcess` samples.
+* The levels are `RGBA16_FLOAT` like the scene colour, and per target, not per frame in flight:
+  consumed within the frame that wrote them.
+
+**What blooms is chosen by brightness alone.** The prefilter reads the scene colour's radiance
+against the threshold; no material can say "glow" or "don't glow", because nothing per-material
+reaches the chain. On PBR shading that is the standard selector. On flat, banded (toon/cel)
+shading it is the wrong one: a sunlit flat region sits at one level, so it either blooms whole —
+haze over clothes and faces — or not at all. Stylized engines select per material instead, with a
+bloom weight or mask the material writes; this one has none.
+
+The way to control it today is **emissive-only bloom**: set `threshold` above the brightest lit
+surface (around 1.0–1.5 at the exposure environments are normalized to) and drive glow through
+the surface's `emissive` ([Game-Defined Surfaces](game_defined_surfaces.md)), which lands in the
+scene colour at whatever radiance the surface asks for. Specular peaks can still cross a threshold
+set this way, so a stylized material wants little specular. Glow colour also goes through AgX,
+which pulls very bright colours toward white — a saturated emissive glows paler than it is
+authored.
+
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl_extended/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-Today it applies `AgX` through the LUT above, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+Today it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
+`BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing — then
+applies `AgX` through the LUT above, graded when the target has `SetColorGradeEnabled` (see
+[the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
 not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
-the stage rather than those steps: everything between a resolved scene and the screen — bloom,
-grading, exposure adaptation — belongs here as it lands.
+the stage rather than those steps: everything between a resolved scene and the screen — exposure
+adaptation next — belongs here as it lands.
 
 The outline width is **4 px at a 2160-line target, scaled by the mask's height** — not a fixed texel
 count. The mask is on the render grid while the image around it is reconstructed onto the output
@@ -731,6 +852,32 @@ contour no thicker on screen.
 * **It is the first writer of the backbuffer, and the only other is the overlay below**, which
   blends over what it wrote. `SubmitCapture` reads the last presented backbuffer, so a capture
   describes what was displayed either way — a scene golden simply submits no overlay.
+
+#### The colour grade
+
+`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl_common/shaders/src/lib/math/ColorGrade.slang)
+runs `AgX`'s two halves — `AgXLogEncode` and `AgXFormation` — with the `ColorGradeSettings` steps
+between and before them:
+
+1. **White balance**, in scene linear: a von Kries scale in CAT02 LMS. `temperature` and `tint`
+   pick a white on the CIE daylight locus as Unity does, and `WhiteBalanceLmsScale`
+   ([postprocess/color_grade.h](libs/bgl_extended/src/postprocess/color_grade.h)) turns it into
+   three gains on the CPU once per frame.
+2. **Vignette**, in scene linear: Unity's frame-shaped falloff, `vignetteIntensity` reaching a black
+   corner at 1 and `vignetteSmoothness` the exponent's share of 5.
+3. **The ASC CDL**, in the log coordinate the formation LUT reads — where a colourist applies one in
+   a scene-referred pipeline and where Blender's looks run. `slope` and `offset` act on a 25-stop
+   encoding with 0 at −12.5 EV, so a slope brightens the top of the range more than the bottom;
+   `saturation` is about Rec.709 luma, as the CDL defines it.
+4. **Contrast**, in the same coordinate, pivoting at middle grey's (0.4), so 0.18 stays where the
+   curve put it.
+
+Every default is the identity, and a neutral grade with the toggle on renders the ungraded image
+exactly (`ColorGrade_test`). There is no look: Blender's looks run in its `AgX Log` space, which no
+CDL in this coordinate reproduces, and a game authors its grade from the controls instead. The
+grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's CombineLUTs and
+Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
+work this pass does in a few dozen ALU.
 
 ### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl_extended/src/passes/OverlayPass.cpp)
 

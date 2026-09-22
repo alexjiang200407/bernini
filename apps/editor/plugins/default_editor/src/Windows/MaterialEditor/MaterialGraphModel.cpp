@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <QJsonObject>
 #include <QPointF>
@@ -14,10 +15,36 @@
 
 using QtNodes::ConnectionId;
 using QtNodes::InvalidNodeId;
+using QtNodes::InvalidPortIndex;
 using QtNodes::NodeId;
 using QtNodes::NodeRole;
+using QtNodes::PortIndex;
 using QtNodes::PortRole;
 using QtNodes::PortType;
+
+namespace
+{
+	/** Where `sink` takes the geometry occlusion map, or InvalidPortIndex for a sink with no such port. */
+	PortIndex
+	GeometryOcclusionPortOf(const MaterialSinkNode* sink)
+	{
+		const auto* pbr = qobject_cast<const MaterialOutputNode*>(sink);
+		return pbr != nullptr ? pbr->GeometryOcclusionPort() : InvalidPortIndex;
+	}
+
+	/**
+	 * The port a wire into `from` lands on once the sink is swapped, or InvalidPortIndex to drop it.
+	 * The port follows the channel groups, whose count differs between sinks, so the geometry
+	 * occlusion wire moves by what it is, and nothing else may land where that port now sits.
+	 */
+	PortIndex
+	MovedPort(PortIndex from, PortIndex oldGeometryOcclusion, PortIndex newGeometryOcclusion)
+	{
+		if (oldGeometryOcclusion != InvalidPortIndex && from == oldGeometryOcclusion)
+			return newGeometryOcclusion;
+		return from == newGeometryOcclusion ? InvalidPortIndex : from;
+	}
+}
 
 QtNodes::NodeId
 MaterialGraphModel::OutputNodeId()
@@ -99,6 +126,8 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// "internal-data" envelope, and load() expects the state itself.
 	const QJsonObject state = old->save();
 
+	const PortIndex oldGeometryOcclusionPort = GeometryOcclusionPortOf(old);
+
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
 
@@ -118,12 +147,20 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// outright, so going through it would silently drop the factors and the split layout the artist
 	// had dialled in -- and switching a material between opaque and cutout would quietly reset it.
 	// Loading straight after the node is created is what QtNodes' own loadNode does.
-	if (MaterialSinkNode* sink = delegateModel<MaterialSinkNode>(newId); sink != nullptr)
+	MaterialSinkNode* sink = delegateModel<MaterialSinkNode>(newId);
+	if (sink != nullptr)
 		sink->load(state);
+
+	const PortIndex newGeometryOcclusionPort = GeometryOcclusionPortOf(sink);
 
 	for (const ConnectionId& wire : incoming)
 	{
-		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, wire.inPortIndex };
+		const PortIndex inPort =
+			MovedPort(wire.inPortIndex, oldGeometryOcclusionPort, newGeometryOcclusionPort);
+		if (inPort == InvalidPortIndex)
+			continue;
+
+		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, inPort };
 		if (PortsAreCompatible(moved))
 			addConnection(moved);
 	}

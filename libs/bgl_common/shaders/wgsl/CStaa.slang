@@ -17,7 +17,7 @@ struct BoundInputs : IResolveInputs
     float HistoryDepth(float2 uv) { return gHistory.SampleLevel(gPoint, uv, 0.0).a; }
     float4 Scene(float2 uv) { return gScene.SampleLevel(gPoint, uv, 0.0); }
     float3 SceneLinear(float2 uv) { return gScene.SampleLevel(gLinear, uv, 0.0).rgb; }
-    float2 Motion(float2 uv) { return gMotion.SampleLevel(gPoint, uv, 0.0).xy; }
+    float4 Motion(float2 uv) { return gMotion.SampleLevel(gPoint, uv, 0.0); }
     float Depth(float2 uv) { return gDepth.SampleLevel(gPoint, uv, 0.0).r; }
 };
 
@@ -29,12 +29,10 @@ void main(uint3 id: SV_DispatchThreadID)
     let y = RgbToYCoCg(ToneWeight(c));
     let back = UnToneWeight(YCoCgToRgb(y));
     let w = PhaseWeight(0.25, 0.125, 2.0, 1.0);
-    let m = CameraMotion(float2(0.5, 0.5), 0.5, float2(0.0, 0.0), float4x4(1.0), float4x4(1.0));
 
     BoundInputs inputs;
     ResolveParams p;
     p.clipToView = float4x4(1.0);
-    p.viewToPrevClip = float4x4(1.0);
     p.viewToPrevView = float4x4(1.0);
     p.cameraPairValid = 1.0;
     p.jitter = float2(0.0, 0.0);
@@ -49,5 +47,5 @@ void main(uint3 id: SV_DispatchThreadID)
     p.historyValid = 1.0;
     let resolved = TaaResolve(inputs, p, float2(0.5, 0.5));
 
-    gOut[0] = float4(back, w) + float4(m, 0.0, 0.0) + resolved;
+    gOut[0] = float4(back, w) + resolved;
 }

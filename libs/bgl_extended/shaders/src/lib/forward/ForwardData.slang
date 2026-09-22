@@ -2,6 +2,7 @@ import idl.Geom;
 import idl.IPlayback;
 import idl.MeshInstance;
 import idl.Meshlet;
+import idl.MeshletGroup;
 import idl.PlaybackType;
 import idl.RawEntry;
 import idl.Submesh;
@@ -18,6 +19,7 @@ public struct ForwardData
     public EntryBuffer<Geom> geomBuffer;
     public RangeBuffer<Submesh> submeshBuffer;
     public RangeBuffer<Meshlet> meshletBuffer;
+    public RangeBuffer<MeshletGroup> meshletGroupBuffer;
     public RangeBuffer<uint> vertexMapBuffer;
     public RawBuffer vertexDataBuffer;
     public RangeBuffer<uint> indexBuffer;

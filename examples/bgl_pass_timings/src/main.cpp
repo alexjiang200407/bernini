@@ -113,7 +113,7 @@ try
 
 	const auto dataRoot = std::filesystem::path(opts.project);
 
-	auto graphics = headless::CreateHeadlessGraphics();
+	auto graphics = headless::CreateHeadlessGraphics(dataRoot);
 	auto target   = headless::CreateHeadlessTarget(graphics, opts.width, opts.height, opts.taa);
 
 	// Every frame from here on is timed, which is what the whole run is for.

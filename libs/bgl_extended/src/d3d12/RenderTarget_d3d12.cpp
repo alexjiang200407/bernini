@@ -171,8 +171,6 @@ namespace bgl
 
 	namespace
 	{
-		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
-
 		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
 		// Alpha is carried because the blend state writes destination alpha and the capture path
 		// reads it, which rules out the packed three-channel float formats.

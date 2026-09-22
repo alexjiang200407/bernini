@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <bgl/LayerType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 #include <bgl/types/ChannelRouteDesc.h>
 
@@ -30,5 +31,8 @@ namespace bgl
 		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
 		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic
 		std::array<ChannelRouteDesc, 2> normal;     // X, Y (Z reconstructed in shader)
+
+		// Sampled whole, never routed; see PbrMaterialDesc.
+		TextureAssetHandle geometryOcclusionTexture;
 	};
 }

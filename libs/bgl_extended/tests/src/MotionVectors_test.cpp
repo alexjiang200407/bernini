@@ -196,6 +196,12 @@ namespace
 		{
 			return bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), width, height);
 		}
+
+		std::vector<glm::vec2>
+		ReadOwnMotion()
+		{
+			return bgl::test::ReadOwnMotion(gfx.Get(), target.Get(), width, height);
+		}
 	};
 
 	glm::vec2
@@ -667,6 +673,72 @@ TEST_CASE("A moved instance writes its own velocity", "[motionvectors][transform
 	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
 
 	// Guards the assertion against passing on a zero it was supposed to detect.
+	CHECK(std::abs(expected.x) > 1e-2f);
+}
+
+// The TAA resolve reads a surface's own motion to tell an animating silhouette from the backdrop
+// the camera drags past it. A camera move must therefore leave it at exactly zero -- not merely
+// small -- on everything that did not move, sky included, however large the velocity it reports.
+TEST_CASE(
+	"A moving camera gives static geometry and the sky no motion of their own",
+	"[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+	fixture.AddSkybox();
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	for (const glm::vec2& texel : fixture.ReadOwnMotion())
+	{
+		REQUIRE(texel.x == 0.0f);
+		REQUIRE(texel.y == 0.0f);
+	}
+}
+
+// Both movers at once: the instance slides and the camera pans. Its own motion is its velocity less
+// the camera's contribution, which is the displacement the slide alone makes on screen.
+TEST_CASE(
+	"A moved instance's own motion excludes the camera's",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
+	const glm::vec3 eyeAfter{ 0.4f, 0.3f, c_CameraZ };
+
+	fixture.RenderFrom(CameraAt(eyeBefore));
+
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	const bgl::Camera after = CameraAt(eyeAfter);
+	fixture.RenderFrom(after);
+
+	const glm::vec2 own      = CentrePixel(fixture.ReadOwnMotion());
+	const glm::vec2 velocity = CentrePixel(fixture.ReadMotionVectors());
+
+	// Under the previous camera: the point now under the centre, against where it sat before the
+	// slide.
+	const bgl::Camera before   = CameraAt(eyeBefore);
+	const glm::vec3   surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2   expected = ProjectToUv(before, surface) -
+	                             ProjectToUv(before, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("own = " << own.x << ", " << own.y << "; velocity = " << velocity.x << ", " << velocity.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(own.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(own.y == Catch::Approx(expected.y).margin(1e-3));
+
+	// The camera's share is large, so an own motion that merely copied the velocity would fail.
+	CHECK(std::abs(velocity.x - own.x) > 1e-2f);
 	CHECK(std::abs(expected.x) > 1e-2f);
 }
 

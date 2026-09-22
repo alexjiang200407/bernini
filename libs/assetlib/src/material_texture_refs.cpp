@@ -46,11 +46,13 @@ namespace assetlib
 			mapOne(material.pbr.baseColorTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.normalTexture, RefKind::kBakedMap, map, seen);
 			mapOne(material.pbr.ormTexture, RefKind::kBakedMap, map, seen);
+			mapOne(material.pbr.geometryOcclusionTexture, RefKind::kBakedMap, map, seen);
 			for (ChannelRoute& route : material.pbr.routes)
 				mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			break;
 
 		case ShadingModel::kPbrSurface:
+		case ShadingModel::kLitSurface:
 			// The PBR shape per slot: a whole binding or a composited map is what the renderer
 			// samples, and a route is what the bake reads (ADR-7).
 			for (SurfaceTextureBinding& texture : material.surface.textures)

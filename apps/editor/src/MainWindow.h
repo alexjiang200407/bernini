@@ -50,20 +50,24 @@ class MainWindow : public QMainWindow
 
 public:
 	/**
+	 * @param project The project to open, and the one the renderer registers surfaces from. There is
+	 *                no editor without one: choosing it is the landing page's job, before any of
+	 *                this is built.
+	 * @param plugins The plugins main loaded, whose kinds `project` was opened against. The window
+	 *                registers their editor halves after the host-linked plugin's.
 	 * @param configPath The config.json to build from. Empty takes the one deployed next to the
 	 *                   executable, which is what ships; a test names one of its own, because
 	 *                   editor_tests runs from the directory that file is deployed into.
 	 * @param startup Where building the window reports -- the pipelines bgl compiles, then the
 	 *                project's rebuild. Empty and startup is silent, which is what it was before
 	 *                there was a screen to report to and what the tests still do.
-	 * @param project The project to open and register surfaces from, outranking the config's
-	 *                `startupProject`. Empty defers to the config.
 	 */
 	explicit MainWindow(
-		QWidget*                 parent     = nullptr,
-		std::filesystem::path    configPath = {},
-		background::ProgressSink startup    = {},
-		std::filesystem::path    project    = {});
+		std::unique_ptr<editor::plugins::PluginSession> plugins,
+		assetlib::Project                               project,
+		std::filesystem::path                           configPath = {},
+		background::ProgressSink                        startup    = {},
+		QWidget*                                        parent     = nullptr);
 	~MainWindow();
 
 	/**
@@ -150,9 +154,6 @@ private:
 	SetActiveProject(assetlib::Project project);
 
 	void
-	ShowEmptyState();
-
-	void
 	ShowProjectState();
 
 	// Adds the viewport frame-time readout to the status bar and connects every viewport to it. The
@@ -168,7 +169,7 @@ private:
 
 	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
 	void
-	Build(const std::filesystem::path& configPath, const std::filesystem::path& project);
+	Build(const std::filesystem::path& configPath, assetlib::Project project);
 
 	/**
 	 * Destroys thumbnails and panels before their project asset manager and renderer.
@@ -220,6 +221,8 @@ private:
 
 	editor::MainWindowWidgets m_Ui;
 	std::optional<bool>       m_TaaOverride;
+	std::optional<bool>       m_BloomOverride;
+	std::optional<bool>       m_ColorGradeOverride;
 	std::optional<float>      m_RenderScaleOverride;
 	std::optional<float>      m_ReconstructionWidthOverride;
 	bool                      m_OutlineEnabled = true;
@@ -241,6 +244,9 @@ private:
 		QDockWidget*                  dock;
 		QPointer<editor::EditorPanel> panel;
 	};
+
+	// Every project this window opens is recorded here, for the landing page to offer next launch.
+	std::filesystem::path m_RecentProjectsFile;
 
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;

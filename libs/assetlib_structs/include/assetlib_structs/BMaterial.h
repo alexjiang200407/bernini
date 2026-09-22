@@ -16,8 +16,12 @@ namespace assetlib
 
 		// The same lighting, over a material half the game computes. Its textures bind whole by
 		// name; a slot may instead carry channel routes and a per-slot bake (SurfaceTextureBinding).
-		// A game-defined *lighting* model would be a third value.
 		kPbrSurface = 1,
+
+		// A game-defined lighting model: the surface's Shade returns radiance and the engine's PBR
+		// never runs. The document shape is kPbrSurface's exactly -- a surface name, parameters,
+		// textures -- and only the contract the named surface must conform to differs.
+		kLitSurface = 2,
 
 		kCount,
 	};
@@ -94,6 +98,11 @@ namespace assetlib
 		std::string baseColorTexture;  // path to the base-color texture file (empty when absent)
 		std::string normalTexture;     // path to the normal texture file (empty when absent)
 		std::string ormTexture;        // path to the occlusion/roughness/metallic texture file
+
+		// A single-channel occlusion map sampled through the mesh's second UV set and multiplied with
+		// the ORM's own; empty when absent. Sampled whole: not routed, not baked. A surface takes the
+		// same map through a slot of its own instead.
+		std::string geometryOcclusionTexture;
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;

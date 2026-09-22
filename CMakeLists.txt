@@ -76,6 +76,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_definitions($<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>)
 
+# Read by libc++ alone: MSVC's debug runtime already aborts on an empty optional dereferenced or an
+# index past the end, and without this a Debug build on macOS lets both through silently.
+add_compile_definitions($<$<CONFIG:Debug>:_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG>)
+
 
 # Embedded, these are the consumer's to choose and a `set()` here would not reach its executable
 # anyway -- so the engine stages its shaders and assets into whatever the consumer picked. It has

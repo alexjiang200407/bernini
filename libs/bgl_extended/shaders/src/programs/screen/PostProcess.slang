@@ -1,3 +1,4 @@
+import lib.math.ColorGrade;
 import lib.math.Tonemap;
 import lib.screen.TonemapLut;
 
@@ -21,6 +22,24 @@ struct PostProcessData
     // The display curve's LUT and the linear clamp it is read through.
     Texture2D.Handle tonemapLut;
     SamplerState.Handle lutSampler;
+
+    // The bloom chain's finished level 0, on the source's grid at half resolution -- always
+    // linearly sampled, whatever carries the scene colour across.
+    Texture2D.Handle bloom;
+    SamplerState.Handle bloomSampler;
+    float bloomIntensity;
+    uint bloomEnabled;
+
+    // lib.math.ColorGrade's fields, flat because a cbuffer member is addressed by one name.
+    float3 gradeWhiteBalance;
+    float3 gradeSlope;
+    float3 gradeOffset;
+    float3 gradePower;
+    float gradeSaturation;
+    float gradeContrast;
+    float gradeVignetteIntensity;
+    float gradeVignetteSmoothness;
+    uint gradeEnabled;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -106,11 +125,36 @@ float4 PSMain(VSOut input) : SV_Target
 {
     float4 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv, 0.0);
 
+    // Added in linear radiance, ahead of the curve: the glow is of the scene, not of the display.
+    if (gPostProcessData.bloomEnabled != 0)
+    {
+        scene.rgb += gPostProcessData.bloomIntensity * gPostProcessData.bloom.SampleLevel(gPostProcessData.bloomSampler, input.uv, 0.0).rgb;
+    }
+
     TonemapLut lut;
     lut.strip = gPostProcessData.tonemapLut;
     lut.sampler = gPostProcessData.lutSampler;
 
-    float3 color = AgX(scene.rgb, lut);
+    float3 color;
+
+    if (gPostProcessData.gradeEnabled != 0)
+    {
+        ColorGrade grade;
+        grade.whiteBalance = gPostProcessData.gradeWhiteBalance;
+        grade.slope = gPostProcessData.gradeSlope;
+        grade.offset = gPostProcessData.gradeOffset;
+        grade.power = gPostProcessData.gradePower;
+        grade.saturation = gPostProcessData.gradeSaturation;
+        grade.contrast = gPostProcessData.gradeContrast;
+        grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
+        grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
+
+        color = AgXGraded(scene.rgb, input.uv, grade, lut);
+    }
+    else
+    {
+        color = AgX(scene.rgb, lut);
+    }
 
     if (gPostProcessData.outlineEnabled != 0)
     {

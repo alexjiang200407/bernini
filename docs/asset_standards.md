@@ -285,6 +285,7 @@ struct — see `DecodeVertex` in
 | position | `float32x3` | **yes** | must be the **first** attribute (offset 0) — the meshlet builder reads positions at stride intervals from offset 0 |
 | normal | `float32x3` | no | default `(0,0,1)` |
 | texcoord0 | `float32x2` | no | default `(0,0)` |
+| texcoord1 | `float32x2` | no | carried **only** where the primitive's material samples a map through it — see [Geometry AO](#geometry-ao-on-a-second-uv-set); absent, the renderer reads that map as white |
 | tangent | `float32x4` | no | `xyz` + `w` = bitangent handedness; authored upstream when the source has one, else **derived at import**; absent only when there are no UVs/normals/triangles to derive from, and then → geometric-normal fallback |
 | joints0 | `uint16x4` | no | bone indices, **already in the skeleton's bone order** — not the glTF's joint order |
 | weights0 | `unorm16x4` | no | renormalized to sum 1 before quantizing |
@@ -296,6 +297,36 @@ them is only drawable against the `.bskel` it names — see [Rigs](#rigs).
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
 (CPU) mirror [libs/bgl_common/shaders/src/idl/VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) (GPU) — the enum
 ordering is shared so a layout maps field-for-field between them.
+
+### Geometry AO on a second UV set
+
+A material's AO through UV0 — ORM red — can only hold *texture* AO on art that tiles or atlases its
+UVs: one texel is many places, so it cannot also say that one of them sits under an eave. Geometry
+AO goes on a **second, unique UV set** instead, the way a lightmap does, and multiplies the first.
+Authoring it:
+
+* **Unwrap a unique `TEXCOORD_1`**: no two triangles share a texel, and it fills the unit square
+  without wrapping. A margin between islands keeps the filter from bleeding one into the next. The
+  import warns on a set that leaves `[0, 1]` — the renderer tells a mesh with *no* second set by a
+  UV1 far outside it.
+* **Bake a single channel into it.** Red is what is read; a greyscale map is the usual form. It is
+  sampled clamped and trilinear, so its resolution can sit far below the tiled maps' — occlusion is
+  soft.
+* **Name it as glTF does**: `material.occlusionTexture` with `texCoord: 1`. A `texCoord: 0` map
+  still routes into ORM red; any set past the second is refused. `strength` is ignored with a
+  warning, as for the first set: bake the map at the strength it is meant to have.
+* **What it holds is what was baked together.** It lives on the material and is read per mesh, so
+  contact between pieces placed separately is only in it if they were baked in one scene — a crate
+  baked on a stand-in ground plane darkens at its foot; the same crate baked alone does not.
+* **A set nothing samples is not carried.** Exporters emit degenerate ones — every vertex at one
+  point — and a primitive whose material samples no map through `TEXCOORD_1` imports exactly as if
+  it had none.
+* **In the material editor it is the PBR sink's last port, *Geometry Occlusion (UV1)***, on the opaque,
+  cutout, hashed and blended sinks alike. A game surface's node has none: a surface shows the slots
+  it declares, and takes this map through one of its own. Wire a texture's red into it; the map is sampled whole, so another
+  channel's wire names the file and warns. It is last so a board saved before it existed keeps every
+  connection, and a document naming the map whose board has no such wire gets one on open — Save
+  compiles the board, and would otherwise drop the key.
 
 ### Normal & tangent space
 
@@ -338,8 +369,18 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
-* **A submesh's meshlet count is unbounded**, up to the 65535 thread groups one `DispatchMesh` can
-  launch. `Scene::AddStaticMeshGeom`
+* **One bounding sphere per run of `c_MeshletsPerGroup` (8) meshlets**, fitted to the vertices of
+  the whole run and stored in `BMesh::meshletGroups`, which each submesh names by
+  `firstMeshletGroup` — the count follows from its meshlet count. This is what the static tier's
+  amplification stage frustum-culls in ([Passes § Meshlet culling](docs/passes.md#meshlet-culling)),
+  so the fit must enclose every vertex every meshlet under it draws or the renderer drops geometry
+  that is on screen. `assetlib::c_MeshletsPerGroup` and `idl::cMeshletsPerGroup` are separate
+  constants — `bgl` does not link `assetlib` — and a `static_assert` in
+  [Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), the one file that sees both, holds them
+  equal.
+* **A submesh's meshlet count is unbounded**, up to the largest multiple of `c_MeshletsPerGroup`
+  under the 65535 thread groups one `DispatchMesh` can launch, since the tier dispatches whole
+  groups. `Scene::AddStaticMeshGeom`
   ([libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp)) emits one GPU submesh per source
   submesh and rejects anything past that limit; it never splits a submesh.
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
@@ -429,6 +470,17 @@ in `docs/specs/`.
   and `doubleSided`, top-level keys beside `shadingModel`. `gamelib` derives the renderer's `LayerType`
   from `alphaMode`; a model's payload holds nothing about how alpha is read.
 
+  **`PbrParams::geometryOcclusionTexture` — geometry occlusion**: the top-level `geometryOcclusion` key, a
+  PBR key like the factors, so a surface document is cleared of it with the rest. A single-channel
+  map sampled through the mesh's *second* UV set and multiplied with ORM red. It is a whole texture,
+  never a channel route and never part of the baked triplet — the triplet is addressed by UV0, and a
+  map on another UV set cannot be composited into it — so no bake reads or writes it. The renderer
+  samples it directly, which is why the reference graph and the baked-map prune hold it as a baked
+  map. It scales the environment's light and never the sun's, like the AO it multiplies; on a mesh
+  with no second UV set it reads as white ([Passes](passes.md)). Absent, the key is not written, so a
+  material without one is byte-for-byte what it was before the key existed. A game surface takes the
+  same map through a slot of its own ([Game-Defined Surfaces](game_defined_surfaces.md)).
+
   **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
 
   * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
@@ -467,8 +519,11 @@ in `docs/specs/`.
   **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, its document
   keys in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
-  today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
-  `shadingModel` with no `default`, so the compiler names every one of them.
+  rejects any model it has no path for rather than rendering it wrong. Each of those is a `switch` on
+  `shadingModel` with no `default`, so the compiler names every one of them. The three models today
+  are `pbr`, `pbrSurface` and `litSurface`; the surface pair share one document shape and one
+  renderer path, differing only in the contract the named surface must conform to
+  ([docs/game_defined_surfaces.md](game_defined_surfaces.md) § The document).
 
   That is the offline half. The renderer's half lives in `bgl_extended`: a `MaterialType` enumerator and a
   material struct in the IDL (`libs/bgl_common/shaders/src/idl`, regenerated by `just idl`), whose texture handles
@@ -500,20 +555,21 @@ in `docs/specs/`.
   I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
-    key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
-    under `Derived/SourceTextures/`, the machine-ready `baked` `.ktx2` under `Derived/BakedTextures/`, and the `SourceStamp`
-    the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
+    key, the lighting joins its two routes into one. Every map is an `EnvMapRoute`: the `source`, the
+    imported `.hdr` or cube `.ktx2` under `Authored/EnvSources/`, the machine-ready `baked` `.ktx2`
+    under `Derived/BakedTextures/`, and the `SourceStamp` the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
     The authored presentation lives on the `.benv` document, not here.
   * **Sky and lighting are separate files because their lifetimes are.** Re-authoring a sky is
     immediate; re-convolving the lighting it implies is minutes of work that the same edit need
     not trigger.
-  * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
-    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
-    routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
-    `Derived/BakedTextures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
-    themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
-  * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
-    maps, so it must move whenever they do.
+  * **The bake convolves.** `AssetStore::BakeSky`/`BakeEnvLighting`
+    ([libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) read
+    the parameters from the `.bimport` beside the routed source, project and convolve it in memory
+    (`skyChain`, `prefilterRadiance`, `irradianceSh`), and encode the result into content-addressed
+    `.ktx2` under `Derived/BakedTextures/` — BC7 sRGB for an LDR sky or prefilter, RGB9E5 otherwise;
+    the rule and its reasons are in [Environment Maps](envmaps.md). Nothing float is written.
+  * `BakeEnvLighting` also re-derives `exposure` from the irradiance it convolved: it is a property of
+    the maps, so it must move whenever they do.
   * `isSkyBakeStale`/`isEnvLightingBakeStale` mirror `bakeIsStale`: unrouted is never stale; a
     changed, missing or never-baked source is.
   * **The texture prune knows these assets.** Its mark phase reads every `.bsky`/`.benvl` below the
@@ -535,10 +591,9 @@ in `docs/specs/`.
     `.benv` must reference is its consumer's rule, not the container's.
   * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
     ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h))
-    follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
-    map while it is current, the float source it was compiled from otherwise. Same branch a material
-    takes (`drawsLoose`), and for the same reason — `Derived/BakedTextures/` is regenerated per platform, so a
-    fresh checkout has sources and no bakes. Only a route with neither throws.
+    follows the chain and loads, per route, the baked map `envMapToDraw` names — stale or not, and
+    never the source, which is an image to convolve rather than one to sample. A route with no baked
+    map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
 **`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
@@ -743,8 +798,10 @@ both file and VRAM.
   Pass `Ktx2Decode::kRgba8` to transcode to `KTX_TTF_RGBA32` instead — for code that must *read* texels
   rather than draw them, i.e. the material bake compositing its sources. An already-block-compressed
   file (a baked map) cannot be decoded that way and is rejected: BC blocks do not transcode back.
-* **HDR/IBL stays uncompressed.** Basis Universal is LDR-only, so float cube/2D maps skip compression
-  and keep their `R16/R32` float formats (BC6H HDR compression is a possible follow-up).
+* **HDR stays uncompressed.** Basis Universal is LDR-only, so a float image skips compression and keeps
+  its float format; an environment bake packs one RGB9E5. An environment map whose values all fit
+  [0, 1] is quantized to 8-bit sRGB first and bakes BC7 like any LDR texture — see
+  [Environment Maps](envmaps.md). BC6H, for HDR, has no encoder in this build.
 * **Per-map targets are chosen at bake, not at load.** `loadKTX2` still needs no per-map role: a mesh
   import's UASTC textures all transcode to BC7, and a material bake's textures already carry their
   block format (`BC1_RGB_SRGB` / `BC5_UNORM` / `BC7_UNORM`), so nothing about the file has to be
@@ -848,11 +905,12 @@ Ten rules, each of which is a way to get this wrong:
   no metallic-roughness texture leaves roughness and metallic **unrouted**, which the bake fills with
   the group's fallback: the factors alone drive them.
 
-  The map is **refused** rather than routed when its `texCoord` is not 0. Only `TEXCOORD_0` is read
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), and baked AO is commonly
-  unwrapped onto a second UV set — sampling it through the wrong parameterisation is confident
-  garbage, which is worse than the white default. `occlusionTexture.strength` has no home in
-  `PbrParams` and is likewise ignored; both cases warn rather than passing silently.
+  A map on `texCoord: 1` is **not** routed into ORM red: ORM is sampled through `TEXCOORD_0`, and
+  baked AO is commonly unwrapped onto a second UV set, so folding it in would be confident garbage.
+  The import keeps it beside the ORM as `geometryOcclusionTexture` instead, and the board wires it into
+  the sink's *Geometry Occlusion (UV1)* port — see [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
+  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)). `occlusionTexture.strength`
+  has no home in `PbrParams` and is ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
   sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB with the alpha left
@@ -1091,8 +1149,9 @@ assetlib_cli obj -p <project> Derived/Meshes/model.bmesh -o model.obj
 # Derive a tangent basis in place, for a mesh imported before the importers did it themselves
 assetlib_cli tangents -p <project> Derived/Meshes/model.bmesh
 
-# Convolve an HDRI into the project's split environment set: float sources into Derived/SourceTextures/, a
-# baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an Authored/Environments/forest.benv naming the pair
+# Convolve an HDRI into the project's split environment set: the source copied into Authored/EnvSources/
+# with its .bimport, a baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an
+# Authored/Environments/forest.benv naming the pair
 assetlib_cli envmap -p <project> forest.hdr --name forest
 
 # Print what is actually inside a container (the kind is read from the file's magic, not its name).

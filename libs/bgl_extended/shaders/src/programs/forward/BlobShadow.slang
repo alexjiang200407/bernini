@@ -1,6 +1,7 @@
 import idl.BlobShadow;
 import idl.Constants;
 import idl.MeshInstance;
+import lib.math.box_bounds;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.Texture;
@@ -56,10 +57,6 @@ static const float cTopSlack = 0.02;
 // it ramps out, so a surface tilted past ~70 degrees -- a wall -- receives nothing.
 static const float cFacingRamp = 0.35;
 
-// The corners of the shadow volume: a box, so the two footprint axes and the sweep give 2^3. The
-// loop below reads i's bits as those three signs, which is why this is not free to change.
-static const uint cVolumeCorners = 8;
-
 struct VSOut
 {
     float4 position : SV_Position;
@@ -72,7 +69,7 @@ struct VSOut
 
 // The volume a blob's shadow can land in: the caster's footprint swept from just above the caster
 // down to fadeHeight below it.
-void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolumeCorners])
+void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cBoxCorners])
 {
     let n = gBlobShadowData.groundNormal;
 
@@ -88,7 +85,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
     let bottom = position - n * blob.fadeHeight;
 
     [unroll]
-    for (uint i = 0; i < cVolumeCorners; ++i)
+    for (uint i = 0; i < cBoxCorners; ++i)
     {
         let sx = (i & 1) != 0 ? 1.0 : -1.0;
         let sy = (i & 2) != 0 ? 1.0 : -1.0;
@@ -99,7 +96,7 @@ void VolumeCorners(BlobShadow blob, MeshInstance mesh, out float3 corners[cVolum
 // The volume a foot's shadow can land in: the sole's heel-to-ball segment widened by the radius,
 // swept from `lift` above the higher end down to fadeHeight below the lower one. A box in the ground
 // plane's own axes, so the corners keep the order VolumeCorners gives them.
-void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float3 ballPos, out float3 corners[cVolumeCorners])
+void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float3 ballPos, out float3 corners[cBoxCorners])
 {
     let n = gBlobShadowData.groundNormal;
 
@@ -116,7 +113,7 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float
     let hi = max(heelIn, ballIn) + float3(radius, radius, blob.lift + blob.fadeHeight * cTopSlack);
 
     [unroll]
-    for (uint i = 0; i < cVolumeCorners; ++i)
+    for (uint i = 0; i < cBoxCorners; ++i)
     {
         let x = (i & 1) != 0 ? hi.x : lo.x;
         let y = (i & 2) != 0 ? hi.y : lo.y;
@@ -133,16 +130,10 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     let blob = gBlobShadowData.blobBuffer[gid];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
 
-    SetMeshOutputCounts(4, 2);
-
-    // The quad covers the volume's screen bounds rather than rasterizing the volume itself: a
-    // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
-    // reconstruction anyway. A corner at or behind the near plane makes the projected bounds
-    // meaningless, so that quad covers the whole viewport instead.
     // A branch, not a select: a body disc's `soleSlot` is no index, and a select loads both sides.
     var heelPos = float3(0.0, 0.0, 0.0);
     var ballPos = float3(0.0, 0.0, 0.0);
-    float3 corners[cVolumeCorners];
+    float3 corners[cBoxCorners];
     if (blob.soleSlot != cBodyDisc)
     {
         heelPos = gBlobShadowData.palettes[blob.soleSlot].xyz;
@@ -154,38 +145,17 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
         VolumeCorners(blob, mesh, corners);
     }
 
-    var lo = float2(1.0, 1.0);
-    var hi = float2(-1.0, -1.0);
-    var behind = false;
+    // The quad covers the volume's screen bounds rather than rasterizing the volume itself: a
+    // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
+    // reconstruction anyway. A volume the frustum does not reach emits nothing, since every pixel
+    // it covered would be rejected.
+    let rect = ProjectBoxBounds(gBlobShadowData.viewProj, corners);
+    let quads = uint(!rect.IsEmpty());
+    SetMeshOutputCounts(4 * quads, 2 * quads);
 
-    [unroll]
-    for (uint i = 0; i < cVolumeCorners; ++i)
+    if (gtid < 4 * quads)
     {
-        let clip = mul(gBlobShadowData.viewProj, float4(corners[i], 1.0));
-        if (clip.w <= 0.0)
-        {
-            behind = true;
-        }
-        else
-        {
-            let ndc = clip.xy / clip.w;
-            lo = min(lo, ndc);
-            hi = max(hi, ndc);
-        }
-    }
-
-    if (behind)
-    {
-        lo = float2(-1.0, -1.0);
-        hi = float2(1.0, 1.0);
-    }
-
-    lo = max(lo, float2(-1.0, -1.0));
-    hi = min(hi, float2(1.0, 1.0));
-
-    if (gtid < 4)
-    {
-        let corner = float2((gtid & 1) != 0 ? hi.x : lo.x, (gtid & 2) != 0 ? hi.y : lo.y);
+        let corner = float2((gtid & 1) != 0 ? rect.hi.x : rect.lo.x, (gtid & 2) != 0 ? rect.hi.y : rect.lo.y);
 
         VSOut vout;
         vout.position = float4(corner, 0.0, 1.0);
@@ -195,7 +165,7 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
         verts[gtid] = vout;
     }
 
-    if (gtid == 0)
+    if (gtid < quads)
     {
         tris[0] = uint3(0, 1, 2);
         tris[1] = uint3(2, 1, 3);

@@ -21,8 +21,9 @@ namespace bgl
 
 	/**
 	 * Reads the one surface out of a game's compiled module: the struct conforming to
-	 * `ISurfaceSource`, its `MaterialParams` fields at the offsets a record holds them at, the texture
-	 * fields among them by their declared type, and the defaults on the values that are left.
+	 * `ISurfaceSource` or `ILitSurfaceSource` — `SurfaceType::shading` says which — its
+	 * `MaterialParams` fields at the offsets a record holds them at, the texture fields among them
+	 * by their declared type, and the defaults on the values that are left.
 	 *
 	 * **Reflect on a scalar-layout target** -- DXIL, whatever backend draws it. The offsets must be
 	 * the ones `RawBuffer.Load<MaterialParams>` reads at, and a raw load rebuilds a struct from
@@ -43,9 +44,10 @@ namespace bgl
 	 * @param targetIndex Which of the session's targets the layout is read for.
 	 * @return The reflected surface and the name of the struct it was read from, or nothing when the
 	 *         module does not import the contract.
-	 * @throws std::runtime_error if the module imports the contract but holds no conforming struct
-	 *         or more than one, declares more textures than a record carries, declares a parameter
-	 *         of a type the engine cannot pack, or does not reflect at all. Not
+	 * @throws std::runtime_error if the module imports a contract but holds no conforming struct,
+	 *         more than one, or one conforming to both contracts; declares more textures than a
+	 *         record carries; declares a parameter
+	 *         of a type the engine cannot pack; or does not reflect at all. Not
 	 *         `bgl::ApiError`: that type is the renderer's to throw, and registration is the seam
 	 *         where a bad module becomes one.
 	 */

@@ -15,11 +15,13 @@
 #include <QJsonObject>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QString>
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
 #include <filesystem>
 #include <memory>
 #include <qlatin1stringview.h>
+#include <qlogging.h>
 #include <qnamespace.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
@@ -100,6 +102,20 @@ MaterialOutputNode::CompileInto(
 		pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
 		pbr.routes[i].channel = wired.channel;
 	}
+
+	// Sampled whole with its red read, so a wire from another channel names the file and no more.
+	const ChannelData::Route occlusion = GeometryOcclusionRoute();
+	if (!occlusion.path.isEmpty() && occlusion.channel != 0)
+	{
+		qWarning(
+			"MaterialEditor: the geometry occlusion map reads red; the %c channel wired from '%s' "
+			"is "
+			"not "
+			"the one sampled",
+			"rgba"[occlusion.channel & 3u],
+			qPrintable(occlusion.path));
+	}
+	material.pbr.geometryOcclusionTexture = Rebase(occlusion.path, dataRoot, true).toStdString();
 }
 
 unsigned int
@@ -150,37 +166,52 @@ MaterialOutputNode::ResolvePort(QtNodes::PortIndex port) const
 }
 
 unsigned int
-MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+MaterialOutputNode::GroupPortCount() const
 {
-	if (portType != QtNodes::PortType::In)
-		return 0u;
-
 	unsigned int total = 0;
 	for (const unsigned int count : m_GroupPorts) total += count;
 	return total;
 }
 
+unsigned int
+MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+{
+	return portType == QtNodes::PortType::In ? GroupPortCount() + 1u : 0u;
+}
+
 QtNodes::NodeDataType
 MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
+	if (port == GeometryOcclusionPort())
+		return ChannelData::ScalarType();
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
-		return ChannelData::Type(1);
+		return ChannelData::ScalarType();
 
 	// One wide port takes the whole group; expanded, each port takes a single channel. The opaque
 	// node's base color is a 3-wide RGB port, so a texture's RGBA bundle will not connect to it.
-	return ChannelData::Type(IsCollapsed(ref.group) ? m_GroupSizes[ref.group] : 1);
+	return IsCollapsed(ref.group) ? ChannelData::Type(m_GroupSizes[ref.group]) :
+	                                ChannelData::ScalarType();
 }
 
 void
 MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
+	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
+	// A wire is refused unless its type matches the port's, so a live payload is a ChannelData.
+	auto channelData = std::dynamic_pointer_cast<ChannelData>(data);
+
+	if (port == GeometryOcclusionPort())
+	{
+		m_GeometryOcclusion = std::move(channelData);
+		Q_EMIT Changed();
+		return;
+	}
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return;
-
-	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
-	auto channelData = std::dynamic_pointer_cast<ChannelData>(data);
 
 	if (IsCollapsed(ref.group))
 		m_Bundles[ref.group] = std::move(channelData);
@@ -533,6 +564,9 @@ MaterialOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) cons
 	static const char* const c_Captions[c_ChannelCount] = { "Base R",   "Base G",   "Base B",
 		                                                    "Base A",   "AO",       "Roughness",
 		                                                    "Metallic", "Normal X", "Normal Y" };
+
+	if (port == GeometryOcclusionPort())
+		return QStringLiteral("Geometry Occlusion (UV1)");
 
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)

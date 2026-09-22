@@ -84,12 +84,16 @@ namespace assetlib
 			if (present == 0)
 				return false;
 
-			core::throw_runtime_error_if(
-				present < routed,
-				"it routes '{}', which is not on disk",
-				*missing);
+			if (present < routed)
+				core::throw_runtime_error("it routes '{}', which is not on disk", *missing);
 
 			return true;
+		}
+
+		bool
+		hasSource(const AssetStore& store, const EnvMapRoute& route)
+		{
+			return !route.source.empty() && store.StampOf(route.source).size != 0;
 		}
 
 		/**
@@ -98,6 +102,10 @@ namespace assetlib
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
 		 * one (a binding naming a vanished submesh is this file's failure); everything else is
 		 * read and re-saved at the current form.
+		 *
+		 * On a dry run, an environment container that would be re-baked comes back empty -- no
+		 * container serializes to nothing, so it reads as a change -- because its map's name
+		 * follows from the cooked pixels, and resolving it would cost the convolution.
 		 */
 		std::optional<std::vector<std::byte>>
 		resave(
@@ -150,11 +158,31 @@ namespace assetlib
 
 				return AssetCodec<BMaterial>::Serialize(material);
 			}
+			// A map lost from under its container is the same drift as a material's, and nothing
+			// else puts it back. A delivered project without its sources has nothing to cook from,
+			// and its maps are what it ships.
 			case AssetType::kSky:
-				return AssetCodec<BSky>::Serialize(AssetCodec<BSky>::Deserialize(bytes));
+			{
+				BSky sky = AssetCodec<BSky>::Deserialize(bytes);
+				if (hasSource(store, sky.sky) && store.IsSkyBakeStale(sky))
+				{
+					if (dryRun)
+						return std::vector<std::byte>();
+					store.BakeSky(sky);
+				}
+				return AssetCodec<BSky>::Serialize(sky);
+			}
 			case AssetType::kEnvLighting:
-				return AssetCodec<BEnvLighting>::Serialize(
-					AssetCodec<BEnvLighting>::Deserialize(bytes));
+			{
+				BEnvLighting lighting = AssetCodec<BEnvLighting>::Deserialize(bytes);
+				if (hasSource(store, lighting.prefilter) && store.IsEnvLightingBakeStale(lighting))
+				{
+					if (dryRun)
+						return std::vector<std::byte>();
+					store.BakeEnvLighting(lighting);
+				}
+				return AssetCodec<BEnvLighting>::Serialize(lighting);
+			}
 			case AssetType::kEnvironment:
 				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
 			case AssetType::kAvatar:

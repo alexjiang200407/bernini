@@ -47,8 +47,7 @@ public:
 
 	/**
 	 * The asset name every written file is named from: `Derived/Sky/<name>.bsky`,
-	 * `Derived/SourceTextures/<name>_sky.ktx2`
-	 * and so on.
+	 * `Authored/EnvSources/<name>.hdr` and so on.
 	 *
 	 * Falls back to the source's base name when what was typed could name a file outside the
 	 * categories it belongs in -- a separator, or anything that is not a plain file stem.
@@ -75,9 +74,6 @@ public:
 	QString
 	GetLightingDirectory() const;
 
-	QString
-	GetSourceDirectory() const;
-
 	/** Where the source itself is copied, with the `.bimport` describing it beside it. */
 	QString
 	GetImportedSourceDirectory() const;
@@ -89,7 +85,6 @@ private:
 	QLineEdit* m_Name              = nullptr;
 	QLineEdit* m_SkyDir            = nullptr;
 	QLineEdit* m_LightingDir       = nullptr;
-	QLineEdit* m_SourceDir         = nullptr;
 	QLineEdit* m_ImportedSourceDir = nullptr;
 	QString    m_DefaultName;
 };

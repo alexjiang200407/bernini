@@ -115,7 +115,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   costs is the frames a moving pixel waits for the phase that serves it, which no still measurement
   can see.
 
-* **The clamp box, the depth read and the object-motion discriminator all stay on the render 3×3.**
+* **The clamp box, the dilation and the own-motion test all stay on the render grid.** The clamp
+  reads its 3×3, and the dilation and the own-motion test read its cross.
   A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
   neighbourhood did not already contain. Only the history fetch and its Catmull-Rom taps are in
   output texels.
@@ -123,7 +124,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
   and exposure adaptation belong between a resolved scene and the screen, and each would otherwise
-  arrive as a change to the TAA shader.
+  arrive as a change to the TAA shader. Bloom is the first occupant: its chain reads the freshly
+  resolved history (docs/passes.md § Bloom), which is exactly what the seam was kept for.
 
 * **History is HDR, and so is the accumulation.** Both `sceneColor` and the two history buffers are
   `RGBA16_FLOAT` linear radiance with exposure already folded in. The display curve is the last thing
@@ -198,11 +200,11 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   filtered when reconstructing a different output grid. Valid history keeps the 5% blend, with
   reconstruction weights bounded to a convex blend.
 
-  Rejection requires motion above the noise floor and no detected independent object motion:
+  Rejection requires motion above the noise floor and no own motion anywhere in the cross, because
   camera matrices do not describe an object's previous depth. Resting accumulation is unchanged.
-  The motion discriminator subtracts a binary16 rounding bound before measuring that residual:
-  half-float velocity error grows with speed and would otherwise classify a rapid camera move as
-  object motion, disabling rejection on static geometry.
+  Own motion is the velocity buffer's BA, written by the forward pass ([Passes Overview](passes.md)
+  § Motion vectors). Its two projections share their math, so a static surface reads exactly zero
+  however fast the camera moves.
   Zero means unavailable: multi-draw frames, depths beyond the half-float range, hashed coverage
   and transparent overlays use that fallback. Scene alpha explicitly marks reliable opaque
   coverage; it is not inferred from material opacity. Built-in and game-defined hashed paths write
@@ -215,42 +217,30 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   [TaaHistory_test.cpp](libs/bgl_extended/tests/src/TaaHistory_test.cpp). The depth SRV and history
   resources retain their existing frame-graph tracking; see [Passes Overview](passes.md).
 
-* **Velocity-dilated by the neighbour that moves most on its own.** Reprojecting by the longest
-  velocity in the 3×3 — the no-depth stand-in for closest-fragment dilation — was first measured on
-  pans and rejected: panning over a hashed patch went from 0.0029 to 0.0040–0.0073 of frame-to-frame
-  noise, because a discarded hashed fragment carries the backdrop's motion and an exact-texel fetch
-  by it *pins* the noise field, where "correcting" it to the strand's velocity re-samples that field
-  at a fresh fractional offset every frame. What dilation exists for is a mesh **animating** — a
-  silhouette pixel half covered by the mesh carries either its velocity or the backdrop's, by which
-  fragment won its centre, so the edge mixture reprojects from the wrong place on alternate pixels
-  and the outline doubles, which is what the Animation panel showed under a still camera and under
-  an orbit. The two are told apart by **object motion**: each tap's written vector minus what the
-  camera alone gives a surface at that tap's depth (`CameraMotion`), and the pixel borrows the
-  vector of whichever neighbour moves most on its own, above `c_ObjectTexels`. A static surface, a
-  hashed strand's survivor or its discard, and the sky all measure zero object motion under any
-  camera, so the hashed pan never dilates and every pan and resting figure is bit-identical; only a
-  genuinely animating surface does, still camera or moving.
+* **Velocity-dilated by the nearest surface in the cross.** This is the standard rule: UE4
+  `TemporalAA.usf`, UE5 TSR's velocity dilation and Unity's `GetClosestFragment`. The pixel reprojects
+  by the vector of whichever of the centre and its four edge neighbours has the smallest depth, and
+  the centre wins a tie. A silhouette pixel whose centre the backdrop won still carries the
+  foreground's motion, so the edge mixture reprojects with the surface that made it and the outline
+  of an animating mesh does not double. The diagonals are left out: that saves 4% of the pass on the
+  M3 Pro, at a longer pan trail (background bleed 0.0045 → 0.0065) and a softer animating outline
+  (drifting camera 5.2e-5 → 8.6e-5) than the full 3×3.
 
-  Three things make the reconstruction exact enough to trust at a twentieth of a texel, each
-  measured on the exact history readback of static geometry under an orbit, sky and no sky, close
-  and grazing: it goes through this frame's inverse *projection* and then a rigid view-to-previous
-  -clip matrix, never the inverse view-projection, whose w row cancels catastrophically towards the
-  far plane while its xyz rows round independently of it, so a point reconstructed through it
-  wanders off its own view ray by up to half a texel — which under any camera reads as motion; it
-  reconstructs at the pixel centre *less the jitter*, where the fragment whose depth was written
-  actually sits, since on an oblique surface the depth slope times the jitter reads as parallax;
-  and the far plane counts as no object motion at all — it is the sky or nothing, neither of which
-  animates, and at infinity a translation's parallax and an emptied pixel's zero would both read as
-  motion of their own (reprojecting it as a direction was tried, and a rotated skybox's own
-  reprojection differs from it enough to dilate every silhouette against the sky). A frame of
-  several draws has no one camera to reconstruct with and reprojects by each pixel's own vector.
+  It replaced a bespoke rule: borrow the vector of the neighbour moving most *on its own*. That rule
+  rebuilt the camera's share of every tap from depth, which PIX put at 40% of the pass on an
+  RTX 4060. It also reprojected a pixel whose hashed fragment was discarded by the empty
+  background's vector. Measured on one build, old rule → closest-depth:
 
-  Measured on the tilted skinned quad sweeping over a flat backdrop, animated-against-held under TAA
-  with the raw pair at exactly 0: still camera 6.9e-4 → 1.1e-4, drifting camera 8.8e-4 → 1.8e-4.
-  Off the suite, on the test project's coyote through a throwaway headless harness, against the
-  still-camera converged image of the same pose: its ears in close-up 1.16 → 0.98 (mean |Δ|/255)
-  under a still camera — the dilation-alone figure; the #372 harness measured lower with the
-  since-removed resting shelter stacked on top.
+  - The skinned quad sweeping over a backdrop, animating against held: 1.8e-4 → 1.8e-4 under a still
+    camera, and 2.9e-4 → 5.2e-5 under a drifting one (over the 3×3; over the cross, 2.2e-4 and
+    8.6e-5).
+  - The hashed-ramp smear against the converged still: 4–22% lower across render scales and
+    reconstruction widths.
+  - A converged hashed patch under a pan, frame to frame: 0.0020 → 0.0042 (0.0037 over the cross).
+    This is the one figure that rises. The old rule's exact-texel fetch pinned the noise to the screen, and the patch is
+    featureless, so it cannot show that the pinned history came from the wrong place; the ramp does.
+
+  By eye, a hashed hair asset showed no visible difference, if anything an improvement.
 
 * **The clamp box is mean ± σ, always, kept inside the min/max box.** A plain min/max box has a
   blind spot that is exactly the visible artifact — on hashed coverage at a distance one strand
@@ -264,6 +254,15 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   rung). That is the trade the standard-recipe note above records: the resting shelter that once
   bridged those frames also ghosted on any surface that rested and then left faster than a 3×3
   witnesses, and its correctness cost more machinery than the resting quality bought.
+
+* **The clamp reads the 3×3, not the cross the dilation reads.** A five-tap cross clamp was built,
+  measured and judged by eye on a hashed hair asset, then taken out. It made the pass 21–23% cheaper
+  on the M3 Pro (0.56 ms at 4K), and on opaque edges it was tighter: pan trail 0.0065 → 0.0037,
+  animating outline 2.2e-4 → 1.6e-4. On stochastic coverage five samples of a two-population field
+  give a noisy σ. A converged hashed patch flickered about 13× as much (0.0016 → 0.0205 at rest,
+  0.0037 → 0.044 under a pan), the hashed ramp's smear tripled, and the hair visibly shimmered. It
+  would suit a project with little stochastic coverage, which is why it is worth keeping as a
+  measurement rather than a default.
 
 ---
 
@@ -290,7 +289,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 ```mermaid
 flowchart TD
     FWD["Forward + Skybox<br/>(jittered projection)"] --> SC["sceneColor<br/>RGB radiance, A depth validity"]
-    FWD --> MV["motionVectors<br/>RG16F, de-jittered"]
+    FWD --> MV["motionVectors<br/>RGBA16F: velocity, own motion; de-jittered"]
     FWD --> D["depth"]
 
     SC --> RES["TaaResolve"]

@@ -69,8 +69,7 @@ namespace bgl
 			"cullBackfaces"sv,
 		};
 
-		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
-		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
+		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
 
 		// The shared blend kernel's programs: the whole depth-sorted list draws through this one
 		// pipeline, and AnyMesh branches tier per instance, so no bucket needs a blend kernel of
@@ -286,6 +285,8 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		DeclareMeshletCullBuffers(desc);
+
 		for (const auto& binding : c_MaterialBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -315,6 +316,7 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
+			BindMeshletCullBuffers(*foundExpansion, resources);
 		}
 
 		if (auto foundSkinnedData = kernel.FindUniforms("skinnedData"))

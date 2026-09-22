@@ -67,10 +67,10 @@ namespace assetlib
 		// are paths, and no budget turns on a handful of them.
 		return vectorBytes(mesh.nodes) + vectorBytes(mesh.roots) + vectorBytes(mesh.meshes) +
 		       vectorBytes(mesh.submeshes) + vectorBytes(mesh.meshlets) +
-		       vectorBytes(mesh.meshletVertices) + vectorBytes(mesh.meshletTriangles) +
-		       vectorBytes(mesh.vertexData) + vectorBytes(mesh.indexData) +
-		       vectorBytes(mesh.stringPool.bytes()) + stringVectorBytes(mesh.materials) +
-		       stringVectorBytes(mesh.skeletonBoneNames);
+		       vectorBytes(mesh.meshletGroups) + vectorBytes(mesh.meshletVertices) +
+		       vectorBytes(mesh.meshletTriangles) + vectorBytes(mesh.vertexData) +
+		       vectorBytes(mesh.indexData) + vectorBytes(mesh.stringPool.bytes()) +
+		       stringVectorBytes(mesh.materials) + stringVectorBytes(mesh.skeletonBoneNames);
 	}
 
 	uint64_t

@@ -153,9 +153,9 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 |---|---|---|
 | Import from glTF | [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h), [asset_import.h](libs/assetlib/include/assetlib/asset_import.h) | Decode, then write the files an import produces — with a rollback for a cancelled one. |
 | Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet — or, for a surface material, to one packed map per routed data slot. `AssetStore::ComposeSurfaceSlot` is that compositor; `LooseSurfaceSlots` says which slots a load draws through their routes instead ([docs/game_defined_surfaces.md](docs/game_defined_surfaces.md)). |
-| Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping RGB9E5 maps. |
+| Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping BC7 / RGB9E5 maps. |
 | Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
-| Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
+| Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack, 8-bit sRGB quantize. [docs/asset_standards.md](docs/asset_standards.md) |
 | Texture refresh | `AssetStore::WriteTextures` / `GetStaleImportedTextureSources` / `RefreshImportedTextures` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) | Extract an import's textures, and re-extract them when the source has moved -- the one part of a group the load-time seam skips. |
 | Produce a project | `AssetStore::Reimport` / `GetStaleGeometry` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [reimport.h](libs/assetlib/include/assetlib/reimport.h) | Write the outputs a source's `.bimport` names that are not on disk at all — the one operation that runs from the authored side, where everything else needs the derived file to already be there. [docs/asset_containers.md](docs/asset_containers.md) |
 | Describe, migrate, prune | `AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person, one overload per container; re-save at the current form; collect unreferenced bakes. |
@@ -231,6 +231,11 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   into a missing root is a mistyped root rather than a new subfolder.
 * **`Save` refuses a key that escapes the data root**, which is `ResolveWritePath`'s boundary. A
   key typed on a command line cannot climb out of the project.
+* **`loadFromGltf` reads `TEXCOORD_1` only for a primitive whose material samples occlusion
+  through it** (`occlusionTexture.texCoord == 1`), and files that map as
+  `BMaterialImport::geometryOcclusionTexture` rather than routing it into ORM red. Every other second
+  UV set is dropped, so a mesh whose materials sample none imports byte-for-byte as it did before
+  the set was read. See [Asset Standards § Geometry AO](asset_standards.md#geometry-ao-on-a-second-uv-set).
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
@@ -257,8 +262,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
   that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
   containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An environment's
-  float cubes keep their part suffix across the move. An output a
+  since the document names the new path either way and `Reimport` writes it there. An output a
   rename of its own has since taken off the source's stem is left where it is — its name no longer
   says it came from this source — and the document's reference to it is rewritten like any other.
 

@@ -1,4 +1,6 @@
 """Codex policy boundaries, protocol integration, and init backfills."""
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -137,6 +139,29 @@ def test_codex_watch_identity_and_wake(monkeypatch, tmp_path):
     assert Path(calls[0][0]).stem in ('codex', 'codex.cmd')
     assert calls[0][1:4] == ['queue', '--thread', 'test-thread']
     assert json.loads((tmp_path / 'bernini-pr-event-42.json').read_text())['event'] == 'review'
+
+
+def test_codex_watch_notification_is_automatic(monkeypatch):
+    monkeypatch.delenv('CODEX_THREAD_ID', raising=False)
+    assert not watch_pr.codex_notification_enabled(False, False)
+    monkeypatch.setenv('CODEX_THREAD_ID', 'test-thread')
+    assert watch_pr.codex_notification_enabled(False, False)
+    assert not watch_pr.codex_notification_enabled(False, True)
+
+
+def test_stop_hook_prescribes_durable_codex_watcher(monkeypatch, capsys):
+    path = ENGINE / '.claude/hooks/pr_watch_guard.py'
+    spec = importlib.util.spec_from_file_location('pr_watch_guard_test', path)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    monkeypatch.setenv('CODEX_THREAD_ID', 'test-thread')
+    monkeypatch.setattr(guard.watchlist, 'pending', lambda: [
+        {'pr': 42, 'url': 'https://github.com/example/repo/pull/42'}])
+    monkeypatch.setattr(sys, 'stdin', io.StringIO('{}'))
+    assert guard.main() == 2
+    message = capsys.readouterr().err
+    assert 'just watch-pr 42 --notify-codex' in message
+    assert '>.claude/features/pr-42.watch.log 2>&1 &' in message
 
 
 @pytest.mark.parametrize('language', ['cpp', 'slang'])

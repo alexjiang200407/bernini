@@ -15,6 +15,23 @@ public static const uint cMeshGroupSize = 64;
 // do -- it would re-read the same instance to agree on the same dispatch.
 public static const uint cThreadsPerInstance = 1;
 
+// Threads per amplification-shader group of the static tier, which frustum-culls its instance's
+// meshlets one per lane before it dispatches.
+public static const uint cMeshletCullGroupSize = 32;
+
+// Meshlets one cooked bounding sphere covers, and the unit the static tier's amplification stage
+// culls and dispatches in. A power of two so the mesh stage's decode is a shift; the cook names the
+// same number as assetlib::c_MeshletsPerGroup, and a static_assert in Scene.cpp holds them equal.
+public static const uint cMeshletsPerGroup = 8;
+
+// Meshlet groups the static tier's amplification group compacts into its payload, as a bit per group
+// and a running count per 32 of them -- about 1.5 KiB. The payload is copied out whole per group, on
+// Metal once per lane, so its size costs every instance drawn: 8 KiB measured +3 ms a pass in
+// animal-run. At this many groups it covers 65536 meshlets, more than the 65535 thread groups one
+// DispatchMesh can launch -- so every submesh a scene can hold compacts, and there is no
+// dispatch-everything path.
+public static const uint cMaxCompactedGroups = 8192;
+
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;

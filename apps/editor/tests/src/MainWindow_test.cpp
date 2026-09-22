@@ -12,6 +12,7 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
+#include "util/recent_projects.h"
 #include "util/rig_containers.h"
 #include <algorithm>
 #include <array>
@@ -20,6 +21,7 @@
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
@@ -86,7 +88,9 @@
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
+#include <qwidget.h>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 // What a viewport's `headless` flag buys: a whole editor -- device, renderer, every viewport --
@@ -100,7 +104,7 @@ namespace
 	// The panels that own a viewport today. The count below is what makes another one loud.
 	constexpr int c_ViewportCount = 3;
 
-	/** A scaffolded project and a config.json naming it, both in a directory of their own. */
+	/** A scaffolded project and a headless config.json, both in a directory of their own. */
 	struct HeadlessEditor
 	{
 		QTemporaryDir temp;
@@ -116,8 +120,6 @@ namespace
 			// these cases are about what is built, not what it accumulates.
 			const std::string config = R"({
   "headless": true,
-  "startupProject": ")" + EscapedProjectFile() +
-			                           R"(",
   "materialEditor":  { "temporalAA": false },
   "animationEditor": { "temporalAA": false }
 })";
@@ -149,18 +151,21 @@ namespace
 			return Root() / "Data";
 		}
 
-		// JSON has no raw backslash, and a Windows path is full of them.
-		[[nodiscard]] std::string
-		EscapedProjectFile() const
+		[[nodiscard]] assetlib::Project
+		Open() const
 		{
-			std::string escaped;
-			for (const char c : ProjectFile().string())
-			{
-				if (c == '\\')
-					escaped += '\\';
-				escaped += c;
-			}
-			return escaped;
+			return assetlib::Project::Open(ProjectFile());
+		}
+
+		// What main() does before the window: the directories the config names, and no others.
+		[[nodiscard]] std::unique_ptr<editor::plugins::PluginSession>
+		Plugins() const
+		{
+			return std::make_unique<editor::plugins::PluginSession>(
+				editor::plugins::PluginSession::Load(
+					editor::plugins::ConfiguredPluginDirectories(ConfigFile()),
+					editor::plugins::CurrentBuildIdentity(),
+					temp.path().toStdString() / fs::path("plugin-copies")));
 		}
 	};
 
@@ -254,8 +259,9 @@ TEST_CASE("A loaded plugin panel is owned by one project host", "[mainwindow][pl
 	const PluginHeadlessEditor    editor;
 	QPointer<editor::EditorPanel> panel;
 	{
-		auto   window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
-		QMenu* tools  = nullptr;
+		auto window =
+			std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		QMenu* tools = nullptr;
 		for (QAction* action : window->menuBar()->actions())
 			if (action->menu() != nullptr && action->text() == "Tools")
 				tools = action->menu();
@@ -284,8 +290,9 @@ TEST_CASE(
 	"[mainwindow][plugins][render][notification]")
 {
 	const PluginHeadlessEditor editor;
-	auto                       window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
-	const auto                 open   = [&window](const QString& id) {
+	auto                       window =
+		std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	const auto open = [&window](const QString& id) {
 		for (QAction* action : window->menuBar()->actions())
 			if (action->text() == "Tools" && action->menu() != nullptr)
 				Q_EMIT action->menu()->aboutToShow();
@@ -348,7 +355,7 @@ TEST_CASE(
 		window.reset();
 		REQUIRE(first.isNull());
 		REQUIRE(second.isNull());
-		window     = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+		window = std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		auto* next = open("sample.observer_one");
 		QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 		CHECK(next->property("notificationCount").toInt() == 0);
@@ -360,7 +367,7 @@ TEST_CASE(
 	"[mainwindow][plugins][render]")
 {
 	const PluginHeadlessEditor editor;
-	MainWindow                 window(nullptr, editor.ConfigFile());
+	MainWindow                 window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	bool                       overrideDefaults = false;
 	SECTION("Plugin presentation defaults") {}
 	SECTION("Earlier menu choices override plugin defaults")
@@ -405,8 +412,9 @@ TEST_CASE(
 TEST_CASE("A plugin editor failure stays inside the GUI boundary", "[mainwindow][plugins]")
 {
 	const PluginHeadlessEditor editor;
-	auto                       window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
-	auto*                      explorer = window->findChild<ContentExplorerWindow*>();
+	auto                       window =
+		std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto* explorer = window->findChild<ContentExplorerWindow*>();
 	REQUIRE(explorer != nullptr);
 
 	QTimer::singleShot(0, [] {
@@ -425,7 +433,7 @@ TEST_CASE(
 {
 	const HeadlessEditor             first;
 	const HeadlessEditor             second;
-	MainWindow                       window(nullptr, first.ConfigFile());
+	MainWindow                       window(first.Plugins(), first.Open(), first.ConfigFile());
 	QPointer<MaterialEditorWindow>   material  = window.findChild<MaterialEditorWindow*>();
 	QPointer<AnimationEditorWindow>  animation = window.findChild<AnimationEditorWindow*>();
 	QPointer<BlendSpaceEditorWindow> blend     = window.findChild<BlendSpaceEditorWindow*>();
@@ -534,7 +542,8 @@ TEST_CASE("Tearing the editor down releases its viewports first", "[mainwindow][
 	QObject                                   teardownObserver;
 
 	{
-		auto window = std::make_unique<MainWindow>(nullptr, editor.ConfigFile());
+		auto window =
+			std::make_unique<MainWindow>(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		ObserveViewportTeardown(*window, teardownObserver, releasedRoots);
 
 		for (RenderTargetWindow* view : window->findChildren<RenderTargetWindow*>())
@@ -559,10 +568,9 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
-	// config.json's startupProject is a route into SetActiveProject that opens no dialog, so the
-	// project is already open by the time the constructor returns.
+	// The project is open by the time the constructor returns.
 	auto* materials = window.findChild<MaterialEditorWindow*>();
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 
@@ -573,10 +581,9 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 	CHECK(animation->GetDataRoot().toStdString() == editor.DataRoot().string());
 }
 
-// How a restart reaches the project the user opened: the argument decides both the project and the
-// shaders the renderer registers, whatever config.json names.
+// The project decides which surfaces the renderer compiles, which is why it is chosen first.
 TEST_CASE(
-	"A project handed to the editor outranks the config's, surfaces included",
+	"The renderer registers the surfaces of the project the editor is built for",
 	"[mainwindow][surfacerelaunch][render]")
 {
 	const HeadlessEditor editor;
@@ -610,7 +617,7 @@ struct TintSurface : ISurfaceSource
 };
 )");
 
-	const MainWindow window(nullptr, editor.ConfigFile(), {}, other);
+	const MainWindow window(editor.Plugins(), assetlib::Project::Open(other), editor.ConfigFile());
 
 	auto* materials = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(materials != nullptr);
@@ -632,7 +639,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
 	auto* materialDock  = window.findChild<QDockWidget*>("bernini.material");
@@ -682,7 +689,7 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 
@@ -694,13 +701,130 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 	for (const RenderTargetWindow* view : viewports) CHECK(view->IsHeadless());
 }
 
+// How a viewport blooms is config.json's alone: the Render menu may switch it on and off and nothing
+// else. A partial section overrides only what it names, and a value bgl would throw on is clamped
+// rather than taking the editor down with it.
+TEST_CASE(
+	"A viewport blooms as config.json says, and the menu only toggles it",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "materialEditor":  { "temporalAA": false,
+                       "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.8,
+                                  "softKnee": 5.0 } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+
+	const auto* material = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(material != nullptr);
+	const auto* materialView = material->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+
+	CHECK(materialView->IsBloomEnabled());
+
+	const bgl::BloomSettings named = materialView->GetBloomSettings();
+	CHECK(named.intensity == Catch::Approx(0.3f));
+	CHECK(named.threshold == Catch::Approx(0.8f));
+	CHECK(named.softKnee == Catch::Approx(1.0f));
+	CHECK(named.scatter == Catch::Approx(bgl::BloomSettings().scatter));
+
+	// No section is bloom's default: off, and with the settings bgl ships.
+	const auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(animationView->IsBloomEnabled());
+	CHECK(
+		animationView->GetBloomSettings().intensity ==
+		Catch::Approx(bgl::BloomSettings().intensity));
+
+	// Checked because a viewport started with it on; and a toggle is all the menu offers.
+	const QAction* bloom = ActionNamed(window, "Bloom");
+	REQUIRE(bloom != nullptr);
+	CHECK(bloom->isChecked());
+
+	for (const char* valueMenu :
+	     { "Bloom Intensity", "Bloom Threshold", "Bloom Soft Knee", "Bloom Scatter" })
+	{
+		INFO(valueMenu);
+		CHECK(ActionNamed(window, valueMenu) == nullptr);
+	}
+}
+
+// As bloom: how a viewport grades is config.json's, and the Render menu only switches it. A partial
+// CDL channel set overrides only the channels it names, and a value bgl would throw on is clamped.
+TEST_CASE(
+	"A viewport grades as config.json says, and the menu only toggles it",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "materialEditor":  { "temporalAA": false,
+                       "colorGrade": { "enabled": true, "temperature": 20.0, "saturation": 1.3,
+                                       "slope": { "r": 1.1 }, "power": { "g": 0.0 },
+                                       "tint": 250.0 } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+
+	const auto* material = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(material != nullptr);
+	auto* materialView = material->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+
+	CHECK(materialView->IsColorGradeEnabled());
+
+	const bgl::ColorGradeSettings named = materialView->GetColorGradeSettings();
+	CHECK(named.temperature == Catch::Approx(20.0f));
+	CHECK(named.saturation == Catch::Approx(1.3f));
+	CHECK(named.slope.r == Catch::Approx(1.1f));
+	CHECK(named.slope.g == Catch::Approx(1.0f));
+	CHECK(named.power.g > 0.0f);
+	CHECK(named.tint == Catch::Approx(100.0f));
+	CHECK(named.contrast == Catch::Approx(DefaultViewportGrade().contrast));
+
+	// No section is the editor's default grade, off -- and not bgl's neutral one, or the Render
+	// menu's toggle would switch between two identical images.
+	const auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(animationView->IsColorGradeEnabled());
+
+	const bgl::ColorGradeSettings unnamed = animationView->GetColorGradeSettings();
+	CHECK(unnamed.saturation == Catch::Approx(DefaultViewportGrade().saturation));
+	CHECK(unnamed.saturation != Catch::Approx(bgl::ColorGradeSettings().saturation));
+	CHECK(unnamed.vignetteIntensity > 0.0f);
+
+	QAction* grade = ActionNamed(window, "Color Grade");
+	REQUIRE(grade != nullptr);
+	CHECK(grade->isChecked());
+
+	// Unchecking switches every viewport off and leaves what config.json named in place.
+	grade->setChecked(false);
+	CHECK_FALSE(materialView->IsColorGradeEnabled());
+	CHECK(materialView->GetColorGradeSettings().saturation == Catch::Approx(1.3f));
+}
+
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
 // behaviour rather than layout: the panel behind it holds no mesh and renders nothing.
 TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 	QCoreApplication::processEvents();
 
@@ -721,7 +845,7 @@ TEST_CASE("The timing graph turns GPU timing on while it is open", "[mainwindow]
 {
 	const HeadlessEditor editor;
 
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	QAction* timing = ActionNamed(window, "GPU Pass Timing");
 	QAction* graph  = ActionNamed(window, "GPU Timing Graph");
@@ -786,9 +910,11 @@ TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup]
 	auto labels = std::vector<QString>();
 
 	{
-		const MainWindow window(nullptr, editor.ConfigFile(), [&](int, int, const QString& label) {
-			labels.push_back(label);
-		});
+		const MainWindow window(
+			editor.Plugins(),
+			editor.Open(),
+			editor.ConfigFile(),
+			[&](int, int, const QString& label) { labels.push_back(label); });
 	}
 
 	// Landing nothing is the failure this pins, and it is invisible: the window builds exactly as
@@ -801,88 +927,26 @@ TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup]
 	CHECK(std::ranges::count(labels, QStringLiteral("Compiling shaders...")) == 1);
 }
 
-TEST_CASE("What a project enables and an empty editor does not", "[mainwindow][render]")
+static_assert(
+	!std::is_constructible_v<MainWindow> && !std::is_constructible_v<MainWindow, QWidget*>,
+	"there is no editor without a project: the landing page chooses one before the renderer "
+	"exists");
+
+TEST_CASE(
+	"Opening a project records it among the recent ones",
+	"[mainwindow][recentprojects][render]")
 {
 	const HeadlessEditor editor;
 
-	// The File menu reached the way a user does, rather than through MainWindow's own handle on it:
-	// an entry that exists but never made it onto the bar would pass the other way round.
-	const auto entry = [](const QMainWindow& window, const QString& text) -> const QAction* {
-		for (const QAction* menu : window.menuBar()->actions())
-		{
-			if (menu->menu() == nullptr)
-				continue;
-
-			for (const QAction* action : menu->menu()->actions())
-			{
-				if (action->text() == text)
-					return action;
-			}
-		}
-		return nullptr;
-	};
-
-	// A whole menu rather than one entry: Edit and Window are greyed out as units, since neither
-	// has anything to offer without a project.
-	const auto menu = [](const QMainWindow& window, const QString& title) -> const QMenu* {
-		for (const QAction* action : window.menuBar()->actions())
-		{
-			if (action->menu() != nullptr && action->menu()->title() == title)
-				return action->menu();
-		}
-		return nullptr;
-	};
-
-	SECTION("with a project open")
 	{
-		const MainWindow window(nullptr, editor.ConfigFile());
-
-		const QAction* save  = entry(window, "Save");
-		const QAction* clean = entry(window, "Clean Unused Textures...");
-		const QMenu*   edit  = menu(window, "Edit");
-		const QMenu*   panes = menu(window, "Window");
-
-		REQUIRE(save != nullptr);
-		REQUIRE(clean != nullptr);
-		REQUIRE(edit != nullptr);
-		REQUIRE(panes != nullptr);
-
-		CHECK(save->isEnabled());
-		CHECK(clean->isEnabled());
-		CHECK(edit->isEnabled());
-		CHECK(panes->isEnabled());
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	}
 
-	SECTION("with none")
-	{
-		// The same config without a startupProject, so the window lands in its empty state. Both
-		// entries act on a project, and enabled they would reach a null one.
-		const fs::path config = editor.temp.path().toStdString() / fs::path("empty.json");
-		core::file::write_atomic(config, R"({ "headless": true })");
-
-		const MainWindow window(nullptr, config);
-		CHECK(window.findChildren<RenderTargetWindow*>().isEmpty());
-		CHECK(window.findChild<MaterialEditorWindow*>() == nullptr);
-		CHECK(window.findChild<AnimationEditorWindow*>() == nullptr);
-		CHECK(window.findChild<BlendSpaceEditorWindow*>() == nullptr);
-
-		const QAction* save  = entry(window, "Save");
-		const QAction* clean = entry(window, "Clean Unused Textures...");
-		const QMenu*   edit  = menu(window, "Edit");
-		const QMenu*   panes = menu(window, "Window");
-
-		REQUIRE(save != nullptr);
-		REQUIRE(clean != nullptr);
-		REQUIRE(edit != nullptr);
-		REQUIRE(panes != nullptr);
-
-		CHECK_FALSE(save->isEnabled());
-		CHECK_FALSE(clean->isEnabled());
-
-		// Window lists the docks, which are hidden here; Edit is empty either way.
-		CHECK_FALSE(edit->isEnabled());
-		CHECK_FALSE(panes->isEnabled());
-	}
+	// Beside the config the window read, which is how a test keeps off the shipping editor's list.
+	const std::vector<fs::path> recent =
+		editor::ReadRecentProjects(editor::RecentProjectsFileBeside(editor.ConfigFile()));
+	REQUIRE_FALSE(recent.empty());
+	CHECK(fs::equivalent(recent.front(), editor.ProjectFile()));
 }
 
 namespace
@@ -915,7 +979,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
 	auto* blendDock     = window.findChild<QDockWidget*>("bernini.blend_space");
@@ -934,7 +998,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
@@ -953,7 +1017,7 @@ TEST_CASE(
 	"[mainwindow][animation][layout][render]")
 {
 	const HeadlessEditor editor;
-	MainWindow           window(nullptr, editor.ConfigFile());
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.resize(1200, 700);
 	window.show();
 	auto* dock = window.findChild<QDockWidget*>("bernini.animation");
@@ -981,7 +1045,7 @@ TEST_CASE(
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(blend != nullptr);
@@ -1024,7 +1088,7 @@ TEST_CASE(
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* blend = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(blend != nullptr);
@@ -1071,7 +1135,7 @@ TEST_CASE("Leaving the Blend Space Editor's tab closes the set", "[mainwindow][b
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
 	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
@@ -1098,7 +1162,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
@@ -1122,7 +1186,7 @@ TEST_CASE(
 	const HeadlessEditor editor;
 	const QString        key = WriteUnshownSet(editor.DataRoot());
 
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
 	auto* blendDock = window.findChild<QDockWidget*>("bernini.blend_space");
@@ -1178,7 +1242,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 
-	const MainWindow window(nullptr, editor.ConfigFile());
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
@@ -1218,7 +1282,7 @@ TEST_CASE(
 	set.animations                 = "Derived/Animations/absent.banim";
 	const std::string key          = "Authored/Animations/solo.bblend";
 	store.Save(set, key);
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 	QCoreApplication::processEvents();
 	auto* dock = window.findChild<QDockWidget*>("bernini.blend_space");
@@ -1251,7 +1315,7 @@ TEST_CASE(
 	set.spaces                     = { { "Speed", { { "Walk", 0.0f }, { "Run", 1.0f } } } };
 	const std::string key          = "Authored/Animations/pending.bblend";
 	store.Save(set, key);
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	auto*      dock = window.findChild<QDockWidget*>("bernini.blend_space");
 	REQUIRE(dock != nullptr);
 	auto* panel = dynamic_cast<editor::AssetEditorPanel*>(dock->widget());
@@ -1296,7 +1360,7 @@ TEST_CASE(
 		{ "animationEditor",
 		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } }
 	}.dump(2);
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	for (const auto* id : { "bernini.animation", "bernini.blend_space" })
 	{
 		auto* dock = window.findChild<QDockWidget*>(id);
@@ -1334,7 +1398,7 @@ TEST_CASE(
 	"[mainwindow][render][materialplugin]")
 {
 	const HeadlessEditor editor;
-	MainWindow           window(nullptr, editor.ConfigFile());
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 	QCoreApplication::processEvents();
 	auto* preview = window.findChild<MaterialPreviewWindow*>();
@@ -1361,7 +1425,7 @@ TEST_CASE(
 		  { { "temporalAA", false }, { "environmentMap", configured.generic_string() } } },
 		{ "animationEditor", { { "temporalAA", false }, { "environmentMap", "" } } }
 	}.dump(2);
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	auto*      panel = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(panel != nullptr);
 	auto* preview = panel->findChild<MaterialPreviewWindow*>();
@@ -1399,7 +1463,7 @@ TEST_CASE(
 	material.pbr.baseColorTexture       = "Derived/BakedTextures/before.ktx2";
 	const std::string key               = "Authored/Materials/notification.bmaterial";
 	store.Save(material, key);
-	MainWindow window(nullptr, editor.ConfigFile());
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	auto*      panel = window.findChild<MaterialEditorWindow*>();
 	REQUIRE(panel != nullptr);
 	REQUIRE(dynamic_cast<editor::EditorPanel*>(panel) != nullptr);

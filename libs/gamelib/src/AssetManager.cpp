@@ -1,3 +1,4 @@
+#include "gamelib/shading_model.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
@@ -235,18 +236,19 @@ namespace game
 	}
 
 	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
-	// them (a loose slot expanding to its four route sources in place), the baked triplet, or the
-	// nine authoring routes. One order per case, in one place, so the record's texture references
-	// and the desc it rebuilds can never fall out of step.
+	// them (a loose slot expanding to its four route sources in place), or the baked triplet or the
+	// nine authoring routes followed by the geometry occlusion map. One order per case, in one place, so
+	// the record's texture references and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
 	MaterialTextures(
 		const assetlib::BMaterial& material,
 		const bool                 loose,
 		const uint32_t             looseSlots)
 	{
-		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		auto paths = std::vector<std::string>();
+
+		if (assetlib::isSurfaceModel(material.shadingModel))
 		{
-			auto paths = std::vector<std::string>();
 			paths.reserve(material.surface.textures.size());
 			for (size_t i = 0; i < material.surface.textures.size(); ++i)
 			{
@@ -267,17 +269,21 @@ namespace game
 			return paths;
 		}
 
-		const assetlib::PbrParams& pbr = material.pbr;
-
 		if (loose)
 		{
-			auto paths = std::vector<std::string>(assetlib::c_LooseChannelCount);
-			for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
-				paths[i] = pbr.routes[i].texture;
-			return paths;
+			paths.reserve(assetlib::c_LooseChannelCount + 1);
+			for (const assetlib::ChannelRoute& route : material.pbr.routes)
+				paths.push_back(route.texture);
+		}
+		else
+		{
+			paths = { material.pbr.baseColorTexture,
+				      material.pbr.normalTexture,
+				      material.pbr.ormTexture };
 		}
 
-		return { pbr.baseColorTexture, pbr.normalTexture, pbr.ormTexture };
+		paths.push_back(material.pbr.geometryOcclusionTexture);
+		return paths;
 	}
 
 	AssetManager::AssetManager(
@@ -468,7 +474,7 @@ namespace game
 		std::string                key,
 		TexturePrefetch*           prefetch)
 	{
-		const bool surface = material.shadingModel == assetlib::ShadingModel::kPbrSurface;
+		const bool surface = assetlib::isSurfaceModel(material.shadingModel);
 
 		if (material.shadingModel != assetlib::ShadingModel::kPbr && !surface)
 			throw bgl::SceneError(
@@ -1487,7 +1493,7 @@ namespace game
 		// A surface material is neither loose nor baked, so the check above lets one through --
 		// and the triplet it would write is a field no surface reads. Refused rather than ignored:
 		// the write would report success and change nothing on screen.
-		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(record.source.shadingModel))
 		{
 			throw bgl::SceneError(
 				"SetMaterialTexture expects a baked material; a surface material's textures are "
@@ -1556,7 +1562,7 @@ namespace game
 
 		// Rewritten in place, so the handle stays valid and every submesh bound to this material
 		// follows the change without being rebound.
-		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (assetlib::isSurfaceModel(record.source.shadingModel))
 			m_Scene->UpdateSurfaceMaterial(record.handle, SurfaceDesc(record));
 		else if (record.loose)
 			m_Scene->UpdateLoosePbrMaterial(record.handle, LooseDesc(record));
@@ -1587,6 +1593,8 @@ namespace game
 		desc.normalTexture    = record.textures[1];
 		desc.ormTexture       = record.textures[2];
 
+		desc.geometryOcclusionTexture = record.textures.back();
+
 		return desc;
 	}
 
@@ -1601,6 +1609,10 @@ namespace game
 		desc.layerType   = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff = layer.alphaCutoff;
 		desc.doubleSided = layer.doubleSided;
+
+		// The document's model is its contract expectation (ADR-5): the renderer refuses a named
+		// surface that conforms to the other one.
+		desc.shading = ToSurfaceShading(record.source.shadingModel);
 
 		desc.values.reserve(surface.values.size());
 		for (const assetlib::SurfaceValueBinding& value : surface.values)
@@ -1676,6 +1688,8 @@ namespace game
 			desc.orm[i] = route(assetlib::channelIndex(assetlib::c_OrmChannels, i));
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(assetlib::channelIndex(assetlib::c_NormalChannels, i));
+
+		desc.geometryOcclusionTexture = record.textures.back();
 
 		return desc;
 	}

@@ -101,11 +101,12 @@ TEST_CASE("A compatible local plugin loads both module halves", "[plugins][loade
 	const fs::path plugin =
 		WriteDescriptor(sandbox.root / "valid", "sample.valid", EDITOR_PLUGIN_FIXTURE, build);
 
-	const editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
+	editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
 		std::vector<fs::path>{ plugin },
 		build,
 		sandbox.root / "plugin-copies",
 		editor::plugins::PluginBinaryCopyMode::kAlways);
+	session.RegisterEditorPlugins();
 
 	CHECK(session.Ids() == std::vector<std::string>{ "sample.valid" });
 	CHECK(session.KindRegistry()->FindById("sample.fixture") != nullptr);
@@ -280,13 +281,17 @@ TEST_CASE("Editor contribution collisions reject the private session", "[plugins
 		std::ofstream(directory / editor::c_PluginDescriptorFileName) << json.dump(2);
 	}
 
+	editor::plugins::PluginSession session = editor::plugins::PluginSession::Load(
+		std::vector<fs::path>{ first, second },
+		build,
+		sandbox.root / "plugin-copies",
+		editor::plugins::PluginBinaryCopyMode::kNever);
 	CHECK_THROWS_WITH(
-		editor::plugins::PluginSession::Load(
-			std::vector<fs::path>{ first, second },
-			build,
-			sandbox.root / "plugin-copies",
-			editor::plugins::PluginBinaryCopyMode::kNever),
+		session.RegisterEditorPlugins(),
 		Catch::Matchers::ContainsSubstring("collides"));
+
+	// The first plugin's registration stands; only the colliding batch was rolled back.
+	CHECK(session.Contributions().FindPanel("sample.fixture_panel") != nullptr);
 }
 #endif
 

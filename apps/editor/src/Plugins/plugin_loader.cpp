@@ -5,6 +5,8 @@
 #include <QCoreApplication>
 #include <QLibrary>
 #include <QString>
+#include <QtAssert>
+#include <assetlib/Project.h>
 
 #include <algorithm>
 #include <assetlib/AssetKindRegistry.h>
@@ -240,6 +242,7 @@ namespace editor::plugins
 			std::make_shared<assetlib::AssetKindRegistry>();
 		std::vector<std::string>  ids;
 		std::vector<LoadedPlugin> plugins;
+		bool                      editorRegistered = false;
 	};
 
 	PluginSession::PluginSession() : m_Impl(std::make_unique<Impl>()) {}
@@ -344,8 +347,7 @@ namespace editor::plugins
 		std::span<const std::filesystem::path> directories,
 		const BuildIdentity&                   build,
 		const std::filesystem::path&           pluginCopyRoot,
-		PluginBinaryCopyMode                   copyMode,
-		EditorPluginPtr                        builtIn)
+		PluginBinaryCopyMode                   copyMode)
 	{
 		std::vector<Descriptor>         selected;
 		std::unordered_set<std::string> seen;
@@ -362,15 +364,6 @@ namespace editor::plugins
 		}
 
 		PluginSession session;
-		if (builtIn)
-		{
-			session.m_Impl->editorPlugins.push_back(std::move(builtIn));
-			session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
-			session.m_Impl->plugins.push_back(
-				{ std::string(c_BuiltInPluginId),
-			      "Bernini Editors",
-			      "The Material, Animation and Blend Space editors built into this editor." });
-		}
 
 		std::map<std::filesystem::path, QLibrary*> loadedModules;
 		const auto loadModule = [&](const std::filesystem::path& path) -> QLibrary& {
@@ -436,7 +429,6 @@ namespace editor::plugins
 						"Editor plugin factory returned null: {}",
 						descriptor.id);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
-				session.m_Impl->contributions.Register(*session.m_Impl->editorPlugins.back());
 				loaded.editorModule = descriptor.directory / descriptor.editor;
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
@@ -444,6 +436,44 @@ namespace editor::plugins
 		}
 
 		return session;
+	}
+
+	void
+	PluginSession::RegisterEditorPlugins(EditorPluginPtr builtIn)
+	{
+		Q_ASSERT(!m_Impl->editorRegistered);
+		m_Impl->editorRegistered = true;
+		if (builtIn)
+		{
+			m_Impl->editorPlugins.insert(m_Impl->editorPlugins.begin(), std::move(builtIn));
+			m_Impl->plugins.insert(
+				m_Impl->plugins.begin(),
+				{ std::string(c_BuiltInPluginId),
+			      "Bernini Editors",
+			      "The Material, Animation and Blend Space editors built into this editor." });
+		}
+		for (const EditorPluginPtr& plugin : m_Impl->editorPlugins)
+			m_Impl->contributions.Register(*plugin);
+	}
+
+	assetlib::Project
+	OpenProjectWithPlugins(const std::filesystem::path& projectFile, const PluginSession& session)
+	{
+		const std::vector<std::string> missing =
+			MissingRequiredPlugins(session.Ids(), assetlib::Project::PluginIdsOf(projectFile));
+		if (!missing.empty())
+		{
+			std::string ids;
+			for (const std::string& id : missing) ids += (ids.empty() ? "" : ", ") + id;
+			core::throw_runtime_error(
+				"{} requires plugins this editor did not load: {}. Put each one in {}/<id>/ or "
+				"name "
+				"its directory in pluginDirectories in config.json, then restart.",
+				projectFile.stem().string(),
+				ids,
+				DefaultPluginRoot().string());
+		}
+		return assetlib::Project::Open(projectFile, session.KindRegistry());
 	}
 
 	std::vector<std::string>

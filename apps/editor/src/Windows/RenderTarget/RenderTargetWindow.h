@@ -28,6 +28,35 @@ namespace game
 
 #include "Render/Renderer.h"
 
+// A viewport's `bloom` section of config.json. The Render menu toggles `enabled`, never `settings`.
+struct BloomConfig
+{
+	bool               enabled = false;
+	bgl::BloomSettings settings;
+};
+
+// bgl's defaults are the identity, which leaves the Render menu's toggle nothing to show. A viewport
+// whose config.json leaves a key out takes this mild grade's value for it instead: warmer, a touch
+// more saturated and contrasty, darker corners.
+[[nodiscard]] inline bgl::ColorGradeSettings
+DefaultViewportGrade() noexcept
+{
+	auto settings              = bgl::ColorGradeSettings();
+	settings.temperature       = 10.0f;
+	settings.saturation        = 1.15f;
+	settings.contrast          = 1.1f;
+	settings.vignetteIntensity = 0.25f;
+	return settings;
+}
+
+// A viewport's `colorGrade` section of config.json. The Render menu toggles `enabled`, never
+// `settings`.
+struct ColorGradeConfig
+{
+	bool                    enabled  = false;
+	bgl::ColorGradeSettings settings = DefaultViewportGrade();
+};
+
 struct RenderTargetWindowDesc
 {
 	// Borrowed services must outlive the viewport; destruction drains its pending render work.
@@ -50,6 +79,10 @@ struct RenderTargetWindowDesc
 	// with. Narrower is sharper and slower to settle, and it does nothing at a render scale of 1,
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
+
+	// Out-of-range settings are clamped and warned about, like the render scale.
+	BloomConfig      bloom;
+	ColorGradeConfig colorGrade;
 
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to
@@ -96,6 +129,29 @@ public:
 	// re-enabling shows the current selection again.
 	void
 	SetOutlineEnabled(bool enabled);
+
+	// Turns bloom on or off for this viewport, with the settings config.json gave it. Unlike TAA
+	// nothing is allocated at creation -- the chain appears at the first frame that blooms -- so
+	// any viewport can turn it on.
+	void
+	SetBloomEnabled(bool enabled);
+
+	// What the viewport's target is blooming with now, read on the render thread that owns it.
+	[[nodiscard]] bool
+	IsBloomEnabled() const;
+
+	[[nodiscard]] bgl::BloomSettings
+	GetBloomSettings() const;
+
+	// Turns the colour grade on or off for this viewport, with the settings config.json gave it.
+	void
+	SetColorGradeEnabled(bool enabled);
+
+	[[nodiscard]] bool
+	IsColorGradeEnabled() const;
+
+	[[nodiscard]] bgl::ColorGradeSettings
+	GetColorGradeSettings() const;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.

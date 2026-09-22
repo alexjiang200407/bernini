@@ -58,7 +58,8 @@ namespace assetlib
 
 		// Every top-level key the PBR half owns, so a material of another model can be cleared of
 		// them by name rather than by whatever the writer below happens to emit.
-		constexpr std::array<std::string_view, 8> c_PbrKeys = { {
+		constexpr std::array<std::string_view, 9> c_PbrKeys = { {
+			"geometryOcclusion",
 			"baseColorFactor",
 			"metallicFactor",
 			"roughnessFactor",
@@ -69,9 +70,10 @@ namespace assetlib
 			"routes",
 		} };
 
-		constexpr std::array<std::string_view, 2> c_ShadingModelNames = { {
+		constexpr std::array<std::string_view, 3> c_ShadingModelNames = { {
 			"pbr",
 			"pbrSurface",
+			"litSurface",
 		} };
 
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
@@ -353,6 +355,7 @@ namespace assetlib
 			json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
 			json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
 			json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
+			setOrErase(json, "geometryOcclusion", pbr.geometryOcclusionTexture);
 
 			// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
 			// key inside `baked` or a route survives this writer too.
@@ -398,7 +401,7 @@ namespace assetlib
 		{
 			const SurfaceParams& surface = material.surface;
 
-			if (material.shadingModel != ShadingModel::kPbrSurface)
+			if (!isSurfaceModel(material.shadingModel))
 			{
 				json.erase("surface");
 				json.erase("parameters");
@@ -535,6 +538,7 @@ namespace assetlib
 			taker.Take("transmissionFactor", pbr.transmissionFactor);
 			taker.Take("specularColorFactor", pbr.specularColorFactor);
 			taker.Take("specularFactor", pbr.specularFactor);
+			taker.Take("geometryOcclusion", pbr.geometryOcclusionTexture);
 
 			// Taken whatever the model is, so a surface's keys never ride `extraJson` back out
 			// beside the ones written from the struct.
@@ -544,7 +548,7 @@ namespace assetlib
 
 			// Taken, then dropped: the keys are not this material's, and a struct still holding
 			// them would say it is drawn by a surface that its own model denies.
-			if (material.shadingModel != ShadingModel::kPbrSurface)
+			if (!isSurfaceModel(material.shadingModel))
 				material.surface = SurfaceParams();
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
@@ -620,6 +624,7 @@ namespace assetlib
 		{
 		case ShadingModel::kPbr:
 		case ShadingModel::kPbrSurface:
+		case ShadingModel::kLitSurface:
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:
@@ -799,7 +804,7 @@ namespace assetlib
 	bool
 	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem)
 	{
-		if (material.shadingModel == ShadingModel::kPbrSurface)
+		if (isSurfaceModel(material.shadingModel))
 			return std::ranges::any_of(
 				material.surface.textures,
 				[&](const SurfaceTextureBinding& slot) {

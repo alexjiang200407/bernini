@@ -134,6 +134,7 @@ namespace
 		submesh.indexType             = IndexType::kUint16;
 		submesh.firstMeshlet          = 0x22;
 		submesh.meshletCount          = 0x23;
+		submesh.firstMeshletGroup     = 0x25;
 		submesh.material              = 0x24;
 		submesh.aabbMin               = glm::vec3(7.0f, 8.0f, 9.0f);
 		submesh.aabbMax               = glm::vec3(10.0f, 11.0f, 12.0f);
@@ -150,8 +151,13 @@ namespace
 		meshlet.boundingCenter = glm::vec3(13.0f, 14.0f, 15.0f);
 		meshlet.boundingRadius = 16.0f;
 		mesh.meshlets          = { meshlet };
-		mesh.meshletVertices   = { 5, 6, 7 };
-		mesh.meshletTriangles  = { 8, 9, 10 };
+
+		MeshletGroup group{};
+		group.boundingCenter  = glm::vec3(17.0f, 18.0f, 19.0f);
+		group.boundingRadius  = 20.0f;
+		mesh.meshletGroups    = { group };
+		mesh.meshletVertices  = { 5, 6, 7 };
+		mesh.meshletTriangles = { 8, 9, 10 };
 
 		mesh.vertexData.resize(3 * 48);
 		for (size_t i = 0; i < mesh.vertexData.size(); ++i)
@@ -290,7 +296,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0x9e3cad8f352072e9ull, .hash = 0x30f92bf7f85ad992ull },
+			Pin{ .token = 0x668da118da7846a0ull, .hash = 0x4a322ab6ad88ff51ull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
@@ -314,7 +320,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BSky>::c_BakeToken,
-			Pin{ .token = 0x7c25e8b1904dfa36ull, .hash = 0xc4ad4035fc805a1full },
+			Pin{ .token = 0xe4953f8c7c481c07ull, .hash = 0x137f4544ff950969ull },
 			AssetCodec<BSky>::Serialize(CanarySky()));
 	}
 
@@ -322,7 +328,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BEnvLighting>::c_BakeToken,
-			Pin{ .token = 0xd48f19c7a35b062eull, .hash = 0x20569dd2f51e76d8ull },
+			Pin{ .token = 0xde4ee8df9d425a20ull, .hash = 0xc0ece8c4cca39e31ull },
 			AssetCodec<BEnvLighting>::Serialize(CanaryLighting()));
 	}
 

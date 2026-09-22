@@ -75,8 +75,12 @@ surface which forgets the import is simply not registered — the mistake surfac
 when a material names it, and still by name.
 
 `Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
-lighting then reads. A surface chooses what a pixel *is*, not how it is lit; there is no
-game-defined lighting model.
+lighting then reads. A surface under this contract chooses what a pixel *is*, not how it is lit.
+A sibling contract for a surface that owns its lighting — `ILitSurfaceSource`, whose `Shade`
+returns pre-exposure radiance through an `ISurfaceLight` of the sun and the environment — draws
+through lit programs of its own, and the engine's PBR never runs for it. Nothing reaches either
+contract's answer after it returns: geometry AO baked on a second UV set is the surface's to take,
+like any other map (below).
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque
@@ -98,8 +102,10 @@ follow from that and are worth stating plainly:
   slot, its programs are generated from source, and every pipeline is built against them. An edited surface is seen at the
   next launch.
 * **The editor registers the project it started with**, and opens one with other shaders by
-  restarting into it. New or Open Project on a project whose `Authored/Shaders` is a different
-  directory asks first, then relaunches the editor with `--project`. Two projects with no shaders
+  restarting into it. The first project never restarts: without one the editor starts on a landing
+  page that builds no renderer, and the renderer is built for the project chosen there. After that,
+  New or Open Project on a project whose `Authored/Shaders` is a different directory asks first, then
+  relaunches the editor with `--project`. Two projects with no shaders
   at all share a session. ([`surface_relaunch.h`](../apps/editor/src/util/surface_relaunch.h))
 * **A `.bpak` holds no shaders.** `pack` skips a file whose extension names no container, and a
   packed game reads its shaders off the loose directory beside it.
@@ -148,6 +154,24 @@ runs, a skinned vertex is a world-space position like any other.
 the interpolated normal negated — the same flip the engine applies to its own lighting — so a
 view-dependent term is correct on both faces and a surface never sees a facing bit.
 
+`Uv1` is the mesh's second UV set, where geometry AO is baked on a unique unwrap
+([Asset Standards](asset_standards.md#geometry-ao-on-a-second-uv-set)), and `HasUv1` says whether the
+mesh carries one. A surface that wants that AO declares a slot for it and samples it itself, exactly
+as it samples a normal map — the engine applies nothing on its behalf, so a surface that declares no
+such slot neither gets the AO nor shows a port for it in the editor. Sample first and select after,
+so the sample stays in uniform control flow, and answer the absent case, which hands back a `Uv1`
+far outside the unit square:
+
+```slang
+DataSlot occlusion;   // in the params
+...
+let ao = reader.Sample(params.occlusion, reader.Uv1()).r;
+surface.orm.r *= reader.HasUv1() ? ao : 1.0;
+```
+
+The map binds by the slot's name, like any other. Multiplying it into `orm.r` keeps it off the sun,
+which the engine scales by no AO ([Passes](passes.md)).
+
 ## Hashed alpha
 
 A hashed layer replaces the cutoff with stochastic coverage: a fragment survives with probability
@@ -192,11 +216,14 @@ cutoff is the thing being replaced.
 A material drawn by a surface says so, names it, and sets what it wants by name
 ([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)).
 
-The model is **`pbrSurface`**, not `surface`, and the name is the whole story: the lighting is the
-engine's PBR, and what a surface supplies is the material's half of it — a `PbrSurface`, which is
-the struct `Evaluate` returns. It is where the inputs come from rather than a second shading
-model. A game-defined *lighting* model would be a third value, and nothing in today's contract can
-write one.
+The model names the contract, and there are two: **`pbrSurface`** for a surface on
+`ISurfaceSource` — the lighting is the engine's PBR, and what the surface supplies is the
+material's half of it, the `PbrSurface` its `Evaluate` returns — and **`litSurface`** for one on
+`ILitSurfaceSource`, whose `Shade` is the whole lighting. The document's model is its contract
+*expectation*: `CreateSurfaceMaterial` refuses a named surface that conforms to the other one, so
+a surface that changes contract fails loud instead of silently changing what every material drawn
+by it means. Everything else in the document — the surface name, `parameters`, `textures`, the
+per-slot bakes — is identical under both models.
 
 ```json
 {
@@ -248,6 +275,7 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a parameter that is not one to four numbers | reading the document (`bmaterial_io.cpp`) |
 | a `shadingModel` this build does not know | reading the document |
 | a surface no shader declared | `CreateSurfaceMaterial`, naming the surface |
+| a `shadingModel` naming a surface on the other contract | `CreateSurfaceMaterial`, naming the surface and both contracts |
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
@@ -276,7 +304,12 @@ Deliberate, and each is a decision rather than an omission:
   into a demotion.
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
-  Nothing of the frame — no depth, no history, no lights.
+  Nothing of the frame — no depth, no history. A lit surface additionally reads the light through
+  `ISurfaceLight` — the sun and the environment, and only those; a PBR surface reads no light at
+  all, because the engine lights it.
+* **No say over bloom beyond `emissive`.** A surface cannot mark itself as glowing or not; bloom
+  selects by brightness alone, which is wrong for flat toon shading. `emissive` above the
+  target's threshold is the one lever — see [Passes Overview](passes.md) § Bloom.
 
 ## Reading further
 

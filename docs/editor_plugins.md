@@ -145,7 +145,10 @@ so a debug build loads it with nothing configured. A descriptor that is missing,
 for another engine or older than the SDK stamp stops startup with the plugin named, as does a kind
 or contribution collision between two plugins: an install holds one owner per extension.
 
-A `.bproj` may name the plugin IDs it needs in `plugins`. That list loads nothing; it is a guard.
+Modules load in `main`, before the project is chosen, so the landing page and the startup project
+both open against the loaded kinds; the editor halves register once the window builds, the
+host-linked plugin first. A `.bproj` may name the plugin IDs it needs in `plugins`. That list loads
+nothing; it is a guard.
 Opening a project whose list names a plugin the editor did not load is refused, naming the plugin
 and where to put it, because a kind the store cannot read is a document the reference scan, rename,
 pack and migration silently pass over. A project that names nothing opens against whatever loaded.

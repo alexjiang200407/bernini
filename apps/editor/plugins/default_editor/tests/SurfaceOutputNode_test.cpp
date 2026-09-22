@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
@@ -667,4 +668,50 @@ TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][
 	const bgl::SurfaceMaterialDesc rewired = editor::SurfaceDescOfBoard(*sink);
 	REQUIRE(rewired.textures.size() == 1);
 	CHECK(rewired.textures[0].routes[0].channel == 2);
+}
+
+TEST_CASE(
+	"A surface's sink shows no Geometry Occlusion (UV1) port",
+	"[materialgraph][surfacesink][geometryao]")
+{
+	// A surface takes geometry AO the way it takes any map -- through a slot it declares and
+	// samples itself -- so its node shows the slots it declares and no port it never names.
+	MaterialGraphModel model(Registry());
+	REQUIRE(model.addNode(QStringLiteral("SurfaceOutput:Rim")) != InvalidNodeId);
+
+	SurfaceOutputNode* sink = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	for (unsigned int port = 0; port < sink->nPorts(PortType::In); ++port)
+	{
+		INFO("port " << port);
+		CHECK(
+			sink->portCaption(PortType::In, static_cast<QtNodes::PortIndex>(port)) !=
+			QStringLiteral("Geometry Occlusion (UV1)"));
+	}
+}
+
+TEST_CASE(
+	"Switching a PBR board to a surface lets its geometry occlusion wire go",
+	"[materialgraph][surfacesink][geometryao]")
+{
+	// The opaque sink's geometry occlusion port sits at the index of Rim's orm.r, a single-channel port the wire's
+	// type fits: moved by index, the occlusion map would be bound as the surface's ORM red.
+	MaterialGraphModel model(Registry());
+	const NodeId       outputId  = model.addNode(QStringLiteral("MaterialOutput"));
+	const NodeId       textureId = model.addNode(QStringLiteral("Texture"));
+	if (auto* texture = model.delegateModel<TextureNode>(textureId))
+		texture->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/wall/ao.ktx2"));
+
+	const auto* pbr = qobject_cast<const MaterialOutputNode*>(model.OutputNode());
+	REQUIRE(pbr != nullptr);
+	model.addConnection(
+		ConnectionId{ textureId,
+	                  QtNodes::PortIndex(TextureNode::c_BundleCount),
+	                  outputId,
+	                  pbr->GeometryOcclusionPort() });
+
+	REQUIRE(model.SetOutputType(QStringLiteral("SurfaceOutput:Rim")));
+
+	CHECK(model.allConnectionIds(model.OutputNodeId()).empty());
 }

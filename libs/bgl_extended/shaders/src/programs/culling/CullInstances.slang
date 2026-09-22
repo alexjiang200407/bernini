@@ -64,20 +64,11 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
-    // World-space bounding sphere. The centre transforms like a vertex -- the same accessor the
-    // forward pass uses -- so cull and draw cannot disagree on where the instance is. The radius scales
-    // by the largest transformed basis length, which is the exact max axis scale for a
-    // translation-rotation-scale transform; a sheared transform could under-scale it, but instance
-    // transforms here are TRS.
-    let center = mesh.TransformPoint(submesh.boundingSphere.xyz);
+    // The centre transforms like a vertex -- the same accessor the forward pass uses -- so cull and
+    // draw cannot disagree on where the instance is.
+    let sphere = mesh.TransformSphere(submesh.boundingSphere);
 
-    let ax = mesh.TransformDirection(float3(1.0, 0.0, 0.0));
-    let ay = mesh.TransformDirection(float3(0.0, 1.0, 0.0));
-    let az = mesh.TransformDirection(float3(0.0, 0.0, 1.0));
-    let maxScaleSq = max(dot(ax, ax), max(dot(ay, ay), dot(az, az)));
-    let radius = submesh.boundingSphere.w * sqrt(maxScaleSq);
-
-    let visible = SphereInFrustum(gUniforms.cullView[0].frustumPlanes, center, radius);
+    let visible = SphereInFrustum(gUniforms.cullView[0].frustumPlanes, sphere.xyz, sphere.w);
 
     gUniforms.visibility[globalIdx].visible = visible ? 1u : 0u;
 

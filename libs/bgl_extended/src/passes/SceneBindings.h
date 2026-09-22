@@ -21,9 +21,9 @@ namespace bgl
 	};
 
 	// The geometry tables every forward expansion and vertex decode reads. Every pass built on
-	// those shaders declares and binds all nine, so the set lives here rather than in any one
+	// those shaders declares and binds all ten, so the set lives here rather than in any one
 	// pass.
-	constexpr std::array<SceneBuffer, 9> c_ForwardDataBuffers = {
+	constexpr std::array<SceneBuffer, 10> c_ForwardDataBuffers = {
 		{ { c_InstanceBufferName,
 		    "instanceBuffer",
 		    BarrierAccessFlag::kShaderResource,
@@ -42,6 +42,10 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader },
 		  { c_MeshletBufferName,
 		    "meshletBuffer",
+		    BarrierAccessFlag::kShaderResource,
+		    BarrierSyncFlag::kVertexShader },
+		  { c_MeshletGroupBufferName,
+		    "meshletGroupBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_VertexMapBufferName,
@@ -105,6 +109,36 @@ namespace bgl
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader } }
 	};
+
+	/**
+	 * Declares what the static tier's amplification stage culls meshlets with: the frustum the draw's
+	 * instances were culled against, and the cull counters.
+	 * @pre recorded under the cull scope whose compaction the pass draws, where `cull.view` resolves.
+	 */
+	inline void
+	DeclareMeshletCullBuffers(PassDesc& desc)
+	{
+		desc.AddBufferArg(
+			c_CullViewName,
+			BarrierSyncFlag::kVertexShader,
+			BarrierAccessFlag::kShaderResource);
+		desc.AddBufferArg(
+			c_CullStatsName,
+			BarrierSyncFlag::kVertexShader,
+			BarrierAccessFlag::kUnorderedAccess);
+	}
+
+	/**
+	 * Binds DeclareMeshletCullBuffers' buffers into an `expansionData` that reads them. Only the
+	 * static tier's programs do, and the counters only under BERNINI_GPU_DEBUG, so either may be
+	 * absent from a kernel's reflection.
+	 */
+	inline void
+	BindMeshletCullBuffers(Uniforms& expansion, const PassContext& resources)
+	{
+		expansion["cullView"].SetIfValid(resources.GetBuffer(c_CullViewName));
+		expansion["stats"].SetIfValid(resources.GetBuffer(c_CullStatsName));
+	}
 
 	inline void
 	BindSceneBuffers(

@@ -54,7 +54,7 @@ namespace assetlib
 
 		/**
 		 * Which of the parts `document` claims no longer match it: all of them when the copied
-		 * source or the float cubes' revision moved, and otherwise each one whose parameters were
+		 * source or the bake's revision moved, and otherwise each one whose parameters were
 		 * edited since it was written. An absent source stales nothing, the rule the geometry
 		 * cache keys follow.
 		 *

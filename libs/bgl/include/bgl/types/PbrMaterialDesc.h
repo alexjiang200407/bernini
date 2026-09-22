@@ -31,5 +31,9 @@ namespace bgl
 		TextureAssetHandle baseColorTexture;
 		TextureAssetHandle normalTexture;
 		TextureAssetHandle ormTexture;
+
+		// Occlusion sampled through the mesh's second UV set and multiplied with the ORM's own; a
+		// mesh without that set reads it as unoccluded. Scales the environment only, never the sun.
+		TextureAssetHandle geometryOcclusionTexture;
 	};
 }

@@ -9,10 +9,12 @@
 #include "fg/FrameGraph.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
+#include "passes/BloomPass.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
+#include "postprocess/BloomChain.h"
 #include "resource/ResourceManager.h"
 #include "resource/Sampler.h"
 #include "resource/Texture.h"
@@ -31,8 +33,10 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/MaterialType.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/gassert.h>
@@ -148,6 +152,18 @@ namespace bgl
 			return std::format("{}{}", c_HistoryName, index);
 		}
 
+		std::string
+		GetBloomDownName(uint32_t level)
+		{
+			return std::format("bloomDown{}", level);
+		}
+
+		std::string
+		GetBloomUpName(uint32_t level)
+		{
+			return std::format("bloomUp{}", level);
+		}
+
 		// Encodes a tight RGBA8 image as a PNG via stb_image_write -- cross-platform, replacing the
 		// old DirectXTex DDS / WIC PNG encoders.
 		void
@@ -183,10 +199,17 @@ namespace bgl
 		DeviceRef                        device,
 		ResourceManagerRef               resourceManager,
 		std::shared_ptr<DrawBucketTable> buckets,
+		std::span<const SurfaceType>     surfaceTypes,
 		bool                             enableDebug) :
 		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
 	{
+		m_GameSurfaceShading.reserve(surfaceTypes.size());
+		for (const SurfaceType& type : surfaceTypes)
+		{
+			m_GameSurfaceShading.emplace_back(type.shading);
+		}
+
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
@@ -214,10 +237,10 @@ namespace bgl
 		m_Forward.Init(passes);
 		m_Skybox.Init(passes);
 		m_PostProcess.Init(passes);
+		m_BloomPass.Init(passes);
 		m_OverlayPass.Init(passes);
 		m_OutlineMask.Init(passes);
 		m_TaaResolve.Init(passes);
-		m_BrdfLut.Init(passes);
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
@@ -225,6 +248,7 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_Skybox.CheckBindings();
 		m_PostProcess.CheckBindings();
+		m_BloomPass.CheckBindings();
 		m_OverlayPass.CheckBindings();
 		m_TaaResolve.CheckBindings();
 
@@ -234,12 +258,9 @@ namespace bgl
 			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
-		m_BrdfLut.Generate(m_CommandList.Get());
 		m_TonemapLut.Upload(m_CommandList.Get());
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
-
-		m_BrdfLut.ReleaseTarget();
 
 #if defined(BERNINI_GPU_DEBUG)
 		m_BufferPoisoner.Init(m_ResourceManager);
@@ -278,6 +299,7 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
+		m_BloomPass.Release();
 		m_OverlayPass.Release();
 		m_OutlineMask.Release();
 		m_TaaResolve.Release();
@@ -668,6 +690,55 @@ namespace bgl
 			"EnsureDrawBucketPipelinesExist left the shared blend kernel uninitialized");
 	}
 
+	// Whether a bucket of this kind samples the split-sum machinery: the engine's PBR records, and
+	// a game surface whose lighting is the engine's. A lit surface's kind does not, and neither
+	// does kNull or kAssert.
+	bool
+	RenderContext::KindIsPbrLit(MaterialType kind) const noexcept
+	{
+		if (kind == MaterialType::kPBR || kind == MaterialType::kLoosePbr)
+			return true;
+
+		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
+		if (static_cast<uint32_t>(kind) < start)
+			return false;
+
+		const uint32_t slot = static_cast<uint32_t>(kind) - start;
+		return slot < m_GameSurfaceShading.size() &&
+		       m_GameSurfaceShading[slot] == SurfaceShading::kPbrSurface;
+	}
+
+	void
+	RenderContext::EnsureBrdfLutExists(DrawBucketMask demanded)
+	{
+		if (m_BrdfLut.Generated())
+			return;
+
+		const DrawBucketTable& table  = *m_DrawBucketTable;
+		bool                   needed = false;
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count && !needed; ++bucket)
+		{
+			needed = demanded.test(bucket) && KindIsPbrLit(table.Desc(bucket).material);
+		}
+		if (!needed)
+			return;
+
+		// The same demand shape as the bucket kernels above: built by the first Draw that needs
+		// it, so a scene shaded entirely by lit surfaces never builds the pipeline or the texture.
+		auto       pipelines = PipelineBatch(m_Device.Get());
+		const auto passes    = PassInitContext{ m_Device.Get(),
+			                                    &pipelines,
+			                                    m_ResourceManager,
+			                                    m_DrawBucketTable.get() };
+		m_BrdfLut.Init(passes);
+		pipelines.Build();
+		m_Device->ReleaseSlangSession();
+
+		// Recorded at the head of the open frame list, so every pass the frame graph records at
+		// EndFrame -- the first sampler of the table among them -- orders after the write.
+		m_BrdfLut.Generate(m_CommandList.Get());
+	}
+
 	void
 	RenderContext::Draw(const RenderJob& job)
 	{
@@ -685,6 +756,7 @@ namespace bgl
 		auto scene = view->GetScene()->As<Scene>();
 
 		EnsureDrawBucketPipelinesExist(view->DemandedDrawBuckets());
+		EnsureBrdfLutExists(view->DemandedDrawBuckets());
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
@@ -746,10 +818,9 @@ namespace bgl
 
 		const glm::mat4 invView = glm::inverse(job.camera.GetView());
 
-		// What the resolve tells a surface's own motion from the camera's with. One camera stands
-		// for the target, so a frame of several draws disables it rather than choosing.
+		// What the resolve validates history depth with. One camera stands for the target, so a
+		// frame of several draws disables it rather than choosing.
 		m_TaaClipToView     = glm::inverse(job.camera.GetProjection());
-		m_TaaViewToPrevClip = prevCamera.unjitteredViewProj * invView;
 		m_TaaViewToPrevView = prevCamera.view * invView;
 		m_TaaJitter         = jitter;
 
@@ -1030,7 +1101,6 @@ namespace bgl
 			taaArgs.reconstructionWidth = rt.GetTaaReconstructionWidth();
 			taaArgs.depth               = rt.GetDepthSrv();
 			taaArgs.clipToView          = m_TaaClipToView;
-			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
 			taaArgs.viewToPrevView      = m_TaaViewToPrevView;
 			taaArgs.jitter              = m_TaaJitter;
 			taaArgs.cameraPairValid     = m_DrawCount == 1;
@@ -1041,6 +1111,71 @@ namespace bgl
 			postProcessArgs.source     = rt.GetHistorySrv(current);
 			postProcessArgs.sourceName = GetHistoryName(current);
 		}
+
+		BloomChain& bloomChain = rt.GetBloomChain();
+
+		if (rt.IsBloomEnabled())
+		{
+			bloomChain.Ensure(m_ResourceManager, rt.GetWidth(), rt.GetHeight());
+		}
+
+		// Empty when bloom is off -- and when a resource pool refused the chain, where skipping
+		// the frame's bloom is the whole recovery.
+		const std::span<const BloomChain::Level> levels = bloomChain.GetLevels();
+
+		if (rt.IsBloomEnabled() && !levels.empty())
+		{
+			const BloomSettings settings = rt.GetBloomSettings();
+
+			auto bloomArgs       = BloomPass::Args();
+			bloomArgs.source     = postProcessArgs.source;
+			bloomArgs.sourceName = postProcessArgs.sourceName;
+			bloomArgs.sampler    = m_LinearClampSampler;
+			bloomArgs.threshold  = settings.threshold;
+			bloomArgs.knee       = settings.threshold * settings.softKnee;
+			bloomArgs.scatter    = settings.scatter;
+
+			// The grid the source is on, which is the question sourceOnOutputGrid already
+			// answered for the same source.
+			bloomArgs.sourceSize = sourceOnOutputGrid ? glm::vec2(
+															static_cast<float>(rt.GetWidth()),
+															static_cast<float>(rt.GetHeight())) :
+			                                            renderSize;
+
+			for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+			{
+				const BloomChain::Level& level = levels[i];
+
+				m_FrameGraph.ImportTexture(GetBloomDownName(i), level.downTexture);
+
+				auto& levelArgs    = bloomArgs.levels.emplace_back();
+				levelArgs.downSrv  = level.downSrv;
+				levelArgs.downRtv  = level.downRtv;
+				levelArgs.downName = GetBloomDownName(i);
+				levelArgs.width    = level.width;
+				levelArgs.height   = level.height;
+
+				if (!level.upTexture.IsNull())
+				{
+					m_FrameGraph.ImportTexture(GetBloomUpName(i), level.upTexture);
+					levelArgs.upSrv  = level.upSrv;
+					levelArgs.upRtv  = level.upRtv;
+					levelArgs.upName = GetBloomUpName(i);
+				}
+			}
+
+			m_BloomPass.AttachToFrameGraph(m_FrameGraph, bloomArgs);
+
+			postProcessArgs.bloom        = bloomChain.GetBloomSrv();
+			postProcessArgs.bloomSampler = m_LinearClampSampler;
+			postProcessArgs.bloomName =
+				bloomChain.IsUpsampled() ? GetBloomUpName(0) : GetBloomDownName(0);
+			postProcessArgs.bloomIntensity = settings.intensity;
+			postProcessArgs.bloomEnabled   = true;
+		}
+
+		postProcessArgs.colorGrade        = rt.GetColorGradeSettings();
+		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 

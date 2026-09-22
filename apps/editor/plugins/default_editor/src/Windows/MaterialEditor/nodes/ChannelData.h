@@ -44,6 +44,13 @@ public:
 		return data;
 	}
 
+	/** One channel wide: a texture's R, G, B or A port, and every port that takes one of them. */
+	[[nodiscard]] static QtNodes::NodeDataType
+	ScalarType()
+	{
+		return Type(1);
+	}
+
 	[[nodiscard]] static QtNodes::NodeDataType
 	Type(unsigned int arity)
 	{

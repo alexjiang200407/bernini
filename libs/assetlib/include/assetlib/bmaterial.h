@@ -25,6 +25,18 @@ namespace assetlib
 	}
 
 	/**
+	 * Whether the model's material half is a registered surface's declared parameters -- the
+	 * document carries a surface name, `parameters` and `textures` rather than the PBR triplet.
+	 * True for both surface contracts: which one only decides who lights the pixel, never what
+	 * the document holds.
+	 */
+	[[nodiscard]] inline constexpr bool
+	isSurfaceModel(ShadingModel model) noexcept
+	{
+		return model == ShadingModel::kPbrSurface || model == ShadingModel::kLitSurface;
+	}
+
+	/**
 	 * Whether anything routes into `group`.
 	 *
 	 * A group with nothing routed bakes to no map at all, which is a complete bake rather than a
