@@ -5,6 +5,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <gamelib/shading_model.h>
 
 #include <QColor>
 #include <QColorDialog>
@@ -496,9 +497,7 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 {
 	// The registered surface's own contract decides the model, so a lit surface's document says
 	// what its module says and a save never demotes one to the engine-lit model.
-	material.shadingModel = m_Surface.shading == bgl::SurfaceShading::kLit ?
-	                            assetlib::ShadingModel::kLitSurface :
-	                            assetlib::ShadingModel::kPbrSurface;
+	material.shadingModel = game::ToShadingModel(m_Surface.shading);
 
 	material.layer.alphaMode   = m_AlphaMode;
 	material.layer.alphaCutoff = m_AlphaCutoff;

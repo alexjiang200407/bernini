@@ -1,3 +1,4 @@
+#include "gamelib/shading_model.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
@@ -6,7 +7,6 @@
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
-#include <bgl/SurfaceType.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
@@ -1605,9 +1605,7 @@ namespace game
 
 		// The document's model is its contract expectation (ADR-5): the renderer refuses a named
 		// surface that conforms to the other one.
-		desc.shading = record.source.shadingModel == assetlib::ShadingModel::kLitSurface ?
-		                   bgl::SurfaceShading::kLit :
-		                   bgl::SurfaceShading::kPbrSurface;
+		desc.shading = ToSurfaceShading(record.source.shadingModel);
 
 		desc.values.reserve(surface.values.size());
 		for (const assetlib::SurfaceValueBinding& value : surface.values)
