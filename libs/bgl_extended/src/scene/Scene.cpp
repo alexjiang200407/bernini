@@ -1979,6 +1979,23 @@ namespace bgl
 		const SurfaceType&   surface = *found;
 		const SurfaceParams& params  = surface.params;
 
+		// ADR-5: a caller that says which contract it was authored against is refused a surface
+		// that conforms to the other one, instead of silently drawing under a lighting model the
+		// document never meant.
+		if (desc.shading.has_value() && *desc.shading != surface.shading)
+		{
+			const auto name = [](SurfaceShading shading) {
+				return shading == SurfaceShading::kLit ? "owns its lighting (ILitSurfaceSource)" :
+				                                         "is lit by the engine (ISurfaceSource)";
+			};
+			throw SceneError(
+				std::format(
+					"surface '{}' {}, but the material expects one that {}",
+					desc.surface,
+					name(surface.shading),
+					name(*desc.shading)));
+		}
+
 		const std::optional<uint32_t> carrier = CoverageCarrierSlot(params);
 
 		// Hashed alpha relates a UV footprint to texels, so it needs one of the surface's textures

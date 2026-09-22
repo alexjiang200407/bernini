@@ -912,3 +912,31 @@ TEST_CASE("a surface parameter of the wrong shape is refused", "[bmaterial][io][
 		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "textures": {"t": 3}})"),
 		std::runtime_error);
 }
+
+// The lit model carries the same three keys pbrSurface does; what changes is only the model name,
+// which is the document's contract expectation and must never be rewritten by a round trip.
+TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surface]")
+{
+	BMaterial mat;
+	mat.name         = "banded";
+	mat.shadingModel = ShadingModel::kLitSurface;
+	mat.surface.name = "Band";
+
+	mat.surface.values   = { { "bands", { 4.0f } } };
+	mat.surface.textures = { { "base", "Derived/BakedTextures/band_base.ktx2" } };
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find("\"shadingModel\": \"litSurface\"") != std::string::npos);
+	CHECK(out.find("\"surface\": \"Band\"") != std::string::npos);
+
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
+
+	REQUIRE(restored.shadingModel == ShadingModel::kLitSurface);
+	CHECK(restored.surface.name == "Band");
+	REQUIRE(restored.surface.values.size() == 1u);
+	CHECK(restored.surface.values[0].name == "bands");
+	REQUIRE(restored.surface.textures.size() == 1u);
+	CHECK(restored.surface.textures[0].name == "base");
+}

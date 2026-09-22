@@ -16,8 +16,12 @@ namespace assetlib
 
 		// The same lighting, over a material half the game computes. Its textures bind whole by
 		// name; a slot may instead carry channel routes and a per-slot bake (SurfaceTextureBinding).
-		// A game-defined *lighting* model would be a third value.
 		kPbrSurface = 1,
+
+		// A game-defined lighting model: the surface's Shade returns radiance and the engine's PBR
+		// never runs. The document shape is kPbrSurface's exactly -- a surface name, parameters,
+		// textures -- and only the contract the named surface must conform to differs.
+		kLitSurface = 2,
 
 		kCount,
 	};

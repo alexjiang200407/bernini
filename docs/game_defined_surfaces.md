@@ -196,11 +196,14 @@ cutoff is the thing being replaced.
 A material drawn by a surface says so, names it, and sets what it wants by name
 ([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)).
 
-The model is **`pbrSurface`**, not `surface`, and the name is the whole story: the lighting is the
-engine's PBR, and what a surface supplies is the material's half of it — a `PbrSurface`, which is
-the struct `Evaluate` returns. It is where the inputs come from rather than a second shading
-model. A game-defined *lighting* model would be a third value, and nothing in today's contract can
-write one.
+The model names the contract, and there are two: **`pbrSurface`** for a surface on
+`ISurfaceSource` — the lighting is the engine's PBR, and what the surface supplies is the
+material's half of it, the `PbrSurface` its `Evaluate` returns — and **`litSurface`** for one on
+`ILitSurfaceSource`, whose `Shade` is the whole lighting. The document's model is its contract
+*expectation*: `CreateSurfaceMaterial` refuses a named surface that conforms to the other one, so
+a surface that changes contract fails loud instead of silently changing what every material drawn
+by it means. Everything else in the document — the surface name, `parameters`, `textures`, the
+per-slot bakes — is identical under both models.
 
 ```json
 {
@@ -252,6 +255,7 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a parameter that is not one to four numbers | reading the document (`bmaterial_io.cpp`) |
 | a `shadingModel` this build does not know | reading the document |
 | a surface no shader declared | `CreateSurfaceMaterial`, naming the surface |
+| a `shadingModel` naming a surface on the other contract | `CreateSurfaceMaterial`, naming the surface and both contracts |
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
@@ -280,7 +284,9 @@ Deliberate, and each is a decision rather than an omission:
   into a demotion.
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
-  Nothing of the frame — no depth, no history, no lights.
+  Nothing of the frame — no depth, no history. A lit surface additionally reads the light through
+  `ISurfaceLight` — the sun and the environment, and only those; a PBR surface reads no light at
+  all, because the engine lights it.
 * **No say over bloom beyond `emissive`.** A surface cannot mark itself as glowing or not; bloom
   selects by brightness alone, which is wrong for flat toon shading. `emissive` above the
   target's threshold is the one lever — see [Passes Overview](passes.md) § Bloom.
