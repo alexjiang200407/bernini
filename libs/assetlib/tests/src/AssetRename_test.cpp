@@ -392,7 +392,7 @@ TEST_CASE("Renaming a texture re-points the material's UV1 occlusion map", "[ass
 	WriteSource(root.path / "Derived/SourceTextures" / "ao.ktx2", { { 128, 128, 128, 255 } });
 
 	BMaterial material;
-	material.uv1OcclusionTexture = "Derived/SourceTextures/ao.ktx2";
+	material.pbr.uv1OcclusionTexture = "Derived/SourceTextures/ao.ktx2";
 	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
 
 	REQUIRE(
@@ -402,7 +402,7 @@ TEST_CASE("Renaming a texture re-points the material's UV1 occlusion map", "[ass
 	CHECK(
 		StoreAt(root.path)
 			.Load<BMaterial>("Authored/Materials/mat.bmaterial")
-			.uv1OcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
+			.pbr.uv1OcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
 	CHECK(root.Scan().broken.empty());
 }
 

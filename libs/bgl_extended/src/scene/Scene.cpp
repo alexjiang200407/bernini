@@ -2082,8 +2082,6 @@ namespace bgl
 		for (idl::RawTextureHandle& handle : record.textures)
 			handle = RawHandleOf(m_Textures.GetDescriptor(white));
 
-		record.uv1OcclusionTexture = ResolveTexture(desc.uv1OcclusionTexture, white);
-
 		// The identity routing over white: a data slot nothing binds gathers exactly what an
 		// unbound whole slot samples, and a partially routed one fills its gaps with white.
 		for (uint32_t route = 0;
@@ -2345,9 +2343,6 @@ namespace bgl
 		static_assert(
 			offsetof(idl::GameSurfaceRecord, routeTextures) ==
 			sizeof(idl::GameSurfaceRecord::textures));
-		static_assert(
-			offsetof(idl::GameSurfaceRecord, uv1OcclusionTexture) ==
-			idl::cGameSurfaceUv1OcclusionIndex * sizeof(idl::RawTextureHandle));
 		static_assert(
 			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
 			idl::cGameSurfaceRouteChannelsByteOffset);

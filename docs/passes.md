@@ -253,9 +253,10 @@ is no shadow pass; what it is scaled by, and in which units, is
 
 **Ambient occlusion has two sources, multiplied.** `PbrSurface::orm.r` is the material's own AO,
 read through UV0, times its UV1 occlusion map — geometry AO baked on a unique second UV set, which a
-tiled UV0 cannot hold ([Asset Standards](asset_standards.md)). Every kind multiplies it in the same
-place: `SurfaceOf` for a PBR record, `GameRecord::Evaluate` after the surface returns. It is
-sampled on every draw, an absent map reading the white default as every other slot does — about
+tiled UV0 cannot hold ([Asset Standards](asset_standards.md)). The PBR records multiply it in
+`SurfaceOf`; a game surface takes it through a slot of its own, sampling `IMaterialReader::Uv1`
+([Game-Defined Surfaces](game_defined_surfaces.md)), and the engine adds nothing after it returns.
+It is sampled on every PBR draw, an absent map reading the white default as every other slot does — about
 1.5% of Forward in `[.forwardcost]`, the price of not splitting every pipeline on it. A mesh with no
 second UV set decodes `cNoUv1`, which `SampleUv1Occlusion` reads as unoccluded, so a material shared
 with such a mesh draws it as though the map were white. The interpolant is `SECONDUV` and never

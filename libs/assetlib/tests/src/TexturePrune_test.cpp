@@ -196,7 +196,7 @@ TEST_CASE("FindUnusedBakedTextures keeps a map a material samples through UV1", 
 	REQUIRE(rebaked.pbr.baseColorTexture != map);
 
 	BMaterial occluded;
-	occluded.uv1OcclusionTexture = map;
+	occluded.pbr.uv1OcclusionTexture = map;
 	StoreAt(root.path).Save(occluded, "Authored/Materials/occluded.bmaterial");
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();

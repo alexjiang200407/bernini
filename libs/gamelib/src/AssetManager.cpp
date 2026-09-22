@@ -236,10 +236,9 @@ namespace game
 	}
 
 	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
-	// them (a loose slot expanding to its four route sources in place), the baked triplet, or the
-	// nine authoring routes -- then, in every case, the UV1 occlusion map. One order per case, in
-	// one place, so the record's texture references and the desc it rebuilds can never fall out of
-	// step.
+	// them (a loose slot expanding to its four route sources in place), or the baked triplet or the
+	// nine authoring routes followed by the UV1 occlusion map. One order per case, in one place, so
+	// the record's texture references and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
 	MaterialTextures(
 		const assetlib::BMaterial& material,
@@ -250,7 +249,7 @@ namespace game
 
 		if (assetlib::isSurfaceModel(material.shadingModel))
 		{
-			paths.reserve(material.surface.textures.size() + 1);
+			paths.reserve(material.surface.textures.size());
 			for (size_t i = 0; i < material.surface.textures.size(); ++i)
 			{
 				const assetlib::SurfaceTextureBinding& slot = material.surface.textures[i];
@@ -267,8 +266,10 @@ namespace game
 
 				paths.push_back(assetlib::slotIsRouted(slot) ? slot.bakedPath : slot.texturePath);
 			}
+			return paths;
 		}
-		else if (loose)
+
+		if (loose)
 		{
 			paths.reserve(assetlib::c_LooseChannelCount + 1);
 			for (const assetlib::ChannelRoute& route : material.pbr.routes)
@@ -281,7 +282,7 @@ namespace game
 				      material.pbr.ormTexture };
 		}
 
-		paths.push_back(material.uv1OcclusionTexture);
+		paths.push_back(material.pbr.uv1OcclusionTexture);
 		return paths;
 	}
 
@@ -1652,8 +1653,6 @@ namespace game
 
 			desc.textures.push_back(std::move(binding));
 		}
-
-		desc.uv1OcclusionTexture = record.textures.back();
 
 		return desc;
 	}

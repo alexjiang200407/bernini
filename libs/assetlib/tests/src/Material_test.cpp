@@ -133,30 +133,40 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 	CHECK(defaulted.pbr.specularColorFactor == glm::vec3(1.0f));
 }
 
-// The map is every model's, not the PBR payload's: a surface material samples it too, so it sits
-// at the top level beside the layer and survives a model that clears the other model's keys.
-TEST_CASE("a material's UV1 occlusion map round-trips under every shading model", "[bmaterial][io]")
+// The key is the PBR model's: a surface takes the map through a slot of its own, so a surface
+// document carries none -- written or read -- however its struct was filled.
+TEST_CASE(
+	"a PBR material's UV1 occlusion map round-trips, and a surface's is dropped",
+	"[bmaterial][io]")
 {
-	for (const ShadingModel model : { ShadingModel::kPbr, ShadingModel::kPbrSurface })
-	{
-		INFO("shading model " << static_cast<uint32_t>(model));
+	BMaterial mat;
+	mat.name                    = "wall";
+	mat.pbr.uv1OcclusionTexture = "Derived/SourceTextures/wall_ao.ktx2";
 
-		BMaterial mat;
-		mat.name                = "wall";
-		mat.shadingModel        = model;
-		mat.uv1OcclusionTexture = "Derived/SourceTextures/wall_ao.ktx2";
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	// One tab of indent is the top level of a canonical document.
+	CHECK(
+		out.find("\n\t\"uv1Occlusion\": \"Derived/SourceTextures/wall_ao.ktx2\"") !=
+		std::string::npos);
+	CHECK(
+		AssetCodec<BMaterial>::Deserialize(bytes).pbr.uv1OcclusionTexture ==
+		mat.pbr.uv1OcclusionTexture);
 
-		const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
-		const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-		// One tab of indent is the top level of a canonical document.
-		CHECK(
-			out.find("\n\t\"uv1Occlusion\": \"Derived/SourceTextures/wall_ao.ktx2\"") !=
-			std::string::npos);
+	BMaterial surface              = mat;
+	surface.shadingModel           = ShadingModel::kPbrSurface;
+	surface.surface.name           = "Rim";
+	const auto        surfaceBytes = AssetCodec<BMaterial>::Serialize(surface);
+	const std::string surfaceOut(
+		reinterpret_cast<const char*>(surfaceBytes.data()),
+		surfaceBytes.size());
+	CHECK(surfaceOut.find("uv1Occlusion") == std::string::npos);
 
-		CHECK(
-			AssetCodec<BMaterial>::Deserialize(bytes).uv1OcclusionTexture ==
-			mat.uv1OcclusionTexture);
-	}
+	const std::string text =
+		R"({"shadingModel":"pbrSurface","surface":"Rim","uv1Occlusion":"a.ktx2"})";
+	CHECK(
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())))
+			.pbr.uv1OcclusionTexture.empty());
 }
 
 // Every material written before the key existed must load, and re-save, exactly as it did.
@@ -165,7 +175,7 @@ TEST_CASE("a material without a UV1 occlusion map writes no key for it", "[bmate
 	const std::string text = R"({"shadingModel":"pbr","name":"plain"})";
 	const auto        legacy =
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
-	CHECK(legacy.uv1OcclusionTexture.empty());
+	CHECK(legacy.pbr.uv1OcclusionTexture.empty());
 
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(legacy);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());

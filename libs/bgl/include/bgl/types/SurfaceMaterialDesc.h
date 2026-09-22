@@ -77,9 +77,5 @@ namespace bgl
 
 		std::vector<SurfaceValueBinding>   values;
 		std::vector<SurfaceTextureBinding> textures;
-
-		// Multiplied into the PbrSurface's AO by the engine after the surface returns it, so the
-		// surface never sees the second UV set; see PbrMaterialDesc.
-		TextureAssetHandle uv1OcclusionTexture;
 	};
 }

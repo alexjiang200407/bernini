@@ -301,6 +301,7 @@ namespace assetlib
 			out += std::format("    baseColor       {}\n", pathOr(pbr.baseColorTexture));
 			out += std::format("    normal          {}\n", pathOr(pbr.normalTexture));
 			out += std::format("    orm             {}\n", pathOr(pbr.ormTexture));
+			out += std::format("    uv1Occlusion    {}\n", pathOr(pbr.uv1OcclusionTexture));
 
 			out += "\n  channel routes\n";
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
@@ -459,7 +460,6 @@ namespace assetlib
 		// submesh can be skinned at all.
 		out += std::format("  alphaMode         {}\n", alphaModeName(material.layer.alphaMode));
 		out += std::format("  doubleSided       {}\n", material.layer.doubleSided);
-		out += std::format("  uv1Occlusion      {}\n", pathOr(material.uv1OcclusionTexture));
 
 		switch (material.shadingModel)
 		{
