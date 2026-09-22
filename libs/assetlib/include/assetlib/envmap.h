@@ -264,8 +264,8 @@ namespace assetlib
 	{
 		std::filesystem::path source;  // an equirectangular `.hdr`, or a cube map `.ktx2`
 
-		// Names every file the import writes: `Derived/Sky/<name>.bsky`,
-		// `Derived/SourceTextures/<name>_sky.ktx2`, ...
+		// Names every file the import writes: `Derived/Sky/<name>.bsky`, the copied source
+		// `Authored/EnvSources/<name>.hdr`, ...
 		std::string name = "env";
 
 		/**
@@ -279,12 +279,11 @@ namespace assetlib
 		std::filesystem::path skyDir         = c_SkyDirectoryName;
 		std::filesystem::path lightingDir    = c_EnvLightingDirectoryName;
 		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
-		std::filesystem::path sourceDir      = c_SourceTexturesDirectoryName;
 
-		// Where `source` itself is copied, with the `.bimport` describing it beside it -- not
-		// `sourceDir`, which holds the float cubes computed *from* it. Must sit under
-		// `Authored/EnvSources`, the environment sources' category; anywhere else is refused. The
-		// import dialog offers a subfolder of it, as it does for each part.
+		// Where `source` itself is copied, with the `.bimport` describing it beside it. What every
+		// bake of this environment reads, so it must sit under `Authored/EnvSources`, the
+		// environment sources' category; anywhere else is refused. The import dialog offers a
+		// subfolder of it, as it does for each part.
 		std::filesystem::path importedSourceDir = c_EnvSourcesDirectoryName;
 
 		bool sky         = true;  // write the `.bsky`

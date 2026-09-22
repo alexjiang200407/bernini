@@ -290,11 +290,11 @@ namespace game
 		 * The maps are keyed by their own paths, so two environments composing the same sky share its
 		 * upload -- which is the point of the reference container.
 		 *
-		 * Baked or source per route, by `assetlib::envMapToDraw` -- the rule a material's baked-vs-
-		 * loose branch follows.
+		 * Each route's baked map, by `assetlib::envMapToDraw` -- stale or not, and never its source,
+		 * which is an image to convolve rather than one to sample.
 		 *
-		 * @throws std::runtime_error if a referenced file is missing or malformed, or a route has
-		 *         neither a baked map nor a source on disk.
+		 * @throws std::runtime_error if a referenced file is missing or malformed, or a route's baked
+		 *         map is not on disk -- a project `assetlib_cli migrate` has not baked yet.
 		 */
 		Environment
 		AcquireEnvironment(std::string_view relPath);

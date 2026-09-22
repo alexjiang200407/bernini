@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "env_parts.h"
 #include "json_doc.h"
 #include "ref_paths.h"
 #include <assetlib_structs/Animation.h>
@@ -287,6 +288,11 @@ namespace assetlib
 			}
 			json.erase(it);
 		}
+
+		if (document.environment)
+			std::erase_if(document.outputs, [](const std::string& output) {
+				return isRetiredEnvironmentOutput(output);
+			});
 
 		document.extraJson = json.dump();
 		return document;

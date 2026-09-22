@@ -71,13 +71,13 @@ namespace assetlib
 		 */
 		std::optional<EnvironmentImportParameters> environment;
 
-		// The float sources' key, as textureStamp and textureBakeToken are the extracted textures':
-		// the source as it stood when they were written, and c_EnvSourceBakeToken then.
+		// The environment's key, as textureStamp and textureBakeToken are the extracted textures':
+		// the source as it stood when its parts were cooked, and c_EnvSourceBakeToken then.
 		SourceStamp envSourceStamp;
 		uint64_t    envSourceBakeToken = 0;
 
 		// And the parameters each part was written with, hashed per part. A `.bmesh` keeps this in
-		// its own header; a float cube has none, and `environment` is what the parameters are *now*,
+		// its own header; a baked map has none, and `environment` is what the parameters are *now*,
 		// so without these an edited document would describe pixels nothing re-cooks. Zero for a
 		// part this source never produced.
 		uint64_t envSkyParametersHash      = 0;

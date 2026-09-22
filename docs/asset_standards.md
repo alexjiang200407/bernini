@@ -555,21 +555,21 @@ in `docs/specs/`.
   I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
-    key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
-    under `Derived/SourceTextures/`, the machine-ready `baked` `.ktx2` under `Derived/BakedTextures/`, and the `SourceStamp`
-    the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
+    key, the lighting joins its two routes into one. Every map is an `EnvMapRoute`: the `source`, the
+    imported `.hdr` or cube `.ktx2` under `Authored/EnvSources/`, the machine-ready `baked` `.ktx2`
+    under `Derived/BakedTextures/`, and the `SourceStamp` the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
     The authored presentation lives on the `.benv` document, not here.
   * **Sky and lighting are separate files because their lifetimes are.** Re-authoring a sky is
     immediate; re-convolving the lighting it implies is minutes of work that the same edit need
     not trigger.
-  * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
-    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
-    routed float-cube intermediates and encode them into content-addressed `.ktx2` under
-    `Derived/BakedTextures/` — BC7 sRGB for an LDR sky or prefilter, RGB9E5 otherwise; the rule and
-    its reasons are in [Environment Maps](envmaps.md). The convolutions
-    themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
-  * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
-    maps, so it must move whenever they do.
+  * **The bake convolves.** `AssetStore::BakeSky`/`BakeEnvLighting`
+    ([libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) read
+    the parameters from the `.bimport` beside the routed source, project and convolve it in memory
+    (`skyChain`, `prefilterRadiance`, `irradianceSh`), and encode the result into content-addressed
+    `.ktx2` under `Derived/BakedTextures/` — BC7 sRGB for an LDR sky or prefilter, RGB9E5 otherwise;
+    the rule and its reasons are in [Environment Maps](envmaps.md). Nothing float is written.
+  * `BakeEnvLighting` also re-derives `exposure` from the irradiance it convolved: it is a property of
+    the maps, so it must move whenever they do.
   * `isSkyBakeStale`/`isEnvLightingBakeStale` mirror `bakeIsStale`: unrouted is never stale; a
     changed, missing or never-baked source is.
   * **The texture prune knows these assets.** Its mark phase reads every `.bsky`/`.benvl` below the
@@ -591,10 +591,9 @@ in `docs/specs/`.
     `.benv` must reference is its consumer's rule, not the container's.
   * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
     ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h))
-    follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
-    map while it is current, the float source it was compiled from otherwise. Same branch a material
-    takes (`drawsLoose`), and for the same reason — `Derived/BakedTextures/` is regenerated per platform, so a
-    fresh checkout has sources and no bakes. Only a route with neither throws.
+    follows the chain and loads, per route, the baked map `envMapToDraw` names — stale or not, and
+    never the source, which is an image to convolve rather than one to sample. A route with no baked
+    map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
 **`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
@@ -1150,8 +1149,9 @@ assetlib_cli obj -p <project> Derived/Meshes/model.bmesh -o model.obj
 # Derive a tangent basis in place, for a mesh imported before the importers did it themselves
 assetlib_cli tangents -p <project> Derived/Meshes/model.bmesh
 
-# Convolve an HDRI into the project's split environment set: float sources into Derived/SourceTextures/, a
-# baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an Authored/Environments/forest.benv naming the pair
+# Convolve an HDRI into the project's split environment set: the source copied into Authored/EnvSources/
+# with its .bimport, a baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an
+# Authored/Environments/forest.benv naming the pair
 assetlib_cli envmap -p <project> forest.hdr --name forest
 
 # Print what is actually inside a container (the kind is read from the file's magic, not its name).

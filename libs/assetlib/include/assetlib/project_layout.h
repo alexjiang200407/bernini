@@ -25,8 +25,8 @@ namespace assetlib
 	 * commit rule is a directory rather than a list of extensions.
 	 *
 	 * One exception remains, and it only shrinks: an environment imported before environment
-	 * sources were copied in has no `.bimport`, so nothing puts its `Derived/Sky`,
-	 * `Derived/EnvLighting` or float cubes back until it is re-imported. See
+	 * sources were copied in has no `.bimport`, so nothing puts its `Derived/Sky` or
+	 * `Derived/EnvLighting` back until it is re-imported. See
 	 * [Asset Containers](docs/asset_containers.md).
 	 */
 	inline constexpr auto c_AuthoredDirectoryName = "Authored";
