@@ -869,6 +869,62 @@ namespace assetlib
 		return out;
 	}
 
+	ImageData
+	quantizeSrgb8(const ImageData& image)
+	{
+		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
+			throw std::runtime_error("assetlib::quantizeSrgb8: source must be R32G32B32A32_SFLOAT");
+
+		const auto encode = [](float linear) {
+			const float v = std::clamp(linear, 0.0f, 1.0f);
+			return v <= 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+		};
+		const auto toByte = [](float unit) {
+			return static_cast<uint8_t>(std::lround(std::clamp(unit, 0.0f, 1.0f) * 255.0f));
+		};
+
+		ImageData out;
+		out.width     = image.width;
+		out.height    = image.height;
+		out.mipLevels = image.mipLevels;
+		out.arraySize = image.arraySize;
+		out.isCubemap = image.isCubemap;
+		out.vkFormat  = VkFormat::R8G8B8A8_SRGB;
+
+		size_t texels = 0;
+		for (const ImageSubresource& sub : image.subresources)
+			texels += static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+
+		out.pixels = core::fixed_buffer<std::byte>(texels * 4);
+
+		size_t dst = 0;
+		for (const ImageSubresource& sub : image.subresources)
+		{
+			const auto count = static_cast<size_t>(sub.slicePitch) / (sizeof(float) * 4);
+			const auto rows =
+				sub.rowPitch > 0 ? static_cast<size_t>(sub.slicePitch / sub.rowPitch) : 1u;
+			const size_t width = rows > 0 ? count / rows : count;
+
+			out.subresources.push_back(
+				{ dst * 4, static_cast<uint64_t>(width) * 4, static_cast<uint64_t>(count) * 4 });
+
+			const auto* src    = reinterpret_cast<const float*>(image.pixels.data() + sub.offset);
+			auto*       target = reinterpret_cast<uint8_t*>(out.pixels.data()) + dst * 4;
+
+			for (size_t t = 0; t < count; ++t)
+			{
+				target[t * 4 + 0] = toByte(encode(src[t * 4 + 0]));
+				target[t * 4 + 1] = toByte(encode(src[t * 4 + 1]));
+				target[t * 4 + 2] = toByte(encode(src[t * 4 + 2]));
+				target[t * 4 + 3] = toByte(src[t * 4 + 3]);
+			}
+
+			dst += count;
+		}
+
+		return out;
+	}
+
 	std::vector<std::byte>
 	encodeKTX2(const ImageData& image, bool srgb, Ktx2Compression compression)
 	{
