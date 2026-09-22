@@ -321,6 +321,12 @@ Authoring it:
 * **A set nothing samples is not carried.** Exporters emit degenerate ones — every vertex at one
   point — and a primitive whose material samples no map through `TEXCOORD_1` imports exactly as if
   it had none.
+* **In the material editor it is the PBR sink's last port, *Occlusion (UV1)***, on the opaque,
+  cutout, hashed and blended sinks alike. A game surface's node has none: a surface shows the slots
+  it declares, and takes this map through one of its own. Wire a texture's red into it; the map is sampled whole, so another
+  channel's wire names the file and warns. It is last so a board saved before it existed keeps every
+  connection, and a document naming the map whose board has no such wire gets one on open — Save
+  compiles the board, and would otherwise drop the key.
 
 ### Normal & tangent space
 
@@ -898,8 +904,8 @@ Ten rules, each of which is a way to get this wrong:
 
   A map on `texCoord: 1` is **not** routed into ORM red: ORM is sampled through `TEXCOORD_0`, and
   baked AO is commonly unwrapped onto a second UV set, so folding it in would be confident garbage.
-  The import keeps it beside the ORM as `uv1OcclusionTexture` instead — see
-  [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
+  The import keeps it beside the ORM as `uv1OcclusionTexture` instead, and the board wires it into
+  the sink's *Occlusion (UV1)* port — see [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
   ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)). `occlusionTexture.strength`
   has no home in `PbrParams` and is ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the

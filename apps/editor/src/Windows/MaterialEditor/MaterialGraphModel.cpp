@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <QJsonObject>
 #include <QPointF>
@@ -14,8 +15,10 @@
 
 using QtNodes::ConnectionId;
 using QtNodes::InvalidNodeId;
+using QtNodes::InvalidPortIndex;
 using QtNodes::NodeId;
 using QtNodes::NodeRole;
+using QtNodes::PortIndex;
 using QtNodes::PortRole;
 using QtNodes::PortType;
 
@@ -99,6 +102,11 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// "internal-data" envelope, and load() expects the state itself.
 	const QJsonObject state = old->save();
 
+	// Its index follows the PBR sink's group ports, which differ between sinks, so it is moved by
+	// what it is rather than by where it was. A surface's sink has none.
+	const auto*     oldPbr     = qobject_cast<const MaterialOutputNode*>(old);
+	const PortIndex oldUv1Port = oldPbr != nullptr ? oldPbr->Uv1OcclusionPort() : InvalidPortIndex;
+
 	const std::unordered_set<ConnectionId> wires = allConnectionIds(oldId);
 	const std::vector<ConnectionId>        incoming(wires.begin(), wires.end());
 
@@ -118,12 +126,21 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// outright, so going through it would silently drop the factors and the split layout the artist
 	// had dialled in -- and switching a material between opaque and cutout would quietly reset it.
 	// Loading straight after the node is created is what QtNodes' own loadNode does.
-	if (MaterialSinkNode* sink = delegateModel<MaterialSinkNode>(newId); sink != nullptr)
+	MaterialSinkNode* sink = delegateModel<MaterialSinkNode>(newId);
+	if (sink != nullptr)
 		sink->load(state);
+
+	const auto*     newPbr     = qobject_cast<const MaterialOutputNode*>(sink);
+	const PortIndex newUv1Port = newPbr != nullptr ? newPbr->Uv1OcclusionPort() : InvalidPortIndex;
 
 	for (const ConnectionId& wire : incoming)
 	{
-		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, wire.inPortIndex };
+		const bool      isUv1  = oldUv1Port != InvalidPortIndex && wire.inPortIndex == oldUv1Port;
+		const PortIndex inPort = isUv1 ? newUv1Port : wire.inPortIndex;
+		if (inPort == InvalidPortIndex || (!isUv1 && inPort == newUv1Port))
+			continue;
+
+		const ConnectionId moved{ wire.outNodeId, wire.outPortIndex, newId, inPort };
 		if (PortsAreCompatible(moved))
 			addConnection(moved);
 	}

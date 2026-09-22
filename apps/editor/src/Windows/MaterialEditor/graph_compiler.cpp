@@ -216,6 +216,8 @@ namespace editor
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
+		desc.uv1OcclusionTexture = output->Uv1OcclusionRoute().texture;
+
 		// The kind check matters since a board switches: a handle left by a surface sink is a
 		// different bucket, and updating it in place would throw on every keystroke.
 		if (graph.preview.IsValid() && graph.preview.materialType == bgl::MaterialType::kLoosePbr &&

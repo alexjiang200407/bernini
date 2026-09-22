@@ -166,8 +166,32 @@ public:
 		return m_SpecularFactor;
 	}
 
-	// The PBR compile: kPbr, the factors, the layer keys and the nine routes. One implementation
-	// serves all four PBR-family sinks -- what differs between them is virtual.
+	/**
+	 * The input the UV1 occlusion map is wired into: after every group's ports, so a board saved
+	 * before it existed keeps every connection it had. A surface's sink has none -- a surface takes
+	 * the map through a slot of its own.
+	 */
+	[[nodiscard]] QtNodes::PortIndex
+	Uv1OcclusionPort() const
+	{
+		return static_cast<QtNodes::PortIndex>(GroupPortCount());
+	}
+
+	/** What is wired into Uv1OcclusionPort -- its file and its upload -- or an empty route. */
+	[[nodiscard]] ChannelData::Route
+	Uv1OcclusionRoute() const noexcept
+	{
+		return m_Uv1Occlusion != nullptr ? m_Uv1Occlusion->At(0) : ChannelData::Route{};
+	}
+
+	[[nodiscard]] bool
+	HasUv1Occlusion() const noexcept
+	{
+		return m_Uv1Occlusion != nullptr;
+	}
+
+	// The PBR compile: kPbr, the factors, the layer keys, the nine routes and the UV1 occlusion map.
+	// One implementation serves all four PBR-family sinks -- what differs between them is virtual.
 	void
 	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
 		const override;
@@ -207,6 +231,10 @@ private:
 	[[nodiscard]] unsigned int
 	GroupFirstPort(unsigned int group) const;
 
+	// The ports the channel groups take, which the UV1 occlusion port follows.
+	[[nodiscard]] unsigned int
+	GroupPortCount() const;
+
 	struct PortRef
 	{
 		unsigned int group  = c_GroupCount;
@@ -225,6 +253,7 @@ private:
 
 	std::array<std::shared_ptr<ChannelData>, c_GroupCount>   m_Bundles;
 	std::array<std::shared_ptr<ChannelData>, c_ChannelCount> m_Channels;
+	std::shared_ptr<ChannelData>                             m_Uv1Occlusion;
 
 	glm::vec4 m_BaseColorFactor     = glm::vec4(1.0f);
 	float     m_MetallicFactor      = 1.0f;

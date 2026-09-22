@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <memory>
 #include <qlatin1stringview.h>
+#include <qlogging.h>
 #include <qnamespace.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
@@ -100,6 +101,19 @@ MaterialOutputNode::CompileInto(
 		pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
 		pbr.routes[i].channel = wired.channel;
 	}
+
+	// Sampled whole with its red read, so a wire from another channel names the file and no more.
+	const ChannelData::Route uv1 = Uv1OcclusionRoute();
+	if (!uv1.path.isEmpty() && uv1.channel != 0)
+	{
+		qWarning(
+			"MaterialEditor: the UV1 occlusion map reads red; the %c channel wired from '%s' is "
+			"not "
+			"the one sampled",
+			"rgba"[uv1.channel & 3u],
+			qPrintable(uv1.path));
+	}
+	material.uv1OcclusionTexture = Rebase(uv1.path, dataRoot, true).toStdString();
 }
 
 unsigned int
@@ -150,19 +164,25 @@ MaterialOutputNode::ResolvePort(QtNodes::PortIndex port) const
 }
 
 unsigned int
-MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+MaterialOutputNode::GroupPortCount() const
 {
-	if (portType != QtNodes::PortType::In)
-		return 0u;
-
 	unsigned int total = 0;
 	for (const unsigned int count : m_GroupPorts) total += count;
 	return total;
 }
 
+unsigned int
+MaterialOutputNode::nPorts(QtNodes::PortType portType) const
+{
+	return portType == QtNodes::PortType::In ? GroupPortCount() + 1u : 0u;
+}
+
 QtNodes::NodeDataType
 MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
+	if (port == Uv1OcclusionPort())
+		return ChannelData::Type(1);
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return ChannelData::Type(1);
@@ -175,6 +195,13 @@ MaterialOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 void
 MaterialOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
+	if (port == Uv1OcclusionPort())
+	{
+		m_Uv1Occlusion = std::dynamic_pointer_cast<ChannelData>(data);
+		Q_EMIT Changed();
+		return;
+	}
+
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return;
@@ -533,6 +560,9 @@ MaterialOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) cons
 	static const char* const c_Captions[c_ChannelCount] = { "Base R",   "Base G",   "Base B",
 		                                                    "Base A",   "AO",       "Roughness",
 		                                                    "Metallic", "Normal X", "Normal Y" };
+
+	if (port == Uv1OcclusionPort())
+		return QStringLiteral("Occlusion (UV1)");
 
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
