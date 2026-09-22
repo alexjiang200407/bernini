@@ -26,36 +26,69 @@ disagrees, trust the header, then fix this doc.
 ## Design Choices
 
 * **The environment family mirrors `.bmaterial`'s authoring/baked split.** A `.bsky` and a `.benvl`
-  hold `EnvMapRoute`s — a *source* under `Derived/SourceTextures/`, a *baked* map under `Derived/BakedTextures/`, and the
-  source's size + content-hash stamp as it measured at bake time. The same shape, the same staleness question,
-  and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
+  hold `EnvMapRoute`s — a *source*, the imported `.hdr` (or cube `.ktx2`) under
+  `Authored/EnvSources/`, a *baked* map under `Derived/BakedTextures/`, and the source's size +
+  content-hash stamp as it measured at bake time. The same shape, the same staleness question, and
+  the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
 * **A `.benv` holds no pixels, and it is the family's only authored file.** It is a text document —
   canonical JSON, like `.bmaterial` — naming a `.bsky` and a `.benvl` by path and carrying the
   presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`). Composing by reference is
   what lets a sky be re-authored without touching the lighting that minutes of convolution produced,
   and what lets two environments share one sky. Either half may be empty. `.bsky` and `.benvl` are
   purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
-  key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
-  fails loudly on one it cannot, and `Reimport` produces an absent one — float cubes included —
-  from the source and the `.bimport` the import left under `Authored/EnvSources/`. `migrate`
-  re-cooks a part whose document has moved on — a re-exported `.hdr`, an edited parameter — and
-  never a load, which would put minutes of convolution inside it.
+  key, the lighting's key joins its two routes; `pack` re-bakes a stale one into the archive and
+  fails loudly on one it cannot, and `Reimport` produces an absent one from the source and the
+  `.bimport` the import left under `Authored/EnvSources/`. `migrate` re-cooks a part whose document
+  has moved on — a re-exported `.hdr`, an edited parameter, a moved `c_EnvSourceBakeToken` — and
+  re-bakes a map lost from under its container; a load never does either, which would put minutes
+  of convolution inside it.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.
-* **Sources are float, shipped maps are `RGB9E5`.** The import writes `R32G32B32A32_SFLOAT` cubes into
-  `Derived/SourceTextures/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
-  `Derived/BakedTextures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
-  `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float`. Preferred over BC6H, whose 1 byte a
-  texel is unreachable on Apple GPUs; `R11G11B10` is the same size but bands in sky gradients, its blue
-  channel carrying only 5 mantissa bits.
-* **Baked maps are shared, not owned.** The name is content-addressed from the route, so two skies
-  routing the same source name one file. Nothing deletes a baked map implicitly; reclaiming orphans is
+* **Nothing float is kept.** A bake — `AssetStore::BakeSky` / `BakeEnvLighting`, which the import,
+  `Reimport`, `migrate` and `pack` all go through — reads the parameters from the `.bimport` beside
+  the route's source, projects and convolves in memory, and writes only the baked maps. There is no
+  cache between the convolution and the encoding: a re-bake of the lighting is its minutes of
+  convolution again, which is what keeping a 1024² sky out of a 134 MB `R32G32B32A32_SFLOAT` file
+  costs.
+* **A shipped map is BC7 when it can be, `RGB9E5` when it cannot.** The bake encodes each map by what
+  it holds:
+
+  | Map | Every channel ≤ 1, faces a multiple of 4 | Otherwise |
+  |---|---|---|
+  | sky, prefilter | `BC7_SRGB_BLOCK`, 1 byte a texel | `E5B9G9R9_UFLOAT_PACK32`, 4 bytes |
+  | irradiance | `E5B9G9R9_UFLOAT_PACK32` | the same |
+
+  The range is measured, not declared, so a painted sky imported through a `.hdr` still bakes BC7.
+  BC7 holds [0, 1] and nothing above; an HDR map — a sun at thousands — needs a float format, and
+  BC6H, the standard one, has no encoder in this build (libktx cannot write it). `R11G11B10` is
+  RGB9E5's size but bands in sky gradients, its blue channel carrying only 5 mantissa bits. The
+  irradiance is one 128² mip, 0.4 MB, and not worth a second path. The format is chosen per bake,
+  and a baked map is regenerated per platform, so what one backend can sample constrains only its
+  own bake — BC7 is sampled natively by both D3D12 and Metal on Apple silicon.
+* **What an environment costs on disk**, 6 faces with the default chains:
+
+  | Map | Size | LDR (BC7) | HDR (RGB9E5) |
+  |---|---|---|---|
+  | sky | 512², 6 mips | 2.1 MB | 8.4 MB |
+  | sky | 1024², 6 mips | 8.4 MB | 33.5 MB |
+  | prefilter | 256², 7 mips | 0.5 MB | 2.1 MB |
+  | irradiance | 128², 1 mip | — | 0.4 MB |
+
+  Nothing else under `Derived/` is pixels: the float cubes an import once kept beside these — a
+  1024² sky alone was 134 MB — are not written. animal-run's painted sky is the 1024² LDR row; the
+  shipped `forest` is the 512² HDR one.
+* **A compressed sky is held to 40 dB.** 8-bit sRGB PSNR per face against the RGB9E5 bake of the same
+  source — the space a painted sky was authored in — pinned by `EnvBake_test`.
+* **Baked maps are shared, not owned.** The name is content-addressed — group, encoding, source key
+  and stamp, the part's parameter hash and `c_EnvSourceBakeToken` — so a map already on disk under
+  it is this bake's and is not written twice, and two containers routing the same cook name one
+  file. Nothing deletes a baked map implicitly; reclaiming orphans is
   the whole-project mark and sweep in
   [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h),
   which recognises them via `isBakedEnvMapName`.
 * **Exposure belongs to the maps, not to the scene.** An HDR environment's absolute scale is
-  arbitrary, so `bakeEnvLighting` derives an exposure from the irradiance it produced and stores it in
+  arbitrary, so `BakeEnvLighting` derives an exposure from the irradiance it produced and stores it in
   the `.benvl`. It has to be re-derived whenever the maps change, which is why it lives in the file.
 * **The derivation proposes; the document decides.** `exposureFor` normalizes every environment
   to middle grey, which means that used alone, no environment can be dimmer or brighter than another —
@@ -97,7 +130,7 @@ disagrees, trust the header, then fix this doc.
 |---|---|
 | [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
 | [env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h) | `EnvironmentImportParameters`, the six numbers an import's pixels follow from, and `c_EnvSourceBakeToken` — apart from `envmap.h` because an import document holds them by value |
-| [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
+| [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` — cook a route's source and encode it — and their staleness checks |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
 
@@ -106,11 +139,10 @@ disagrees, trust the header, then fix this doc.
 ```mermaid
 flowchart TD
     HDR[".hdr or float cube"] -- "ImportEnvironment (copied)" --> COPY["Authored/EnvSources/*.hdr + .bimport"]
-    COPY -- "projected, convolved" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
-    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (RGB9E5, content-addressed)"]
+    COPY -- "BakeSky / BakeEnvLighting: projected, convolved, encoded in memory" --> BAKED["Derived/BakedTextures/*.ktx2 (BC7 or RGB9E5, content-addressed)"]
 
-    SRC -- "routed by" --> BSKY[".bsky"]
-    SRC -- "routed by" --> BENVL[".benvl"]
+    COPY -- "routed by" --> BSKY[".bsky"]
+    COPY -- "routed by" --> BENVL[".benvl"]
     BAKED -- "named by" --> BSKY
     BAKED -- "named by" --> BENVL
 
@@ -141,8 +173,8 @@ flowchart TD
 ### `game::AssetManager`
 
 * **`AcquireEnvironment`** — @post pieces the `.benv` does not reference come back as invalid handles.
-  **@throws** when a route it *does* name has neither a baked map nor a source on disk; that is a
-  project error, not a partial environment. Use `Environment::HasLighting()` and `HasSky()` before
+  **@throws** when a route it *does* name has no baked map on disk; that is a project to
+  `migrate`, not a partial environment. Use `Environment::HasLighting()` and `HasSky()` before
   binding: they exist because the scene throws, not because it tolerates.
 
 ### `AssetStore::ImportEnvironment`
@@ -153,9 +185,11 @@ flowchart TD
   itself.
 * **@post a `.bimport` stands beside the copy**, written last and stamped from the copy: the
   parameters, the source's stamp and `c_EnvSourceBakeToken`, a hash of each part's parameters as it
-  was written, and every derived file the import produced — the float cubes, the `.bsky`, the
-  `.benvl` — in `outputs`. Not the `.benv`, which is authored. See
-  [Asset Containers](asset_containers.md).
+  was written, and every container the import produced — the `.bsky`, the `.benvl` — in
+  `outputs`. Not the `.benv`, which is authored, and not the baked maps, which are shared. See
+  [Asset Containers](asset_containers.md). A document an older build wrote may also claim
+  `*_sky/_prefilter/_irradiance.ktx2` float cubes; they are dropped as it is read, and the next
+  refresh saves it without them. The files themselves are left where they are.
 * **A part-only import keeps the other part.** Re-authoring the sky over an existing document keeps
   the lighting's claim, parameters and hash as they were, which is what makes the split worth having.
   It is **refused** when the incoming file is not the one the document was stamped from, since the
@@ -173,33 +207,28 @@ flowchart TD
 
 ### Renaming and deleting an imported environment
 
-* **The source, its `.bimport`, the `.bsky`, the `.benvl` and the float cubes move as one.** Name
-  either the source or the document; the cubes keep their part suffix, and the `.benv` and the
-  containers' routes are rewritten to follow. The `.benv` itself is authored, not an output, and
-  stays where it is.
-* **Deleting the `.bimport` takes the source it alone names and leaves the derived files**, as for a
-  mesh. Deleting the `.benv` frees the `.bsky`, `.benvl` and cubes only it named, and drops their
-  claims from the document so `Reimport` does not put them back.
+* **The source, its `.bimport`, the `.bsky` and the `.benvl` move as one.** Name either the source
+  or the document; the `.benv` and the containers' routes are rewritten to follow. The `.benv`
+  itself is authored, not an output, and stays where it is.
+* **Deleting the `.bimport` leaves the source and the derived files.** The containers route the
+  source — it is what their next bake cooks — so it is held, unlike a mesh's. Deleting the `.benv`
+  frees the `.bsky`, `.benvl` and baked maps only it named, and drops their claims from the
+  document so `Reimport` does not put them back; the source stays, held by its document.
 
 ### `assetlib::resolveEnvironment`
 
-* Loads whichever map each route draws — `envMapToDraw`, below. **@throws** only when a route has
-  neither its baked map nor its source on disk.
+* Loads the map each route draws — `envMapToDraw`, below. **@throws** when one is not on disk.
 
 ### `assetlib::envMapToDraw`
 
-* **The baked-vs-source branch, in one place**, because two consumers ask it: `resolveEnvironment`
-  (the editor) and `game::AssetManager::AcquireEnvironment` (the runtime). It is the environment's
-  copy of a material's `drawsLoose`, and follows the same rule — the baked RGB9E5 while it is on disk
-  and current, the float source it was compiled from while it is not, and the baked map anyway when
-  the source has gone, because a route with neither cannot be drawn at all.
-* **This is what makes a fresh checkout work.** `Data/Derived/BakedTextures/` is git-ignored by
-  design — baked output is regenerated per platform — so a clone has every `Derived/SourceTextures/`
-  source and no bake. Before this branch existed, every environment in such a project failed to load
-  while its materials drew fine, because materials already had the fallback.
-* The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5, four times the bytes) and is not
-  what ships. It is not a different *image*: the source is exactly what the bake compiled, blur and
-  all.
+* **The baked map, whether or not it is current, and nothing else.** Two consumers ask it:
+  `resolveEnvironment` (the editor) and `game::AssetManager::AcquireEnvironment` (the runtime). A
+  source is an image to convolve, not one to sample, so unlike a material's `drawsLoose` there is no
+  loose branch: drawing the source would mean minutes of convolution inside a load. A stale map is
+  drawn until a re-bake replaces it.
+* **@throws** when the baked map is not on disk, naming `assetlib_cli migrate`. A fresh checkout is
+  in that state for every environment, because `/Data/Derived/` is git-ignored whole — the same
+  command that puts its meshes back bakes its environments.
 
 ### `editor::ApplyEnvironment`
 

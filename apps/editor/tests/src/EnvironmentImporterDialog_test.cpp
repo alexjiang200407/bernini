@@ -149,12 +149,6 @@ namespace
 	}
 
 	QLineEdit*
-	SourceDirField(const EnvironmentImporterDialog& dialog)
-	{
-		return dialog.findChild<QLineEdit*>("sourceDirectory");
-	}
-
-	QLineEdit*
 	ImportedSourceDirField(const EnvironmentImporterDialog& dialog)
 	{
 		return dialog.findChild<QLineEdit*>("importedSourceDirectory");
@@ -169,7 +163,6 @@ TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 
 	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
 	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
-	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures");
 
 	// The copy of the file being imported, which is what the family is re-produced from.
 	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources");
@@ -180,10 +173,8 @@ TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
 	SkyDirField(dialog)->setText("outdoor/dusk");
-	SourceDirField(dialog)->setText("hdri");
 
 	CHECK(dialog.GetSkyDirectory() == "Derived/Sky/outdoor/dusk");
-	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures/hdri");
 
 	ImportedSourceDirField(dialog)->setText("outdoor");
 	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources/outdoor");
