@@ -9,9 +9,14 @@
 #include <string>
 #include <string_view>
 
+#include <assetlib/image_io.h>
+#include <assetlib/texture_prune.h>
+
 #include "MountAt.h"
 #include "RefsSandbox.h"
+#include "baked_name.h"
 #include "mounted_io.h"
+#include "texture_encoding.h"
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -27,18 +32,6 @@ namespace
 		return bakedTextureKey(contentName).substr(contentName.size());
 	}
 
-	/**
-	 * Records `field`'s baked map by its content name, and moves the file to where that name
-	 * resolves -- the shape a bake that writes content names leaves behind.
-	 */
-	void
-	RecordAsContentName(const DataRoot& root, std::string& field)
-	{
-		const std::string contentName =
-			field.substr(0, field.size() - std::string_view(".ktx2").size());
-		fs::rename(root.path / field, root.path / bakedTextureKey(contentName));
-		field = contentName;
-	}
 }
 
 TEST_CASE("a file key is drawn from as it is", "[bmaterial][encoding]")
@@ -89,17 +82,90 @@ TEST_CASE(
 	CHECK_THROWS_AS(bakedTextureKey("Derived/BakedTextures/basecolor_0123"), std::runtime_error);
 }
 
+TEST_CASE("one content under two encodings is one name and two files", "[bmaterial][encoding]")
+{
+	// The point of the split: re-encoding a map rewrites no document. Only the file moves.
+	const std::string name = bakedMapContentName("basecolor", "some|content|key");
+
+	const std::string bc1 = bakedMapEncodedName(name, textureEncoding(TextureRole::kBaseColor));
+	const std::string bc7 =
+		bakedMapEncodedName(name, textureEncoding(TextureRole::kBaseColorWithAlpha));
+
+	CHECK(bc1 != bc7);
+	CHECK(bc1.starts_with(name + ".bc1-"));
+	CHECK(bc7.starts_with(name + ".bc7-"));
+	CHECK(isBakedMapName(bc1));
+	CHECK(isBakedMapName(bc7));
+
+	// And the shape written before the halves were split is still recognised, so the prune can
+	// sweep what it left behind.
+	CHECK(isBakedMapName(name + ".ktx2"));
+}
+
+TEST_CASE("a bake records the content name and writes the encoded file", "[bmaterial][encoding]")
+{
+	const DataRoot root("bernini_split_name");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 90, 120, 200, 255 } });
+
+	const BMaterial material = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
+
+	CHECK(material.pbr.baseColorTexture.starts_with("Derived/BakedTextures/basecolor_"));
+	CHECK_FALSE(material.pbr.baseColorTexture.ends_with(".ktx2"));
+	CHECK(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
+	CHECK_FALSE(fs::exists(root.path / (material.pbr.baseColorTexture + ".ktx2")));
+}
+
+TEST_CASE(
+	"a material naming its map as a file re-bakes under a content name",
+	"[bmaterial][encoding]")
+{
+	// What every document written before this holds. The map on disk is a file the bake can no
+	// longer name, so the material is stale however fresh its sources are.
+	const DataRoot root("bernini_legacy_name");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 30, 30, 30, 255 } });
+
+	BMaterial material = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
+
+	const std::string legacy = material.pbr.baseColorTexture + ".ktx2";
+	fs::rename(root.path / bakedTextureKey(material.pbr.baseColorTexture), root.path / legacy);
+	material.pbr.baseColorTexture = legacy;
+
+	REQUIRE(bakeIsStale(material, MountAt(root.path)));
+
+	StoreAt(root.path).BakeMaterial(material);
+
+	CHECK_FALSE(material.pbr.baseColorTexture.ends_with(".ktx2"));
+	CHECK_FALSE(bakeIsStale(material, MountAt(root.path)));
+}
+
+TEST_CASE("a live map's file under another encoding is unused", "[bmaterial][encoding]")
+{
+	// A table change leaves the document alone and the old file behind: the sweep is what reclaims
+	// it, and the map the current encoding names must survive it.
+	const DataRoot root("bernini_stale_encoding");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 70, 10, 10, 255 } });
+
+	const BMaterial material = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
+
+	const std::string live  = bakedTextureKey(material.pbr.baseColorTexture);
+	const std::string other = bakedMapEncodedName(
+		material.pbr.baseColorTexture,
+		TextureEncoding{ "bc7", Ktx2Compression::kBC7_RGBA });
+	fs::copy_file(root.path / live, root.path / other);
+
+	const TexturePruneScan scan = AssetStore(root.path).FindUnusedBakedTextures();
+
+	REQUIRE(scan.unused.size() == 1);
+	CHECK(scan.unused.front().path == other);
+}
+
 TEST_CASE("a material recording content names reads through them", "[bmaterial][encoding]")
 {
 	const DataRoot root("bernini_baked_texture_key");
 	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 40, 10, 255 } });
 
-	BMaterial material = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
-	REQUIRE(material.pbr.baseColorTexture.ends_with(".ktx2"));
-	REQUIRE_FALSE(bakeIsStale(material, MountAt(root.path)));
-
-	RecordAsContentName(root, material.pbr.baseColorTexture);
-	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
+	const BMaterial material = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
+	REQUIRE_FALSE(material.pbr.baseColorTexture.ends_with(".ktx2"));
 
 	const std::string file = bakedTextureKey(material.pbr.baseColorTexture);
 

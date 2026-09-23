@@ -3,6 +3,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/migrate.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -325,11 +326,12 @@ TEST_CASE("migrate brings a material's bake current", "[migrate][bake]")
 		const BMaterial rebaked =
 			StoreAt(project.root).Load<BMaterial>("Authored/Materials/m.bmaterial");
 		CHECK(rebaked.pbr.baseColorTexture != wasBaked);
-		CHECK(std::filesystem::exists(project.root / rebaked.pbr.baseColorTexture));
+		CHECK(
+			std::filesystem::exists(project.root / bakedTextureKey(rebaked.pbr.baseColorTexture)));
 
 		// The map the material used to name is left for the prune, not deleted here: another
 		// material may still hold it.
-		CHECK(std::filesystem::exists(project.root / wasBaked));
+		CHECK(std::filesystem::exists(project.root / bakedTextureKey(wasBaked)));
 
 		CHECK(
 			AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);

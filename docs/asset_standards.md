@@ -114,8 +114,8 @@ There are **two producers of textures**, and they compress differently:
   table above are its rows rather than constants in three files. A change to a row is a bump of
   `c_TextureEncodingToken` ([Asset Containers](asset_containers.md)).
 
-  **A document may record a baked map by its content name**, `<dir>/<group>_<16 hex>` with no
-  extension, rather than by file. `bakedTextureKey`
+  **A document records a baked map by its content name**, `<dir>/<group>_<16 hex>` with no
+  extension, which names no file. `bakedTextureKey`
   ([libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h))
   resolves one to `<name>.<tag>-<8 hex>.ktx2`, the tag and the hash of `c_TextureEncodingToken` from
   the row the group's role takes — so an alpha-carrying base colour is the group `basecoloralpha`, its
@@ -125,8 +125,9 @@ There are **two producers of textures**, and they compress differently:
   baked field through it.
 
   **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
-  `orm_<hash>.ktx2`, where the hash covers the group, its target format and, per channel, the source
-  routed into it *and that source's own size and content hash*. Two materials whose ORM channels route
+  `orm_<hash>`, where the hash covers the group and, per channel, the source routed into it *and that
+  source's own size and content hash*. The format is not in it: it names the file the content is
+  stored in, not the content. Two materials whose ORM channels route
   identically therefore name the same file and write it once, instead of emitting byte-identical copies
   under each material's name. (The Apples model is exactly this: two submeshes, two materials, one
   shared ORM source.) A routed *surface* slot bakes to the same rule under the shared `slot_<hash>`
@@ -331,7 +332,7 @@ Authoring it:
 * **Bake a single channel into it.** Red is what is read; a greyscale map is the usual form. It is
   sampled clamped and trilinear, so its resolution can sit far below the tiled maps' — occlusion is
   soft. The material bake keeps only that channel: it writes the map's red as `BC4_UNORM` under
-  `Derived/BakedTextures/occlusion_<hash>.ktx2`, half the bytes of the BC7 the extracted source
+  `Derived/BakedTextures/occlusion_<hash>`, half the bytes of the BC7 the extracted source
   transcodes to at load, and the renderer samples the baked map while it is current.
 * **Name it as glTF does**: `material.occlusionTexture` with `texCoord: 1`. A `texCoord: 0` map
   still routes into ORM red; any set past the second is refused. `strength` is ignored with a
@@ -497,7 +498,7 @@ in `docs/specs/`.
   never a channel route and never part of the baked triplet — the triplet is addressed by UV0, and a
   map on another UV set cannot be composited into it. It is instead the *source* of a fourth baked
   map: the bake reads its red into `baked.geometryOcclusion` (`PbrParams::geometryOcclusionBakedTexture`,
-  `occlusion_<hash>.ktx2`, BC4) and records the source's stamp beside it as `baked.geometryOcclusionSource`,
+  `occlusion_<hash>`, BC4) and records the source's stamp beside it as `baked.geometryOcclusionSource`,
   under the same `baked.token`. The renderer samples the baked map while it is current and the
   authored one otherwise (`drawsBakedGeometryOcclusion`) — per map, so a stale occlusion bake never
   drags the triplet loose — and `bakeIsStale` reports either half out of date. The reference graph
@@ -990,7 +991,10 @@ It is a **mark and sweep over the whole project**, and each half has a rule that
   the renderer happens to be drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
   rather than being skipped — an unread material is one whose references cannot be known, and the maps
   it alone keeps alive would otherwise be swept as garbage.
-* **Sweep** — only files matching the bake's own naming, `<group>_<16 hex>.ktx2`, are candidates.
+* **Sweep** — only files matching the bake's own naming are candidates: a content name under an
+  encoding, `<group>_<16 hex>.<tag>-<8 hex>.ktx2`, or the `<group>_<16 hex>.ktx2` written before the two
+  halves were split. A live map's file under an encoding the table no longer names is therefore swept,
+  which is what reclaims the old files after a table change.
   That test is `isBakedMapName`, deliberately kept in `material_bake.cpp` beside the `c_Groups` table
   that *writes* the names, so the two cannot drift. It is what keeps a hand-placed map sharing the
   directory — one named in config, or by no material at all — from being swept as unreferenced.

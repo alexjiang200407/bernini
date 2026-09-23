@@ -2,6 +2,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/material_bake.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib/texture_prune.h>
@@ -92,7 +93,7 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 
 	SECTION("the baked map is referenced by the material that wrote it")
 	{
-		const auto referrers = graph.ReferrersOf(material.pbr.baseColorTexture);
+		const auto referrers = graph.ReferrersOf(bakedTextureKey(material.pbr.baseColorTexture));
 
 		REQUIRE(referrers.size() == 1);
 		CHECK(referrers[0].referrer == "Authored/Materials/mat.bmaterial");
@@ -110,8 +111,8 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 
 	SECTION("neither can be deleted while the material names it")
 	{
-		for (const std::string& texture :
-		     { material.pbr.baseColorTexture, std::string("Derived/SourceTextures/albedo.ktx2") })
+		for (const std::string& texture : { bakedTextureKey(material.pbr.baseColorTexture),
+		                                    std::string("Derived/SourceTextures/albedo.ktx2") })
 		{
 			INFO("texture: " << texture);
 
@@ -151,7 +152,7 @@ TEST_CASE("A PBR material's geometry occlusion map is held", "[assetrefs]")
 
 	SECTION("the baked map, as the map the bake wrote")
 	{
-		const std::string& baked = material.pbr.geometryOcclusionBakedTexture;
+		const std::string baked = bakedTextureKey(material.pbr.geometryOcclusionBakedTexture);
 		REQUIRE_FALSE(baked.empty());
 
 		const auto referrers = graph.ReferrersOf(baked);
@@ -286,7 +287,7 @@ TEST_CASE("A mesh is always deletable, and its materials outlive it", "[assetref
 
 	// Nothing else was touched: not the material, and not the maps it baked.
 	CHECK(fs::exists(root.path / "Authored/Materials" / "mat.bmaterial"));
-	CHECK(fs::exists(root.path / material.pbr.baseColorTexture));
+	CHECK(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
 	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 
 	SECTION("and the material it freed can then be deleted in its own right")
@@ -361,11 +362,14 @@ TEST_CASE("A baked map two materials share is blocked by both", "[assetrefs]")
 
 	const AssetRefGraph graph = root.Scan();
 
+	// The file, not the content name the documents record: a deletion addresses what is on disk.
+	const std::string map = bakedTextureKey(first.pbr.baseColorTexture);
+
 	CHECK(
-		ReferrerPaths(graph, first.pbr.baseColorTexture) ==
+		ReferrerPaths(graph, map) ==
 		std::vector<std::string>{ "Authored/Materials/first.bmaterial",
 	                              "Authored/Materials/second.bmaterial" });
-	CHECK(planDeletion(graph, first.pbr.baseColorTexture).blockers.size() == 2);
+	CHECK(planDeletion(graph, map).blockers.size() == 2);
 }
 
 TEST_CASE("Deleting a material leaves its maps for the prune to sweep", "[assetrefs]")
@@ -381,12 +385,12 @@ TEST_CASE("Deleting a material leaves its maps for the prune to sweep", "[assetr
 	const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial");
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
-	CHECK(fs::exists(root.path / material.pbr.baseColorTexture));
+	CHECK(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
 
 	const auto swept = AssetStore(root.path).FindUnusedBakedTextures();
 
 	REQUIRE(swept.unused.size() == 1);
-	CHECK(swept.unused.front().path == material.pbr.baseColorTexture);
+	CHECK(swept.unused.front().path == bakedTextureKey(material.pbr.baseColorTexture));
 }
 
 TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")

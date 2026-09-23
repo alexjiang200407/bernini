@@ -3,6 +3,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
@@ -106,7 +107,7 @@ namespace assetlib
 			const std::filesystem::path& dataRoot)
 		{
 			const TextureEncoding encoding = textureEncoding(roleFor(image, group));
-			const std::string     name     = bakedMapFileName(
+			const std::string     name     = bakedMapContentName(
 				group,
 				std::format(
 					"{}|{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
@@ -118,16 +119,18 @@ namespace assetlib
 					parametersHash,
 					c_EnvSourceBakeToken));
 
+			const std::string file = name + std::string(c_TextureExtension);
+
 			const std::filesystem::path outDir = dataRoot / c_BakedTexturesDirectoryName;
 			createDirectories(outDir);
-			const std::filesystem::path target = outDir / name;
+			const std::filesystem::path target = outDir / file;
 
 			if (!hasBytes(target))
 				writeEnvMap(image, encoding, target);
 
 			EnvMapRoute baked = route;
 			baked.baked =
-				(std::filesystem::path(c_BakedTexturesDirectoryName) / name).generic_string();
+				(std::filesystem::path(c_BakedTexturesDirectoryName) / file).generic_string();
 			baked.stamp = stamp;
 			return baked;
 		}

@@ -4,6 +4,7 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
+#include <assetlib/material_bake.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -375,7 +376,9 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 	{
 		const std::string renamed = "Derived/BakedTextures/renamed_basecolor.ktx2";
 
-		REQUIRE(Rename(root, baked.pbr.baseColorTexture, renamed).status == RenameStatus::kRenamed);
+		REQUIRE(
+			Rename(root, bakedTextureKey(baked.pbr.baseColorTexture), renamed).status ==
+			RenameStatus::kRenamed);
 
 		const BMaterial material =
 			StoreAt(root.path).Load<BMaterial>("Authored/Materials/mat.bmaterial");
