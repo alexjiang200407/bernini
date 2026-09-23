@@ -202,7 +202,7 @@ MaterialEditorWindow::MaterialEditorWindow(
 		const QString look                             = OverrideAtRow(row);
 		m_ShownOverrides[static_cast<size_t>(submesh)] = look;
 
-		const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+		const std::vector<editor::RegisteredMaterial> registered = ListedMaterialsFor(submesh);
 		const auto found = std::ranges::find(registered, look, &editor::RegisteredMaterial::name);
 
 		ShowMaterialForSubmesh(
@@ -924,11 +924,43 @@ MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 	if (path.isEmpty())
 		return;  // nothing on disk to point the mesh at; Save first
 
+	// The look the submesh is giving up: registered before it is replaced, or it leaves the list
+	// and nothing in the project names it any more.
+	const QString outgoing = editor::NameForOutgoingDefault(
+		RegisteredMaterialsFor(submeshIndex),
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submeshIndex) : QString(),
+		m_DataRoot);
+
+	if (!outgoing.isEmpty() && !m_MeshSourceKey.empty())
+	{
+		try
+		{
+			const assetlib::AssetStore& store = m_Host.GetStore();
+			const auto     mesh   = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
+
+			store.SetSubmeshMaterialOverrideInDocument(
+				mesh.source.key,
+				mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+				outgoing.toStdString(),
+				Rebase(m_Preview->SubmeshMaterialPaths().value(submeshIndex), m_DataRoot, true)
+					.toStdString());
+		}
+		catch (const std::exception& e)
+		{
+			// Keeping the old look is a courtesy; failing it must not stop the rebind the user
+			// asked for.
+			qWarning("MaterialEditor: could not keep '%s': %s", qPrintable(outgoing), e.what());
+		}
+	}
+
 	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
 	{
 		QMessageBox::warning(window(), QStringLiteral("Make Default"), error);
 		return;
 	}
+
+	ReloadRegisteredMaterials();
 
 	// The look is the default now, so it is no longer an override being shown -- the combo's first
 	// entry is what it is.
@@ -973,11 +1005,7 @@ MaterialEditorWindow::AddMaterialOverride()
 	}
 
 	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
-	const QString                  path  = editor::NewOverrideMaterialPath(
-		m_DataRoot,
-		entry.materialPath,
-		m_SubmeshSelector->currentText(),
-		name);
+	const QString path = editor::NewOverrideMaterialPath(m_DataRoot, entry.materialPath, name);
 
 	try
 	{
@@ -1214,6 +1242,15 @@ MaterialEditorWindow::RegisteredMaterialsFor(int submeshIndex) const
 	return m_Registered[static_cast<size_t>(submeshIndex)];
 }
 
+std::vector<editor::RegisteredMaterial>
+MaterialEditorWindow::ListedMaterialsFor(int submeshIndex) const
+{
+	return editor::LooksBesidesDefault(
+		RegisteredMaterialsFor(submeshIndex),
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submeshIndex) : QString(),
+		m_DataRoot);
+}
+
 QString
 MaterialEditorWindow::ShownOverride(int submeshIndex) const
 {
@@ -1227,7 +1264,7 @@ QString
 MaterialEditorWindow::OverrideAtRow(int row) const
 {
 	const std::vector<editor::RegisteredMaterial> registered =
-		RegisteredMaterialsFor(m_Graphs.CurrentSubmesh());
+		ListedMaterialsFor(m_Graphs.CurrentSubmesh());
 
 	// Row 0 is the submesh's default, so the registered looks start at 1.
 	if (row <= 0 || static_cast<size_t>(row) > registered.size())
@@ -1264,7 +1301,7 @@ MaterialEditorWindow::RefreshMaterialList()
 			QStringLiteral("%1\n\nEvery instance of this mesh loads with this look.")
 				.arg(defaultPath));
 
-	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+	const std::vector<editor::RegisteredMaterial> registered = ListedMaterialsFor(submesh);
 	for (const editor::RegisteredMaterial& look : registered)
 	{
 		auto* item = new QListWidgetItem(look.name, m_MaterialList);

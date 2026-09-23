@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/material_overrides.h"
 
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 
 #include <QDir>
@@ -46,15 +47,49 @@ namespace editor
 		});
 	}
 
+	std::vector<RegisteredMaterial>
+	LooksBesidesDefault(
+		const std::vector<RegisteredMaterial>& registered,
+		const QString&                         defaultPath,
+		const std::filesystem::path&           dataRoot)
+	{
+		auto listed = std::vector<RegisteredMaterial>();
+		for (const RegisteredMaterial& look : registered)
+			if (!IsSameMaterialFile(Rebase(look.material, dataRoot, false), defaultPath))
+				listed.push_back(look);
+
+		return listed;
+	}
+
+	QString
+	NameForOutgoingDefault(
+		const std::vector<RegisteredMaterial>& registered,
+		const QString&                         defaultPath,
+		const std::filesystem::path&           dataRoot)
+	{
+		if (defaultPath.isEmpty())
+			return {};
+
+		for (const RegisteredMaterial& look : registered)
+			if (IsSameMaterialFile(Rebase(look.material, dataRoot, false), defaultPath))
+				return {};
+
+		const QString stem = QFileInfo(defaultPath).completeBaseName();
+
+		QString name = stem;
+		for (int suffix = 2; !CanRegisterMaterialName(registered, name); ++suffix)
+			name = QStringLiteral("%1 %2").arg(stem).arg(suffix);
+
+		return name;
+	}
+
 	QString
 	NewOverrideMaterialPath(
 		const std::filesystem::path& dataRoot,
 		const QString&               from,
-		const QString&               submeshName,
 		const QString&               name)
 	{
-		const QString stem = from.isEmpty() ? submeshName : QFileInfo(from).completeBaseName();
-		const QString base = QStringLiteral("%1_%2").arg(stem, name.trimmed());
+		const QString base = name.trimmed();
 
 		const auto at = [&](const QString& file) {
 			return from.isEmpty() ? DefaultMaterialPath(dataRoot, file) :

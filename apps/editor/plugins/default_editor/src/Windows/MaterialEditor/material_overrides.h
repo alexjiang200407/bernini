@@ -44,19 +44,47 @@ namespace editor
 	CanRegisterMaterialName(const std::vector<RegisteredMaterial>& taken, const QString& name);
 
 	/**
-	 * Where the copy backing a new look called `name` is written: beside `from` when that material
-	 * has a file, otherwise under the project's Materials directory, stemmed from `submeshName`.
+	 * The looks to list under a submesh whose default is the material at `defaultPath`: every
+	 * registered one except those naming that same file, which the default row already shows.
 	 *
-	 * Named from what it varies rather than from the submesh alone -- `wood_Rusty.bmaterial` --
-	 * because a project's materials are one flat directory and two submeshes called `crate[0]`
-	 * in different meshes would otherwise collide. A spelling already on disk is stepped past
-	 * (`wood_Rusty_2.bmaterial`): two submeshes sharing a material and a name would otherwise
-	 * compute one destination, and the second copy would overwrite the first's look.
+	 * A look does not stop being registered when it becomes the default -- a game that asks for it
+	 * by name still gets it -- so this is what keeps it from appearing twice.
+	 *
+	 * @param dataRoot What a registered look's stored key is relative to.
+	 */
+	[[nodiscard]] std::vector<RegisteredMaterial>
+	LooksBesidesDefault(
+		const std::vector<RegisteredMaterial>& registered,
+		const QString&                         defaultPath,
+		const std::filesystem::path&           dataRoot);
+
+	/**
+	 * The name to register the outgoing default under when a look replaces it, or empty when there
+	 * is nothing to keep: no file, or a registration that already names it.
+	 *
+	 * Without this the material a submesh used to load with leaves the list the moment another look
+	 * takes over, and nothing in the project names it any more. Named from its file, stepped past a
+	 * name already taken (`Crate`, then `Crate 2`).
+	 */
+	[[nodiscard]] QString
+	NameForOutgoingDefault(
+		const std::vector<RegisteredMaterial>& registered,
+		const QString&                         defaultPath,
+		const std::filesystem::path&           dataRoot);
+
+	/**
+	 * Where the copy backing a new look called `name` is written: `Rusty.bmaterial` beside `from`,
+	 * or under the project's Materials directory when that material has no file yet.
+	 *
+	 * Named for the look alone. A project keeps a mesh's materials in a directory of its own, so
+	 * the folder already says which Rusty this is and a stem in front of it would only repeat it.
+	 * A spelling already on disk is stepped past (`Rusty_2.bmaterial`): two submeshes sharing a
+	 * material and a name would otherwise compute one destination, and the second copy would
+	 * overwrite the first's look.
 	 */
 	[[nodiscard]] QString
 	NewOverrideMaterialPath(
 		const std::filesystem::path& dataRoot,
 		const QString&               from,
-		const QString&               submeshName,
 		const QString&               name);
 }

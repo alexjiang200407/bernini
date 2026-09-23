@@ -79,6 +79,66 @@ TEST_CASE("A look needs a name of its own", "[materialoverrides]")
 	CHECK_FALSE(editor::CanRegisterMaterialName(taken, QStringLiteral(" rusty")));
 }
 
+TEST_CASE("The look the default names is not listed under it as well", "[materialoverrides]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot   = std::filesystem::path(root.path().toStdWString());
+	const auto registered = std::vector<editor::RegisteredMaterial>{
+		{ QStringLiteral("Rusty"), QStringLiteral("Materials/Rusty.bmaterial") },
+		{ QStringLiteral("Painted"), QStringLiteral("Materials/Painted.bmaterial") },
+	};
+
+	// Making a look the default does not unregister it -- a game still asks for it by name -- so
+	// the default row and its own row would otherwise be the same material twice.
+	const std::vector<editor::RegisteredMaterial> listed = editor::LooksBesidesDefault(
+		registered,
+		QDir(root.path()).filePath(QStringLiteral("Materials/Rusty.bmaterial")),
+		dataRoot);
+
+	REQUIRE(listed.size() == 1);
+	CHECK(listed[0].name == QStringLiteral("Painted"));
+}
+
+TEST_CASE("The look a default gives up is kept, under its own name", "[materialoverrides]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+	const auto crate    = QDir(root.path()).filePath(QStringLiteral("Materials/Crate.bmaterial"));
+
+	auto registered =
+		std::vector<editor::RegisteredMaterial>{ { QStringLiteral("Rusty"),
+		                                           QStringLiteral("Materials/Rusty.bmaterial") } };
+
+	// Without this the material the submesh used to load with leaves the list, and nothing in the
+	// project names it any more.
+	CHECK(editor::NameForOutgoingDefault(registered, crate, dataRoot) == QStringLiteral("Crate"));
+
+	SECTION("a submesh with no default yet gives up nothing")
+	{
+		CHECK(editor::NameForOutgoingDefault(registered, QString(), dataRoot).isEmpty());
+	}
+
+	SECTION("a default already registered is not registered twice")
+	{
+		registered.push_back(
+			{ QStringLiteral("Original"), QStringLiteral("Materials/Crate.bmaterial") });
+		CHECK(editor::NameForOutgoingDefault(registered, crate, dataRoot).isEmpty());
+	}
+
+	SECTION("a name already taken is stepped past")
+	{
+		registered.push_back(
+			{ QStringLiteral("Crate"), QStringLiteral("Materials/Other.bmaterial") });
+		CHECK(
+			editor::NameForOutgoingDefault(registered, crate, dataRoot) ==
+			QStringLiteral("Crate 2"));
+	}
+}
+
 TEST_CASE("A look's copy lands beside the material it varies", "[materialoverrides]")
 {
 	QTemporaryDir root;
@@ -87,13 +147,11 @@ TEST_CASE("A look's copy lands beside the material it varies", "[materialoverrid
 	const auto    dataRoot = std::filesystem::path(root.path().toStdWString());
 	const QString from     = QDir(root.path()).filePath(QStringLiteral("Materials/wood.bmaterial"));
 
-	const QString made = editor::NewOverrideMaterialPath(
-		dataRoot,
-		from,
-		QStringLiteral("crate[0]"),
-		QStringLiteral("Rusty"));
+	// The look's own name: the directory a mesh's materials sit in already says which Rusty this
+	// is, so a stem in front of it would only repeat the folder.
+	const QString made = editor::NewOverrideMaterialPath(dataRoot, from, QStringLiteral("Rusty"));
 
-	CHECK(QDir(root.path()).filePath(QStringLiteral("Materials/wood_Rusty.bmaterial")) == made);
+	CHECK(QDir(root.path()).filePath(QStringLiteral("Materials/Rusty.bmaterial")) == made);
 }
 
 TEST_CASE("A second look never overwrites the first's material", "[materialoverrides]")
@@ -105,26 +163,18 @@ TEST_CASE("A second look never overwrites the first's material", "[materialoverr
 	const QString from     = QDir(root.path()).filePath(QStringLiteral("Materials/wood.bmaterial"));
 	REQUIRE(QDir(root.path()).mkpath(QStringLiteral("Materials")));
 
-	const QString first = editor::NewOverrideMaterialPath(
-		dataRoot,
-		from,
-		QStringLiteral("crate[0]"),
-		QStringLiteral("Rusty"));
+	const QString first = editor::NewOverrideMaterialPath(dataRoot, from, QStringLiteral("Rusty"));
 	REQUIRE(QFile(first).open(QIODevice::WriteOnly));
 
 	// Two submeshes wearing one material, each given a look called Rusty: the second copy must not
 	// be written over the first submesh's.
-	const QString second = editor::NewOverrideMaterialPath(
-		dataRoot,
-		from,
-		QStringLiteral("crate[1]"),
-		QStringLiteral("Rusty"));
+	const QString second = editor::NewOverrideMaterialPath(dataRoot, from, QStringLiteral("Rusty"));
 
 	CHECK(second != first);
-	CHECK(second.endsWith(QStringLiteral("wood_Rusty_2.bmaterial")));
+	CHECK(second.endsWith(QStringLiteral("Rusty_2.bmaterial")));
 }
 
-TEST_CASE("A look copied from an unsaved graph is named from the submesh", "[materialoverrides]")
+TEST_CASE("A look copied from an unsaved graph lands under Materials", "[materialoverrides]")
 {
 	QTemporaryDir root;
 	REQUIRE(root.isValid());
@@ -132,12 +182,9 @@ TEST_CASE("A look copied from an unsaved graph is named from the submesh", "[mat
 	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
 
 	// No file to sit beside, so it lands where a Save As would have offered.
-	const QString made = editor::NewOverrideMaterialPath(
-		dataRoot,
-		QString(),
-		QStringLiteral("crate[0]"),
-		QStringLiteral(" Rusty "));
+	const QString made =
+		editor::NewOverrideMaterialPath(dataRoot, QString(), QStringLiteral(" Rusty "));
 
-	CHECK(made.endsWith(QStringLiteral("crate[0]_Rusty.bmaterial")));
+	CHECK(made.endsWith(QStringLiteral("Rusty.bmaterial")));
 	CHECK(made.startsWith(root.path()));
 }

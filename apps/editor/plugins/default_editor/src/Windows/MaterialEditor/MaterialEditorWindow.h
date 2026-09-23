@@ -197,6 +197,10 @@ private:
 	[[nodiscard]] std::vector<editor::RegisteredMaterial>
 	RegisteredMaterialsFor(int submeshIndex) const;
 
+	/** Those of them the list shows: the default row already stands for the one it names. */
+	[[nodiscard]] std::vector<editor::RegisteredMaterial>
+	ListedMaterialsFor(int submeshIndex) const;
+
 	/** The override shown for `submeshIndex`, or empty when it shows the submesh's default. */
 	[[nodiscard]] QString
 	ShownOverride(int submeshIndex) const;
