@@ -53,8 +53,9 @@ namespace
 		// nothing in it yet, and none of that is what the model costs.
 		uint32_t warmup = 8;
 
-		bool  taa         = true;
-		float renderScale = 1.0f;
+		bool  taa          = true;
+		float renderScale  = 1.0f;
+		float taaSharpness = 0.0f;
 
 		// Set by the run rather than by the caller: a project with no environment renders unlit, and
 		// what the passes cost is not the same question lit as it is unlit.
@@ -65,7 +66,8 @@ namespace
 	Report(const bgl::PassHistory& history, const Options& opts)
 	{
 		std::cout << std::format(
-			"\n{} frames of {} at {}x{}, render scale {}, {}, TAA {}, {} dropped to warm-up\n\n",
+			"\n{} frames of {} at {}x{}, render scale {}, {}, TAA {}, sharpness {}, {} dropped to "
+			"warm-up\n\n",
 			history.SampleCount(),
 			opts.mesh,
 			opts.width,
@@ -73,6 +75,7 @@ namespace
 			opts.renderScale,
 			opts.lit ? "lit" : "unlit",
 			opts.taa ? "on" : "off",
+			opts.taaSharpness,
 			opts.warmup);
 
 		headless::PrintPassCosts(std::cout, headless::SummarisePasses(history));
@@ -115,6 +118,12 @@ try
 			   "The geometry passes' grid relative to the output size; below 1 the TAA resolve "
 			   "reconstructs the output (RenderTargetDesc::renderScale)")
 			->check(CLI::PositiveNumber);
+		app.add_option(
+			   "--taa-sharpness",
+			   opts.taaSharpness,
+			   "The sharpen applied to the resolved image, 0 (off) to 1; needs --taa "
+			   "(RenderTargetDesc::taaSharpness)")
+			->check(CLI::Range(0.0f, 1.0f));
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -128,6 +137,8 @@ try
 		opts.height,
 		opts.taa,
 		opts.renderScale);
+
+	target->SetTaaSharpness(opts.taaSharpness);
 
 	// Every frame from here on is timed, which is what the whole run is for.
 	target->SetGpuTimingEnabled(true);

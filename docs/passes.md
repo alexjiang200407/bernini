@@ -823,7 +823,9 @@ Turns the linear HDR scene colour into the displayed image, as a single full-scr
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-Today it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
+On a TAA target with a nonzero `taaSharpness` it first sharpens the resolved history with RCAS
+([Temporal Antialiasing](docs/taa.md) § The sharpen), reading four more point taps of it; at zero
+the branch is skipped and the frame is the one it always was. Then it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
 `BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing — then
 applies `AgX` through the LUT above, graded when the target has `SetColorGradeEnabled` (see
 [the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —

@@ -1,4 +1,5 @@
 import lib.math.ColorGrade;
+import lib.math.rcas;
 import lib.math.Tonemap;
 import lib.screen.TonemapLut;
 
@@ -9,6 +10,11 @@ struct PostProcessData
     // Point when the source is already on the backbuffer's grid, linear when a render-resolution
     // scene colour has to be carried across -- which is only a frame the TAA resolve did not run.
     SamplerState.Handle sampler;
+
+    // The resolved history's texel, for RCAS's cross; RCAS runs only on a frame the resolve ran, when
+    // the source is on this pass's grid and point-sampled. Zero strength skips it.
+    float2 sourceTexelSize;
+    float rcasStrength;
 
     Texture2D.Handle outlineMask;
 
@@ -124,6 +130,18 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
 float4 PSMain(VSOut input) : SV_Target
 {
     float4 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv, 0.0);
+
+    // Ahead of the bloom: the sharpen is of the resolved scene, not of the glow added to it.
+    if (gPostProcessData.rcasStrength > 0.0)
+    {
+        let texel = gPostProcessData.sourceTexelSize;
+        float3 above = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv - float2(0.0, texel.y), 0.0).rgb;
+        float3 left = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv - float2(texel.x, 0.0), 0.0).rgb;
+        float3 right = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv + float2(texel.x, 0.0), 0.0).rgb;
+        float3 below = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv + float2(0.0, texel.y), 0.0).rgb;
+
+        scene.rgb = Rcas(above, left, scene.rgb, right, below, gPostProcessData.rcasStrength);
+    }
 
     // Added in linear radiance, ahead of the curve: the glow is of the scene, not of the display.
     if (gPostProcessData.bloomEnabled != 0)

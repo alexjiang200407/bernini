@@ -18,6 +18,8 @@
 #include <array>
 #include <bgl/IRenderTarget.h>
 #include <bgl_common/gassert.h>
+#include <cmath>
+#include <core/glm.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -35,8 +37,10 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 21> c_Fields = {
+		constexpr std::array<std::string_view, 23> c_Fields = {
 			"sceneColor"sv,
+			"sourceTexelSize"sv,
+			"rcasStrength"sv,
 			"sampler"sv,
 			"maskSampler"sv,
 			"outlineEnabled"sv,
@@ -58,6 +62,17 @@ namespace bgl
 			"gradeVignetteSmoothness"sv,
 			"gradeEnabled"sv,
 		};
+
+		/**
+		 * FSR 2's mapping from a sharpness in [0, 1] to RCAS's lobe scale: 2 - 2s stops below the
+		 * maximum (ffx_fsr2.cpp, FsrRcasCon). Zero is off here rather than two stops, so a target that
+		 * never asked for a sharpen draws the frame it always did.
+		 */
+		[[nodiscard]] float
+		RcasStrength(float sharpness) noexcept
+		{
+			return sharpness > 0.0f ? std::exp2(2.0f * sharpness - 2.0f) : 0.0f;
+		}
 	}
 
 	void
@@ -145,6 +160,11 @@ namespace bgl
 			auto& tonemap = *found;
 
 			tonemap["sceneColor"].SetIfValid(args.source);
+			tonemap["rcasStrength"].SetIfValid(RcasStrength(args.taaSharpness));
+			tonemap["sourceTexelSize"].SetIfValid(
+				1.0f / glm::vec2(
+						   args.viewport.maxX - args.viewport.minX,
+						   args.viewport.maxY - args.viewport.minY));
 			tonemap["sampler"].SetIfValid(args.sampler);
 			tonemap["maskSampler"].SetIfValid(args.maskSampler);
 			tonemap["tonemapLut"].SetIfValid(args.tonemapLut);
