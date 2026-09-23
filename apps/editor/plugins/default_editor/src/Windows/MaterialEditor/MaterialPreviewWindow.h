@@ -69,7 +69,7 @@ public:
 	 *
 	 * An *instance override*, not a change to the geometry's default: authoring a graph must not
 	 * rewrite the shared asset. Committing it to the mesh is a deliberate act -- see the editor's
-	 * Set Default Material.
+	 * Make Default.
 	 */
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);

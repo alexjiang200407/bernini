@@ -3,15 +3,24 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
+#include <QModelIndex>
+#include <QPainter>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QStyle>
+#include <QStyleOptionViewItem>
+#include <QStyledItemDelegate>
 #include <QVBoxLayout>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
@@ -27,6 +36,74 @@
 
 namespace
 {
+	// Enough of a mesh's looks to read at a glance; the rest scroll.
+	constexpr int c_MaterialListHeight = 132;
+
+	// A strip under the list, not a row of buttons: square, and small enough to read as part of it.
+	constexpr int c_ListButtonSize = 22;
+
+	constexpr int   c_TagGap  = 6;
+	constexpr float c_TagFade = 0.7f;
+
+	/** Draws the default look's row: its name bold, and a grey `default` tag against the margin. */
+	class DefaultTagDelegate : public QStyledItemDelegate
+	{
+	public:
+		using QStyledItemDelegate::QStyledItemDelegate;
+
+		void
+		paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index)
+			const override
+		{
+			if (!index.data(editor::c_IsDefaultMaterialRole).toBool())
+			{
+				QStyledItemDelegate::paint(painter, option, index);
+				return;
+			}
+
+			QStyleOptionViewItem row = option;
+			initStyleOption(&row, index);
+			row.font.setBold(true);
+
+			// The text is drawn below, in two pieces; the base would draw the model's own over it.
+			const QString name = row.text;
+			row.text.clear();
+
+			const QWidget* widget = row.widget;
+			QStyle*        style  = widget != nullptr ? widget->style() : QApplication::style();
+			style->drawControl(QStyle::CE_ItemViewItem, &row, painter, widget);
+
+			const QRect text = style->subElementRect(QStyle::SE_ItemViewItemText, &row, widget);
+			const QFontMetrics metrics(row.font);
+			const QString      tag  = QStringLiteral("default");
+			const int          span = metrics.horizontalAdvance(tag) + c_TagGap;
+
+			const bool selected = row.state.testFlag(QStyle::State_Selected);
+
+			painter->save();
+			painter->setFont(row.font);
+
+			// On the selection the grey would read as unreadable rather than as secondary, so the
+			// tag takes the highlight's own text colour, softened.
+			QColor tagColor = row.palette.color(
+				selected ? QPalette::Normal : QPalette::Disabled,
+				selected ? QPalette::HighlightedText : QPalette::Text);
+			if (selected)
+				tagColor.setAlphaF(c_TagFade);
+
+			painter->setPen(tagColor);
+			painter->drawText(text, Qt::AlignRight | Qt::AlignVCenter, tag);
+
+			painter->setPen(
+				row.palette.color(selected ? QPalette::HighlightedText : QPalette::Text));
+			painter->drawText(
+				text.adjusted(0, 0, -span, 0),
+				Qt::AlignLeft | Qt::AlignVCenter,
+				metrics.elidedText(name, Qt::ElideMiddle, text.width() - span));
+			painter->restore();
+		}
+	};
+
 	// The Layer combo's entries, indexed by assetlib::AlphaMode -- what the window writes through.
 	constexpr const char* c_LayerLabels[] = { "Opaque",
 		                                      "Alpha Tested",
@@ -140,12 +217,39 @@ namespace editor
 		meshActions->addWidget(widgets.bakeAll);
 		propertiesLayout->addLayout(meshActions);
 
-		widgets.setDefault =
-			new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
-		widgets.setDefault->setToolTip(QStringLiteral(
-			"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads "
-			"with it.\nThe preview only overrides the instances in front of you until you do."));
-		propertiesLayout->addWidget(widgets.setDefault);
+		// Every look this submesh can wear: its default, then the overrides the mesh registers. A
+		// game reaches one of these by name (AssetManager::SetInstanceSubmeshMaterialOverride), so
+		// the list is the asset's own, not the panel's. A list rather than a drop-down, for the
+		// reason the Animation editor lists clips: it is a place you work, not a setting you pick.
+		propertiesLayout->addWidget(new QLabel(QStringLiteral("Material"), propertiesPanel));
+
+		widgets.materialList = new QListWidget(propertiesPanel);
+		widgets.materialList->setEnabled(false);
+		widgets.materialList->setItemDelegate(new DefaultTagDelegate(widgets.materialList));
+		widgets.materialList->setContextMenuPolicy(Qt::CustomContextMenu);
+		widgets.materialList->setMaximumHeight(c_MaterialListHeight);
+		widgets.materialList->setToolTip(QStringLiteral(
+			"The looks this submesh can wear. Click one to edit and preview it; double-click to "
+			"make it the mesh's default.\nRight-click for the rest."));
+		propertiesLayout->addWidget(widgets.materialList);
+
+		// Under the list rather than beside it, and flat: registering a look is an edit to the
+		// list, not one of the panel's actions.
+		widgets.addOverride    = new QPushButton(QStringLiteral("+"), propertiesPanel);
+		widgets.removeOverride = new QPushButton(QStringLiteral("\u2212"), propertiesPanel);
+		for (QPushButton* button : { widgets.addOverride, widgets.removeOverride })
+		{
+			button->setFlat(true);
+			button->setFixedSize(c_ListButtonSize, c_ListButtonSize);
+		}
+
+		auto* listActions = new QHBoxLayout();
+		listActions->setContentsMargins(0, 0, 0, 0);
+		listActions->setSpacing(0);
+		listActions->addWidget(widgets.addOverride);
+		listActions->addWidget(widgets.removeOverride);
+		listActions->addStretch(1);
+		propertiesLayout->addLayout(listActions);
 
 		// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes
 		// to.
