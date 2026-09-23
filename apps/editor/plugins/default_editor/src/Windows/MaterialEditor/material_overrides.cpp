@@ -35,11 +35,14 @@ namespace editor
 	bool
 	CanRegisterMaterialName(const std::vector<RegisteredMaterial>& taken, const QString& name)
 	{
-		if (name.trimmed().isEmpty())
+		// Trimmed on both sides of the comparison, because that is what gets registered: a name
+		// typed with a stray space would otherwise pass as new and replace the look it matches.
+		const QString wanted = name.trimmed();
+		if (wanted.isEmpty())
 			return false;
 
-		return std::ranges::none_of(taken, [&name](const RegisteredMaterial& entry) {
-			return entry.name.compare(name, Qt::CaseInsensitive) == 0;
+		return std::ranges::none_of(taken, [&wanted](const RegisteredMaterial& entry) {
+			return entry.name.trimmed().compare(wanted, Qt::CaseInsensitive) == 0;
 		});
 	}
 
@@ -51,11 +54,20 @@ namespace editor
 		const QString&               name)
 	{
 		const QString stem = from.isEmpty() ? submeshName : QFileInfo(from).completeBaseName();
-		const QString file = QStringLiteral("%1_%2.bmaterial").arg(stem, name.trimmed());
+		const QString base = QStringLiteral("%1_%2").arg(stem, name.trimmed());
 
-		if (from.isEmpty())
-			return DefaultMaterialPath(dataRoot, file);
+		const auto at = [&](const QString& file) {
+			return from.isEmpty() ? DefaultMaterialPath(dataRoot, file) :
+			                        QFileInfo(from).dir().filePath(file);
+		};
 
-		return QFileInfo(from).dir().filePath(file);
+		// Two submeshes showing one material and given one override name compute one destination,
+		// and the second copy would overwrite the first submesh's look with its own content. So the
+		// first free spelling wins instead.
+		QString file = base + QStringLiteral(".bmaterial");
+		for (int suffix = 2; QFileInfo::exists(at(file)); ++suffix)
+			file = QStringLiteral("%1_%2.bmaterial").arg(base).arg(suffix);
+
+		return at(file);
 	}
 }

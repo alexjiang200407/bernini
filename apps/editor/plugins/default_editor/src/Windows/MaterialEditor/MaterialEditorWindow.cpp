@@ -36,6 +36,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <bgl/IGraphics.h>
 #include <bgl/SurfaceType.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -614,8 +615,18 @@ MaterialEditorWindow::RefreshActions()
 	RefreshMaterialSelector();
 
 	// A look is registered against a submesh of a real mesh, and it is copied from the board, so
-	// both need something behind them.
-	m_AddOverrideButton->setEnabled(hasGraph && hasMesh);
+	// both need something behind them. A sourceless mesh has no import document to register one in
+	// -- it carries its bindings itself -- so it keeps the single default it has.
+	const bool canRegister = hasGraph && hasMesh && !m_MeshSourceKey.empty();
+	m_AddOverrideButton->setEnabled(canRegister);
+	m_AddOverrideButton->setToolTip(
+		canRegister || !hasMesh ?
+			QStringLiteral(
+				"Register another look for this submesh, copied from the one on the "
+				"board.") :
+			QStringLiteral(
+				"This mesh was not imported from a source, so it has no import document "
+				"to register a look in."));
 
 	const bool shownIsOverride = !ShownOverride(m_Graphs.CurrentSubmesh()).isEmpty();
 	m_RemoveOverride->setEnabled(shownIsOverride);
@@ -927,13 +938,22 @@ MaterialEditorWindow::AddMaterialOverride()
 
 	try
 	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+
+		// Read before anything is written: a mesh with no source has no document to register in,
+		// and a copy saved first would be a `.bmaterial` nothing names.
+		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		core::throw_runtime_error_if(
+			mesh.source.key.empty(),
+			"'{}': it was not imported from a source, so it has no import document to register a "
+			"look in",
+			m_Preview->MeshPath().string());
+
 		// The copy is written before it is registered: a registration naming a file that is not
 		// there is one every later load reports as a broken reference.
-		const assetlib::AssetStore& store = m_Host.GetStore();
-		const std::string           key = store.KeyFor(std::filesystem::path(path.toStdWString()));
+		const std::string key = store.KeyFor(std::filesystem::path(path.toStdWString()));
 		store.Save(editor::BuildMaterial(*entry.model, path, store), key);
 
-		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
 		store.SetSubmeshMaterialOverrideInDocument(
 			mesh.source.key,
 			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
@@ -1035,6 +1055,7 @@ void
 MaterialEditorWindow::ReloadRegisteredMaterials()
 {
 	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
+	m_MeshSourceKey.clear();
 
 	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
 		return;
@@ -1042,6 +1063,8 @@ MaterialEditorWindow::ReloadRegisteredMaterials()
 	try
 	{
 		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		m_MeshSourceKey = mesh.source.key;
+
 		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
 		{
 			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));

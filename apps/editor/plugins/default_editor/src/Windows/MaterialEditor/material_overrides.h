@@ -49,7 +49,9 @@ namespace editor
 	 *
 	 * Named from what it varies rather than from the submesh alone -- `wood_Rusty.bmaterial` --
 	 * because a project's materials are one flat directory and two submeshes called `crate[0]`
-	 * in different meshes would otherwise collide.
+	 * in different meshes would otherwise collide. A spelling already on disk is stepped past
+	 * (`wood_Rusty_2.bmaterial`): two submeshes sharing a material and a name would otherwise
+	 * compute one destination, and the second copy would overwrite the first's look.
 	 */
 	[[nodiscard]] QString
 	NewOverrideMaterialPath(

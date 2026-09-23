@@ -14,6 +14,7 @@
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <string>
 #include <vector>
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
@@ -260,6 +261,10 @@ private:
 	// Which look each submesh is showing: the name of a registered override, or empty for the
 	// submesh's default. Indexed by panel submesh, sized with the graphs.
 	std::vector<QString> m_ShownOverrides;
+
+	// The mesh's own source, empty for a sourceless one -- which registers no looks, because the
+	// document they live in is the one a source has. Read with the looks below.
+	std::string m_MeshSourceKey;
 
 	// The mesh's registered looks, per panel submesh. Cached because the combo is refilled on
 	// every panel refresh and the answer is a whole `.bmesh` read.

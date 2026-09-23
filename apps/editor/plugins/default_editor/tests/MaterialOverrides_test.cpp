@@ -3,6 +3,8 @@
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QDir>
+#include <QFile>
+#include <QIODevice>
 #include <QString>
 #include <QTemporaryDir>
 
@@ -70,6 +72,11 @@ TEST_CASE("A look needs a name of its own", "[materialoverrides]")
 	// One name, two answers: a game asking for "Rusty" could be given either material.
 	CHECK_FALSE(editor::CanRegisterMaterialName(taken, QStringLiteral("Rusty")));
 	CHECK_FALSE(editor::CanRegisterMaterialName(taken, QStringLiteral("rusty")));
+
+	// The name is registered trimmed, so a stray space is the same look -- and registering it
+	// again would silently replace the material behind it.
+	CHECK_FALSE(editor::CanRegisterMaterialName(taken, QStringLiteral("Rusty ")));
+	CHECK_FALSE(editor::CanRegisterMaterialName(taken, QStringLiteral(" rusty")));
 }
 
 TEST_CASE("A look's copy lands beside the material it varies", "[materialoverrides]")
@@ -87,6 +94,34 @@ TEST_CASE("A look's copy lands beside the material it varies", "[materialoverrid
 		QStringLiteral("Rusty"));
 
 	CHECK(QDir(root.path()).filePath(QStringLiteral("Materials/wood_Rusty.bmaterial")) == made);
+}
+
+TEST_CASE("A second look never overwrites the first's material", "[materialoverrides]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto    dataRoot = std::filesystem::path(root.path().toStdWString());
+	const QString from     = QDir(root.path()).filePath(QStringLiteral("Materials/wood.bmaterial"));
+	REQUIRE(QDir(root.path()).mkpath(QStringLiteral("Materials")));
+
+	const QString first = editor::NewOverrideMaterialPath(
+		dataRoot,
+		from,
+		QStringLiteral("crate[0]"),
+		QStringLiteral("Rusty"));
+	REQUIRE(QFile(first).open(QIODevice::WriteOnly));
+
+	// Two submeshes wearing one material, each given a look called Rusty: the second copy must not
+	// be written over the first submesh's.
+	const QString second = editor::NewOverrideMaterialPath(
+		dataRoot,
+		from,
+		QStringLiteral("crate[1]"),
+		QStringLiteral("Rusty"));
+
+	CHECK(second != first);
+	CHECK(second.endsWith(QStringLiteral("wood_Rusty_2.bmaterial")));
 }
 
 TEST_CASE("A look copied from an unsaved graph is named from the submesh", "[materialoverrides]")
