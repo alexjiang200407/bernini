@@ -677,7 +677,10 @@ reconstructs the surface's normal one-sided, differencing toward whichever neigh
 is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
 under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
 its face while a walkable slope still catches at full strength. There is no depth test and no depth
-attachment: the depth the decal reads is exactly what each pixel shows at that point. Units draw
+attachment: the depth the decal reads is exactly what each pixel shows at that point. It is sampled
+where it stands rather than copied into a receiver texture of its own: a Metal blit of it at the seam
+measured 0.10-0.32 ms in animal-run, on top of everything the sample costs, and would add back the
+texture and the depth attachment. Units draw
 after the decals, so a unit standing between the camera and a shadowed surface covers it, and the
 transparents draw after too, so smoke over a unit composites over its shadow. The transparent phase's
 blend state, into scene colour alone; a view with no disc attaches no pass.
