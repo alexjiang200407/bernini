@@ -317,9 +317,11 @@ AnimationPreviewWindow::Clear()
 	SetTime(0.0f);
 
 	// Both tables, because both are node halves: a panel left listing the old rig's spaces would
-	// offer a fade onto a node nothing holds.
+	// offer a fade onto a node nothing holds. The set they came from goes with them -- it is what
+	// a panel holds open, and nothing is open.
 	m_Clips.clear();
 	m_Spaces.clear();
+	m_BlendKey.clear();
 
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
@@ -426,8 +428,7 @@ AnimationPreviewWindow::LoadMesh(
 	assetlib::BMesh           mesh;
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
-	std::vector<std::string>  blendSets;
-	std::string               blend = blendRelPath;
+	std::string               blend      = blendRelPath;
 
 	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
@@ -462,9 +463,11 @@ AnimationPreviewWindow::LoadMesh(
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
-			// One edge over: the sets are per clip set, so which ones exist is only knowable once
-			// the `.banim` is settled.
-			blendSets = editor::ResolveBlendSets(graph, animations);
+			// One edge over: a set belongs to a clip set, so which one to load is only knowable
+			// once the `.banim` is settled. A caller that named its own keeps it -- the Blend
+			// Space editor previews the set it is editing, wherever that is stored.
+			if (blend.empty())
+				blend = editor::BlendSetFor(graph, animations);
 
 			plan = editor::PlanAnimationDraws(mesh);
 
@@ -704,22 +707,15 @@ AnimationPreviewWindow::LoadMesh(
 			bindings.animations.begin(),
 			std::find(bindings.animations.begin(), bindings.animations.end(), animations)));
 
-		auto setNames = QStringList();
-		for (const std::string& set : blendSets) setNames << QString::fromStdString(set);
-		const auto activeSet =
-			static_cast<int>(std::distance(blendSets.begin(), std::ranges::find(blendSets, blend)));
-
-		m_Clips  = loaded.clips;
-		m_Spaces = loaded.spaces;
+		m_Clips    = loaded.clips;
+		m_Spaces   = loaded.spaces;
+		m_BlendKey = blend;
 
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		// Before SpacesChanged, and the order is read: a space is a node past the clips, so the
 		// panel cannot place one until it knows how many clips there are.
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
-		Q_EMIT BlendSetsChanged(
-			setNames,
-			blend.empty() || activeSet >= setNames.size() ? -1 : activeSet);
 		Q_EMIT SpacesChanged(loaded.spaces);
 
 		if (!loaded.refusal.isEmpty())

@@ -9,9 +9,9 @@
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "mesh_drop_import.h"
 #include <algorithm>
-#include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
+#include <editor_plugin_api/EditorPanel.h>
 #include <editor_sdk/mesh_drop.h>
 #include <exception>
 #include <gamelib/BlendSpaceInfo.h>
@@ -45,7 +45,6 @@
 #include <optional>
 #include <qcontainerfwd.h>
 #include <qlatin1stringview.h>
-#include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qsizepolicy.h>
@@ -113,12 +112,6 @@ AnimationEditorWindow::AnimationEditorWindow(
 		m_MeshLabel->setText(relPath.isEmpty() ? QStringLiteral("No mesh open") : relPath);
 		m_Stage->setCurrentIndex(relPath.isEmpty() ? 0 : 1);
 	});
-
-	connect(
-		m_Preview,
-		&AnimationPreviewWindow::BlendSetsChanged,
-		this,
-		[this](const QStringList& sets, int activeIndex) { SetBlendSets(sets, activeIndex); });
 
 	connect(
 		m_Preview,
@@ -207,28 +200,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		LoadShownMesh(m_SourceSelector->itemText(index));
 	});
 	layout->addWidget(m_SourceSelector);
-
-	// Which spaces the rig carries, for the Blend tab to fade onto. In the header because it is a
-	// fact about the clip set on screen, the way the `.banim` above it is -- and because opening
-	// one reloads the rig, which is not something a tab switch should ever do.
-	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Blend Set"), column));
-
-	m_BlendSetSelector = new QComboBox(column);
-	m_BlendSetSelector->setEnabled(false);
-	m_BlendSetSelector->addItem(QStringLiteral("None"));
-	m_BlendSetSelector->setToolTip(QStringLiteral(
-		"The .bblend whose blend spaces this rig carries. Choosing one reloads the mesh: a rig "
-		"already uploaded refuses a set it was not built with."));
-	connect(m_BlendSetSelector, &QComboBox::activated, this, [this](int index) {
-		if (m_SyncingUi || index < 0 || m_MeshRelPath.isEmpty() || m_DataRoot.isEmpty())
-			return;
-		// Index 0 is "None", so the sets themselves start at 1.
-		LoadShownMesh(
-			m_SourceSelector->currentText(),
-			index == 0 ? QString() : m_BlendSetSelector->itemText(index));
-	});
-	layout->addWidget(m_BlendSetSelector);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
@@ -547,8 +518,8 @@ AnimationEditorWindow::GetHeldOpenPaths() const
 
 	auto held = QStringList();
 	held << root.absoluteFilePath(m_MeshRelPath);
-	if (!m_BlendRelPath.isEmpty())
-		held << root.absoluteFilePath(m_BlendRelPath);
+	if (const QString blend = m_Preview->BlendSetKey(); !blend.isEmpty())
+		held << root.absoluteFilePath(blend);
 	for (int i = 0; i < m_SourceSelector->count(); ++i)
 		held << root.absoluteFilePath(m_SourceSelector->itemText(i));
 	return held;
@@ -570,24 +541,11 @@ AnimationEditorWindow::TierSourceAt(const int index) noexcept
 }
 
 void
-AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath)
+AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
 {
 	const auto absolute = std::filesystem::path(m_DataRoot.toStdWString()) /
 	                      std::filesystem::path(m_MeshRelPath.toStdWString());
-	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString(), blendRelPath.toStdString());
-}
-
-void
-AnimationEditorWindow::SetBlendSets(const QStringList& sets, const int activeIndex)
-{
-	m_SyncingUi = true;
-	m_BlendSetSelector->clear();
-	m_BlendSetSelector->addItem(QStringLiteral("None"));
-	m_BlendSetSelector->addItems(sets);
-	m_BlendSetSelector->setCurrentIndex(activeIndex < 0 ? 0 : activeIndex + 1);
-	m_BlendSetSelector->setEnabled(!m_MeshRelPath.isEmpty());
-	m_BlendRelPath = activeIndex < 0 ? QString() : sets.at(activeIndex);
-	m_SyncingUi    = false;
+	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString());
 }
 
 void

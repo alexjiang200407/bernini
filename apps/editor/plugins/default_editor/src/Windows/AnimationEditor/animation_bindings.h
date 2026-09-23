@@ -22,8 +22,7 @@ namespace editor
 	 * `skeleton` (a static mesh) resolves to no candidates.
 	 *
 	 * `graph` is passed in rather than scanned here because a scan reads and parses every asset in
-	 * the project, and a caller that also wants the blend sets (`ResolveBlendSets`) would otherwise
-	 * pay for two of them on every load.
+	 * the project, and the caller asks it other questions on the same load.
 	 *
 	 * Signature drift is deliberately not checked here: a candidate whose clips no longer match
 	 * the rig is refused by the bake, which names the reason.

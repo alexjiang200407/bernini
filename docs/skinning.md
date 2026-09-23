@@ -421,14 +421,19 @@ to keep in agreement beyond the one below.
   instance and holds no slots, so `SetSkinnedPlayback` throws there; it still interpolates frames
   within that clip, which is a different thing from blending between two.
 
-* **A blend set is opened from the header, for *Blend* to fade onto.** The sets authored
-  against the live clip set come from the same reference scan that found the `.banim` candidates,
-  one `kBlendClips` edge over (`editor::ResolveBlendSets`), and choosing one **reloads the mesh** --
-  a rig already uploaded refuses a set it was not built with, so this cannot be a rebind. Switching
-  `.banim` drops the set with it: a set names one clip set, and carrying it across would name a
-  file the rig no longer plays.
+* **A rig arrives with its blend set, for *Blend* to fade onto.** A clip set's spaces live in the
+  set at `assetlib::blendSetKeyFor`'s key, so the load asks for that key and takes what is there
+  (`editor::BlendSetFor`) -- there is nothing to choose, and no control to choose it with. Switching
+  `.banim` re-asks: a set names one clip set, so a different one is a different set.
 
-  Opening a set is all this panel does with one; authoring its spaces is the Blend Space Editor's.
+  A set stored anywhere else is not offered here, which is the deliberate cost of having no picker:
+  a `.bblend` records the clip set it was authored against, so the referrers of a `.banim` *could*
+  be asked instead, but that answers with every file that happens to name it — a list where there is
+  only ever a choice by accident. `CreateEmptyBlendSet` refuses to write a second set at the key, so
+  the tooling cannot produce one.
+
+  Opening a set is all this panel does with one; authoring its spaces is the Blend Space Editor's,
+  which previews whichever set it has open rather than the conventional one.
 
 * **A blend space is authored in the Blend Space Editor, a dock beside this panel.** It opens one
   `.bblend`, dropped on it or double-clicked in the Content Explorer, and lists that document's
