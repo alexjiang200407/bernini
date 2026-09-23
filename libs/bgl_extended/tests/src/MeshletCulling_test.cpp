@@ -9,8 +9,8 @@
 #include "gfx/RenderTargetBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
+#include "passes/ForwardPass.h"
 #include "passes/PassInitContext.h"
-#include "passes/StaticDepthPass.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
@@ -330,7 +330,7 @@ namespace
 		REQUIRE(scene != nullptr);
 
 		// Alpha-tested and double-sided, the shape of a grass card: the pipelines that draw it are
-		// the cutout ones, and StaticDepth draws it through its coverage twin.
+		// the cutout ones.
 		auto desc            = bgl::PbrMaterialDesc();
 		desc.baseColorFactor = glm::vec4(0.6f, 0.8f, 0.4f, 1.0f);
 		desc.metallicFactor  = 0.0f;
@@ -438,9 +438,10 @@ TEST_CASE(
 	REQUIRE(scene != nullptr);
 	REQUIRE(view != nullptr);
 
-	// A real material kind, so the instance lands in an opaque static bucket StaticDepth draws.
+	// kNull: an opaque static bucket whose pixel stage reads no lighting, which this graph binds
+	// none of. The amplification stage under test is the same for every static bucket.
 	auto material         = bgl::MaterialHandle();
-	material.materialType = bgl::MaterialType::kPBR;
+	material.materialType = bgl::MaterialType::kNull;
 
 	const std::array<bgl::MaterialHandle, 1> materials = { material };
 	const auto floor = sceneRef->AddStaticMeshGeom(mesh, 0, materials);
@@ -486,15 +487,16 @@ TEST_CASE(
 	REQUIRE(surelyCulled < groups);
 
 	auto compactPass = bgl::CompactInstancesPass();
-	auto depthPass   = bgl::StaticDepthPass();
+	auto forwardPass = bgl::ForwardPass();
 	{
 		const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
 		auto                        pipelines = bgl::PipelineBatch(device);
 		const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 		compactPass.Init(ctx);
-		depthPass.Init(ctx);
+		forwardPass.Init(ctx);
+		forwardPass.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
 		pipelines.Build();
-		depthPass.CheckBindings();
+		forwardPass.CheckBindings();
 	}
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
@@ -510,7 +512,9 @@ TEST_CASE(
 
 	bgl::FrameGraph fg;
 	fg.RegisterQueue("main", cmdQueue, cmdList);
-	fg.ImportTexture(bgl::c_StaticDepthName, targetBase->GetStaticDepthTexture());
+	fg.ImportTexture(bgl::c_BackbufferName, targetBase->GetSceneColorTexture());
+	fg.ImportTexture(bgl::c_MotionVectorsName, targetBase->GetMotionVectorTexture());
+	fg.ImportTexture(bgl::c_DepthName, targetBase->GetDepthTexture());
 
 	fg.SetResourceNamespace(view->GetResourceNamespace());
 	scene->AttachToFrameGraph(fg, 0);
@@ -525,12 +529,14 @@ TEST_CASE(
 	draw.viewState.viewProj     = viewProj;
 	draw.viewState.prevViewProj = viewProj;
 	draw.viewState.cullView     = bgl::BuildCullView(viewProj);
-	draw.targets.staticDepth    = targetBase->GetStaticDepthDsv();
+	draw.targets.sceneColor     = targetBase->GetSceneColorRtv();
+	draw.targets.motionVector   = targetBase->GetMotionVectorRtv();
+	draw.targets.depth          = targetBase->GetDepthDsv();
 	draw.materialArena          = scene->GetMaterialBinding();
 
 	fg.SetResourceNamespace(view->GetCullNamespace(0));
 	compactPass.AttachToFrameGraph(fg, draw);
-	depthPass.AttachToFrameGraph(fg, draw);
+	forwardPass.AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kWorld);
 
 	fg.AddPass(
 		bgl::PassDesc()
@@ -568,7 +574,7 @@ TEST_CASE(
 
 	resourceManager->UnmapReadback(rbStats);
 	compactPass.Release(false);
-	depthPass.Release();
+	forwardPass.Release();
 }
 
 #endif

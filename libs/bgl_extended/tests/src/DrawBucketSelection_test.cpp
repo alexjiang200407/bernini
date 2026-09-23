@@ -158,15 +158,6 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 	CHECK(bgl::DrawBucketGeometrySrc(staticCutout) == "programs.forward.StaticMesh"sv);
 	CHECK(bgl::DrawBucketGeometrySrc(skinnedCutout) == "programs.forward.SkinnedMesh"sv);
 
-	// The static depth pass evaluates coverage with the colour pass's own arithmetic.
-	CHECK(
-		bgl::DrawBucketCoveragePixelSrc(staticCutout) ==
-		"programs.forward.DepthOnly_PBR_AlphaTest"sv);
-	CHECK(
-		bgl::DrawBucketCoveragePixelSrc(
-			{ GeomType::kStaticMesh, MaterialType::kLoosePbr, LayerType::kHashed }) ==
-		"programs.forward.DepthOnly_PBR_Loose_HashedAlpha"sv);
-
 	// Only the materialless kinds cull in hardware: every material bucket leaves back faces to the
 	// mesh stage and the material's doubleSided flag.
 	CHECK(
@@ -207,10 +198,6 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[d
 				bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kHashed }) ==
 				program("_HashedAlpha"));
 		}
-
-		CHECK(
-			bgl::DrawBucketCoveragePixelSrc({ GeomType::kStaticMesh, kind, LayerType::kMask }) ==
-			"programs.forward.DepthOnly_GameSlot" + std::to_string(slot) + "_AlphaTest");
 
 		// The skinned door is open for every layer a game surface can carry, hashed included: a
 		// surface's tiers differ in nothing but the geometry stage.

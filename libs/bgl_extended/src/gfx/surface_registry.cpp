@@ -79,19 +79,6 @@ namespace bgl
 				slot);
 		}
 
-		std::string
-		CoverageProgramSource(uint32_t slot, std::string_view discard)
-		{
-			return std::format(
-				"import {};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
-				"import lib.forward.common;\n\n[shader(\"pixel\")]\n"
-				"void PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
-				"    materialData.{}<Slot{}Surface>(input, isFrontFace);\n}}\n",
-				BindingModuleName(slot),
-				discard,
-				slot);
-		}
-
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
 		// kinds -- the arm's function picked by the surface's contract; it shadows
 		// programs/forward/Transparent.slang, which is this with no arms.
@@ -128,18 +115,13 @@ namespace bgl
 		}
 
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
-		// program, and the static depth pass's coverage twins -- the lit family where the surface
-		// owns its lighting. Named by the draw-bucket config, so the names generated here are the
-		// names the passes build.
+		// program -- the lit family where the surface owns its lighting. Named by the draw-bucket
+		// config, so the names generated here are the names the passes build.
 		std::vector<SlangSourceModule>
 		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
 		{
 			const auto colour = [kind](LayerType layer) {
 				return DrawBucketPixelSrc(DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
-			};
-			const auto coverage = [kind](LayerType layer) {
-				return DrawBucketCoveragePixelSrc(
-					DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
 			};
 			const bool lit = shading == SurfaceShading::kLit;
 
@@ -157,18 +139,6 @@ namespace bgl
 				  ColorProgramSource(
 					  slot,
 					  lit ? "GameLitHashedAlphaProgram" : "GameHashedAlphaProgram"),
-				  false },
-				{ coverage(LayerType::kMask),
-				  CoverageProgramSource(
-					  slot,
-					  lit ? "DiscardUncoveredGameLitAlphaTested" :
-							"DiscardUncoveredGameAlphaTested"),
-				  false },
-				{ coverage(LayerType::kHashed),
-				  CoverageProgramSource(
-					  slot,
-					  lit ? "DiscardUncoveredGameLitHashedAlpha" :
-							"DiscardUncoveredGameHashedAlpha"),
 				  false },
 			};
 		}
