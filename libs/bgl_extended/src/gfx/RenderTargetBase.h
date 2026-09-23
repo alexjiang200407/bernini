@@ -9,6 +9,7 @@
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
 #include "resource/Texture.h"
+#include "types/TaaHistoryPlane.h"
 #include <algorithm>
 #include <array>
 #include <bgl/IGraphics.h>
@@ -409,21 +410,21 @@ namespace bgl
 		GetOutlineMaskSrv() const noexcept = 0;
 
 		/**
-		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
-		 * this frame's resolve writes, the other is the one it reads. Sized with the *output* grid,
-		 * which is what the resolve reconstructs onto. Null on a target without TAA, which allocates
-		 * neither.
+		 * The two history slots TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
+		 * this frame's resolve writes, the other is the one it reads, and each holds one texture per
+		 * plane. Sized with the *output* grid, which is what the resolve reconstructs onto. Null on a
+		 * target without TAA, which allocates none of them.
 		 *
 		 * @pre `index` is 0 or 1.
 		 */
 		[[nodiscard]] virtual TextureHandle
-		GetHistoryTexture(uint32_t index) const noexcept = 0;
+		GetHistoryTexture(uint32_t index, TaaHistoryPlane plane) const noexcept = 0;
 
 		[[nodiscard]] virtual RtvHandle
-		GetHistoryRtv(uint32_t index) const noexcept = 0;
+		GetHistoryRtv(uint32_t index, TaaHistoryPlane plane) const noexcept = 0;
 
 		[[nodiscard]] virtual SrvHandle
-		GetHistorySrv(uint32_t index) const noexcept = 0;
+		GetHistorySrv(uint32_t index, TaaHistoryPlane plane) const noexcept = 0;
 
 		[[nodiscard]] virtual uint32_t
 		GetCurrentHistoryIndex() const noexcept = 0;

@@ -72,6 +72,21 @@ public float PhaseWeight(float offset, float jitterTexel, float subPixels, float
     return exp(-k * offset * offset) * subPixels / sum;
 }
 
+// What the resolve writes: the colour history, and the luma ring beside it.
+public struct TaaResolveOutput
+{
+    public float4 history;
+    public float4 lumaRing;
+};
+
+// A ring entry, as FSR 2 stores one: luma compressed into [0, 1) and quantized to the 8 bits the
+// ring holds, so two frames compare equal exactly when the stored bytes do.
+public float RingLuma(float luma)
+{
+    float compressed = luma / (1.0 + max(0.0, luma));
+    return round(compressed * 255.0) / 255.0;
+}
+
 // Catmull-Rom over the 4x4 around `uv`, folded to five bilinear fetches by pairing the two inner
 // taps per axis and dropping the four corners, whose weights are near zero (renormalised out).
 //
@@ -116,9 +131,11 @@ float3 SampleHistoryCatmullRom<I : IResolveInputs>(I inputs, float2 uv, float2 t
  * nearest surface in it lends its vector, and this frame is blended in by how near its jittered
  * sample landed. docs/taa.md is the recipe and the measurement behind each choice.
  *
- * @return The new colour history and unaccumulated view depth; zero depth means unavailable.
+ * @return The new colour history with unaccumulated view depth, zero meaning unavailable; and the
+ *         luma ring shifted one frame, this frame's neighbourhood luma newest. A pixel with no
+ *         history starts its ring over.
  */
-public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv)
+public TaaResolveOutput TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv)
 {
     let texel = p.renderTexelSize;
 
@@ -219,6 +236,9 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     boxMin = clamp(mu - sigma, boxMin, boxMax);
     boxMax = clamp(mu + sigma, boxMin, boxMax);
 
+    TaaResolveOutput output;
+    float luma = RingLuma(mu.x);
+
     // Reprojected off-screen: there is no history for this pixel, and wrapping the clamp sampler's
     // edge texel in would be a smear rather than an accumulation.
     bool onScreen = all(historyUv >= 0.0) && all(historyUv <= 1.0);
@@ -252,7 +272,9 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
         // the frame out of jittered samples yet, so this one frame is a plain resample.
         float3 whole = resampling ? inputs.SceneLinear(uv) : current.rgb;
 
-        return float4(whole, historyDepth);
+        output.history = float4(whole, historyDepth);
+        output.lumaRing = float4(luma, 0.0, 0.0, 0.0);
+        return output;
     }
 
     float3 history = SampleHistoryCatmullRom(inputs, historyUv, p.outputTexelSize);
@@ -270,5 +292,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 
-    return float4(resolved, historyDepth);
+    output.history = float4(resolved, historyDepth);
+    output.lumaRing = float4(luma, inputs.LumaHistory(historyUv).xyz);
+    return output;
 }
