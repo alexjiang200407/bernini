@@ -28,6 +28,10 @@ namespace bgl
 		// with. Narrower is sharper and slower to settle; see IRenderTarget::SetTaaReconstructionWidth.
 		float taaReconstructionWidth = 0.4f;
 
+		// How hard the resolved image is sharpened before the display curve, in [0, 1]. Zero skips
+		// the sharpen; see IRenderTarget::SetTaaSharpness.
+		float taaSharpness = 0.0f;
+
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless. The Metal layer and its window are the caller's: the
 		// backbuffer is sRGB-encoded, and the window's colour space must be set to sRGB explicitly
@@ -148,6 +152,21 @@ namespace bgl
 		 */
 		virtual void
 		SetTaaReconstructionWidth(float width) = 0;
+
+		/** How hard the resolved image is sharpened, in [0, 1]; zero is off. */
+		[[nodiscard]] virtual float
+		GetTaaSharpness() const noexcept = 0;
+
+		/**
+		 * Sets the contrast-adaptive sharpen applied to the resolved image from the next frame on.
+		 * Nothing is reallocated and the accumulation is kept, since the sharpen reads the history
+		 * and never writes it. Zero skips it; above zero it follows FSR 2's mapping, a strength
+		 * of exp2(2s - 2). It runs only on frames the TAA resolve ran.
+		 *
+		 * @throws GraphicsError if `sharpness` is not a finite number in [0, 1].
+		 */
+		virtual void
+		SetTaaSharpness(float sharpness) = 0;
 
 		/** Whether the selection outline is drawn on this target. On by default. */
 		[[nodiscard]] virtual bool

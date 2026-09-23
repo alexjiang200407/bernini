@@ -1876,6 +1876,59 @@ TEST_CASE(
 	}
 }
 
+TEST_CASE("The sharpness is off by default and bounded to zero through one", "[taa]")
+{
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	CHECK(targetDesc.taaSharpness == 0.0f);
+
+	SECTION("the desc is checked at creation")
+	{
+		for (const float bad : { -0.1f, 1.1f, std::numeric_limits<float>::quiet_NaN() })
+		{
+			targetDesc.taaSharpness = bad;
+			CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+		}
+
+		targetDesc.taaSharpness = 1.0f;
+		auto target             = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+		CHECK(target->GetTaaSharpness() == 1.0f);
+	}
+
+	SECTION("the setter takes both ends and leaves a rejected value unapplied")
+	{
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+		CHECK(target->GetTaaSharpness() == 0.0f);
+
+		target->SetTaaSharpness(1.0f);
+		CHECK(target->GetTaaSharpness() == 1.0f);
+
+		target->SetTaaSharpness(0.25f);
+
+		for (const float bad : { -0.1f,
+		                         1.1f,
+		                         std::numeric_limits<float>::infinity(),
+		                         std::numeric_limits<float>::quiet_NaN() })
+		{
+			CHECK_THROWS_AS(target->SetTaaSharpness(bad), bgl::GraphicsError);
+		}
+
+		CHECK(target->GetTaaSharpness() == 0.25f);
+
+		target->SetTaaSharpness(0.0f);
+		CHECK(target->GetTaaSharpness() == 0.0f);
+	}
+}
+
 // The accuracy half of the reconstruction width's trade, against the only reference that can judge
 // it. HashedAlpha_test measures the other half -- what a width costs a smear -- and the default is a
 // choice between the two, so neither is worth reading alone.
