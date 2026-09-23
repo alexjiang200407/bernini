@@ -2,6 +2,7 @@
 
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
+#include "mesh_drop_import.h"
 #include <editor_sdk/mesh_load.h>
 
 #include "Windows/AnimationEditor/animation_bindings.h"
@@ -1158,15 +1159,14 @@ AnimationPreviewWindow::dropEvent(QDropEvent* event)
 	if (!m_MeshDropsEnabled)
 		return;
 
-	const editor::MeshDrop drop =
-		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
+	const QString mesh = editor::MeshForDrop(
+		m_Host,
+		event->mimeData(),
+		QString::fromStdWString(m_DataRoot.wstring()));
+	if (mesh.isEmpty())
 		return;
-	}
 
-	LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
+	LoadMesh(std::filesystem::path(mesh.toStdWString()));
 	event->acceptProposedAction();
 }
 

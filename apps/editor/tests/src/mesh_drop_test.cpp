@@ -215,8 +215,8 @@ TEST_CASE("A source that resolves to nothing is still named", "[drop]")
 	auto mime = QMimeData();
 	SetLocalFiles(mime, { orphan });
 
-	// What separates "nothing was dropped" from "something was, and it had nothing to show". The
-	// second is reported to the user; the first is a drag this viewport simply did not want.
+	// What separates "nothing was dropped" from "something was, and this project has never seen
+	// it". The second is what a viewport offers to import; the first is a drag it did not want.
 	const editor::MeshDrop unresolved = editor::GetMeshDroppedOn(&mime, root);
 	CHECK(unresolved.mesh.isEmpty());
 	CHECK(unresolved.source == orphan);

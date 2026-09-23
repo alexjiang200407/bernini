@@ -7,6 +7,7 @@
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
+#include "mesh_drop_import.h"
 #include <algorithm>
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
@@ -532,14 +533,11 @@ AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
 void
 AnimationEditorWindow::dropEvent(QDropEvent* event)
 {
-	const editor::MeshDrop drop = editor::GetMeshDroppedOn(event->mimeData(), m_DataRoot);
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
+	const QString mesh = editor::MeshForDrop(m_Host, event->mimeData(), m_DataRoot);
+	if (mesh.isEmpty())
 		return;
-	}
 
-	m_Preview->LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
+	m_Preview->LoadMesh(std::filesystem::path(mesh.toStdWString()));
 	event->acceptProposedAction();
 }
 

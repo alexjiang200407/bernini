@@ -1,4 +1,6 @@
 #include "MaterialPreviewWindow.h"
+
+#include "mesh_drop_import.h"
 #include <QEvent>
 #include <QVBoxLayout>
 #include <editor_sdk/mesh_load.h>
@@ -466,15 +468,14 @@ MaterialPreviewWindow::dropEvent(QDropEvent* event)
 		return;
 	}
 
-	const editor::MeshDrop drop =
-		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
+	const QString mesh = editor::MeshForDrop(
+		m_Host,
+		event->mimeData(),
+		QString::fromStdWString(m_DataRoot.wstring()));
+	if (mesh.isEmpty())
 		return;
-	}
 
-	LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
+	LoadMesh(std::filesystem::path(mesh.toStdWString()));
 	event->acceptProposedAction();
 }
 

@@ -3,13 +3,7 @@
 #include <editor_sdk/mime_files.h>
 #include <editor_sdk/source_mesh.h>
 
-#include <QFileInfo>
-#include <QMessageBox>
-
 #include <assetlib/codecs.h>
-#include <qlogging.h>
-#include <qobject.h>
-#include <qstringliteral.h>
 
 namespace editor
 {
@@ -47,24 +41,5 @@ namespace editor
 			return {};
 
 		return { .mesh = GetSourceMesh(dataRoot, source), .source = source };
-	}
-
-	void
-	ReportUnresolved(QWidget* parent, const MeshDrop& drop)
-	{
-		if (!drop.mesh.isEmpty() || drop.source.isEmpty())
-			return;
-
-		const QString name = QFileInfo(drop.source).fileName();
-
-		qWarning("MeshDrop: '%s' resolved to no mesh", qPrintable(drop.source));
-
-		QMessageBox::warning(
-			parent,
-			QStringLiteral("Load Mesh"),
-			QStringLiteral(
-				"'%1' has no mesh to show.\n\nIt has not been imported into this "
-				"project, or its import produced none.")
-				.arg(name));
 	}
 }
