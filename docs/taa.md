@@ -46,9 +46,9 @@ held frame, and what it costs is the frames a moving pixel waits for the jitter 
 — so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
 of 1 it does nothing at all: each output pixel has a sample of its own there.
 
-Last is **TAA Sharpness** (`taaSharpness` on the desc, `IRenderTarget::SetTaaSharpness` live, 0 by
-default and off): FSR 1's RCAS applied to the resolved image in `PostProcess`. It is what a render
-scale below 1 costs a still image, put back as edge contrast; see § The sharpen.
+Last is **TAA Sharpness** (`taaSharpness` on the desc, `IRenderTarget::SetTaaSharpness` live, 0.5 by
+default): FSR 1's RCAS applied to the resolved image in `PostProcess`, below a render scale of 1
+only. It is what an upscale costs a moving image, put back as edge contrast; see § The sharpen.
 
 **The resolve is deliberately the standard recipe** — jittered accumulation, YCoCg variance
 clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation and opaque disocclusion
@@ -312,14 +312,27 @@ converges to the bytes one created there does.
   its own, because four taps do not pay for a full-screen pass. Its limiter assumes a peak of one,
   so a neighbourhood straddling one solves for no lobe and a highlight's edge is left alone rather
   than rung. A sharpness `s` maps to a lobe scale of `exp2(2s - 2)`, FSR 2's two stops across the
-  range. Zero is off rather than FSR 2's quarter strength, so a target that never asks draws the
-  bytes it always did. It runs only on a frame the resolve ran, because a raw scene colour on a
-  coarser grid has no output-grid neighbourhood to sharpen. Measured on the M3 Pro at 3840×2160,
-  scale 0.667: PostProcess 0.50 → 0.75 ms at sharpness 1, nothing at 0. On the `[taa][render]`
-  two-thirds fence, full sharpness takes neighbour contrast from 0.00090 to 0.00256 (native
-  0.00202) and PSNR against native from 33.85 to 33.96 dB. It is kept off by default: it would move
-  every converged figure in this document, and it sharpens stochastic coverage's grain along with
-  its edges.
+  range, and zero is off rather than FSR 2's quarter strength.
+
+  **It runs only below a render scale of 1, at 0.5 by default.** At native or above there is no
+  upscale's softness to put back, and a sharpen only pushes past the native image. That is also what
+  keeps every scale-1 figure in this document unchanged. Measured on `apples` at 1280×720, still and
+  converged: at scale 0.5, the default takes neighbour contrast from 1.87e-4 to 2.06e-4 (native
+  2.09e-4) and PSNR against native from 48.16 to 48.01 dB; full sharpness overshoots to 2.93e-4 and
+  44.0 dB. At scale 0.25 the default lands at 2.36e-4 and 40.04 dB (40.51 unsharpened). A converged
+  still upscale is already close to native, so what the default buys is mostly in motion, where the
+  accumulation has not caught up. It also sharpens stochastic coverage: at scale 0.5 the hashed
+  patch's flicker rose 2% and the hashed ramp's smear trail 34% (0.00283 → 0.00380), both inside
+  their bounds.
+
+  **The strength does not follow the render scale, and neither does the cross.** Both were measured
+  at 0.5 and 0.25. A stronger sharpen at lower scales only overshoots, because the limiter already
+  caps the lobe. Spacing the cross by a render pixel rather than an output pixel gained 0.6 dB in one
+  case (0.25 at the default) and lost 1.7 dB at full strength, so the cross stays FSR 2's.
+
+  It runs only on a frame the resolve ran, because a raw scene colour on a coarser grid has no
+  output-grid neighbourhood to sharpen. Measured on the M3 Pro at 3840×2160, scale 0.667,
+  PostProcess goes 0.50 → 0.75 ms at sharpness 1. It costs nothing at 0 or at scale 1.
 
 ---
 
@@ -329,7 +342,7 @@ converges to the bytes one created there does.
 |---|---|---|
 | `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
-| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on the resolved image, live; zero is off. |
+| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on an upscaled resolved image, live; 0.5 by default, zero is off. |
 | `Rcas` | [lib/math/rcas.slang](libs/bgl_common/shaders/src/lib/math/rcas.slang) | The sharpen itself, over one five-tap cross. |
 | `HaltonJitter` | [bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl_extended/src/passes/TaaResolvePass.h) | Binds the frame and writes the new history. |

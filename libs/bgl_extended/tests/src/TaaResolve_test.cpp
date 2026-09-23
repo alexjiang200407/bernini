@@ -1632,9 +1632,10 @@ TEST_CASE(
 // back as neighbouring-pixel contrast. Measured against the same upscale unsharpened rather than
 // against the native render, since a sharpen is not trying to agree with it -- the PSNR is reported so
 // a change that sharpens by breaking the image still shows. A target without TAA never sharpens:
-// there is no resolved history for it to read, and its frame must be the one it always drew.
+// there is no resolved history for it to read, and its frame must be the one it always drew. Nor
+// does one at render scale 1, which has no upscale's softness to put back.
 TEST_CASE(
-	"The sharpness adds detail to a resolved upscale, and nothing without TAA",
+	"The sharpness adds detail to a resolved upscale, and nothing without one",
 	"[taa][render]")
 {
 	constexpr float c_TwoThirdsScale = 0.667f;
@@ -1644,12 +1645,13 @@ TEST_CASE(
 	constexpr int c_FenceBoxY = 98;
 	constexpr int c_FenceBox  = 60;
 
-	const std::string native    = "assets/golden/taa_rcas_native.got.png";
-	const std::string soft      = "assets/golden/taa_rcas_soft.got.png";
-	const std::string sharp     = "assets/golden/taa_rcas_sharp.got.png";
-	const std::string raw       = "assets/golden/taa_rcas_raw.got.png";
-	const std::string rawSharp  = "assets/golden/taa_rcas_raw_sharp.got.png";
-	const auto        upscaleTo = [&](const std::string& path, bool taa, float sharpness) {
+	const std::string native      = "assets/golden/taa_rcas_native.got.png";
+	const std::string soft        = "assets/golden/taa_rcas_soft.got.png";
+	const std::string sharp       = "assets/golden/taa_rcas_sharp.got.png";
+	const std::string raw         = "assets/golden/taa_rcas_raw.got.png";
+	const std::string rawSharp    = "assets/golden/taa_rcas_raw_sharp.got.png";
+	const std::string nativeSharp = "assets/golden/taa_rcas_native_sharp.got.png";
+	const auto        upscaleTo   = [&](const std::string& path, bool taa, float sharpness) {
 		RenderTo(
 			path,
 			taa,
@@ -1665,6 +1667,18 @@ TEST_CASE(
 	};
 
 	RenderTo(native, true, c_ConvergeFrames, AddFineFence);
+	RenderTo(
+		nativeSharp,
+		true,
+		c_ConvergeFrames,
+		AddFineFence,
+		StillCamera,
+		StoppedClock,
+		1.0f,
+		1,
+		bgl::RenderTargetDesc().taaReconstructionWidth,
+		false,
+		c_FullSharpness);
 	upscaleTo(soft, true, 0.0f);
 	upscaleTo(sharp, true, c_FullSharpness);
 	upscaleTo(raw, false, 0.0f);
@@ -1704,6 +1718,7 @@ TEST_CASE(
 	CHECK(psnr(sharp) > psnr(soft) - c_PsnrMarginDb);
 
 	CHECK(bgl::test::MaxChannelDelta(raw, rawSharp) == 0.0f);
+	CHECK(bgl::test::MaxChannelDelta(native, nativeSharp) == 0.0f);
 }
 
 // The measurement the whole change is judged by, and the only one here that can say a frame is
@@ -1956,7 +1971,7 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("The sharpness is off by default and bounded to zero through one", "[taa]")
+TEST_CASE("The sharpness is half by default and bounded to zero through one", "[taa]")
 {
 	auto gfx = bgl::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
@@ -1967,7 +1982,7 @@ TEST_CASE("The sharpness is off by default and bounded to zero through one", "[t
 	targetDesc.headless   = true;
 	targetDesc.taaEnabled = true;
 
-	CHECK(targetDesc.taaSharpness == 0.0f);
+	CHECK(targetDesc.taaSharpness == 0.5f);
 
 	SECTION("the desc is checked at creation")
 	{
@@ -1987,7 +2002,7 @@ TEST_CASE("The sharpness is off by default and bounded to zero through one", "[t
 	{
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
-		CHECK(target->GetTaaSharpness() == 0.0f);
+		CHECK(target->GetTaaSharpness() == 0.5f);
 
 		target->SetTaaSharpness(1.0f);
 		CHECK(target->GetTaaSharpness() == 1.0f);

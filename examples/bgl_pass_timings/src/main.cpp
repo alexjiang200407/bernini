@@ -55,7 +55,7 @@ namespace
 
 		bool  taa          = true;
 		float renderScale  = 1.0f;
-		float taaSharpness = 0.0f;
+		float taaSharpness = bgl::RenderTargetDesc().taaSharpness;
 
 		// Set by the run rather than by the caller: a project with no environment renders unlit, and
 		// what the passes cost is not the same question lit as it is unlit.
@@ -121,8 +121,8 @@ try
 		app.add_option(
 			   "--taa-sharpness",
 			   opts.taaSharpness,
-			   "The sharpen applied to the resolved image, 0 (off) to 1; needs --taa "
-			   "(RenderTargetDesc::taaSharpness)")
+			   "The sharpen applied to an upscaled resolved image, 0 (off) to 1; needs --taa and a "
+			   "--render-scale below 1 (RenderTargetDesc::taaSharpness)")
 			->check(CLI::Range(0.0f, 1.0f));
 
 		CLI11_PARSE(app, argc, argv);

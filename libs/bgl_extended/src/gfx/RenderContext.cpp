@@ -1110,7 +1110,7 @@ namespace bgl
 			// The display curve is applied to what the resolve produced, not to the raw frame.
 			postProcessArgs.source       = rt.GetHistorySrv(current);
 			postProcessArgs.sourceName   = GetHistoryName(current);
-			postProcessArgs.taaSharpness = rt.GetTaaSharpness();
+			postProcessArgs.taaSharpness = rt.GetRenderScale() < 1.0f ? rt.GetTaaSharpness() : 0.0f;
 		}
 
 		BloomChain& bloomChain = rt.GetBloomChain();
