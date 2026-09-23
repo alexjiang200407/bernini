@@ -1108,8 +1108,9 @@ namespace bgl
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.
-			postProcessArgs.source     = rt.GetHistorySrv(current);
-			postProcessArgs.sourceName = GetHistoryName(current);
+			postProcessArgs.source       = rt.GetHistorySrv(current);
+			postProcessArgs.sourceName   = GetHistoryName(current);
+			postProcessArgs.taaSharpness = rt.GetRenderScale() < 1.0f ? rt.GetTaaSharpness() : 0.0f;
 		}
 
 		BloomChain& bloomChain = rt.GetBloomChain();

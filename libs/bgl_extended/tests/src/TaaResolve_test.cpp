@@ -253,7 +253,8 @@ namespace
 		float              renderScale         = 1.0f,
 		int                outputScale         = 1,
 		float              reconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth,
-		bool               resetLastHistory    = false)
+		bool               resetLastHistory    = false,
+		float              sharpness           = 0.0f)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
@@ -265,6 +266,7 @@ namespace
 		targetDesc.taaEnabled             = taaEnabled;
 		targetDesc.renderScale            = renderScale;
 		targetDesc.taaReconstructionWidth = reconstructionWidth;
+		targetDesc.taaSharpness           = sharpness;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -1626,6 +1628,99 @@ TEST_CASE(
 	CHECK(taauPsnr > rawPsnr);
 }
 
+// RCAS is what the sharpness buys at a render scale below one: the reconstruction's softness put
+// back as neighbouring-pixel contrast. Measured against the same upscale unsharpened rather than
+// against the native render, since a sharpen is not trying to agree with it -- the PSNR is reported so
+// a change that sharpens by breaking the image still shows. A target without TAA never sharpens:
+// there is no resolved history for it to read, and its frame must be the one it always drew. Nor
+// does one at render scale 1, which has no upscale's softness to put back.
+TEST_CASE(
+	"The sharpness adds detail to a resolved upscale, and nothing without one",
+	"[taa][render]")
+{
+	constexpr float c_TwoThirdsScale = 0.667f;
+	constexpr float c_FullSharpness  = 1.0f;
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const std::string native      = "assets/golden/taa_rcas_native.got.png";
+	const std::string soft        = "assets/golden/taa_rcas_soft.got.png";
+	const std::string sharp       = "assets/golden/taa_rcas_sharp.got.png";
+	const std::string raw         = "assets/golden/taa_rcas_raw.got.png";
+	const std::string rawSharp    = "assets/golden/taa_rcas_raw_sharp.got.png";
+	const std::string nativeSharp = "assets/golden/taa_rcas_native_sharp.got.png";
+	const auto        upscaleTo   = [&](const std::string& path, bool taa, float sharpness) {
+		RenderTo(
+			path,
+			taa,
+			taa ? c_ConvergeFrames : 1,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_TwoThirdsScale,
+			1,
+			bgl::RenderTargetDesc().taaReconstructionWidth,
+			false,
+			sharpness);
+	};
+
+	RenderTo(native, true, c_ConvergeFrames, AddFineFence);
+	RenderTo(
+		nativeSharp,
+		true,
+		c_ConvergeFrames,
+		AddFineFence,
+		StillCamera,
+		StoppedClock,
+		1.0f,
+		1,
+		bgl::RenderTargetDesc().taaReconstructionWidth,
+		false,
+		c_FullSharpness);
+	upscaleTo(soft, true, 0.0f);
+	upscaleTo(sharp, true, c_FullSharpness);
+	upscaleTo(raw, false, 0.0f);
+	upscaleTo(rawSharp, false, c_FullSharpness);
+
+	const auto detail = [&](const std::string& path) {
+		return bgl::test::AliasEnergy(path, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+	};
+	const auto psnr = [&](const std::string& path) {
+		return bgl::test::PsnrDb(
+			path,
+			native,
+			0,
+			0,
+			static_cast<int>(c_Width),
+			static_cast<int>(c_Height));
+	};
+
+	const float softDetail   = detail(soft);
+	const float sharpDetail  = detail(sharp);
+	const float nativeDetail = detail(native);
+
+	WARN(
+		"fence detail: native = " << nativeDetail << ", upscale = " << softDetail
+								  << ", sharpened = " << sharpDetail
+								  << "; PSNR against native: upscale = " << psnr(soft)
+								  << " dB, sharpened = " << psnr(sharp) << " dB");
+
+	CHECK(
+		bgl::test::MeanColor(native, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox).Luma() >
+		0.1f);
+	CHECK(sharpDetail > softDetail);
+
+	// Measured 33.96 against 33.85 dB unsharpened on Metal. Too thin a gain to pin across backends,
+	// so what is held is that the sharpen does not buy its contrast by breaking the image.
+	constexpr float c_PsnrMarginDb = 0.5f;
+	CHECK(psnr(sharp) > psnr(soft) - c_PsnrMarginDb);
+
+	CHECK(bgl::test::MaxChannelDelta(raw, rawSharp) == 0.0f);
+	CHECK(bgl::test::MaxChannelDelta(native, nativeSharp) == 0.0f);
+}
+
 // The measurement the whole change is judged by, and the only one here that can say a frame is
 // *right* rather than unchanged or self-consistent: mean |delta| against the same frame rendered at
 // four times the linear resolution, unjittered and unaccumulated, box-filtered back down. Sixteen
@@ -1876,7 +1971,7 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("The sharpness is off by default and bounded to zero through one", "[taa]")
+TEST_CASE("The sharpness is full by default and bounded to zero through one", "[taa]")
 {
 	auto gfx = bgl::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
@@ -1887,7 +1982,7 @@ TEST_CASE("The sharpness is off by default and bounded to zero through one", "[t
 	targetDesc.headless   = true;
 	targetDesc.taaEnabled = true;
 
-	CHECK(targetDesc.taaSharpness == 0.0f);
+	CHECK(targetDesc.taaSharpness == 1.0f);
 
 	SECTION("the desc is checked at creation")
 	{
@@ -1907,10 +2002,10 @@ TEST_CASE("The sharpness is off by default and bounded to zero through one", "[t
 	{
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
-		CHECK(target->GetTaaSharpness() == 0.0f);
-
-		target->SetTaaSharpness(1.0f);
 		CHECK(target->GetTaaSharpness() == 1.0f);
+
+		target->SetTaaSharpness(0.5f);
+		CHECK(target->GetTaaSharpness() == 0.5f);
 
 		target->SetTaaSharpness(0.25f);
 

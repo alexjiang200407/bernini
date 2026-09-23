@@ -28,9 +28,9 @@ namespace bgl
 		// with. Narrower is sharper and slower to settle; see IRenderTarget::SetTaaReconstructionWidth.
 		float taaReconstructionWidth = 0.4f;
 
-		// How hard the resolved image is sharpened before the display curve, in [0, 1]. Zero skips
-		// the sharpen; see IRenderTarget::SetTaaSharpness.
-		float taaSharpness = 0.0f;
+		// How hard an upscaled image is sharpened before the display curve, in [0, 1]. Zero skips
+		// the sharpen, and so does a render scale of 1 or more; see IRenderTarget::SetTaaSharpness.
+		float taaSharpness = 1.0f;
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless. The Metal layer and its window are the caller's: the
@@ -153,7 +153,7 @@ namespace bgl
 		virtual void
 		SetTaaReconstructionWidth(float width) = 0;
 
-		/** How hard the resolved image is sharpened, in [0, 1]; zero is off. */
+		/** How hard an upscaled image is sharpened, in [0, 1]; zero is off. */
 		[[nodiscard]] virtual float
 		GetTaaSharpness() const noexcept = 0;
 
@@ -161,7 +161,9 @@ namespace bgl
 		 * Sets the contrast-adaptive sharpen applied to the resolved image from the next frame on.
 		 * Nothing is reallocated and the accumulation is kept, since the sharpen reads the history
 		 * and never writes it. Zero skips it; above zero it follows FSR 2's mapping, a strength
-		 * of exp2(2s - 2). It runs only on frames the TAA resolve ran.
+		 * of exp2(2s - 2). It runs only on frames the TAA resolve ran, and only below a render
+		 * scale of 1: at native or above there is no upscale's softness to put back, and a sharpen
+		 * there only pushes past the native image.
 		 *
 		 * @throws GraphicsError if `sharpness` is not a finite number in [0, 1].
 		 */
