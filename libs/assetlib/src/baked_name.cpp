@@ -53,6 +53,17 @@ namespace assetlib
 	}
 
 	bool
+	namesEncodedBakedMap(std::string_view fileName) noexcept
+	{
+		if (!fileName.ends_with(c_BakedMapExtension))
+			return false;
+		fileName.remove_suffix(c_BakedMapExtension.size());
+
+		const size_t dot = fileName.rfind('.');
+		return dot != std::string_view::npos && isEncodingSegment(fileName.substr(dot + 1));
+	}
+
+	bool
 	namesTextureFile(std::string_view reference) noexcept
 	{
 		return reference.ends_with(c_BakedMapExtension);
