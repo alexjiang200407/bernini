@@ -184,34 +184,6 @@ namespace bgl
 
 		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
 
-		// The static receivers' depth, sized and shaped exactly as the scene depth: the
-		// blob-shadow decal re-emits sampled values as SV_Depth for a kLessOrEqual test against
-		// it, and only an identically quantized format keeps a visible receiver's re-emitted
-		// depth equal to its rasterized one.
-		auto staticDepthDesc   = TextureDesc();
-		staticDepthDesc.width  = GetRenderWidth();
-		staticDepthDesc.height = GetRenderHeight();
-		staticDepthDesc.format = c_DepthFormat;
-		staticDepthDesc.usage =
-			TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
-		staticDepthDesc.initialLayout = BarrierLayout::kDepthWrite;
-		staticDepthDesc.debugName     = "Static Depth";
-		staticDepthDesc.clearValue.SetDepthStencil(1.0f, 0);
-
-		m_StaticDepthTexture = m_ResourceManager->CreateTexture(staticDepthDesc);
-
-		auto staticDepthDsvDesc      = DsvDesc();
-		staticDepthDsvDesc.format    = c_DepthFormat;
-		staticDepthDsvDesc.debugName = "Static Depth DSV";
-
-		m_StaticDepthDsv = m_ResourceManager->CreateDsv(m_StaticDepthTexture, staticDepthDsvDesc);
-
-		auto staticDepthSrvDesc      = SrvDesc();
-		staticDepthSrvDesc.format    = c_DepthFormat;
-		staticDepthSrvDesc.debugName = "Static Depth SRV";
-
-		m_StaticDepthSrv = m_ResourceManager->CreateSrv(m_StaticDepthTexture, staticDepthSrvDesc);
-
 		auto motionDesc   = TextureDesc();
 		motionDesc.width  = GetRenderWidth();
 		motionDesc.height = GetRenderHeight();
@@ -334,12 +306,6 @@ namespace bgl
 			m_ResourceManager->DestroyRtv(m_OutlineMaskRtv, false);
 		if (!m_OutlineMaskTexture.IsNull())
 			m_ResourceManager->DestroyTexture(m_OutlineMaskTexture, false);
-		if (!m_StaticDepthSrv.IsNull())
-			m_ResourceManager->DestroySrv(m_StaticDepthSrv, false);
-		if (!m_StaticDepthDsv.IsNull())
-			m_ResourceManager->DestroyDsv(m_StaticDepthDsv, false);
-		if (!m_StaticDepthTexture.IsNull())
-			m_ResourceManager->DestroyTexture(m_StaticDepthTexture, false);
 		if (!m_DepthSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_DepthSrv, false);
 		if (!m_MotionSrv.IsNull())
@@ -362,10 +328,6 @@ namespace bgl
 		m_OutlineMaskSrv     = {};
 		m_OutlineMaskRtv     = {};
 		m_OutlineMaskTexture = {};
-
-		m_StaticDepthSrv     = {};
-		m_StaticDepthDsv     = {};
-		m_StaticDepthTexture = {};
 
 		m_DepthSrv          = {};
 		m_MotionSrv         = {};

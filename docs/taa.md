@@ -66,8 +66,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 The same field is a game's temporal upscaler: a scale below 1 shades the scene on a coarser grid and
 the resolve reconstructs the output from it, which is the shape of UE5 TSR and FSR2's accumulation
 at its simplest — jittered low-resolution samples accumulated onto the output grid. What it buys is
-bounded by what runs on which grid. Every pass before the resolve — `StaticDepth`, forward, transparents,
-skybox, the motion and outline targets — is on the render grid; the resolve, bloom,
+bounded by what runs on which grid. Every pass before the resolve — the forward phases, the blob
+decals, skybox, the motion and outline targets — is on the render grid; the resolve, bloom,
 post-process and the overlay are on the output grid, and the resolve *reads* the output-sized
 history and writes it again whatever the render grid is. Measured with `bgl_pass_timings` on an
 M3 Pro at 3840x2160, TAA on, median of 120 frames, on the engine's `apples` and on animal-run's

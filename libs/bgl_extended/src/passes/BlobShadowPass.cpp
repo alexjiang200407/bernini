@@ -44,7 +44,7 @@ namespace bgl
 		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
 		constexpr std::array<std::string_view, 8> c_Fields = {
-			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "staticDepth"sv,
+			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "worldDepth"sv,
 			"viewProj"sv,   "invViewProj"sv, "groundNormal"sv, "viewportRect"sv,
 		};
 	}
@@ -54,15 +54,15 @@ namespace bgl
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
-		// The transparents' render state -- colour only, blended, depth read without write --
-		// but its own two-stage program: the discs are not instance-pipeline geometry.
+		// The transparents' blend, but colour only with no depth attachment -- the depth is this
+		// pass's input -- and its own two-stage program: the discs are not instance-pipeline
+		// geometry.
 		auto pipelineDesc = MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
 		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
-		pipelineDesc.SetDsvFormat(Format::D24S8);
 
 		auto raster = RasterState();
 		raster.SetFillMode(RasterFillMode::kSolid)
@@ -70,13 +70,10 @@ namespace bgl
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
-		// kLessOrEqual, not kLess: the pixel stage re-emits the receiver's sampled depth as
-		// SV_Depth, and where the receiver itself is what the scene shows, the two are equal.
+		// No test: the depth holds the world alone, so the receiver each fragment reads is exactly
+		// what the pixel shows. A unit in front is drawn after, and covers the decal.
 		auto depth = DepthStencilState{};
-		depth.SetDepthTestEnable(true)
-			.SetDepthWriteEnable(false)
-			.SetDepthFunc(ComparisonFunc::kLessOrEqual)
-			.SetStencilEnable(false);
+		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
 		auto blend = BlendState{};
 		blend.SetRenderTarget(
@@ -123,11 +120,6 @@ namespace bgl
 		                    BarrierLayout::kRenderTarget })
 			.AddTextureArg(
 				TextureArg{ std::string(c_DepthName),
-		                    BarrierSyncFlag::kDepthStencil,
-		                    BarrierAccessFlag::kDepthWrite,
-		                    BarrierLayout::kDepthWrite })
-			.AddTextureArg(
-				TextureArg{ std::string(c_StaticDepthName),
 		                    BarrierSyncFlag::kPixelShader,
 		                    BarrierAccessFlag::kShaderResource,
 		                    BarrierLayout::kShaderResource })
@@ -165,7 +157,7 @@ namespace bgl
 			uniforms["blobBuffer"] = resources.GetBuffer(c_BlobShadowsName);
 			uniforms["meshBuffer"] = resources.GetBuffer(c_MeshInstanceBufferName);
 			uniforms["palettes"]   = resources.GetBuffer(c_BonePaletteName);
-			uniforms["staticDepth"].SetIfValid(draw.targets.staticDepthSrv);
+			uniforms["worldDepth"].SetIfValid(draw.targets.depthSrv);
 			uniforms["viewProj"]    = draw.viewState.viewProj;
 			uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);
 
@@ -184,13 +176,10 @@ namespace bgl
 			gfatal("Blob shadow shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
-		// Colour only, exactly as the transparent phase binds: a blend PSO declares one
-		// rtvFormat, so the velocity buffer must not be attached.
+		// Colour alone: the velocity buffer is not the decal's to write, and the depth is read.
 		auto gfxState = MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.targets.sceneColor)
-		                           .SetDepthAttachment(draw.targets.depth);
+		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(draw.targets.sceneColor);
 		gfxState.kernel      = &m_Kernel;
 
 		ICommandList* cmd = resources.GetCommandList();

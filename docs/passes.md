@@ -35,7 +35,7 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth + static depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
@@ -43,9 +43,8 @@ flowchart TD
         RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
-        CI --> SD["Static Depth (static opaque buckets, depth only)"]
-        SD --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> BLOB["Blob Shadows (only when the view has a disc)"]
+        CI --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        FWW --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
         FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
         FWT --> SM["Outline Mask (only when the view has a selection)"]
@@ -80,10 +79,10 @@ recorded under the frustum's scope and reach the view's own buffers by the outwa
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
 state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
 view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour,
-motion-vector, depth and static-depth handles), `lighting` (environment map, exposure, the sun, optional
+motion-vector and depth handles, and the depth's shader-resource view), `lighting` (environment map, exposure, the sun, optional
 skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
-`c_SceneColorName` / `c_DepthName` / `c_StaticDepthName` in
+`c_SceneColorName` / `c_DepthName` in
 [constants/constants.h](libs/bgl_extended/src/constants/constants.h) are
 what both the importer and the passes name them by.
 
@@ -185,8 +184,8 @@ meshlet groups against the **same** `cull.view` planes -- built from the jittere
 the raster draws with -- using the group's cooked sphere placed by the same
 `MeshInstance::TransformSphere`. A sphere test only rejects geometry wholly outside a plane, and a
 group's sphere encloses every vertex under it, so a meshlet with any pixel in view survives, jitter
-included, and so does every receiver a blob-shadow decal reads out of Static Depth, which draws from
-the same camera. Both Forward's static buckets and Static Depth dispatch through it; the skinned tier
+included, and so does every receiver a blob-shadow decal reads out of the world's depth, which is the
+same draw. Forward World's buckets dispatch through it; the skinned tier
 and `AnyMesh` (the transparent list, the outline mask) cull nothing below the instance, since a posed
 meshlet leaves its bind-pose sphere.
 
@@ -408,7 +407,7 @@ under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInst
 `CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
 in `BERNINI_GPU_DEBUG` builds -- here per instance, and per meshlet by the static tier's
-amplification stage in Static Depth and Forward ([Meshlet culling](#meshlet-culling)) -- and read by
+amplification stage in Forward World ([Meshlet culling](#meshlet-culling)) -- and read by
 nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
@@ -564,45 +563,14 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
   a table is written once and a discarded one would otherwise stay discarded.
 
-### Static Depth — [passes/StaticDepthPass.{h,cpp}](libs/bgl_extended/src/passes/StaticDepthPass.cpp)
-
-Renders the static geometry's depth into the target's own receiver texture (`staticDepth`, the
-scene depth's format and grid), ahead of `Forward`: what the blob-shadow decal reconstructs the
-surface under each pixel from. The opaque static draw buckets share a depth-only pixel stage —
-`programs.forward.DepthOnly`, with no outputs, since a pipeline with no pixel shader at all is
-reflection-only on Metal — over the `StaticMesh` geometry stage, in two pipelines split by where
-back faces are culled. Every pipeline and every dispatch here takes its culling from
-`DrawBucketCullMode` ([passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h)), the one
-rule: hardware culling where the Forward draw bucket culls, and
-otherwise `cullBackfaces` hands back faces to the mesh stage and the material's `doubleSided`,
-exactly as `Forward` binds it — so the receiver holds precisely the faces the colour pass drew, a
-double-sided surface's back included and a single-sided one's excluded. The cutout and hashed static
-draw buckets render too, each through its own `programs.forward.DepthOnly_*` twin
-(`DrawBucketCoveragePixelSrc`), built the first time the draw bucket is demanded: the identical coverage
-discard with nothing shaded — same records, same samplers, and the colour pass's own
-`alphaHashSeed` — so a shadow lands on a bush's leaves and falls through its gaps, texel for texel
-with what the colour pass drew. Every draw bucket dispatches indirect off the same
-`compactDispatchArgs` the Forward pass draws from, so it sees exactly the instances the cull kept.
-Statics only, deliberately: units are absent, so a blob shadow never lands on another unit passing
-beneath its caster — and statics are therefore drawn twice per frame, a cost the HZB milestone
-repays when this is promoted into the shared depth prepass the roadmap already assumes.
-
-* **In:** `compactDispatchArgs` as indirect args; the `c_ForwardDataBuffers` scene buffers, the
-  two `c_ExpansionBuffers`, `cull.view` and `cull.stats` for [meshlet culling](#meshlet-culling)
-  (`DeclareMeshletCullBuffers`), and the material arena (`c_MaterialBuffers`) for `doubleSided` and
-  the coverage stages.
-* **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
-  `BlobShadowPass`).
-* **Skipped** when the view's instance count is 0.
-
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
 The main geometry pass: a mesh-shader forward render, attached as three graph passes by
 `ForwardPhase`. **Forward World** draws the non-transparent buckets of the static tier -- the
 world, which is everything a blob shadow lands on, moving placements included; **Forward Skinned**
 the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the world the
-depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where an HZB build
-belongs. One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
+depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where the HZB of
+two-phase occlusion culling will be built (ROADMAP.md § Culling). One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
 tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
@@ -650,7 +618,7 @@ the `compactDispatchArgs` entry that `Compact Instances` produced -- and whose c
 same entry's `threadCountX` (`DrawBucketCountIndex`): the args are their own count buffer, so a
 built draw bucket with nothing visible this frame issues no command on D3D12 and dispatches its
 zero grid on Metal ([RHI](docs/rhi.md) § the count verb), and a zero count can never meet a non-zero
-grid. Static Depth dispatches the same way.
+grid.
 
 **Transparent draw buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, in Forward Transparent, off the depth-sorted
@@ -697,8 +665,9 @@ projected bounds of the caster's shadow volume (its footprint swept `fadeHeight`
 normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
 bounded by where its edges cross it; a volume wholly outside any
 one frustum plane — most often, all of it behind the camera — emits no quad at all
-(`lib.math.box_bounds`). The pixel shader reconstructs the static surface under each pixel from the
-[Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
+(`lib.math.box_bounds`). The pixel shader reconstructs the surface under each pixel from the scene
+depth as Forward World left it -- the world alone, sampled rather than attached -- through the
+inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
 than falling through to the ground plane. The cast point is the instance's origin raised by
@@ -707,13 +676,14 @@ foliage around its root instead of from under it. A receiver must also face up: 
 reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
 is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
 under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
-its face while a walkable slope still catches at full strength. The fragment re-emits the receiver's depth as
-`SV_Depth` under a `kLessOrEqual` test against the scene depth. Units draw after the decals, so a
-unit standing between the camera and a shadowed surface covers it, and the transparents draw after
-too, so smoke over a unit composites over its shadow. Same blend state and same colour-only
-framebuffer as the transparent phase; a view with no disc attaches no pass.
-Receivers are static by construction — units are absent from the receiver texture, so a shadow
-never smears across another animal passing beneath. The cost of a static caster is that it is its
+its face while a walkable slope still catches at full strength. There is no depth test and no depth
+attachment: the depth the decal reads is exactly what each pixel shows at that point. Units draw
+after the decals, so a unit standing between the camera and a shadowed surface covers it, and the
+transparents draw after too, so smoke over a unit composites over its shadow. The transparent phase's
+blend state, into scene colour alone; a view with no disc attaches no pass.
+Receivers are the world by construction — no unit has drawn yet, so a shadow never smears across
+another animal passing beneath, and the receiver is the colour pass's own depth, cutout and hashed
+coverage included, texel for texel. The cost of a static caster is that it is its
 own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
 remains is any upward-facing surface of the caster below its own origin.
 
@@ -727,8 +697,8 @@ planted sole is at street level and a lifted cast point would pre-fade exactly t
 be darkest.
 
 * **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena (the soles), and
-  `staticDepth` as a shader resource.
-* **Out:** scene colour (blended); `depth` is tested, never written.
+  `depth` as a shader resource.
+* **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
 
 ### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl_extended/src/passes/OutlineMaskPass.cpp)
