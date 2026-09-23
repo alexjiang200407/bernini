@@ -129,8 +129,6 @@ protected:
 
 private:
 	editor::IEditorHost& m_Host;
-	void
-	OpenMeshDialog();
 
 	// Reloads the mesh currently shown, played from `animationsRelPath` and blended by
 	// `blendRelPath`.
@@ -223,7 +221,7 @@ private:
 	SpaceForNode(int node) const;
 
 	AnimationPreviewWindow* m_Preview = nullptr;
-	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
+	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or everything the panel is for
 
 	QLabel*    m_MeshLabel      = nullptr;
 	QComboBox* m_SourceSelector = nullptr;  // which .banim is played

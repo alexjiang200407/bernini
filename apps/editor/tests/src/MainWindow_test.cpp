@@ -706,7 +706,7 @@ TEST_CASE(
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
 	// The panel's one stack: the prompt, or everything the panel is for.
-	auto* stage = materials->findChild<QStackedWidget*>();
+	auto* stage = materials->findChild<QStackedWidget*>("MaterialStage");
 	REQUIRE(stage != nullptr);
 
 	// Nothing open, so nothing of the editing surface is offered -- the default sphere is behind
@@ -737,6 +737,33 @@ TEST_CASE(
 
 	CHECK(promptUpBeforeGeometryWent);
 	CHECK(editor::test::WaitFor([stage] { return stage->currentIndex() == 0; }));
+}
+
+TEST_CASE(
+	"The animation panel offers nothing but its prompt until a rig is open",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* animation     = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animationDock != nullptr);
+	REQUIRE(animation != nullptr);
+
+	animationDock->raise();
+	REQUIRE(editor::test::WaitFor([animationDock] { return animationDock->isVisible(); }));
+
+	// By name: the panel's Blend tab is a QTabWidget, which keeps a QStackedWidget of its own.
+	auto* stage = animation->findChild<QStackedWidget*>("AnimationStage");
+	REQUIRE(stage != nullptr);
+
+	// The properties column goes behind the prompt with the viewport, so a clip list and a
+	// transport are not offered for a rig that is not there.
+	CHECK(stage->currentIndex() == 0);
+	CHECK(animation->GetHeldAssets().empty());
 }
 
 TEST_CASE(
@@ -1140,6 +1167,14 @@ TEST_CASE(
 	dock->raise();
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
+
+	// The properties are on the stack's second page, which opening a rig raises -- and the fixture
+	// carries no rigged mesh to open. Raised directly: what this pins is the layout, not the route
+	// to it.
+	auto* stage = animation->findChild<QStackedWidget*>("AnimationStage");
+	REQUIRE(stage != nullptr);
+	stage->setCurrentIndex(1);
+
 	auto* scroll   = animation->findChild<QScrollArea*>();
 	auto* splitter = animation->findChild<QSplitter*>();
 	REQUIRE(scroll != nullptr);

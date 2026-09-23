@@ -85,25 +85,28 @@ AnimationEditorWindow::AnimationEditorWindow(
 	viewportLayout->addWidget(m_Preview, /*stretch*/ 1);
 	viewportLayout->addWidget(BuildTransportBar());
 
+	auto* splitter = new QSplitter(Qt::Horizontal, this);
+	splitter->addWidget(BuildPropertiesColumn());
+	splitter->addWidget(viewportSide);
+	splitter->setStretchFactor(0, 0);
+	splitter->setStretchFactor(1, 1);
+
 	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of
-	// its compositing, and a hidden viewport leaves the frame loop entirely.
-	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here\n\nor   Open Mesh..."), this);
+	// its compositing, and a hidden viewport leaves the frame loop entirely. The properties go
+	// behind it with the viewport -- a clip list and a transport with no rig to drive read as a
+	// mesh being open.
+	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here"), this);
 	prompt->setAlignment(Qt::AlignCenter);
 	prompt->setEnabled(false);
 
 	m_Stage = new QStackedWidget(this);
+	m_Stage->setObjectName(QStringLiteral("AnimationStage"));
 	m_Stage->addWidget(prompt);
-	m_Stage->addWidget(viewportSide);
-
-	auto* splitter = new QSplitter(Qt::Horizontal, this);
-	splitter->addWidget(BuildPropertiesColumn());
-	splitter->addWidget(m_Stage);
-	splitter->setStretchFactor(0, 0);
-	splitter->setStretchFactor(1, 1);
+	m_Stage->addWidget(splitter);
 
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(splitter);
+	layout->addWidget(m_Stage);
 
 	connect(m_Preview, &AnimationPreviewWindow::MeshChanged, this, [this](const QString& relPath) {
 		m_MeshRelPath = relPath;
@@ -171,9 +174,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	auto* layout = new QVBoxLayout(column);
 	layout->setContentsMargins(4, 4, 4, 4);
 
-	auto* openButton = new QPushButton(QStringLiteral("Open Mesh..."), column);
-	connect(openButton, &QPushButton::clicked, this, &AnimationEditorWindow::OpenMeshDialog);
-
 	// The way to let go of the held assets: the explorer refuses to delete or rename what this
 	// panel is offering, and "close it first" needs a close to point at.
 	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
@@ -185,11 +185,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		closeButton,
 		[closeButton](const QString& relPath) { closeButton->setEnabled(!relPath.isEmpty()); });
 
-	auto* fileRow = new QHBoxLayout();
-	fileRow->setContentsMargins(0, 0, 0, 0);
-	fileRow->addWidget(openButton, /*stretch*/ 1);
-	fileRow->addWidget(closeButton);
-	layout->addLayout(fileRow);
+	layout->addWidget(closeButton);
 
 	m_MeshLabel = new QLabel(QStringLiteral("No mesh open"), column);
 	m_MeshLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -608,24 +604,6 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 	// is the panel disagreeing with itself. StampTransition is a no-op off the Blend tab and clears
 	// on an incomplete pair, so this restores a fade exactly when there was one to restore.
 	StampTransition();
-}
-
-void
-AnimationEditorWindow::OpenMeshDialog()
-{
-	auto start = QString();
-	if (!m_DataRoot.isEmpty())
-		start = m_DataRoot + QLatin1Char('/') + QLatin1String(assetlib::c_MeshesDirectoryName);
-
-	const QString file = QFileDialog::getOpenFileName(
-		this,
-		QStringLiteral("Open Mesh"),
-		start,
-		QStringLiteral("Baked Mesh (*.bmesh)"));
-	if (file.isEmpty())
-		return;
-
-	m_Preview->LoadMesh(std::filesystem::path(file.toStdWString()));
 }
 
 void

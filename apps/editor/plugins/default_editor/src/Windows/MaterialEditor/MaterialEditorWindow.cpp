@@ -371,6 +371,7 @@ MaterialEditorWindow::MaterialEditorWindow(
 	prompt->setEnabled(false);
 
 	m_Stage = new QStackedWidget(this);
+	m_Stage->setObjectName(QStringLiteral("MaterialStage"));
 	m_Stage->addWidget(prompt);
 	m_Stage->addWidget(splitter);
 
