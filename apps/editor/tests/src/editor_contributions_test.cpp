@@ -92,7 +92,7 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 	REQUIRE(registry.Menus().size() == 1);
 	REQUIRE(registry.Panels().size() == 1);
 	REQUIRE(registry.AssetEditors().size() == 1);
-	REQUIRE(registry.Actions().size() == 1);
+	REQUIRE(registry.Actions().size() == 2);
 	CHECK(registry.FindPanel("sample.overview") != nullptr);
 	CHECK(registry.FindAssetEditor(".bexample") != nullptr);
 	CHECK(registry.FindAssetEditor(".unknown") == nullptr);
@@ -111,6 +111,16 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 	CHECK(
 		host.GetLanguageResolver().Resolve({ "sample.editor", "overview", "Project tools" }) ==
 		"Project tools");
+}
+
+TEST_CASE("A host with no import refuses rather than answering empty", "[plugins][registry]")
+{
+	TemporaryStore              store;
+	editor::plugins::EditorHost host(store.store, {}, nullptr, nullptr, true, {});
+
+	// An empty key means an import produced no mesh, which a caller drops in silence. A host that
+	// cannot import at all must not arrive as that same answer.
+	CHECK_THROWS(host.ImportMeshSource("/downloads/crate.glb"));
 }
 
 TEST_CASE(
@@ -269,7 +279,7 @@ TEST_CASE(
 	CHECK_FALSE(state->pluginAlive);
 	CHECK(state->ownerOutlived);
 	registry.Register(*validPlugin);
-	CHECK(registry.Actions().size() == 1);
+	CHECK(registry.Actions().size() == 2);
 }
 
 TEST_CASE("Null contribution objects are rejected", "[plugins][registry]")

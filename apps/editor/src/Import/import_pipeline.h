@@ -12,6 +12,7 @@ namespace editor
 	enum class ImportOutcome
 	{
 		kImported,
+		kDeclined,   // the options dialog was dismissed, so nothing was attempted
 		kCancelled,  // by the user, on the loading screen
 		kBlocked,    // an asset of that name already exists; reported to the user
 		kFailed,     // already reported to the user
