@@ -26,7 +26,7 @@ namespace bgl
 	 * writes the output-resolution history, so a render scale is reconstructed here rather than
 	 * stretched at present.
 	 *
-	 * It writes the history and nothing else. `PostProcess` reads what it produced and applies the
+	 * It writes the history's two planes and nothing else. `PostProcess` reads the colour and applies the
 	 * display curve, so anything that must sit between a resolved scene and the screen -- bloom,
 	 * grading -- has a stage to live in rather than arriving as a change to this shader.
 	 */
@@ -53,10 +53,16 @@ namespace bgl
 			SrvHandle prevHistory;
 			RtvHandle history;
 
+			// The same pair for the luma ring the history carries beside it.
+			SrvHandle prevLumaRing;
+			RtvHandle lumaRing;
+
 			// Graph resource names, so the pass can declare the ping-pong halves it actually touches
 			// this frame rather than both.
 			std::string prevHistoryName;
 			std::string historyName;
+			std::string prevLumaRingName;
+			std::string lumaRingName;
 
 			SamplerHandle pointSampler;
 			SamplerHandle linearSampler;
