@@ -14,6 +14,7 @@
 #include <QTabWidget>
 #include <qcontainerfwd.h>
 
+#include "Import/drop_import.h"
 #include "Plugins/EditorHost.h"
 #include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
@@ -1179,6 +1180,14 @@ MainWindow::SetActiveProject(assetlib::Project project)
 					}
 				},
 			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
+			.importMeshSource =
+				[this, dataDir](const std::filesystem::path& source) {
+					return editor::RunMeshImport(
+							   this,
+							   dataDir,
+							   QString::fromStdWString(source.wstring()))
+		                .mesh.toStdString();
+				},
 		});
 
 	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);

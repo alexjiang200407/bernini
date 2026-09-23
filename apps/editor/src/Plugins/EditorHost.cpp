@@ -7,11 +7,13 @@
 
 #include <assetlib/AssetStore.h>
 #include <editor_plugin_api/IEditorViewport.h>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <qwidget.h>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -90,6 +92,14 @@ namespace editor::plugins
 		if (!m_Dispatch.openAsset)
 			throw std::runtime_error("Editor asset dispatch is unavailable");
 		m_Dispatch.openAsset(key);
+	}
+
+	std::string
+	EditorHost::ImportMeshSource(const std::filesystem::path& source)
+	{
+		if (!m_Dispatch.importMeshSource)
+			throw std::runtime_error("Editor import is unavailable");
+		return m_Dispatch.importMeshSource(source);
 	}
 
 	void
