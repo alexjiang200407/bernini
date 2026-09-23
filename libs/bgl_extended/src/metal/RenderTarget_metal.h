@@ -239,24 +239,24 @@ namespace bgl
 		}
 
 		[[nodiscard]] TextureHandle
-		GetHistoryTexture(uint32_t index) const noexcept override
+		GetHistoryTexture(uint32_t index, TaaHistoryPlane plane) const noexcept override
 		{
 			gassert(index < 2, "History index out of range");
-			return m_History[index].texture;
+			return m_History[static_cast<size_t>(plane)][index].texture;
 		}
 
 		[[nodiscard]] RtvHandle
-		GetHistoryRtv(uint32_t index) const noexcept override
+		GetHistoryRtv(uint32_t index, TaaHistoryPlane plane) const noexcept override
 		{
 			gassert(index < 2, "History index out of range");
-			return m_History[index].rtv;
+			return m_History[static_cast<size_t>(plane)][index].rtv;
 		}
 
 		[[nodiscard]] SrvHandle
-		GetHistorySrv(uint32_t index) const noexcept override
+		GetHistorySrv(uint32_t index, TaaHistoryPlane plane) const noexcept override
 		{
 			gassert(index < 2, "History index out of range");
-			return m_History[index].srv;
+			return m_History[static_cast<size_t>(plane)][index].srv;
 		}
 
 		[[nodiscard]] uint32_t
@@ -362,9 +362,9 @@ namespace bgl
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.
-		std::array<Accumulation, 2> m_History;
-		uint32_t                    m_CurrentHistoryIndex = 0;
-		bool                        m_HistoryValid        = false;
+		std::array<std::array<Accumulation, 2>, c_TaaHistoryPlaneCount> m_History;
+		uint32_t                                                        m_CurrentHistoryIndex = 0;
+		bool                                                            m_HistoryValid = false;
 
 		uint32_t m_FrameIndex         = 0;
 		uint32_t m_LastPresentedIndex = 0;

@@ -19,7 +19,8 @@ namespace bgl
 	constexpr std::string_view c_DepthName         = "depth"sv;
 	constexpr std::string_view c_StaticDepthName   = "staticDepth"sv;
 
-	constexpr std::string_view c_HistoryName = "taaHistory"sv;
+	constexpr std::string_view c_HistoryName  = "taaHistory"sv;
+	constexpr std::string_view c_LumaRingName = "taaLumaRing"sv;
 
 	// The velocity buffer: RG is where the surface was last frame as a UV displacement, BA the part
 	// of it the surface moved on its own -- the velocity less what the camera alone gives the same

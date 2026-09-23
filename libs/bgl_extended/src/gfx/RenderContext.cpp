@@ -147,9 +147,12 @@ namespace bgl
 		}
 
 		std::string
-		GetHistoryName(uint32_t index)
+		GetHistoryName(uint32_t index, TaaHistoryPlane plane)
 		{
-			return std::format("{}{}", c_HistoryName, index);
+			return std::format(
+				"{}{}",
+				plane == TaaHistoryPlane::kColor ? c_HistoryName : c_LumaRingName,
+				index);
 		}
 
 		std::string
@@ -603,9 +606,16 @@ namespace bgl
 
 		if (rt.IsTaaEnabled())
 		{
-			for (uint32_t i = 0; i < 2; ++i)
+			for (uint32_t p = 0; p < c_TaaHistoryPlaneCount; ++p)
 			{
-				m_FrameGraph.ImportTexture(GetHistoryName(i), rt.GetHistoryTexture(i));
+				const auto plane = static_cast<TaaHistoryPlane>(p);
+
+				for (uint32_t i = 0; i < 2; ++i)
+				{
+					m_FrameGraph.ImportTexture(
+						GetHistoryName(i, plane),
+						rt.GetHistoryTexture(i, plane));
+				}
 			}
 		}
 
@@ -1090,10 +1100,14 @@ namespace bgl
 			auto taaArgs                = TaaResolvePass::Args();
 			taaArgs.sceneColor          = rt.GetSceneColorSrv();
 			taaArgs.motionVectors       = rt.GetMotionVectorSrv();
-			taaArgs.prevHistory         = rt.GetHistorySrv(prev);
-			taaArgs.history             = rt.GetHistoryRtv(current);
-			taaArgs.prevHistoryName     = GetHistoryName(prev);
-			taaArgs.historyName         = GetHistoryName(current);
+			taaArgs.prevHistory         = rt.GetHistorySrv(prev, TaaHistoryPlane::kColor);
+			taaArgs.history             = rt.GetHistoryRtv(current, TaaHistoryPlane::kColor);
+			taaArgs.prevHistoryName     = GetHistoryName(prev, TaaHistoryPlane::kColor);
+			taaArgs.historyName         = GetHistoryName(current, TaaHistoryPlane::kColor);
+			taaArgs.prevLumaRing        = rt.GetHistorySrv(prev, TaaHistoryPlane::kLumaRing);
+			taaArgs.lumaRing            = rt.GetHistoryRtv(current, TaaHistoryPlane::kLumaRing);
+			taaArgs.prevLumaRingName    = GetHistoryName(prev, TaaHistoryPlane::kLumaRing);
+			taaArgs.lumaRingName        = GetHistoryName(current, TaaHistoryPlane::kLumaRing);
 			taaArgs.pointSampler        = m_PointClampSampler;
 			taaArgs.linearSampler       = m_LinearClampSampler;
 			taaArgs.viewport            = viewport;
@@ -1108,8 +1122,8 @@ namespace bgl
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.
-			postProcessArgs.source     = rt.GetHistorySrv(current);
-			postProcessArgs.sourceName = GetHistoryName(current);
+			postProcessArgs.source     = rt.GetHistorySrv(current, TaaHistoryPlane::kColor);
+			postProcessArgs.sourceName = GetHistoryName(current, TaaHistoryPlane::kColor);
 		}
 
 		BloomChain& bloomChain = rt.GetBloomChain();

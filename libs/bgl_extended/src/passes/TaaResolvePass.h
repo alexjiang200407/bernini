@@ -53,10 +53,16 @@ namespace bgl
 			SrvHandle prevHistory;
 			RtvHandle history;
 
+			// The same pair for the luma ring the history carries beside it.
+			SrvHandle prevLumaRing;
+			RtvHandle lumaRing;
+
 			// Graph resource names, so the pass can declare the ping-pong halves it actually touches
 			// this frame rather than both.
 			std::string prevHistoryName;
 			std::string historyName;
+			std::string prevLumaRingName;
+			std::string lumaRingName;
 
 			SamplerHandle pointSampler;
 			SamplerHandle linearSampler;
