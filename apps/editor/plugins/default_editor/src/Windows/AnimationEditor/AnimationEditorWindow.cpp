@@ -24,6 +24,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -109,7 +110,10 @@ AnimationEditorWindow::AnimationEditorWindow(
 
 	connect(m_Preview, &AnimationPreviewWindow::MeshChanged, this, [this](const QString& relPath) {
 		m_MeshRelPath = relPath;
-		m_MeshLabel->setText(relPath.isEmpty() ? QStringLiteral("No mesh open") : relPath);
+		m_MeshLabel->setText(
+			relPath.isEmpty() ? QStringLiteral("No mesh open") :
+								QFileInfo(relPath).completeBaseName());
+		m_MeshLabel->setToolTip(relPath);
 		m_Stage->setCurrentIndex(relPath.isEmpty() ? 0 : 1);
 	});
 
