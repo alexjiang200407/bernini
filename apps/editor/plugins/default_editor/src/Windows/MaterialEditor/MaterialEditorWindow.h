@@ -26,6 +26,8 @@ class TexturePreviewCache;
 
 class QAction;
 class QComboBox;
+class QEvent;
+class QTimer;
 class QListWidget;
 class QJsonObject;
 class QLabel;
@@ -66,6 +68,10 @@ public:
 	}
 	void
 	SetActive(bool active) override;
+
+	/** Marks the board edited on any interaction with it; see MarkGraphEdited. */
+	bool
+	eventFilter(QObject* watched, QEvent* event) override;
 	void
 	OnAssetChanged(std::string_view key) override;
 	~MaterialEditorWindow() override;
@@ -189,6 +195,10 @@ private:
 	[[nodiscard]] QString
 	OverrideAtRow(int row) const;
 
+	/** What `graphIndex` compiles to right now, hashed, for the comparison a write makes. */
+	[[nodiscard]] uint64_t
+	CompiledHash(int graphIndex) const;
+
 	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
 	void
 	ReloadRegisteredMaterials();
@@ -208,23 +218,38 @@ private:
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
 
-	void
-	SaveCurrentMaterial(bool saveAs);
-
 	/**
-	 * Writes every graph that already has a file, by exactly the rule Save follows -- the mesh binding
-	 * a first write leaves included. A graph with no file yet is skipped rather than prompted.
+	 * Marks `graphIndex` edited and restarts the write timer, so a burst of edits writes once when
+	 * it stops. Does nothing while a graph is being loaded or seeded -- that is not an edit -- or
+	 * for the default sphere, which has no project asset to write to.
 	 *
-	 * Reports only what it skipped or could not write: a clean run is reported by the panel it
-	 * refreshes.
+	 * Deliberately over-eager: it is called for anything that *might* have changed the board,
+	 * including a bare click on it, because a write compares what the graph compiles to against
+	 * what was last written and skips an identical one. Missing a trigger loses an edit silently;
+	 * an extra trigger costs one compile. So a control added to this panel needs nothing here --
+	 * it is enough that the value it edits lives in the graph, which is what puts it in the file.
 	 */
 	void
-	SaveAllMaterials();
+	MarkGraphEdited(int graphIndex);
 
 	/**
-	 * Save All, then composites each of the mesh's distinct materials down to its baked triplet.
+	 * Writes every edited graph now: on the timer, and at every point the edits would otherwise be
+	 * lost or read stale -- switching submesh or look, hiding the panel, closing it, and baking.
 	 *
-	 * Saving first is not a convenience: a bake reads the routes off disk, so an unsaved edit would
+	 * A graph with no file yet is given one (editor::AutoSaveMaterialPath) and bound to its
+	 * submesh, which is what the first Save used to do.
+	 *
+	 * @param quiet Report to the log rather than to a dialog. For the teardown flush, which runs
+	 *              inside the destructor, where a modal would block a panel already going away.
+	 */
+	void
+	FlushEditedGraphs(bool quiet = false);
+
+	/**
+	 * Composites each of the mesh's distinct materials down to its baked triplet, writing what is
+	 * still pending first.
+	 *
+	 * Writing first is not a convenience: a bake reads the routes off disk, so a pending edit would
 	 * otherwise be baked in its previous state without saying so.
 	 */
 	void
@@ -272,6 +297,14 @@ private:
 	QComboBox* m_SubmeshSelector = nullptr;
 	QComboBox* m_OutputSelector  = nullptr;
 
+	// Restarted by every edit; on its timeout the edited graphs are written. Single-shot, so a
+	// burst of keystrokes is one write rather than one per keystroke.
+	QTimer* m_WriteTimer = nullptr;
+
+	// Set while a graph is being loaded or seeded, so the edits that arrive from the load itself
+	// are not read as the user's and written straight back.
+	bool m_Loading = false;
+
 	// Which look each submesh is showing: the name of a registered override, or empty for the
 	// submesh's default. Indexed by panel submesh, sized with the graphs.
 	std::vector<QString> m_ShownOverrides;
@@ -288,9 +321,6 @@ private:
 	editor::MaterialEditorWidgets m_Ui;
 	MaterialGraphView*            m_GraphView         = nullptr;
 	QPushButton*                  m_OpenButton        = nullptr;
-	QPushButton*                  m_SaveButton        = nullptr;
-	QPushButton*                  m_SaveAsButton      = nullptr;
-	QPushButton*                  m_SaveAllButton     = nullptr;
 	QPushButton*                  m_BakeAllButton     = nullptr;
 	QPushButton*                  m_AddOverrideButton = nullptr;
 	QPushButton*                  m_RemoveOverride    = nullptr;

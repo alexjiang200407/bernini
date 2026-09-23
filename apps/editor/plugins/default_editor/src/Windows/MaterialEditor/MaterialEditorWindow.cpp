@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
 
@@ -27,12 +28,15 @@
 #include <QPointF>
 #include <QPushButton>
 #include <QSplitter>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 
+#include <QEvent>
+#include <QScopeGuard>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/mesh_tangents.h>
@@ -41,6 +45,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/SurfaceType.h>
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -72,6 +77,7 @@
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include <QtNodes/internal/AbstractGraphModel.hpp>
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
 #include <editor_plugin_api/IEditorHost.h>
@@ -80,6 +86,35 @@
 
 namespace
 {
+	// Long enough that a drag or a run of keystrokes is one write, short enough that a glance at
+	// the Content Explorer after an edit shows it.
+	constexpr int c_WriteDelayMs = 500;
+
+	/**
+	 * Holds a flag for a scope, so an early return cannot leave the panel thinking it is loading.
+	 *
+	 * Restores what it found rather than clearing: a mesh load opens one of these and then opens a
+	 * second per bound submesh, and clearing on the inner scope's exit would leave the rest of the
+	 * load looking like the user's own edits.
+	 */
+	class LoadGuard
+	{
+	public:
+		explicit LoadGuard(bool& flag) noexcept : m_Flag(flag), m_Was(flag) { m_Flag = true; }
+		~LoadGuard() { m_Flag = m_Was; }
+
+		LoadGuard(const LoadGuard&) = delete;
+		LoadGuard(LoadGuard&&)      = delete;
+		LoadGuard&
+		operator=(const LoadGuard&) = delete;
+		LoadGuard&
+		operator=(LoadGuard&&) = delete;
+
+	private:
+		bool& m_Flag;
+		bool  m_Was;
+	};
+
 	/** Whether the graph routes anything into the sink's normal channels. */
 	bool
 	RoutesNormalMap(const MaterialOutputNode& output)
@@ -111,9 +146,6 @@ MaterialEditorWindow::MaterialEditorWindow(
 
 	m_GraphView          = ui.graphView;
 	m_OpenButton         = ui.open;
-	m_SaveButton         = ui.save;
-	m_SaveAsButton       = ui.saveAs;
-	m_SaveAllButton      = ui.saveAll;
 	m_BakeAllButton      = ui.bakeAll;
 	m_AddOverrideButton  = ui.addOverride;
 	m_RemoveOverride     = ui.removeOverride;
@@ -135,10 +167,19 @@ MaterialEditorWindow::MaterialEditorWindow(
 		if (!path.isEmpty())
 			OpenMaterialInto(m_Graphs.Current(), path);
 	});
-	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
-	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
-	connect(m_SaveAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::SaveAllMaterials);
 	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
+
+	// Every interaction with the board and with the properties beside it, not only the signals
+	// the controls emit; an identical write is skipped, so this costs nothing when it is nothing.
+	m_GraphView->viewport()->installEventFilter(this);
+	m_Ui.leftPanel->installEventFilter(this);
+
+	// The panel writes by itself. One shot, restarted by every edit, so a drag or a run of
+	// keystrokes writes once when it stops rather than once per event.
+	m_WriteTimer = new QTimer(this);
+	m_WriteTimer->setSingleShot(true);
+	m_WriteTimer->setInterval(c_WriteDelayMs);
+	connect(m_WriteTimer, &QTimer::timeout, this, [this]() { FlushEditedGraphs(); });
 
 	// The list's actions are its context menu and its keys, so each one is written once. The strip
 	// under the list triggers the same two.
@@ -198,6 +239,9 @@ MaterialEditorWindow::MaterialEditorWindow(
 		const int submesh = m_Graphs.CurrentSubmesh();
 		if (row < 0 || !m_Graphs.HasSubmesh(submesh) || m_Preview == nullptr)
 			return;
+
+		// The board is about to change under the pending edit, exactly as a submesh switch does.
+		FlushEditedGraphs();
 
 		const QString look                             = OverrideAtRow(row);
 		m_ShownOverrides[static_cast<size_t>(submesh)] = look;
@@ -272,6 +316,12 @@ MaterialEditorWindow::MaterialEditorWindow(
 		m_Preview = new MaterialPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
 		rightPanel = m_Preview;
 
+		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
+		// reloading -- so what they hold unwritten is written while it is still theirs.
+		connect(m_Preview, &MaterialPreviewWindow::GeometryAboutToChange, this, [this]() {
+			FlushEditedGraphs();
+		});
+
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
@@ -324,6 +374,11 @@ MaterialEditorWindow::MaterialEditorWindow(
 
 MaterialEditorWindow::~MaterialEditorWindow()
 {
+	// The last chance: the panel is going away, and a pending edit goes with it. Closing it is not
+	// a way to discard one -- there has not been one since the panel started writing by itself.
+	// Quietly: a modal raised from a destructor would block a panel already being torn down.
+	FlushEditedGraphs(/*quiet*/ true);
+
 	if (m_Preview != nullptr)
 		m_Preview->SetRenderingEnabled(false);
 	ReleasePreviewMaterials();
@@ -370,6 +425,22 @@ MaterialEditorWindow::RebuildGraph(
 	if (current)
 		m_GraphView->setScene(entry.scene.get());
 
+	// Every edit the board makes, not only the ones that reach the sink: a node moved or deleted
+	// changes the document too, and the panel is what saves it.
+	for (const auto signal : { &QtNodes::AbstractGraphModel::nodeCreated,
+	                           &QtNodes::AbstractGraphModel::nodeDeleted,
+	                           &QtNodes::AbstractGraphModel::nodePositionUpdated,
+	                           &QtNodes::AbstractGraphModel::nodeUpdated })
+		connect(entry.model.get(), signal, this, [this, graphIndex]() {
+			MarkGraphEdited(graphIndex);
+		});
+
+	for (const auto signal : { &QtNodes::AbstractGraphModel::connectionCreated,
+	                           &QtNodes::AbstractGraphModel::connectionDeleted })
+		connect(entry.model.get(), signal, this, [this, graphIndex]() {
+			MarkGraphEdited(graphIndex);
+		});
+
 	MaterialSinkNode* output = WatchOutputNode(graphIndex);
 
 	if (current)
@@ -414,6 +485,7 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 	{
 		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
 			CompileGraph(graphIndex);
+			MarkGraphEdited(graphIndex);
 
 			// A load or a seed changes the sink's layer without touching the panel; the panel
 			// follows only while this graph is the one on screen.
@@ -492,6 +564,8 @@ MaterialEditorWindow::SyncLayerSection()
 void
 MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 {
+	const LoadGuard loading(m_Loading);
+
 	// The preview's instances -- and the overrides naming these materials -- were destroyed before
 	// this was emitted, so nothing wears them any more.
 	ReleasePreviewMaterials();
@@ -570,6 +644,10 @@ MaterialEditorWindow::SelectSubmesh(int index)
 		return;
 	}
 
+	// What is on the board is about to change, and an edit still pending belongs to the graph
+	// leaving rather than the one arriving.
+	FlushEditedGraphs();
+
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
 	m_Graphs.SetCurrentSubmesh(index);
@@ -624,19 +702,12 @@ MaterialEditorWindow::RefreshActions()
 	const bool hasGraph   = graphIndex >= 0;
 
 	m_OpenButton->setEnabled(hasGraph);
-	m_SaveAsButton->setEnabled(hasGraph);
 
-	// Both act on the mesh's materials, so neither needs a selection -- but with nothing bound to a
-	// file yet there is nothing for either to act on.
-	const bool anyBound = !m_Graphs.OpenPaths().isEmpty();
-	m_SaveAllButton->setEnabled(anyBound);
-	m_BakeAllButton->setEnabled(anyBound);
+	// It acts on the mesh's materials, so it needs no selection -- but with nothing bound to a file
+	// yet there is nothing to bake.
+	m_BakeAllButton->setEnabled(!m_Graphs.OpenPaths().isEmpty());
 
 	const QString materialPath = hasGraph ? m_Graphs.At(graphIndex).materialPath : QString();
-
-	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
-	// there until the graph has been given a path by Save As.
-	m_SaveButton->setEnabled(!materialPath.isEmpty());
 
 	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
 	// sphere is procedural and has neither.
@@ -744,110 +815,138 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 		texture->SetTexturePath(path);
 }
 
-void
-MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
+uint64_t
+MaterialEditorWindow::CompiledHash(int graphIndex) const
 {
-	const int graphIndex = m_Graphs.Current();
-	if (graphIndex < 0)
-		return;
+	if (!m_Graphs.Holds(graphIndex))
+		return 0;
 
-	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
-
-	QString path = entry.materialPath;
-	if (saveAs || path.isEmpty())
-	{
-		path = QFileDialog::getSaveFileName(
-			window(),
-			QStringLiteral("Save Material"),
-			path.isEmpty() ?
-				editor::DefaultMaterialPath(m_DataRoot, m_SubmeshSelector->currentText()) :
-				path,
-			QStringLiteral("Bernini Material (*.bmaterial)"));
-		if (path.isEmpty())
-			return;  // cancelled
-
-		if (QFileInfo(path).suffix().isEmpty())
-			path += QStringLiteral(".bmaterial");
-	}
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.model == nullptr || entry.materialPath.isEmpty())
+		return 0;
 
 	try
 	{
-		const assetlib::AssetStore& store = m_Host.GetStore();
-		store.Save(
-			editor::BuildMaterial(*entry.model, path, m_Host.GetStore()),
-			store.KeyFor(std::filesystem::path(path.toStdWString())));
-		m_Host.AssetChanged(store.KeyFor(std::filesystem::path(path.toStdWString())));
+		const std::vector<std::byte> bytes = assetlib::AssetCodec<assetlib::BMaterial>::Serialize(
+			editor::BuildMaterial(*entry.model, entry.materialPath, m_Host.GetStore()));
+
+		return core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
 	}
 	catch (const std::exception& e)
 	{
-		qWarning("MaterialEditor: failed to save '%s': %s", qPrintable(path), e.what());
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Save Material"),
-			QStringLiteral("Could not save the material:\n%1").arg(QString::fromLatin1(e.what())));
-		return;
+		// Zero is "not known", which costs a write that turns out to be identical -- never a
+		// skipped one.
+		qWarning("MaterialEditor: cannot measure the board: %s", e.what());
+		return 0;
 	}
+}
 
-	entry.materialPath = path;
-
-	// Every graph, not just this one: Save As can put a second graph on a path another already
-	// holds, and a stamp cannot separate two writes inside one millisecond.
-	m_Graphs.ForgetOnDisk();
-
-	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
-	// leaving it unbound would mean saving a material the mesh never references. Once it has one,
-	// Save writes only the `.bmaterial`: rebinding the mesh is Make Default's job, and doing
-	// it here would edit the shared asset every time the user pressed Ctrl+S.
-	const int submesh = m_Graphs.CurrentSubmesh();
-	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(submesh).isEmpty())
+bool
+MaterialEditorWindow::eventFilter(QObject* watched, QEvent* event)
+{
+	// Anything the board or the panel answers to, rather than the signals a particular control
+	// happens to emit: a control added here that forgets to announce itself would otherwise be
+	// edited and never written, and nothing on screen would say so.
+	switch (event->type())
 	{
-		if (const QString error = AttachMaterialToMesh(submesh, path); !error.isEmpty())
-			QMessageBox::warning(window(), QStringLiteral("Save Material"), error);
+	case QEvent::MouseButtonRelease:
+	case QEvent::KeyRelease:
+	case QEvent::Wheel:
+	case QEvent::FocusOut:
+		MarkGraphEdited(m_Graphs.Current());
+		break;
+
+	default:
+		break;
 	}
 
-	RefreshActions();
+	return EditorPanel::eventFilter(watched, event);
 }
 
 void
-MaterialEditorWindow::SaveAllMaterials()
+MaterialEditorWindow::MarkGraphEdited(int graphIndex)
 {
+	// A load is not an edit: seeding a board fires the same signals, and writing them back would
+	// rewrite every material the panel merely opened.
+	if (m_Loading || !m_Graphs.Holds(graphIndex))
+		return;
+
+	// The default sphere is procedural: it has no asset behind it, and inventing one for it would
+	// put a file in the project for a mesh nobody opened.
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	m_Graphs.At(graphIndex).dirty = true;
+	m_WriteTimer->start();
+}
+
+void
+MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
+{
+	m_WriteTimer->stop();
+
 	auto result = editor::MaterialSaveResult();
 
-	for (MaterialGraphSet::Graph& entry : m_Graphs.All())
+	for (int graphIndex = 0; m_Graphs.Holds(graphIndex); ++graphIndex)
 	{
-		if (entry.model == nullptr)
+		MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+		if (!entry.dirty || entry.model == nullptr)
 			continue;
 
-		if (entry.materialPath.isEmpty())
+		// A graph with no file yet is given one, and the submesh it drives is bound to it: what
+		// the first Save used to do, at the moment the first edit lands instead.
+		const bool fresh = entry.materialPath.isEmpty();
+		if (fresh)
 		{
-			++result.unsaved;
-			continue;
+			entry.materialPath = editor::AutoSaveMaterialPath(
+				m_DataRoot,
+				m_Preview != nullptr ? m_Preview->MeshPath() : std::filesystem::path(),
+				m_SubmeshSelector->itemText(
+					entry.submeshes.empty() ? 0 : static_cast<int>(entry.submeshes.front())));
 		}
 
 		try
 		{
 			const assetlib::AssetStore& store = m_Host.GetStore();
-			store.Save(
-				editor::BuildMaterial(*entry.model, entry.materialPath, m_Host.GetStore()),
-				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString())));
-			m_Host.AssetChanged(
-				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString())));
+			const std::string           key =
+				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString()));
+
+			const assetlib::BMaterial material =
+				editor::BuildMaterial(*entry.model, entry.materialPath, store);
+
+			// What the board compiles to, against what was last written: a mark that turned out to
+			// be nothing -- a click, a node dragged and put back -- writes no file and notifies
+			// nobody. That is what lets the marking above be as eager as it is.
+			const std::vector<std::byte> bytes =
+				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material);
+			const uint64_t hash = core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
+			if (!fresh && hash == entry.writtenHash)
+			{
+				entry.dirty = false;
+				continue;
+			}
+
+			store.Save(material, key);
+			entry.writtenHash = hash;
+			m_Host.AssetChanged(key);
 		}
 		catch (const std::exception& e)
 		{
 			qWarning(
-				"MaterialEditor: failed to save '%s': %s",
+				"MaterialEditor: failed to write '%s': %s",
 				qPrintable(entry.materialPath),
 				e.what());
 			result.failed << entry.materialPath;
+
+			if (fresh)
+				entry.materialPath.clear();  // it has no file after all
 			continue;
 		}
 
+		entry.dirty = false;
 		++result.saved;
 
-		// Save's rule, applied to every submesh the graph drives: one with no material yet is bound by
-		// its first write, and one that already has a material is left to Make Default.
-		if (m_Preview == nullptr)
+		if (!fresh)
 			continue;
 
 		for (const uint32_t submesh : entry.submeshes)
@@ -856,8 +955,9 @@ MaterialEditorWindow::SaveAllMaterials()
 			if (!m_Preview->SubmeshMaterialPaths().value(index).isEmpty())
 				continue;
 
-			// Whatever stopped the write is the `.bmesh` itself, which every submesh here shares, so
-			// the rest would fail the same way -- and a batch must not raise one modal per submesh.
+			// Whatever stopped the write is the mesh itself, which every submesh here shares, so
+			// the rest would fail the same way. Reported: the material is on disk and the mesh
+			// still points elsewhere, which nothing else on screen would say.
 			if (!AttachMaterialToMesh(index, entry.materialPath).isEmpty())
 			{
 				result.unattached << entry.materialPath;
@@ -866,19 +966,27 @@ MaterialEditorWindow::SaveAllMaterials()
 		}
 	}
 
+	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
+	{
+		if (quiet)
+			qWarning("MaterialEditor: %s", qPrintable(summary));
+		else
+			QMessageBox::warning(window(), QStringLiteral("Material Editor"), summary);
+	}
+
+	if (result.saved == 0)
+		return;
+
 	// Every graph, not just the ones written: two graphs can hold one path, and a stamp cannot
 	// separate two writes inside one millisecond.
 	m_Graphs.ForgetOnDisk();
 	RefreshActions();
-
-	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
-		QMessageBox::information(window(), QStringLiteral("Save All"), summary);
 }
 
 void
 MaterialEditorWindow::BakeAllMaterials()
 {
-	SaveAllMaterials();
+	FlushEditedGraphs();
 
 	const QStringList files = editor::UniqueMaterialFiles(m_Graphs.OpenPaths());
 	if (files.isEmpty())
@@ -1323,6 +1431,9 @@ MaterialEditorWindow::RefreshMaterialList()
 void
 MaterialEditorWindow::Reset()
 {
+	// The graphs are about to be dropped, and with them anything not yet written.
+	FlushEditedGraphs();
+
 	// The preview's Reset clears its geometry, mesh path and material paths, then emits
 	// GeometryChanged -- which is what rebuilds the graphs, empty, one per submesh.
 	if (m_Preview)
@@ -1409,6 +1520,20 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 {
 	if (!m_Graphs.Holds(graphIndex))
 		return;
+
+	// The board is about to be replaced, so what it holds is written before it goes -- except
+	// during a load, where the graph is being built rather than edited.
+	if (!m_Loading)
+		FlushEditedGraphs();
+
+	// Seeding the board fires every signal an edit does; none of it is the user's.
+	const LoadGuard loading(m_Loading);
+
+	// Whatever the board compiles to once this load lands is what the file already holds.
+	const auto rememberLoaded = qScopeGuard([this, graphIndex] {
+		if (m_Graphs.Holds(graphIndex))
+			m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
+	});
 
 	auto material = assetlib::BMaterial();
 	try

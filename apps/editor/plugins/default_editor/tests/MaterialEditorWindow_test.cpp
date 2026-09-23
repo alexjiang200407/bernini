@@ -131,6 +131,44 @@ TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
 			"C:/data/materials/leaf.bmaterial"));
 }
 
+TEST_CASE("A submesh with no material writes under its mesh's own folder", "[materialeditor]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+	REQUIRE(QDir(root.path()).mkpath(QStringLiteral("Authored/Materials")));
+
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("Box[0]"));
+
+	// Under the mesh, because a submesh name is only unique within its mesh: two `Box[0]`s in two
+	// meshes would otherwise be written to one file, each overwriting the other.
+	CHECK(
+		made ==
+		QDir(root.path()).filePath(QStringLiteral("Authored/Materials/crate/Box_0_.bmaterial")));
+}
+
+TEST_CASE("A submesh name that is no filename still gets one", "[materialeditor]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+
+	// A `.glb` may call a submesh anything at all, and the panel writes without asking, so there is
+	// nobody to correct a name the filesystem refuses.
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("  ***  "));
+
+	CHECK(made.endsWith(QStringLiteral(".bmaterial")));
+	CHECK_FALSE(made.contains(QStringLiteral("*")));
+}
+
 TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
 {
 	// "Show the current baked textures if any": the paths the material's last bake wrote, one per line,
@@ -230,23 +268,6 @@ TEST_CASE("Nothing is said when every material was written", "[materialeditor]")
 	CHECK(editor::MaterialSaveSummary(clean).isEmpty());
 }
 
-TEST_CASE("A skipped submesh says how to give it a file", "[materialeditor]")
-{
-	// Silently writing four of five materials is the failure mode this exists to prevent: the user
-	// has to be told the fifth was left, and that Save As is what fixes it.
-	auto skipped    = editor::MaterialSaveResult();
-	skipped.saved   = 4;
-	skipped.unsaved = 1;
-
-	const QString summary = editor::MaterialSaveSummary(skipped);
-
-	REQUIRE_FALSE(summary.isEmpty());
-	CHECK(summary.contains("4 materials"));
-	CHECK(summary.contains("1 submesh"));
-	CHECK_FALSE(summary.contains("1 submeshes"));
-	CHECK(summary.contains("Save As"));
-}
-
 TEST_CASE("A material that could not be written is named", "[materialeditor]")
 {
 	// A read-only file or a data root that has gone. The others are still written -- one bad path
@@ -263,15 +284,15 @@ TEST_CASE("A material that could not be written is named", "[materialeditor]")
 
 TEST_CASE("Nothing written is not reported as saving nothing", "[materialeditor]")
 {
-	// Every graph skipped -- the default sphere, or a mesh nothing has been saved for yet. "Saved 0
-	// materials." leads with a non-event; what the user needs is the reason and the way out.
-	auto none    = editor::MaterialSaveResult();
-	none.unsaved = 2;
+	// A write that failed before any material landed. "Saved 0 materials." leads with a non-event;
+	// what the user needs is which file it was.
+	auto none   = editor::MaterialSaveResult();
+	none.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
 	const QString summary = editor::MaterialSaveSummary(none);
 
 	CHECK_FALSE(summary.contains("Saved 0"));
-	CHECK(summary.startsWith("Skipped 2 submeshes"));
+	CHECK(summary.startsWith("Could not write"));
 }
 
 TEST_CASE("A material the mesh could not be made to name is reported once", "[materialeditor]")

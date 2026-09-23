@@ -7,6 +7,7 @@
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/asset_paths.h>
 #include <editor_sdk/mesh_load.h>
 
 #include <QFileInfo>
@@ -170,6 +171,23 @@ namespace editor
 		return QString::fromStdWString((dir / name.toStdWString()).wstring());
 	}
 
+	QString
+	AutoSaveMaterialPath(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath,
+		const QString&               submeshName)
+	{
+		const QString stem = ToPlainFileStem(submeshName);
+		const QString file =
+			QStringLiteral("%1.bmaterial").arg(stem.isEmpty() ? QStringLiteral("material") : stem);
+
+		if (meshPath.empty())
+			return DefaultMaterialPath(dataRoot, file);
+
+		const QString mesh = QString::fromStdWString(meshPath.stem().wstring());
+		return DefaultMaterialPath(dataRoot, QStringLiteral("%1/%2").arg(mesh, file));
+	}
+
 	QStringList
 	HeldOpenByMaterialEditor(const QStringList& materials, const std::filesystem::path& previewMesh)
 	{
@@ -204,7 +222,7 @@ namespace editor
 	QString
 	MaterialSaveSummary(const MaterialSaveResult& result)
 	{
-		if (result.unsaved == 0 && result.failed.isEmpty() && result.unattached.isEmpty())
+		if (result.failed.isEmpty() && result.unattached.isEmpty())
 			return {};
 
 		const auto count = [](const int n, const char* one, const char* many) {
@@ -215,13 +233,6 @@ namespace editor
 
 		if (result.saved > 0)
 			lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
-
-		if (result.unsaved > 0)
-		{
-			lines << QStringLiteral(
-						 "Skipped %1 with no material file yet; Save As gives one a file.")
-						 .arg(count(result.unsaved, "submesh", "submeshes"));
-		}
 
 		if (!result.failed.isEmpty())
 			lines << QStringLiteral("Could not write:\n%1")
