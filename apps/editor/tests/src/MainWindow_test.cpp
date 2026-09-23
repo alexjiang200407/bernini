@@ -721,8 +721,21 @@ TEST_CASE(
 	REQUIRE_FALSE(preview->MeshPath().empty());
 	CHECK(editor::test::WaitFor([stage] { return stage->currentIndex() == 1; }));
 
-	// And back, by the same signal a failed load arrives on.
+	// And back, by the same signal a failed load arrives on -- with the prompt already up at the
+	// moment the mesh is dropped, so the sphere the preview falls back to is never on screen.
+	bool                          promptUpBeforeGeometryWent = false;
+	const QMetaObject::Connection watch                      = QObject::connect(
+		preview,
+		&MaterialPreviewWindow::GeometryAboutToChange,
+		materials,
+		[&promptUpBeforeGeometryWent, stage] {
+			promptUpBeforeGeometryWent = stage->currentIndex() == 0;
+		});
+
 	materials->Reset();
+	QObject::disconnect(watch);
+
+	CHECK(promptUpBeforeGeometryWent);
 	CHECK(editor::test::WaitFor([stage] { return stage->currentIndex() == 0; }));
 }
 
