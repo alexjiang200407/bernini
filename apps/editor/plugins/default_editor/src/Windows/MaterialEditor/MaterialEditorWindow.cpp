@@ -800,11 +800,13 @@ MaterialEditorWindow::RefreshBakeState()
 			continue;
 		}
 
+		// Unreadable -- deleted or corrupted behind the panel -- is not an all-clear: the badge is
+		// the only thing on screen that would say so, and the bake is what puts a map back.
 		const assetlib::BMaterial* material =
 			entry.onDisk.Get(m_Host.GetStore(), entry.materialPath);
 		if (material == nullptr)
 		{
-			entry.bakeStale = false;
+			entry.bakeStale = true;
 			continue;
 		}
 
@@ -816,7 +818,9 @@ MaterialEditorWindow::RefreshBakeState()
 		}
 		catch (const std::exception& e)
 		{
-			// A data root that has gone leaves the badge alone rather than throwing out of a slot.
+			// A data root that has gone reads as needing a bake rather than throwing out of a
+			// slot: the pessimistic answer costs a bake nobody needed, the other loses one.
+			entry.bakeStale = true;
 			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
 		}
 	}
@@ -1014,8 +1018,7 @@ MaterialEditorWindow::BakeAllMaterials()
 		},
 		background::Cancellable::kYes);
 
-	// The panel reads its staleness marker and its baked-texture listing off the file, which the bake
-	// has just rewritten -- a cancelled run included, since the files before the cancel are baked.
+	// The panel reads its staleness marker off the file, which the bake has just rewritten -- a cancelled run included, since the files before the cancel are baked.
 	RefreshMaterialState();
 	if (result.Completed())
 		for (const QString& key : relative) m_Host.AssetChanged(key.toStdString());
@@ -1537,10 +1540,20 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	// Seeding the board fires every signal an edit does; none of it is the user's.
 	const LoadGuard loading(m_Loading);
 
-	// Whatever the board compiles to once this load lands is what the file already holds.
-	const auto rememberLoaded = qScopeGuard([this, graphIndex] {
-		if (m_Graphs.Holds(graphIndex))
-			m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
+	// On every way out of this function, not at the end of it: a surface document returns early,
+	// and a load that left either of these behind would leave the panel describing the material it
+	// used to hold. Whatever the board compiles to once the load lands is what the file holds, and
+	// what its bake is worth is the new material's.
+	const auto measureLoaded = qScopeGuard([this, graphIndex] {
+		if (!m_Graphs.Holds(graphIndex))
+			return;
+
+		m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
+		RefreshBakeState();
+
+		// Last, and again: a branch that refreshed on its way out painted the badge from the
+		// material it was replacing.
+		RefreshActions();
 	});
 
 	auto material = assetlib::BMaterial();
@@ -1660,8 +1673,6 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 
 	CompileGraph(graphIndex);
 
-	// The material behind the board is new to the panel, so what its bake is worth is too.
-	RefreshBakeState();
 	RefreshActions();
 }
 

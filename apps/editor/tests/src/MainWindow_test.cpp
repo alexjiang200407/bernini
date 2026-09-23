@@ -1521,7 +1521,7 @@ TEST_CASE(
 				return button->text() != QStringLiteral("Bake All");
 		return false;
 	};
-	REQUIRE(marked());
+	REQUIRE(editor::test::WaitFor(marked));
 
 	// What a bake leaves behind, without one: nothing routed, so nothing to have drifted. The
 	// file's timestamp is put back, so only the notification can be what the panel acted on.
@@ -1530,12 +1530,12 @@ TEST_CASE(
 	material.pbr.routes[0].texture.clear();
 	store.Save(material, key);
 	fs::last_write_time(file, stamp);
-	CHECK(marked());
+	CHECK(editor::test::WaitFor(marked));
 
 	auto* explorer = window.findChild<ContentExplorerWindow*>();
 	REQUIRE(explorer != nullptr);
 	Q_EMIT explorer->MaterialBaked(QString::fromStdString(key));
 	QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
-	CHECK_FALSE(marked());
+	CHECK(editor::test::WaitFor([&marked] { return !marked(); }));
 	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
 }
