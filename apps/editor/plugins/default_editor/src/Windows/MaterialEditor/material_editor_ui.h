@@ -51,9 +51,6 @@ namespace editor
 		QWidget*           leftPanel        = nullptr;
 		MaterialGraphView* graphView        = nullptr;
 		QPushButton*       open             = nullptr;
-		QPushButton*       save             = nullptr;
-		QPushButton*       saveAs           = nullptr;
-		QPushButton*       saveAll          = nullptr;
 		QPushButton*       bakeAll          = nullptr;
 		QPushButton*       addOverride      = nullptr;
 		QPushButton*       removeOverride   = nullptr;

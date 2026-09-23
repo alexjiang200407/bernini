@@ -173,6 +173,12 @@ public:
 	Reset();
 
 Q_SIGNALS:
+	// The preview is about to drop the geometry it holds, while the mesh behind it is still the
+	// current one. What a panel holding unwritten edits to that mesh's materials acts on: after
+	// GeometryChanged the mesh is already the new one, and a write would reach the wrong asset.
+	void
+	GeometryAboutToChange();
+
 	// The preview geometry changed, so its submeshes did too.
 	void
 	GeometryChanged();

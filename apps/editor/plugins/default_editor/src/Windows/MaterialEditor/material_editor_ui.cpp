@@ -185,37 +185,20 @@ namespace editor
 		auto* propertiesLayout = new QVBoxLayout(propertiesPanel);
 		propertiesLayout->setContentsMargins(4, 4, 4, 4);
 
-		// Material file actions, acting on the selected submesh's graph.
-		widgets.open   = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
-		widgets.save   = new QPushButton(QStringLiteral("Save"), propertiesPanel);
-		widgets.saveAs = new QPushButton(QStringLiteral("Save As..."), propertiesPanel);
+		// The panel writes by itself, so there is nothing here to save with: what is left is
+		// putting an existing material on the board, and baking what the graphs route.
+		widgets.open = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
+
+		widgets.bakeAll = new QPushButton(QStringLiteral("Bake All"), propertiesPanel);
+		widgets.bakeAll->setToolTip(QStringLiteral(
+			"Composite every material of this mesh down to its baked textures.\nA bake reads the "
+			"routes off disk, so it writes what is still pending first."));
 
 		auto* fileActions = new QHBoxLayout();
 		fileActions->setContentsMargins(0, 0, 0, 0);
 		fileActions->addWidget(widgets.open);
-		fileActions->addWidget(widgets.save);
-		fileActions->addWidget(widgets.saveAs);
+		fileActions->addWidget(widgets.bakeAll);
 		propertiesLayout->addLayout(fileActions);
-
-		// The whole mesh rather than the selected submesh: a mesh with a dozen submeshes is a dozen
-		// trips through the selector otherwise. Submeshes wearing one material share a graph, so the
-		// file is written once however many of them name it.
-		widgets.saveAll = new QPushButton(QStringLiteral("Save All"), propertiesPanel);
-		widgets.saveAll->setToolTip(QStringLiteral(
-			"Write every material of this mesh.\nA submesh whose graph has no file yet is skipped "
-			"-- "
-			"Save As gives it one."));
-
-		widgets.bakeAll = new QPushButton(QStringLiteral("Bake All"), propertiesPanel);
-		widgets.bakeAll->setToolTip(QStringLiteral(
-			"Save every material of this mesh, then composite each down to its baked "
-			"textures.\nA bake reads the routes off disk, so it saves first."));
-
-		auto* meshActions = new QHBoxLayout();
-		meshActions->setContentsMargins(0, 0, 0, 0);
-		meshActions->addWidget(widgets.saveAll);
-		meshActions->addWidget(widgets.bakeAll);
-		propertiesLayout->addLayout(meshActions);
 
 		// Every look this submesh can wear: its default, then the overrides the mesh registers. A
 		// game reaches one of these by name (AssetManager::SetInstanceSubmeshMaterialOverride), so
