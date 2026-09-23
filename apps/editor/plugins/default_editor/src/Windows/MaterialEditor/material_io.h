@@ -30,15 +30,6 @@ namespace editor
 	IsSameMaterialFile(const QString& a, const QString& b);
 
 	/**
-	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
-	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
-	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and a
-	 * bake -- this panel's Bake All, or the Content Explorer's -- is what rewrites them.
-	 */
-	[[nodiscard]] QString
-	BakedTexturesSummary(const assetlib::BMaterial& material);
-
-	/**
 	 * The material `model` authors, ready to be written to `materialPath`.
 	 *
 	 * A material already on disk keeps whatever a previous bake produced: the triplet and its

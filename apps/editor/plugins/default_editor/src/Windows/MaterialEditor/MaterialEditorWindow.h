@@ -195,6 +195,17 @@ private:
 	[[nodiscard]] QString
 	OverrideAtRow(int row) const;
 
+	/**
+	 * Re-measures every graph's bake against the sources it routes, and marks Bake All when any of
+	 * them no longer matches.
+	 *
+	 * Called when a material changes -- a load, a write, a bake, an edit from elsewhere -- rather
+	 * than on every refresh: the verdict costs a re-stamp of every routed texture, and a panel
+	 * refresh happens on every click.
+	 */
+	void
+	RefreshBakeState();
+
 	/** What `graphIndex` compiles to right now, hashed, for the comparison a write makes. */
 	[[nodiscard]] uint64_t
 	CompiledHash(int graphIndex) const;
@@ -327,12 +338,10 @@ private:
 	QListWidget*                  m_MaterialList      = nullptr;
 
 	// The list's own actions: its context menu, and the keys it answers to.
-	QAction*     m_AddLook            = nullptr;
-	QAction*     m_RenameLook         = nullptr;
-	QAction*     m_RemoveLook         = nullptr;
-	QAction*     m_MakeLookDefault    = nullptr;
-	QLabel*      m_MaterialLabel      = nullptr;
-	QLabel*      m_BakedTexturesLabel = nullptr;
-	QLabel*      m_TangentWarning     = nullptr;
-	QPushButton* m_GenerateTangents   = nullptr;
+	QAction*     m_AddLook          = nullptr;
+	QAction*     m_RenameLook       = nullptr;
+	QAction*     m_RemoveLook       = nullptr;
+	QAction*     m_MakeLookDefault  = nullptr;
+	QLabel*      m_TangentWarning   = nullptr;
+	QPushButton* m_GenerateTangents = nullptr;
 };

@@ -187,8 +187,4 @@ TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surfa
 	CHECK(material->shadingModel == assetlib::ShadingModel::kPbrSurface);
 	CHECK(material->surface.name == "Rim");
 	CHECK(material->editorGraph.empty());
-
-	// A baked triplet is a PBR notion. The panel's summary is what would otherwise show three
-	// em-dashes and invite a bake of a material no bake produces.
-	CHECK(editor::BakedTexturesSummary(*material).isEmpty());
 }
