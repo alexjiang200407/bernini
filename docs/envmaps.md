@@ -80,10 +80,15 @@ disagrees, trust the header, then fix this doc.
   shipped `forest` is the 512² HDR one.
 * **A compressed sky is held to 40 dB.** 8-bit sRGB PSNR per face against the RGB9E5 bake of the same
   source — the space a painted sky was authored in — pinned by `EnvBake_test`.
-* **Baked maps are shared, not owned.** The name is content-addressed — group, encoding, source key
-  and stamp, the part's parameter hash and `c_EnvSourceBakeToken` — so a map already on disk under
-  it is this bake's and is not written twice, and two containers routing the same cook name one
-  file. Nothing deletes a baked map implicitly; reclaiming orphans is
+* **Baked maps are shared, not owned.** The name is content-addressed — group, source key and stamp,
+  the part's parameter hash and `c_EnvSourceBakeToken` — and the file adds the encoding it was
+  written in, `<group>_<16 hex>.<tag>-<8 hex>.ktx2`, the tag and the hash of `c_TextureEncodingToken`
+  from the same table the material bake reads
+  ([asset_standards.md](asset_standards.md) § Texture standards). So a map already on disk under it is
+  this bake's and is not written twice, and two containers routing the same cook name one file.
+  Unlike a material's, an environment's route records the **file**: its encoding is read off the
+  convolved image — LDR to BC7 sRGB, anything else to RGB9E5 — and a loader has no image to read it
+  off. Nothing deletes a baked map implicitly; reclaiming orphans is
   the whole-project mark and sweep in
   [libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h),
   which recognises them via `isBakedEnvMapName`.
@@ -139,7 +144,7 @@ disagrees, trust the header, then fix this doc.
 ```mermaid
 flowchart TD
     HDR[".hdr or float cube"] -- "ImportEnvironment (copied)" --> COPY["Authored/EnvSources/*.hdr + .bimport"]
-    COPY -- "BakeSky / BakeEnvLighting: projected, convolved, encoded in memory" --> BAKED["Derived/BakedTextures/*.ktx2 (BC7 or RGB9E5, content-addressed)"]
+    COPY -- "BakeSky / BakeEnvLighting: projected, convolved, encoded in memory" --> BAKED["Derived/BakedTextures/&lt;group&gt;_&lt;hash&gt;.&lt;tag&gt;-&lt;hash&gt;.ktx2 (BC7 or RGB9E5)"]
 
     COPY -- "routed by" --> BSKY[".bsky"]
     COPY -- "routed by" --> BENVL[".benvl"]
@@ -372,7 +377,7 @@ composes and whether those files are there.
 ```bash
 assetlib_cli describe -p <project> Authored/Environments/forest.benv
 assetlib_cli describe -p <project> Derived/Sky/forest.bsky
-assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.ktx2   # what holds a baked map alive
+assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.bc7srgb-<hash>.ktx2   # what holds a baked map alive
 ```
 
 ## Parity with Blender

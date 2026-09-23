@@ -3,6 +3,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -170,12 +171,14 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	{
 		material.pbr.routeStamps[0]   = stampOf(source);
 		material.pbr.bakeToken        = c_TextureBakeToken;
-		material.pbr.baseColorTexture = "Derived/BakedTextures/baked.ktx2";
+		material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_0123456789abcdef";
 
 		// The map has to be there as well as named: a triplet entry pointing at nothing is stale.
 		std::filesystem::create_directories(root / "Derived/BakedTextures");
 		{
-			std::ofstream out(root / "Derived/BakedTextures" / "baked.ktx2", std::ios::binary);
+			std::ofstream out(
+				root / bakedTextureKey(material.pbr.baseColorTexture),
+				std::ios::binary);
 			out << "baked bytes";
 		}
 
@@ -459,8 +462,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	std::filesystem::create_directories(root / "Derived/BakedTextures");
 
 	const auto source = root / "Derived/SourceTextures" / "forest.ktx2";
-	const auto baked  = root / "Derived/BakedTextures" / "forest_sky_ab12.ktx2";
-	const auto write  = [](const std::filesystem::path& path, std::string_view bytes) {
+	const auto baked = root / "Derived/BakedTextures" / "sky_00000000ab120000.rgb9e5-f7276718.ktx2";
+	const auto write = [](const std::filesystem::path& path, std::string_view bytes) {
 		std::ofstream out(path, std::ios::binary);
 		out << bytes;
 	};
@@ -473,7 +476,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	BSky sky;
 	sky.name       = "forest";
 	sky.sky.source = "Derived/SourceTextures/forest.ktx2";
-	sky.sky.baked  = "Derived/BakedTextures/forest_sky_ab12.ktx2";
+	sky.sky.baked  = "Derived/BakedTextures/sky_00000000ab120000.rgb9e5-f7276718.ktx2";
 	sky.sky.stamp  = stampOf(source);
 
 	SECTION("a sky reports its route and a current bake")
@@ -482,7 +485,9 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 
 		CHECK(text.find("bsky 'forest'") != std::string::npos);
 		CHECK(text.find("Derived/SourceTextures/forest.ktx2") != std::string::npos);
-		CHECK(text.find("Derived/BakedTextures/forest_sky_ab12.ktx2") != std::string::npos);
+		CHECK(
+			text.find("Derived/BakedTextures/sky_00000000ab120000.rgb9e5-f7276718.ktx2") !=
+			std::string::npos);
 		CHECK(text.find("source up to date") != std::string::npos);
 		CHECK(text.find("STALE") == std::string::npos);
 	}

@@ -1,5 +1,6 @@
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_test_macros.hpp>
@@ -39,6 +40,9 @@ namespace
 		out << content;
 	}
 
+	// A baked map is recorded by its content name; the file it is stored in carries the encoding.
+	constexpr std::string_view c_BakedSkin = "Derived/BakedTextures/basecolor_0123456789abcdef";
+
 	// A material whose bake is current: its one route is stamped as it is on disk, and the triplet
 	// entry it names is there to sample.
 	BMaterial
@@ -48,7 +52,7 @@ namespace
 		material.name                 = "skin";
 		material.pbr.routes[0]        = { "Derived/SourceTextures/skin.ktx2", 0 };
 		material.pbr.routeStamps[0]   = stampOf(root / "Derived/SourceTextures/skin.ktx2");
-		material.pbr.baseColorTexture = "Derived/BakedTextures/skin_baked.ktx2";
+		material.pbr.baseColorTexture = std::string(c_BakedSkin);
 		material.pbr.bakeToken        = c_TextureBakeToken;
 		return material;
 	}
@@ -112,7 +116,7 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 	SECTION("a current bake reads baked through both")
 	{
 		Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
-		Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
+		Write(scratch.path / bakedTextureKey(c_BakedSkin), "baked bytes");
 		SaveAt(MakeBakedMaterial(scratch.path), scratch.path / "Authored/Materials/skin.bmaterial");
 		Pack(scratch.path);
 
@@ -161,7 +165,7 @@ TEST_CASE("editing a source after packing moves the loose verdict alone", "[stal
 	const Scratch scratch("stale_seam_frozen");
 
 	Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
-	Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
+	Write(scratch.path / bakedTextureKey(c_BakedSkin), "baked bytes");
 
 	const BMaterial material = MakeBakedMaterial(scratch.path);
 	StoreAt(scratch.path).Save(material, "Authored/Materials/skin.bmaterial");
@@ -194,7 +198,7 @@ TEST_CASE("a source deleted from the tree survives inside the archive", "[stales
 	const Scratch scratch("stale_seam_deleted");
 
 	Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
-	Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
+	Write(scratch.path / bakedTextureKey(c_BakedSkin), "baked bytes");
 
 	const BMaterial material = MakeBakedMaterial(scratch.path);
 	Pack(scratch.path);

@@ -11,16 +11,20 @@
 #include <assetlib_structs/SourceStamp.h>
 #include <assetlib_structs/VertexLayout.h>
 
+#include <assetlib_structs/VkFormat.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/containers/fixed_buffer.h>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "bmesh_texture.h"
+#include "texture_encoding.h"
 
 using namespace assetlib;
 
@@ -288,6 +292,52 @@ namespace
 			}
 		return pixels;
 	}
+
+	// The canary gradient as linear float, scaled past 1 so the shared exponent has range to use.
+	ImageData
+	CanaryFloatImage()
+	{
+		constexpr uint32_t c_Size = 16;
+
+		const std::vector<std::byte> bytes = CanaryPixels();
+
+		ImageData out;
+		out.width    = c_Size;
+		out.height   = c_Size;
+		out.vkFormat = VkFormat::R32G32B32A32_SFLOAT;
+		out.pixels   = core::fixed_buffer<std::byte>(bytes.size() * sizeof(float));
+
+		auto* texels = reinterpret_cast<float*>(out.pixels.data());
+		for (size_t i = 0; i < bytes.size(); ++i) texels[i] = static_cast<float>(bytes[i]) / 64.0f;
+
+		const uint64_t pitch = static_cast<uint64_t>(c_Size) * 4 * sizeof(float);
+		out.subresources.push_back({ 0, pitch, pitch * c_Size });
+		return out;
+	}
+
+	/**
+	 * What the GPU is handed for one role: the stored blocks of a baked map, the transcoded blocks
+	 * of a Basis file for the load row, the packed texels of a `kNone` row.
+	 */
+	std::vector<std::byte>
+	EncodedForRole(TextureRole role)
+	{
+		const TextureEncoding encoding = textureEncoding(role);
+
+		if (encoding.compression == Ktx2Compression::kNone)
+		{
+			const ImageData packed = packRgb9e5(CanaryFloatImage());
+			return { packed.pixels.data(), packed.pixels.data() + packed.pixels.size() };
+		}
+
+		const ImageData       source = rgba8ToImage(CanaryPixels(), 16, 16);
+		const Ktx2Compression stored = role == TextureRole::kTranscodeAtLoad ?
+		                                   Ktx2Compression::kBasisUASTC :
+		                                   encoding.compression;
+
+		const ImageData gpu = decodeKTX2(encodeKTX2(source, false, stored));
+		return { gpu.pixels.data(), gpu.pixels.data() + gpu.pixels.size() };
+	}
 }
 
 TEST_CASE("a writer's output cannot change without its bake token", "[canary][io]")
@@ -353,5 +403,30 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 			c_TextureBakeToken,
 			Pin{ .token = 0x4f1a83c05e7b29d6ull, .hash = 0x2032a96f19d50a48ull },
 			bytes(rgba8ToImage(CanaryPixels(), 16, 16, 0.5f, /*srgb*/ true)));
+	}
+
+	SECTION(".ktx2 encoding")
+	{
+		// Every row of the table -- its role, its tag, and the bytes the GPU receives for the
+		// canary chain -- under the one token. A changed row and a libktx upgrade that moves the
+		// blocks both fail here. The pin assumes basisu encodes identically on every platform the
+		// suite runs on.
+		auto rows = std::vector<std::byte>();
+		for (auto r = 0u; r < static_cast<uint32_t>(TextureRole::kCount); ++r)
+		{
+			const auto             role = static_cast<TextureRole>(r);
+			const std::string_view tag  = textureEncoding(role).tag;
+
+			rows.push_back(static_cast<std::byte>(r));
+			for (const char c : tag) rows.push_back(static_cast<std::byte>(c));
+			rows.push_back(std::byte{ 0 });
+
+			const std::vector<std::byte> encoded = EncodedForRole(role);
+			rows.insert(rows.end(), encoded.begin(), encoded.end());
+		}
+		CheckCanary(
+			c_TextureEncodingToken,
+			Pin{ .token = 0x5f497f4931e9cfb8ull, .hash = 0x14df57c5d10d3339ull },
+			rows);
 	}
 }

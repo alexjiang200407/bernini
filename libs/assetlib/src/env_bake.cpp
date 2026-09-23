@@ -3,6 +3,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
@@ -28,6 +29,7 @@
 #include <core/file/IFileSystem.h>
 
 #include "mounted_io.h"
+#include "texture_encoding.h"
 
 namespace assetlib
 {
@@ -43,25 +45,6 @@ namespace assetlib
 			c_IrradianceGroup,
 		};
 
-		enum class EnvMapEncoding : uint8_t
-		{
-			kRgb9e5,
-			kBc7Srgb,
-		};
-
-		std::string_view
-		encodingTag(EnvMapEncoding encoding) noexcept
-		{
-			switch (encoding)
-			{
-			case EnvMapEncoding::kRgb9e5:
-				return "rgb9e5";
-			case EnvMapEncoding::kBc7Srgb:
-				return "bc7srgb";
-			}
-			return {};
-		}
-
 		bool
 		isLowDynamicRange(const ImageData& cube)
 		{
@@ -75,33 +58,29 @@ namespace assetlib
 		}
 
 		/**
-		 * BC7 for a sky or prefilter whose every value fits it, RGB9E5 otherwise. The irradiance map
-		 * is one small mip and stays RGB9E5 whatever it holds; a face that is not a multiple of the
-		 * 4x4 block is refused by D3D12 as a block-compressed top level.
+		 * The LDR role for a sky or prefilter whose every value fits in [0, 1], the HDR role otherwise.
+		 * The irradiance map is one small mip and stays HDR whatever it holds; a face that is not a
+		 * multiple of the 4x4 block is refused by D3D12 as a block-compressed top level.
 		 */
-		EnvMapEncoding
-		encodingFor(const ImageData& cube, std::string_view group)
+		TextureRole
+		roleFor(const ImageData& cube, std::string_view group)
 		{
 			if (group == c_IrradianceGroup || cube.width % 4 != 0 || cube.height % 4 != 0)
-				return EnvMapEncoding::kRgb9e5;
-			return isLowDynamicRange(cube) ? EnvMapEncoding::kBc7Srgb : EnvMapEncoding::kRgb9e5;
+				return TextureRole::kEnvironmentHdr;
+			return isLowDynamicRange(cube) ? TextureRole::kEnvironmentLdr :
+			                                 TextureRole::kEnvironmentHdr;
 		}
 
 		void
 		writeEnvMap(
 			const ImageData&             cube,
-			EnvMapEncoding               encoding,
+			const TextureEncoding&       encoding,
 			const std::filesystem::path& target)
 		{
-			switch (encoding)
-			{
-			case EnvMapEncoding::kRgb9e5:
+			if (encoding.compression == Ktx2Compression::kNone)
 				writeKTX2(packRgb9e5(cube), target, false, Ktx2Compression::kNone);
-				return;
-			case EnvMapEncoding::kBc7Srgb:
-				writeKTX2(quantizeSrgb8(cube), target, true, Ktx2Compression::kBC7_RGBA);
-				return;
-			}
+			else
+				writeKTX2(quantizeSrgb8(cube), target, true, encoding.compression);
 		}
 
 		bool
@@ -114,8 +93,8 @@ namespace assetlib
 
 		/**
 		 * Bakes one route: encodes `image` into the content-addressed target unless a map is already
-		 * there under that name -- which, since the name covers everything that produced it, is this
-		 * map. Returns the updated route; the caller assigns it, so a failure part-way leaves the
+		 * there under that name -- which, since the name covers everything that produced it and the
+		 * suffix covers the encoding it was written in, is this map. Returns the updated route; the caller assigns it, so a failure part-way leaves the
 		 * asset untouched.
 		 */
 		EnvMapRoute
@@ -127,29 +106,32 @@ namespace assetlib
 			uint64_t                     parametersHash,
 			const std::filesystem::path& dataRoot)
 		{
-			const EnvMapEncoding encoding = encodingFor(image, group);
-			const std::string    name     = bakedMapFileName(
+			const TextureEncoding encoding = textureEncoding(roleFor(image, group));
+			const std::string     name     = bakedMapContentName(
 				group,
 				std::format(
-					"{}|{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
+					"{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
 					group,
-					encodingTag(encoding),
 					route.source,
 					stamp.size,
 					stamp.hash,
 					parametersHash,
 					c_EnvSourceBakeToken));
 
+			// The route records the file: which encoding this map takes is read off the convolved
+			// image, and a loader has no image to read it off.
+			const std::string file = bakedMapEncodedName(name, encoding);
+
 			const std::filesystem::path outDir = dataRoot / c_BakedTexturesDirectoryName;
 			createDirectories(outDir);
-			const std::filesystem::path target = outDir / name;
+			const std::filesystem::path target = outDir / file;
 
 			if (!hasBytes(target))
 				writeEnvMap(image, encoding, target);
 
 			EnvMapRoute baked = route;
 			baked.baked =
-				(std::filesystem::path(c_BakedTexturesDirectoryName) / name).generic_string();
+				(std::filesystem::path(c_BakedTexturesDirectoryName) / file).generic_string();
 			baked.stamp = stamp;
 			return baked;
 		}
@@ -165,10 +147,15 @@ namespace assetlib
 			if (stampOf(fileSystem, route.source) != route.stamp)
 				return true;
 
+			// A map named without an encoding was baked before the content and the encoding became
+			// two halves of the name, so it re-cooks once under the name this bake writes.
+			if (!namesEncodedBakedMap(route.baked))
+				return true;
+
 			// Named is not the same as present: a map deleted since the bake leaves the route
 			// pointing at a file there is nothing to sample. A bake cannot claim what it cannot
 			// produce, so that is stale and not up to date.
-			return route.baked.empty() || stampOf(fileSystem, route.baked).size == 0;
+			return stampOf(fileSystem, route.baked).size == 0;
 		}
 
 		/**

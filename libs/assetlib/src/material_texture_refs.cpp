@@ -4,11 +4,13 @@
 #include "json_doc.h"  // IWYU pragma: keep
 
 #include <assetlib/codecs.h>
+#include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
 #include <cstddef>
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -31,6 +33,33 @@ namespace assetlib
 			seen.emplace_back(key, kind);
 			key = map(key);
 		}
+
+		// A baked map recorded by its content name is seen as the file it resolves to. A move of that
+		// file keeps the content name when the new file still carries the encoding suffix, and names
+		// the file outright when it does not.
+		void
+		mapBaked(
+			std::string&                                          key,
+			const std::function<std::string(const std::string&)>& map,
+			std::vector<std::pair<std::string, RefKind>>&         seen)
+		{
+			if (key.empty() || key.ends_with(c_TextureExtension))
+			{
+				mapOne(key, RefKind::kBakedMap, map, seen);
+				return;
+			}
+
+			const std::string resolved = bakedTextureKey(key);
+			seen.emplace_back(resolved, RefKind::kBakedMap);
+
+			const std::string mapped = map(resolved);
+			if (mapped == resolved)
+				return;
+
+			const std::string_view suffix = std::string_view(resolved).substr(key.size());
+			key =
+				mapped.ends_with(suffix) ? mapped.substr(0, mapped.size() - suffix.size()) : mapped;
+		}
 	}
 
 	std::vector<std::pair<std::string, RefKind>>
@@ -43,10 +72,10 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			mapOne(material.pbr.baseColorTexture, RefKind::kBakedMap, map, seen);
-			mapOne(material.pbr.normalTexture, RefKind::kBakedMap, map, seen);
-			mapOne(material.pbr.ormTexture, RefKind::kBakedMap, map, seen);
-			mapOne(material.pbr.geometryOcclusionBakedTexture, RefKind::kBakedMap, map, seen);
+			mapBaked(material.pbr.baseColorTexture, map, seen);
+			mapBaked(material.pbr.normalTexture, map, seen);
+			mapBaked(material.pbr.ormTexture, map, seen);
+			mapBaked(material.pbr.geometryOcclusionBakedTexture, map, seen);
 			mapOne(material.pbr.geometryOcclusionTexture, RefKind::kChannelRoute, map, seen);
 			for (ChannelRoute& route : material.pbr.routes)
 				mapOne(route.texture, RefKind::kChannelRoute, map, seen);
@@ -59,7 +88,7 @@ namespace assetlib
 			for (SurfaceTextureBinding& texture : material.surface.textures)
 			{
 				mapOne(texture.texturePath, RefKind::kBakedMap, map, seen);
-				mapOne(texture.bakedPath, RefKind::kBakedMap, map, seen);
+				mapBaked(texture.bakedPath, map, seen);
 				for (ChannelRoute& route : texture.routes)
 					mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			}

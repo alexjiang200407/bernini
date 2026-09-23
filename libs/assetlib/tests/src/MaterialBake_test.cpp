@@ -176,8 +176,8 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	SECTION("it fills the triplet, and the bake it wrote reads as current")
 	{
 		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
-		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
-		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.ormTexture));
+		REQUIRE(std::filesystem::exists(dir.path / bakedTextureKey(mat.pbr.baseColorTexture)));
+		REQUIRE(std::filesystem::exists(dir.path / bakedTextureKey(mat.pbr.ormTexture)));
 	}
 
 	SECTION("baked maps land under the data root's texture directory, not beside the material")
@@ -185,7 +185,7 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 		// The recorded path is relative to the data root, whatever directory the material lives in.
 		REQUIRE(mat.pbr.baseColorTexture.starts_with("Derived/BakedTextures/basecolor_"));
 		REQUIRE(mat.pbr.ormTexture.starts_with("Derived/BakedTextures/orm_"));
-		REQUIRE(mat.pbr.baseColorTexture.ends_with(".ktx2"));
+		REQUIRE_FALSE(mat.pbr.baseColorTexture.ends_with(".ktx2"));
 	}
 
 	SECTION("a group with nothing routed is not baked")
@@ -203,8 +203,11 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	SECTION("each map lands in its own block format")
 	{
 		REQUIRE(
-			loadKTX2(dir.path / mat.pbr.baseColorTexture).vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
-		REQUIRE(loadKTX2(dir.path / mat.pbr.ormTexture).vkFormat == VkFormat::BC7_UNORM_BLOCK);
+			loadKTX2(dir.path / bakedTextureKey(mat.pbr.baseColorTexture)).vkFormat ==
+			VkFormat::BC1_RGB_SRGB_BLOCK);
+		REQUIRE(
+			loadKTX2(dir.path / bakedTextureKey(mat.pbr.ormTexture)).vkFormat ==
+			VkFormat::BC7_UNORM_BLOCK);
 	}
 
 	SECTION("the routes and the graph survive the bake")
@@ -251,7 +254,7 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 	{
 		// BC1 would silently drop the alpha channel and there could be no blending.
 		REQUIRE(
-			loadKTX2(dir.path / bakeBaseColor(AlphaMode::kBlend)).vkFormat ==
+			loadKTX2(dir.path / bakedTextureKey(bakeBaseColor(AlphaMode::kBlend))).vkFormat ==
 			VkFormat::BC7_SRGB_BLOCK);
 	}
 
@@ -267,7 +270,7 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 		// Hashed tests base-color alpha against a per-pixel threshold, so losing the channel would
 		// leave every fragment surviving -- opaque cards where the strands should be.
 		REQUIRE(
-			loadKTX2(dir.path / bakeBaseColor(AlphaMode::kHashed)).vkFormat ==
+			loadKTX2(dir.path / bakedTextureKey(bakeBaseColor(AlphaMode::kHashed))).vkFormat ==
 			VkFormat::BC7_SRGB_BLOCK);
 	}
 
@@ -330,7 +333,7 @@ TEST_CASE("bakeMaterial routes each channel from its own source", "[bmaterial][b
 
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
-	const auto rgb = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto rgb = FirstBc1Color(loadKTX2(dir.path / bakedTextureKey(mat.pbr.baseColorTexture)));
 
 	// The UASTC -> BC1 round trip is lossy and BC1 quantizes to 5/6/5 bits, so allow a wide margin.
 	// It is still far tighter than any channel swap: these three values are 64 apart or more.
@@ -353,7 +356,7 @@ TEST_CASE("bakeMaterial fills an unrouted channel with its neutral value", "[bma
 
 	// G and B are unrouted, so they sample 1.0 and let baseColorFactor drive them.
 	constexpr double c_Bc1Margin = 12.0;
-	const auto       rgb         = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto rgb = FirstBc1Color(loadKTX2(dir.path / bakedTextureKey(mat.pbr.baseColorTexture)));
 	CHECK(rgb[0] == Catch::Approx(240).margin(c_Bc1Margin));
 	CHECK(rgb[1] == Catch::Approx(255).margin(c_Bc1Margin));
 	CHECK(rgb[2] == Catch::Approx(255).margin(c_Bc1Margin));
@@ -373,7 +376,7 @@ TEST_CASE("bakeMaterial resamples sources to the largest routed one", "[bmateria
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
 	// The composited map takes the largest source's dimensions, not the first route's.
-	const ImageData baked = loadKTX2(dir.path / mat.pbr.baseColorTexture);
+	const ImageData baked = loadKTX2(dir.path / bakedTextureKey(mat.pbr.baseColorTexture));
 	REQUIRE(baked.width == 32);
 	REQUIRE(baked.height == 32);
 }
@@ -460,7 +463,7 @@ TEST_CASE("bakeMaterial reuses a map unless what it names changed", "[bmaterial]
 	mat.pbr.routes[0] = { "a.ktx2", 0 };
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
-	const auto baked = dir.path / mat.pbr.baseColorTexture;
+	const auto baked = dir.path / bakedTextureKey(mat.pbr.baseColorTexture);
 
 	// Overwrite the baked map with a sentinel. Whether the next bake rewrites it is then observable
 	// directly, rather than inferred from the state the bake itself consults.
@@ -519,7 +522,7 @@ TEST_CASE("bakeMaterial reuses a map unless what it names changed", "[bmaterial]
 
 		REQUIRE(again.pbr.baseColorTexture != mat.pbr.baseColorTexture);
 		REQUIRE(
-			loadKTX2(dir.path / again.pbr.baseColorTexture).vkFormat ==
+			loadKTX2(dir.path / bakedTextureKey(again.pbr.baseColorTexture)).vkFormat ==
 			VkFormat::BC1_RGB_SRGB_BLOCK);
 
 		// The old map is one the prune reclaims, not one this bake may overwrite: another material
@@ -581,11 +584,15 @@ TEST_CASE("bakeMaterial never decodes a source whose map is already there", "[bm
 	BMaterial resolved = mat;
 	REQUIRE_NOTHROW(StoreAt(dir.path).ResolveMaterialBake(resolved));
 	REQUIRE_FALSE(resolved.pbr.baseColorTexture.empty());
-	REQUIRE_FALSE(std::filesystem::exists(dir.path / resolved.pbr.baseColorTexture));
+	REQUIRE_FALSE(
+		std::filesystem::exists(dir.path / bakedTextureKey(resolved.pbr.baseColorTexture)));
 
-	std::filesystem::create_directories((dir.path / resolved.pbr.baseColorTexture).parent_path());
+	std::filesystem::create_directories(
+		(dir.path / bakedTextureKey(resolved.pbr.baseColorTexture)).parent_path());
 	{
-		std::ofstream out(dir.path / resolved.pbr.baseColorTexture, std::ios::binary);
+		std::ofstream out(
+			dir.path / bakedTextureKey(resolved.pbr.baseColorTexture),
+			std::ios::binary);
 		out << "ALREADY BAKED";
 	}
 
@@ -628,7 +635,7 @@ TEST_CASE("bakeMaterial leaves a material that routes nothing alone", "[bmateria
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
 		CHECK(mat.pbr.baseColorTexture == baked);
-		CHECK(std::filesystem::exists(dir.path / baked));
+		CHECK(std::filesystem::exists(dir.path / bakedTextureKey(baked)));
 	}
 }
 
@@ -650,7 +657,7 @@ TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][ba
 
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
-	const auto rgb = FirstBc1Color(loadKTX2(dir.path / mat.pbr.baseColorTexture));
+	const auto rgb = FirstBc1Color(loadKTX2(dir.path / bakedTextureKey(mat.pbr.baseColorTexture)));
 	CHECK(rgb[0] == Catch::Approx(200).margin(12));
 }
 
@@ -804,7 +811,7 @@ TEST_CASE(
 	REQUIRE(CountMaps(textures, "orm_") == 1);
 
 	ImageData orm;
-	REQUIRE_NOTHROW(orm = loadKTX2(dir.path / materials[0].pbr.ormTexture));
+	REQUIRE_NOTHROW(orm = loadKTX2(dir.path / bakedTextureKey(materials[0].pbr.ormTexture)));
 	CHECK(orm.width == c_Size);
 	CHECK(orm.height == c_Size);
 
@@ -844,7 +851,9 @@ TEST_CASE("bakeMaterial writes the geometry occlusion map single-channel", "[bma
 		// The imported shape: a triplet the import wrote (here none) and an AO map beside it, no
 		// routes at all. The occlusion bake does not wait on a route to exist.
 		REQUIRE_FALSE(mat.pbr.geometryOcclusionBakedTexture.empty());
-		REQUIRE(std::filesystem::exists(dir.path / mat.pbr.geometryOcclusionBakedTexture));
+		REQUIRE(
+			std::filesystem::exists(
+				dir.path / bakedTextureKey(mat.pbr.geometryOcclusionBakedTexture)));
 		REQUIRE(mat.pbr.bakeToken == c_TextureBakeToken);
 		REQUIRE(mat.pbr.geometryOcclusionStamp == stampOf(dir.path / "wall_ao.ktx2"));
 		REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
@@ -855,15 +864,18 @@ TEST_CASE("bakeMaterial writes the geometry occlusion map single-channel", "[bma
 	{
 		REQUIRE(
 			mat.pbr.geometryOcclusionBakedTexture.starts_with("Derived/BakedTextures/occlusion_"));
-		REQUIRE(mat.pbr.geometryOcclusionBakedTexture.ends_with(".ktx2"));
+		REQUIRE_FALSE(mat.pbr.geometryOcclusionBakedTexture.ends_with(".ktx2"));
 		REQUIRE(isBakedMapName(
-			std::filesystem::path(mat.pbr.geometryOcclusionBakedTexture).filename().string()));
+			std::filesystem::path(bakedTextureKey(mat.pbr.geometryOcclusionBakedTexture))
+				.filename()
+				.string()));
 		REQUIRE(mat.pbr.geometryOcclusionTexture == "wall_ao.ktx2");
 	}
 
 	SECTION("it is BC4, mipped, and holds the source's red")
 	{
-		const ImageData image = loadKTX2(dir.path / mat.pbr.geometryOcclusionBakedTexture);
+		const ImageData image =
+			loadKTX2(dir.path / bakedTextureKey(mat.pbr.geometryOcclusionBakedTexture));
 		REQUIRE(image.vkFormat == VkFormat::BC4_UNORM_BLOCK);
 		REQUIRE(image.width == 16);
 		REQUIRE(image.mipLevels == 5);
@@ -914,7 +926,7 @@ TEST_CASE("bakeMaterial writes the geometry occlusion map single-channel", "[bma
 		WriteSource(dir.path / "wall_ao.ktx2", 16, { { 1, 2, 3, 255 } });
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 		REQUIRE(mat.pbr.geometryOcclusionBakedTexture != before);
-		REQUIRE(std::filesystem::exists(dir.path / before));
+		REQUIRE(std::filesystem::exists(dir.path / bakedTextureKey(before)));
 	}
 
 	SECTION("a map already there is reused without a decode")
@@ -929,9 +941,11 @@ TEST_CASE("bakeMaterial writes the geometry occlusion map single-channel", "[bma
 		again.pbr.geometryOcclusionTexture = "wall_ao.ktx2";
 		REQUIRE_NOTHROW(StoreAt(dir.path).ResolveMaterialBake(again));
 		std::filesystem::create_directories(
-			(dir.path / again.pbr.geometryOcclusionBakedTexture).parent_path());
+			(dir.path / bakedTextureKey(again.pbr.geometryOcclusionBakedTexture)).parent_path());
 		{
-			std::ofstream out(dir.path / again.pbr.geometryOcclusionBakedTexture, std::ios::binary);
+			std::ofstream out(
+				dir.path / bakedTextureKey(again.pbr.geometryOcclusionBakedTexture),
+				std::ios::binary);
 			out << "ALREADY BAKED";
 		}
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
@@ -982,7 +996,7 @@ TEST_CASE("the geometry occlusion bake is stale on what the triplet's is", "[bma
 
 	SECTION("a baked map deleted since")
 	{
-		std::filesystem::remove(dir.path / mat.pbr.geometryOcclusionBakedTexture);
+		std::filesystem::remove(dir.path / bakedTextureKey(mat.pbr.geometryOcclusionBakedTexture));
 		REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
 		REQUIRE_FALSE(drawsBakedGeometryOcclusion(mat, MountAt(dir.path)));
 	}

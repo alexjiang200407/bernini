@@ -6,6 +6,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 
 #include <assetlib/image_io.h>
@@ -15,6 +16,7 @@
 #include "baked_name.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
+#include "texture_encoding.h"
 #include <assetlib_structs/VkFormat.h>
 
 #include <core/err/util.h>
@@ -67,18 +69,18 @@ namespace assetlib
 		// The three maps a PBR material bakes to.
 		struct Group
 		{
-			ChannelGroup    channels;
-			const char*     name;      // file-name prefix, also part of the content hash
-			uint8_t         fallback;  // what an unrouted channel of this group samples
-			bool            srgb;
-			Ktx2Compression compression;
+			ChannelGroup channels;
+			const char*  name;      // file-name prefix, also part of the content hash
+			uint8_t      fallback;  // what an unrouted channel of this group samples
+			bool         srgb;
+			TextureRole  role;
 		};
 
 		constexpr std::array<Group, 3> c_Groups = { {
-			{ c_BaseColorChannels, "basecolor", 0xFF, true, Ktx2Compression::kBC1_RGB },
-			{ c_OrmChannels, "orm", 0xFF, false, Ktx2Compression::kBC7_RGBA },
+			{ c_BaseColorChannels, "basecolor", 0xFF, true, TextureRole::kBaseColor },
+			{ c_OrmChannels, "orm", 0xFF, false, TextureRole::kOrm },
 			// An unrouted normal axis is 0.5, i.e. zero once the shader maps [0,1] to [-1,1].
-			{ c_NormalChannels, "normal", 0x80, false, Ktx2Compression::kBC5_RG },
+			{ c_NormalChannels, "normal", 0x80, false, TextureRole::kNormal },
 		} };
 
 		// Every routed surface slot bakes under this one prefix, whatever the slot is called: the
@@ -86,16 +88,18 @@ namespace assetlib
 		// without enumerating names no engine list holds.
 		constexpr std::string_view c_SurfaceSlotBakePrefix = "slot";
 
+		// A base colour whose alpha the material keeps is other content than an opaque one -- its
+		// colour is dilated under the transparent texels -- so it is a group of its own.
+		constexpr std::string_view c_BaseColorWithAlphaBakePrefix = "basecoloralpha";
+
 		// The one rule for a slot's map, shared by the disk bake and the in-memory compose: linear
-		// data, white where nothing routes (the factor alone drives that component), BC7 on disk.
-		constexpr uint8_t         c_SlotFallback    = 0xFF;
-		constexpr Ktx2Compression c_SlotCompression = Ktx2Compression::kBC7_RGBA;
+		// data, white where nothing routes (the factor alone drives that component).
+		constexpr uint8_t c_SlotFallback = 0xFF;
 
 		// The geometry occlusion map: the authored map's red, alone, single-channel on disk. Only
 		// red is ever read (MaterialData.slang), so the other three channels are not stored.
-		constexpr std::string_view c_OcclusionBakePrefix  = "occlusion";
-		constexpr uint8_t          c_OcclusionFallback    = 0xFF;
-		constexpr Ktx2Compression  c_OcclusionCompression = Ktx2Compression::kBC4_R;
+		constexpr std::string_view c_OcclusionBakePrefix = "occlusion";
+		constexpr uint8_t          c_OcclusionFallback   = 0xFF;
 
 		bool
 		isRgba8(VkFormat vk)
@@ -286,15 +290,22 @@ namespace assetlib
 			       layer.alphaMode == AlphaMode::kMask;
 		}
 
-		/**
-		 * The block format this group bakes to, which is a property of the *material*, not of the group
-		 * alone.
-		 *
-		 */
-		Ktx2Compression
-		groupCompression(const MaterialLayer& layer, const Group& group)
+		/** The role this group bakes as, which is a property of the *material*, not of the group alone. */
+		TextureRole
+		groupRole(const MaterialLayer& layer, const Group& group)
 		{
-			return groupCarriesAlpha(layer, group) ? Ktx2Compression::kBC7_RGBA : group.compression;
+			return groupCarriesAlpha(layer, group) ? TextureRole::kBaseColorWithAlpha : group.role;
+		}
+
+		/**
+		 * The group a map is named under, which a base colour keeping its alpha changes: its colour is
+		 * dilated under the transparent texels, so it is other content than an opaque one -- and with
+		 * the format out of the content name, nothing else would tell the two apart.
+		 */
+		std::string_view
+		bakeGroupName(const MaterialLayer& layer, const Group& group)
+		{
+			return groupCarriesAlpha(layer, group) ? c_BaseColorWithAlphaBakePrefix : group.name;
 		}
 
 		// A map is sized to the largest source routed into *it*, so its output does not depend on any
@@ -356,12 +367,15 @@ namespace assetlib
 			return key;
 		}
 
-		/** The lead every map's key starts from -- everything before the per-route segments. */
+		/**
+		 * The lead every map's key starts from -- everything before the per-route segments. The
+		 * encoding is deliberately absent: it names the file rather than the content, so one content
+		 * name serves every encoding of it.
+		 */
 		std::string
-		keyLead(std::string_view name, Ktx2Compression compression)
+		keyLead(std::string_view group)
 		{
-			return std::string(name) + '|' + std::to_string(c_TextureBakeToken) + '|' +
-			       std::to_string(static_cast<uint32_t>(compression));
+			return std::string(group) + '|' + std::to_string(c_TextureBakeToken);
 		}
 
 		/**
@@ -489,7 +503,8 @@ namespace assetlib
 
 			throwIfCancelled(cancel);
 
-			const Ktx2Compression compression = groupCompression(layer, group);
+			const TextureRole     role     = groupRole(layer, group);
+			const TextureEncoding encoding = textureEncoding(role);
 
 			// Cutout and hashed mips are keyed against the cutoff; blend keeps its alpha but bakes
 			// plain mips.
@@ -499,14 +514,16 @@ namespace assetlib
 
 			// The cut segment is written for base colour whether or not there is a cutoff, so a
 			// cutout and a blend material never converge on one file name.
-			std::string lead = keyLead(group.name, compression);
+			const std::string_view groupName = bakeGroupName(layer, group);
+
+			std::string lead = keyLead(groupName);
 			if (group.channels.count == c_BaseColorChannels.count)
 				lead += mipCutoff ? "|cut:" + std::to_string(*mipCutoff) : "|cut:none";
 
-			const std::string name = bakedMapFileName(
-				group.name,
+			const std::string name = bakedMapContentName(
+				groupName,
 				bakeKey(std::move(lead), routes, stamps, group.fallback));
-			const auto target = outDir / name;
+			const auto target = outDir / bakedMapEncodedName(name, encoding);
 
 			if (desc.write && !hasBytes(target))
 			{
@@ -525,7 +542,7 @@ namespace assetlib
 				const ImageData image =
 					rgba8ToImage(composed, width, height, mipCutoff, group.srgb);
 
-				writeKTX2(image, target, group.srgb, compression);
+				writeKTX2(image, target, group.srgb, encoding.compression);
 			}
 
 			// Recorded relative to the data root, not to the material file.
@@ -540,14 +557,16 @@ namespace assetlib
 		{
 			throwIfCancelled(cancel);
 
-			const std::string name = bakedMapFileName(
+			const TextureEncoding encoding = textureEncoding(TextureRole::kGeometryOcclusion);
+
+			const std::string name = bakedMapContentName(
 				c_OcclusionBakePrefix,
 				bakeKey(
-					keyLead(c_OcclusionBakePrefix, c_OcclusionCompression),
+					keyLead(c_OcclusionBakePrefix),
 					occlusionRoute,
 					stamps,
 					c_OcclusionFallback));
-			const auto target = outDir / name;
+			const auto target = outDir / bakedMapEncodedName(name, encoding);
 
 			if (desc.write && !hasBytes(target))
 			{
@@ -557,7 +576,7 @@ namespace assetlib
 					compose(occlusionRoute, c_OcclusionFallback, sources, width, height);
 				const ImageData image = rgba8ToImage(composed, width, height, std::nullopt, false);
 
-				writeKTX2(image, target, false, c_OcclusionCompression);
+				writeKTX2(image, target, false, encoding.compression);
 			}
 
 			pbr.geometryOcclusionBakedTexture = (desc.textureDir / name).generic_string();
@@ -619,14 +638,16 @@ namespace assetlib
 
 			throwIfCancelled(cancel);
 
-			const std::string name = bakedMapFileName(
+			const TextureEncoding encoding = textureEncoding(TextureRole::kSurfaceSlot);
+
+			const std::string name = bakedMapContentName(
 				c_SurfaceSlotBakePrefix,
 				bakeKey(
-					keyLead(c_SurfaceSlotBakePrefix, c_SlotCompression) + '|' + slot.name,
+					keyLead(c_SurfaceSlotBakePrefix) + '|' + slot.name,
 					routes,
 					stamps,
 					c_SlotFallback));
-			const auto target = outDir / name;
+			const auto target = outDir / bakedMapEncodedName(name, encoding);
 
 			if (desc.write && !hasBytes(target))
 			{
@@ -635,7 +656,7 @@ namespace assetlib
 				const Rgba8     composed = compose(routes, c_SlotFallback, sources, width, height);
 				const ImageData image = rgba8ToImage(composed, width, height, std::nullopt, false);
 
-				writeKTX2(image, target, false, c_SlotCompression);
+				writeKTX2(image, target, false, encoding.compression);
 			}
 
 			slot.bakedPath = (desc.textureDir / name).generic_string();
@@ -666,14 +687,42 @@ namespace assetlib
 	bool
 	isBakedMapName(std::string_view fileName) noexcept
 	{
-		static constexpr std::array<std::string_view, c_Groups.size() + 2> c_Names = { {
+		static constexpr std::array<std::string_view, c_Groups.size() + 3> c_Names = { {
 			c_Groups[0].name,
 			c_Groups[1].name,
 			c_Groups[2].name,
+			c_BaseColorWithAlphaBakePrefix,
 			c_SurfaceSlotBakePrefix,
 			c_OcclusionBakePrefix,
 		} };
 		return isBakedNameAmong(fileName, c_Names);
+	}
+
+	std::string
+	bakedTextureKey(std::string_view reference)
+	{
+		if (reference.empty() || namesTextureFile(reference))
+			return std::string(reference);
+
+		const std::string_view group = bakedGroupOf(reference);
+
+		auto role = std::optional<TextureRole>();
+		for (const Group& candidate : c_Groups)
+			if (group == candidate.name)
+				role = candidate.role;
+		if (group == c_BaseColorWithAlphaBakePrefix)
+			role = TextureRole::kBaseColorWithAlpha;
+		if (group == c_OcclusionBakePrefix)
+			role = TextureRole::kGeometryOcclusion;
+		if (group == c_SurfaceSlotBakePrefix)
+			role = TextureRole::kSurfaceSlot;
+
+		core::throw_runtime_error_if(
+			!role.has_value(),
+			"assetlib::bakedTextureKey: '{}' is neither a texture file nor a baked map's name",
+			reference);
+
+		return bakedMapEncodedName(reference, textureEncoding(*role));
 	}
 
 	void
