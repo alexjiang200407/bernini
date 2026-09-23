@@ -26,7 +26,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 ## The frame
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp)) drives the frame and
-owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_Skybox`, `m_TransparentSort`,
+owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
 `m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
@@ -44,8 +44,11 @@ flowchart TD
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> SD["Static Depth (static opaque buckets, depth only)"]
-        SD --> FWD["Forward (indirect dispatch per bucket, then one for the sorted list)"]
-        FWD --> SM["Outline Mask (only when the view has a selection)"]
+        SD --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        FWW --> BLOB["Blob Shadows (only when the view has a disc)"]
+        BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
+        FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
+        FWT --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
     TAA --> BLM["Bloom (only when the target blooms; one pass per chain level each way)"]
@@ -517,7 +520,7 @@ orders device memory rather than groupshared.
 
 It runs **twice per instance in one dispatch**, at `time` and at `prevTime`, writing two palettes back
 to back from `SkinnedState::palette`, and after them, on a rig with legs, each leg's sole as the pose
-at `time` stands it: the heel and the ball, world space, read by the blob phase's foot shadows. The
+at `time` stands it: the heel and the ball, world space, read by the blob-shadow pass's foot shadows. The
 soles are written after the plant and before the inverse bind is folded in — the one window a slot
 holds a model transform — and only for `time`, since the decal is colour only and has no motion
 vector to want a previous one. That is how skinned geometry gets a motion vector without a
@@ -589,12 +592,18 @@ repays when this is promoted into the shared depth prepass the roadmap already a
   (`DeclareMeshletCullBuffers`), and the material arena (`c_MaterialBuffers`) for `doubleSided` and
   the coverage stages.
 * **Out:** `staticDepth` (cleared by the frame's Clear pass, written here, read by
-  `BlobShadowPhase`).
+  `BlobShadowPass`).
 * **Skipped** when the view's instance count is 0.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
-The main geometry pass: a mesh-shader forward render, in two phases. It holds one
+The main geometry pass: a mesh-shader forward render, attached as three graph passes by
+`ForwardPhase`. **Forward World** draws the non-transparent buckets of the static tier -- the
+world, which is everything a blob shadow lands on, moving placements included; **Forward Skinned**
+the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the world the
+depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where an HZB build
+belongs. One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
+tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
 [passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h) (pixel-shader module,
@@ -643,48 +652,8 @@ built draw bucket with nothing visible this frame issues no command on D3D12 and
 zero grid on Metal ([RHI](docs/rhi.md) § the count verb), and a zero count can never meet a non-zero
 grid. Static Depth dispatches the same way.
 
-**Blob shadows draw between the two phases.** `BlobShadowPhase`
-([passes/BlobShadowPhase.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPhase.cpp)) — a phase
-ForwardPass owns rather than a pass of its own, because a separate pass cannot interleave between
-two phases sharing one depth attachment — dispatches one mesh-shader group
-per disc (`ISceneView::SetBlobShadow`), off the view's dense
-`scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
-`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
-projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
-normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
-bounded by where its edges cross it; a volume wholly outside any
-one frustum plane — most often, all of it behind the camera — emits no quad at all
-(`lib.math.box_bounds`). The pixel shader reconstructs the static surface under each pixel from the
-[Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
-radial falloff around the caster's axis and fading with the caster's per-pixel height above that
-surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
-than falling through to the ground plane. The cast point is the instance's origin raised by
-`BlobShadowDesc::casterLift`, which is how a ground-standing caster — a tree — casts from above the
-foliage around its root instead of from under it. A receiver must also face up: the fragment
-reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
-is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
-under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
-its face while a walkable slope still catches at full strength. The fragment re-emits the receiver's depth as
-`SV_Depth` under a `kLessOrEqual` test, which is what still occludes the decal behind the full
-scene depth, units included. The decals draw
-before the transparents so smoke over a unit composites over its shadow too. Same blend state and
-same colour-only framebuffer as the transparent phase; a zero blob count skips the phase entirely.
-Receivers are static by construction — units are absent from the receiver texture, so a shadow
-never smears across another animal passing beneath. The cost of a static caster is that it is its
-own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
-remains is any upward-facing surface of the caster below its own origin.
-
-A foot's entry casts from its sole rather than from the origin: the heel and the ball, world space,
-which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. The mesh stage reads
-the two once per group — the palette arena is already declared by the pass, for the skinned tables —
-and hands them to the pixel stage, which casts from the point of that segment nearest the receiver
-across the ground, so a heel raised off a planted toe fades while the toe stays dark. Its lift only
-lets a receiver rise that far above the sole; the fade is measured from the sole itself, because a
-planted sole is at street level and a lifted cast point would pre-fade exactly the foot that should
-be darkest.
-
 **Transparent draw buckets are skipped there** — blending needs depth order, not PSO order — and drawn
-afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
+afterwards by `DrawTransparent`, in Forward Transparent, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent
 PSO shares one pipeline and the list is drawn whole, so the transparent phase is **one
 `DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees. Their blend state is
@@ -709,14 +678,58 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`, `cull.view` and
-  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances`, the `staticDepth` texture the blob-shadow phase samples, and the
+  buffers, the four `c_SkinnedBuffers` (not Forward World), the two `c_ExpansionBuffers`, `cull.view` and
+  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances` (Forward Transparent), and the
   one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
+
+### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPass.cpp)
+
+Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
+per disc (`ISceneView::SetBlobShadow`), off the view's dense
+`scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
+`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
+projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
+normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
+bounded by where its edges cross it; a volume wholly outside any
+one frustum plane — most often, all of it behind the camera — emits no quad at all
+(`lib.math.box_bounds`). The pixel shader reconstructs the static surface under each pixel from the
+[Static Depth](#static-depth) texture through the inverse view-projection, darkening it by a
+radial falloff around the caster's axis and fading with the caster's per-pixel height above that
+surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
+than falling through to the ground plane. The cast point is the instance's origin raised by
+`BlobShadowDesc::casterLift`, which is how a ground-standing caster — a tree — casts from above the
+foliage around its root instead of from under it. A receiver must also face up: the fragment
+reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
+is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
+under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
+its face while a walkable slope still catches at full strength. The fragment re-emits the receiver's depth as
+`SV_Depth` under a `kLessOrEqual` test against the scene depth. Units draw after the decals, so a
+unit standing between the camera and a shadowed surface covers it, and the transparents draw after
+too, so smoke over a unit composites over its shadow. Same blend state and same colour-only
+framebuffer as the transparent phase; a view with no disc attaches no pass.
+Receivers are static by construction — units are absent from the receiver texture, so a shadow
+never smears across another animal passing beneath. The cost of a static caster is that it is its
+own receiver — though the facing test bounds it: an underside faces down and is rejected, so what
+remains is any upward-facing surface of the caster below its own origin.
+
+A foot's entry casts from its sole rather than from the origin: the heel and the ball, world space,
+which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. The mesh stage reads
+the two once per group, off the palette arena the pass declares for them,
+and hands them to the pixel stage, which casts from the point of that segment nearest the receiver
+across the ground, so a heel raised off a planted toe fades while the toe stays dark. Its lift only
+lets a receiver rise that far above the sole; the fade is measured from the sole itself, because a
+planted sole is at street level and a lifted cast point would pre-fade exactly the foot that should
+be darkest.
+
+* **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena (the soles), and
+  `staticDepth` as a shader resource.
+* **Out:** scene colour (blended); `depth` is tested, never written.
+* **Skipped** when the view has no disc.
 
 ### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl_extended/src/passes/OutlineMaskPass.cpp)
 

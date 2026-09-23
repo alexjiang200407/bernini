@@ -235,6 +235,7 @@ namespace bgl
 		m_TransparentSort.Init(passes);
 		m_StaticDepth.Init(passes);
 		m_Forward.Init(passes);
+		m_BlobShadows.Init(passes);
 		m_Skybox.Init(passes);
 		m_PostProcess.Init(passes);
 		m_BloomPass.Init(passes);
@@ -246,6 +247,7 @@ namespace bgl
 
 		m_StaticDepth.CheckBindings();
 		m_Forward.CheckBindings();
+		m_BlobShadows.CheckBindings();
 		m_Skybox.CheckBindings();
 		m_PostProcess.CheckBindings();
 		m_BloomPass.CheckBindings();
@@ -297,6 +299,7 @@ namespace bgl
 		}
 		m_StaticDepth.Release();
 		m_Forward.Release();
+		m_BlobShadows.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
 		m_BloomPass.Release();
@@ -912,7 +915,11 @@ namespace bgl
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_StaticDepth.AttachToFrameGraph(m_FrameGraph, draw);
-		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
+		// The depth holds the world alone here: the seam an HZB build belongs at.
+		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);
 
 		if (const auto selected = view->GetSelectedInstances();
 		    !selected.empty() && m_ActiveTarget->IsOutlineEnabled())

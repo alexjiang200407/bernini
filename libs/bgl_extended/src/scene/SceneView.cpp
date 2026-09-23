@@ -74,7 +74,7 @@ namespace bgl
 
 		/**
 		 * The palette-arena slot of leg `leg`'s sole: a hero palette ends with one per leg of
-		 * its rig, which PoseSkinned writes after the two poses and the blob phase reads.
+		 * its rig, which PoseSkinned writes after the two poses and the blob-shadow pass reads.
 		 */
 		uint32_t
 		SoleSlotOf(const MeshMeta& meta, uint32_t leg) noexcept
