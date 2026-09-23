@@ -10,7 +10,7 @@ import lib.types.UploadBuffer;
 // One workgroup draws one blob-shadow decal: a screen-space quad over the caster's footprint whose
 // pixel stage reconstructs the static receiver under each pixel from the static depth prepass and
 // darkens it by a radial falloff, fading with the caster's height above that surface. Composites
-// between Forward's static and unit phases, so a unit drawn after hides it and a transparent
+// between Forward's world and skinned phases, so a unit drawn after hides it and a transparent
 // composites over it; colour only -- a blended decal has no single depth to reproject, exactly as
 // programs.forward.Transparent has none.
 //

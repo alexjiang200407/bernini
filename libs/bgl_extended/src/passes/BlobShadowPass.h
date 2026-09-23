@@ -17,8 +17,8 @@ namespace bgl
 	 * One workgroup per placement carrying a blob shadow, each emitting a screen-space decal that
 	 * drapes over whatever static surface the StaticDepth pass recorded beneath the caster.
 	 *
-	 * Attached between Forward's static and unit phases, so a unit drawn over the decal hides it
-	 * and a transparent composites over it.
+	 * Attached between Forward's world and skinned phases, so a unit drawn over the decal hides
+	 * it and a transparent composites over it.
 	 */
 	class BlobShadowPass
 	{

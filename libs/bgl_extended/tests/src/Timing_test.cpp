@@ -252,18 +252,21 @@ TEST_CASE("Timing a frame lists every kept pass with what it cost", "[timing][re
 	const std::vector<std::string> names = Names(rows);
 	CHECK(names.front() == "Clear");
 	CHECK(names.back() == "PreparePresent");
-	CHECK(std::ranges::find(names, "Forward Static 0") != names.end());
-	CHECK(std::ranges::find(names, "Forward Units 0") != names.end());
+	CHECK(std::ranges::find(names, "Forward World 0") != names.end());
+	CHECK(std::ranges::find(names, "Forward Skinned 0") != names.end());
+	CHECK(std::ranges::find(names, "Forward Transparent 0") != names.end());
 	CHECK(std::ranges::find(names, "TaaResolve") != names.end());
 	CHECK(std::ranges::find(names, "PostProcess") != names.end());
 
 	// In execution order, so the forward render precedes the resolve that reads what it drew, and
-	// its static phase precedes its unit phase.
-	const auto forwardStatic = std::ranges::find(names, "Forward Static 0");
-	const auto forwardUnits  = std::ranges::find(names, "Forward Units 0");
-	const auto resolve       = std::ranges::find(names, "TaaResolve");
-	CHECK(forwardStatic < forwardUnits);
-	CHECK(forwardUnits < resolve);
+	// its phases run world, skinned, transparent.
+	const auto world       = std::ranges::find(names, "Forward World 0");
+	const auto skinned     = std::ranges::find(names, "Forward Skinned 0");
+	const auto transparent = std::ranges::find(names, "Forward Transparent 0");
+	const auto resolve     = std::ranges::find(names, "TaaResolve");
+	CHECK(world < skinned);
+	CHECK(skinned < transparent);
+	CHECK(transparent < resolve);
 
 	double sumMs = 0.0;
 	for (const bgl::PassTiming& row : rows)

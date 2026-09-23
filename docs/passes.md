@@ -44,10 +44,11 @@ flowchart TD
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> SD["Static Depth (static opaque buckets, depth only)"]
-        SD --> FWS["Forward Static (indirect dispatch per static bucket)"]
-        FWS --> BLOB["Blob Shadows (only when the view has a disc)"]
-        BLOB --> FWU["Forward Units (indirect dispatch per unit bucket, then one for the sorted list)"]
-        FWU --> SM["Outline Mask (only when the view has a selection)"]
+        SD --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        FWW --> BLOB["Blob Shadows (only when the view has a disc)"]
+        BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
+        FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
+        FWT --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
     TAA --> BLM["Bloom (only when the target blooms; one pass per chain level each way)"]
@@ -596,12 +597,13 @@ repays when this is promoted into the shared depth prepass the roadmap already a
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
 
-The main geometry pass: a mesh-shader forward render, attached as two graph passes by
-`ForwardPhase`. **Forward Static** draws the non-transparent buckets of the static tier; **Forward
-Units** the non-transparent buckets of every other tier, then the depth-sorted transparent list.
-Between the two the depth holds static surfaces alone -- the seam [Blob Shadows](#blob-shadows)
-draws at, and where an HZB build belongs. One object owns both phases' kernels, since a kernel is per
-bucket and a bucket is one tier. It holds one
+The main geometry pass: a mesh-shader forward render, attached as three graph passes by
+`ForwardPhase`. **Forward World** draws the non-transparent buckets of the static tier -- the
+world, which is everything a blob shadow lands on, moving placements included; **Forward Skinned**
+the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the world the
+depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where an HZB build
+belongs. One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
+tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
 [passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h) (pixel-shader module,
@@ -651,7 +653,7 @@ zero grid on Metal ([RHI](docs/rhi.md) § the count verb), and a zero count can 
 grid. Static Depth dispatches the same way.
 
 **Transparent draw buckets are skipped there** — blending needs depth order, not PSO order — and drawn
-afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
+afterwards by `DrawTransparent`, in Forward Transparent, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent
 PSO shares one pipeline and the list is drawn whole, so the transparent phase is **one
 `DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees. Their blend state is
@@ -676,8 +678,8 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the four `c_SkinnedBuffers` (Forward Units), the two `c_ExpansionBuffers`, `cull.view` and
-  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances` (Forward Units), and the
+  buffers, the four `c_SkinnedBuffers` (not Forward World), the two `c_ExpansionBuffers`, `cull.view` and
+  `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances` (Forward Transparent), and the
   one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
@@ -687,7 +689,7 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPass.cpp)
 
-Drawn between Forward's two phases, it dispatches one mesh-shader group
+Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
 per disc (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
 `BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the

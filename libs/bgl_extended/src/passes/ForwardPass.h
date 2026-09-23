@@ -20,14 +20,15 @@ namespace bgl
 	struct DrawData;
 
 	/**
-	 * Which half of the forward render a pass records. The static tier draws first, so that between
-	 * the two the depth holds static receivers alone: the blob-shadow pass draws there, and it is
-	 * where an HZB build belongs.
+	 * Which part of the forward render a pass records, in the order they draw. After `kWorld` the
+	 * depth holds the world alone -- the static tier's opaque surfaces, moving or not: the blob-shadow
+	 * pass draws there, and it is where an HZB build belongs.
 	 */
 	enum class ForwardPhase : uint8_t
 	{
-		kStatic,
-		kUnits,
+		kWorld,        // the static tier's non-transparent buckets
+		kSkinned,      // the skinned tier's non-transparent buckets
+		kTransparent,  // the depth-sorted list, every tier
 	};
 
 	class ForwardPass
@@ -89,10 +90,6 @@ namespace bgl
 		void
 		CheckBindings() const;
 
-		/**
-		 * `kStatic` draws the non-transparent static buckets; `kUnits` the non-transparent buckets
-		 * of every other tier, then the depth-sorted transparent list.
-		 */
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, ForwardPhase phase);
 
@@ -106,7 +103,7 @@ namespace bgl
 
 		/**
 		 * The depth-sorted transparent phase: one indirect dispatch over the whole sorted list,
-		 * back-to-front, drawn after the unit buckets and inside the same pass.
+		 * back-to-front.
 		 *
 		 * Binds its own framebuffers rather than reusing the opaque one: a blend PSO declares no
 		 * velocity render target, and an attachment count that outruns the PSO's is invalid.

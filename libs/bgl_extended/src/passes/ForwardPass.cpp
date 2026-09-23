@@ -239,24 +239,14 @@ namespace bgl
 	void
 	ForwardPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, const ForwardPhase phase)
 	{
+		constexpr std::array<std::string_view, 3> c_PhaseNames = { "World"sv,
+			                                                       "Skinned"sv,
+			                                                       "Transparent"sv };
+
 		auto desc = PassDesc();
-
-		if (phase == ForwardPhase::kStatic)
-		{
-			desc.SetName("Forward Static {}", draw.drawIdx);
-		}
-		else
-		{
-			desc.SetName("Forward Units {}", draw.drawIdx);
-		}
-
-		desc.AddTextureArg(
-				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
+		desc.SetName("Forward {} {}", c_PhaseNames[static_cast<size_t>(phase)], draw.drawIdx)
 			.AddTextureArg(
-				TextureArg{ std::string(c_MotionVectorsName),
+				TextureArg{ std::string(c_BackbufferName),
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
@@ -264,13 +254,9 @@ namespace bgl
 				TextureArg{ std::string(c_DepthName),
 		                    BarrierSyncFlag::kDepthStencil,
 		                    BarrierAccessFlag::kDepthWrite,
-		                    BarrierLayout::kDepthWrite })
-			.AddBufferArg(
-				BufferArg{ std::string(c_CompactDispatchArgsName),
-		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument });
+		                    BarrierLayout::kDepthWrite });
 
-		if (phase == ForwardPhase::kUnits)
+		if (phase == ForwardPhase::kTransparent)
 		{
 			desc.AddBufferArg(
 					BufferArg{ std::string(c_SortedTransparentInstancesName),
@@ -280,7 +266,23 @@ namespace bgl
 					BufferArg{ std::string(c_TransparentDispatchArgsName),
 			                   BarrierSyncFlag::kIndirectArgument,
 			                   BarrierAccessFlag::kIndirectArgument });
+		}
+		else
+		{
+			desc.AddTextureArg(
+					TextureArg{ std::string(c_MotionVectorsName),
+			                    BarrierSyncFlag::kRenderTarget,
+			                    BarrierAccessFlag::kRenderTarget,
+			                    BarrierLayout::kRenderTarget })
+				.AddBufferArg(
+					BufferArg{ std::string(c_CompactDispatchArgsName),
+			                   BarrierSyncFlag::kIndirectArgument,
+			                   BarrierAccessFlag::kIndirectArgument });
+		}
 
+		// The world tier's geometry stage reads no skinned tables; the transparent list is any tier.
+		if (phase != ForwardPhase::kWorld)
+		{
 			for (const auto& binding : c_SkinnedBuffers)
 			{
 				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -381,6 +383,12 @@ namespace bgl
 			return;
 		}
 
+		if (phase == ForwardPhase::kTransparent)
+		{
+			DrawTransparent(draw, resources);
+			return;
+		}
+
 		// Colour + velocity, matching the two rtvFormats every non-blend PSO declares.
 		auto gfxState = MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
@@ -391,14 +399,14 @@ namespace bgl
 
 		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
-		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
-		// table's live count. The transparent buckets are skipped here -- their order is depth,
-		// not bucket, so they draw below.
-		const bool staticPhase = phase == ForwardPhase::kStatic;
+		// Opaque and alpha-test of one tier: bucketed, drawn indirect over the counting-sort output,
+		// to the table's live count. The transparent buckets are depth-ordered, so their own phase.
+		const GeomType tier =
+			phase == ForwardPhase::kWorld ? GeomType::kStaticMesh : GeomType::kSkinnedMesh;
 		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
 		{
-			const bool staticBucket = m_DrawBucketTable->Desc(bucket).geom == GeomType::kStaticMesh;
-			if (m_DrawBucketTable->Transparent(bucket) || staticBucket != staticPhase)
+			if (m_DrawBucketTable->Transparent(bucket) ||
+			    m_DrawBucketTable->Desc(bucket).geom != tier)
 			{
 				continue;
 			}
@@ -424,11 +432,6 @@ namespace bgl
 			gfxState.commandCounts = dispatchArgs;
 			cmd->SetMeshletState(gfxState);
 			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
-		}
-
-		if (!staticPhase)
-		{
-			DrawTransparent(draw, resources);
 		}
 	}
 

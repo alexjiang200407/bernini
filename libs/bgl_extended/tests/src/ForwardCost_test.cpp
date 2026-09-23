@@ -183,12 +183,12 @@ namespace
 			if (frame < 3)
 				continue;
 			const bgl::PassTimings timings = s.gfx->GetPassTimings(s.target);
-			// The forward render is three passes: the static phase, the blob decals, the units.
+			// The forward render is four passes: the world, the blob decals, the skinned, the blended.
 			double forwardMs = 0.0;
 			for (const bgl::PassTiming& row : timings.passes)
 			{
-				if (row.name == "Forward Static 0" || row.name == "Blob Shadows 0" ||
-				    row.name == "Forward Units 0")
+				if (row.name == "Forward World 0" || row.name == "Blob Shadows 0" ||
+				    row.name == "Forward Skinned 0" || row.name == "Forward Transparent 0")
 					forwardMs += row.milliseconds;
 			}
 			samples.push_back(forwardMs);

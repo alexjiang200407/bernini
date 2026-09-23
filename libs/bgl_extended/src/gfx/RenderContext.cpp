@@ -915,10 +915,11 @@ namespace bgl
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_StaticDepth.AttachToFrameGraph(m_FrameGraph, draw);
-		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kStatic);
-		// The depth holds static receivers alone here: the seam an HZB build belongs at.
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
+		// The depth holds the world alone here: the seam an HZB build belongs at.
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
-		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kUnits);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);
 
 		if (const auto selected = view->GetSelectedInstances();
 		    !selected.empty() && m_ActiveTarget->IsOutlineEnabled())
