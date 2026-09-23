@@ -1460,8 +1460,14 @@ TEST_CASE(
 	const assetlib::AssetStore store(editor.DataRoot());
 	auto                       material = assetlib::BMaterial();
 	material.name                       = "Notification";
-	material.pbr.baseColorTexture       = "Derived/BakedTextures/before.ktx2";
 	const std::string key               = "Authored/Materials/notification.bmaterial";
+
+	// A routed source that exists, against a stamp that was never taken: the material reads as
+	// baked-stale, which is what the panel puts on its Bake All button.
+	const std::string source = "Derived/SourceTextures/before.ktx2";
+	fs::create_directories(store.ResolveWritePath(source).parent_path());
+	std::ofstream(store.ResolveWritePath(source)) << "not really a texture";
+	material.pbr.routes[0].texture = source;
 	store.Save(material, key);
 	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	auto*      panel = window.findChild<MaterialEditorWindow*>();
@@ -1506,23 +1512,30 @@ TEST_CASE(
 	QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs, nativeDisabled);
 	REQUIRE(selected);
 	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
-	const auto shows = [panel](const QString& text) {
-		for (auto* label : panel->findChildren<QLabel*>())
-			if (label->text().contains(text))
-				return true;
+
+	// The panel says nothing about paths any more: what a bake elsewhere changes here is the badge
+	// on the button that would have fixed it.
+	const auto marked = [panel]() {
+		for (auto* button : panel->findChildren<QPushButton*>())
+			if (button->text().startsWith("Bake All"))
+				return button->text() != QStringLiteral("Bake All");
 		return false;
 	};
-	REQUIRE(shows("before.ktx2"));
-	const auto file               = store.ResolveWritePath(key);
-	const auto stamp              = fs::last_write_time(file);
-	material.pbr.baseColorTexture = "Derived/BakedTextures/after.ktx2";
+	REQUIRE(editor::test::WaitFor(marked));
+
+	// What a bake leaves behind, without one: nothing routed, so nothing to have drifted. The
+	// file's timestamp is put back, so only the notification can be what the panel acted on.
+	const auto file  = store.ResolveWritePath(key);
+	const auto stamp = fs::last_write_time(file);
+	material.pbr.routes[0].texture.clear();
 	store.Save(material, key);
 	fs::last_write_time(file, stamp);
-	CHECK_FALSE(shows("after.ktx2"));
+	CHECK(editor::test::WaitFor(marked));
+
 	auto* explorer = window.findChild<ContentExplorerWindow*>();
 	REQUIRE(explorer != nullptr);
 	Q_EMIT explorer->MaterialBaked(QString::fromStdString(key));
 	QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
-	CHECK(shows("after.ktx2"));
+	CHECK(editor::test::WaitFor([&marked] { return !marked(); }));
 	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
 }

@@ -169,55 +169,9 @@ TEST_CASE("A submesh name that is no filename still gets one", "[materialeditor]
 	CHECK_FALSE(made.contains(QStringLiteral("*")));
 }
 
-TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
-{
-	// "Show the current baked textures if any": the paths the material's last bake wrote, one per line,
-	// so the artist can see what the mesh actually samples without opening the files.
-	auto material                 = assetlib::BMaterial();
-	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
-	material.pbr.normalTexture    = "Textures/normal_c3d4.ktx2";
-	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
-
-	const QString summary = editor::BakedTexturesSummary(material);
-
-	CHECK(summary.contains("Textures/basecolor_a1b2.ktx2"));
-	CHECK(summary.contains("Textures/normal_c3d4.ktx2"));
-	CHECK(summary.contains("Textures/orm_e5f6.ktx2"));
-}
-
-TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
-{
-	// A material authored but never baked carries only routes, no triplet -- there is nothing baked to
-	// show, and the empty string is what keeps the label hidden.
-	auto material         = assetlib::BMaterial();
-	material.shadingModel = assetlib::ShadingModel::kPbr;
-	material.pbr.routes[0].texture =
-		"Derived/SourceTextures/albedo.ktx2";  // a source route, not a baked map
-
-	CHECK(editor::BakedTexturesSummary(material).isEmpty());
-}
-
-TEST_CASE(
-	"A material baked without every map shows a dash for the one it lacks",
-	"[materialeditor]")
-{
-	// Base colour and ORM baked, no normal routed: the missing map reads as a dash rather than a blank
-	// that looks like a bug, and the listing still shows because something is baked.
-	auto material                 = assetlib::BMaterial();
-	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
-	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
-
-	const QString summary = editor::BakedTexturesSummary(material);
-
-	REQUIRE_FALSE(summary.isEmpty());
-	CHECK(summary.contains(QString::fromUtf8("—")));
-}
-
-// Save All and Bake All act on the mesh rather than on the selected submesh, and the two rules that
-// decides are here rather than in the window: which files a batch touches, and what it says
-// afterwards. The window itself cannot be driven -- both end in a modal, and without a graphics
+// Bake All acts on the mesh rather than on the selected submesh, and the two rules that decides are
+// here rather than in the window: which files it touches, and what it says
+// afterwards. The window itself cannot be driven -- it ends in a modal, and without a graphics
 // device there are no submesh graphs to batch over in the first place.
 
 TEST_CASE("A material two submeshes wear is one file to bake", "[materialeditor]")

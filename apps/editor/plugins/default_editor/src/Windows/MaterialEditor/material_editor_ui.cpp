@@ -234,19 +234,6 @@ namespace editor
 		listActions->addStretch(1);
 		propertiesLayout->addLayout(listActions);
 
-		// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes
-		// to.
-		widgets.materialLabel = new QLabel(propertiesPanel);
-		widgets.materialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		widgets.materialLabel->setWordWrap(true);
-		widgets.materialLabel->setStyleSheet("color: gray;");
-
-		// A path has no spaces to wrap at, so the label's minimum width would otherwise be a whole
-		// directory name and become the floor for the panel -- and for the splitter above it. Ignored
-		// drops it out of that calculation; the tooltip carries the path once it is too narrow to read.
-		widgets.materialLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-		propertiesLayout->addWidget(widgets.materialLabel);
-
 		propertiesLayout->addSpacing(8);
 
 		propertiesLayout->addWidget(new QLabel(QStringLiteral("Submesh"), propertiesPanel));
@@ -299,16 +286,6 @@ namespace editor
 
 		widgets.layerSection->hide();
 		propertiesLayout->addWidget(widgets.layerSection);
-
-		// The material's current baked textures, if any. Read-only: the graph authors the routes they are
-		// composited from, and Bake All above -- or the Content Explorer's Bake -- is what rewrites them.
-		widgets.bakedTextures = new QLabel(propertiesPanel);
-		widgets.bakedTextures->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		widgets.bakedTextures->setWordWrap(true);
-		widgets.bakedTextures->setStyleSheet("color: gray;");
-		widgets.bakedTextures->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-		widgets.bakedTextures->hide();
-		propertiesLayout->addWidget(widgets.bakedTextures);
 
 		// A normal map routed onto a submesh with no tangent renders as nothing: the shader rebuilds the
 		// map's frame from the tangent and falls back to the geometric normal without one. Silent until

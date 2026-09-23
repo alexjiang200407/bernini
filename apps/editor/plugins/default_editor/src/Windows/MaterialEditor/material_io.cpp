@@ -49,49 +49,6 @@ namespace editor
 		return normalise(a).compare(normalise(b), Qt::CaseInsensitive) == 0;
 	}
 
-	QString
-	BakedTexturesSummary(const assetlib::BMaterial& material)
-	{
-		// A surface material's bake is per routed slot (ADR-7); a slot bound whole has none.
-		if (assetlib::isSurfaceModel(material.shadingModel))
-		{
-			auto lines = QStringList();
-			for (const assetlib::SurfaceTextureBinding& slot : material.surface.textures)
-				if (!slot.bakedPath.empty())
-					lines << QStringLiteral("%1: %2").arg(
-						QString::fromStdString(slot.name),
-						QString::fromStdString(slot.bakedPath));
-
-			return lines.isEmpty() ?
-			           QString() :
-			           QStringLiteral("Baked textures\n%1").arg(lines.join(QLatin1Char('\n')));
-		}
-
-		// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
-		// never-baked material has nothing to list. A kLoose material keeps the triplet of its
-		// last bake, which is still worth showing: "current baked textures, if any".
-		if (material.shadingModel != assetlib::ShadingModel::kPbr)
-			return {};
-
-		const assetlib::PbrParams& pbr = material.pbr;
-		if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty() &&
-		    pbr.geometryOcclusionBakedTexture.empty())
-			return {};
-
-		const auto line = [](const char* label, const std::string& path) {
-			return QStringLiteral("%1: %2").arg(
-				QLatin1String(label),
-				path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
-		};
-
-		return QStringLiteral("Baked textures\n%1\n%2\n%3\n%4")
-		    .arg(
-				line("Base color", pbr.baseColorTexture),
-				line("Normal", pbr.normalTexture),
-				line("ORM", pbr.ormTexture),
-				line("Geometry occlusion", pbr.geometryOcclusionBakedTexture));
-	}
-
 	assetlib::BMaterial
 	BuildMaterial(
 		MaterialGraphModel&         model,
