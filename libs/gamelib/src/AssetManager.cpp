@@ -33,6 +33,7 @@
 #include <assetlib/bmaterial.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -265,7 +266,9 @@ namespace game
 					continue;
 				}
 
-				paths.push_back(assetlib::slotIsRouted(slot) ? slot.bakedPath : slot.texturePath);
+				paths.push_back(
+					assetlib::slotIsRouted(slot) ? assetlib::bakedTextureKey(slot.bakedPath) :
+												   slot.texturePath);
 			}
 			return paths;
 		}
@@ -278,13 +281,13 @@ namespace game
 		}
 		else
 		{
-			paths = { material.pbr.baseColorTexture,
-				      material.pbr.normalTexture,
-				      material.pbr.ormTexture };
+			paths = { assetlib::bakedTextureKey(material.pbr.baseColorTexture),
+				      assetlib::bakedTextureKey(material.pbr.normalTexture),
+				      assetlib::bakedTextureKey(material.pbr.ormTexture) };
 		}
 
 		paths.push_back(
-			bakedOcclusion ? material.pbr.geometryOcclusionBakedTexture :
+			bakedOcclusion ? assetlib::bakedTextureKey(material.pbr.geometryOcclusionBakedTexture) :
 							 material.pbr.geometryOcclusionTexture);
 		return paths;
 	}

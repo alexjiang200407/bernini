@@ -6,6 +6,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 
 #include <assetlib/image_io.h>
@@ -86,6 +87,10 @@ namespace assetlib
 		// slot's own name goes in the content key instead, so texture pruning recognises the family
 		// without enumerating names no engine list holds.
 		constexpr std::string_view c_SurfaceSlotBakePrefix = "slot";
+
+		// A base colour whose alpha the material keeps is other content than an opaque one -- its
+		// colour is dilated under the transparent texels -- so it is a group of its own.
+		constexpr std::string_view c_BaseColorWithAlphaBakePrefix = "basecoloralpha";
 
 		// The one rule for a slot's map, shared by the disk bake and the in-memory compose: linear
 		// data, white where nothing routes (the factor alone drives that component).
@@ -679,6 +684,33 @@ namespace assetlib
 			c_OcclusionBakePrefix,
 		} };
 		return isBakedNameAmong(fileName, c_Names);
+	}
+
+	std::string
+	bakedTextureKey(std::string_view reference)
+	{
+		if (reference.empty() || reference.ends_with(c_TextureExtension))
+			return std::string(reference);
+
+		const std::string_view group = bakedGroupOf(reference);
+
+		auto role = std::optional<TextureRole>();
+		for (const Group& candidate : c_Groups)
+			if (group == candidate.name)
+				role = candidate.role;
+		if (group == c_BaseColorWithAlphaBakePrefix)
+			role = TextureRole::kBaseColorWithAlpha;
+		if (group == c_OcclusionBakePrefix)
+			role = TextureRole::kGeometryOcclusion;
+		if (group == c_SurfaceSlotBakePrefix)
+			role = TextureRole::kSurfaceSlot;
+
+		core::throw_runtime_error_if(
+			!role.has_value(),
+			"assetlib::bakedTextureKey: '{}' is neither a texture file nor a baked map's name",
+			reference);
+
+		return bakedMapEncodedName(reference, textureEncoding(*role));
 	}
 
 	void
