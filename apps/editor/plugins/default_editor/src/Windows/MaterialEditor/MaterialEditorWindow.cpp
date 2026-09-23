@@ -378,7 +378,14 @@ MaterialEditorWindow::~MaterialEditorWindow()
 	FlushEditedGraphs(/*quiet*/ true);
 
 	if (m_Preview != nullptr)
+	{
+		// Stop listening before anything else: ~QWidget deletes the preview *after* this body, and
+		// the geometry it drops on the way out announces itself. Answering that would run
+		// FlushEditedGraphs against a panel whose members are already gone -- and the flush that
+		// matters has just happened, a line above.
+		m_Preview->disconnect(this);
 		m_Preview->SetRenderingEnabled(false);
+	}
 	ReleasePreviewMaterials();
 
 	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a
