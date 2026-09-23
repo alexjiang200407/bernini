@@ -27,6 +27,9 @@
 
 namespace
 {
+	// Enough of a mesh's looks to read at a glance; the rest scroll.
+	constexpr int c_MaxVisibleMaterials = 12;
+
 	// The Layer combo's entries, indexed by assetlib::AlphaMode -- what the window writes through.
 	constexpr const char* c_LayerLabels[] = { "Opaque",
 		                                      "Alpha Tested",
@@ -140,12 +143,46 @@ namespace editor
 		meshActions->addWidget(widgets.bakeAll);
 		propertiesLayout->addLayout(meshActions);
 
-		widgets.setDefault =
-			new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
-		widgets.setDefault->setToolTip(QStringLiteral(
-			"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads "
-			"with it.\nThe preview only overrides the instances in front of you until you do."));
-		propertiesLayout->addWidget(widgets.setDefault);
+		// Every look this submesh can wear: its default, then the overrides the mesh registers. A
+		// game reaches one of these by name (AssetManager::SetInstanceSubmeshMaterialOverride), so
+		// the list is the asset's own, not the panel's.
+		propertiesLayout->addWidget(new QLabel(QStringLiteral("Material"), propertiesPanel));
+
+		widgets.materialSelector = new QComboBox(propertiesPanel);
+		widgets.materialSelector->setEnabled(false);
+		widgets.materialSelector->setPlaceholderText(QStringLiteral("No material"));
+
+		// A popup rather than a native menu, so a mesh registering thirty looks scrolls instead of
+		// covering the screen.
+		widgets.materialSelector->setMaxVisibleItems(c_MaxVisibleMaterials);
+		widgets.materialSelector->setStyleSheet(QStringLiteral("QComboBox { combobox-popup: 0; }"));
+		widgets.materialSelector->setToolTip(QStringLiteral(
+			"Which of this submesh's looks the board edits and the preview wears. The default is "
+			"what every instance of the mesh loads with; the rest are overrides a game asks for by "
+			"name."));
+		propertiesLayout->addWidget(widgets.materialSelector);
+
+		widgets.addOverride = new QPushButton(QStringLiteral("Add Override..."), propertiesPanel);
+		widgets.addOverride->setToolTip(QStringLiteral(
+			"Register another look for this submesh, copied from the one on the board."));
+
+		widgets.removeOverride = new QPushButton(QStringLiteral("Remove"), propertiesPanel);
+		widgets.removeOverride->setToolTip(QStringLiteral(
+			"Unregister this override. Its .bmaterial stays on disk -- delete it in the Content "
+			"Explorer."));
+
+		auto* overrideActions = new QHBoxLayout();
+		overrideActions->setContentsMargins(0, 0, 0, 0);
+		overrideActions->addWidget(widgets.addOverride);
+		overrideActions->addWidget(widgets.removeOverride);
+		propertiesLayout->addLayout(overrideActions);
+
+		widgets.makeDefault = new QPushButton(QStringLiteral("Make Default"), propertiesPanel);
+		widgets.makeDefault->setFlat(true);
+		widgets.makeDefault->setToolTip(QStringLiteral(
+			"Bind this look to the submesh in the .bimport, so every instance of the mesh loads "
+			"with it."));
+		propertiesLayout->addWidget(widgets.makeDefault);
 
 		// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes
 		// to.

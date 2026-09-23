@@ -50,7 +50,10 @@ namespace editor
 		QPushButton*       saveAs           = nullptr;
 		QPushButton*       saveAll          = nullptr;
 		QPushButton*       bakeAll          = nullptr;
-		QPushButton*       setDefault       = nullptr;
+		QPushButton*       addOverride      = nullptr;
+		QPushButton*       removeOverride   = nullptr;
+		QPushButton*       makeDefault      = nullptr;
+		QComboBox*         materialSelector = nullptr;
 		QPushButton*       generateTangents = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;

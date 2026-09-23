@@ -13,10 +13,12 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPointF>
 #include <QPushButton>
@@ -60,6 +62,7 @@
 #include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/MaterialEditor/material_overrides.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
@@ -107,7 +110,10 @@ MaterialEditorWindow::MaterialEditorWindow(
 	m_SaveAsButton       = ui.saveAs;
 	m_SaveAllButton      = ui.saveAll;
 	m_BakeAllButton      = ui.bakeAll;
-	m_SetDefaultButton   = ui.setDefault;
+	m_AddOverrideButton  = ui.addOverride;
+	m_RemoveOverride     = ui.removeOverride;
+	m_MakeDefaultButton  = ui.makeDefault;
+	m_MaterialSelector   = ui.materialSelector;
 	m_GenerateTangents   = ui.generateTangents;
 	m_SubmeshSelector    = ui.submeshSelector;
 	m_OutputSelector     = ui.outputSelector;
@@ -130,8 +136,42 @@ MaterialEditorWindow::MaterialEditorWindow(
 	connect(m_SaveAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::SaveAllMaterials);
 	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
 
-	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
-		SetDefaultMaterial(m_Graphs.CurrentSubmesh());
+	connect(m_MakeDefaultButton, &QPushButton::clicked, this, [this]() {
+		MakeShownMaterialDefault(m_Graphs.CurrentSubmesh());
+	});
+
+	connect(
+		m_AddOverrideButton,
+		&QPushButton::clicked,
+		this,
+		&MaterialEditorWindow::AddMaterialOverride);
+
+	connect(
+		m_RemoveOverride,
+		&QPushButton::clicked,
+		this,
+		&MaterialEditorWindow::RemoveShownMaterialOverride);
+
+	// activated, not currentIndexChanged: refilling the combo must not be read as a user picking a
+	// look, which would put the board on a graph the panel is in the middle of rebuilding.
+	connect(m_MaterialSelector, &QComboBox::activated, this, [this](int index) {
+		const int submesh = m_Graphs.CurrentSubmesh();
+		if (index < 0 || !m_Graphs.HasSubmesh(submesh))
+			return;
+
+		// Index 0 is the submesh's default, so the registered looks start at 1.
+		const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+		const bool                                    isDefault  = index == 0;
+		const QString                                 shown =
+			isDefault ? QString() : registered[static_cast<size_t>(index - 1)].name;
+
+		m_ShownOverrides[static_cast<size_t>(submesh)] = shown;
+		ShowMaterialForSubmesh(
+			submesh,
+			isDefault ?
+				m_Preview->SubmeshMaterialPaths().value(submesh) :
+				Rebase(registered[static_cast<size_t>(index - 1)].material, m_DataRoot, false));
+		RefreshActions();
 	});
 
 	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() {
@@ -422,6 +462,9 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 	m_GraphView->setScene(nullptr);
 	m_Graphs.Reset(static_cast<int>(submeshNames.size()));
 
+	// A new mesh shows every submesh's default; what the previous one was showing means nothing here.
+	m_ShownOverrides.assign(static_cast<size_t>(submeshNames.size()), QString());
+
 	const QStringList materialPaths =
 		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths() : QStringList();
 
@@ -460,6 +503,10 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 	}
 
 	m_SubmeshSelector->setEnabled(!submeshNames.isEmpty());
+
+	// After the selector is filled, so the looks are indexed by the same submeshes it lists.
+	ReloadRegisteredMaterials();
+
 	if (!submeshNames.isEmpty())
 		m_SubmeshSelector->setCurrentIndex(0);
 
@@ -564,12 +611,20 @@ MaterialEditorWindow::RefreshActions()
 
 	RefreshTangentWarning();
 
-	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
-	m_SetDefaultButton->setToolTip(
+	RefreshMaterialSelector();
+
+	// A look is registered against a submesh of a real mesh, and it is copied from the board, so
+	// both need something behind them.
+	m_AddOverrideButton->setEnabled(hasGraph && hasMesh);
+
+	const bool shownIsOverride = !ShownOverride(m_Graphs.CurrentSubmesh()).isEmpty();
+	m_RemoveOverride->setEnabled(shownIsOverride);
+
+	m_MakeDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
+	m_MakeDefaultButton->setToolTip(
 		isDefault ?
-			QStringLiteral("The mesh already uses this material for this submesh") :
-			QStringLiteral(
-				"Write this material into the mesh, so every instance of it loads with it"));
+			QStringLiteral("The mesh already loads this submesh with this material") :
+			QStringLiteral("Write this look into the mesh, so every instance of it loads with it"));
 
 	if (materialPath.isEmpty())
 	{
@@ -687,7 +742,7 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 
 	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
 	// leaving it unbound would mean saving a material the mesh never references. Once it has one,
-	// Save writes only the `.bmaterial`: rebinding the mesh is Set Default Material's job, and doing
+	// Save writes only the `.bmaterial`: rebinding the mesh is Make Default's job, and doing
 	// it here would edit the shared asset every time the user pressed Ctrl+S.
 	const int submesh = m_Graphs.CurrentSubmesh();
 	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(submesh).isEmpty())
@@ -737,7 +792,7 @@ MaterialEditorWindow::SaveAllMaterials()
 		++result.saved;
 
 		// Save's rule, applied to every submesh the graph drives: one with no material yet is bound by
-		// its first write, and one that already has a material is left to Set Default Material.
+		// its first write, and one that already has a material is left to Make Default.
 		if (m_Preview == nullptr)
 			continue;
 
@@ -805,7 +860,7 @@ MaterialEditorWindow::BakeAllMaterials()
 }
 
 void
-MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
+MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 {
 	const int graphIndex = m_Graphs.ForSubmesh(submeshIndex);
 	if (graphIndex < 0)
@@ -816,9 +871,245 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 		return;  // nothing on disk to point the mesh at; Save first
 
 	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
-		QMessageBox::warning(window(), QStringLiteral("Set Default Material"), error);
+	{
+		QMessageBox::warning(window(), QStringLiteral("Make Default"), error);
+		return;
+	}
 
+	// The look is the default now, so it is no longer an override being shown -- the combo's first
+	// entry is what it is.
+	m_ShownOverrides[static_cast<size_t>(submeshIndex)].clear();
 	RefreshActions();
+}
+
+void
+MaterialEditorWindow::AddMaterialOverride()
+{
+	const int submesh    = m_Graphs.CurrentSubmesh();
+	const int graphIndex = m_Graphs.ForSubmesh(submesh);
+	if (graphIndex < 0 || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		QStringLiteral("Add Override"),
+		QStringLiteral("Name this look. A game asks for it by this name."),
+		QLineEdit::Normal,
+		QString(),
+		&accepted);
+	if (!accepted)
+		return;
+
+	if (!editor::CanRegisterMaterialName(registered, name))
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Add Override"),
+			name.trimmed().isEmpty() ?
+				QStringLiteral("An override needs a name.") :
+				QStringLiteral("This submesh already registers a look called '%1'.").arg(name));
+		return;
+	}
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	const QString                  path  = editor::NewOverrideMaterialPath(
+		m_DataRoot,
+		entry.materialPath,
+		m_SubmeshSelector->currentText(),
+		name);
+
+	try
+	{
+		// The copy is written before it is registered: a registration naming a file that is not
+		// there is one every later load reports as a broken reference.
+		const assetlib::AssetStore& store = m_Host.GetStore();
+		const std::string           key = store.KeyFor(std::filesystem::path(path.toStdWString()));
+		store.Save(editor::BuildMaterial(*entry.model, path, store), key);
+
+		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		store.SetSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+			name.trimmed().toStdString(),
+			key);
+		m_Host.AssetChanged(key);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not register '%s': %s", qPrintable(name), e.what());
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Add Override"),
+			QStringLiteral("Could not register the override:\n%1")
+				.arg(QString::fromLatin1(e.what())));
+		return;
+	}
+
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)] = name.trimmed();
+	ShowMaterialForSubmesh(submesh, path);
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::RemoveShownMaterialOverride()
+{
+	const int     submesh = m_Graphs.CurrentSubmesh();
+	const QString shown   = ShownOverride(submesh);
+	if (shown.isEmpty() || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	try
+	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		store.RemoveSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+			shown.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not remove '%s': %s", qPrintable(shown), e.what());
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Remove Override"),
+			QStringLiteral("Could not remove the override:\n%1")
+				.arg(QString::fromLatin1(e.what())));
+		return;
+	}
+
+	// The `.bmaterial` is left on disk: unregistering a look is not deleting an asset, and the
+	// Content Explorer is where a file is deleted.
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)].clear();
+	ShowMaterialForSubmesh(submesh, m_Preview->SubmeshMaterialPaths().value(submesh));
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath)
+{
+	if (!m_Graphs.HasSubmesh(submeshIndex))
+		return;
+
+	// A graph already open for this file is the one to show: two submeshes wearing one material
+	// share a graph, so editing it once updates both.
+	int graphIndex = materialPath.isEmpty() ? -1 : m_Graphs.FindForPath(materialPath);
+	if (graphIndex >= 0)
+		m_Graphs.Share(graphIndex, submeshIndex);
+	else
+	{
+		graphIndex = m_Graphs.Add(submeshIndex);
+		ResetGraph(graphIndex, QJsonObject());
+
+		if (!materialPath.isEmpty() &&
+		    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
+			OpenMaterialInto(graphIndex, materialPath, false);  // compiles the graph it loads
+		else
+			CompileGraph(graphIndex);
+	}
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (m_Preview != nullptr && entry.preview.IsValid())
+		m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(submeshIndex), entry.preview);
+
+	m_GraphView->setScene(entry.scene.get());
+	SyncOutputSelector();
+	SyncLayerSection();
+	FrameOnOutput();
+}
+
+void
+MaterialEditorWindow::ReloadRegisteredMaterials()
+{
+	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
+
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	try
+	{
+		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
+		{
+			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+			if (source == assetlib::c_InvalidIndex)
+				continue;
+
+			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh, source);
+		}
+	}
+	catch (const std::exception& e)
+	{
+		// A UI refresh, so a mesh that will not read leaves the looks unlisted rather than
+		// throwing out of a slot; the panel still shows the default the preview loaded.
+		qWarning("MaterialEditor: cannot read the registered materials: %s", e.what());
+	}
+}
+
+std::vector<editor::RegisteredMaterial>
+MaterialEditorWindow::RegisteredMaterialsFor(int submeshIndex) const
+{
+	if (submeshIndex < 0 || static_cast<size_t>(submeshIndex) >= m_Registered.size())
+		return {};
+
+	return m_Registered[static_cast<size_t>(submeshIndex)];
+}
+
+QString
+MaterialEditorWindow::ShownOverride(int submeshIndex) const
+{
+	if (submeshIndex < 0 || static_cast<size_t>(submeshIndex) >= m_ShownOverrides.size())
+		return {};
+
+	return m_ShownOverrides[static_cast<size_t>(submeshIndex)];
+}
+
+void
+MaterialEditorWindow::RefreshMaterialSelector()
+{
+	const int submesh = m_Graphs.CurrentSubmesh();
+
+	const QSignalBlocker blocker(m_MaterialSelector);
+	m_MaterialSelector->clear();
+
+	if (!m_Graphs.HasSubmesh(submesh))
+	{
+		m_MaterialSelector->setEnabled(false);
+		return;
+	}
+
+	const QString defaultPath =
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submesh) : QString();
+
+	m_MaterialSelector->addItem(
+		defaultPath.isEmpty() ?
+			QStringLiteral("(unbound) - default") :
+			QStringLiteral("%1 - default").arg(QFileInfo(defaultPath).completeBaseName()));
+
+	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+	for (const editor::RegisteredMaterial& look : registered)
+		m_MaterialSelector->addItem(look.name);
+
+	const QString shown = ShownOverride(submesh);
+	const auto    found = std::ranges::find(registered, shown, &editor::RegisteredMaterial::name);
+	m_MaterialSelector->setCurrentIndex(
+		found == registered.end() ? 0 :
+									static_cast<int>(std::distance(registered.begin(), found)) + 1);
+
+	m_MaterialSelector->setEnabled(true);
 }
 
 void

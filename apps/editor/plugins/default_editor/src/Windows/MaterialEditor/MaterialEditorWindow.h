@@ -19,6 +19,7 @@
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
+#include "Windows/MaterialEditor/material_overrides.h"
 
 class TexturePreviewCache;
 
@@ -151,13 +152,43 @@ private:
 	ReleasePreviewMaterials();
 
 	/**
-	 * Writes the material at `materialPath` into the `.bmesh` as `submeshIndex`'s default, so every
-	 * instance of that mesh -- in the preview, in a level, in the game -- picks it up on load.
+	 * Writes the look the Material combo shows as `submeshIndex`'s default -- into the mesh's
+	 * import document, or into the `.bmesh` itself for a mesh with no source -- so every instance
+	 * of that mesh, in the preview, in a level and in the game, picks it up on load.
 	 *
 	 * The deliberate act the preview's instance overrides exist to keep separate from authoring.
 	 */
 	void
-	SetDefaultMaterial(int submeshIndex);
+	MakeShownMaterialDefault(int submeshIndex);
+
+	/** Registers another look for the selected submesh, copied from the one on the board. */
+	void
+	AddMaterialOverride();
+
+	/** Unregisters the shown override and goes back to the submesh's default. */
+	void
+	RemoveShownMaterialOverride();
+
+	/** Puts `materialPath` on the board and on the previewed submesh, sharing a graph already open
+	 *  for it. An empty path leaves the submesh its own blank graph. */
+	void
+	ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath);
+
+	/** Fills the Material combo for the selected submesh and selects the look on the board. */
+	void
+	RefreshMaterialSelector();
+
+	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
+	void
+	ReloadRegisteredMaterials();
+
+	/** The looks the mesh registers for `submeshIndex`, or none for a mesh that has no file. */
+	[[nodiscard]] std::vector<editor::RegisteredMaterial>
+	RegisteredMaterialsFor(int submeshIndex) const;
+
+	/** The override shown for `submeshIndex`, or empty when it shows the submesh's default. */
+	[[nodiscard]] QString
+	ShownOverride(int submeshIndex) const;
 
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
@@ -226,6 +257,14 @@ private:
 	QComboBox* m_SubmeshSelector = nullptr;
 	QComboBox* m_OutputSelector  = nullptr;
 
+	// Which look each submesh is showing: the name of a registered override, or empty for the
+	// submesh's default. Indexed by panel submesh, sized with the graphs.
+	std::vector<QString> m_ShownOverrides;
+
+	// The mesh's registered looks, per panel submesh. Cached because the combo is refilled on
+	// every panel refresh and the answer is a whole `.bmesh` read.
+	std::vector<std::vector<editor::RegisteredMaterial>> m_Registered;
+
 	// The built widgets, kept whole for the free functions that take them (FillLayerSection).
 	editor::MaterialEditorWidgets m_Ui;
 	MaterialGraphView*            m_GraphView          = nullptr;
@@ -234,7 +273,10 @@ private:
 	QPushButton*                  m_SaveAsButton       = nullptr;
 	QPushButton*                  m_SaveAllButton      = nullptr;
 	QPushButton*                  m_BakeAllButton      = nullptr;
-	QPushButton*                  m_SetDefaultButton   = nullptr;
+	QPushButton*                  m_AddOverrideButton  = nullptr;
+	QPushButton*                  m_RemoveOverride     = nullptr;
+	QPushButton*                  m_MakeDefaultButton  = nullptr;
+	QComboBox*                    m_MaterialSelector   = nullptr;
 	QLabel*                       m_MaterialLabel      = nullptr;
 	QLabel*                       m_BakedTexturesLabel = nullptr;
 	QLabel*                       m_TangentWarning     = nullptr;
