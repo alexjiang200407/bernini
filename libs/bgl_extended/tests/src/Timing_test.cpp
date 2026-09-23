@@ -252,14 +252,18 @@ TEST_CASE("Timing a frame lists every kept pass with what it cost", "[timing][re
 	const std::vector<std::string> names = Names(rows);
 	CHECK(names.front() == "Clear");
 	CHECK(names.back() == "PreparePresent");
-	CHECK(std::ranges::find(names, "Forward 0") != names.end());
+	CHECK(std::ranges::find(names, "Forward Static 0") != names.end());
+	CHECK(std::ranges::find(names, "Forward Units 0") != names.end());
 	CHECK(std::ranges::find(names, "TaaResolve") != names.end());
 	CHECK(std::ranges::find(names, "PostProcess") != names.end());
 
-	// In execution order, so Forward precedes the resolve that reads what it drew.
-	const auto forward = std::ranges::find(names, "Forward 0");
-	const auto resolve = std::ranges::find(names, "TaaResolve");
-	CHECK(forward < resolve);
+	// In execution order, so the forward render precedes the resolve that reads what it drew, and
+	// its static phase precedes its unit phase.
+	const auto forwardStatic = std::ranges::find(names, "Forward Static 0");
+	const auto forwardUnits  = std::ranges::find(names, "Forward Units 0");
+	const auto resolve       = std::ranges::find(names, "TaaResolve");
+	CHECK(forwardStatic < forwardUnits);
+	CHECK(forwardUnits < resolve);
 
 	double sumMs = 0.0;
 	for (const bgl::PassTiming& row : rows)

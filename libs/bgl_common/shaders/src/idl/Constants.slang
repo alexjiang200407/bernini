@@ -70,7 +70,7 @@ public static const uint cFloat4sPerBone = 3;
 public static const uint cMaxLegsPerRig = 8;
 
 // float4s one leg's sole occupies at the end of a hero palette: its heel and its ball, world space,
-// as the pose at `time` stands them. The blob phase's foot shadows read them.
+// as the pose at `time` stands them. The blob-shadow pass's foot shadows read them.
 public static const uint cFloat4sPerSole = 2;
 
 // A blob-shadow entry's `soleSlot` when the entry is the placement's own disc rather than a foot's.

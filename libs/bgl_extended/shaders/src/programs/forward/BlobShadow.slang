@@ -10,8 +10,9 @@ import lib.types.UploadBuffer;
 // One workgroup draws one blob-shadow decal: a screen-space quad over the caster's footprint whose
 // pixel stage reconstructs the static receiver under each pixel from the static depth prepass and
 // darkens it by a radial falloff, fading with the caster's height above that surface. Composites
-// between the opaque buckets and the depth-sorted transparents, colour only -- a blended decal has
-// no single depth to reproject, exactly as programs.forward.Transparent has none.
+// between Forward's static and unit phases, so a unit drawn after hides it and a transparent
+// composites over it; colour only -- a blended decal has no single depth to reproject, exactly as
+// programs.forward.Transparent has none.
 //
 // An entry is either a placement's own disc, cast from its origin, or one foot's: a capsule lying on
 // the sole from heel to ball, cast from the pose the frame draws. The two differ only in where the
@@ -197,9 +198,8 @@ struct PSOut
 {
     float4 color : SV_Target;
 
-    // The fragment takes the receiver's own depth, so the kLessOrEqual test against the scene
-    // depth occludes the decal wherever a unit stands between the camera and the surface it lands
-    // on -- the quad's rasterized depth means nothing.
+    // The fragment takes the receiver's own depth for the kLessOrEqual test against the scene
+    // depth -- the quad's rasterized depth means nothing.
     float depth : SV_Depth;
 };
 

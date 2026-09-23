@@ -1,6 +1,8 @@
-#include "passes/BlobShadowPhase.h"
+#include "passes/BlobShadowPass.h"
 #include "cmd/CommandList.h"
+#include "constants/constants.h"
 #include "device/Device.h"
+#include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
@@ -48,7 +50,7 @@ namespace bgl
 	}
 
 	void
-	BlobShadowPhase::Init(const PassInitContext& ctx)
+	BlobShadowPass::Init(const PassInitContext& ctx)
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
@@ -95,39 +97,64 @@ namespace bgl
 	}
 
 	void
-	BlobShadowPhase::CheckBindings() const
+	BlobShadowPass::CheckBindings() const
 	{
-		BindingNameCheck("BlobShadowPhase"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
+		BindingNameCheck("BlobShadowPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void
-	BlobShadowPhase::DeclareResources(PassDesc& desc)
-	{
-		// The palette arena is read too, for the soles; ForwardPass declares it with the skinned
-		// tables, at the stage and access this reads it with.
-		desc.AddBufferArg(
-			BufferArg{ std::string(c_BlobShadowsName),
-		               BarrierSyncFlag::kVertexShader,
-		               BarrierAccessFlag::kShaderResource });
-
-		desc.AddTextureArg(
-			TextureArg{ std::string(c_StaticDepthName),
-		                BarrierSyncFlag::kPixelShader,
-		                BarrierAccessFlag::kShaderResource,
-		                BarrierLayout::kShaderResource });
-	}
-
-	void
-	BlobShadowPhase::Draw(const DrawData& draw, const PassContext& resources)
+	BlobShadowPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
 		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "BlobShadowPhase requires a bgl::SceneView");
+		gassert(view != nullptr, "BlobShadowPass requires a bgl::SceneView");
 
-		const uint32_t blobs = view->GetBlobShadowCount();
-		if (blobs == 0)
+		if (view->GetBlobShadowCount() == 0)
 		{
 			return;
 		}
+
+		auto desc = PassDesc();
+
+		desc.SetName("Blob Shadows {}", draw.drawIdx)
+			.AddTextureArg(
+				TextureArg{ std::string(c_BackbufferName),
+		                    BarrierSyncFlag::kRenderTarget,
+		                    BarrierAccessFlag::kRenderTarget,
+		                    BarrierLayout::kRenderTarget })
+			.AddTextureArg(
+				TextureArg{ std::string(c_DepthName),
+		                    BarrierSyncFlag::kDepthStencil,
+		                    BarrierAccessFlag::kDepthWrite,
+		                    BarrierLayout::kDepthWrite })
+			.AddTextureArg(
+				TextureArg{ std::string(c_StaticDepthName),
+		                    BarrierSyncFlag::kPixelShader,
+		                    BarrierAccessFlag::kShaderResource,
+		                    BarrierLayout::kShaderResource })
+			.AddBufferArg(
+				BufferArg{ std::string(c_BlobShadowsName),
+		                   BarrierSyncFlag::kVertexShader,
+		                   BarrierAccessFlag::kShaderResource })
+			.AddBufferArg(
+				BufferArg{ std::string(c_MeshInstanceBufferName),
+		                   BarrierSyncFlag::kVertexShader,
+		                   BarrierAccessFlag::kShaderResource })
+			.AddBufferArg(
+				BufferArg{ std::string(c_BonePaletteName),
+		                   BarrierSyncFlag::kVertexShader,
+		                   BarrierAccessFlag::kShaderResource });
+
+		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
+
+		fg.AddPass(std::move(desc));
+	}
+
+	void
+	BlobShadowPass::Execute(const DrawData& draw, const PassContext& resources)
+	{
+		const auto* view = draw.view->As<SceneView>();
+
+		const uint32_t blobs = view->GetBlobShadowCount();
 
 		gassert(m_Kernel.pipeline.IsInitialized(), "Blob shadow pipeline must be initialized");
 

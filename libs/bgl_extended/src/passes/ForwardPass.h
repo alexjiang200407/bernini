@@ -1,6 +1,5 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
-#include "passes/BlobShadowPhase.h"
 #include "passes/PassInitContext.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/DrawBucketMask.h"
@@ -19,6 +18,17 @@ namespace bgl
 	class PassContext;
 
 	struct DrawData;
+
+	/**
+	 * Which half of the forward render a pass records. The static tier draws first, so that between
+	 * the two the depth holds static receivers alone: the blob-shadow pass draws there, and it is
+	 * where an HZB build belongs.
+	 */
+	enum class ForwardPhase : uint8_t
+	{
+		kStatic,
+		kUnits,
+	};
 
 	class ForwardPass
 	{
@@ -43,10 +53,8 @@ namespace bgl
 				kernel.Reset();
 			}
 			m_TransparentKernel.Reset();
-			m_BlobShadows.Release();
 		}
 
-		/** Requests the always-on blob-shadow kernels; bucket kernels arrive by AddDrawBucketKernels. */
 		void
 		Init(const PassInitContext& ctx);
 
@@ -81,21 +89,24 @@ namespace bgl
 		void
 		CheckBindings() const;
 
+		/**
+		 * `kStatic` draws the non-transparent static buckets; `kUnits` the non-transparent buckets
+		 * of every other tier, then the depth-sorted transparent list.
+		 */
 		void
-		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
-
-		void
-		Execute(const DrawData& draw, const PassContext& resources);
+		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, ForwardPhase phase);
 
 	private:
+		void
+		Execute(const DrawData& draw, const PassContext& resources, ForwardPhase phase);
+
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
 		void
 		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
 
 		/**
 		 * The depth-sorted transparent phase: one indirect dispatch over the whole sorted list,
-		 * back-to-front, drawn after the opaque buckets and inside the same pass so it shares the
-		 * depth attachment.
+		 * back-to-front, drawn after the unit buckets and inside the same pass.
 		 *
 		 * Binds its own framebuffers rather than reusing the opaque one: a blend PSO declares no
 		 * velocity render target, and an attachment count that outruns the PSO's is invalid.
@@ -114,9 +125,5 @@ namespace bgl
 		MeshletKernel m_TransparentKernel;
 
 		const DrawBucketTable* m_DrawBucketTable = nullptr;
-
-		// Drawn between the opaque buckets and DrawTransparent -- see BlobShadowPhase for why it
-		// is a phase of this pass rather than a pass of its own.
-		BlobShadowPhase m_BlobShadows;
 	};
 }

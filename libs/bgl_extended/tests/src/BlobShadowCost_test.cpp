@@ -44,11 +44,15 @@ namespace
 			if (frame < 4)
 				continue;
 			const bgl::PassTimings timings = gfx.GetPassTimings(target);
+			// The forward render is three passes: the static phase, the blob decals, the units.
+			double forwardMs = 0.0;
 			for (const bgl::PassTiming& row : timings.passes)
 			{
-				if (row.name == "Forward 0")
-					samples.push_back(row.milliseconds);
+				if (row.name == "Forward Static 0" || row.name == "Blob Shadows 0" ||
+				    row.name == "Forward Units 0")
+					forwardMs += row.milliseconds;
 			}
+			samples.push_back(forwardMs);
 		}
 		REQUIRE(!samples.empty());
 		std::ranges::sort(samples);

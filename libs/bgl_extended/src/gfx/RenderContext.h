@@ -11,6 +11,7 @@
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
+#include "passes/BlobShadowPass.h"
 #include "passes/BloomPass.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
@@ -310,6 +311,7 @@ namespace bgl
 		TonemapLut           m_TonemapLut;
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
+		BlobShadowPass       m_BlobShadows;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;
 		BloomPass            m_BloomPass;

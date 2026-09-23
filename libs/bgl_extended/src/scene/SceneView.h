@@ -260,8 +260,8 @@ namespace bgl
 		}
 
 		/**
-		 * How many workgroups the forward pass's blob phase dispatches: one per placement carrying
-		 * a blob shadow. Zero means the phase has nothing to draw.
+		 * How many workgroups the blob-shadow pass dispatches: one per placement carrying
+		 * a blob shadow. Zero means the pass is not attached.
 		 */
 		[[nodiscard]] uint32_t
 		GetBlobShadowCount() const noexcept
@@ -580,7 +580,7 @@ namespace bgl
 		// which own no palette.
 		UploadBuffer<idl::PosedInstance> m_PosedInstances;
 
-		// The placements carrying a blob shadow, one disc each -- the forward pass's blob phase
+		// The placements carrying a blob shadow, one disc each -- the blob-shadow pass
 		// dispatches over it. Dense and CPU-authored for the pose list's reason.
 		UploadBuffer<idl::BlobShadow> m_BlobShadows;
 
