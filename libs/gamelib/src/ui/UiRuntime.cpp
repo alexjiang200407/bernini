@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <gamelib/ui/UiRuntime.h>
 
+#include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
 #include "ui/UiFileInterface.h"
 #include "ui/UiSystemInterface.h"
 #include <assetlib/AssetStore.h>

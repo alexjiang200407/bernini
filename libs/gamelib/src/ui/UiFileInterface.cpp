@@ -1,4 +1,5 @@
 #include "ui/UiFileInterface.h"
+#include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
 #include <algorithm>
 #include <core/file/IFileSystem.h>
 #include <cstddef>

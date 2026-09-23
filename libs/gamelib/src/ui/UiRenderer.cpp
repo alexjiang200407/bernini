@@ -5,6 +5,7 @@
 #include <exception>
 #include <gamelib/ui/UiRenderer.h>
 
+#include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
 #include "ui/UiSystemInterface.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>

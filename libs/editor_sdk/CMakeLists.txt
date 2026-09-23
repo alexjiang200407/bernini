@@ -17,6 +17,13 @@ target_include_directories(editor_sdk PUBLIC
 target_link_libraries(editor_sdk PUBLIC assetlib bgl Qt6::Widgets)
 set_target_properties(editor_sdk PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 enable_strict_compiler(editor_sdk)
+# What Qt costs the strict set, and nothing more: a QObject is non-copyable, so every Q_OBJECT class
+# reports all four of its implicitly deleted copy/move members, and moc writes its own include as a
+# path full of `..`. Suppressed rather than dropping enable_strict_compiler as editor_lib does,
+# because this target is exported in the BerniniEditorSDK package a plugin author compiles against
+# and only two of its headers declare a Q_OBJECT.
+target_compile_options(editor_sdk PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/wd4625 /wd4626 /wd5026 /wd5027 /wd4464>)
 enable_coverage(editor_sdk)
 
 file(GLOB_RECURSE EDITOR_SDK_HEADERS CONFIGURE_DEPENDS include/*.h)
