@@ -68,7 +68,7 @@ and fix the map.
 | `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_plugin_api/include/editor_plugin_api/TranslationCatalog.h), [translation_csv.h](libs/editor_plugin_api/include/editor_plugin_api/translation_csv.h) | Module data and optional CSV ingestion |
 | `MenuDesc` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
 | `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_plugin_api/include/editor_plugin_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
-| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
+| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch, editor navigation and the host's mesh import |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_plugin_api/include/editor_plugin_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
 | Loading-screen tasks | [BackgroundTask.h](../libs/editor_sdk/include/editor_sdk/BackgroundTask.h) | Scoped worker execution with GUI-thread progress and cooperative cancellation |
@@ -290,6 +290,15 @@ exercise both services through the end of viewport teardown.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
   own writes. The host reports thrown errors; a successful write calls `AssetChanged`, which drops
   cached previews and their render assets because another document may reference the changed key.
+- **The host's own mesh import** runs the other way, and the two are not alternatives.
+  `IEditorImporter` is a plugin *supplying* an import for an extension the host would not otherwise
+  know; `IEditorHost::ImportMeshSource` is a plugin *asking* for the glTF cook the editor already
+  has, which it cannot link. It takes a filesystem path — a file the user picked from anywhere —
+  and answers with the mount key of the `.bmesh` it wrote. The host owns the options dialog, the
+  loading screen and every report, and parents them itself.
+  An empty answer covers declined, cancelled, failed, and a source imported for its clips alone: the
+  host has already said which, so a caller shows nothing of its own. A host with no import to offer
+  throws rather than answering empty, so "cannot" is never read as "produced nothing".
 - **Asset changes:** after a successful write, call `IEditorHost::AssetChanged` on the GUI thread
   with a normalized mount key. It invalidates host caches and queues `EditorPanel::OnAssetChanged`
   once for each panel alive at that call, including inactive panels and the writer. Each queued

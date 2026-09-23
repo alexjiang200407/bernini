@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Import/import_pipeline.h"
+
 #include <QString>
 
 class QMimeData;
@@ -7,6 +9,31 @@ class QWidget;
 
 namespace editor
 {
+	/** What one mesh source's import produced. */
+	struct MeshImport
+	{
+		ImportOutcome outcome = ImportOutcome::kFailed;
+
+		/**
+		 * The `.bmesh` it wrote, data-root-relative, or empty when it wrote none -- an import asked
+		 * for the clips alone, and every outcome but kImported.
+		 */
+		QString mesh;
+	};
+
+	/**
+	 * Asks for `sourceFile`'s import options and runs the import behind its loading screen.
+	 *
+	 * The whole of what importing one mesh source means, so that a drop of several and a caller
+	 * holding one file agree on it: the self-contained check that refuses before a dialog promises
+	 * an import that cannot happen, the material probe that decides what the dialog may offer, the
+	 * dialog, and the cook.
+	 *
+	 * @param parent Parents the dialog, the loading screen and every message box.
+	 */
+	[[nodiscard]] MeshImport
+	RunMeshImport(QWidget* parent, const QString& dataRoot, const QString& sourceFile);
+
 	/** Whether `localFile` names a mesh source the importer accepts. */
 	[[nodiscard]] bool
 	IsImportableMesh(const QString& localFile);

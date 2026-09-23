@@ -12,6 +12,7 @@
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_plugin_api/LocalizedText.h>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -140,6 +141,36 @@ namespace
 		std::string m_PanelId;
 	};
 
+	/**
+	 * Imports the selected mesh source and opens what came back.
+	 *
+	 * The shape every consumer of the host's import wants: the answer is a key, so it feeds
+	 * OpenAsset directly, and an empty one is dropped in silence -- the host has already told the
+	 * user why there is nothing to open.
+	 */
+	class ImportSourceAction final : public editor::IEditorAction
+	{
+	public:
+		bool
+		IsEnabled(editor::IEditorHost&, const std::span<const std::string> selection) const override
+		{
+			return !selection.empty();
+		}
+		void
+		Invoke(editor::IEditorHost& host, const std::span<const std::string> selection) override
+		{
+			if (selection.empty())
+				return;
+
+			const std::string mesh =
+				host.ImportMeshSource(std::filesystem::path(selection.front()));
+			if (mesh.empty())
+				return;
+
+			host.OpenAsset(mesh);
+		}
+	};
+
 	class SampleEditorPlugin final : public editor::IEditorPlugin
 	{
 	public:
@@ -172,6 +203,12 @@ namespace
 					.SetTitle({ "sample.editor", "overview", "Project tools" })
 					.SetMenuId("sample.tools")
 					.AddAction<OpenPanelAction>("sample.overview"));
+			registry.AddAction(
+				editor::ActionDesc()
+					.SetId("sample.import-source")
+					.SetTitle({ "sample.editor", "import", "Import mesh source" })
+					.SetMenuId("sample.tools")
+					.AddAction<ImportSourceAction>());
 		}
 	};
 }

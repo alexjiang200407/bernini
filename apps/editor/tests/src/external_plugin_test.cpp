@@ -139,7 +139,7 @@ TEST_CASE(
 		true,
 		{ .showPanel = [&shown](std::string_view id) { shown = id; } });
 	QWidget parent;
-	REQUIRE(registry.Actions().size() == 1);
+	REQUIRE(registry.Actions().size() == 2);
 	registry.Actions().front().action->Invoke(host, {});
 	CHECK(shown == "sample.overview");
 	const auto* overview = registry.FindPanel(shown);

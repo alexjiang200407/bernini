@@ -6,10 +6,12 @@
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_plugin_api/LanguageResolver.h>
 #include <editor_plugin_api/TranslationCatalog.h>
+#include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <qwidget.h>
 #include <span>
+#include <string>
 #include <string_view>
 
 class Renderer;
@@ -23,6 +25,10 @@ namespace editor::plugins
 		std::function<void(std::string_view)>    openAsset;
 		std::function<void(std::string_view)>    assetChanged;
 		std::function<void(RenderTargetWindow&)> viewportCreated;
+
+		// Dispatched rather than called here: the import owns dialogs and a loading screen, which
+		// belong to a window, and this object has none.
+		std::function<std::string(const std::filesystem::path&)> importMeshSource;
 	};
 
 	class EditorHost final : public IEditorHost
@@ -53,6 +59,9 @@ namespace editor::plugins
 
 		void
 		OpenAsset(std::string_view key) override;
+
+		[[nodiscard]] std::string
+		ImportMeshSource(const std::filesystem::path& source) override;
 
 		void
 		AssetChanged(std::string_view key) override;
