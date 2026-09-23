@@ -26,6 +26,7 @@ class TexturePreviewCache;
 
 class QAction;
 class QComboBox;
+class QEvent;
 class QTimer;
 class QListWidget;
 class QJsonObject;
@@ -67,6 +68,10 @@ public:
 	}
 	void
 	SetActive(bool active) override;
+
+	/** Marks the board edited on any interaction with it; see MarkGraphEdited. */
+	bool
+	eventFilter(QObject* watched, QEvent* event) override;
 	void
 	OnAssetChanged(std::string_view key) override;
 	~MaterialEditorWindow() override;
@@ -190,6 +195,10 @@ private:
 	[[nodiscard]] QString
 	OverrideAtRow(int row) const;
 
+	/** What `graphIndex` compiles to right now, hashed, for the comparison a write makes. */
+	[[nodiscard]] uint64_t
+	CompiledHash(int graphIndex) const;
+
 	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
 	void
 	ReloadRegisteredMaterials();
@@ -213,6 +222,12 @@ private:
 	 * Marks `graphIndex` edited and restarts the write timer, so a burst of edits writes once when
 	 * it stops. Does nothing while a graph is being loaded or seeded -- that is not an edit -- or
 	 * for the default sphere, which has no project asset to write to.
+	 *
+	 * Deliberately over-eager: it is called for anything that *might* have changed the board,
+	 * including a bare click on it, because a write compares what the graph compiles to against
+	 * what was last written and skips an identical one. Missing a trigger loses an edit silently;
+	 * an extra trigger costs one compile. So a control added to this panel needs nothing here --
+	 * it is enough that the value it edits lives in the graph, which is what puts it in the file.
 	 */
 	void
 	MarkGraphEdited(int graphIndex);

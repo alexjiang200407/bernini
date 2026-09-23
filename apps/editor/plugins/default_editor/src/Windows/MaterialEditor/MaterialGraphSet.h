@@ -48,6 +48,11 @@ public:
 
 		// Edited since it was last written. The panel saves by itself, so this is what it saves.
 		bool dirty = false;
+
+		// What the graph compiled to when it was last written or loaded, hashed. A write compares
+		// against it and skips an identical one, which is what makes marking the graph edited too
+		// eagerly free -- see MaterialEditorWindow::MarkGraphEdited.
+		uint64_t writtenHash = 0;
 	};
 
 	/** Drops every graph and sizes the submesh table for a mesh of `submeshCount` submeshes. */

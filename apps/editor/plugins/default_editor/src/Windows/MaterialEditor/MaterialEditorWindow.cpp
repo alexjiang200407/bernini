@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
 
@@ -34,6 +35,8 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 
+#include <QEvent>
+#include <QScopeGuard>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/mesh_tangents.h>
@@ -42,6 +45,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/SurfaceType.h>
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -164,6 +168,11 @@ MaterialEditorWindow::MaterialEditorWindow(
 			OpenMaterialInto(m_Graphs.Current(), path);
 	});
 	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
+
+	// Every interaction with the board and with the properties beside it, not only the signals
+	// the controls emit; an identical write is skipped, so this costs nothing when it is nothing.
+	m_GraphView->viewport()->installEventFilter(this);
+	m_Ui.leftPanel->installEventFilter(this);
 
 	// The panel writes by itself. One shot, restarted by every edit, so a drag or a run of
 	// keystrokes writes once when it stops rather than once per event.
@@ -806,6 +815,54 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 		texture->SetTexturePath(path);
 }
 
+uint64_t
+MaterialEditorWindow::CompiledHash(int graphIndex) const
+{
+	if (!m_Graphs.Holds(graphIndex))
+		return 0;
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.model == nullptr || entry.materialPath.isEmpty())
+		return 0;
+
+	try
+	{
+		const std::vector<std::byte> bytes = assetlib::AssetCodec<assetlib::BMaterial>::Serialize(
+			editor::BuildMaterial(*entry.model, entry.materialPath, m_Host.GetStore()));
+
+		return core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
+	}
+	catch (const std::exception& e)
+	{
+		// Zero is "not known", which costs a write that turns out to be identical -- never a
+		// skipped one.
+		qWarning("MaterialEditor: cannot measure the board: %s", e.what());
+		return 0;
+	}
+}
+
+bool
+MaterialEditorWindow::eventFilter(QObject* watched, QEvent* event)
+{
+	// Anything the board or the panel answers to, rather than the signals a particular control
+	// happens to emit: a control added here that forgets to announce itself would otherwise be
+	// edited and never written, and nothing on screen would say so.
+	switch (event->type())
+	{
+	case QEvent::MouseButtonRelease:
+	case QEvent::KeyRelease:
+	case QEvent::Wheel:
+	case QEvent::FocusOut:
+		MarkGraphEdited(m_Graphs.Current());
+		break;
+
+	default:
+		break;
+	}
+
+	return EditorPanel::eventFilter(watched, event);
+}
+
 void
 MaterialEditorWindow::MarkGraphEdited(int graphIndex)
 {
@@ -854,7 +911,23 @@ MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
 			const std::string           key =
 				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString()));
 
-			store.Save(editor::BuildMaterial(*entry.model, entry.materialPath, store), key);
+			const assetlib::BMaterial material =
+				editor::BuildMaterial(*entry.model, entry.materialPath, store);
+
+			// What the board compiles to, against what was last written: a mark that turned out to
+			// be nothing -- a click, a node dragged and put back -- writes no file and notifies
+			// nobody. That is what lets the marking above be as eager as it is.
+			const std::vector<std::byte> bytes =
+				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material);
+			const uint64_t hash = core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
+			if (!fresh && hash == entry.writtenHash)
+			{
+				entry.dirty = false;
+				continue;
+			}
+
+			store.Save(material, key);
+			entry.writtenHash = hash;
 			m_Host.AssetChanged(key);
 		}
 		catch (const std::exception& e)
@@ -1455,6 +1528,12 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 
 	// Seeding the board fires every signal an edit does; none of it is the user's.
 	const LoadGuard loading(m_Loading);
+
+	// Whatever the board compiles to once this load lands is what the file already holds.
+	const auto rememberLoaded = qScopeGuard([this, graphIndex] {
+		if (m_Graphs.Holds(graphIndex))
+			m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
+	});
 
 	auto material = assetlib::BMaterial();
 	try
