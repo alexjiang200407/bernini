@@ -758,6 +758,40 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	CHECK(rewritten.bindings[0].material == "Authored/Materials/new.bmaterial");
 }
 
+TEST_CASE(
+	"Renaming a material only an override names re-points the import document",
+	"[assetrename][overrides]")
+{
+	const DataRoot root("bernini_rename_override");
+
+	BMaterial material;
+	material.name = "burnt";
+	core::file::write_atomic(
+		root.path / "Authored/Materials" / "old.bmaterial",
+		AssetCodec<BMaterial>::Serialize(material));
+
+	ImportDocument document;
+	document.materialOverrides = { { "kirk[0]", "Burnt", "Authored/Materials/old.bmaterial" } };
+	fs::create_directories(root.path / "Authored/Meshes");
+	core::file::write_atomic(
+		root.path / "Authored/Meshes" / "kirk.bimport",
+		AssetCodec<ImportDocument>::Serialize(document));
+	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
+
+	const RenamePlan plan = planRename(
+		root.Scan(),
+		"Authored/Materials/old.bmaterial",
+		"Authored/Materials/new.bmaterial");
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
+
+	const ImportDocument rewritten =
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/kirk.bimport");
+	REQUIRE(rewritten.materialOverrides.size() == 1);
+	CHECK(
+		rewritten.materialOverrides[0] ==
+		MaterialOverrideBinding{ "kirk[0]", "Burnt", "Authored/Materials/new.bmaterial" });
+}
+
 TEST_CASE("Renaming an imported source moves everything it produced", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_import_group");

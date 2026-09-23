@@ -206,6 +206,79 @@ TEST_CASE("a malformed import document is refused with its reason", "[importdoc]
 	CHECK_THROWS(DocumentText(colliding));
 }
 
+TEST_CASE(
+	"overrides round-trip canonically, and a document with none writes no key",
+	"[importdoc][overrides]")
+{
+	ImportDocument document;
+	document.bindings          = { { "crate[0]", "Authored/Materials/wood.bmaterial" } };
+	document.materialOverrides = { { "crate[1]", "Rusty", "Authored/Materials/rust.bmaterial" },
+		                           { "crate[0]", "Painted", "Authored/Materials/paint.bmaterial" },
+		                           { "crate[0]", "Burnt", "Authored/Materials/burnt.bmaterial" } };
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	CHECK(
+		read.materialOverrides ==
+		std::vector<MaterialOverrideBinding>{
+			{ "crate[0]", "Burnt", "Authored/Materials/burnt.bmaterial" },
+			{ "crate[0]", "Painted", "Authored/Materials/paint.bmaterial" },
+			{ "crate[1]", "Rusty", "Authored/Materials/rust.bmaterial" } });
+	CHECK(DocumentText(read) == text);
+
+	// Overrides are not a parameter: registering a look re-cooks nothing.
+	ImportDocument bare = document;
+	bare.materialOverrides.clear();
+	CHECK(parametersHashOf(bare) == parametersHashOf(document));
+	CHECK(DocumentText(bare).find("\"materialOverrides\"") == std::string::npos);
+}
+
+TEST_CASE("a malformed override is refused with its reason", "[importdoc][overrides]")
+{
+	CHECK_THROWS(DocumentFrom(R"({ "materialOverrides": [1] })"));
+	CHECK_THROWS(DocumentFrom(R"({ "materialOverrides": { "cube[0]": "a.bmaterial" } })"));
+	CHECK_THROWS(DocumentFrom(R"({ "materialOverrides": { "cube[0]": { "Rusty": 7 } } })"));
+	CHECK_THROWS(DocumentFrom(R"({ "materialOverrides": { "cube[0]": { "": "a.bmaterial" } } })"));
+
+	ImportDocument colliding;
+	colliding.materialOverrides = { { "cube[0]", "Rusty", "Authored/Materials/a.bmaterial" },
+		                            { "cube[0]", "Rusty", "Authored/Materials/b.bmaterial" } };
+	CHECK_THROWS(DocumentText(colliding));
+
+	// One name on two submeshes is two overrides, not a collision.
+	ImportDocument shared;
+	shared.materialOverrides = { { "cube[0]", "Rusty", "Authored/Materials/a.bmaterial" },
+		                         { "cube[1]", "Rusty", "Authored/Materials/a.bmaterial" } };
+	CHECK(DocumentFrom(DocumentText(shared)).materialOverrides.size() == 2);
+}
+
+TEST_CASE(
+	"the scan reads an override's material as a reference",
+	"[importdoc][assetrefs][overrides]")
+{
+	const DataRoot root("bernini_importdoc_scan_override");
+
+	BMaterial material;
+	material.name = "rust";
+	core::file::write_atomic(
+		root.path / "Authored/Materials" / "rust.bmaterial",
+		AssetCodec<BMaterial>::Serialize(material));
+
+	ImportDocument document;
+	document.materialOverrides = { { "kirk[0]", "Rusty", "Authored/Materials/rust.bmaterial" } };
+	WriteText(root.path / "Authored/Meshes" / "kirk.bimport", DocumentText(document));
+	WriteText(root.path / "Authored/Meshes" / "kirk.glb", "not really a glb");
+
+	// The one thing that stops the explorer deleting a look a game can still ask for by name.
+	const AssetRefGraph graph                 = root.Scan();
+	bool                documentHoldsMaterial = false;
+	for (const AssetRef& ref : graph.ReferrersOf("Authored/Materials/rust.bmaterial"))
+		documentHoldsMaterial |=
+			ref.referrer == "Authored/Meshes/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
+	CHECK(documentHoldsMaterial);
+}
+
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
 {
 	CHECK(importDocumentKeyFor("Authored/Meshes/kirk.glb") == "Authored/Meshes/kirk.bimport");
@@ -385,6 +458,68 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		document.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/skin.bmaterial" });
 	CHECK(
 		document.bindings[1] == MaterialBinding{ "kirk[1]", "Authored/Materials/teeth.bmaterial" });
+}
+
+TEST_CASE(
+	"overrides are authored in the document and survive a re-import",
+	"[importdoc][overrides]")
+{
+	const DataRoot root("bernini_importdoc_overrides");
+	WriteText(root.path / "crate.glb", "the source");
+
+	const BMesh mesh = NamedMesh({ { "crate[0]", 0 } }, { "Authored/Materials/wood.bmaterial" });
+	const ImportTarget target{ "Authored/Meshes/crate.glb", 24.0f, {} };
+	const AssetStore   store(root.path);
+	static_cast<void>(store.CopyImportedSource(root.path / "crate.glb", target));
+	store.WriteImportedDocument(target, &mesh);
+
+	const auto read = [&] {
+		return loadImportDocument(
+			core::file::LooseFileSystem(root.path),
+			"Authored/Meshes/crate.bimport");
+	};
+
+	store.SetSubmeshMaterialOverrideInDocument(
+		target.source,
+		"crate[0]",
+		"Rusty",
+		"Authored/Materials/rust.bmaterial");
+	store.SetSubmeshMaterialOverrideInDocument(
+		target.source,
+		"crate[0]",
+		"Rusty",
+		"Authored/Materials/rust2.bmaterial");
+	CHECK(
+		read().materialOverrides ==
+		std::vector<MaterialOverrideBinding>{
+			{ "crate[0]", "Rusty", "Authored/Materials/rust2.bmaterial" } });
+	CHECK(
+		read().bindings ==
+		std::vector<MaterialBinding>{ { "crate[0]", "Authored/Materials/wood.bmaterial" } });
+
+	SECTION("a re-import keeps them")
+	{
+		store.WriteImportedDocument(target, &mesh);
+		CHECK(read().materialOverrides.size() == 1);
+	}
+
+	SECTION("removing one leaves the binding; removing one twice is refused")
+	{
+		store.RemoveSubmeshMaterialOverrideInDocument(target.source, "crate[0]", "Rusty");
+		CHECK(read().materialOverrides.empty());
+		CHECK(read().bindings.size() == 1);
+		CHECK_THROWS(
+			store.RemoveSubmeshMaterialOverrideInDocument(target.source, "crate[0]", "Rusty"));
+	}
+
+	SECTION("an override needs a name")
+	{
+		CHECK_THROWS(store.SetSubmeshMaterialOverrideInDocument(
+			target.source,
+			"crate[0]",
+			"",
+			"Authored/Materials/rust.bmaterial"));
+	}
 }
 
 // The importer places the source like every other output, so a project can organise the authored

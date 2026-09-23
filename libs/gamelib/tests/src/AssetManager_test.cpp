@@ -110,14 +110,16 @@ namespace
 	// of one triangle. `materials` are the data-root-relative .bmaterial paths it names.
 	void
 	WriteMesh(
-		const std::filesystem::path& path,
-		std::span<const std::string> materials,
-		std::span<const uint32_t>    materialIndices)
+		const std::filesystem::path&                       path,
+		std::span<const std::string>                       materials,
+		std::span<const uint32_t>                          materialIndices,
+		std::span<const assetlib::SubmeshMaterialOverride> overrides = {})
 	{
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
 		auto mesh = assetlib::BMesh();
 		mesh.materials.assign(materials.begin(), materials.end());
+		mesh.materialOverrides.assign(overrides.begin(), overrides.end());
 
 		mesh.vertexData.resize(materialIndices.size() * 3 * c_Stride);
 
@@ -652,6 +654,57 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 	}
 
 	(*fx).DestroyInstance(fx.view, plain);
+}
+
+TEST_CASE(
+	"AssetManager dresses an instance in a look its mesh registers",
+	"[gamelib][assets][overrides]")
+{
+	Fixture fx("bernini_am_registered_override");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "rust.bmaterial", "Textures/b.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial",
+		                                                   "Authored/Materials/rust.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0, 0 };
+	const auto overrides = std::vector<assetlib::SubmeshMaterialOverride>{ { 1, "Rusty", 1 } };
+	WriteMesh(fx.root.path / "Derived/Meshes" / "two.bmesh", materials, materialIndices, overrides);
+
+	const bgl::GeomHandle         geom = (*fx).AcquireMesh("Derived/Meshes/two.bmesh");
+	const bgl::MaterialHandle     m0   = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
+	const bgl::MeshInstanceHandle worn = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	(*fx).ReleaseMaterial(m0);
+
+	// A registered look is not loaded until something wears it.
+	const bgl::MaterialHandle probe = (*fx).AcquireMaterial("Authored/Materials/rust.bmaterial");
+	REQUIRE((*fx).MaterialRefCount(probe) == 1);
+
+	(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 1, "Rusty");
+	CHECK((*fx).MaterialRefCount(probe) == 2);
+	CHECK((*fx).MaterialRefCount(m0) == 2);  // both submeshes' defaults, untouched
+
+	SECTION("it is released like any other override")
+	{
+		(*fx).ClearInstanceSubmeshMaterial(fx.view, worn, 1);
+		CHECK((*fx).MaterialRefCount(probe) == 1);
+	}
+
+	SECTION("a name the submesh does not register throws, and wears nothing")
+	{
+		CHECK_THROWS_AS(
+			(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 0, "Rusty"),
+			bgl::SceneError);
+		CHECK_THROWS_AS(
+			(*fx).SetInstanceSubmeshMaterialOverride(fx.view, worn, 1, "Gilded"),
+			bgl::SceneError);
+		CHECK((*fx).MaterialRefCount(probe) == 2);
+	}
+
+	(*fx).ReleaseMaterial(probe);
+	(*fx).DestroyInstance(fx.view, worn);
+	(*fx).ReleaseGeom(geom);
 }
 
 TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")

@@ -11,6 +11,17 @@
 
 namespace assetlib
 {
+	/** A named alternative material registered for one submesh; see ImportDocument::materialOverrides. */
+	struct SubmeshMaterialOverride
+	{
+		uint32_t    submesh;   // index into BMesh::submeshes
+		std::string name;      // unique per submesh
+		uint32_t    material;  // index into BMesh::materials
+
+		bool
+		operator==(const SubmeshMaterialOverride&) const = default;
+	};
+
 	/**
 	 * A mesh loaded from a `.bmesh` file: the modular, path-referencing counterpart of
 	 * imp::BMeshImport. The geometry (nodes, meshes, submeshes, meshlets and the vertex/index/string
@@ -36,6 +47,10 @@ namespace assetlib
 		core::string_pool      stringPool;
 
 		std::vector<std::string> materials;
+
+		// Sorted by submesh, then name. A material only an override names still has a slot in
+		// `materials`, so it is a reference like any other.
+		std::vector<SubmeshMaterialOverride> materialOverrides;
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 

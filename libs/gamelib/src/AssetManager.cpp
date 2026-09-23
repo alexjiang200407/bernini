@@ -577,11 +577,12 @@ namespace game
 			submeshMaterials[i] = handle;
 		}
 
-		auto record             = GeomRecord();
-		record.handle           = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
-		record.key              = key;
-		record.submeshMaterials = std::move(submeshMaterials);
-		record.refCount         = 1;
+		auto record                     = GeomRecord();
+		record.handle                   = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
+		record.key                      = key;
+		record.submeshMaterials         = std::move(submeshMaterials);
+		record.submeshMaterialOverrides = MaterialOverridesOf(mesh, entry);
+		record.refCount                 = 1;
 
 		const uint32_t slot = record.handle.handle.index;
 
@@ -869,10 +870,11 @@ namespace game
 			auto record = GeomRecord();
 			record.handle =
 				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig.handle, bounds);
-			record.key               = key;
-			record.submeshMaterials  = std::move(submeshMaterials);
-			record.skinnedClips      = clipInfo;
-			record.skinnedAnimations = animationsNorm;
+			record.key                      = key;
+			record.submeshMaterials         = std::move(submeshMaterials);
+			record.submeshMaterialOverrides = MaterialOverridesOf(mesh, entry);
+			record.skinnedClips             = clipInfo;
+			record.skinnedAnimations        = animationsNorm;
 			// The rig's, not this call's: a shared rig hands back the set it was built with, and
 			// recording the empty request instead would later refuse this geom its own set.
 			record.skinnedSpaces = rig.spaces;
@@ -1422,6 +1424,55 @@ namespace game
 		record.overrides[submeshIndex] = replacement;
 
 		ReleaseMaterial(previous);
+	}
+
+	std::vector<AssetManager::RegisteredMaterialOverride>
+	AssetManager::MaterialOverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry)
+	{
+		auto overrides = std::vector<RegisteredMaterialOverride>();
+		for (const assetlib::SubmeshMaterialOverride& registered : mesh.materialOverrides)
+		{
+			if (registered.submesh < entry.firstSubmesh ||
+			    registered.submesh >= entry.firstSubmesh + entry.submeshCount ||
+			    registered.material >= mesh.materials.size())
+				continue;
+			overrides.emplace_back(
+				registered.submesh - entry.firstSubmesh,
+				registered.name,
+				mesh.materials[registered.material]);
+		}
+		return overrides;
+	}
+
+	void
+	AssetManager::SetInstanceSubmeshMaterialOverride(
+		bgl::SceneViewRef       view,
+		bgl::MeshInstanceHandle instance,
+		uint32_t                submeshIndex,
+		std::string_view        name)
+	{
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to SetInstanceSubmeshMaterialOverride is not owned by "
+				"this "
+				"AssetManager");
+
+		const GeomRecord& geom  = m_Geoms.at(it->second.geomSlot);
+		const auto        found = std::ranges::find_if(
+			geom.submeshMaterialOverrides,
+			[&](const RegisteredMaterialOverride& entry) {
+				return entry.submesh == submeshIndex && entry.name == name;
+			});
+		if (found == geom.submeshMaterialOverrides.end())
+			throw bgl::SceneError(
+				std::format(
+					"submesh {} of '{}' registers no override named '{}'",
+					submeshIndex,
+					geom.key,
+					name));
+
+		SetInstanceSubmeshMaterial(view, instance, submeshIndex, found->material);
 	}
 
 	void

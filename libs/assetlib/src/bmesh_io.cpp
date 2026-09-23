@@ -27,6 +27,7 @@
 #include <assetlib_structs/VertexLayout.h>
 
 #include <cerrno>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/hash.h>
 #include <cstddef>
@@ -116,7 +117,15 @@ namespace assetlib
 			kSkeletonSignature,
 			kSkeletonBoneNames,  // the cooked rig's bone names, in bone order
 			kGeometrySignature,  // the vertex blob and the tables addressing it, hashed at cook
-			kMeshletGroups       // one bound per run of c_MeshletsPerGroup meshlets
+			kMeshletGroups,      // one bound per run of c_MeshletsPerGroup meshlets
+			kMaterialOverrides,  // (submesh, material) pairs; absent when there are none
+			kMaterialOverrideNames
+		};
+
+		struct PackedOverride
+		{
+			uint32_t submesh;
+			uint32_t material;
 		};
 
 		bool
@@ -172,6 +181,22 @@ namespace assetlib
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
 
+		// Written only when present, so a mesh with none stays byte-identical to one from before.
+		if (!mesh.materialOverrides.empty())
+		{
+			auto pairs = std::vector<PackedOverride>();
+			auto names = std::vector<std::string>();
+			pairs.reserve(mesh.materialOverrides.size());
+			names.reserve(mesh.materialOverrides.size());
+			for (const SubmeshMaterialOverride& entry : mesh.materialOverrides)
+			{
+				pairs.emplace_back(entry.submesh, entry.material);
+				names.emplace_back(entry.name);
+			}
+			writer.Add(ChunkId::kMaterialOverrides, pairs);
+			writer.Add(ChunkId::kMaterialOverrideNames, cache::packStrings(names));
+		}
+
 		// Computed here rather than taken from the struct, so a producer that rewrote the blob and
 		// forgot the field cannot write a file that disagrees with its own geometry.
 		const uint64_t geometry = geometrySignature(mesh);
@@ -209,6 +234,17 @@ namespace assetlib
 
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
 		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
+
+		const auto pairs = reader.Read<PackedOverride>(ChunkId::kMaterialOverrides);
+		const auto names = cache::unpackStrings(reader.Read<char>(ChunkId::kMaterialOverrideNames));
+		core::throw_runtime_error_if(
+			pairs.size() != names.size(),
+			"bmesh: {} material overrides but {} override names",
+			pairs.size(),
+			names.size());
+		mesh.materialOverrides.reserve(pairs.size());
+		for (size_t i = 0; i < pairs.size(); ++i)
+			mesh.materialOverrides.emplace_back(pairs[i].submesh, names[i], pairs[i].material);
 
 		requireSkeletonIfSkinned(mesh);
 		return mesh;
