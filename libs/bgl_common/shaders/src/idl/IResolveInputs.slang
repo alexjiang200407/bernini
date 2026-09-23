@@ -17,8 +17,6 @@ public interface IResolveInputs
     float4 Motion(float2 uv);
     /// The depth buffer at a texel centre, unfiltered.
     float Depth(float2 uv);
-    /// Last frame's luma ring, filtered: the four most recent frames' quantized luma, newest in x.
-    float4 LumaHistory(float2 uv);
 };
 
 // The plain half of the same inputs, which needs no lookup and so no interface.

@@ -14,7 +14,6 @@
 #include "types/Format.h"
 #include "types/RasterState.h"
 #include "types/RenderState.h"
-#include "types/TaaHistoryPlane.h"
 #include <algorithm>
 #include <array>
 #include <bgl_common/gassert.h>
@@ -37,12 +36,12 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 20> c_Fields = {
-			"sceneColor"sv,      "history"sv,         "motionVectors"sv,  "depth"sv,
-			"lumaHistory"sv,     "clipToView"sv,      "viewToPrevView"sv, "jitter"sv,
-			"cameraPairValid"sv, "pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,
-			"renderTexelSize"sv, "outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,
-			"resampling"sv,      "sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
+		constexpr std::array<std::string_view, 19> c_Fields = {
+			"sceneColor"sv,      "history"sv,        "motionVectors"sv, "depth"sv,
+			"clipToView"sv,      "viewToPrevView"sv, "jitter"sv,        "cameraPairValid"sv,
+			"pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,    "renderTexelSize"sv,
+			"outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,     "resampling"sv,
+			"sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
 		};
 
 		// Valid history retains subpixel detail; disoccluded pixels bypass accumulation.
@@ -59,8 +58,7 @@ namespace bgl
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(TaaHistoryFormat(TaaHistoryPlane::kColor));
-		pipelineDesc.AddRtvFormat(TaaHistoryFormat(TaaHistoryPlane::kLumaRing));
+		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
 
 		auto raster = RasterState();
 		raster.SetFillMode(RasterFillMode::kSolid)
@@ -109,17 +107,7 @@ namespace bgl
 		                    BarrierAccessFlag::kShaderResource,
 		                    BarrierLayout::kShaderResource })
 			.AddTextureArg(
-				TextureArg{ args.prevLumaRingName,
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
 				TextureArg{ args.historyName,
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ args.lumaRingName,
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget });
@@ -167,7 +155,6 @@ namespace bgl
 			taa["history"].SetIfValid(args.prevHistory);
 			taa["motionVectors"].SetIfValid(args.motionVectors);
 			taa["depth"].SetIfValid(args.depth);
-			taa["lumaHistory"].SetIfValid(args.prevLumaRing);
 			taa["clipToView"].SetIfValid(args.clipToView);
 			taa["viewToPrevView"].SetIfValid(args.viewToPrevView);
 			taa["jitter"].SetIfValid(args.jitter);
@@ -193,8 +180,7 @@ namespace bgl
 		auto gfxState   = MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(args.viewport);
-		gfxState.frameBuffer =
-			FrameBuffer().AddColorAttachment(args.history).AddColorAttachment(args.lumaRing);
+		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(args.history);
 
 		cmd->SetMeshletState(gfxState);
 
