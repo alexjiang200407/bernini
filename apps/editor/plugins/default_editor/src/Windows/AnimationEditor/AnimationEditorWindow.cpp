@@ -7,12 +7,11 @@
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
-#include "mesh_drop_import.h"
 #include <algorithm>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
 #include <editor_plugin_api/EditorPanel.h>
-#include <editor_sdk/mesh_drop.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
@@ -490,26 +489,24 @@ AnimationEditorWindow::SetDockVisible(const bool visible)
 void
 AnimationEditorWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()))
+	if (m_Preview->AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()))
+	if (m_Preview->AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dropEvent(QDropEvent* event)
 {
-	const QString mesh = editor::MeshForDrop(m_Host, event->mimeData(), m_DataRoot);
-	if (mesh.isEmpty())
-		return;
-
-	m_Preview->LoadMesh(std::filesystem::path(mesh.toStdWString()));
-	event->acceptProposedAction();
+	// The preview's own, answered on its behalf: while the prompt is up it is on the page behind
+	// and no drag can reach it -- including an environment, which it takes whatever else it takes.
+	if (m_Preview->TakeDrop(event->mimeData()))
+		event->acceptProposedAction();
 }
 
 QStringList
