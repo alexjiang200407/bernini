@@ -268,23 +268,6 @@ TEST_CASE("Nothing is said when every material was written", "[materialeditor]")
 	CHECK(editor::MaterialSaveSummary(clean).isEmpty());
 }
 
-TEST_CASE("A skipped submesh says how to give it a file", "[materialeditor]")
-{
-	// Silently writing four of five materials is the failure mode this exists to prevent: the user
-	// has to be told the fifth was left, and that Save As is what fixes it.
-	auto skipped    = editor::MaterialSaveResult();
-	skipped.saved   = 4;
-	skipped.unsaved = 1;
-
-	const QString summary = editor::MaterialSaveSummary(skipped);
-
-	REQUIRE_FALSE(summary.isEmpty());
-	CHECK(summary.contains("4 materials"));
-	CHECK(summary.contains("1 submesh"));
-	CHECK_FALSE(summary.contains("1 submeshes"));
-	CHECK(summary.contains("Save As"));
-}
-
 TEST_CASE("A material that could not be written is named", "[materialeditor]")
 {
 	// A read-only file or a data root that has gone. The others are still written -- one bad path
@@ -301,15 +284,15 @@ TEST_CASE("A material that could not be written is named", "[materialeditor]")
 
 TEST_CASE("Nothing written is not reported as saving nothing", "[materialeditor]")
 {
-	// Every graph skipped -- the default sphere, or a mesh nothing has been saved for yet. "Saved 0
-	// materials." leads with a non-event; what the user needs is the reason and the way out.
-	auto none    = editor::MaterialSaveResult();
-	none.unsaved = 2;
+	// A write that failed before any material landed. "Saved 0 materials." leads with a non-event;
+	// what the user needs is which file it was.
+	auto none   = editor::MaterialSaveResult();
+	none.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
 	const QString summary = editor::MaterialSaveSummary(none);
 
 	CHECK_FALSE(summary.contains("Saved 0"));
-	CHECK(summary.startsWith("Skipped 2 submeshes"));
+	CHECK(summary.startsWith("Could not write"));
 }
 
 TEST_CASE("A material the mesh could not be made to name is reported once", "[materialeditor]")

@@ -222,7 +222,7 @@ namespace editor
 	QString
 	MaterialSaveSummary(const MaterialSaveResult& result)
 	{
-		if (result.unsaved == 0 && result.failed.isEmpty() && result.unattached.isEmpty())
+		if (result.failed.isEmpty() && result.unattached.isEmpty())
 			return {};
 
 		const auto count = [](const int n, const char* one, const char* many) {
@@ -233,13 +233,6 @@ namespace editor
 
 		if (result.saved > 0)
 			lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
-
-		if (result.unsaved > 0)
-		{
-			lines << QStringLiteral(
-						 "Skipped %1 with no material file yet; Save As gives one a file.")
-						 .arg(count(result.unsaved, "submesh", "submeshes"));
-		}
 
 		if (!result.failed.isEmpty())
 			lines << QStringLiteral("Could not write:\n%1")

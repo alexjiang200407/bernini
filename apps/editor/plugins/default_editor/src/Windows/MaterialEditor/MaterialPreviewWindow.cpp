@@ -133,6 +133,10 @@ MaterialPreviewWindow::~MaterialPreviewWindow()
 void
 MaterialPreviewWindow::ClearGeometry()
 {
+	// Before anything is released, so a listener still sees the mesh these submeshes belong to.
+	if (!m_MeshPath.empty())
+		Q_EMIT GeometryAboutToChange();
+
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const InstanceRef& instance : m_Instances)
 		{

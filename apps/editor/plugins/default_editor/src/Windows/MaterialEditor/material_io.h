@@ -97,14 +97,10 @@ namespace editor
 	[[nodiscard]] QStringList
 	UniqueMaterialFiles(const QStringList& paths);
 
-	/** What one Save All wrote, and what it could not. */
+	/** What one write of the edited graphs put on disk, and what it could not. */
 	struct MaterialSaveResult
 	{
 		int saved = 0;
-
-		// Graphs with no file yet. Skipped rather than prompted: a batch action that opens a file
-		// dialog per submesh is not one.
-		int unsaved = 0;
 
 		QStringList failed;
 
@@ -114,8 +110,9 @@ namespace editor
 	};
 
 	/**
-	 * What to tell the user after a Save All, or an empty string when a dialog would say nothing worth
-	 * a click -- everything written and nothing skipped. The panel's own refresh reports a clean run.
+	 * What to tell the user after the panel wrote its edited graphs, or an empty string when a
+	 * dialog would say nothing worth a click -- everything written. The panel's own refresh
+	 * reports a clean run, and the writes happen on a timer nobody asked to be told about.
 	 */
 	[[nodiscard]] QString
 	MaterialSaveSummary(const MaterialSaveResult& result);

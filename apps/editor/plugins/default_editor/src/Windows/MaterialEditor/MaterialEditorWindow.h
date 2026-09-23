@@ -223,9 +223,12 @@ private:
 	 *
 	 * A graph with no file yet is given one (editor::AutoSaveMaterialPath) and bound to its
 	 * submesh, which is what the first Save used to do.
+	 *
+	 * @param quiet Report to the log rather than to a dialog. For the teardown flush, which runs
+	 *              inside the destructor, where a modal would block a panel already going away.
 	 */
 	void
-	FlushEditedGraphs();
+	FlushEditedGraphs(bool quiet = false);
 
 	/**
 	 * Composites each of the mesh's distinct materials down to its baked triplet, writing what is

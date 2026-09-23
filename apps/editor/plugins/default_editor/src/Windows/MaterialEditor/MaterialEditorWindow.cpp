@@ -86,12 +86,18 @@ namespace
 	// the Content Explorer after an edit shows it.
 	constexpr int c_WriteDelayMs = 500;
 
-	/** Holds a flag for a scope, so an early return cannot leave the panel thinking it is loading. */
+	/**
+	 * Holds a flag for a scope, so an early return cannot leave the panel thinking it is loading.
+	 *
+	 * Restores what it found rather than clearing: a mesh load opens one of these and then opens a
+	 * second per bound submesh, and clearing on the inner scope's exit would leave the rest of the
+	 * load looking like the user's own edits.
+	 */
 	class LoadGuard
 	{
 	public:
-		explicit LoadGuard(bool& flag) noexcept : m_Flag(flag) { m_Flag = true; }
-		~LoadGuard() { m_Flag = false; }
+		explicit LoadGuard(bool& flag) noexcept : m_Flag(flag), m_Was(flag) { m_Flag = true; }
+		~LoadGuard() { m_Flag = m_Was; }
 
 		LoadGuard(const LoadGuard&) = delete;
 		LoadGuard(LoadGuard&&)      = delete;
@@ -102,6 +108,7 @@ namespace
 
 	private:
 		bool& m_Flag;
+		bool  m_Was;
 	};
 
 	/** Whether the graph routes anything into the sink's normal channels. */
@@ -163,7 +170,7 @@ MaterialEditorWindow::MaterialEditorWindow(
 	m_WriteTimer = new QTimer(this);
 	m_WriteTimer->setSingleShot(true);
 	m_WriteTimer->setInterval(c_WriteDelayMs);
-	connect(m_WriteTimer, &QTimer::timeout, this, &MaterialEditorWindow::FlushEditedGraphs);
+	connect(m_WriteTimer, &QTimer::timeout, this, [this]() { FlushEditedGraphs(); });
 
 	// The list's actions are its context menu and its keys, so each one is written once. The strip
 	// under the list triggers the same two.
@@ -300,6 +307,12 @@ MaterialEditorWindow::MaterialEditorWindow(
 		m_Preview = new MaterialPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
 		rightPanel = m_Preview;
 
+		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
+		// reloading -- so what they hold unwritten is written while it is still theirs.
+		connect(m_Preview, &MaterialPreviewWindow::GeometryAboutToChange, this, [this]() {
+			FlushEditedGraphs();
+		});
+
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
@@ -354,7 +367,8 @@ MaterialEditorWindow::~MaterialEditorWindow()
 {
 	// The last chance: the panel is going away, and a pending edit goes with it. Closing it is not
 	// a way to discard one -- there has not been one since the panel started writing by itself.
-	FlushEditedGraphs();
+	// Quietly: a modal raised from a destructor would block a panel already being torn down.
+	FlushEditedGraphs(/*quiet*/ true);
 
 	if (m_Preview != nullptr)
 		m_Preview->SetRenderingEnabled(false);
@@ -810,12 +824,11 @@ MaterialEditorWindow::MarkGraphEdited(int graphIndex)
 }
 
 void
-MaterialEditorWindow::FlushEditedGraphs()
+MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
 {
 	m_WriteTimer->stop();
 
-	auto failed = QStringList();
-	bool wrote  = false;
+	auto result = editor::MaterialSaveResult();
 
 	for (int graphIndex = 0; m_Graphs.Holds(graphIndex); ++graphIndex)
 	{
@@ -850,7 +863,7 @@ MaterialEditorWindow::FlushEditedGraphs()
 				"MaterialEditor: failed to write '%s': %s",
 				qPrintable(entry.materialPath),
 				e.what());
-			failed << entry.materialPath;
+			result.failed << entry.materialPath;
 
 			if (fresh)
 				entry.materialPath.clear();  // it has no file after all
@@ -858,7 +871,7 @@ MaterialEditorWindow::FlushEditedGraphs()
 		}
 
 		entry.dirty = false;
-		wrote       = true;
+		++result.saved;
 
 		if (!fresh)
 			continue;
@@ -870,21 +883,25 @@ MaterialEditorWindow::FlushEditedGraphs()
 				continue;
 
 			// Whatever stopped the write is the mesh itself, which every submesh here shares, so
-			// the rest would fail the same way.
+			// the rest would fail the same way. Reported: the material is on disk and the mesh
+			// still points elsewhere, which nothing else on screen would say.
 			if (!AttachMaterialToMesh(index, entry.materialPath).isEmpty())
+			{
+				result.unattached << entry.materialPath;
 				break;
+			}
 		}
 	}
 
-	if (!failed.isEmpty())
+	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
 	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Material Editor"),
-			QStringLiteral("Could not write:\n\n%1").arg(failed.join(QStringLiteral("\n"))));
+		if (quiet)
+			qWarning("MaterialEditor: %s", qPrintable(summary));
+		else
+			QMessageBox::warning(window(), QStringLiteral("Material Editor"), summary);
 	}
 
-	if (!wrote)
+	if (result.saved == 0)
 		return;
 
 	// Every graph, not just the ones written: two graphs can hold one path, and a stamp cannot
@@ -1430,6 +1447,11 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 {
 	if (!m_Graphs.Holds(graphIndex))
 		return;
+
+	// The board is about to be replaced, so what it holds is written before it goes -- except
+	// during a load, where the graph is being built rather than edited.
+	if (!m_Loading)
+		FlushEditedGraphs();
 
 	// Seeding the board fires every signal an edit does; none of it is the user's.
 	const LoadGuard loading(m_Loading);
