@@ -768,6 +768,26 @@ TEST_CASE(
 	// transport are not offered for a rig that is not there.
 	CHECK(stage->currentIndex() == 0);
 	CHECK(animation->GetHeldAssets().empty());
+
+	// And the drop it cannot reach still lands: the preview is on the page behind, so Qt routes
+	// the drag to the panel, which answers on the preview's behalf.
+	QMimeData mime;
+	mime.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString(
+				(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+
+	QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(animation, &enter);
+	REQUIRE(enter.isAccepted());
+
+	QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(animation, &drop);
+	REQUIRE(drop.isAccepted());
+
+	CHECK(
+		animation->GetHeldAssets() ==
+		std::vector<std::string>{ "Authored/Environments/dropped.benv" });
 }
 
 TEST_CASE(
