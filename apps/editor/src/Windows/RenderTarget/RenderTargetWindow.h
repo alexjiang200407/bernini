@@ -81,8 +81,8 @@ struct RenderTargetWindowDesc
 	float taaReconstructionWidth = 0.4f;
 
 	// How hard the resolved image is sharpened (RCAS) before the display curve; 0 is off. Only a
-	// viewport with TAA sharpens. Clamped to [0, 1].
-	float taaSharpness = 0.0f;
+	// viewport with TAA and a render scale below 1 sharpens. Clamped to [0, 1].
+	float taaSharpness = 1.0f;
 
 	// Out-of-range settings are clamped and warned about, like the render scale.
 	BloomConfig      bloom;
@@ -339,7 +339,7 @@ private:
 
 	// Clamped copy of the desc's, kept so the menu can show what this viewport is on. GUI thread.
 	float m_TaaReconstructionWidth = 0.4f;
-	float m_TaaSharpness           = 0.0f;
+	float m_TaaSharpness           = 1.0f;
 
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.

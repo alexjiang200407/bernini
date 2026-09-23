@@ -263,7 +263,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
 			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
 			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
-			viewport.taaSharpness           = section["taaSharpness"].GetOrDefault(0.0f);
+			viewport.taaSharpness           = section["taaSharpness"].GetOrDefault(1.0f);
 			viewport.bloomEnabled           = bloom.enabled;
 			viewport.bloom                  = bloom.settings;
 			viewport.colorGradeEnabled      = grade.enabled;
@@ -668,13 +668,14 @@ MainWindow::SetUpSharpnessMenu(QMenu* render)
 	QMenu* sharpness = render->addMenu("TAA Sharpness");
 	sharpness->setStatusTip(
 		"How hard the resolved image is sharpened (RCAS) before the display curve. Only viewports "
-		"with temporal antialiasing sharpen; it also sharpens hashed alpha's grain.");
+		"with temporal antialiasing and a render scale below 1 sharpen; it also sharpens hashed "
+		"alpha's grain.");
 
 	auto* group = new QActionGroup(sharpness);
 	group->setExclusive(true);
 
 	const QList<RenderTargetWindow*> views = findChildren<RenderTargetWindow*>();
-	const float current = views.isEmpty() ? 0.0f : views.first()->GetTaaSharpness();
+	const float current = views.isEmpty() ? 1.0f : views.first()->GetTaaSharpness();
 
 	for (const float value : c_Sharpness)
 	{
@@ -687,7 +688,7 @@ MainWindow::SetUpSharpnessMenu(QMenu* render)
 		connect(sharpness, &QMenu::aboutToShow, action, [this, action, value] {
 			const auto  views   = findChildren<RenderTargetWindow*>();
 			const float current = m_SharpnessOverride.value_or(
-				views.isEmpty() ? 0.0f : views.first()->GetTaaSharpness());
+				views.isEmpty() ? 1.0f : views.first()->GetTaaSharpness());
 			action->setChecked(qFuzzyCompare(value + 1.0f, current + 1.0f));
 		});
 

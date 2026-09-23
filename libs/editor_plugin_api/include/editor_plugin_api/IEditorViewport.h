@@ -29,7 +29,7 @@ namespace editor
 		bool     taaEnabled             = true;
 		float    renderScale            = 1.0f;
 		float    taaReconstructionWidth = 0.4f;
-		float    taaSharpness           = 0.0f;
+		float    taaSharpness           = 1.0f;
 
 		// Off by default with bgl's identity settings; the host clamps and warns like the render scale.
 		bool                    bloomEnabled = false;
