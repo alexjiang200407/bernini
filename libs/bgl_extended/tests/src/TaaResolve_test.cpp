@@ -1698,6 +1698,11 @@ TEST_CASE(
 		0.1f);
 	CHECK(sharpDetail > softDetail);
 
+	// Measured 33.96 against 33.85 dB unsharpened on Metal. Too thin a gain to pin across backends,
+	// so what is held is that the sharpen does not buy its contrast by breaking the image.
+	constexpr float c_PsnrMarginDb = 0.5f;
+	CHECK(psnr(sharp) > psnr(soft) - c_PsnrMarginDb);
+
 	CHECK(bgl::test::MaxChannelDelta(raw, rawSharp) == 0.0f);
 }
 

@@ -1,9 +1,4 @@
-// FSR 1's robust contrast-adaptive sharpen (RCAS, ffx_fsr1.h FsrRcasF), with its noise detection on
-// as FSR 2 builds it. A five-tap cross whose negative lobe is solved per pixel for the most sharpening
-// that cannot push the centre past the neighbourhood's range, then scaled by `strength`.
-//
-// Its limiter assumes a peak of one. On linear HDR, as FSR 2 feeds it, a neighbourhood straddling one
-// solves for no lobe at all, so the edge of a highlight is left alone rather than rung.
+// FSR 1's RCAS (ffx_fsr1.h FsrRcasF) with FSR 2's noise detection on; docs/taa.md § The sharpen.
 
 // Where the limiter stops: FSR 1's FSR_RCAS_LIMIT, at the edge of unnatural results.
 static const float c_RcasLimit = 0.25 - 1.0 / 16.0;
