@@ -83,6 +83,12 @@ namespace bgl
 			return m_TaaReconstructionWidth;
 		}
 
+		[[nodiscard]] float
+		GetTaaSharpness() const noexcept final
+		{
+			return m_TaaSharpness;
+		}
+
 		[[nodiscard]] bool
 		IsGpuTimingEnabled() const noexcept final
 		{
@@ -179,6 +185,17 @@ namespace bgl
 			}
 
 			m_TaaReconstructionWidth = width;
+		}
+
+		void
+		SetTaaSharpness(float sharpness) final
+		{
+			if (!(sharpness >= 0.0f && sharpness <= 1.0f))
+			{
+				throw GraphicsError("RenderTargetDesc::taaSharpness must be in [0, 1]");
+			}
+
+			m_TaaSharpness = sharpness;
 		}
 
 		[[nodiscard]] bool
@@ -511,6 +528,7 @@ namespace bgl
 		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
 		// GPU idle to change.
 		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
+		float m_TaaSharpness           = RenderTargetDesc().taaSharpness;
 
 		// Like the reconstruction width: shader constants and a toggle, never an allocation --
 		// the chain the toggle turns on is the render context's, sized lazily at the frame.
