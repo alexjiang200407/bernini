@@ -46,7 +46,7 @@ held frame, and what it costs is the frames a moving pixel waits for the jitter 
 — so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
 of 1 it does nothing at all: each output pixel has a sample of its own there.
 
-Last is **TAA Sharpness** (`taaSharpness` on the desc, `IRenderTarget::SetTaaSharpness` live, 0.5 by
+Last is **TAA Sharpness** (`taaSharpness` on the desc, `IRenderTarget::SetTaaSharpness` live, 1 by
 default): FSR 1's RCAS applied to the resolved image in `PostProcess`, below a render scale of 1
 only. It is what an upscale costs a moving image, put back as edge contrast; see § The sharpen.
 
@@ -314,16 +314,18 @@ converges to the bytes one created there does.
   than rung. A sharpness `s` maps to a lobe scale of `exp2(2s - 2)`, FSR 2's two stops across the
   range, and zero is off rather than FSR 2's quarter strength.
 
-  **It runs only below a render scale of 1, at 0.5 by default.** At native or above there is no
+  **It runs only below a render scale of 1, at full strength by default.** At native or above there is no
   upscale's softness to put back, and a sharpen only pushes past the native image. That is also what
   keeps every scale-1 figure in this document unchanged. Measured on `apples` at 1280×720, still and
-  converged: at scale 0.5, the default takes neighbour contrast from 1.87e-4 to 2.06e-4 (native
-  2.09e-4) and PSNR against native from 48.16 to 48.01 dB; full sharpness overshoots to 2.93e-4 and
-  44.0 dB. At scale 0.25 the default lands at 2.36e-4 and 40.04 dB (40.51 unsharpened). A converged
-  still upscale is already close to native, so what the default buys is mostly in motion, where the
-  accumulation has not caught up. It also sharpens stochastic coverage: at scale 0.5 the hashed
-  patch's flicker rose 2% and the hashed ramp's smear trail 34% (0.00283 → 0.00380), both inside
-  their bounds.
+  converged: at scale 0.5, full strength takes neighbour contrast from 1.87e-4 to 2.93e-4 (native
+  2.09e-4) and PSNR against native from 48.16 to 44.0 dB; 0.5 lands at 2.06e-4 and 48.01 dB. On
+  `angelica` at 1920×1080 and scale 0.5, full strength raises neighbour contrast 66% (1.72e-4 →
+  2.85e-4), and the change is concentrated on the hair and silhouettes. Full strength is the
+  default, chosen by eye over 0.5, which read as no change. A converged still upscale is already
+  close to native, so the sharpen overshoots it by the numbers. It also sharpens stochastic
+  coverage: at scale 0.5 the hashed patch's flicker rises 6% (0.00243 → 0.00257) and the hashed
+  ramp's smear trail 132% (0.00283 → 0.00655), both inside their bounds. A project whose hashed
+  content trails visibly lowers `taaSharpness`.
 
   **The strength does not follow the render scale, and neither does the cross.** Both were measured
   at 0.5 and 0.25. A stronger sharpen at lower scales only overshoots, because the limiter already
@@ -342,7 +344,7 @@ converges to the bytes one created there does.
 |---|---|---|
 | `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
-| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on an upscaled resolved image, live; 0.5 by default, zero is off. |
+| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on an upscaled resolved image, live; 1 by default, zero is off. |
 | `Rcas` | [lib/math/rcas.slang](libs/bgl_common/shaders/src/lib/math/rcas.slang) | The sharpen itself, over one five-tap cross. |
 | `HaltonJitter` | [bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl_extended/src/passes/TaaResolvePass.h) | Binds the frame and writes the new history. |

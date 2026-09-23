@@ -823,7 +823,7 @@ Turns the linear HDR scene colour into the displayed image, as a single full-scr
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-On a TAA target rendering below a scale of 1, with a nonzero `taaSharpness` (0.5 by default), it
+On a TAA target rendering below a scale of 1, with a nonzero `taaSharpness` (1 by default), it
 first sharpens the resolved history with RCAS ([Temporal Antialiasing](docs/taa.md) § The sharpen),
 reading four more point taps of it. Otherwise the branch is skipped and the frame is the one it
 always was. Then it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by

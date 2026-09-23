@@ -30,7 +30,7 @@ namespace bgl
 
 		// How hard an upscaled image is sharpened before the display curve, in [0, 1]. Zero skips
 		// the sharpen, and so does a render scale of 1 or more; see IRenderTarget::SetTaaSharpness.
-		float taaSharpness = 0.5f;
+		float taaSharpness = 1.0f;
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless. The Metal layer and its window are the caller's: the

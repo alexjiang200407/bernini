@@ -1971,7 +1971,7 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("The sharpness is half by default and bounded to zero through one", "[taa]")
+TEST_CASE("The sharpness is full by default and bounded to zero through one", "[taa]")
 {
 	auto gfx = bgl::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
@@ -1982,7 +1982,7 @@ TEST_CASE("The sharpness is half by default and bounded to zero through one", "[
 	targetDesc.headless   = true;
 	targetDesc.taaEnabled = true;
 
-	CHECK(targetDesc.taaSharpness == 0.5f);
+	CHECK(targetDesc.taaSharpness == 1.0f);
 
 	SECTION("the desc is checked at creation")
 	{
@@ -2002,10 +2002,10 @@ TEST_CASE("The sharpness is half by default and bounded to zero through one", "[
 	{
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
-		CHECK(target->GetTaaSharpness() == 0.5f);
-
-		target->SetTaaSharpness(1.0f);
 		CHECK(target->GetTaaSharpness() == 1.0f);
+
+		target->SetTaaSharpness(0.5f);
+		CHECK(target->GetTaaSharpness() == 0.5f);
 
 		target->SetTaaSharpness(0.25f);
 
