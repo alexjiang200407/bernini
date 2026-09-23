@@ -108,8 +108,8 @@ namespace
 		{
 			std::byte*                    vertex  = mesh.vertexData.data() + v * c_Stride;
 			const glm::vec3               normal  = glm::vec3(0.0f, 1.0f, 0.0f);
-			const std::array<uint16_t, 4> joints  = { 0, 0, 0, 0 };
-			const std::array<uint16_t, 4> weights = { 0xFFFF, 0, 0, 0 };
+			const std::array<uint16_t, 4> joints  = { { 0, 0, 0, 0 } };
+			const std::array<uint16_t, 4> weights = { { 0xFFFF, 0, 0, 0 } };
 			std::memcpy(vertex, &corners[v], 12);
 			std::memcpy(vertex + 12, &normal, 12);
 			std::memcpy(vertex + 24, joints.data(), 8);
@@ -123,7 +123,7 @@ namespace
 		mesh.meshlets.push_back(meshlet);
 
 		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
-		constexpr std::array<uint8_t, 6> c_Indices = { 0, 1, 2, 0, 2, 3 };
+		constexpr std::array<uint8_t, 6> c_Indices = { { 0, 1, 2, 0, 2, 3 } };
 		for (const uint8_t index : c_Indices) mesh.meshletTriangles.push_back(index);
 
 		auto submesh                  = assetlib::Submesh();
