@@ -2,6 +2,12 @@
 #include "WinAPI.h"
 #include <concepts>
 #include <core/str/str.h>
+#include <exception>
+#include <functional>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 namespace core::win32
 {

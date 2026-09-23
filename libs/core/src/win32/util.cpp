@@ -1,6 +1,10 @@
 #include "win32/util.h"
-#include "util.h"
+#include <core/platform/util.h>
 #include <core/str/str.h>
+#include <cstdint>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
 
 namespace core::win32
 {

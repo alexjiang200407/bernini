@@ -1,4 +1,5 @@
 #include "gamelib/shading_model.h"
+#include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
