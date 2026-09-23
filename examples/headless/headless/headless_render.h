@@ -19,13 +19,18 @@ namespace headless
 	[[nodiscard]] bgl::GraphicsRef
 	CreateHeadlessGraphics(const std::filesystem::path& dataRoot);
 
-	/** An offscreen target: presents nothing, and captures what it last drew. */
+	/**
+	 * An offscreen target: presents nothing, and captures what it last drew. `renderScale` is
+	 * RenderTargetDesc::renderScale: the grid the geometry passes render on, relative to
+	 * `width` x `height`, which stays the size every capture has.
+	 */
 	[[nodiscard]] bgl::RenderTargetRef
 	CreateHeadlessTarget(
 		const bgl::GraphicsRef& graphics,
 		uint32_t                width,
 		uint32_t                height,
-		bool                    taa);
+		bool                    taa,
+		float                   renderScale = 1.0f);
 
 	[[nodiscard]] bgl::SceneRef
 	CreateHeadlessScene(const bgl::GraphicsRef& graphics);

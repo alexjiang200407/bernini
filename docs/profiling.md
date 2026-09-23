@@ -308,7 +308,9 @@ just run bgl_pass_timings -- --project "$PWD/test-project/Data" \
 `--project` is the data root and every other key is relative to it, so the tool measures *your*
 content rather than the repo's — which is also what makes a capture taken here comparable with one
 exported from the editor: the same project, the same format, two producers. `--out` is the CSV, and
-`--taa` and `--width`/`--height` are the framing the numbers are read at.
+`--taa`, `--width`/`--height` and `--render-scale` are the framing the numbers are read at — the last
+is `RenderTargetDesc::renderScale`, and [Temporal Antialiasing](taa.md) § Render scale holds a
+table it took.
 
 **Light it from somewhere, or know that you did not.** `--env` names the `.benv` and `--env-root` the
 root it is keyed under, defaulting to `--project` — a second root because a project is free to have
