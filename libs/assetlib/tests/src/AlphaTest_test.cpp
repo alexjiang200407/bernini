@@ -234,7 +234,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		// BC1 has no alpha at all (libktx's only BC1 target is documented "opaque only, no
 		// punchthrough alpha support yet"), so baking a cutout to it would composite the mask and then
 		// silently throw it away -- the shader would sample alpha = 1 everywhere and cut nothing out.
-		const ImageData baked = loadKTX2(dir.path / cutout.pbr.baseColorTexture);
+		const ImageData baked = loadKTX2(dir.path / bakedTextureKey(cutout.pbr.baseColorTexture));
 		REQUIRE(baked.vkFormat == VkFormat::BC7_SRGB_BLOCK);
 	}
 
@@ -260,24 +260,25 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
-		const ImageData baked = loadKTX2(dir.path / opaque.pbr.baseColorTexture);
+		const ImageData baked = loadKTX2(dir.path / bakedTextureKey(opaque.pbr.baseColorTexture));
 		CHECK(baked.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
 		CHECK(opaque.layer.alphaMode == AlphaMode::kOpaque);
 	}
 
 	SECTION("the cutout and opaque variants cannot collide on one file name")
 	{
-		// Identical routes, different alpha mode, therefore different format. The bake key hashes the
-		// *resolved* compression, so the two name different files -- otherwise whichever baked second
-		// would be read as the other, and the cutout would load a BC1 map with no alpha.
+		// Identical routes, different alpha mode, therefore different pixels: the cutout's colour is
+		// dilated under its transparent texels. It bakes under the alpha-carrying group and against
+		// its cutoff, so the two name different maps -- otherwise whichever baked second would be
+		// read as the other, and the cutout would load a map with no alpha.
 		BMaterial opaque;
 		opaque.pbr.routes = cutout.pbr.routes;
 
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
 		REQUIRE(opaque.pbr.baseColorTexture != cutout.pbr.baseColorTexture);
-		CHECK(std::filesystem::exists(dir.path / opaque.pbr.baseColorTexture));
-		CHECK(std::filesystem::exists(dir.path / cutout.pbr.baseColorTexture));
+		CHECK(std::filesystem::exists(dir.path / bakedTextureKey(opaque.pbr.baseColorTexture)));
+		CHECK(std::filesystem::exists(dir.path / bakedTextureKey(cutout.pbr.baseColorTexture)));
 	}
 }
 

@@ -97,6 +97,12 @@ TEST_CASE("isBakedMapName recognizes only what the bake writes", "[texture_prune
 		CHECK_FALSE(isBakedMapName("basecolor_700a22db7b7ef78z.ktx2"));   // not hex
 		CHECK_FALSE(isBakedMapName("albedo_700a22db7b7ef785.ktx2"));  // not a group the bake writes
 		CHECK_FALSE(isBakedMapName("basecolor.ktx2"));                // no hash at all
+
+		// A copy somebody made, which the sweep must not read as one of its own encodings.
+		CHECK_FALSE(isBakedMapName("basecolor_700a22db7b7ef785.bak.ktx2"));
+		CHECK_FALSE(isBakedMapName("basecolor_700a22db7b7ef785.bc1-1714c15.ktx2"));    // 7 digits
+		CHECK_FALSE(isBakedMapName("basecolor_700a22db7b7ef785.bc1-1714c150z.ktx2"));  // not hex
+		CHECK(isBakedMapName("basecolor_700a22db7b7ef785.bc1-1714c150.ktx2"));
 	}
 }
 
@@ -120,7 +126,7 @@ TEST_CASE("FindUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	SECTION("the abandoned map is reported, and only it")
 	{
 		REQUIRE(scan.unused.size() == 1);
-		CHECK(scan.unused.front().path == first.pbr.baseColorTexture);
+		CHECK(scan.unused.front().path == bakedTextureKey(first.pbr.baseColorTexture));
 		CHECK(scan.unused.front().bytes > 0);
 		CHECK(scan.bytes == scan.unused.front().bytes);
 	}
@@ -140,8 +146,9 @@ TEST_CASE("FindUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 		CHECK(result.bytes == scan.bytes);
 		CHECK(result.failed.empty());
 
-		CHECK_FALSE(std::filesystem::exists(root.path / first.pbr.baseColorTexture));
-		CHECK(std::filesystem::exists(root.path / second.pbr.baseColorTexture));
+		CHECK_FALSE(
+			std::filesystem::exists(root.path / bakedTextureKey(first.pbr.baseColorTexture)));
+		CHECK(std::filesystem::exists(root.path / bakedTextureKey(second.pbr.baseColorTexture)));
 		CHECK(CountMaps(root.Textures()) == 1);
 	}
 
@@ -180,7 +187,7 @@ TEST_CASE("FindUnusedBakedTextures keeps a map another material still shares", "
 	CHECK(scan.unused.empty());
 
 	AssetStore(root.path).DeleteUnusedBakedTextures(scan);
-	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
+	CHECK(std::filesystem::exists(root.path / bakedTextureKey(keeper.pbr.baseColorTexture)));
 }
 
 TEST_CASE("FindUnusedBakedTextures keeps a map a material samples through UV1", "[texture_prune]")
@@ -234,7 +241,7 @@ TEST_CASE("FindUnusedBakedTextures sweeps the occlusion map a re-bake orphaned",
 
 		const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
 		REQUIRE(scan.unused.size() == 1);
-		CHECK(scan.unused.front().path == first);
+		CHECK(scan.unused.front().path == bakedTextureKey(first));
 	}
 }
 
@@ -295,7 +302,7 @@ TEST_CASE("FindUnusedBakedTextures refuses to run on an unreadable material", "[
 		<< "not a material";
 
 	REQUIRE_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
-	CHECK(std::filesystem::exists(root.path / material.pbr.baseColorTexture));
+	CHECK(std::filesystem::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
 }
 
 TEST_CASE("FindUnusedBakedTextures handles a project with nothing baked", "[texture_prune]")
@@ -347,11 +354,11 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 	material.pbr.routes[0] = { "a.ktx2", 0 };
 	store.BakeMaterial(material);
 
+	const std::string map = bakedTextureKey(material.pbr.baseColorTexture);
 	const std::string orphan =
-		"Derived/cooked/" +
-		std::filesystem::path(material.pbr.baseColorTexture).filename().generic_string();
+		"Derived/cooked/" + std::filesystem::path(map).filename().generic_string();
 	std::filesystem::create_directories(root.path / "Derived/cooked");
-	std::filesystem::copy_file(root.path / material.pbr.baseColorTexture, root.path / orphan);
+	std::filesystem::copy_file(root.path / map, root.path / orphan);
 
 	material.pbr.routes[0] = { "b.ktx2", 0 };
 	store.BakeMaterial(material);

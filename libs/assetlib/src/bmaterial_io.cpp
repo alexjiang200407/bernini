@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "baked_name.h"
 #include "mounted_io.h"
 
 namespace assetlib
@@ -798,7 +799,10 @@ namespace assetlib
 			for (const std::string* map :
 			     { &pbr.baseColorTexture, &pbr.normalTexture, &pbr.ormTexture })
 			{
-				if (!map->empty() && stampOf(fileSystem, bakedTextureKey(*map)).size == 0)
+				if (map->empty())
+					continue;
+
+				if (namesTextureFile(*map) || stampOf(fileSystem, bakedTextureKey(*map)).size == 0)
 					return false;
 			}
 			return true;
@@ -843,7 +847,7 @@ namespace assetlib
 			return true;
 
 		// Routed and every source matches -- but the map has to be there to sample.
-		return slot.bakedPath.empty() ||
+		return slot.bakedPath.empty() || namesTextureFile(slot.bakedPath) ||
 		       stampOf(fileSystem, bakedTextureKey(slot.bakedPath)).size == 0;
 	}
 
@@ -864,6 +868,7 @@ namespace assetlib
 			return true;
 
 		return pbr.geometryOcclusionBakedTexture.empty() ||
+		       namesTextureFile(pbr.geometryOcclusionBakedTexture) ||
 		       stampOf(fileSystem, bakedTextureKey(pbr.geometryOcclusionBakedTexture)).size == 0;
 	}
 

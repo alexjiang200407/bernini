@@ -22,18 +22,48 @@ namespace assetlib
 		constexpr size_t c_BakedHashDigits = 16;
 
 		constexpr std::string_view c_BakedMapExtension = ".ktx2";
+
+		// Hex digits of the encoding hash in a baked map's file name.
+		constexpr size_t c_EncodingHashDigits = 8;
+
+		bool
+		isHex(char c) noexcept
+		{
+			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+		}
+
+		/** Whether `segment` is a `<tag>-<8 hex>` one encoding of a map is stored under. */
+		bool
+		isEncodingSegment(std::string_view segment) noexcept
+		{
+			const size_t dash = segment.rfind('-');
+			if (dash == std::string_view::npos || dash == 0)
+				return false;
+
+			const std::string_view tag    = segment.substr(0, dash);
+			const std::string_view digits = segment.substr(dash + 1);
+
+			return std::ranges::all_of(
+					   tag,
+					   [](char c) noexcept {
+						   return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+					   }) &&
+			       digits.size() == c_EncodingHashDigits && std::ranges::all_of(digits, isHex);
+		}
+	}
+
+	bool
+	namesTextureFile(std::string_view reference) noexcept
+	{
+		return reference.ends_with(c_BakedMapExtension);
 	}
 
 	std::string
-	bakedMapFileName(std::string_view group, std::string_view key)
+	bakedMapContentName(std::string_view group, std::string_view key)
 	{
 		assert(group.find('_') == std::string_view::npos);
 
-		return std::format(
-			"{}_{:016x}{}",
-			group,
-			core::hash_string(key, core::hash_seed()),
-			c_BakedMapExtension);
+		return std::format("{}_{:016x}", group, core::hash_string(key, core::hash_seed()));
 	}
 
 	std::string
@@ -65,10 +95,6 @@ namespace assetlib
 
 		const std::string_view digits = key.substr(separator + 1);
 
-		const auto isHex = [](char c) noexcept {
-			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-		};
-
 		if (digits.size() != c_BakedHashDigits || !std::ranges::all_of(digits, isHex))
 			return {};
 
@@ -81,6 +107,17 @@ namespace assetlib
 		if (!fileName.ends_with(c_BakedMapExtension))
 			return false;
 		fileName.remove_suffix(c_BakedMapExtension.size());
+
+		// An encoding suffix, where there is one: what is left is the content name either way, so
+		// one recogniser covers a map written before the two halves were split and one written since.
+		// Anything else after the dot is somebody else's file -- `basecolor_<hash>.bak.ktx2` is a copy
+		// somebody made, and sweeping it would be this rule deleting what it was written to protect.
+		if (const size_t dot = fileName.rfind('.'); dot != std::string_view::npos)
+		{
+			if (!isEncodingSegment(fileName.substr(dot + 1)))
+				return false;
+			fileName.remove_suffix(fileName.size() - dot);
+		}
 
 		const std::string_view group = bakedGroupOf(fileName);
 		return !group.empty() && std::ranges::find(groups, group) != groups.end();

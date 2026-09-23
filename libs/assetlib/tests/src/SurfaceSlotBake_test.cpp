@@ -106,7 +106,8 @@ TEST_CASE(
 	CHECK(orm.bakeToken != 0);
 
 	// Linear data, block-compressed: the format ADR-7 fixes for a slot's map.
-	CHECK(loadKTX2(dir.path / orm.bakedPath).vkFormat == VkFormat::BC7_UNORM_BLOCK);
+	CHECK(
+		loadKTX2(dir.path / bakedTextureKey(orm.bakedPath)).vkFormat == VkFormat::BC7_UNORM_BLOCK);
 
 	SECTION("and the bake is not stale, however many times it is asked")
 	{

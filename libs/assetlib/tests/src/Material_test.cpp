@@ -6,6 +6,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -370,10 +371,10 @@ TEST_CASE("A source whose mtime moved but whose bytes did not is not stale", "[b
 
 	const auto source = dir / "albedo.ktx2";
 	write(source, "aaaa");
-	write(dir / "mat_basecolor.ktx2", "bbbb");
+	write(dir / bakedTextureKey("basecolor_0123456789abcdef"), "bbbb");
 
 	BMaterial mat;
-	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.baseColorTexture = "basecolor_0123456789abcdef";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 	mat.pbr.routeStamps[0]   = stampOf(source);
 	mat.pbr.bakeToken        = c_TextureBakeToken;
@@ -416,13 +417,15 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 		out << bytes;
 	};
 
+	constexpr std::string_view c_Baked = "basecolor_0123456789abcdef";
+
 	const auto source = dir / "albedo.ktx2";
-	const auto baked  = dir / "mat_basecolor.ktx2";
+	const auto baked  = dir / bakedTextureKey(c_Baked);
 	write(source, "aaaa");
 	write(baked, "bbbb");
 
 	BMaterial mat;
-	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.baseColorTexture = std::string(c_Baked);
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 	mat.pbr.bakeToken        = c_TextureBakeToken;
 
@@ -496,13 +499,15 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 		out << bytes;
 	};
 
+	constexpr std::string_view c_Baked = "basecolor_0123456789abcdef";
+
 	const auto source = dir / "albedo.ktx2";
-	const auto baked  = dir / "mat_basecolor.ktx2";
+	const auto baked  = dir / bakedTextureKey(c_Baked);
 	write(source, "aaaa");
 	write(baked, "bbbb");
 
 	BMaterial mat;
-	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
+	mat.pbr.baseColorTexture = std::string(c_Baked);
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 	mat.pbr.bakeToken        = c_TextureBakeToken;
 
