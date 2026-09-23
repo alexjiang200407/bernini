@@ -60,7 +60,7 @@ render targets and the imported `depth` texture as their depth attachment — **
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
-luma ring (`taaHistory*`, `taaLumaRing*`) and writes the next pair; `Bloom`, on a target that blooms, reads whichever of the two the last HDR
+writes the next one; `Bloom`, on a target that blooms, reads whichever of the two the last HDR
 stage produced and renders its ladder (`bloomDown0..`, `bloomUp0..`); `PostProcess` reads the same
 source — plus the finished `bloomUp0` when bloom ran — and writes the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
 last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
@@ -760,15 +760,14 @@ neighbourhood clamp's 3x3 and the dilation's cross stay on the render grid aroun
 the two grids coincide the weight is identically one and the pass is the render-grid accumulation it
 has always been.
 
-* **In:** `sceneColor`, `motionVectors`, `depth` and the previous history's two planes as shader
-  resources; a point sampler for the three read at their own texel centres and a linear one for the
-  reprojected colour and luma ring, both owned by `RenderContext`. Depth is read for the nearest surface in the cross, whose
+* **In:** `sceneColor`, `motionVectors`, `depth` and the previous history as shader resources; a
+  point sampler for the three read at their own texel centres and a linear one for the reprojected
+  history, both owned by `RenderContext`. Depth is read for the nearest surface in the cross, whose
   vector the pixel reprojects by, and for the view depth history keeps for disocclusion. The
   velocity buffer's own-motion half is what keeps an animating surface out of that test
   ([Temporal Antialiasing](docs/taa.md)).
-* **Out:** the current history's two planes, at the target's output size: the colour
-  (`RGBA16_FLOAT`) and the luma ring (`RGBA8_UNORM`), as two render targets. `PostProcess` is then
-  pointed at the colour instead of `sceneColor`.
+* **Out:** the current history, at the target's output size. `PostProcess` is then pointed at it
+  instead of `sceneColor`.
 * **The first frame, and the first after a resize, take the scene colour whole** — `historyValid` is
   false and there is no accumulation to blend against. So does the first frame after the scene's
   shading changed, where the accumulation exists but describes a material that is gone; see

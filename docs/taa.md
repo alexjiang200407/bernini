@@ -22,7 +22,7 @@ allocated nothing throws — there is no history to accumulate into, and silentl
 would leave a caller wondering why the image never resolves.
 
 The two are not interchangeable, which is why the editor exposes both. A `temporalAA: false` viewport
-never creates its history buffers, so that is what actually gives back the memory and the four RTV
+never creates its history buffers, so that is what actually gives back the memory and the two RTV
 slots; the Render menu's toggle only stops the work. The menu is offered when *any* viewport
 allocated a history and is disabled otherwise — rather than hidden, so the answer to "why can I not
 turn this on" is in the place that asks the question — and a viewport configured without it ignores
@@ -333,14 +333,11 @@ flowchart TD
     D --> RES
     HPREV["history[prev]"] --> RES
     RES --> HCUR["history[current]<br/>RGB accumulated, A view depth"]
-    LPREV["lumaRing[prev]"] --> RES
-    RES --> LCUR["lumaRing[current]<br/>last four frames' luma"]
 
     HCUR --> PP["PostProcess<br/>(AgX)"]
     PP --> BB["backbuffer"]
 
     HCUR -. "AdvanceHistory at EndFrame" .-> HPREV
-    LCUR -. "AdvanceHistory at EndFrame" .-> LPREV
 ```
 
 With `taaEnabled` false the middle disappears: `PostProcess` reads `sceneColor` directly, and neither
@@ -463,13 +460,6 @@ Two couplings worth knowing:
   accumulation stays for the life of the target. This was live for a while and invisible: the
   neighbourhood clamp happens to launder NaN, since IEEE `min`/`max` return the non-NaN operand.
   Deleting the clamp turned every resolved frame black, which is how it surfaced.
-
-* **Each history slot holds a luma ring beside its colour.** FSR 2's layout
-  (`ffx_fsr2_accumulate.h`, `ComputeLumaInstabilityFactor`): per output pixel, the last four frames'
-  3×3 mean luma compressed to [0, 1) and quantized to 8 bits, newest in x, in an `RGBA8_UNORM`
-  texture beside the colour, allocated and discarded with it. The resolve writes it as a second
-  render target, the previous ring reprojected with the history and moved down a slot, and starts it
-  over wherever it takes the scene colour whole. It costs about 33 MB per slot at 3840×2160.
 
 * **History alpha is depth, not opacity or an accumulated statistic.** Every return path writes
   the current sample's view depth or the unavailable marker, including the no-history path.

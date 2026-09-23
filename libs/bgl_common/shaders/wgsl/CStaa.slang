@@ -7,7 +7,6 @@ Texture2D gHistory;
 Texture2D gScene;
 Texture2D gMotion;
 Texture2D gDepth;
-Texture2D gLumaHistory;
 SamplerState gPoint;
 SamplerState gLinear;
 RWStructuredBuffer<float4> gOut;
@@ -20,7 +19,6 @@ struct BoundInputs : IResolveInputs
     float3 SceneLinear(float2 uv) { return gScene.SampleLevel(gLinear, uv, 0.0).rgb; }
     float4 Motion(float2 uv) { return gMotion.SampleLevel(gPoint, uv, 0.0); }
     float Depth(float2 uv) { return gDepth.SampleLevel(gPoint, uv, 0.0).r; }
-    float4 LumaHistory(float2 uv) { return gLumaHistory.SampleLevel(gLinear, uv, 0.0); }
 };
 
 [shader("compute")]
@@ -49,5 +47,5 @@ void main(uint3 id: SV_DispatchThreadID)
     p.historyValid = 1.0;
     let resolved = TaaResolve(inputs, p, float2(0.5, 0.5));
 
-    gOut[0] = float4(back, w) + resolved.history + resolved.lumaRing;
+    gOut[0] = float4(back, w) + resolved;
 }
