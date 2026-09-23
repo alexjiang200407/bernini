@@ -131,6 +131,44 @@ TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
 			"C:/data/materials/leaf.bmaterial"));
 }
 
+TEST_CASE("A submesh with no material writes under its mesh's own folder", "[materialeditor]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+	REQUIRE(QDir(root.path()).mkpath(QStringLiteral("Authored/Materials")));
+
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("Box[0]"));
+
+	// Under the mesh, because a submesh name is only unique within its mesh: two `Box[0]`s in two
+	// meshes would otherwise be written to one file, each overwriting the other.
+	CHECK(
+		made ==
+		QDir(root.path()).filePath(QStringLiteral("Authored/Materials/crate/Box_0_.bmaterial")));
+}
+
+TEST_CASE("A submesh name that is no filename still gets one", "[materialeditor]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+
+	// A `.glb` may call a submesh anything at all, and the panel writes without asking, so there is
+	// nobody to correct a name the filesystem refuses.
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("  ***  "));
+
+	CHECK(made.endsWith(QStringLiteral(".bmaterial")));
+	CHECK_FALSE(made.contains(QStringLiteral("*")));
+}
+
 TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
 {
 	// "Show the current baked textures if any": the paths the material's last bake wrote, one per line,

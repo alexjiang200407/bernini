@@ -63,6 +63,21 @@ namespace editor
 	DefaultMaterialPath(const std::filesystem::path& dataRoot, const QString& name);
 
 	/**
+	 * Where a submesh's material is written when it has none yet and the panel saves by itself:
+	 * `Materials/<mesh stem>/<submesh>.bmaterial`, or beside the project's Materials directory for
+	 * a mesh with no file.
+	 *
+	 * Under the mesh's own directory because that is how a project keeps them (`Materials/Bear/`),
+	 * and because a submesh name is only unique within its mesh -- two `Box[0]`s would otherwise
+	 * write to one file. The name is `ToPlainFileStem`'d: a submesh may be called anything.
+	 */
+	[[nodiscard]] QString
+	AutoSaveMaterialPath(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath,
+		const QString&               submeshName);
+
+	/**
 	 * Everything a Material Editor showing `materials` over `previewMesh` holds open, absolute.
 	 * The mesh counts: the panel binds materials into it and writes them back through the
 	 * `.bmesh`. An empty path -- the default sphere -- holds nothing.

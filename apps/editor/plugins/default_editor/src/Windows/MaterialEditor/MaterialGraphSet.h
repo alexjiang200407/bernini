@@ -45,6 +45,9 @@ public:
 		bgl::MaterialHandle preview;
 
 		std::vector<uint32_t> submeshes;
+
+		// Edited since it was last written. The panel saves by itself, so this is what it saves.
+		bool dirty = false;
 	};
 
 	/** Drops every graph and sizes the submesh table for a mesh of `submeshCount` submeshes. */

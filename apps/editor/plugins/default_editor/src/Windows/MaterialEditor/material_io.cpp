@@ -7,6 +7,7 @@
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/asset_paths.h>
 #include <editor_sdk/mesh_load.h>
 
 #include <QFileInfo>
@@ -168,6 +169,23 @@ namespace editor
 			dir = dataRoot;
 
 		return QString::fromStdWString((dir / name.toStdWString()).wstring());
+	}
+
+	QString
+	AutoSaveMaterialPath(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath,
+		const QString&               submeshName)
+	{
+		const QString stem = ToPlainFileStem(submeshName);
+		const QString file =
+			QStringLiteral("%1.bmaterial").arg(stem.isEmpty() ? QStringLiteral("material") : stem);
+
+		if (meshPath.empty())
+			return DefaultMaterialPath(dataRoot, file);
+
+		const QString mesh = QString::fromStdWString(meshPath.stem().wstring());
+		return DefaultMaterialPath(dataRoot, QStringLiteral("%1/%2").arg(mesh, file));
 	}
 
 	QStringList
