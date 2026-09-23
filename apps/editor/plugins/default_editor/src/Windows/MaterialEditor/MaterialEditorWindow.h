@@ -24,7 +24,9 @@
 
 class TexturePreviewCache;
 
+class QAction;
 class QComboBox;
+class QListWidget;
 class QJsonObject;
 class QLabel;
 class QPointF;
@@ -170,14 +172,22 @@ private:
 	void
 	RemoveShownMaterialOverride();
 
+	/** Renames the shown override, keeping the material it names. */
+	void
+	RenameShownMaterialOverride();
+
 	/** Puts `materialPath` on the board and on the previewed submesh, sharing a graph already open
 	 *  for it. An empty path leaves the submesh its own blank graph. */
 	void
 	ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath);
 
-	/** Fills the Material combo for the selected submesh and selects the look on the board. */
+	/** Fills the Material list for the selected submesh and selects the look on the board. */
 	void
-	RefreshMaterialSelector();
+	RefreshMaterialList();
+
+	/** The look at `row` of the Material list: empty for the default row, which is row 0. */
+	[[nodiscard]] QString
+	OverrideAtRow(int row) const;
 
 	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
 	void
@@ -272,18 +282,23 @@ private:
 
 	// The built widgets, kept whole for the free functions that take them (FillLayerSection).
 	editor::MaterialEditorWidgets m_Ui;
-	MaterialGraphView*            m_GraphView          = nullptr;
-	QPushButton*                  m_OpenButton         = nullptr;
-	QPushButton*                  m_SaveButton         = nullptr;
-	QPushButton*                  m_SaveAsButton       = nullptr;
-	QPushButton*                  m_SaveAllButton      = nullptr;
-	QPushButton*                  m_BakeAllButton      = nullptr;
-	QPushButton*                  m_AddOverrideButton  = nullptr;
-	QPushButton*                  m_RemoveOverride     = nullptr;
-	QPushButton*                  m_MakeDefaultButton  = nullptr;
-	QComboBox*                    m_MaterialSelector   = nullptr;
-	QLabel*                       m_MaterialLabel      = nullptr;
-	QLabel*                       m_BakedTexturesLabel = nullptr;
-	QLabel*                       m_TangentWarning     = nullptr;
-	QPushButton*                  m_GenerateTangents   = nullptr;
+	MaterialGraphView*            m_GraphView         = nullptr;
+	QPushButton*                  m_OpenButton        = nullptr;
+	QPushButton*                  m_SaveButton        = nullptr;
+	QPushButton*                  m_SaveAsButton      = nullptr;
+	QPushButton*                  m_SaveAllButton     = nullptr;
+	QPushButton*                  m_BakeAllButton     = nullptr;
+	QPushButton*                  m_AddOverrideButton = nullptr;
+	QPushButton*                  m_RemoveOverride    = nullptr;
+	QListWidget*                  m_MaterialList      = nullptr;
+
+	// The list's own actions: its context menu, and the keys it answers to.
+	QAction*     m_AddLook            = nullptr;
+	QAction*     m_RenameLook         = nullptr;
+	QAction*     m_RemoveLook         = nullptr;
+	QAction*     m_MakeLookDefault    = nullptr;
+	QLabel*      m_MaterialLabel      = nullptr;
+	QLabel*      m_BakedTexturesLabel = nullptr;
+	QLabel*      m_TangentWarning     = nullptr;
+	QPushButton* m_GenerateTangents   = nullptr;
 };

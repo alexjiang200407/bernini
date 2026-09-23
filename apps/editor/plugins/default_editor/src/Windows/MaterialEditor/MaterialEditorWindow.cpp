@@ -5,6 +5,7 @@
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
@@ -17,8 +18,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPointF>
 #include <QPushButton>
@@ -113,8 +117,7 @@ MaterialEditorWindow::MaterialEditorWindow(
 	m_BakeAllButton      = ui.bakeAll;
 	m_AddOverrideButton  = ui.addOverride;
 	m_RemoveOverride     = ui.removeOverride;
-	m_MakeDefaultButton  = ui.makeDefault;
-	m_MaterialSelector   = ui.materialSelector;
+	m_MaterialList       = ui.materialList;
 	m_GenerateTangents   = ui.generateTangents;
 	m_SubmeshSelector    = ui.submeshSelector;
 	m_OutputSelector     = ui.outputSelector;
@@ -137,41 +140,75 @@ MaterialEditorWindow::MaterialEditorWindow(
 	connect(m_SaveAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::SaveAllMaterials);
 	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
 
-	connect(m_MakeDefaultButton, &QPushButton::clicked, this, [this]() {
+	// The list's actions are its context menu and its keys, so each one is written once. The strip
+	// under the list triggers the same two.
+	m_AddLook         = new QAction(QStringLiteral("Add Override..."), this);
+	m_RenameLook      = new QAction(QStringLiteral("Rename..."), this);
+	m_RemoveLook      = new QAction(QStringLiteral("Remove"), this);
+	m_MakeLookDefault = new QAction(QStringLiteral("Make Default"), this);
+
+	m_RenameLook->setShortcut(Qt::Key_F2);
+	m_RemoveLook->setShortcut(QKeySequence::Delete);
+	for (QAction* action : { m_AddLook, m_RenameLook, m_RemoveLook, m_MakeLookDefault })
+	{
+		action->setShortcutContext(Qt::WidgetShortcut);
+		m_MaterialList->addAction(action);
+	}
+
+	connect(m_AddLook, &QAction::triggered, this, &MaterialEditorWindow::AddMaterialOverride);
+	connect(
+		m_RenameLook,
+		&QAction::triggered,
+		this,
+		&MaterialEditorWindow::RenameShownMaterialOverride);
+	connect(
+		m_RemoveLook,
+		&QAction::triggered,
+		this,
+		&MaterialEditorWindow::RemoveShownMaterialOverride);
+	connect(m_MakeLookDefault, &QAction::triggered, this, [this]() {
+		MakeShownMaterialDefault(m_Graphs.CurrentSubmesh());
+	});
+
+	connect(m_AddOverrideButton, &QPushButton::clicked, m_AddLook, &QAction::trigger);
+	connect(m_RemoveOverride, &QPushButton::clicked, m_RemoveLook, &QAction::trigger);
+
+	// itemActivated, not doubleClicked: Enter on the keyboard is the same gesture, and a list you
+	// arrow through should not need the mouse to commit.
+	connect(m_MaterialList, &QListWidget::itemActivated, this, [this]() {
 		MakeShownMaterialDefault(m_Graphs.CurrentSubmesh());
 	});
 
 	connect(
-		m_AddOverrideButton,
-		&QPushButton::clicked,
+		m_MaterialList,
+		&QListWidget::customContextMenuRequested,
 		this,
-		&MaterialEditorWindow::AddMaterialOverride);
+		[this](const QPoint& at) {
+			QMenu menu(m_MaterialList);
+			menu.addAction(m_AddLook);
+			menu.addAction(m_RenameLook);
+			menu.addAction(m_RemoveLook);
+			menu.addSeparator();
+			menu.addAction(m_MakeLookDefault);
+			menu.exec(m_MaterialList->viewport()->mapToGlobal(at));
+		});
 
-	connect(
-		m_RemoveOverride,
-		&QPushButton::clicked,
-		this,
-		&MaterialEditorWindow::RemoveShownMaterialOverride);
-
-	// activated, not currentIndexChanged: refilling the combo must not be read as a user picking a
-	// look, which would put the board on a graph the panel is in the middle of rebuilding.
-	connect(m_MaterialSelector, &QComboBox::activated, this, [this](int index) {
+	// currentRowChanged, so the arrow keys move the board exactly as a click does.
+	connect(m_MaterialList, &QListWidget::currentRowChanged, this, [this](int row) {
 		const int submesh = m_Graphs.CurrentSubmesh();
-		if (index < 0 || !m_Graphs.HasSubmesh(submesh))
+		if (row < 0 || !m_Graphs.HasSubmesh(submesh) || m_Preview == nullptr)
 			return;
 
-		// Index 0 is the submesh's default, so the registered looks start at 1.
-		const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
-		const bool                                    isDefault  = index == 0;
-		const QString                                 shown =
-			isDefault ? QString() : registered[static_cast<size_t>(index - 1)].name;
+		const QString look                             = OverrideAtRow(row);
+		m_ShownOverrides[static_cast<size_t>(submesh)] = look;
 
-		m_ShownOverrides[static_cast<size_t>(submesh)] = shown;
+		const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+		const auto found = std::ranges::find(registered, look, &editor::RegisteredMaterial::name);
+
 		ShowMaterialForSubmesh(
 			submesh,
-			isDefault ?
-				m_Preview->SubmeshMaterialPaths().value(submesh) :
-				Rebase(registered[static_cast<size_t>(index - 1)].material, m_DataRoot, false));
+			found == registered.end() ? m_Preview->SubmeshMaterialPaths().value(submesh) :
+										Rebase(found->material, m_DataRoot, false));
 		RefreshActions();
 	});
 
@@ -612,12 +649,13 @@ MaterialEditorWindow::RefreshActions()
 
 	RefreshTangentWarning();
 
-	RefreshMaterialSelector();
+	RefreshMaterialList();
 
 	// A look is registered against a submesh of a real mesh, and it is copied from the board, so
 	// both need something behind them. A sourceless mesh has no import document to register one in
 	// -- it carries its bindings itself -- so it keeps the single default it has.
 	const bool canRegister = hasGraph && hasMesh && !m_MeshSourceKey.empty();
+	m_AddLook->setEnabled(canRegister);
 	m_AddOverrideButton->setEnabled(canRegister);
 	m_AddOverrideButton->setToolTip(
 		canRegister || !hasMesh ?
@@ -628,14 +666,19 @@ MaterialEditorWindow::RefreshActions()
 				"This mesh was not imported from a source, so it has no import document "
 				"to register a look in."));
 
+	// The default row is the mesh's own binding, so there is no registration to rename or remove.
 	const bool shownIsOverride = !ShownOverride(m_Graphs.CurrentSubmesh()).isEmpty();
+	m_RemoveLook->setEnabled(shownIsOverride);
+	m_RenameLook->setEnabled(shownIsOverride);
 	m_RemoveOverride->setEnabled(shownIsOverride);
+	m_RemoveOverride->setToolTip(
+		shownIsOverride ?
+			QStringLiteral(
+				"Unregister this look. Its .bmaterial stays on disk -- delete it in the "
+				"Content Explorer.") :
+			QStringLiteral("The default is the mesh's own binding, not a look to unregister."));
 
-	m_MakeDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
-	m_MakeDefaultButton->setToolTip(
-		isDefault ?
-			QStringLiteral("The mesh already loads this submesh with this material") :
-			QStringLiteral("Write this look into the mesh, so every instance of it loads with it"));
+	m_MakeLookDefault->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 
 	if (materialPath.isEmpty())
 	{
@@ -1019,6 +1062,86 @@ MaterialEditorWindow::RemoveShownMaterialOverride()
 }
 
 void
+MaterialEditorWindow::RenameShownMaterialOverride()
+{
+	const int     submesh = m_Graphs.CurrentSubmesh();
+	const QString shown   = ShownOverride(submesh);
+	if (shown.isEmpty() || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		QStringLiteral("Rename Override"),
+		QStringLiteral("Name this look. A game asks for it by this name."),
+		QLineEdit::Normal,
+		shown,
+		&accepted);
+	if (!accepted || name.trimmed() == shown)
+		return;
+
+	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+	const auto found = std::ranges::find(registered, shown, &editor::RegisteredMaterial::name);
+	if (found == registered.end())
+		return;
+
+	// Every look but this one: renaming it to what it is already called is not a collision.
+	auto others = registered;
+	std::erase_if(others, [&shown](const editor::RegisteredMaterial& look) {
+		return look.name == shown;
+	});
+
+	if (!editor::CanRegisterMaterialName(others, name))
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Rename Override"),
+			name.trimmed().isEmpty() ?
+				QStringLiteral("An override needs a name.") :
+				QStringLiteral("This submesh already registers a look called '%1'.").arg(name));
+		return;
+	}
+
+	try
+	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+		const auto        mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const std::string submeshName =
+			std::string(mesh.stringPool.at(mesh.submeshes[source].nameOffset));
+
+		// Registered under the new name before the old one goes, so a failure between the two
+		// leaves the look reachable rather than unregistered.
+		store.SetSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			submeshName,
+			name.trimmed().toStdString(),
+			found->material.toStdString());
+		store.RemoveSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			submeshName,
+			shown.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not rename '%s': %s", qPrintable(shown), e.what());
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Rename Override"),
+			QStringLiteral("Could not rename the override:\n%1")
+				.arg(QString::fromLatin1(e.what())));
+		return;
+	}
+
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)] = name.trimmed();
+	RefreshActions();
+}
+
+void
 MaterialEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath)
 {
 	if (!m_Graphs.HasSubmesh(submeshIndex))
@@ -1100,39 +1223,64 @@ MaterialEditorWindow::ShownOverride(int submeshIndex) const
 	return m_ShownOverrides[static_cast<size_t>(submeshIndex)];
 }
 
+QString
+MaterialEditorWindow::OverrideAtRow(int row) const
+{
+	const std::vector<editor::RegisteredMaterial> registered =
+		RegisteredMaterialsFor(m_Graphs.CurrentSubmesh());
+
+	// Row 0 is the submesh's default, so the registered looks start at 1.
+	if (row <= 0 || static_cast<size_t>(row) > registered.size())
+		return {};
+
+	return registered[static_cast<size_t>(row - 1)].name;
+}
+
 void
-MaterialEditorWindow::RefreshMaterialSelector()
+MaterialEditorWindow::RefreshMaterialList()
 {
 	const int submesh = m_Graphs.CurrentSubmesh();
 
-	const QSignalBlocker blocker(m_MaterialSelector);
-	m_MaterialSelector->clear();
+	const QSignalBlocker blocker(m_MaterialList);
+	m_MaterialList->clear();
 
 	if (!m_Graphs.HasSubmesh(submesh))
 	{
-		m_MaterialSelector->setEnabled(false);
+		m_MaterialList->setEnabled(false);
 		return;
 	}
 
 	const QString defaultPath =
 		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submesh) : QString();
 
-	m_MaterialSelector->addItem(
+	auto* first = new QListWidgetItem(
+		defaultPath.isEmpty() ? QStringLiteral("(unbound)") :
+								QFileInfo(defaultPath).completeBaseName(),
+		m_MaterialList);
+	first->setData(editor::c_IsDefaultMaterialRole, true);
+	first->setToolTip(
 		defaultPath.isEmpty() ?
-			QStringLiteral("(unbound) - default") :
-			QStringLiteral("%1 - default").arg(QFileInfo(defaultPath).completeBaseName()));
+			QStringLiteral("This submesh has no material yet. Saving one binds it.") :
+			QStringLiteral("%1\n\nEvery instance of this mesh loads with this look.")
+				.arg(defaultPath));
 
 	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
 	for (const editor::RegisteredMaterial& look : registered)
-		m_MaterialSelector->addItem(look.name);
+	{
+		auto* item = new QListWidgetItem(look.name, m_MaterialList);
+		item->setToolTip(QStringLiteral(
+							 "%1\n\nA game wears this look by asking for '%2'. Double-click to "
+							 "make it the default.")
+		                     .arg(look.material, look.name));
+	}
 
 	const QString shown = ShownOverride(submesh);
 	const auto    found = std::ranges::find(registered, shown, &editor::RegisteredMaterial::name);
-	m_MaterialSelector->setCurrentIndex(
+	m_MaterialList->setCurrentRow(
 		found == registered.end() ? 0 :
 									static_cast<int>(std::distance(registered.begin(), found)) + 1);
 
-	m_MaterialSelector->setEnabled(true);
+	m_MaterialList->setEnabled(true);
 }
 
 void
