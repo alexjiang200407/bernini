@@ -26,9 +26,13 @@ class TexturePreviewCache;
 
 class QAction;
 class QComboBox;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class QEvent;
 class QTimer;
 class QListWidget;
+class QStackedWidget;
 class QJsonObject;
 class QLabel;
 class QPointF;
@@ -72,6 +76,14 @@ public:
 	/** Marks the board edited on any interaction with it; see MarkGraphEdited. */
 	bool
 	eventFilter(QObject* watched, QEvent* event) override;
+
+	/** The drop prompt covers the preview, so a mesh dropped on the empty panel arrives here. */
+	void
+	dragEnterEvent(QDragEnterEvent* event) override;
+	void
+	dragMoveEvent(QDragMoveEvent* event) override;
+	void
+	dropEvent(QDropEvent* event) override;
 	void
 	OnAssetChanged(std::string_view key) override;
 	~MaterialEditorWindow() override;
@@ -190,6 +202,10 @@ private:
 	/** Fills the Material list for the selected submesh and selects the look on the board. */
 	void
 	RefreshMaterialList();
+
+	/** The drop prompt while no mesh is open, the editing surface once one is. */
+	void
+	RefreshStage();
 
 	/** The look at `row` of the Material list: empty for the default row, which is row 0. */
 	[[nodiscard]] QString
@@ -336,6 +352,10 @@ private:
 	QPushButton*                  m_AddOverrideButton = nullptr;
 	QPushButton*                  m_RemoveOverride    = nullptr;
 	QListWidget*                  m_MaterialList      = nullptr;
+
+	// The drop prompt and the editing surface. Which one is up is the preview's mesh, not a flag
+	// of this panel's -- a failed load puts the prompt back through the same signal a close does.
+	QStackedWidget* m_Stage = nullptr;
 
 	// The list's own actions: its context menu, and the keys it answers to.
 	QAction*     m_AddLook          = nullptr;

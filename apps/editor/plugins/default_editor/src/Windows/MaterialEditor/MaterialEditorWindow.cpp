@@ -11,6 +11,9 @@
 #include <QComboBox>
 #include <QDebug>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -25,9 +28,11 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPointF>
 #include <QPushButton>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -323,6 +328,7 @@ MaterialEditorWindow::MaterialEditorWindow(
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
+			RefreshStage();
 		});
 
 		// A click in the preview picks through the selector, so the graph swap and the outline
@@ -357,9 +363,24 @@ MaterialEditorWindow::MaterialEditorWindow(
 	splitter->setStretchFactor(0, 3);
 	splitter->setStretchFactor(1, 2);
 
+	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of its
+	// compositing, and a hidden viewport leaves the frame loop entirely. The whole editing surface
+	// goes behind it, because a properties column and a blank board read as a material being open.
+	auto* prompt = new QLabel(QStringLiteral("Drop a .glb or .bmesh here"), this);
+	prompt->setAlignment(Qt::AlignCenter);
+	prompt->setEnabled(false);
+
+	m_Stage = new QStackedWidget(this);
+	m_Stage->setObjectName(QStringLiteral("MaterialStage"));
+	m_Stage->addWidget(prompt);
+	m_Stage->addWidget(splitter);
+
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(splitter);
+	layout->addWidget(m_Stage);
+
+	// The preview is hidden while the prompt is up, so the drop it would have taken lands here.
+	setAcceptDrops(true);
 
 	// Populate the selector from the preview geometry (the default sphere for now). Each submesh has
 	// its own graph, and the graph is bound to a `.bmaterial` once saved or opened. The sphere is not
@@ -368,6 +389,37 @@ MaterialEditorWindow::MaterialEditorWindow(
 		SetPreviewGeometry(m_Preview->SubmeshNames());
 	else
 		RefreshActions();  // no preview scene, so no graphs: everything stays disabled
+
+	RefreshStage();
+}
+
+void
+MaterialEditorWindow::RefreshStage()
+{
+	m_Stage->setCurrentIndex(m_Preview != nullptr && !m_Preview->MeshPath().empty() ? 1 : 0);
+}
+
+void
+MaterialEditorWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+	if (m_Preview != nullptr && MaterialPreviewWindow::AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+MaterialEditorWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+	if (m_Preview != nullptr && MaterialPreviewWindow::AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+MaterialEditorWindow::dropEvent(QDropEvent* event)
+{
+	// The preview's own, answered on its behalf: an environment dropped while the prompt is up is
+	// still the preview's to apply, and it cannot be reached under the page it is hidden on.
+	if (m_Preview != nullptr && m_Preview->TakeDrop(event->mimeData()))
+		event->acceptProposedAction();
 }
 
 MaterialEditorWindow::~MaterialEditorWindow()
@@ -378,7 +430,14 @@ MaterialEditorWindow::~MaterialEditorWindow()
 	FlushEditedGraphs(/*quiet*/ true);
 
 	if (m_Preview != nullptr)
+	{
+		// Stop listening before anything else: ~QWidget deletes the preview *after* this body, and
+		// the geometry it drops on the way out announces itself. Answering that would run
+		// FlushEditedGraphs against a panel whose members are already gone -- and the flush that
+		// matters has just happened, a line above.
+		m_Preview->disconnect(this);
 		m_Preview->SetRenderingEnabled(false);
+	}
 	ReleasePreviewMaterials();
 
 	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a
@@ -1444,6 +1503,15 @@ MaterialEditorWindow::Reset()
 {
 	// The graphs are about to be dropped, and with them anything not yet written.
 	FlushEditedGraphs();
+
+	// The prompt goes up first, before the preview falls back to its sphere. Raising it afterwards
+	// puts the sphere on screen for the frames in between, which reads as the panel opening
+	// something on its way out. Hiding the page also stops the viewport drawing it at all.
+	// The prompt goes up first, before the preview falls back to its sphere. Raising it afterwards
+	// puts the sphere on screen for the frames in between, which reads as the panel opening
+	// something on its way out. Hiding the page also stops the viewport drawing it at all.
+	if (m_Stage != nullptr)
+		m_Stage->setCurrentIndex(0);
 
 	// The preview's Reset clears its geometry, mesh path and material paths, then emits
 	// GeometryChanged -- which is what rebuilds the graphs, empty, one per submesh.

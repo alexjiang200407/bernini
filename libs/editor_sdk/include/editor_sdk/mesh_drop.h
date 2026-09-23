@@ -5,7 +5,6 @@
 #include <QString>
 
 class QMimeData;
-class QWidget;
 
 namespace editor
 {
@@ -27,9 +26,8 @@ namespace editor
 	 * Whether a drag carries a file a mesh viewport takes -- a `.bmesh`, or an imported source.
 	 * By extension alone: nothing is opened, because this answers every `dragMoveEvent`.
 	 *
-	 * So it accepts a source that will not resolve; GetMeshDroppedOn is where that is discovered and
-	 * ReportUnresolved is what says so. Resolving here instead would read a document from disk on
-	 * every mouse move of every drag.
+	 * So it accepts a source that will not resolve; GetMeshDroppedOn is where that is discovered.
+	 * Resolving here instead would read a document from disk on every mouse move of every drag.
 	 */
 	[[nodiscard]] EDITOR_SDK_EXPORT bool
 	IsMeshDrag(const QMimeData* mime);
@@ -47,13 +45,4 @@ namespace editor
 	 */
 	[[nodiscard]] EDITOR_SDK_EXPORT MeshDrop
 	GetMeshDroppedOn(const QMimeData* mime, const QString& dataRoot);
-
-	/**
-	 * Tells the user a dropped source had no mesh to show, in the shape a failed load uses.
-	 *
-	 * Does nothing when the drop resolved, and nothing when it carried no source: a drag of
-	 * something else entirely is not a failure, it is a drop this viewport did not want.
-	 */
-	EDITOR_SDK_EXPORT void
-	ReportUnresolved(QWidget* parent, const MeshDrop& drop);
 }

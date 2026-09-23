@@ -62,6 +62,7 @@
 #include <QScrollBar>
 #include <QSignalSpy>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QString>
 #include <QStringList>
 #include <QTabBar>
@@ -685,6 +686,146 @@ TEST_CASE(
 	CHECK(editor::test::WaitFor([preview] { return preview->MeshPath().empty(); }));
 }
 
+TEST_CASE(
+	"The material panel prompts for a mesh until one is open",
+	"[mainwindow][panelclear][render]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+
+	auto* materialDock = window.findChild<QDockWidget*>("bernini.material");
+	auto* materials    = window.findChild<MaterialEditorWindow*>();
+	auto* preview      = window.findChild<MaterialPreviewWindow*>();
+	REQUIRE(materialDock != nullptr);
+	REQUIRE(materials != nullptr);
+	REQUIRE(preview != nullptr);
+
+	materialDock->raise();
+	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
+
+	// The panel's one stack: the prompt, or everything the panel is for.
+	auto* stage = materials->findChild<QStackedWidget*>("MaterialStage");
+	REQUIRE(stage != nullptr);
+
+	// Nothing open, so nothing of the editing surface is offered -- the default sphere is behind
+	// the prompt rather than in front of it, which is what made an empty panel read as a full one.
+	REQUIRE(preview->MeshPath().empty());
+	CHECK(stage->currentIndex() == 0);
+
+	const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+	REQUIRE(fs::exists(mesh));
+
+	preview->LoadMesh(mesh);
+	REQUIRE_FALSE(preview->MeshPath().empty());
+	CHECK(editor::test::WaitFor([stage] { return stage->currentIndex() == 1; }));
+
+	// And back, by the same signal a failed load arrives on -- with the prompt already up at the
+	// moment the mesh is dropped, so the sphere the preview falls back to is never on screen.
+	bool                          promptUpBeforeGeometryWent = false;
+	const QMetaObject::Connection watch                      = QObject::connect(
+		preview,
+		&MaterialPreviewWindow::GeometryAboutToChange,
+		materials,
+		[&promptUpBeforeGeometryWent, stage] {
+			promptUpBeforeGeometryWent = stage->currentIndex() == 0;
+		});
+
+	materials->Reset();
+	QObject::disconnect(watch);
+
+	CHECK(promptUpBeforeGeometryWent);
+	CHECK(editor::test::WaitFor([stage] { return stage->currentIndex() == 0; }));
+}
+
+TEST_CASE(
+	"The animation panel offers nothing but its prompt until a rig is open",
+	"[mainwindow][render][rigplugin]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+
+	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
+	auto* animation     = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animationDock != nullptr);
+	REQUIRE(animation != nullptr);
+
+	animationDock->raise();
+	REQUIRE(editor::test::WaitFor([animationDock] { return animationDock->isVisible(); }));
+
+	// By name: the panel's Blend tab is a QTabWidget, which keeps a QStackedWidget of its own.
+	auto* stage = animation->findChild<QStackedWidget*>("AnimationStage");
+	REQUIRE(stage != nullptr);
+
+	// The properties column goes behind the prompt with the viewport, so a clip list and a
+	// transport are not offered for a rig that is not there.
+	CHECK(stage->currentIndex() == 0);
+	CHECK(animation->GetHeldAssets().empty());
+}
+
+TEST_CASE(
+	"An environment dropped on the empty material panel still reaches the preview",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+
+	auto* panel = window.findChild<MaterialEditorWindow*>();
+	REQUIRE(panel != nullptr);
+	auto* preview = panel->findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+
+	// Nothing open, so the prompt is up and the preview is on the page behind it. Qt routes a drag
+	// to the widget under the cursor, and a widget on a hidden page is under nothing -- so the drop
+	// arrives at the panel, and the environment would be lost if it only understood meshes.
+	REQUIRE(preview->MeshPath().empty());
+
+	QMimeData mime;
+	mime.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString(
+				(editor.DataRoot() / "Authored/Environments/dropped.benv").string())) });
+
+	QDragEnterEvent enter(QPoint(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(panel, &enter);
+	REQUIRE(enter.isAccepted());
+
+	QDropEvent drop(QPointF(1, 1), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+	QCoreApplication::sendEvent(panel, &drop);
+	REQUIRE(drop.isAccepted());
+
+	CHECK(
+		panel->GetHeldAssets() == std::vector<std::string>{ "Authored/Environments/dropped.benv" });
+}
+
+TEST_CASE(
+	"The material panel tears down with a mesh still open",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	{
+		MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		window.show();
+
+		auto* preview = window.findChild<MaterialPreviewWindow*>();
+		REQUIRE(preview != nullptr);
+
+		const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+		REQUIRE(fs::exists(mesh));
+		preview->LoadMesh(mesh);
+		REQUIRE_FALSE(preview->MeshPath().empty());
+	}
+
+	// Reaching here is the whole assertion. The preview is deleted by ~QWidget, which runs after
+	// the panel's destructor body, and the geometry it drops announces itself on the way out --
+	// straight into a panel whose members were already gone. Quitting with a mesh open crashed.
+	SUCCEED("the panel survived its preview's last signal");
+}
+
 TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
@@ -1026,6 +1167,14 @@ TEST_CASE(
 	dock->raise();
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
+
+	// The properties are on the stack's second page, which opening a rig raises -- and the fixture
+	// carries no rigged mesh to open. Raised directly: what this pins is the layout, not the route
+	// to it.
+	auto* stage = animation->findChild<QStackedWidget*>("AnimationStage");
+	REQUIRE(stage != nullptr);
+	stage->setCurrentIndex(1);
+
 	auto* scroll   = animation->findChild<QScrollArea*>();
 	auto* splitter = animation->findChild<QSplitter*>();
 	REQUIRE(scroll != nullptr);
@@ -1406,6 +1555,14 @@ TEST_CASE(
 	auto* view = preview->findChild<RenderTargetWindow*>();
 	REQUIRE(view != nullptr);
 	CHECK(view->parentWidget() == preview);
+
+	// A mesh first: with none open the panel shows its drop prompt instead, and a viewport on the
+	// page behind it is hidden, which is a state no click can reach rather than one to pin.
+	const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+	REQUIRE(fs::exists(mesh));
+	preview->LoadMesh(mesh);
+	REQUIRE(editor::test::WaitFor([view] { return view->isVisible(); }));
+
 	QSignalSpy picked(preview, &MaterialPreviewWindow::SubmeshPicked);
 	QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->rect().center());
 	REQUIRE(picked.count() == 1);
