@@ -215,8 +215,8 @@ context. Owned scene handles may be retained by a panel, but all access and rele
 on the render thread, before its host dies. The host drains a viewport's pending draws before
 destroying its view. Inactive tabs must suspend their viewports through `SetActive`.
 
-`ViewportDesc` supplies initial instance capacity, TAA allocation, render scale and reconstruction
-width. The host preserves these defaults until the user selects a Render-menu override. Those
+`ViewportDesc` supplies initial instance capacity, TAA allocation, render scale, reconstruction
+width and sharpness. The host preserves these defaults until the user selects a Render-menu override. Those
 choices also apply to viewports created later by lazy panel factories; outline and GPU timing follow
 the current host toggles. TAA availability is refreshed when the Render menu opens.
 
