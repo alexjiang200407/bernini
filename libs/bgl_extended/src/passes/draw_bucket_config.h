@@ -21,14 +21,6 @@ namespace bgl
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc);
 
 	/**
-	 * The discard-only twin of the bucket's pixel program, for the static depth pass: coverage is
-	 * evaluated with the colour pass's own arithmetic, or the receiver would catch shadows on
-	 * discarded texels. @pre a static-tier bucket on the kMask or kHashed layer.
-	 */
-	[[nodiscard]] std::string
-	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc);
-
-	/**
 	 * How a bucket's pipelines cull in hardware. A bucket that culls nothing leaves back faces to
 	 * the mesh stage, which reads each material's doubleSided flag; only the materialless kNull
 	 * and kAssert kinds cull in hardware, having no flag to read. Every pass drawing the bucket
@@ -44,10 +36,6 @@ namespace bgl
 	 */
 	[[nodiscard]] uint32_t
 	DrawBucketMeshStageCullsBackfaces(const DrawBucketDesc& desc) noexcept;
-
-	/** Whether the static depth pass draws the bucket through a coverage twin of its own. */
-	[[nodiscard]] bool
-	DrawBucketHasCoverageTwin(const DrawBucketDesc& desc) noexcept;
 
 	/**
 	 * Where a draw bucket's command count sits when its own dispatch args are the count buffer: the

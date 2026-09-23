@@ -68,10 +68,8 @@ namespace bgl
 		DsvHandle depth;
 		RtvHandle outlineMask;
 
-		// The static receivers' depth: written by the StaticDepth pass, read back by the
-		// blob-shadow decal, so both ends travel with the draw.
-		DsvHandle staticDepth;
-		SrvHandle staticDepthSrv;
+		// The same depth as a shader resource: what the blob-shadow decal reads the world from.
+		SrvHandle depthSrv;
 	};
 
 	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */

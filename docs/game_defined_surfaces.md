@@ -116,7 +116,7 @@ and not a document's. The count is bounded only by the draw-bucket ceiling: past
 refused by name at startup rather than ignored. Below that, what a frame draws is still subject to
 the ceiling per (tier, kind, layer) key, which clamps to the unlit fallback
 ([Passes](passes.md)). A surface's programs -- its opaque, alpha-test and hashed colour
-programs, the static depth pass's coverage twins, and an arm in the shared blend program -- are
+programs and an arm in the shared blend program -- are
 generated at registration (`src/gfx/surface_registry.cpp`); each is one call into
 `lib/forward/GameSurface.slang`, and `programs/forward/GameSurfaceShapes.slang` instantiates every
 shape on the null surface so the build validates them. Only the slot bindings load into every Slang

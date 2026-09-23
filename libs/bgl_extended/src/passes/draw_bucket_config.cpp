@@ -16,7 +16,7 @@ namespace bgl
 	{
 		using namespace std::string_view_literals;
 
-		// A program is named `programs.forward.[DepthOnly_]<stem><layer suffix>` -- a file for an
+		// A program is named `programs.forward.<stem><layer suffix>` -- a file for an
 		// engine kind, generated text for a surface's: one stem per material kind, one suffix per
 		// layer.
 		std::string
@@ -82,32 +82,10 @@ namespace bgl
 		                                             "programs.forward.StaticMesh"sv;
 	}
 
-	std::string
-	DrawBucketCoveragePixelSrc(const DrawBucketDesc& desc)
-	{
-		gassert(
-			desc.geom == GeomType::kStaticMesh &&
-				(desc.layer == LayerType::kMask || desc.layer == LayerType::kHashed) &&
-				desc.material != MaterialType::kNull && desc.material != MaterialType::kAssert,
-			"Coverage twins exist for static cutout and hashed buckets of a shaded kind alone");
-
-		return std::format(
-			"programs.forward.DepthOnly_{}{}",
-			ProgramStem(desc.material),
-			LayerSuffix(desc.layer));
-	}
-
 	uint32_t
 	DrawBucketMeshStageCullsBackfaces(const DrawBucketDesc& desc) noexcept
 	{
 		return DrawBucketCullMode(desc) == RasterCullMode::kNone ? 1u : 0u;
-	}
-
-	bool
-	DrawBucketHasCoverageTwin(const DrawBucketDesc& desc) noexcept
-	{
-		return desc.geom == GeomType::kStaticMesh &&
-		       (desc.layer == LayerType::kMask || desc.layer == LayerType::kHashed);
 	}
 
 	RasterCullMode
