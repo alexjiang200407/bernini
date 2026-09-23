@@ -11,6 +11,7 @@
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
+#include "passes/BlobShadowPass.h"
 #include "passes/BloomPass.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
@@ -22,7 +23,6 @@
 #include "passes/RigFramesPass.h"
 #include "passes/SkinnedPosePass.h"
 #include "passes/SkyboxPass.h"
-#include "passes/StaticDepthPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
 #include "postprocess/TonemapLut.h"
@@ -310,6 +310,7 @@ namespace bgl
 		TonemapLut           m_TonemapLut;
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
+		BlobShadowPass       m_BlobShadows;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;
 		BloomPass            m_BloomPass;
@@ -317,7 +318,6 @@ namespace bgl
 		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
-		StaticDepthPass      m_StaticDepth;
 		RigFramesPass        m_RigFrames;
 		SkinnedPosePass      m_SkinnedPose;
 		TransparentSortPass  m_TransparentSort;

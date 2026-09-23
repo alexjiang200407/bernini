@@ -10,8 +10,8 @@ namespace bgl
 
 	/**
 	 * Reads every surface in `dir`, binds each to a slot, and generates the programs its draw
-	 * buckets draw through: an opaque, alpha-test and hashed colour program, the coverage twins,
-	 * and an arm in the shared blend program.
+	 * buckets draw through: an opaque, alpha-test and hashed colour program, and an arm in the
+	 * shared blend program.
 	 *
 	 * Each `.slang` directly in the directory is one surface: its name is the file's stem, and its
 	 * slot is its position in filename order, so nothing outside the directory names a file. Each is

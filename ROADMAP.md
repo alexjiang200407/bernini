@@ -90,15 +90,22 @@ and portability.
     Today is standard Z: `glm::perspective` under `GLM_FORCE_DEPTH_ZERO_TO_ONE`, depth cleared to
     1.0, `kLess` tests. Float depth for the precision gain, and an optional infinite far plane for
     terrain at unbounded range. Every depth clear and test moves with it, as does every shader
-    that compares clip-space depth to a constant (the skybox's far-plane z, TAA's sky test), the
-    depth-bias sign and gamelib's picking ray.
+    that compares clip-space depth to a constant (the skybox's far-plane z, TAA's sky test, the
+    blob decal's cleared-texel test), the depth-bias sign and gamelib's picking ray.
   - [ ] HZB build (FidelityFX SPD) — single dispatch; reduce to the **farthest** depth (min under
     reversed-Z), and handle non-power-of-two mips explicitly or the odd row/column drops the far
     sample.
   - [ ] HZB occlusion test — screen AABB, mip where it spans ≤2 texels, `GatherRed` 2×2, take farthest.
-  - [ ] Single-phase HZB for the crowd — units are occludees, never occluders, so build from this
-    frame's static depth prepass
-  - [ ] Terrain must render to the depth prepass at unbounded range, or distant mountains occlude
+  - [ ] Two-phase occlusion culling (Haar & Aaltonen 2015; UE5 Nanite's main and post pass). There
+    is no depth prepass: the world is drawn once, in Forward World, which becomes two phases.
+    Phase 1 draws the world instances visible last frame, tested against last frame's HZB; an HZB
+    is built from the depth they leave; phase 2 re-tests what phase 1 rejected against it and draws
+    what became visible. The world is then complete, which is the seam Blob Shadows already reads
+    at: the second HZB build goes there, before any unit is drawn, and serves both the skinned
+    phase -- units are occludees, never occluders, so they test against it and write nothing to
+    it -- and next frame's phase 1. The per-instance visibility bit is the state carried across
+    frames.
+  - [ ] Terrain must render in Forward World at unbounded range, or distant mountains occlude
     nothing.
   - [ ] Density culling — deterministic hash-selected fraction past a distance; cavalry culls later.
   - [ ] Per-view culling — camera and each shadow cascade get their own pass and indirect args.
@@ -345,7 +352,7 @@ and portability.
 - [ ] Terrain — **missing entirely and load-bearing**: the heightfield feeds the grounded test, foot
   planting, corpse settling, slope cost, and the ground blood field.
   - [ ] Heightfield representation + GPU-sampleable height/normal.
-  - [ ] Terrain rendering + LOD, with unbounded range in the depth prepass.
+  - [ ] Terrain rendering + LOD, with unbounded range in Forward World (the occluder phase).
   - [ ] Terrain material layers.
 - [ ] Scene Representation
 - [ ] Foliage
@@ -453,7 +460,7 @@ and portability.
   architecture. Whether the tier is picked at configure time or probed at runtime is undecided.
 - [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
 - [ ] Analytic heightfield occlusion — march the height texture from camera to unit, useful only if
-  occlusion is needed before the depth prepass or on a separate timeline.
+  occlusion is needed before Forward World's first phase or on a separate timeline.
 - [ ] Multi-group radix sort — scale-up for transparent depth ordering, and needed if the spatial grid
   moves to a sparse hash table. Onesweep over the classic three-kernel build.
 - [ ] Corpse pose clustering — cluster settled palettes to K representatives at distance, the escape

@@ -8,10 +8,11 @@ import lib.types.Texture;
 import lib.types.UploadBuffer;
 
 // One workgroup draws one blob-shadow decal: a screen-space quad over the caster's footprint whose
-// pixel stage reconstructs the static receiver under each pixel from the static depth prepass and
-// darkens it by a radial falloff, fading with the caster's height above that surface. Composites
-// between the opaque buckets and the depth-sorted transparents, colour only -- a blended decal has
-// no single depth to reproject, exactly as programs.forward.Transparent has none.
+// pixel stage reconstructs the receiver under each pixel from the depth as Forward's world phase
+// left it -- the world alone, no unit in it -- and darkens it by a radial falloff, fading with the
+// caster's height above that surface. Composites before the skinned phase, so a unit drawn after
+// covers it, and before the transparents, which composite over it; colour only -- a blended decal
+// has no single depth to reproject, exactly as programs.forward.Transparent has none.
 //
 // An entry is either a placement's own disc, cast from its origin, or one foot's: a capsule lying on
 // the sole from heel to ball, cast from the pose the frame draws. The two differ only in where the
@@ -26,13 +27,14 @@ struct Uniforms
     // hero's slice this frame.
     ComputeBuffer<float4> palettes;
 
-    // The static receivers' depth, written by the StaticDepth pass under this frame's viewProj.
-    Texture2D.Handle staticDepth;
+    // The scene depth after Forward's world phase, under this frame's viewProj: every receiver,
+    // and nothing that is not one.
+    Texture2D.Handle worldDepth;
 
     float4x4 viewProj;
 
     // Inverse of viewProj above -- jitter included, so a reconstructed pixel lands exactly where
-    // the receiver pass rasterized it.
+    // the world phase rasterized it.
     float4x4 invViewProj;
 
     // The scene's up axis, unit length: the direction a shadow is cast along.
@@ -172,8 +174,8 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     }
 }
 
-// The static receiver under a raster position: its depth texel unprojected through the same
-// jittered matrix the receiver pass rasterized with.
+// The receiver under a raster position: its depth texel unprojected through the same jittered
+// matrix the world phase rasterized with.
 float3 ReceiverWorld(float2 position, float depth)
 {
     let rect = gBlobShadowData.viewportRect;
@@ -193,32 +195,19 @@ float3 NearestOnSole(float3 heelPos, float3 ballPos, float3 receiver, float3 n)
     return heelPos + segment * t;
 }
 
-struct PSOut
-{
-    float4 color : SV_Target;
-
-    // The fragment takes the receiver's own depth, so the kLessOrEqual test against the scene
-    // depth occludes the decal wherever a unit stands between the camera and the surface it lands
-    // on -- the quad's rasterized depth means nothing.
-    float depth : SV_Depth;
-};
-
 [shader("pixel")]
-PSOut PSMain(VSOut input)
+float4 PSMain(VSOut input) : SV_Target
 {
     let pixel = uint2(input.position.xy);
-    let depth = gBlobShadowData.staticDepth.Load(pixel).r;
+    let depth = gBlobShadowData.worldDepth.Load(pixel).r;
 
-    // A cleared texel has no static receiver under it.
+    // A cleared texel has no receiver under it.
     if (depth >= 1.0)
     {
         discard;
     }
 
     let world = ReceiverWorld(input.position.xy, depth);
-
-    PSOut output;
-    output.depth = depth;
 
     let blob = gBlobShadowData.blobBuffer[input.blob];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
@@ -273,10 +262,10 @@ PSOut PSMain(VSOut input)
     // blade. Per axis, the neighbour nearer in depth is the one on this pixel's own surface, and
     // the normal is built one-sided from those two. A neighbour off the viewport reads as a
     // cleared texel, which the selection then avoids like any other far side of an edge.
-    let zxp = gBlobShadowData.staticDepth.Load(pixel + uint2(1, 0)).r;
-    let zxm = gBlobShadowData.staticDepth.Load(pixel - uint2(1, 0)).r;
-    let zyp = gBlobShadowData.staticDepth.Load(pixel + uint2(0, 1)).r;
-    let zym = gBlobShadowData.staticDepth.Load(pixel - uint2(0, 1)).r;
+    let zxp = gBlobShadowData.worldDepth.Load(pixel + uint2(1, 0)).r;
+    let zxm = gBlobShadowData.worldDepth.Load(pixel - uint2(1, 0)).r;
+    let zyp = gBlobShadowData.worldDepth.Load(pixel + uint2(0, 1)).r;
+    let zym = gBlobShadowData.worldDepth.Load(pixel - uint2(0, 1)).r;
 
     let xPlus = abs(zxp - depth) <= abs(zxm - depth);
     let yPlus = abs(zyp - depth) <= abs(zym - depth);
@@ -300,6 +289,5 @@ PSOut PSMain(VSOut input)
 
     // Premultiplied black: the One/InvSrcAlpha blend scales the scene by 1 - alpha, so the decal
     // only darkens. Squared for a soft shoulder at the rim.
-    output.color = float4(0.0, 0.0, 0.0, blob.intensity * fade * falloff * falloff * facing);
-    return output;
+    return float4(0.0, 0.0, 0.0, blob.intensity * fade * falloff * falloff * facing);
 }

@@ -26,6 +26,7 @@
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
 #include <array>
+#include <bgl/GeomType.h>
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
@@ -161,7 +162,6 @@ namespace bgl
 
 		gassert(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
 		m_DrawBucketTable = ctx.drawBucketTable;
-		m_BlobShadows.Init(ctx);
 	}
 
 	void
@@ -212,9 +212,6 @@ namespace bgl
 	void
 	ForwardPass::CheckBindings() const
 	{
-		// Always-on kernels first: the family guard below must not gate them.
-		m_BlobShadows.CheckBindings();
-
 		CheckKernelNames(m_Kernels);
 		CheckKernelNames({ &m_TransparentKernel, 1 });
 	}
@@ -240,18 +237,16 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
+	ForwardPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, const ForwardPhase phase)
 	{
-		auto desc = PassDesc();
+		constexpr std::array<std::string_view, 3> c_PhaseNames = { "World"sv,
+			                                                       "Skinned"sv,
+			                                                       "Transparent"sv };
 
-		desc.SetName("Forward {}", draw.drawIdx)
+		auto desc = PassDesc();
+		desc.SetName("Forward {} {}", c_PhaseNames[static_cast<size_t>(phase)], draw.drawIdx)
 			.AddTextureArg(
 				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ std::string(c_MotionVectorsName),
 		                    BarrierSyncFlag::kRenderTarget,
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
@@ -259,21 +254,40 @@ namespace bgl
 				TextureArg{ std::string(c_DepthName),
 		                    BarrierSyncFlag::kDepthStencil,
 		                    BarrierAccessFlag::kDepthWrite,
-		                    BarrierLayout::kDepthWrite })
-			.AddBufferArg(
-				BufferArg{ std::string(c_CompactDispatchArgsName),
-		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument })
-			.AddBufferArg(
-				BufferArg{ std::string(c_SortedTransparentInstancesName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kUnorderedAccess })
-			.AddBufferArg(
-				BufferArg{ std::string(c_TransparentDispatchArgsName),
-		                   BarrierSyncFlag::kIndirectArgument,
-		                   BarrierAccessFlag::kIndirectArgument });
+		                    BarrierLayout::kDepthWrite });
 
-		BlobShadowPhase::DeclareResources(desc);
+		if (phase == ForwardPhase::kTransparent)
+		{
+			desc.AddBufferArg(
+					BufferArg{ std::string(c_SortedTransparentInstancesName),
+			                   BarrierSyncFlag::kVertexShader,
+			                   BarrierAccessFlag::kUnorderedAccess })
+				.AddBufferArg(
+					BufferArg{ std::string(c_TransparentDispatchArgsName),
+			                   BarrierSyncFlag::kIndirectArgument,
+			                   BarrierAccessFlag::kIndirectArgument });
+		}
+		else
+		{
+			desc.AddTextureArg(
+					TextureArg{ std::string(c_MotionVectorsName),
+			                    BarrierSyncFlag::kRenderTarget,
+			                    BarrierAccessFlag::kRenderTarget,
+			                    BarrierLayout::kRenderTarget })
+				.AddBufferArg(
+					BufferArg{ std::string(c_CompactDispatchArgsName),
+			                   BarrierSyncFlag::kIndirectArgument,
+			                   BarrierAccessFlag::kIndirectArgument });
+		}
+
+		// The world tier's geometry stage reads no skinned tables; the transparent list is any tier.
+		if (phase != ForwardPhase::kWorld)
+		{
+			for (const auto& binding : c_SkinnedBuffers)
+			{
+				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+			}
+		}
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -292,12 +306,8 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
-		for (const auto& binding : c_SkinnedBuffers)
-		{
-			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
-		}
-
-		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
+		desc.SetExec(
+			[this, draw, phase](const PassContext& resources) { Execute(draw, resources, phase); });
 
 		fg.AddPass(std::move(desc));
 	}
@@ -359,7 +369,10 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Execute(const DrawData& draw, const PassContext& resources)
+	ForwardPass::Execute(
+		const DrawData&    draw,
+		const PassContext& resources,
+		const ForwardPhase phase)
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
@@ -367,6 +380,12 @@ namespace bgl
 
 		if (draw.view->GetInstanceCount() == 0)
 		{
+			return;
+		}
+
+		if (phase == ForwardPhase::kTransparent)
+		{
+			DrawTransparent(draw, resources);
 			return;
 		}
 
@@ -380,12 +399,14 @@ namespace bgl
 
 		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
-		// Opaque and alpha-test: bucketed, drawn indirect over the counting-sort output, to the
-		// table's live count. The transparent buckets are skipped here -- their order is depth,
-		// not bucket, so they draw below.
+		// Opaque and alpha-test of one tier: bucketed, drawn indirect over the counting-sort output,
+		// to the table's live count. The transparent buckets are depth-ordered, so their own phase.
+		const GeomType tier =
+			phase == ForwardPhase::kWorld ? GeomType::kStaticMesh : GeomType::kSkinnedMesh;
 		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
 		{
-			if (m_DrawBucketTable->Transparent(bucket))
+			if (m_DrawBucketTable->Transparent(bucket) ||
+			    m_DrawBucketTable->Desc(bucket).geom != tier)
 			{
 				continue;
 			}
@@ -412,9 +433,6 @@ namespace bgl
 			cmd->SetMeshletState(gfxState);
 			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
 		}
-
-		m_BlobShadows.Draw(draw, resources);
-		DrawTransparent(draw, resources);
 	}
 
 	void

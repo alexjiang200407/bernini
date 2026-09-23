@@ -143,24 +143,6 @@ namespace bgl
 			return m_DepthBuffer.srvHandle;
 		}
 
-		[[nodiscard]] DsvHandle
-		GetStaticDepthDsv() const noexcept override
-		{
-			return m_StaticDepth.dsvHandle;
-		}
-
-		[[nodiscard]] TextureHandle
-		GetStaticDepthTexture() const noexcept override
-		{
-			return m_StaticDepth.textureHandle;
-		}
-
-		[[nodiscard]] SrvHandle
-		GetStaticDepthSrv() const noexcept override
-		{
-			return m_StaticDepth.srvHandle;
-		}
-
 		[[nodiscard]] TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
@@ -355,7 +337,6 @@ namespace bgl
 		bool                m_Presented          = false;
 		TextureRtvSrvHandle m_BackBuffers[c_SwapchainImageCount];
 		TextureDsvHandle    m_DepthBuffer;
-		TextureDsvHandle    m_StaticDepth;
 		TextureRtvHandle    m_MotionVectors;
 		TextureRtvSrvHandle m_SceneColor;
 		SrvHandle           m_MotionVectorSrv;

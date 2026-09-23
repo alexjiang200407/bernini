@@ -233,8 +233,8 @@ namespace bgl
 		m_RigFrames.Init(passes);
 		m_SkinnedPose.Init(passes);
 		m_TransparentSort.Init(passes);
-		m_StaticDepth.Init(passes);
 		m_Forward.Init(passes);
+		m_BlobShadows.Init(passes);
 		m_Skybox.Init(passes);
 		m_PostProcess.Init(passes);
 		m_BloomPass.Init(passes);
@@ -244,8 +244,8 @@ namespace bgl
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
-		m_StaticDepth.CheckBindings();
 		m_Forward.CheckBindings();
+		m_BlobShadows.CheckBindings();
 		m_Skybox.CheckBindings();
 		m_PostProcess.CheckBindings();
 		m_BloomPass.CheckBindings();
@@ -295,8 +295,8 @@ namespace bgl
 				m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
 			}
 		}
-		m_StaticDepth.Release();
 		m_Forward.Release();
+		m_BlobShadows.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
 		m_BloomPass.Release();
@@ -598,7 +598,6 @@ namespace bgl
 		m_FrameGraph.ImportTexture(c_MotionVectorsName, rt.GetMotionVectorTexture());
 		m_FrameGraph.ImportTexture(c_SceneColorName, rt.GetSceneColorTexture());
 		m_FrameGraph.ImportTexture(c_DepthName, rt.GetDepthTexture());
-		m_FrameGraph.ImportTexture(c_StaticDepthName, rt.GetStaticDepthTexture());
 		m_FrameGraph.ImportTexture(c_OutlineMaskName, rt.GetOutlineMaskTexture());
 
 		if (rt.IsTaaEnabled())
@@ -621,10 +620,8 @@ namespace bgl
 			    rt.GetOutlineMaskRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
-		const std::array<ClearPass::DepthTarget, 2> depthTargets{
-			{ { std::string(c_DepthName), rt.GetDepthDsv() },
-			  { std::string(c_StaticDepthName), rt.GetStaticDepthDsv() } }
-		};
+		const std::array<ClearPass::DepthTarget, 1> depthTargets{ { { std::string(c_DepthName),
+			                                                          rt.GetDepthDsv() } } };
 		ClearPass()
 			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, depthTargets);
 
@@ -660,7 +657,6 @@ namespace bgl
 		const auto passes =
 			PassInitContext{ m_Device.Get(), &pipelines, m_ResourceManager, &table };
 		m_Forward.AddDrawBucketKernels(passes, missing);
-		m_StaticDepth.AddDrawBucketKernels(passes, missing);
 		if (missingTransparent)
 		{
 			m_Forward.AddTransparentKernel(passes);
@@ -672,7 +668,6 @@ namespace bgl
 		m_Device->ReleaseSlangSession();
 
 		m_Forward.CheckBindings();
-		m_StaticDepth.CheckBindings();
 
 		m_InitializedDrawBuckets |= missing | transparent;
 
@@ -681,8 +676,7 @@ namespace bgl
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
 			gassert(
-				!missing.test(bucket) || (m_Forward.DrawBucketInitialized(bucket) &&
-			                              m_StaticDepth.DrawBucketInitialized(bucket)),
+				!missing.test(bucket) || m_Forward.DrawBucketInitialized(bucket),
 				"EnsureDrawBucketPipelinesExist left a demanded draw bucket uninitialized");
 		}
 		gassert(
@@ -847,10 +841,9 @@ namespace bgl
 		draw.viewState.unjitteredViewProj = camera.unjitteredViewProj;
 		draw.targets.sceneColor           = m_ActiveTarget->GetSceneColorRtv();
 		draw.targets.depth                = m_ActiveTarget->GetDepthDsv();
+		draw.targets.depthSrv             = m_ActiveTarget->GetDepthSrv();
 		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
-		draw.targets.staticDepth          = m_ActiveTarget->GetStaticDepthDsv();
-		draw.targets.staticDepthSrv       = m_ActiveTarget->GetStaticDepthSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -911,8 +904,11 @@ namespace bgl
 		// sort, which reads it.
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
-		m_StaticDepth.AttachToFrameGraph(m_FrameGraph, draw);
-		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
+		// The depth holds the world alone here: the seam an HZB build belongs at.
+		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);
 
 		if (const auto selected = view->GetSelectedInstances();
 		    !selected.empty() && m_ActiveTarget->IsOutlineEnabled())
