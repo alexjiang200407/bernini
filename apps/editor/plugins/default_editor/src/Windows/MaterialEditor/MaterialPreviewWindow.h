@@ -28,6 +28,7 @@
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QMimeData;
 class QMouseEvent;
 class QWheelEvent;
 
@@ -162,6 +163,22 @@ public:
 	// Replaces the preview geometry with a baked mesh; falls back to the sphere if it cannot load.
 	void
 	LoadMesh(const std::filesystem::path& path);
+
+	/** Whether a drag carries something the preview takes: a mesh, or an environment. */
+	[[nodiscard]] static bool
+	AcceptsDrop(const QMimeData* mime);
+
+	/**
+	 * Applies an environment, or opens a mesh -- importing the dropped source first when the
+	 * project has never seen it.
+	 *
+	 * Public because the panel answers the drop while this widget is hidden behind the empty
+	 * state's prompt, and what a drop means must not be written down in two places.
+	 *
+	 * @return whether the drag was taken; false leaves it for whoever else wants it.
+	 */
+	bool
+	TakeDrop(const QMimeData* mime);
 
 	/**
 	 * Back to what the window opens as: the default sphere, lit by the configured environment.
