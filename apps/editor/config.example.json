@@ -32,6 +32,7 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
+        "taaSharpness": 0.0,
         "bloom": {
             "enabled": false,
             "intensity": 0.25,
@@ -63,6 +64,7 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
+        "taaSharpness": 0.0,
         "bloom": {
             "enabled": false,
             "intensity": 0.25,

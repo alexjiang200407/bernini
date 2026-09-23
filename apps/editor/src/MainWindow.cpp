@@ -251,9 +251,10 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return grade;
 		};
 
-		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
-		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
-		// is a whole editor built without windows, which is the only shape a test can construct.
+		// temporalAA, renderScale, taaReconstructionWidth and taaSharpness are each viewport's own
+		// rather than graphics-wide -- see docs/taa.md. `headless` is every viewport together: a
+		// headless editor is a whole editor built without windows, which is the only shape a test can
+		// construct.
 		const auto readViewport = [&](const auto& section) {
 			auto       viewport             = editor::ViewportDesc();
 			const auto bloom                = readBloom(section);
@@ -262,6 +263,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
 			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
 			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
+			viewport.taaSharpness           = section["taaSharpness"].GetOrDefault(0.0f);
 			viewport.bloomEnabled           = bloom.enabled;
 			viewport.bloom                  = bloom.settings;
 			viewport.colorGradeEnabled      = grade.enabled;
@@ -609,6 +611,7 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 	}
 
 	SetUpReconstructionWidthMenu(render);
+	SetUpSharpnessMenu(render);
 }
 
 // Beside the render scale because it is only legible against one: below 1.0 the resolve builds each
@@ -653,6 +656,45 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 			m_ReconstructionWidthOverride = value;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetTaaReconstructionWidth(value);
+		});
+	}
+}
+
+void
+MainWindow::SetUpSharpnessMenu(QMenu* render)
+{
+	static constexpr std::array c_Sharpness = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+
+	QMenu* sharpness = render->addMenu("TAA Sharpness");
+	sharpness->setStatusTip(
+		"How hard the resolved image is sharpened (RCAS) before the display curve. Only viewports "
+		"with temporal antialiasing sharpen; it also sharpens hashed alpha's grain.");
+
+	auto* group = new QActionGroup(sharpness);
+	group->setExclusive(true);
+
+	const QList<RenderTargetWindow*> views = findChildren<RenderTargetWindow*>();
+	const float current = views.isEmpty() ? 0.0f : views.first()->GetTaaSharpness();
+
+	for (const float value : c_Sharpness)
+	{
+		QAction* action = sharpness->addAction(
+			value == 0.0f ? QString("Off") : QString("%1%").arg(static_cast<int>(value * 100.0f)));
+		action->setCheckable(true);
+		action->setChecked(qFuzzyCompare(value + 1.0f, current + 1.0f));
+		group->addAction(action);
+
+		connect(sharpness, &QMenu::aboutToShow, action, [this, action, value] {
+			const auto  views   = findChildren<RenderTargetWindow*>();
+			const float current = m_SharpnessOverride.value_or(
+				views.isEmpty() ? 0.0f : views.first()->GetTaaSharpness());
+			action->setChecked(qFuzzyCompare(value + 1.0f, current + 1.0f));
+		});
+
+		connect(action, &QAction::triggered, this, [this, value]() {
+			m_SharpnessOverride = value;
+			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+				view->SetTaaSharpness(value);
 		});
 	}
 }
@@ -1571,6 +1613,8 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetRenderScale(*m_RenderScaleOverride);
 	if (m_ReconstructionWidthOverride)
 		view.SetTaaReconstructionWidth(*m_ReconstructionWidthOverride);
+	if (m_SharpnessOverride)
+		view.SetTaaSharpness(*m_SharpnessOverride);
 	if (m_BloomOverride)
 		view.SetBloomEnabled(*m_BloomOverride);
 	if (m_ColorGradeOverride)

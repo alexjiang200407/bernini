@@ -68,6 +68,7 @@ namespace editor::plugins
 		                            .taaEnabled             = desc.taaEnabled,
 		                            .renderScale            = desc.renderScale,
 		                            .taaReconstructionWidth = desc.taaReconstructionWidth,
+		                            .taaSharpness           = desc.taaSharpness,
 		                            .bloom                  = { desc.bloomEnabled, desc.bloom },
 		                            .colorGrade = { desc.colorGradeEnabled, desc.colorGrade },
 		                            .headless   = m_Headless });

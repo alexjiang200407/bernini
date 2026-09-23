@@ -46,9 +46,10 @@ held frame, and what it costs is the frames a moving pixel waits for the jitter 
 — so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
 of 1 it does nothing at all: each output pixel has a sample of its own there.
 
-Last is **TAA Sharpness** (`taaSharpness` on the desc, `IRenderTarget::SetTaaSharpness` live, 1 by
-default): FSR 1's RCAS applied to the resolved image in `PostProcess`, below a render scale of 1
-only. It is what an upscale costs a moving image, put back as edge contrast; see § The sharpen.
+Last is **TAA Sharpness** (`taaSharpness`, same two keys, 1 by default): FSR 1's RCAS applied to
+the resolved image in `PostProcess`, below a render scale of 1 only. It is what an upscale costs a
+moving image, put back as edge contrast; see § The sharpen. The menu lists Off first, and a change
+keeps the accumulation, so one click is a before and after on the same converged frame.
 
 **The resolve is deliberately the standard recipe** — jittered accumulation, YCoCg variance
 clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation and opaque disocclusion

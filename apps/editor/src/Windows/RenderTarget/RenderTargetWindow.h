@@ -80,6 +80,10 @@ struct RenderTargetWindowDesc
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
 
+	// How hard the resolved image is sharpened (RCAS) before the display curve; 0 is off. Only a
+	// viewport with TAA sharpens. Clamped to [0, 1].
+	float taaSharpness = 0.0f;
+
 	// Out-of-range settings are clamped and warned about, like the render scale.
 	BloomConfig      bloom;
 	ColorGradeConfig colorGrade;
@@ -205,6 +209,18 @@ public:
 		return m_TaaReconstructionWidth;
 	}
 
+	// Sets the sharpen on the resolved image, from the next frame on. A per-frame constant like the
+	// reconstruction width: nothing is reallocated and the accumulation is kept, so toggling it is a
+	// before-and-after on the same converged frame. Out-of-range values are clamped and warned about.
+	void
+	SetTaaSharpness(float sharpness);
+
+	[[nodiscard]] float
+	GetTaaSharpness() const noexcept
+	{
+		return m_TaaSharpness;
+	}
+
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
@@ -323,6 +339,7 @@ private:
 
 	// Clamped copy of the desc's, kept so the menu can show what this viewport is on. GUI thread.
 	float m_TaaReconstructionWidth = 0.4f;
+	float m_TaaSharpness           = 0.0f;
 
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.

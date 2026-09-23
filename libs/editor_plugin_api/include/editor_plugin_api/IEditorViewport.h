@@ -29,6 +29,7 @@ namespace editor
 		bool     taaEnabled             = true;
 		float    renderScale            = 1.0f;
 		float    taaReconstructionWidth = 0.4f;
+		float    taaSharpness           = 0.0f;
 
 		// Off by default with bgl's identity settings; the host clamps and warns like the render scale.
 		bool                    bloomEnabled = false;
@@ -88,6 +89,20 @@ namespace editor
 		SetTaaReconstructionWidth(float value) && noexcept
 		{
 			SetTaaReconstructionWidth(value);
+			return std::move(*this);
+		}
+
+		ViewportDesc&
+		SetTaaSharpness(float value) & noexcept
+		{
+			taaSharpness = value;
+			return *this;
+		}
+
+		ViewportDesc&&
+		SetTaaSharpness(float value) && noexcept
+		{
+			SetTaaSharpness(value);
 			return std::move(*this);
 		}
 
