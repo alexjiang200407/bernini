@@ -6,6 +6,7 @@
 #include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
 #include <core/err/util.h>
+#include <exception>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -14,19 +15,21 @@
 
 namespace editor
 {
-	std::vector<std::string>
-	ResolveBlendSets(const assetlib::AssetRefGraph& graph, const std::string_view animationsKey)
+	std::string
+	BlendSetFor(const assetlib::AssetRefGraph& graph, const std::string_view animationsKey)
 	{
-		auto sets = std::vector<std::string>();
 		if (animationsKey.empty())
-			return sets;
+			return {};
 
-		for (const assetlib::AssetRef& ref : graph.ReferrersOf(animationsKey))
-			if (ref.kind == assetlib::RefKind::kBlendClips)
-				sets.push_back(ref.referrer);
-
-		std::ranges::sort(sets);
-		return sets;
+		try
+		{
+			std::string key = assetlib::blendSetKeyFor(animationsKey);
+			return graph.Contains(key) ? std::move(key) : std::string();
+		}
+		catch (const std::exception&)
+		{
+			return {};
+		}
 	}
 
 	std::vector<std::string>

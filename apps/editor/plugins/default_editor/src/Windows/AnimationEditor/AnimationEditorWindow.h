@@ -130,10 +130,10 @@ protected:
 private:
 	editor::IEditorHost& m_Host;
 
-	// Reloads the mesh currently shown, played from `animationsRelPath` and blended by
-	// `blendRelPath`.
+	// Reloads the mesh currently shown, played from `animationsRelPath`. Its blend set comes back
+	// with it: the set is the clip set's own, so a different `.banim` is a different set.
 	void
-	LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath = {});
+	LoadShownMesh(const QString& animationsRelPath);
 
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
@@ -145,11 +145,6 @@ private:
 
 	[[nodiscard]] QWidget*
 	BuildBlendTab();
-
-	// Offers the sets authored against the live clip set, and opens the chosen one -- which is a
-	// reload, since a rig already uploaded refuses a different set.
-	void
-	SetBlendSets(const QStringList& sets, int activeIndex);
 
 	// Takes the spaces the open set resolved to, which the Blend tab's space row offers.
 	void
@@ -233,19 +228,12 @@ private:
 	// Plant feet: the floor, the solve against it, and the sliders that shape it.
 	GroundControls* m_GroundControls = nullptr;
 
-	// Which `.bblend` is open. A set is the rig's rather than the panel's, so choosing one reloads
-	// the mesh.
-	QComboBox* m_BlendSetSelector = nullptr;
-
 	QTabWidget* m_Surfaces = nullptr;
 
 	int m_SelectedClip = -1;
 
 	// What the open set resolved to, as the acquire reported it: what the Blend tab can fade onto.
 	std::vector<game::BlendSpaceInfo> m_Spaces;
-
-	// The set the panel has open, empty when none is. Kept because a reload names it again.
-	QString m_BlendRelPath;
 
 	// The stamped fade's layout, which the shared strip is redrawn from every tick.
 	editor::TransitionLayout m_TransitionLayout;
