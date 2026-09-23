@@ -129,6 +129,12 @@ host import pipeline write Material graphs; it is not a plugin SDK lifecycle int
 
 Each preview composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
 resize events to plugin-owned interaction. The host retains render scheduling and presentation.
+
+A mesh dropped on either mesh panel is opened if the project already holds it and **imported first if
+it does not** — `default_editor`'s `MeshForDrop` over `IEditorHost::ImportMeshSource`. With nothing
+open each panel shows a drop prompt on a stacked page rather than an overlay, because a label floated
+over the native surface is at the mercy of its compositing; the page behind it is hidden, so a panel
+covered by its prompt is one no click reaches.
 The panels borrow the project store for asset operations; an explicitly configured environment from
 another asset root uses its own external store. An omitted environment root uses the project store.
 Content Explorer and rig-editor bakes report

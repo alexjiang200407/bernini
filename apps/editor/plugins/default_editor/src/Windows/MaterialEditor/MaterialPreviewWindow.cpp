@@ -443,10 +443,34 @@ MaterialPreviewWindow::SetSelectedSubmesh(std::optional<uint32_t> submeshIndex)
 	});
 }
 
+bool
+MaterialPreviewWindow::AcceptsDrop(const QMimeData* mime)
+{
+	return editor::IsMeshDrag(mime) || !FirstEnvironmentUrl(mime).isEmpty();
+}
+
+bool
+MaterialPreviewWindow::TakeDrop(const QMimeData* mime)
+{
+	if (const QString environment = FirstEnvironmentUrl(mime); !environment.isEmpty())
+	{
+		SetEnvironment(environment.toStdString());
+		return true;
+	}
+
+	const QString mesh =
+		editor::MeshForDrop(m_Host, mime, QString::fromStdWString(m_DataRoot.wstring()));
+	if (mesh.isEmpty())
+		return false;
+
+	LoadMesh(std::filesystem::path(mesh.toStdWString()));
+	return true;
+}
+
 void
 MaterialPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -454,29 +478,15 @@ void
 MaterialPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 MaterialPreviewWindow::dropEvent(QDropEvent* event)
 {
-	if (const QString environment = FirstEnvironmentUrl(event->mimeData()); !environment.isEmpty())
-	{
-		SetEnvironment(environment.toStdString());
+	if (TakeDrop(event->mimeData()))
 		event->acceptProposedAction();
-		return;
-	}
-
-	const QString mesh = editor::MeshForDrop(
-		m_Host,
-		event->mimeData(),
-		QString::fromStdWString(m_DataRoot.wstring()));
-	if (mesh.isEmpty())
-		return;
-
-	LoadMesh(std::filesystem::path(mesh.toStdWString()));
-	event->acceptProposedAction();
 }
 
 void
