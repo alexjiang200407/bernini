@@ -89,6 +89,20 @@ namespace
 	}
 
 	float
+	ClampSharpness(float sharpness)
+	{
+		const float clamped = std::clamp(sharpness, 0.0f, 1.0f);
+		if (clamped != sharpness)
+		{
+			qWarning(
+				"RenderTarget: TAA sharpness %.3f out of range, using %.3f",
+				static_cast<double>(sharpness),
+				static_cast<double>(clamped));
+		}
+		return clamped;
+	}
+
+	float
 	ClampSectionValue(
 		std::string_view section,
 		std::string_view name,
@@ -180,6 +194,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 
 	m_RenderScale            = ClampRenderScale(m_Desc.renderScale);
 	m_TaaReconstructionWidth = ClampReconstructionWidth(m_Desc.taaReconstructionWidth);
+	m_TaaSharpness           = ClampSharpness(m_Desc.taaSharpness);
 
 	if (m_Desc.headless)
 	{
@@ -197,6 +212,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	rtvDesc.height                 = m_Height;
 	rtvDesc.renderScale            = m_RenderScale;
 	rtvDesc.taaReconstructionWidth = m_TaaReconstructionWidth;
+	rtvDesc.taaSharpness           = m_TaaSharpness;
 	rtvDesc.headless               = m_Desc.headless;
 
 	// Resolved here on the GUI thread; the render target is created from the value on the render
@@ -543,6 +559,21 @@ RenderTargetWindow::SetTaaReconstructionWidth(float width)
 	// reads it between frames.
 	m_Desc.renderer->Invoke(
 		[&] { m_RenderTarget->SetTaaReconstructionWidth(m_TaaReconstructionWidth); });
+}
+
+void
+RenderTargetWindow::SetTaaSharpness(float sharpness)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const float clamped = ClampSharpness(sharpness);
+	if (clamped == m_TaaSharpness)
+		return;
+
+	m_TaaSharpness = clamped;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetTaaSharpness(m_TaaSharpness); });
 }
 
 void

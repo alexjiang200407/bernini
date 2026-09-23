@@ -375,10 +375,13 @@ TEST_CASE(
 		overrideDefaults = true;
 		auto* scale      = ActionNamed(window, "0.5x");
 		auto* width      = ActionNamed(window, "0.8 px");
+		auto* sharpness  = ActionNamed(window, "50%");
 		REQUIRE(scale != nullptr);
 		REQUIRE(width != nullptr);
+		REQUIRE(sharpness != nullptr);
 		scale->trigger();
 		width->trigger();
+		sharpness->trigger();
 	}
 	auto* taa = ActionNamed(window, "Temporal Antialiasing");
 	REQUIRE(taa != nullptr);
@@ -395,6 +398,7 @@ TEST_CASE(
 	REQUIRE(viewport != nullptr);
 	CHECK(viewport->GetRenderScale() == Catch::Approx(overrideDefaults ? 0.5f : 0.75f));
 	CHECK(viewport->GetTaaReconstructionWidth() == Catch::Approx(overrideDefaults ? 0.8f : 0.6f));
+	CHECK(viewport->GetTaaSharpness() == Catch::Approx(overrideDefaults ? 0.5f : 0.25f));
 	QMenu* render = nullptr;
 	for (QAction* action : window.menuBar()->actions())
 		if (action->text() == "Render")

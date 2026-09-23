@@ -69,6 +69,10 @@ namespace bgl
 			float         bloomIntensity = 0.0f;
 			bool          bloomEnabled   = false;
 
+			// The target's TAA sharpness, in [0, 1]; zero skips RCAS. Set only on a frame the resolve
+			// ran below a render scale of 1, whose output is on the backbuffer's grid.
+			float taaSharpness = 0.0f;
+
 			// Validated by the target that carries it; written only when enabled.
 			ColorGradeSettings colorGrade;
 			bool               colorGradeEnabled = false;

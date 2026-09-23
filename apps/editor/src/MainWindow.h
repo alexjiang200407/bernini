@@ -204,6 +204,10 @@ private:
 	void
 	SetUpReconstructionWidthMenu(QMenu* render);
 
+	// The sharpen on the resolved image, with Off first so a before and after is one click apart.
+	void
+	SetUpSharpnessMenu(QMenu* render);
+
 	void
 	SetUpPluginContributions();
 
@@ -225,6 +229,7 @@ private:
 	std::optional<bool>       m_ColorGradeOverride;
 	std::optional<float>      m_RenderScaleOverride;
 	std::optional<float>      m_ReconstructionWidthOverride;
+	std::optional<float>      m_SharpnessOverride;
 	bool                      m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells

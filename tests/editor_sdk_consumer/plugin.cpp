@@ -91,8 +91,10 @@ namespace
 					auto* layout = new QVBoxLayout(this);
 					m_Viewport   = host.CreateViewport(
 						this,
-						editor::ViewportDesc().SetRenderScale(0.75f).SetTaaReconstructionWidth(
-							0.6f));
+						editor::ViewportDesc()
+							.SetRenderScale(0.75f)
+							.SetTaaReconstructionWidth(0.6f)
+							.SetTaaSharpness(0.25f));
 					layout->addWidget(m_Viewport);
 				}
 				std::vector<std::string>
