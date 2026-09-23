@@ -356,41 +356,34 @@ namespace bgl
 			return;
 		}
 
-		for (uint32_t p = 0; p < c_TaaHistoryPlaneCount; ++p)
+		for (uint32_t i = 0; i < m_History.size(); ++i)
 		{
-			const auto   plane  = static_cast<TaaHistoryPlane>(p);
-			const Format format = TaaHistoryFormat(plane);
-			const auto*  label = plane == TaaHistoryPlane::kColor ? "TAA History" : "TAA Luma Ring";
+			auto historyDesc      = TextureDesc();
+			historyDesc.format    = c_SceneColorFormat;
+			historyDesc.width     = GetWidth();
+			historyDesc.height    = GetHeight();
+			historyDesc.dimension = TextureDimension::kTexture2D;
+			historyDesc.debugName = std::format("TAA History: {}", i);
+			historyDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
+			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
 
-			for (uint32_t i = 0; i < m_History[p].size(); ++i)
-			{
-				TextureRtvSrvHandle& slot = m_History[p][i];
+			m_History[i].textureHandle = m_ResourceManager->CreateTexture(historyDesc);
 
-				auto historyDesc      = TextureDesc();
-				historyDesc.format    = format;
-				historyDesc.width     = GetWidth();
-				historyDesc.height    = GetHeight();
-				historyDesc.dimension = TextureDimension::kTexture2D;
-				historyDesc.debugName = std::format("{}: {}", label, i);
-				historyDesc.usage =
-					TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-				historyDesc.initialLayout = BarrierLayout::kRenderTarget;
-				historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_SceneColorFormat;
+			rtvDesc.debugName = std::format("TAA History RTV: {}", i);
 
-				slot.textureHandle = m_ResourceManager->CreateTexture(historyDesc);
+			m_History[i].rtvHandle =
+				m_ResourceManager->CreateRtv(m_History[i].textureHandle, rtvDesc);
 
-				auto rtvDesc      = RtvDesc();
-				rtvDesc.format    = format;
-				rtvDesc.debugName = std::format("{} RTV: {}", label, i);
+			auto historySrvDesc      = SrvDesc();
+			historySrvDesc.format    = c_SceneColorFormat;
+			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
 
-				slot.rtvHandle = m_ResourceManager->CreateRtv(slot.textureHandle, rtvDesc);
-
-				auto historySrvDesc      = SrvDesc();
-				historySrvDesc.format    = format;
-				historySrvDesc.debugName = std::format("{} SRV: {}", label, i);
-
-				slot.srvHandle = m_ResourceManager->CreateSrv(slot.textureHandle, historySrvDesc);
-			}
+			m_History[i].srvHandle =
+				m_ResourceManager->CreateSrv(m_History[i].textureHandle, historySrvDesc);
 		}
 	}
 
@@ -508,25 +501,22 @@ namespace bgl
 	void
 	RenderTarget::DestroyHistoryAttachments()
 	{
-		for (auto& plane : m_History)
+		for (TextureRtvSrvHandle& history : m_History)
 		{
-			for (TextureRtvSrvHandle& history : plane)
+			if (!history.srvHandle.IsNull())
 			{
-				if (!history.srvHandle.IsNull())
-				{
-					m_ResourceManager->DestroySrv(history.srvHandle, false);
-				}
-				if (!history.rtvHandle.IsNull())
-				{
-					m_ResourceManager->DestroyRtv(history.rtvHandle, false);
-				}
-				if (!history.textureHandle.IsNull())
-				{
-					m_ResourceManager->DestroyTexture(history.textureHandle, false);
-				}
-
-				history = {};
+				m_ResourceManager->DestroySrv(history.srvHandle, false);
 			}
+			if (!history.rtvHandle.IsNull())
+			{
+				m_ResourceManager->DestroyRtv(history.rtvHandle, false);
+			}
+			if (!history.textureHandle.IsNull())
+			{
+				m_ResourceManager->DestroyTexture(history.textureHandle, false);
+			}
+
+			history = {};
 		}
 
 		m_HistoryValid        = false;

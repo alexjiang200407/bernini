@@ -1,7 +1,7 @@
 import idl.IResolveInputs;
 import lib.math.taa;
 
-// The resolve's inputs as this renderer binds them: five bindless textures, the two samplers they
+// The resolve's inputs as this renderer binds them: four bindless textures, the two samplers they
 // are read through, and ResolveParams' fields one for one. TaaResolvePass writes every field by
 // name.
 struct TaaResolveData : IResolveInputs
@@ -10,7 +10,6 @@ struct TaaResolveData : IResolveInputs
     Texture2D.Handle history;
     Texture2D.Handle motionVectors;
     Texture2D.Handle depth;
-    Texture2D.Handle lumaHistory;
 
     float4x4 clipToView;
     float4x4 viewToPrevView;
@@ -40,7 +39,6 @@ struct TaaResolveData : IResolveInputs
     float3 SceneLinear(float2 uv) { return sceneColor.SampleLevel(linearSampler, uv, 0.0).rgb; }
     float4 Motion(float2 uv) { return motionVectors.SampleLevel(pointSampler, uv, 0.0); }
     float Depth(float2 uv) { return depth.SampleLevel(pointSampler, uv, 0.0).r; }
-    float4 LumaHistory(float2 uv) { return lumaHistory.SampleLevel(linearSampler, uv, 0.0); }
 
     ResolveParams Params()
     {
@@ -91,20 +89,9 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
     }
 }
 
-struct PSOut
-{
-    float4 history : SV_Target0;
-    float4 lumaRing : SV_Target1;
-};
-
 [shader("pixel")]
-PSOut PSMain(VSOut input)
+float4 PSMain(VSOut input) : SV_Target
 {
     TaaResolveData data = gTaaResolveData;
-    TaaResolveOutput resolved = TaaResolve(data, data.Params(), input.uv);
-
-    PSOut output;
-    output.history = resolved.history;
-    output.lumaRing = resolved.lumaRing;
-    return output;
+    return TaaResolve(data, data.Params(), input.uv);
 }

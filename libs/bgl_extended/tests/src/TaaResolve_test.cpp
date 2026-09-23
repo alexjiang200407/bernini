@@ -3,7 +3,6 @@
 #include "resource/Texture.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
-#include "util/LumaRingReadback.h"
 #include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
@@ -27,7 +26,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -1280,7 +1278,7 @@ TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][re
 		// What a scale change must not disturb: the output grid, and so the backbuffers and the two
 		// histories allocated against it.
 		const bgl::TextureHandle backbuffer = base->GetBackbufferTexture(0);
-		const bgl::TextureHandle history = base->GetHistoryTexture(0, bgl::TaaHistoryPlane::kColor);
+		const bgl::TextureHandle history    = base->GetHistoryTexture(0);
 
 		REQUIRE(base->IsHistoryValid());
 
@@ -1294,7 +1292,7 @@ TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][re
 		// The same textures, not merely the same size: rebuilding them would cost the frame ring its
 		// fences and the accumulation its buffers, for a change that moved neither grid they sit on.
 		CHECK(base->GetBackbufferTexture(0) == backbuffer);
-		CHECK(base->GetHistoryTexture(0, bgl::TaaHistoryPlane::kColor) == history);
+		CHECK(base->GetHistoryTexture(0) == history);
 
 		// The accumulation is dropped even though its buffers are kept: it describes samples the new
 		// render grid does not take.
@@ -1875,130 +1873,6 @@ TEST_CASE(
 
 		// The rejected call leaves the target usable at what it had.
 		CHECK(target->GetTaaReconstructionWidth() == targetDesc.taaReconstructionWidth);
-	}
-}
-
-// The ring is what tells an oscillating pixel from one that changed, so it must hold exactly the
-// frames it claims: the newest in x, each older one moved down a slot, reprojected with the surface.
-TEST_CASE("The resolve records a four-frame luma ring", "[taa]")
-{
-	// An orthographic window of one world unit per twenty pixels, panned by one pixel a frame: the
-	// history a pixel reprojects from is then exactly its right-hand neighbour's.
-	constexpr float c_UnitsPerPixel = 0.05f;
-	constexpr float c_HalfExtent    = 0.5f * c_UnitsPerPixel * static_cast<float>(c_Width);
-	constexpr float c_CentreX       = -15.0f;
-
-	const auto orthoAt = [](float x) {
-		auto camera = bgl::Camera();
-		camera
-			.LookAt(
-				glm::vec3(x, 0.0f, c_CameraZ),
-				glm::vec3(x, 0.0f, c_CameraZ - 1.0f),
-				glm::vec3(0.0f, 1.0f, 0.0f))
-			.Orthographic(-c_HalfExtent, c_HalfExtent, -c_HalfExtent, c_HalfExtent, 0.5f, 500.0f);
-		return camera;
-	};
-
-	auto gfx = bgl::CreateGraphics(TestOptions());
-	REQUIRE(gfx != nullptr);
-
-	auto targetDesc       = bgl::RenderTargetDesc();
-	targetDesc.width      = static_cast<int>(c_Width);
-	targetDesc.height     = static_cast<int>(c_Height);
-	targetDesc.headless   = true;
-	targetDesc.taaEnabled = true;
-
-	auto target = gfx->CreateRenderTarget(targetDesc);
-	REQUIRE(target != nullptr);
-
-	auto scene = gfx->CreateScene(QuadSceneDesc());
-	auto view  = gfx->CreateSceneView(scene, 4);
-	AddFence(scene, view);
-
-	auto job     = bgl::RenderJob();
-	job.view     = view;
-	job.camera   = orthoAt(c_CentreX);
-	job.viewport = FullViewport();
-
-	const auto read = [&] {
-		return bgl::test::ReadLumaRing(gfx.Get(), target.Get(), c_Width, c_Height);
-	};
-	const auto at = [](uint32_t x, uint32_t y) { return static_cast<size_t>(y) * c_Width + x; };
-
-	gfx->DrawFrame(target, job);
-	auto previous = read();
-
-	SECTION("a pixel with no history starts its ring over")
-	{
-		auto distinct = std::set<uint8_t>();
-		for (const glm::u8vec4& entry : previous)
-		{
-			CHECK((entry.y == 0 && entry.z == 0 && entry.w == 0));
-			distinct.insert(entry.x);
-		}
-
-		// The fence's two greys and their edges, not a ring that recorded nothing.
-		CHECK(distinct.size() > 2);
-
-		target->SetTaaEnabled(false);
-		target->SetTaaEnabled(true);
-		gfx->DrawFrame(target, job);
-
-		for (const glm::u8vec4& entry : read())
-		{
-			CHECK((entry.y == 0 && entry.z == 0 && entry.w == 0));
-		}
-	}
-
-	SECTION("at rest each frame moves the ring down a slot")
-	{
-		for (int frame = 0; frame < 5; ++frame)
-		{
-			gfx->DrawFrame(target, job);
-			const auto ring = read();
-
-			auto mismatches = 0;
-			for (size_t i = 0; i < ring.size(); ++i)
-			{
-				const glm::u8vec4 shifted(ring[i].x, previous[i].x, previous[i].y, previous[i].z);
-				mismatches += ring[i] == shifted ? 0 : 1;
-			}
-
-			INFO("frame " << frame + 2);
-			CHECK(mismatches == 0);
-			previous = ring;
-		}
-	}
-
-	SECTION("under a pan the ring follows the surface")
-	{
-		for (int frame = 1; frame <= 4; ++frame)
-		{
-			job.camera = orthoAt(c_CentreX + c_UnitsPerPixel * static_cast<float>(frame));
-			gfx->DrawFrame(target, job);
-			const auto ring = read();
-
-			// The last column reprojects off-screen and starts over; every other pixel was its
-			// right-hand neighbour a frame ago, and not itself, or the pan would prove nothing.
-			auto mismatches = 0;
-			auto unmoved    = 0;
-			for (uint32_t y = 0; y < c_Height; ++y)
-			{
-				for (uint32_t x = 0; x + 1 < c_Width; ++x)
-				{
-					const glm::u8vec4& now = ring[at(x, y)];
-					const glm::u8vec4& was = previous[at(x + 1, y)];
-
-					mismatches += now.y == was.x && now.z == was.y && now.w == was.z ? 0 : 1;
-					unmoved += now.y == previous[at(x, y)].x ? 0 : 1;
-				}
-			}
-
-			INFO("frame " << frame + 1);
-			CHECK(mismatches == 0);
-			CHECK(unmoved > 0);
-			previous = ring;
-		}
 	}
 }
 

@@ -46,7 +46,6 @@ struct Occlusion : IResolveInputs
     float3 SceneLinear(float2 uv) { return float3(0.2); }
     float4 Motion(float2 uv) { return Neighbour(uv) ? float4(0.6, 0.0, 0.0, 0.0) : float4(motion, ownMotion); }
     float Depth(float2 uv) { return Neighbour(uv) ? (scenario == 20 ? 0.9 : 0.3) : 0.6; }
-    float4 LumaHistory(float2 uv) { return 0.0; }
 };
 
 [shader("compute")]
@@ -114,6 +113,6 @@ void main(uint index: SV_DispatchThreadID)
         inputs.motion.x = 0.4 + (index == 18 ? 0.004 : 0.0);
         inputs.ownMotion.x = index == 18 ? 0.004 : 0.0;
     }
-    float4 result = TaaResolve(inputs, p, uv).history;
+    float4 result = TaaResolve(inputs, p, uv);
     gUniforms.results[index] = result.ra;
 }
