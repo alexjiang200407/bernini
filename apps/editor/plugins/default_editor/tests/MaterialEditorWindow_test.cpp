@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-// Set Default Material writes the material into the `.bmesh`. Doing that when the mesh already names
+// Make Default writes the material into the mesh's document. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling
 // "the same file" from "a different one", and the two paths being compared reach the window by
 // different routes: one from a file dialog, one from the mesh's own relative path resolved against the
@@ -116,7 +116,7 @@ TEST_CASE("A real file reached two ways is already default", "[materialeditor]")
 TEST_CASE("Two materials that do not exist are still told apart", "[materialeditor]")
 {
 	// A material can be deleted out from under a mesh that still names it. If the two compared equal
-	// merely by both being absent, Set Default Material would grey out on every mesh.
+	// merely by both being absent, Make Default would grey out on every mesh.
 	CHECK_FALSE(
 		editor::IsSameMaterialFile("C:/Nowhere/Leaf.bmaterial", "C:/Nowhere/Wood.bmaterial"));
 }
