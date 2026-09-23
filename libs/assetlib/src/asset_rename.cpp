@@ -281,6 +281,8 @@ namespace assetlib
 				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 				for (MaterialBinding& binding : document.bindings)
 					binding.material = mapTarget(plan, binding.material);
+				for (MaterialOverrideBinding& entry : document.materialOverrides)
+					entry.material = mapTarget(plan, entry.material);
 
 				document.source   = mapTarget(plan, document.source);
 				document.skeleton = mapTarget(plan, document.skeleton);

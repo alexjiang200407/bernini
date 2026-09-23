@@ -183,7 +183,7 @@ rule it would ride into the archive it must never reach.
 | `Derived/SourceTextures/` | excluded — authoring source; the bake reads it, the runtime never does |
 | `Authored/Meshes/` | excluded — the imported `.glb` sources and their `.bimport` documents |
 | `Authored/EnvSources/` | excluded — the imported environment sources (`.hdr`, float `.ktx2` cubes) and their `.bimport` documents; `pack` cooks a stale `.bsky` / `.benvl` from them before it writes, and the runtime reads only the bakes |
-| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings. Deliberate, so silent (never in `skippedByExtension`) |
+| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings and overrides. Deliberate, so silent (never in `skippedByExtension`) |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.bproj` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
