@@ -38,7 +38,7 @@ namespace assetlib
 		markMap(LiveSet& live, const std::string& map)
 		{
 			if (!map.empty())
-				live.maps.insert(std::filesystem::path(map).filename().string());
+				live.maps.insert(std::filesystem::path(bakedTextureKey(map)).filename().string());
 		}
 
 		/**

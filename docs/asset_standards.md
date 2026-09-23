@@ -114,6 +114,16 @@ There are **two producers of textures**, and they compress differently:
   table above are its rows rather than constants in three files. A change to a row is a bump of
   `c_TextureEncodingToken` ([Asset Containers](asset_containers.md)).
 
+  **A document may record a baked map by its content name**, `<dir>/<group>_<16 hex>` with no
+  extension, rather than by file. `bakedTextureKey`
+  ([libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h))
+  resolves one to `<name>.<tag>-<8 hex>.ktx2`, the tag and the hash of `c_TextureEncodingToken` from
+  the row the group's role takes — so an alpha-carrying base colour is the group `basecoloralpha`, its
+  colour dilated under the transparent texels and so other content than the opaque one. A reference
+  ending `.ktx2` is a file and passes through, which is what an imported triplet and every map baked
+  so far is. gamelib's draw, the staleness checks, the reference graph, rename and prune all read a
+  baked field through it.
+
   **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
   `orm_<hash>.ktx2`, where the hash covers the group, its target format and, per channel, the source
   routed into it *and that source's own size and content hash*. Two materials whose ORM channels route
@@ -974,7 +984,8 @@ a confirmation first.
 It is a **mark and sweep over the whole project**, and each half has a rule that is easy to get wrong:
 
 * **Mark** — every `.bmaterial` below the data root is loaded and its baked maps — the triplet and
-  the occlusion map — marked live, **whether or not the renderer is drawing from it**. A material whose bake has gone stale still names the
+  the occlusion map — marked live, **whether or not the renderer is drawing from it**; one recorded by
+  its content name is marked as the file `bakedTextureKey` resolves it to. A material whose bake has gone stale still names the
   triplet that bake wrote, and re-stamping the sources is a valid thing to do; deleting its maps because
   the renderer happens to be drawing from the routes today would destroy it. A material that fails to load **aborts the scan**
   rather than being skipped — an unread material is one whose references cannot be known, and the maps
