@@ -151,10 +151,14 @@ namespace assetlib::test
 		std::string sky      = "Derived/Sky/forest.bsky";
 		std::string lighting = "Derived/EnvLighting/forest.benvl";
 
-		std::string skySource  = "Derived/SourceTextures/forest.ktx2";
-		std::string skyBaked   = "Derived/BakedTextures/forest_sky.ktx2";
-		std::string prefilter  = "Derived/BakedTextures/forest_prefilter.ktx2";
-		std::string irradiance = "Derived/BakedTextures/forest_irradiance.ktx2";
+		std::string skySource = "Derived/SourceTextures/forest.ktx2";
+		// Named as a bake names one: content, then the encoding it was written in. A map named
+		// without an encoding reads as baked before the split, and every sandbox would re-cook.
+		std::string skyBaked = "Derived/BakedTextures/sky_00000000forest01.rgb9e5-f7276718.ktx2";
+		std::string prefilter =
+			"Derived/BakedTextures/prefilter_00000000forest02.rgb9e5-f7276718.ktx2";
+		std::string irradiance =
+			"Derived/BakedTextures/irradiance_00000000forest03.rgb9e5-f7276718.ktx2";
 	};
 
 	inline Environment

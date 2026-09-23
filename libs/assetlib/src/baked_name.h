@@ -26,6 +26,14 @@ namespace assetlib
 	bakedMapEncodedName(std::string_view contentName, const TextureEncoding& encoding);
 
 	/**
+	 * Whether `fileName` carries an encoding suffix, i.e. whether it is a file bakedMapEncodedName
+	 * could have written. A baked map named without one was written before the content and the
+	 * encoding became two halves, so the container naming it is stale.
+	 */
+	[[nodiscard]] bool
+	namesEncodedBakedMap(std::string_view fileName) noexcept;
+
+	/**
 	 * Whether `reference` names a file rather than a baked map's content, which names none until an
 	 * encoding is put on it. The one spelling of that question.
 	 */

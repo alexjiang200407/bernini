@@ -154,6 +154,54 @@ TEST_CASE("bakeSky compiles an HDR source into a shipping RGB9E5 map", "[envbake
 	}
 }
 
+TEST_CASE("an environment map's file carries the encoding it was written in", "[envbake]")
+{
+	// The same file shape a material's map takes. The route records the file rather than the content
+	// name, because which encoding an environment takes is read off the convolved image and a loader
+	// has no image to read it off.
+	const DataRoot root("bernini_envbake_encoded_name");
+
+	BSky hdr = RoutedSky(root, 2.0f);
+	StoreAt(root.path).BakeSky(hdr);
+
+	BSky ldr;
+	ldr.sky.source = root.AddSource("ldr_src.ktx2", 8, 0.5f);
+	StoreAt(root.path).BakeSky(ldr);
+
+	CHECK(hdr.sky.baked.ends_with(".ktx2"));
+	CHECK(hdr.sky.baked.find(".rgb9e5-") != std::string::npos);
+	CHECK(ldr.sky.baked.find(".bc7srgb-") != std::string::npos);
+
+	CHECK(isBakedEnvMapName(std::filesystem::path(hdr.sky.baked).filename().string()));
+	CHECK(isBakedEnvMapName(std::filesystem::path(ldr.sky.baked).filename().string()));
+
+	CHECK(std::filesystem::exists(root.path / hdr.sky.baked));
+	CHECK(std::filesystem::exists(root.path / ldr.sky.baked));
+}
+
+TEST_CASE("a map named without an encoding re-cooks under one", "[envbake]")
+{
+	// What every environment baked before the name split holds. The file is there and its source has
+	// not moved, so nothing but the name says the map is not one this bake could have written.
+	const DataRoot root("bernini_envbake_legacy_name");
+
+	BSky sky = RoutedSky(root, 2.0f);
+	StoreAt(root.path).BakeSky(sky);
+
+	const std::string legacy =
+		std::string(c_BakedTexturesDirectoryName) + "/sky_0123456789abcdef.ktx2";
+	std::filesystem::rename(root.path / sky.sky.baked, root.path / legacy);
+	sky.sky.baked = legacy;
+
+	REQUIRE(isSkyBakeStale(sky, MountAt(root.path)));
+
+	StoreAt(root.path).BakeSky(sky);
+
+	CHECK(sky.sky.baked != legacy);
+	CHECK(sky.sky.baked.find(".rgb9e5-") != std::string::npos);
+	CHECK_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
+}
+
 TEST_CASE("an LDR sky and prefilter bake to BC7 sRGB; the irradiance stays RGB9E5", "[envbake]")
 {
 	const DataRoot root("bernini_envbake_ldr");

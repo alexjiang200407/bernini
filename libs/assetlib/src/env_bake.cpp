@@ -93,8 +93,8 @@ namespace assetlib
 
 		/**
 		 * Bakes one route: encodes `image` into the content-addressed target unless a map is already
-		 * there under that name -- which, since the name covers everything that produced it, is this
-		 * map. Returns the updated route; the caller assigns it, so a failure part-way leaves the
+		 * there under that name -- which, since the name covers everything that produced it and the
+		 * suffix covers the encoding it was written in, is this map. Returns the updated route; the caller assigns it, so a failure part-way leaves the
 		 * asset untouched.
 		 */
 		EnvMapRoute
@@ -110,16 +110,17 @@ namespace assetlib
 			const std::string     name     = bakedMapContentName(
 				group,
 				std::format(
-					"{}|{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
+					"{}|{}|{:016x}{:016x}|{:016x}|{:016x}",
 					group,
-					encoding.tag,
 					route.source,
 					stamp.size,
 					stamp.hash,
 					parametersHash,
 					c_EnvSourceBakeToken));
 
-			const std::string file = name + std::string(c_TextureExtension);
+			// The route records the file: which encoding this map takes is read off the convolved
+			// image, and a loader has no image to read it off.
+			const std::string file = bakedMapEncodedName(name, encoding);
 
 			const std::filesystem::path outDir = dataRoot / c_BakedTexturesDirectoryName;
 			createDirectories(outDir);
@@ -146,10 +147,15 @@ namespace assetlib
 			if (stampOf(fileSystem, route.source) != route.stamp)
 				return true;
 
+			// A map named without an encoding was baked before the content and the encoding became
+			// two halves of the name, so it re-cooks once under the name this bake writes.
+			if (!namesEncodedBakedMap(route.baked))
+				return true;
+
 			// Named is not the same as present: a map deleted since the bake leaves the route
 			// pointing at a file there is nothing to sample. A bake cannot claim what it cannot
 			// produce, so that is stale and not up to date.
-			return route.baked.empty() || stampOf(fileSystem, route.baked).size == 0;
+			return stampOf(fileSystem, route.baked).size == 0;
 		}
 
 		/**
