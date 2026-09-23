@@ -49,6 +49,11 @@ public:
 		// Edited since it was last written. The panel saves by itself, so this is what it saves.
 		bool dirty = false;
 
+		// Whether the baked maps of the material on disk still match the sources it routes.
+		// Measured when that material changes rather than on every panel refresh: judging it
+		// re-stamps every routed texture, which is a read of each one.
+		bool bakeStale = false;
+
 		// What the graph compiled to when it was last written or loaded, hashed. A write compares
 		// against it and skips an identical one, which is what makes marking the graph edited too
 		// eagerly free -- see MaterialEditorWindow::MarkGraphEdited.

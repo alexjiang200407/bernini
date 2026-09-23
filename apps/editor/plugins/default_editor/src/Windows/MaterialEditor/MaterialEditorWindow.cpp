@@ -144,19 +144,17 @@ MaterialEditorWindow::MaterialEditorWindow(
 
 	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(splitter);
 
-	m_GraphView          = ui.graphView;
-	m_OpenButton         = ui.open;
-	m_BakeAllButton      = ui.bakeAll;
-	m_AddOverrideButton  = ui.addOverride;
-	m_RemoveOverride     = ui.removeOverride;
-	m_MaterialList       = ui.materialList;
-	m_GenerateTangents   = ui.generateTangents;
-	m_SubmeshSelector    = ui.submeshSelector;
-	m_OutputSelector     = ui.outputSelector;
-	m_MaterialLabel      = ui.materialLabel;
-	m_BakedTexturesLabel = ui.bakedTextures;
-	m_TangentWarning     = ui.tangentWarning;
-	m_Ui                 = ui;
+	m_GraphView         = ui.graphView;
+	m_OpenButton        = ui.open;
+	m_BakeAllButton     = ui.bakeAll;
+	m_AddOverrideButton = ui.addOverride;
+	m_RemoveOverride    = ui.removeOverride;
+	m_MaterialList      = ui.materialList;
+	m_GenerateTangents  = ui.generateTangents;
+	m_SubmeshSelector   = ui.submeshSelector;
+	m_OutputSelector    = ui.outputSelector;
+	m_TangentWarning    = ui.tangentWarning;
+	m_Ui                = ui;
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -618,6 +616,7 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 
 	// After the selector is filled, so the looks are indexed by the same submeshes it lists.
 	ReloadRegisteredMaterials();
+	RefreshBakeState();
 
 	if (!submeshNames.isEmpty())
 		m_SubmeshSelector->setCurrentIndex(0);
@@ -673,6 +672,7 @@ void
 MaterialEditorWindow::RefreshMaterialState()
 {
 	m_Graphs.ForgetOnDisk();
+	RefreshBakeState();
 	RefreshActions();
 }
 
@@ -751,52 +751,25 @@ MaterialEditorWindow::RefreshActions()
 
 	m_MakeLookDefault->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 
-	if (materialPath.isEmpty())
-	{
-		m_MaterialLabel->setText(QStringLiteral("(unsaved)"));
-		m_MaterialLabel->setToolTip(QString());
-		m_BakedTexturesLabel->clear();
-		m_BakedTexturesLabel->hide();
-		return;
-	}
+	// The bake's state rides on the button that fixes it: a badge and its colour, where the panel
+	// used to print the material's path and the maps it names.
+	int stale = 0;
+	for (int i = 0; m_Graphs.Holds(i); ++i)
+		if (m_Graphs.At(i).bakeStale)
+			++stale;
 
-	// Whether the baked maps still match the source textures the graph routes. A material saved but
-	// never baked reads as stale, which is what it is: it has no optimized textures yet. Loaded once for
-	// both this and the baked-texture listing below.
-	bool    stale = true;
-	QString bakedSummary;
-	if (const assetlib::BMaterial* material =
-	        m_Graphs.At(graphIndex).onDisk.Get(m_Host.GetStore(), materialPath))
-	{
-		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
-		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
-		try
-		{
-			stale = m_Host.GetStore().BakeIsStale(*material);
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
-		}
-
-		bakedSummary = editor::BakedTexturesSummary(*material);
-	}
-
-	m_BakedTexturesLabel->setText(bakedSummary);
-	m_BakedTexturesLabel->setVisible(!bakedSummary.isEmpty());
-
-	// The material's path, word-wrapped in the properties panel. A stale marker says the baked maps no
-	// longer match the sources the graph routes.
-	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(materialPath) : materialPath);
-	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
-
-	// The path leads, because the label clips it once the panel is narrow.
-	m_MaterialLabel->setToolTip(
-		stale ? QStringLiteral(
-					"%1\n\nThe baked textures do not match its sources. Bake All, or the "
-					"Content Explorer's Bake, updates them.")
-					.arg(materialPath) :
-				materialPath);
+	m_BakeAllButton->setText(
+		stale > 0 ? QStringLiteral("Bake All \u25cf") : QStringLiteral("Bake All"));
+	m_BakeAllButton->setStyleSheet(stale > 0 ? QStringLiteral("color: #c08040;") : QString());
+	m_BakeAllButton->setToolTip(
+		stale > 0 ?
+			QStringLiteral(
+				"%1 of this mesh's materials have baked textures that no longer match the "
+				"sources they route. Baking rewrites them.")
+				.arg(stale) :
+			QStringLiteral(
+				"Composite every material of this mesh down to its baked textures.\nA bake reads "
+				"the routes off disk, so it writes what is still pending first."));
 }
 
 void
@@ -813,6 +786,40 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 
 	if (auto* texture = model.delegateModel<TextureNode>(nodeId))
 		texture->SetTexturePath(path);
+}
+
+void
+MaterialEditorWindow::RefreshBakeState()
+{
+	for (MaterialGraphSet::Graph& entry : m_Graphs.All())
+	{
+		if (entry.materialPath.isEmpty())
+		{
+			// Nothing on disk to have baked: not stale, just not there yet.
+			entry.bakeStale = false;
+			continue;
+		}
+
+		const assetlib::BMaterial* material =
+			entry.onDisk.Get(m_Host.GetStore(), entry.materialPath);
+		if (material == nullptr)
+		{
+			entry.bakeStale = false;
+			continue;
+		}
+
+		try
+		{
+			// A material written but never baked reads as stale, which is what it is: it has no
+			// optimized textures yet.
+			entry.bakeStale = m_Host.GetStore().BakeIsStale(*material);
+		}
+		catch (const std::exception& e)
+		{
+			// A data root that has gone leaves the badge alone rather than throwing out of a slot.
+			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
+		}
+	}
 }
 
 uint64_t
@@ -980,6 +987,7 @@ MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
 	// Every graph, not just the ones written: two graphs can hold one path, and a stamp cannot
 	// separate two writes inside one millisecond.
 	m_Graphs.ForgetOnDisk();
+	RefreshBakeState();
 	RefreshActions();
 }
 
@@ -1651,6 +1659,9 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	m_Graphs.At(graphIndex).materialPath = path;
 
 	CompileGraph(graphIndex);
+
+	// The material behind the board is new to the panel, so what its bake is worth is too.
+	RefreshBakeState();
 	RefreshActions();
 }
 

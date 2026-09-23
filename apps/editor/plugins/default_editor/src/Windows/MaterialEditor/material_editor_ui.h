@@ -58,8 +58,6 @@ namespace editor
 		QPushButton*       generateTangents = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;
-		QLabel*            materialLabel    = nullptr;
-		QLabel*            bakedTextures    = nullptr;
 		QLabel*            tangentWarning   = nullptr;
 
 		// The surface layer (ADR-9), edited here rather than on the node; FillLayerSection shows,
