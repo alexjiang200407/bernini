@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
 #include <catch2/catch_test_macros.hpp>
@@ -268,7 +269,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 
 		const TexturePruneScan scan = AssetStore(root.path).FindUnusedBakedTextures();
 
-		CHECK(Proposes(scan, packedMaterial.pbr.baseColorTexture));
+		CHECK(Proposes(scan, bakedTextureKey(packedMaterial.pbr.baseColorTexture)));
 	}
 }
 

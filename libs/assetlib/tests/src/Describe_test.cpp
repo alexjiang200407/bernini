@@ -3,6 +3,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -170,12 +171,14 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	{
 		material.pbr.routeStamps[0]   = stampOf(source);
 		material.pbr.bakeToken        = c_TextureBakeToken;
-		material.pbr.baseColorTexture = "Derived/BakedTextures/baked.ktx2";
+		material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_0123456789abcdef";
 
 		// The map has to be there as well as named: a triplet entry pointing at nothing is stale.
 		std::filesystem::create_directories(root / "Derived/BakedTextures");
 		{
-			std::ofstream out(root / "Derived/BakedTextures" / "baked.ktx2", std::ios::binary);
+			std::ofstream out(
+				root / bakedTextureKey(material.pbr.baseColorTexture),
+				std::ios::binary);
 			out << "baked bytes";
 		}
 

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib/asset_refs.h>
+#include <assetlib/material_bake.h>
 
 #include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_test_macros.hpp>
@@ -33,7 +34,7 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 	REQUIRE(plan.Allowed());
 
 	auto expected = std::vector<std::string>{ "Authored/Materials/mat.bmaterial",
-		                                      material.pbr.baseColorTexture,
+		                                      bakedTextureKey(material.pbr.baseColorTexture),
 		                                      "Derived/SourceTextures/a.ktx2" };
 	std::ranges::sort(expected);
 	CHECK(plan.cascade == expected);
@@ -42,7 +43,7 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 
 	CHECK_FALSE(fs::exists(root.path / "Derived/Meshes" / "mesh.bmesh"));
 	CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "mat.bmaterial"));
-	CHECK_FALSE(fs::exists(root.path / material.pbr.baseColorTexture));
+	CHECK_FALSE(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
 	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 }
 
@@ -82,7 +83,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 
 		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "shared.ktx2"));
-		CHECK(fs::exists(root.path / stays.pbr.baseColorTexture));
+		CHECK(fs::exists(root.path / bakedTextureKey(stays.pbr.baseColorTexture)));
 	}
 }
 
