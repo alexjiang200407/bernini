@@ -183,11 +183,15 @@ namespace
 			if (frame < 3)
 				continue;
 			const bgl::PassTimings timings = s.gfx->GetPassTimings(s.target);
+			// The forward render is four passes: the world, the blob decals, the skinned, the blended.
+			double forwardMs = 0.0;
 			for (const bgl::PassTiming& row : timings.passes)
 			{
-				if (row.name == "Forward 0")
-					samples.push_back(row.milliseconds);
+				if (row.name == "Forward World 0" || row.name == "Blob Shadows 0" ||
+				    row.name == "Forward Skinned 0" || row.name == "Forward Transparent 0")
+					forwardMs += row.milliseconds;
 			}
+			samples.push_back(forwardMs);
 		}
 		REQUIRE(!samples.empty());
 		std::ranges::sort(samples);

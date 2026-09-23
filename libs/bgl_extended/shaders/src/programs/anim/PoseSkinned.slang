@@ -449,7 +449,7 @@ void PlantFeet(
 }
 
 // Writes where each foot stands, world space, cFloat4sPerSole slots a leg from `firstSoleSlot`: the
-// heel, then the ball. The blob phase's foot shadows read them. After the plant, so a planted foot's
+// heel, then the ball. The blob-shadow pass's foot shadows read them. After the plant, so a planted foot's
 // shadow lies under the foot the frame draws, and before the fold, which is the only time a slot
 // holds a bone's model transform.
 void WriteSoles(PoseTables tables, Rig rig, float4x4 modelToWorld, uint paletteBase, uint firstSoleSlot, uint localIdx)
