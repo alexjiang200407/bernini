@@ -333,3 +333,24 @@ TEST_CASE(
 		project.Store().Load<ImportDocument>(importDocumentKeyFor(c_SourceKey));
 	CHECK(std::ranges::find(document.outputs, c_GrassKey) == document.outputs.end());
 }
+
+TEST_CASE(
+	"Renaming a source carries its grass file with the mesh",
+	"[grass][container][assetrename]")
+{
+	const GrassyProject project("bernini_grass_rename_source");
+
+	const RenamePlan plan =
+		planRename(AssetRefGraph::Scan(project.Store()), c_SourceKey, "Authored/Meshes/avenue.glb");
+	REQUIRE(project.Store().RenameAsset(plan).status == RenameStatus::kRenamed);
+
+	CHECK_FALSE(project.Store().Exists(c_GrassKey));
+	CHECK(project.Store().Exists("Derived/Meshes/avenue.bgrassfields"));
+	CHECK(project.Store().Exists("Derived/Meshes/avenue.bmesh"));
+
+	const ImportDocument document =
+		project.Store().Load<ImportDocument>("Authored/Meshes/avenue.bimport");
+	CHECK(
+		std::ranges::find(document.outputs, "Derived/Meshes/avenue.bgrassfields") !=
+		document.outputs.end());
+}
