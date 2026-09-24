@@ -6,6 +6,7 @@
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -127,6 +128,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		BlendSet set;
 		CheckStoreWritesCodecBytes(set, "a.bblend");
 	}
+
+	SECTION("bgrass")
+	{
+		BGrass grass;
+		CheckStoreWritesCodecBytes(grass, "a.bgrass");
+	}
 }
 
 TEST_CASE("The container table is the only list", "[codec]")
@@ -182,6 +189,7 @@ TEST_CASE("The container table is the only list", "[codec]")
 		CHECK_FALSE(containerKindFor(AssetType::kEnvironment).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kImportDocument).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kBlend).IsCacheEntry());
+		CHECK_FALSE(containerKindFor(AssetType::kGrass).IsCacheEntry());
 	}
 }
 

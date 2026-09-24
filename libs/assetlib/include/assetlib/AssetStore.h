@@ -49,6 +49,7 @@ namespace assetlib
 	struct AnimationSet;
 	struct Avatar;
 	struct BlendSet;
+	struct BGrass;
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
@@ -962,6 +963,10 @@ namespace assetlib
 		/** The clip set the blend spaces are authored against, and each space's clips in order. */
 		[[nodiscard]] std::string
 		Describe(const BlendSet& set) const;
+
+		/** The material a grass look shades through, and every value it sets. */
+		[[nodiscard]] std::string
+		Describe(const BGrass& grass) const;
 
 	private:
 		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */

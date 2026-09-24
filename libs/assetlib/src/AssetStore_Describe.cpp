@@ -65,4 +65,10 @@ namespace assetlib
 	{
 		return describe(set);
 	}
+
+	std::string
+	AssetStore::Describe(const BGrass& grass) const
+	{
+		return describe(grass);
+	}
 }

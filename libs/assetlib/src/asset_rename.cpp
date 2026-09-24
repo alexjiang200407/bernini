@@ -13,6 +13,7 @@
 #include "material_texture_refs.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/file/file.h>
@@ -238,6 +239,13 @@ namespace assetlib
 				BlendSet set   = AssetCodec<BlendSet>::Deserialize(bytes);
 				set.animations = mapTarget(plan, set.animations);
 				return AssetCodec<BlendSet>::Serialize(set);
+			}
+
+			case AssetType::kGrass:
+			{
+				BGrass grass   = AssetCodec<BGrass>::Deserialize(bytes);
+				grass.material = mapTarget(plan, grass.material);
+				return AssetCodec<BGrass>::Serialize(grass);
 			}
 
 			case AssetType::kMaterial:
