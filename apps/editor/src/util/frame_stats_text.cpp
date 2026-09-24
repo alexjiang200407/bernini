@@ -1,4 +1,5 @@
 #include "util/frame_stats_text.h"
+#include "util/editor_language.h"
 #include <algorithm>
 #include <bgl/PassTiming.h>
 #include <cstddef>
@@ -12,13 +13,12 @@ namespace editor
 	FrameStatsText(const QString& viewport, const std::optional<FrameStats>& stats)
 	{
 		if (!stats.has_value())
-			return viewport + " — measuring…";
+			return Localize("editor.util.frame_stats_measuring", { viewport }, "{0} — measuring…");
 
-		return viewport + QString::asprintf(
-							  " — frame %.1f ms avg  %.1f ms max  %d over 20 ms",
-							  stats->meanMs,
-							  stats->maxMs,
-							  stats->slowFrames);
+		return Localize(
+			"editor.util.frame_stats_reported",
+			{ viewport, stats->meanMs, stats->maxMs, stats->slowFrames },
+			"{0} — frame {1:.1f} ms avg  {2:.1f} ms max  {3} over 20 ms");
 	}
 
 	QString

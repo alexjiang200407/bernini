@@ -117,9 +117,10 @@ private:
 	/** One file the import would write as the fields currently read. */
 	struct PlannedFile
 	{
-		QString subject;  // how a message names it -- "The mesh", "The material 'Fur'"
-		QString name;     // the stem as typed, before any of it is judged
-		QString path;     // data-root-relative, extension included
+		QString label;      // the file named on its own, in a list -- "Mesh", "Material 'Fur'"
+		QString needsName;  // the whole sentence refusing it an empty name
+		QString name;       // the stem as typed, before any of it is judged
+		QString path;       // data-root-relative, extension included
 	};
 
 	/** Every file that will actually be written, skipping the categories that are not coming across. */

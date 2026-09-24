@@ -2,6 +2,7 @@
 
 #include "Windows/AssetImporter/ImportSection.h"
 #include "Windows/AssetImporter/material_stems.h"
+#include "util/editor_language.h"
 #include <algorithm>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
@@ -44,7 +45,11 @@ namespace
 	MaterialLabel(const assetlib::GltfMaterial& material, size_t index)
 	{
 		const QString name = QString::fromStdString(material.name).trimmed();
-		return name.isEmpty() ? QString("Material %1").arg(index) : name;
+		return name.isEmpty() ? editor::Localize(
+									"editor.asset_importer.unnamed_material",
+									{ index },
+									"Material {0}") :
+		                        name;
 	}
 }
 
@@ -54,7 +59,7 @@ AssetImporterDialog::AssetImporterDialog(
 	const QString&                          dataRoot,
 	QWidget*                                parent) : QDialog(parent)
 {
-	setWindowTitle("Import Asset");
+	setWindowTitle(editor::Localize("editor.asset_importer.window_title", "Import Asset"));
 	setModal(true);
 
 	m_DefaultName     = QFileInfo(sourceFile).completeBaseName();
@@ -64,7 +69,9 @@ AssetImporterDialog::AssetImporterDialog(
 	auto* layout = new QVBoxLayout(this);
 
 	auto* info = new QFormLayout();
-	info->addRow("File:", new QLabel(sourceFile, this));
+	info->addRow(
+		editor::Localize("editor.asset_importer.file_label", "File:"),
+		new QLabel(sourceFile, this));
 	layout->addLayout(info);
 
 	// The sections scroll, because one unfolded over a source carrying thirty materials would
@@ -85,7 +92,7 @@ AssetImporterDialog::AssetImporterDialog(
 	// always landed -- so the layout an import lands in is the one it always was until a field is
 	// actually changed. For the derived categories that is a subfolder named after the source; for
 	// the source itself it is the category root, which is where every `.glb` copied so far sits.
-	const auto addSection = [&](const char*    label,
+	const auto addSection = [&](const QString& label,
 	                            const char*    category,
 	                            const char*    objectName,
 	                            const QString& tip,
@@ -107,98 +114,134 @@ AssetImporterDialog::AssetImporterDialog(
 	// Above every box rather than under the mesh's: the source is copied for a clips-only import
 	// too, so a section that greyed out with the geometry would leave one unnameable.
 	m_SourceSection = addSection(
-		"Source folder:",
+		editor::Localize("editor.asset_importer.source_folder_label", "Source folder:"),
 		assetlib::c_MeshSourcesDirectoryName,
 		"sourceFolder",
-		"Folder under Authored/Meshes/ to copy the .glb and its .bimport into. The copy is what a "
-		"re-import cooks from, so it is kept rather than being a record of where the file came "
-		"from.");
+		editor::Localize(
+			"editor.asset_importer.source_folder_tip",
+			"Folder under Authored/Meshes/ to copy the .glb and its .bimport into. The copy is "
+			"what a "
+			"re-import cooks from, so it is kept rather than being a record of where the file came "
+			"from."));
 	m_SourceName = m_SourceSection->AddFile(
-		{ .label      = "Source file:",
+		{ .label      = editor::Localize("editor.asset_importer.source_file_label", "Source file:"),
 	      .stem       = m_DefaultName,
 	      .extension  = c_SourceExtension,
 	      .objectName = "sourceName",
-	      .tip = "What the copied source is called in the project. The .bimport beside it takes "
-	             "the same name; naming it is how two exports that came out of the DCC as "
-	             "scene.glb sit in one project." });
+	      .tip        = editor::Localize(
+			  "editor.asset_importer.source_file_tip",
+			  "What the copied source is called in the project. The .bimport beside it takes "
+			  "the same name; naming it is how two exports that came out of the DCC as "
+			  "scene.glb sit in one project.") });
 
-	m_ImportMesh = new QCheckBox("Import mesh", content);
+	m_ImportMesh = new QCheckBox(
+		editor::Localize("editor.asset_importer.import_mesh", "Import mesh"),
+		content);
 	m_ImportMesh->setObjectName("importMesh");
 	m_ImportMesh->setChecked(true);
 	m_ImportMesh->setToolTip(
-		"Bring the geometry across. Off imports only the pieces below -- which is how a rig's "
-		"clips "
-		"arrive when the artist exported one file per animation, each carrying a copy of the "
-		"mesh.");
+		editor::Localize(
+			"editor.asset_importer.import_mesh_tip",
+			"Bring the geometry across. Off imports only the pieces below -- which is how a rig's "
+			"clips "
+			"arrive when the artist exported one file per animation, each carrying a copy of the "
+			"mesh."));
 	contents->addWidget(m_ImportMesh);
 
 	m_MeshSection = addSection(
-		"Mesh folder:",
+		editor::Localize("editor.asset_importer.mesh_folder_label", "Mesh folder:"),
 		assetlib::c_MeshesDirectoryName,
 		"meshFolder",
-		"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed "
-		"(animals/coyote); the category itself is fixed, because every reference in the project is "
-		"written against it.",
+		editor::Localize(
+			"editor.asset_importer.mesh_folder_tip",
+			"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed "
+			"(animals/coyote); the category itself is fixed, because every reference in the "
+			"project is "
+			"written against it."),
 		m_DefaultName);
 	m_MeshName = m_MeshSection->AddFile(
-		{ .label      = "Mesh file:",
+		{ .label      = editor::Localize("editor.asset_importer.mesh_file_label", "Mesh file:"),
 	      .stem       = m_DefaultName,
 	      .extension  = c_MeshExtension,
 	      .objectName = "meshName",
-	      .tip = "What the geometry is written as. Naming it rather than taking the source's "
-	             "name is what lets two imports share one folder." });
+	      .tip        = editor::Localize(
+			  "editor.asset_importer.mesh_file_tip",
+			  "What the geometry is written as. Naming it rather than taking the source's "
+			  "name is what lets two imports share one folder.") });
 
 	// The rig rides with the geometry -- a skin is only meaningful against the mesh it deforms -- so
 	// its folder follows the mesh box rather than one of its own.
 	m_SkeletonSection = addSection(
-		"Skeleton folder:",
+		editor::Localize("editor.asset_importer.skeleton_folder_label", "Skeleton folder:"),
 		assetlib::c_SkeletonsDirectoryName,
 		"skeletonFolder",
-		"Folder under Derived/Skeletons/ to write the .bskel into. Only written when the source "
-		"carries a skin.",
+		editor::Localize(
+			"editor.asset_importer.skeleton_folder_tip",
+			"Folder under Derived/Skeletons/ to write the .bskel into. Only written when the "
+			"source "
+			"carries a skin."),
 		m_DefaultName);
 	m_SkeletonName = m_SkeletonSection->AddFile(
-		{ .label      = "Skeleton file:",
-	      .stem       = m_DefaultName,
+		{ .label = editor::Localize("editor.asset_importer.skeleton_file_label", "Skeleton file:"),
+	      .stem  = m_DefaultName,
 	      .extension  = c_SkeletonExtension,
 	      .objectName = "skeletonName",
-	      .tip = "What the rig is written as, when the source carries one. A rig shared by several "
-	             "files wants the same name in each of them." });
+	      .tip        = editor::Localize(
+			  "editor.asset_importer.skeleton_file_tip",
+			  "What the rig is written as, when the source carries one. A rig shared by several "
+			  "files wants the same name in each of them.") });
 
-	m_ImportTextures = new QCheckBox("Import textures", content);
+	m_ImportTextures = new QCheckBox(
+		editor::Localize("editor.asset_importer.import_textures", "Import textures"),
+		content);
 	m_ImportTextures->setObjectName("importTextures");
 	m_ImportTextures->setChecked(true);
-	m_ImportTextures->setToolTip("Extract the mesh's textures into the project.");
+	m_ImportTextures->setToolTip(
+		editor::Localize(
+			"editor.asset_importer.import_textures_tip",
+			"Extract the mesh's textures into the project."));
 	contents->addWidget(m_ImportTextures);
 
 	// No file rows: WriteTextures names its output after the source's images, so there is nothing
 	// here to name.
 	m_TextureSection = addSection(
-		"Texture folder:",
+		editor::Localize("editor.asset_importer.texture_folder_label", "Texture folder:"),
 		assetlib::c_SourceTexturesDirectoryName,
 		"textureFolder",
-		"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants "
-		"its own: they are named after the images they came from, so two imports sharing a "
-		"folder would overwrite one another.",
+		editor::Localize(
+			"editor.asset_importer.texture_folder_tip",
+			"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants "
+			"its own: they are named after the images they came from, so two imports sharing a "
+			"folder would overwrite one another."),
 		m_DefaultName);
 
-	m_ImportPbrMaterials = new QCheckBox("Import PBR materials", content);
+	m_ImportPbrMaterials = new QCheckBox(
+		editor::Localize("editor.asset_importer.import_pbr_materials", "Import PBR materials"),
+		content);
 	m_ImportPbrMaterials->setObjectName("importPbrMaterials");
 	m_ImportPbrMaterials->setToolTip(
 		m_HasPbrMaterials ?
-			"Derive a material from each of the glTF's PBR materials and bind it to the submeshes "
-			"cut from it. Each is routed at this import's textures and can be reopened in the "
-			"Material Editor." :
-			"This file has no PBR material to derive one from.");
+			editor::Localize(
+				"editor.asset_importer.import_pbr_materials_tip_available",
+				"Derive a material from each of the glTF's PBR materials and bind it to the "
+				"submeshes "
+				"cut from it. Each is routed at this import's textures and can be reopened in the "
+				"Material Editor.") :
+			editor::Localize(
+				"editor.asset_importer.import_pbr_materials_tip_unavailable",
+				"This file has no PBR material to derive one from."));
 	contents->addWidget(m_ImportPbrMaterials);
 
 	m_MaterialSection = addSection(
-		"Material folder:",
+		editor::Localize("editor.asset_importer.material_folder_label", "Material folder:"),
 		assetlib::c_MaterialsDirectoryName,
 		"materialFolder",
-		"Folder under Authored/Materials/ to write the derived .bmaterial files into. Materials "
-		"may "
-		"share one with another import, since each names its own files.",
+		editor::Localize(
+			"editor.asset_importer.material_folder_tip",
+			"Folder under Authored/Materials/ to write the derived .bmaterial files into. "
+			"Materials "
+			"may "
+			"share one with another import, since each names its own files."),
 		m_DefaultName);
 
 	// Only the PBR ones: a material the writer skips would otherwise be offered a name for a file
@@ -213,34 +256,49 @@ AssetImporterDialog::AssetImporterDialog(
 			continue;
 
 		m_MaterialNames[i] = m_MaterialSection->AddFile(
-			{ .label      = m_MaterialLabels.back() + ':',
+			{ .label = editor::Localize(
+				  "editor.asset_importer.material_field_label",
+				  { m_MaterialLabels.back() },
+				  "{0}:"),
 		      .stem       = stems[static_cast<qsizetype>(i)],
 		      .extension  = c_MaterialExtension,
 		      .objectName = QString("materialName%1").arg(i),
-		      .tip        = "What this glTF material is written as." });
+		      .tip        = editor::Localize(
+				  "editor.asset_importer.material_file_tip",
+				  "What this glTF material is written as.") });
 	}
 
-	m_ImportAnimations = new QCheckBox("Import animations", content);
+	m_ImportAnimations = new QCheckBox(
+		editor::Localize("editor.asset_importer.import_animations", "Import animations"),
+		content);
 	m_ImportAnimations->setObjectName("importAnimations");
 	m_ImportAnimations->setChecked(false);
 	m_ImportAnimations->setToolTip(
-		"Bring the file's clips across. With the mesh off they attach to the rig already in the "
-		"project, matched by signature.");
+		editor::Localize(
+			"editor.asset_importer.import_animations_tip",
+			"Bring the file's clips across. With the mesh off they attach to the rig already in "
+			"the "
+			"project, matched by signature."));
 	contents->addWidget(m_ImportAnimations);
 
 	m_AnimationSection = addSection(
-		"Animation folder:",
+		editor::Localize("editor.asset_importer.animation_folder_label", "Animation folder:"),
 		assetlib::c_AnimationsDirectoryName,
 		"animationFolder",
-		"Folder under Derived/Animations/ to write the .banim into.",
+		editor::Localize(
+			"editor.asset_importer.animation_folder_tip",
+			"Folder under Derived/Animations/ to write the .banim into."),
 		m_DefaultName);
 	m_AnimationName = m_AnimationSection->AddFile(
-		{ .label      = "Animation file:",
+		{ .label =
+	          editor::Localize("editor.asset_importer.animation_file_label", "Animation file:"),
 	      .stem       = m_DefaultName,
 	      .extension  = c_AnimExtension,
 	      .objectName = "animationName",
-	      .tip = "What the clips are written as. Every clip in the source goes into this one file; "
-	             "the Animation Editor picks one out of it." });
+	      .tip        = editor::Localize(
+			  "editor.asset_importer.animation_file_tip",
+			  "What the clips are written as. Every clip in the source goes into this one file; "
+			  "the Animation Editor picks one out of it.") });
 
 	contents->addStretch(1);
 
@@ -341,15 +399,17 @@ AssetImporterDialog::PlanFiles() const
 {
 	auto planned = std::vector<PlannedFile>();
 
-	const auto plan = [&](const QString&               subject,
+	const auto plan = [&](const QString&               label,
+	                      const QString&               needsName,
 	                      const editor::ImportSection* section,
 	                      const QLineEdit*             name,
 	                      const QString&               category,
 	                      const QString&               extension) {
 		planned.push_back(
-			{ .subject = subject,
-		      .name    = name->text().trimmed(),
-		      .path    = File(Folder(section->GetFolder(), category), name, extension) });
+			{ .label     = label,
+		      .needsName = needsName,
+		      .name      = name->text().trimmed(),
+		      .path      = File(Folder(section->GetFolder(), category), name, extension) });
 	};
 
 	// Copied for a clips-only import as well, which is the one place the source's destination is
@@ -359,7 +419,13 @@ AssetImporterDialog::PlanFiles() const
 		const QString name   = m_SourceName->text().trimmed();
 		const QString source = File(SourceFolder(), m_SourceName, c_SourceExtension);
 
-		planned.push_back({ .subject = "The source", .name = name, .path = source });
+		planned.push_back(
+			{ .label     = editor::Localize("editor.asset_importer.label_source", "Source"),
+		      .needsName = editor::Localize(
+				  "editor.asset_importer.source_needs_name",
+				  "The source needs a name."),
+		      .name = name,
+		      .path = source });
 
 		// Only for a name that could be written: `importDocumentKeyFor` throws on a path with no
 		// extension, and a blank name leaves `Authored/Meshes/.glb`, which is one. The source row
@@ -369,9 +435,14 @@ AssetImporterDialog::PlanFiles() const
 			// Through the library's rule rather than a second `.bimport` beside the field: one name
 			// places both files, so the pair cannot come apart here and nowhere else.
 			planned.push_back(
-				{ .subject = "The import document",
-			      .name    = name,
-			      .path    = QString::fromStdString(
+				{ .label = editor::Localize(
+					  "editor.asset_importer.label_import_document",
+					  "Import document"),
+			      .needsName = editor::Localize(
+					  "editor.asset_importer.import_document_needs_name",
+					  "The import document needs a name."),
+			      .name = name,
+			      .path = QString::fromStdString(
 					  assetlib::importDocumentKeyFor(source.toStdString())) });
 		}
 	}
@@ -379,7 +450,8 @@ AssetImporterDialog::PlanFiles() const
 	if (m_ImportMesh->isChecked())
 	{
 		plan(
-			"The mesh",
+			editor::Localize("editor.asset_importer.label_mesh", "Mesh"),
+			editor::Localize("editor.asset_importer.mesh_needs_name", "The mesh needs a name."),
 			m_MeshSection,
 			m_MeshName,
 			assetlib::c_MeshesDirectoryName,
@@ -388,7 +460,10 @@ AssetImporterDialog::PlanFiles() const
 		// Planned whether or not the source turns out to carry a skin: that is not known until it is
 		// parsed, and by then a file already there cannot be told from one this import wrote.
 		plan(
-			"The skeleton",
+			editor::Localize("editor.asset_importer.label_skeleton", "Skeleton"),
+			editor::Localize(
+				"editor.asset_importer.skeleton_needs_name",
+				"The skeleton needs a name."),
 			m_SkeletonSection,
 			m_SkeletonName,
 			assetlib::c_SkeletonsDirectoryName,
@@ -398,7 +473,10 @@ AssetImporterDialog::PlanFiles() const
 	if (m_ImportAnimations->isChecked())
 	{
 		plan(
-			"The animations",
+			editor::Localize("editor.asset_importer.label_animations", "Animations"),
+			editor::Localize(
+				"editor.asset_importer.animations_need_name",
+				"The animations need a name."),
 			m_AnimationSection,
 			m_AnimationName,
 			assetlib::c_AnimationsDirectoryName,
@@ -413,7 +491,14 @@ AssetImporterDialog::PlanFiles() const
 				continue;
 
 			plan(
-				QString("The material '%1'").arg(m_MaterialLabels[i]),
+				editor::Localize(
+					"editor.asset_importer.label_material",
+					{ m_MaterialLabels[i] },
+					"Material '{0}'"),
+				editor::Localize(
+					"editor.asset_importer.material_needs_name",
+					{ m_MaterialLabels[i] },
+					"The material '{0}' needs a name."),
 				m_MaterialSection,
 				m_MaterialNames[static_cast<size_t>(i)],
 				assetlib::c_MaterialsDirectoryName,
@@ -434,21 +519,24 @@ AssetImporterDialog::GetProblem() const
 	for (const PlannedFile& file : planned)
 	{
 		if (file.name.isEmpty())
-			return QString("%1 needs a name.").arg(file.subject);
+			return file.needsName;
 
 		if (!editor::IsPlainFileStem(file.name))
-			return QString("'%1' cannot be a file name.").arg(file.name);
+			return editor::Localize(
+				"editor.asset_importer.invalid_file_name",
+				{ file.name },
+				"'{0}' cannot be a file name.");
 
 		// Case-insensitively, because two names differing only in case are one file on Windows.
 		const QString key   = file.path.toLower();
 		const auto    first = claimed.constFind(key);
 		if (first != claimed.constEnd())
-		{
-			return QString("%1 and %2 would both be written as '%3'.")
-			    .arg(*first, file.subject.at(0).toLower() + file.subject.mid(1), file.path);
-		}
+			return editor::Localize(
+				"editor.asset_importer.duplicate_output",
+				{ file.path, *first, file.label },
+				"Two files would be written as '{0}': {1}, {2}.");
 
-		claimed.insert(key, file.subject);
+		claimed.insert(key, file.label);
 	}
 
 	if (m_DataRoot.isEmpty())
@@ -457,8 +545,10 @@ AssetImporterDialog::GetProblem() const
 	for (const PlannedFile& file : planned)
 	{
 		if (QFileInfo::exists(m_DataRoot + '/' + file.path))
-			return QString("'%1' is already in the project. Import never overwrites.")
-			    .arg(file.path);
+			return editor::Localize(
+				"editor.asset_importer.already_in_project",
+				{ file.path },
+				"'{0}' is already in the project. Import never overwrites.");
 	}
 
 	return {};

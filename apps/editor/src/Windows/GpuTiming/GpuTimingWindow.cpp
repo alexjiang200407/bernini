@@ -1,6 +1,7 @@
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 
 #include "Windows/GpuTiming/PassGraphView.h"
+#include "util/editor_language.h"
 #include "util/held_open_assets.h"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -33,7 +34,7 @@ namespace editor
 	GpuTimingWindow::GpuTimingWindow(QWidget* parent) : QWidget(parent, Qt::Window)
 	{
 		setObjectName("GpuTimingWindow");
-		setWindowTitle("GPU Pass Timing");
+		setWindowTitle(Localize("editor.gpu_timing.window_title", "GPU Pass Timing"));
 		resize(980, 420);
 
 		m_Graph = new PassGraphView(m_History, this);
@@ -41,18 +42,21 @@ namespace editor
 		m_Status = new QLabel(this);
 		m_Status->setObjectName("GpuTimingStatus");
 
-		m_Pause = new QPushButton("Pause", this);
+		m_Pause = new QPushButton(Localize("editor.gpu_timing.pause_button", "Pause"), this);
 		m_Pause->setObjectName("GpuTimingPause");
-		m_Pause->setToolTip(
-			"Stop recording, so a spike stays on screen instead of scrolling away.");
+		m_Pause->setToolTip(Localize(
+			"editor.gpu_timing.pause_tooltip",
+			"Stop recording, so a spike stays on screen instead of scrolling away."));
 
-		auto* clear = new QPushButton("Clear", this);
+		auto* clear = new QPushButton(Localize("editor.gpu_timing.clear_button", "Clear"), this);
 		clear->setObjectName("GpuTimingClear");
 
-		auto* save = new QPushButton("Export CSV…", this);
+		auto* save =
+			new QPushButton(Localize("editor.gpu_timing.export_button", "Export CSV…"), this);
 		save->setObjectName("GpuTimingExport");
-		save->setToolTip(
-			"Write retained timings and current editor context beside editor.log, as CSV.");
+		save->setToolTip(Localize(
+			"editor.gpu_timing.export_tooltip",
+			"Write retained timings and current editor context beside editor.log, as CSV."));
 
 		auto* controls = new QHBoxLayout();
 		controls->addWidget(m_Status, 1);
@@ -168,7 +172,9 @@ namespace editor
 	GpuTimingWindow::SetPaused(const bool paused)
 	{
 		m_Paused = paused;
-		m_Pause->setText(paused ? "Resume" : "Pause");
+		m_Pause->setText(
+			paused ? Localize("editor.gpu_timing.resume_button", "Resume") :
+					 Localize("editor.gpu_timing.pause_button", "Pause"));
 		UpdateStatus();
 	}
 
@@ -177,13 +183,19 @@ namespace editor
 	{
 		if (m_Source.isEmpty())
 		{
-			m_Status->setText("No viewport is rendering.");
+			m_Status->setText(
+				Localize("editor.gpu_timing.no_viewport", "No viewport is rendering."));
 			return;
 		}
 
-		m_Status->setText(QString("%1 — %2 frames%3")
-		                      .arg(m_Source)
-		                      .arg(m_History.SampleCount())
-		                      .arg(m_Paused ? ", paused" : ""));
+		m_Status->setText(
+			m_Paused ? Localize(
+						   "editor.gpu_timing.status_paused",
+						   { m_Source, m_History.SampleCount() },
+						   "{0} — {1} frames, paused") :
+					   Localize(
+						   "editor.gpu_timing.status",
+						   { m_Source, m_History.SampleCount() },
+						   "{0} — {1} frames"));
 	}
 }

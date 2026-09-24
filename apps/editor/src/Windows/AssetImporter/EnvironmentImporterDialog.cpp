@@ -1,6 +1,7 @@
 #include "EnvironmentImporterDialog.h"
 
 #include "Windows/AssetImporter/folder_row.h"
+#include "util/editor_language.h"
 #include <assetlib/project_layout.h>
 #include <editor_sdk/asset_paths.h>
 
@@ -17,94 +18,125 @@
 #include <qdialog.h>
 #include <qobject.h>
 
-namespace
-{
-	constexpr auto c_OptionalPlaceholder = "(optional subfolder)";
-}
-
 EnvironmentImporterDialog::EnvironmentImporterDialog(
 	const QString& sourceFile,
 	const QString& targetProject,
 	QWidget*       parent) : QDialog(parent)
 {
-	setWindowTitle("Import Environment");
+	setWindowTitle(
+		editor::Localize("editor.environment_importer.window_title", "Import Environment"));
 	setModal(true);
 
 	m_DefaultName = QFileInfo(sourceFile).completeBaseName();
 
+	const QString optionalPlaceholder = editor::Localize(
+		"editor.environment_importer.optional_subfolder_placeholder",
+		"(optional subfolder)");
+
 	auto* layout = new QVBoxLayout(this);
 
 	auto* info = new QFormLayout();
-	info->addRow("File:", new QLabel(sourceFile, this));
-	info->addRow("Project:", new QLabel(targetProject, this));
+	info->addRow(
+		editor::Localize("editor.environment_importer.file_label", "File:"),
+		new QLabel(sourceFile, this));
+	info->addRow(
+		editor::Localize("editor.environment_importer.project_label", "Project:"),
+		new QLabel(targetProject, this));
 	layout->addLayout(info);
 
 	m_Name = new QLineEdit(m_DefaultName, this);
 	m_Name->setObjectName("environmentName");
 	m_Name->setPlaceholderText(m_DefaultName);
 	m_Name->setToolTip(
-		"Names every file this import writes: Derived/Sky/<name>.bsky, "
-		"Derived/EnvLighting/<name>.benvl, Authored/Environments/<name>.benv and their sources.");
+		editor::Localize(
+			"editor.environment_importer.name_tip",
+			"Names every file this import writes: Derived/Sky/<name>.bsky, "
+			"Derived/EnvLighting/<name>.benvl, Authored/Environments/<name>.benv and their "
+			"sources."));
 
 	auto* nameForm = new QFormLayout();
-	nameForm->addRow("Name:", m_Name);
+	nameForm->addRow(editor::Localize("editor.environment_importer.name_label", "Name:"), m_Name);
 	layout->addLayout(nameForm);
 
-	m_ImportSky = new QCheckBox("Sky", this);
+	m_ImportSky =
+		new QCheckBox(editor::Localize("editor.environment_importer.import_sky", "Sky"), this);
 	m_ImportSky->setObjectName("importSky");
 	m_ImportSky->setChecked(true);
-	m_ImportSky->setToolTip("The backdrop: one radiance cube map, projected from the source.");
+	m_ImportSky->setToolTip(
+		editor::Localize(
+			"editor.environment_importer.import_sky_tip",
+			"The backdrop: one radiance cube map, projected from the source."));
 	layout->addWidget(m_ImportSky);
 
 	m_SkyDir = editor::AddFolderRow(
 		layout,
 		this,
-		{ .label       = "Sky folder:",
+		{ .label = editor::Localize("editor.environment_importer.sky_folder_label", "Sky folder:"),
 	      .category    = assetlib::c_SkyDirectoryName,
 	      .objectName  = "skyDirectory",
-	      .placeholder = c_OptionalPlaceholder,
-	      .tip = "Subfolder of Derived/Sky/ to write the .bsky into. The category itself is fixed: "
-	             "every reference in the project is written against it." });
+	      .placeholder = optionalPlaceholder,
+	      .tip         = editor::Localize(
+			  "editor.environment_importer.sky_folder_tip",
+			  "Subfolder of Derived/Sky/ to write the .bsky into. The category itself is fixed: "
+			  "every reference in the project is written against it.") });
 	connect(m_ImportSky, &QCheckBox::toggled, m_SkyDir, &QWidget::setEnabled);
 
-	m_ImportLighting = new QCheckBox("Environment lighting", this);
+	m_ImportLighting = new QCheckBox(
+		editor::Localize("editor.environment_importer.import_lighting", "Environment lighting"),
+		this);
 	m_ImportLighting->setObjectName("importLighting");
 	m_ImportLighting->setChecked(true);
 	m_ImportLighting->setToolTip(
-		"The image-based lighting: the specular and diffuse convolutions of the same radiance. "
-		"Minutes of work, where the sky is moments -- uncheck it to re-author a backdrop without "
-		"paying for the lighting again.");
+		editor::Localize(
+			"editor.environment_importer.import_lighting_tip",
+			"The image-based lighting: the specular and diffuse convolutions of the same radiance. "
+			"Minutes of work, where the sky is moments -- uncheck it to re-author a backdrop "
+			"without "
+			"paying for the lighting again."));
 	layout->addWidget(m_ImportLighting);
 
 	m_LightingDir = editor::AddFolderRow(
 		layout,
 		this,
-		{ .label       = "Lighting folder:",
+		{ .label = editor::Localize(
+			  "editor.environment_importer.lighting_folder_label",
+			  "Lighting folder:"),
 	      .category    = assetlib::c_EnvLightingDirectoryName,
 	      .objectName  = "lightingDirectory",
-	      .placeholder = c_OptionalPlaceholder,
-	      .tip         = "Subfolder of Derived/EnvLighting/ to write the .benvl into." });
+	      .placeholder = optionalPlaceholder,
+	      .tip         = editor::Localize(
+			  "editor.environment_importer.lighting_folder_tip",
+			  "Subfolder of Derived/EnvLighting/ to write the .benvl into.") });
 	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
 
-	m_ImportEnvironment = new QCheckBox("Environment (composes the two above)", this);
+	m_ImportEnvironment = new QCheckBox(
+		editor::Localize(
+			"editor.environment_importer.import_environment",
+			"Environment (composes the two above)"),
+		this);
 	m_ImportEnvironment->setObjectName("ImportEnvironment");
 	m_ImportEnvironment->setChecked(true);
 	m_ImportEnvironment->setToolTip(
-		"A .benv naming whichever of the two were written. It holds no pixels, so it needs at "
-		"least "
-		"one of them.");
+		editor::Localize(
+			"editor.environment_importer.import_environment_tip",
+			"A .benv naming whichever of the two were written. It holds no pixels, so it needs at "
+			"least "
+			"one of them."));
 	layout->addWidget(m_ImportEnvironment);
 
 	m_ImportedSourceDir = editor::AddFolderRow(
 		layout,
 		this,
-		{ .label       = "Source folder:",
+		{ .label =
+	          editor::Localize("editor.environment_importer.source_folder_label", "Source folder:"),
 	      .category    = assetlib::c_EnvSourcesDirectoryName,
 	      .objectName  = "importedSourceDirectory",
-	      .placeholder = c_OptionalPlaceholder,
-	      .tip = "Subfolder of Authored/EnvSources/ for the copy of the file being imported, and "
-	             "the .bimport beside it. Together they are what re-produces this environment in a "
-	             "checkout that does not carry the derived files." });
+	      .placeholder = optionalPlaceholder,
+	      .tip         = editor::Localize(
+			  "editor.environment_importer.source_folder_tip",
+			  "Subfolder of Authored/EnvSources/ for the copy of the file being imported, and "
+			  "the .bimport beside it. Together they are what re-produces this environment in a "
+			  "checkout that does not carry the derived files.") });
 
 	// It composes the other two, so with neither there is nothing for it to name. Disabled rather
 	// than left tickable, so the refusal is visible before OK rather than as an error afterwards.

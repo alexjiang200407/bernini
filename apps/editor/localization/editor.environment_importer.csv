@@ -1,0 +1,19 @@
+key,en
+file_label,File:
+import_environment,Environment (composes the two above)
+import_environment_tip,"A .benv naming whichever of the two were written. It holds no pixels, so it needs at least one of them."
+import_lighting,Environment lighting
+import_lighting_tip,"The image-based lighting: the specular and diffuse convolutions of the same radiance. Minutes of work, where the sky is moments -- uncheck it to re-author a backdrop without paying for the lighting again."
+import_sky,Sky
+import_sky_tip,"The backdrop: one radiance cube map, projected from the source."
+lighting_folder_label,Lighting folder:
+lighting_folder_tip,Subfolder of Derived/EnvLighting/ to write the .benvl into.
+name_label,Name:
+name_tip,"Names every file this import writes: Derived/Sky/<name>.bsky, Derived/EnvLighting/<name>.benvl, Authored/Environments/<name>.benv and their sources."
+optional_subfolder_placeholder,(optional subfolder)
+project_label,Project:
+sky_folder_label,Sky folder:
+sky_folder_tip,Subfolder of Derived/Sky/ to write the .bsky into. The category itself is fixed: every reference in the project is written against it.
+source_folder_label,Source folder:
+source_folder_tip,"Subfolder of Authored/EnvSources/ for the copy of the file being imported, and the .bimport beside it. Together they are what re-produces this environment in a checkout that does not carry the derived files."
+window_title,Import Environment
