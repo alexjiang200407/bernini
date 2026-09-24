@@ -156,6 +156,30 @@ TEST_CASE("A previewed transition plays its outgoing end from the window's start
 	CHECK(DominantNode(desc, layout.windowEnd) == c_Run);
 }
 
+TEST_CASE("A cut still shows the outgoing end up to the moment it cuts", "[animation]")
+{
+	// What the Blend checkbox switched off stamps: the same transition over one sample interval
+	// instead of the authored fade. The distinction that matters is against a *zero* duration,
+	// which evicts the outgoing end and shows the destination through the whole run-up -- so this
+	// pins that a cut is on the other side of that line, however short it is.
+	constexpr uint32_t c_Land = 0;
+	constexpr uint32_t c_Idle = 1;
+
+	const auto layout = editor::WindowFor(c_Now, editor::CutSeconds(30.0f), 0.6f, 0.9f);
+	const auto desc   = editor::TransitionPlayback(c_Land, c_Idle, 0.0f, 0.0f, layout);
+
+	CHECK(DominantNode(desc, layout.windowStart) == c_Land);
+	CHECK(DominantNode(desc, c_Now - 0.001f) == c_Land);
+	CHECK(DominantNode(desc, layout.windowEnd) == c_Idle);
+
+	// And the destination is reached on the same terms as a long fade: phase 0 at the cut, so what
+	// plays after it is the clip from its start either way.
+	const bgl::PlaybackSlot& to = desc.slot[0].nodeIndex == c_Idle ? desc.slot[0] : desc.slot[1];
+	CHECK(to.nodeIndex == c_Idle);
+	CHECK(to.phase == Catch::Approx(0.0f));
+	CHECK(to.tRef == Catch::Approx(layout.start));
+}
+
 TEST_CASE("A previewed transition carries each end's blend-space parameter", "[animation]")
 {
 	const auto layout = editor::WindowFor(c_Now, 0.5f, 0.6f, 0.9f);
