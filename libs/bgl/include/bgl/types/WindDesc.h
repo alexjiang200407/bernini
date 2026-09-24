@@ -5,7 +5,7 @@ namespace bgl
 {
 	/**
 	 * A view's wind: a steady push along `direction` plus a gust field scrolling with it. What moves
-	 * is up to each grass look's response (GrassWindResponseDesc). The default is calm.
+	 * is up to each grass look's response (GrassResponseDesc). The default is calm.
 	 */
 	struct WindDesc
 	{

@@ -125,7 +125,7 @@ namespace bgl
 			std::span<const GrassHandle>    grass = {}) = 0;
 
 		/**
-		 * Creates a grass look: the blade shape, density, wind response and lighting terms a static
+		 * Creates a grass look: the blade shape, density, response to what bends it and lighting terms a static
 		 * geom's grass fields are drawn with. See GrassDesc.
 		 *
 		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert) or in the

@@ -62,10 +62,13 @@ namespace bgl
 		float widening = 1.0f;
 	};
 
-	/** How a blade answers the view's wind (ISceneView::SetWind). */
-	struct GrassWindResponseDesc
+	/**
+	 * How a blade answers what bends it: the view's wind (ISceneView::SetWind). Every force bends
+	 * a blade about its root without stretching it, so no force moves it out of its chunk's bound.
+	 */
+	struct GrassResponseDesc
 	{
-		// In [0, 1]: at 1 the blade stands still in any wind.
+		// In [0, 1]: at 1 the blade stands still whatever pushes it.
 		float stiffness = 0.5f;
 
 		// Multiplies the gust field's contribution; zero sways with the steady wind alone.
@@ -114,11 +117,11 @@ namespace bgl
 		// alpha is never tested. A blended material is refused.
 		MaterialHandle material;
 
-		GrassBladeDesc        blade;
-		GrassClumpDesc        clump;
-		GrassDensityDesc      density;
-		GrassWindResponseDesc wind;
-		GrassLightingDesc     lighting;
-		GrassColorDesc        color;
+		GrassBladeDesc    blade;
+		GrassClumpDesc    clump;
+		GrassDensityDesc  density;
+		GrassResponseDesc response;
+		GrassLightingDesc lighting;
+		GrassColorDesc    color;
 	};
 }

@@ -184,7 +184,7 @@ disagrees, trust the header, then fix this doc.
 | `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `DirectionalLightDesc` | [libs/bgl/include/bgl/types/DirectionalLightDesc.h](libs/bgl/include/bgl/types/DirectionalLightDesc.h) | The sun: the direction it **travels** (a midday sun is `(0, -1, 0)`), a colour, and an intensity in the irradiance map's units — so a sun and an environment at the same number light a facing surface equally. Casts no shadow. |
-| `GrassDesc` | [libs/bgl/include/bgl/types/GrassDesc.h](libs/bgl/include/bgl/types/GrassDesc.h) | A grass look: the material its blades shade through (drawn opaque whatever its layer; `kBlend` refused), the blade's shape and segment counts, blades per clump, how the field thins between `fadeStart` and `fadeEnd`, how it answers the wind, and the geometry lighting terms — root occlusion, normal rounding, a 0–1 blend toward the ground normal near and far, and a translucency term an engine-lit material receives. No placement: the clumps come with the geom it is bound to. |
+| `GrassDesc` | [libs/bgl/include/bgl/types/GrassDesc.h](libs/bgl/include/bgl/types/GrassDesc.h) | A grass look: the material its blades shade through (drawn opaque whatever its layer; `kBlend` refused), the blade's shape and segment counts, blades per clump, how the field thins between `fadeStart` and `fadeEnd`, how stiffly it answers what bends it (the wind), and the geometry lighting terms — root occlusion, normal rounding, a 0–1 blend toward the ground normal near and far, and a translucency term an engine-lit material receives. No placement: the clumps come with the geom it is bound to. |
 | `WindDesc` | [libs/bgl/include/bgl/types/WindDesc.h](libs/bgl/include/bgl/types/WindDesc.h) | A view's wind: a horizontal direction, a steady strength, and a gust field's size, speed and strength. Calm by default. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `taaSharpness` (how hard an upscaled resolved image is sharpened, in [0, 1], 1 by default, zero off), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
@@ -477,7 +477,9 @@ flowchart TD
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
 * **`SetWind(desc)`** — @pre every field finite, strengths and gust speed non-negative, `gustScale`
-  positive, `direction` with a horizontal part. Per view, like the light, and write-only like it. **Not** an epoch change:
+  positive, `direction` with a horizontal part. Per view, like the light, and write-only like it.
+  Every force bends a blade about its root without stretching it, so a chunk's culling bound -- its
+  clumps inflated by the tallest blade -- holds whatever bends it. **Not** an epoch change:
   grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
 
 ---

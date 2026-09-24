@@ -105,9 +105,11 @@ namespace bgl
 			refuse("density.widening must be finite and non-negative");
 		}
 
-		if (!IsShare(desc.wind.stiffness) || !IsNonNegative(desc.wind.gustResponse))
+		if (!IsShare(desc.response.stiffness) || !IsNonNegative(desc.response.gustResponse))
 		{
-			refuse("wind.stiffness must be in [0, 1] and wind.gustResponse finite, non-negative");
+			refuse(
+				"response.stiffness must be in [0, 1] and response.gustResponse finite and "
+				"non-negative");
 		}
 
 		const GrassLightingDesc& lighting = desc.lighting;
