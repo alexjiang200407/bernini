@@ -266,7 +266,7 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
 * Nothing reaches the GPU until an open command list calls `Update(cmdList)` on each buffer, which
   copies only the dirty blocks.
 
-For a concrete procedural builder, see [Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp). The three
+For a concrete procedural builder, see [Scene_Geometry.cpp](libs/bgl_extended/src/scene/Scene_Geometry.cpp). The three
 primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices;
 they all hand off to `Scene::AddProceduralGeom`, which greedily meshletizes under the
 `cMaxVerticesPerMeshlet` / `cMaxPrimsPerMeshlet` caps and performs the upload sequence above. A
@@ -376,5 +376,5 @@ meshletBuffer.Update(cmdList);
 vertexDataBuffer.Update(cmdList);
 ```
 
-See [Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp) for a full procedural builder and
+See [Scene_Geometry.cpp](libs/bgl_extended/src/scene/Scene_Geometry.cpp) for a full procedural builder and
 [docs/passes.md](docs/passes.md) for how the forward pass consumes these buffers.
