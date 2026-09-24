@@ -22,8 +22,7 @@ REPO_ROOT = ct.REPO_ROOT
 # Files, and directories whose every file is, held to the raw-literal rule. Grows as the sweep lands.
 COVERED = [
     "apps/editor/src",
-    "apps/editor/plugins/default_editor/src/plugin.cpp",
-    "apps/editor/plugins/default_editor/src/Windows/MaterialEditor",
+    "apps/editor/plugins/default_editor/src",
     "examples/editor_plugin",
 ]
 
