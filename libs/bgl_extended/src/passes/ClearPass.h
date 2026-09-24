@@ -45,22 +45,14 @@ namespace bgl
 
 			for (const ColorTarget& color : colors)
 			{
-				desc.AddTextureArg(
-					TextureArg{ color.name,
-				                BarrierSyncFlag::kRenderTarget,
-				                BarrierAccessFlag::kRenderTarget,
-				                BarrierLayout::kRenderTarget });
+				desc.AddRenderTarget(color.name);
 			}
 
 			for (const DepthTarget& depth : depths)
 			{
 				if (!depth.dsv.IsNull())
 				{
-					desc.AddTextureArg(
-						TextureArg{ depth.name,
-					                BarrierSyncFlag::kDepthStencil,
-					                BarrierAccessFlag::kDepthWrite,
-					                BarrierLayout::kDepthWrite });
+					desc.AddDepthWrite(depth.name);
 				}
 			}
 

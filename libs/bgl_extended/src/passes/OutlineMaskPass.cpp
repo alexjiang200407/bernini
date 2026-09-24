@@ -82,15 +82,8 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("Outline Mask {}", draw.drawIdx)
-			.AddTextureArg(
-				TextureArg{ std::string(c_OutlineMaskName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddBufferArg(
-				BufferArg{ std::string(c_SelectedInstancesName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kShaderResource });
+			.AddRenderTarget(c_OutlineMaskName)
+			.AddBufferRead(c_SelectedInstancesName, BarrierSyncFlag::kVertexShader);
 
 		for (const std::span<const SceneBuffer> bindings :
 		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),

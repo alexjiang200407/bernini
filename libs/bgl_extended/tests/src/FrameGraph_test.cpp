@@ -1089,7 +1089,7 @@ TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Producer")
-			.AddBufferArg("a", BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferReadWrite("a", BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const PassContext&) { h.log.push_back("exec:Producer"); }));
 	fg.AddPass(PassDesc{}.SetName("Orphan").SetExec([&](const PassContext&) {
 		h.log.push_back("exec:Orphan");
@@ -1097,7 +1097,7 @@ TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Consumer")
-			.AddBufferArg("a", BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kShaderResource)
+			.AddBufferRead("a", BarrierSyncFlag::kComputeShader)
 			.SetSideEffect()
 			.SetExec([&](const PassContext&) { h.log.push_back("exec:Consumer"); }));
 
@@ -1150,4 +1150,57 @@ TEST_CASE("FrameGraph: passes past the timer's capacity are listed unsampled", "
 	CHECK(!entries[1].sampled);
 	CHECK(timer.GetSlotsUsed() == 2);
 	timer.Disarm();
+}
+
+TEST_CASE("PassDesc: each access helper declares its own barrier flags", "[fg]")
+{
+	using bgl::BarrierAccessFlag;
+	using bgl::BarrierLayout;
+	using bgl::BarrierSyncFlag;
+
+	auto desc = bgl::PassDesc();
+	desc.AddRenderTarget("rt")
+		.AddDepthWrite("depth")
+		.AddTextureRead("sampled", BarrierSyncFlag::kPixelShader)
+		.AddBufferRead("read", BarrierSyncFlag::kComputeShader)
+		.AddBufferReadWrite("uav", BarrierSyncFlag::kVertexShader)
+		.AddIndirectArgs("args")
+		.AddCopySource("from")
+		.AddCopyDest("to");
+
+	REQUIRE(desc.textures.size() == 3);
+	const auto texture =
+		[&](size_t i, bgl::BarrierSync sync, bgl::BarrierAccess access, BarrierLayout layout) {
+			CHECK(desc.textures[i].sync == sync);
+			CHECK(desc.textures[i].access == access);
+			CHECK(desc.textures[i].layout == layout);
+		};
+	texture(
+		0,
+		BarrierSyncFlag::kRenderTarget,
+		BarrierAccessFlag::kRenderTarget,
+		BarrierLayout::kRenderTarget);
+	texture(
+		1,
+		BarrierSyncFlag::kDepthStencil,
+		BarrierAccessFlag::kDepthWrite,
+		BarrierLayout::kDepthWrite);
+	texture(
+		2,
+		BarrierSyncFlag::kPixelShader,
+		BarrierAccessFlag::kShaderResource,
+		BarrierLayout::kShaderResource);
+	CHECK(desc.textures[2].name == "sampled");
+
+	REQUIRE(desc.buffers.size() == 5);
+	const auto buffer = [&](size_t i, bgl::BarrierSync sync, bgl::BarrierAccess access) {
+		CHECK(desc.buffers[i].sync == sync);
+		CHECK(desc.buffers[i].access == access);
+		CHECK_FALSE(desc.buffers[i].poison);
+	};
+	buffer(0, BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kShaderResource);
+	buffer(1, BarrierSyncFlag::kVertexShader, BarrierAccessFlag::kUnorderedAccess);
+	buffer(2, BarrierSyncFlag::kIndirectArgument, BarrierAccessFlag::kIndirectArgument);
+	buffer(3, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopySource);
+	buffer(4, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest);
 }

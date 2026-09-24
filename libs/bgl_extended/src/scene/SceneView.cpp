@@ -1583,8 +1583,7 @@ namespace bgl
 
 		for (const std::string& buffer : updateBuffers)
 		{
-			desc.AddBufferArg(
-				BufferArg{ buffer, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest });
+			desc.AddCopyDest(buffer);
 		}
 
 		desc.SetExec([this](const PassContext& ctx) { Update(ctx.GetCommandList()); });

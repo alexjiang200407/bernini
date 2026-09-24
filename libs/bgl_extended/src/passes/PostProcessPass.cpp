@@ -113,33 +113,17 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("PostProcess")
-			.AddTextureArg(
-				TextureArg{ args.sourceName,
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
-				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget });
+			.AddTextureRead(args.sourceName, BarrierSyncFlag::kPixelShader)
+			.AddRenderTarget(c_BackbufferName);
 
 		if (args.outlineEnabled)
 		{
-			desc.AddTextureArg(
-				TextureArg{ std::string(c_OutlineMaskName),
-			                BarrierSyncFlag::kPixelShader,
-			                BarrierAccessFlag::kShaderResource,
-			                BarrierLayout::kShaderResource });
+			desc.AddTextureRead(c_OutlineMaskName, BarrierSyncFlag::kPixelShader);
 		}
 
 		if (args.bloomEnabled)
 		{
-			desc.AddTextureArg(
-				TextureArg{ args.bloomName,
-			                BarrierSyncFlag::kPixelShader,
-			                BarrierAccessFlag::kShaderResource,
-			                BarrierLayout::kShaderResource });
+			desc.AddTextureRead(args.bloomName, BarrierSyncFlag::kPixelShader);
 		}
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });

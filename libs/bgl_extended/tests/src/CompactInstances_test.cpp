@@ -174,26 +174,11 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Clear")
-			.AddBufferArg(
-				"instanceBuffer",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"drawBucketPrefixSum",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"dispatchArgs",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"compactedInstances",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"visibility",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
+			.AddCopyDest("instanceBuffer")
+			.AddCopyDest("drawBucketPrefixSum")
+			.AddCopyDest("dispatchArgs")
+			.AddCopyDest("compactedInstances")
+			.AddCopyDest("visibility")
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				instanceBuffer.Update(cmd);
@@ -216,18 +201,9 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("HistogramAndPrefixSum")
-			.AddBufferArg(
-				"instanceBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"drawBucketPrefixSum",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"visibility",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
@@ -259,26 +235,11 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Compact")
-			.AddBufferArg(
-				"instanceBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"drawBucketPrefixSum",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"visibility",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"compactedInstances",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"dispatchArgs",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("compactedInstances", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("dispatchArgs", bgl::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
