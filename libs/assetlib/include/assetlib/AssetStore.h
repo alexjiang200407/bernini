@@ -50,10 +50,12 @@ namespace assetlib
 	struct Avatar;
 	struct BlendSet;
 	struct BGrass;
+	struct BGrassFields;
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
 
+	struct RegenGrassFields;
 	struct RegenMesh;
 	struct SourceRef;
 
@@ -284,6 +286,18 @@ namespace assetlib
 		// --- Import writes -----------------------------------------------------------------------
 
 		/**
+		 * Writes the grass an import's source grows -- every POINTS primitive, as `imp::BMeshImport`
+		 * read it -- to `key`, beside its `.bmesh`. Its fields are unbound: the `.bimport`'s grass
+		 * bindings are applied over them wherever they are loaded (LoadRegenGrassFields).
+		 *
+		 * @return `key` when the source had grass and a file was written; empty when it had none,
+		 *         so a source without POINTS names no grass file among its outputs.
+		 * @throws std::runtime_error if the container cannot be written.
+		 */
+		std::vector<std::string>
+		WriteImportedGrass(BGrassFields grass, std::string_view key, const SourceRef& source) const;
+
+		/**
 		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.
 		 *
 		 * A joint index is a bare number into a bone array, so a mesh carrying joints while naming
@@ -346,8 +360,8 @@ namespace assetlib
 		 * a stale bake token, a source stamp that moved, or parameters the `.bimport` no longer
 		 * matches. Always false on a read-only store, which trusts its keys.
 		 *
-		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`, or its header
-		 *         cannot be read.
+		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`/`.bgrassfields`,
+		 *         or its header cannot be read.
 		 */
 		[[nodiscard]] bool
 		GeometryIsStale(std::string_view path) const;
@@ -390,6 +404,27 @@ namespace assetlib
 		 */
 		[[nodiscard]] AnimationSet
 		LoadRegenAnimations(std::string_view path) const;
+
+		/**
+		 * The grass the mesh source grows, with the import document's grass bindings applied over
+		 * it, as LoadRegenMesh applies the material ones.
+		 *
+		 * @throws what LoadRegenMesh throws, and std::runtime_error when the re-exported source no
+		 *         longer carries a POINTS primitive, or two of its fields now share a name.
+		 */
+		[[nodiscard]] RegenGrassFields
+		LoadRegenGrassFields(std::string_view path) const;
+
+		/**
+		 * The `.bgrass` looks a `.bgrassfields` draws its fields with, surviving a foreign bake token
+		 * the way LoadRegenMeshRefs does: from the import document's grass bindings rather than a
+		 * regeneration, so a reference scan stays a header read per file.
+		 *
+		 * @throws std::runtime_error on a foreign-token entry with no recorded source or whose import
+		 *         document is gone.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		LoadRegenGrassLooks(std::string_view path) const;
 
 		/**
 		 * LoadMeshRefs surviving a foreign bake token: chunks that cannot be parsed answer from
@@ -967,6 +1002,10 @@ namespace assetlib
 		/** The material a grass look shades through, and every value it sets. */
 		[[nodiscard]] std::string
 		Describe(const BGrass& grass) const;
+
+		/** Each field of a mesh source's grass: its name, look, chunks and clumps. */
+		[[nodiscard]] std::string
+		Describe(const BGrassFields& grass) const;
 
 	private:
 		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */

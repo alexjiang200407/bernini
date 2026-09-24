@@ -4,6 +4,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
+#include <assetlib/RegenGrassFields.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -26,6 +27,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/err/util.h>
@@ -523,12 +525,18 @@ main(int argc, char** argv)
 			// else's on a rollback is not.
 			const bool writesRig   = !imported.skeleton.bones.empty();
 			const bool writesClips = writesRig && !imported.animations.clips.empty();
+			const bool writesGrass = !imported.grass.fields.empty();
+
+			fs::path grassPath = bmeshPath;
+			grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
 
 			auto files = std::vector<fs::path>{ bmeshPath };
 			if (writesRig)
 				files.push_back(bskelPath);
 			if (writesClips)
 				files.push_back(banimPath);
+			if (writesGrass)
+				files.push_back(grassPath);
 
 			// Import never overwrites, the same rule the editor's does: what it would replace is a
 			// mesh someone authored materials against, and none of it is recoverable.
@@ -604,6 +612,13 @@ main(int argc, char** argv)
 					importStore.KeyFor(banimPath),
 					true,
 					source);
+
+				for (std::string& grass : importStore.WriteImportedGrass(
+						 imported.grass,
+						 importStore.KeyFor(grassPath),
+						 source))
+					outputs.push_back(std::move(grass));
+
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
 				outputs.push_back(importStore.KeyFor(bmeshPath));
@@ -840,6 +855,11 @@ main(int argc, char** argv)
 			case assetlib::AssetType::kGrass:
 			{
 				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
+				break;
+			}
+			case assetlib::AssetType::kGrassFields:
+			{
+				std::cout << describeAsset(store.LoadRegenGrassFields(key).fields);
 				break;
 			}
 			// sniff never answers either: a foreign kind has no codec, and an import document is

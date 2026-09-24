@@ -198,8 +198,9 @@ import document on every launch of a project where nothing changed.
 Read this before optimising the rebuild row, because the obvious target has already been tried.
 
 The **parse count is one per output, not one per source**: 3 sources with 3 `.bmesh`, 2 `.bskel` and
-2 `.banim` between them parse **seven** times, because `Reimport` cooks a stage at a time and
-re-parses rather than holding a source's meshes resident across all three (`reimport.cpp`, whose
+2 `.banim` between them parse **seven** times -- and a source with grass once more, for its
+`.bgrassfields` -- because `Reimport` cooks a stage at a time and re-parses rather than holding a
+source's meshes resident across every stage (`reimport.cpp`, whose
 comment states that trade deliberately). Holding them instead was built — a bounded cache keyed on
 the source, released as its last stage finished — and measured against a same-session control on the
 same binary and machine:

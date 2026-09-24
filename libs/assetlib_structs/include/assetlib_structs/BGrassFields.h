@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Grass.h>
+#include <assetlib_structs/SourceRef.h>
 #include <string>
 #include <vector>
 
@@ -25,5 +26,7 @@ namespace assetlib
 
 		std::vector<GrassChunk> chunks;  // one bound per c_GrassClumpsPerChunk clumps
 		std::vector<GrassClump> clumps;
+
+		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

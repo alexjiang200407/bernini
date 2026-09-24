@@ -130,6 +130,12 @@ namespace assetlib
 					document.clipFloors           = authored.clipFloors;
 					document.extraParametersJson  = authored.extraParametersJson;
 					document.materialOverrides    = authored.materialOverrides;
+
+					// Authored after the import rather than derived by it, like the floors: a
+					// re-import has no way to put a grass binding back.
+					for (const MaterialBinding& binding : authored.bindings)
+						if (isGrassBinding(binding))
+							document.bindings.push_back(binding);
 				}
 			}
 			catch (const std::exception&)
@@ -240,6 +246,20 @@ namespace assetlib
 		return ref;
 	}
 
+	std::vector<std::string>
+	AssetStore::WriteImportedGrass(
+		BGrassFields     grass,
+		std::string_view key,
+		const SourceRef& source) const
+	{
+		if (grass.fields.empty())
+			return {};
+
+		grass.source = source;
+		Save(grass, key);
+		return { std::string(key) };
+	}
+
 	void
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
@@ -260,7 +280,11 @@ namespace assetlib
 			document.textureBakeToken = c_TextureBakeToken;
 		}
 		if (mesh != nullptr)
-			document.bindings = bindingsOf(*mesh);
+		{
+			std::vector<MaterialBinding> grass = std::move(document.bindings);
+			document.bindings                  = bindingsOf(*mesh);
+			document.bindings.insert(document.bindings.end(), grass.begin(), grass.end());
+		}
 
 		core::file::write_atomic(
 			ImportDocumentPath(target.source),

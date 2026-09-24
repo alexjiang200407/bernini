@@ -25,7 +25,7 @@ Two container regimes (see docs/asset_containers.md):
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
 the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
-Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` — is a **cache
+Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky`, `.benvl` — is a **cache
 entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
 parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
 table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
