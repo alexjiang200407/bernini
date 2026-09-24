@@ -292,7 +292,8 @@ exercise both services through the end of viewport teardown.
   on the GUI thread. The sample resolves its widget title when constructed; live widget refresh
   and pluralization are not implemented.
 - **Text shown now:** `Localize(resolver, "context.key", { args }, "English {0}")` resolves and
-  formats in one call, and `Localize(resolver, "context.key", "English")` is the form with none; a descriptor title stays a `LocalizedText`, resolved when the host shows it.
+  formats in one call, and `Localize(resolver, "context.key", "English")` is the form with none;
+  a descriptor title stays a `LocalizedText`, resolved when the host shows it.
   The key splits at its last dot, and a key with no context throws. Arguments fill positional
   `std::format` fields, so a translation may reorder them; a translation that does not format falls
   back to the English, which is the one string a test can prove does. The arguments are one
@@ -410,3 +411,25 @@ The `en` column is what the editor shows, and the fallback at each call site mus
 `scripts/tests/test_editor_localization.py` holds the editor, the default plugin and the sample to
 that, and fails on a lettered string literal handed straight to a Qt text call (`setText`,
 `QLabel`, `QMessageBox::warning`, …) in the sources it covers.
+
+What goes through a catalog is text a user reads. Four things never do, because each is data that
+leaves the screen:
+
+- **An identity.** A QtNodes model's `name()` is what a saved graph names the node by; a panel, menu
+  or action ID routes. Only a caption is translated.
+- **A value read back or written.** A combo box read by `currentText()`, a default that becomes a
+  directory (`New Folder`) or a file stem (a preview's `Sphere`): translate it and the path, or the
+  document, depends on the locale that wrote it. Read a combo by index; keep such a default a
+  constant.
+- **A log line.** `qWarning` and `core::logging` stay English, and a localized string is never
+  logged: when a message is both shown and logged, the log gets the English.
+- **Another library's words.** An exception's `what()` is passed as an argument to a localized frame
+  (`"Could not open {0}: {1}"`), never translated.
+
+A translatable string is **a whole sentence**. One is never assembled from localized pieces -- a verb
+beside a file name, a subject spliced into a clause -- because a translation must be free to order
+and inflect its own. So each case gets its own template: one per startup phase, one per delete
+confirmation, one per kind of file an import refuses a name. A helper below the UI returns what
+happened as data (`ClipRefusal`, `SpeedRefusal`), not an English fragment, and the window words it.
+A name that has to sit inside a sentence arrives as a field (`'{0}' has a single frame…`); a label
+listed after a colon stands alone.
