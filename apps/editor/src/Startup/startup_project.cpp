@@ -38,11 +38,12 @@ namespace editor
 		}
 		catch (const std::exception& e)
 		{
-			startup.failure = editor::Localize(
+			const QString path = QString::fromStdWString(projectFile.wstring());
+			startup.failure    = editor::Localize(
 				"editor.startup.could_not_open_project",
-				{ QString::fromStdWString(projectFile.wstring()), e.what() },
+				{ path, e.what() },
 				"Could not open {0}: {1}");
-			qWarning("Editor: %s", qPrintable(startup.failure));
+			qWarning("Editor: Could not open %s: %s", qPrintable(path), e.what());
 		}
 		return startup;
 	}
