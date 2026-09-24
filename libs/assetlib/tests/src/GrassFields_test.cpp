@@ -63,6 +63,16 @@ namespace
 			Import();
 		}
 
+		// Spelled out: the .glb it holds deletes them anyway, and MSVC's /Wall makes an implicitly
+		// deleted copy or move an error.
+		GrassyProject(const GrassyProject&) = delete;
+		GrassyProject(GrassyProject&&)      = delete;
+		GrassyProject&
+		operator=(const GrassyProject&) = delete;
+		GrassyProject&
+		operator=(GrassyProject&&) = delete;
+		~GrassyProject()           = default;
+
 		void
 		Import()
 		{
