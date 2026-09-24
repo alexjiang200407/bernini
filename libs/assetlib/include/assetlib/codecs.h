@@ -47,6 +47,9 @@ namespace assetlib
 	inline constexpr std::string_view c_AvatarExtension = ".bavatar";
 	inline constexpr std::string_view c_BlendExtension  = ".bblend";
 
+	// Text: a grass look, which names the material its blades shade through.
+	inline constexpr std::string_view c_GrassExtension = ".bgrass";
+
 	// Not assets either: the files a `.bimport` describes, copied into the project beside it. A
 	// mesh import takes the first; an environment import takes the second or a float cube `.ktx2`.
 	// `assetTypeFromExtension` knows none of them as a source, so a plan that has to reach one asks
@@ -84,6 +87,7 @@ namespace assetlib
 	struct AnimationSet;
 	struct Avatar;
 	struct BlendSet;
+	struct BGrass;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
@@ -271,6 +275,23 @@ namespace assetlib
 		Serialize(const BlendSet& value);
 
 		[[nodiscard]] static BlendSet
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
+	/**
+	 * `.bgrass` -- an authored document: a grass look, which names its material by path. No magic
+	 * and no bake token, because nothing cooks it into anything.
+	 */
+	template <>
+	struct AssetCodec<BGrass>
+	{
+		static constexpr std::string_view c_Extension = c_GrassExtension;
+		static constexpr AssetType        c_Type      = AssetType::kGrass;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BGrass& value);
+
+		[[nodiscard]] static BGrass
 		Deserialize(std::span<const std::byte> bytes);
 	};
 }

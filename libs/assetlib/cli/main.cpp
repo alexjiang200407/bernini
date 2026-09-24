@@ -25,6 +25,7 @@
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/err/util.h>
@@ -108,6 +109,8 @@ namespace
 			return "authors the legs of";
 		case assetlib::RefKind::kBlendClips:
 			return "blends clips of";
+		case assetlib::RefKind::kGrassMaterial:
+			return "shades its blades with";
 		case assetlib::RefKind::kPlugin:
 			return "references";
 		}
@@ -141,12 +144,12 @@ namespace
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
 			if (type == assetlib::AssetType::kMaterial ||
 			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar ||
-			    type == assetlib::AssetType::kBlend)
+			    type == assetlib::AssetType::kBlend || type == assetlib::AssetType::kGrass)
 				return *type;
 
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
-				".bmaterial, .benv, .bavatar and .bblend",
+				".bmaterial, .benv, .bavatar, .bblend and .bgrass",
 				key);
 		}
 
@@ -830,6 +833,11 @@ main(int argc, char** argv)
 			case assetlib::AssetType::kBlend:
 			{
 				std::cout << describeAsset(store.Load<assetlib::BlendSet>(key));
+				break;
+			}
+			case assetlib::AssetType::kGrass:
+			{
+				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
 				break;
 			}
 			// sniff never answers either: a foreign kind has no codec, and an import document is

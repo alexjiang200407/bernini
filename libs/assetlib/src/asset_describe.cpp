@@ -8,6 +8,7 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -636,6 +637,65 @@ namespace assetlib
 
 		for (const ClipPlantWeight& entry : avatar.clipWeights)
 			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
+
+		return out;
+	}
+
+	std::string
+	describe(const BGrass& grass)
+	{
+		std::string out;
+
+		out += "bgrass\n";
+		out += std::format("  material     '{}'\n", grass.material);
+
+		const GrassBladeParams& blade = grass.blade;
+		out += std::format(
+			"  blade        height {}..{}  width {} (tip {})  curvature {}  lean {}  segments "
+			"{}..{}\n",
+			blade.minHeight,
+			blade.maxHeight,
+			blade.rootWidth,
+			blade.tipWidth,
+			blade.curvature,
+			blade.lean,
+			blade.nearSegments,
+			blade.farSegments);
+		out += std::format(
+			"  clump        {} blades  radius {}\n",
+			grass.clump.bladesPerClump,
+			grass.clump.radius);
+		out += std::format(
+			"  density      fade {}..{}  widening {}\n",
+			grass.density.fadeStart,
+			grass.density.fadeEnd,
+			grass.density.widening);
+		out += std::format(
+			"  response     stiffness {}  gusts {}\n",
+			grass.response.stiffness,
+			grass.response.gustResponse);
+
+		const GrassLightingParams& lighting = grass.lighting;
+		out += std::format(
+			"  lighting     root AO {}  rounding {}  ground normal {}..{}  translucency {} "
+			"({}, {}, {})\n",
+			lighting.rootOcclusion,
+			lighting.normalRounding,
+			lighting.groundNormalNear,
+			lighting.groundNormalFar,
+			lighting.translucency,
+			lighting.translucencyColor.x,
+			lighting.translucencyColor.y,
+			lighting.translucencyColor.z);
+		out += std::format(
+			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}\n",
+			grass.color.rootTint.x,
+			grass.color.rootTint.y,
+			grass.color.rootTint.z,
+			grass.color.tipTint.x,
+			grass.color.tipTint.y,
+			grass.color.tipTint.z,
+			grass.color.variation);
 
 		return out;
 	}
