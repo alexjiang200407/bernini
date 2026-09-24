@@ -1,5 +1,6 @@
 #include "scene/GeomRollback.h"
 #include "scene/Scene.h"
+#include "scene/dispatch_limits.h"
 #include "types/VertexGen.h"
 #include "util/util.h"
 #include <algorithm>
@@ -44,8 +45,6 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
-
 		// The static tier dispatches whole meshlet groups, so what it can launch is the largest
 		// multiple of the group size that fits. A submesh past it would round its last group up over
 		// the ceiling.
@@ -929,6 +928,8 @@ namespace bgl
 				--rig->useCount;
 			}
 		}
+
+		ReleaseGrass(record.grass);
 
 		const auto& submeshes = record.submeshes;
 
