@@ -92,18 +92,26 @@ namespace editor
 		if (!HasClips())
 			return;
 
-		if (m_InWindow)
-		{
-			if (m_Time >= m_WindowEnd)
-				m_Time = m_WindowStart;
-		}
-		else if (
-			const auto& clip = m_Clips[m_ActiveClip]; !clip.loop && m_Time >= GetPeriodSeconds())
-		{
-			m_Time = 0.0f;
-		}
+		if (AtEnd())
+			m_Time = m_Speed < 0.0f ? (m_InWindow ? m_WindowEnd : GetPeriodSeconds()) :
+			                          (m_InWindow ? m_WindowStart : 0.0f);
 
 		m_Playing = true;
+	}
+
+	bool
+	PlaybackTransport::AtEnd() const noexcept
+	{
+		if (!HasClips())
+			return false;
+
+		if (m_InWindow)
+			return m_Speed < 0.0f ? m_Time <= m_WindowStart : m_Time >= m_WindowEnd;
+
+		if (m_Clips[m_ActiveClip].loop)
+			return false;
+
+		return m_Speed < 0.0f ? m_Time <= 0.0f : m_Time >= GetPeriodSeconds();
 	}
 
 	void
