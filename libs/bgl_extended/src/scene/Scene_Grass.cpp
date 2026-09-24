@@ -1,16 +1,28 @@
 #include "scene/Scene.h"
+#include "scene/dispatch_limits.h"
 #include <algorithm>
+#include <assetlib_structs/BGrassFields.h>
+#include <assetlib_structs/Grass.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/GeomType.h>
 #include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/PreparedGrass.h>
 #include <bgl/glm.h>
 #include <bgl/types/GrassDesc.h>
+#include <bgl_common/gassert.h>
 #include <cmath>
 #include <core/math.h>
+#include <cstddef>
 #include <cstdint>
 #include <format>
+#include <memory>
+#include <span>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -41,6 +53,100 @@ namespace bgl
 		{
 			return core::is_finite(color) && color.x >= 0.0f && color.y >= 0.0f && color.z >= 0.0f;
 		}
+	}
+
+	struct PreparedGrass::Impl
+	{
+		/** One field, its chunks' `firstClump` rebased onto `clumps`. */
+		struct Field
+		{
+			uint32_t                          look = 0;
+			std::vector<assetlib::GrassChunk> chunks;
+			std::vector<assetlib::GrassClump> clumps;
+		};
+
+		std::vector<Field> fields;
+	};
+
+	PreparedGrass::PreparedGrass() noexcept                = default;
+	PreparedGrass::~PreparedGrass()                        = default;
+	PreparedGrass::PreparedGrass(PreparedGrass&&) noexcept = default;
+	PreparedGrass&
+	PreparedGrass::operator=(PreparedGrass&&) noexcept = default;
+
+	PreparedGrass
+	CookGrass(const assetlib::BGrassFields& fields, const uint32_t meshIndex)
+	{
+		auto impl = std::make_unique<PreparedGrass::Impl>();
+
+		for (size_t f = 0; f < fields.fields.size(); ++f)
+		{
+			const assetlib::GrassField& src = fields.fields[f];
+			if (src.mesh != meshIndex)
+			{
+				continue;
+			}
+
+			if (src.chunkCount == 0)
+			{
+				throw SceneError(std::format("CookGrass: field {} has no chunks", f));
+			}
+
+			// One amplification group per chunk.
+			if (src.chunkCount > c_MaxDispatchMeshGroups)
+			{
+				throw SceneError(
+					std::format(
+						"CookGrass: field {} has {} chunks, more than the {} thread groups one "
+						"dispatch can launch",
+						f,
+						src.chunkCount,
+						c_MaxDispatchMeshGroups));
+			}
+
+			if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount > fields.chunks.size())
+			{
+				throw SceneError(
+					std::format(
+						"CookGrass: field {} claims {} chunks at offset {}, past the end of the {} "
+						"there are",
+						f,
+						src.chunkCount,
+						src.firstChunk,
+						fields.chunks.size()));
+			}
+
+			PreparedGrass::Impl::Field& field = impl->fields.emplace_back();
+			field.look                        = src.look;
+			field.chunks.reserve(src.chunkCount);
+
+			for (uint32_t c = 0; c < src.chunkCount; ++c)
+			{
+				assetlib::GrassChunk chunk = fields.chunks[src.firstChunk + c];
+				if (chunk.clumpCount == 0 || chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
+				    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
+				        fields.clumps.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookGrass: field {} chunk {} holds no clumps, more than {}, or clumps "
+							"past the end of the {} there are",
+							f,
+							c,
+							assetlib::c_GrassClumpsPerChunk,
+							fields.clumps.size()));
+				}
+
+				const auto first = fields.clumps.begin() + chunk.firstClump;
+				chunk.firstClump = static_cast<uint32_t>(field.clumps.size());
+				field.clumps.insert(field.clumps.end(), first, first + chunk.clumpCount);
+				field.chunks.emplace_back(chunk);
+			}
+		}
+
+		auto prepared   = PreparedGrass();
+		prepared.m_Impl = std::move(impl);
+		return prepared;
 	}
 
 	void
@@ -179,5 +285,64 @@ namespace bgl
 		}
 
 		m_Grass.release_slot(grass.handle.index);
+	}
+
+	void
+	Scene::AttachGrass(
+		const GeomHandle                   geom,
+		PreparedGrass                      grass,
+		const std::span<const GrassHandle> looks)
+	{
+		const PreparedGrass consumed = std::move(grass);
+		if (consumed.m_Impl == nullptr)
+		{
+			throw SceneError("AttachGrass: the prepared grass was already consumed");
+		}
+
+		if (geom.geomType != GeomType::kStaticMesh || !IsGeomAlive(geom))
+		{
+			throw SceneError("AttachGrass: the geom is dead or not a static geom");
+		}
+
+		std::vector<GrassHandle> bound;
+		for (const PreparedGrass::Impl::Field& field : consumed.m_Impl->fields)
+		{
+			const GrassHandle look = field.look < looks.size() ? looks[field.look] : GrassHandle{};
+			if (!look.IsValid())
+			{
+				continue;
+			}
+
+			if (!IsGrassAlive(look))
+			{
+				throw SceneError(
+					std::format(
+						"AttachGrass: the look bound to slot {} has been deleted",
+						field.look));
+			}
+
+			bound.emplace_back(look);
+		}
+
+		GeomRecord& record = m_Geoms[geom.handle.index];
+		ReleaseGrass(record.grass);
+		for (const GrassHandle look : bound)
+		{
+			++m_Grass[look.handle.index].useCount;
+		}
+		record.grass = std::move(bound);
+	}
+
+	void
+	Scene::ReleaseGrass(const std::span<const GrassHandle> looks) noexcept
+	{
+		for (const GrassHandle look : looks)
+		{
+			gassert(IsGrassAlive(look), "a live geom binds a grass look that is already gone");
+			if (IsGrassAlive(look) && m_Grass[look.handle.index].useCount > 0)
+			{
+				--m_Grass[look.handle.index].useCount;
+			}
+		}
 	}
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -8,6 +7,7 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/GrassHandle.h>
 #include <bgl/MaterialHandle.h>
+#include <bgl/PreparedGrass.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
 #include <bgl/TextureAssetHandle.h>
@@ -101,42 +101,17 @@ namespace bgl
 			std::span<const MaterialHandle> materials) = 0;
 
 		/**
-		 * The overload above, plus the grass that mesh grows: every field of `fields` on mesh
-		 * `meshIndex` is drawn with `looks[field.look]`, by every instance of the geom. A field
-		 * whose slot is out of range or holds a null handle is not drawn. The geom holds a use of
-		 * every look it binds; see DeleteGrass.
-		 *
-		 * @param fields  The BGrassFields cooked from the same source as `mesh`.
-		 * @param looks   Grass looks parallel to `fields.looks`, resolved by the caller.
-		 * @throws SceneError for anything the overload above refuses, anything CookStaticMesh
-		 *         refuses of `fields`, or a non-null handle in `looks` that names a deleted look.
-		 */
-		virtual GeomHandle
-		AddStaticMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials,
-			const assetlib::BGrassFields&   fields,
-			std::span<const GrassHandle>    looks) = 0;
-
-		/**
 		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,
 		 * consuming it. Cook on a worker, commit here -- the flattening is the dominant cost of a
-		 * large mesh, and the overloads above pay it on the calling thread.
+		 * large mesh, and the overload above pays it on the calling thread.
 		 *
 		 * @param mesh       From CookStaticMesh. Consumed, even on failure.
 		 * @param materials  Materials parallel to the source BMesh's `materials`, resolved by the
 		 *                   caller; a submesh whose material index is out of range is left unlit.
-		 * @param looks      Grass looks parallel to the cooked BGrassFields' `looks`, as the
-		 *                   overload above; empty for a mesh cooked without grass.
-		 * @throws SceneError if `mesh` was already consumed, a non-null handle in `looks` names a
-		 *         deleted look, or a buffer allocation fails.
+		 * @throws SceneError if `mesh` was already consumed, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMeshGeom(
-			PreparedStaticMesh              mesh,
-			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    looks = {}) = 0;
+		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
 
 		/**
 		 * Creates a grass look: the blade shape, density, response to what bends it and
@@ -172,6 +147,27 @@ namespace bgl
 		 */
 		virtual void
 		DeleteGrass(GrassHandle grass) = 0;
+
+		/**
+		 * Gives a static geom the grass its mesh grows: every field of `grass` is drawn with
+		 * `looks[field.look]` by every instance of the geom, and moves with it. A field whose slot
+		 * is out of range or holds a null handle is not drawn. Replaces any grass the geom carried,
+		 * releasing the looks it bound; DeleteGeom releases them too. The geom holds a use of every
+		 * look it binds; see DeleteGrass.
+		 *
+		 * A step after AddStaticMeshGeom rather than a part of it: grass is cooked from a container
+		 * of its own (`assetlib::BGrassFields`), so a mesh with none never names it.
+		 *
+		 * @param geom   A live geom from AddStaticMeshGeom.
+		 * @param grass  From CookGrass, over the fields cooked from the same source as the geom's
+		 *               mesh. Consumed, even on failure.
+		 * @param looks  Grass looks parallel to the cooked fields' `looks`, resolved by the caller.
+		 * @throws SceneError if `geom` is dead or not a static geom, `grass` was already consumed,
+		 *         or a non-null handle in `looks` names a deleted look. Nothing changes unless all
+		 *         of it passes.
+		 */
+		virtual void
+		AttachGrass(GeomHandle geom, PreparedGrass grass, std::span<const GrassHandle> looks) = 0;
 
 		/**
 		 * Uploads a rig -- a skeleton and the clips cooked against it -- as a scene object of its
