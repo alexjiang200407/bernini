@@ -8,6 +8,7 @@
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <core/err/util.h>
 
 #include "material_texture_refs.h"
@@ -239,6 +240,13 @@ namespace assetlib
 				BlendSet set   = AssetCodec<BlendSet>::Deserialize(bytes);
 				set.animations = mapTarget(plan, set.animations);
 				return AssetCodec<BlendSet>::Serialize(set);
+			}
+
+			case AssetType::kGrassFields:
+			{
+				BGrassFields grass = AssetCodec<BGrassFields>::Deserialize(bytes);
+				for (std::string& look : grass.looks) look = mapTarget(plan, look);
+				return AssetCodec<BGrassFields>::Serialize(grass);
 			}
 
 			case AssetType::kGrass:

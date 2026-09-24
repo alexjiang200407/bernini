@@ -71,7 +71,7 @@ rename, migrate and pack without entering the closed built-in `AssetType`; see
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv`,
   `.bimport`, `.bavatar`, `.bblend` and `.bgrass` are canonical-JSON text documents, unknown keys preserved on
-  round-trip; `.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
+  round-trip; `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
   the cache key (bake token, source stamp, parameter hash, source mount key) over schema-less
   chunks. A key mismatch is a cache miss that regenerates, never a conversion.
   [docs/asset_containers.md](docs/asset_containers.md)
@@ -145,6 +145,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bimport` | One per copied source under `Authored/Meshes/` or `Authored/EnvSources/`: the source it describes, and the bindings, registered material overrides and parameters an import was authored with, as text. What a stale cache entry re-cooks from. `source` is recorded rather than derived from the document's own name, so a source kind with more than one extension is still reachable; one written before that field falls back to the `.glb` swap. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name, and how far each named clip plants (`plant`, a weight per clip name; zero takes the clip out, and the `unplanted` list it once was still reads). Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
 | `.bblend` | The blend spaces authored against one clip set: each a named, ordered run of clips with the parameter each plays alone at. Names the `.banim` by a path it stores, so unlike a `.bavatar` it is an ordinary asset — renamed freely, and a rename of the clip set rewrites it (`RefKind::kBlendClips`). Clips are named, never indexed, and resolved where both name tables meet. Its struct is [blend.h](libs/assetlib/include/assetlib/blend.h). |
+| `.bgrassfields` | The grass one mesh source grows, cooked beside its `.bmesh` from the source's POINTS primitives: fields (named as submeshes are, each on one mesh and drawn with a look slot), Morton-ordered chunks of at most `c_GrassClumpsPerChunk` clumps with a sphere each, and the clumps. Its looks name `.bgrass` documents (`RefKind::kFieldGrass`, as a `.bimport`'s grass binding does), so a rename of the look rewrites it. A member of the geometry group. Its struct is [BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h). |
 | `.bgrass` | A grass look: the `.bmaterial` its blades shade through (a path it stores, `RefKind::kGrassMaterial`, so a rename of the material rewrites it) and the blade, clump, density, response, lighting and colour groups `bgl::GrassDesc` mirrors. A key it omits takes the default, and unknown keys are kept inside a group as well as at the top. Ranges are not checked on read: the renderer states them once, where it creates the look. Its struct is [BGrass.h](libs/assetlib_structs/include/assetlib_structs/BGrass.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
@@ -240,7 +241,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
-  `assetlib_cli migrate` rewrites a whole project.
+  `assetlib_cli migrate` rewrites a whole project. The geometry group is every container one mesh
+  import produces -- `.bmesh`, `.bskel`, `.banim` and `.bgrassfields` (`isGeometryContainer`) --
+  and each has its `LoadRegen*` door; `LoadRegenGrassFields` answers with the document's grass
+  bindings applied, and a `RegenGrassFields::unboundBindings` that `migrate` and `pack` fail on.
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we

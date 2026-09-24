@@ -2,6 +2,7 @@
 #include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/reimport.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
@@ -57,9 +58,10 @@ namespace assetlib
 		 * Rigs before meshes before clips: a mesh names the rig it binds, and a clip set sweeps its
 		 * boxes through the meshes standing on disk.
 		 */
-		constexpr std::array<AssetType, 3> c_Order = {
-			{ AssetType::kSkeleton, AssetType::kMesh, AssetType::kAnimation }
-		};
+		constexpr std::array<AssetType, 4> c_Order = { { AssetType::kSkeleton,
+			                                             AssetType::kMesh,
+			                                             AssetType::kAnimation,
+			                                             AssetType::kGrassFields } };
 
 		/**
 		 * A source's outputs of one type that this run has to produce, and where in `pending` the
@@ -165,6 +167,19 @@ namespace assetlib
 				}
 
 				store.Save(clips, key);
+				return;
+			}
+			case AssetType::kGrassFields:
+			{
+				core::throw_runtime_error_if(
+					group.import.grass.fields.empty(),
+					"'{}': its source no longer carries a POINTS primitive",
+					key);
+
+				BGrassFields grass = group.import.grass;
+				grass.source       = group.ref;
+				static_cast<void>(applyGrassBindings(grass, document.bindings));
+				store.Save(grass, key);
 				return;
 			}
 			case AssetType::kMaterial:
@@ -395,7 +410,7 @@ namespace assetlib
 								"'{}' is not in the project, so nothing can be produced from it",
 								source.key);
 
-							// Parsed once per kind rather than held across all three: a source's
+							// Parsed once per kind rather than held across all of them: a source's
 							// meshes are the largest thing in this library, and every one of them
 							// would otherwise stay resident until the last clip set was baked.
 							const RegeneratedGroup group =

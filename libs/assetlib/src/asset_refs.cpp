@@ -15,6 +15,7 @@
 #include <assetlib_structs/BMaterial.h>
 
 #include <cctype>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
@@ -271,9 +272,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the grass look '" + referrer +
-					"', so the material it names cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the grass look '{}', so the material it "
+					"names cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -423,6 +426,23 @@ namespace assetlib
 			{
 				collectGrassEdges(edges, files, referrer);
 				++graph.grassLooksScanned;
+			}
+			else if (kind == c_GrassFieldsExtension)
+			{
+				try
+				{
+					for (const std::string& look : store.LoadRegenGrassLooks(referrer))
+						addEdge(edges, referrer, look, RefKind::kFieldGrass);
+				}
+				catch (const std::exception& e)
+				{
+					core::throw_runtime_error(
+						"assetlib::AssetRefGraph: cannot read the grass fields '{}', so the looks "
+						"they name cannot be known: {}",
+						referrer,
+						e.what());
+				}
+				++graph.grassFieldsScanned;
 			}
 			else if (graph.m_Registry != nullptr)
 			{

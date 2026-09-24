@@ -1,8 +1,10 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
@@ -32,6 +34,7 @@
 #include <string_view>
 #include <tracy/Tracy.hpp>
 #include <utility>
+#include <vector>
 
 namespace assetlib
 {
@@ -130,13 +133,22 @@ namespace assetlib
 	{
 		const std::string extension = extensionOf(path);
 		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
-		    extension != c_AnimationExtension)
+		    extension != c_AnimationExtension && extension != c_GrassFieldsExtension)
 			core::throw_runtime_error(
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
 
 		if (IsReadOnly())
 			return false;
+
+		if (extension == c_GrassFieldsExtension)
+			return checkKey(
+					   *this,
+					   path,
+					   magic::c_BGrassF,
+					   AssetCodec<BGrassFields>::c_BakeToken,
+					   "bgrassfields")
+			    .stale;
 
 		if (extension == c_MeshExtension)
 			return checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh")
@@ -153,18 +165,20 @@ namespace assetlib
 	{
 		const std::string extension = extensionOf(path);
 		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
-		    extension != c_AnimationExtension)
+		    extension != c_AnimationExtension && extension != c_GrassFieldsExtension)
 			core::throw_runtime_error(
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
 
-		const uint32_t magic = extension == c_MeshExtension     ? magic::c_BMesh :
-		                       extension == c_SkeletonExtension ? magic::c_BSkel :
-		                                                          magic::c_BAnim;
+		const uint32_t magic = extension == c_MeshExtension      ? magic::c_BMesh :
+		                       extension == c_SkeletonExtension  ? magic::c_BSkel :
+		                       extension == c_AnimationExtension ? magic::c_BAnim :
+		                                                           magic::c_BGrassF;
 
-		const std::string_view what = extension == c_MeshExtension     ? "bmesh" :
-		                              extension == c_SkeletonExtension ? "bskel" :
-		                                                                 "banim";
+		const std::string_view what = extension == c_MeshExtension      ? "bmesh" :
+		                              extension == c_SkeletonExtension  ? "bskel" :
+		                              extension == c_AnimationExtension ? "banim" :
+		                                                                  "bgrassfields";
 
 		MountedFileReader reader(GetFiles(), path, what);
 		SourceRef         current;
@@ -298,6 +312,77 @@ namespace assetlib
 			group.document->bindings,
 			group.document->materialOverrides);
 		return current;
+	}
+
+	RegenGrassFields
+	AssetStore::LoadRegenGrassFields(std::string_view path) const
+	{
+		ZoneScopedN("assetlib load bgrassfields");
+		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
+
+		if (IsReadOnly())
+			return { load<BGrassFields>(*m_Files, path), {} };
+
+		CheckedKey checked = checkKey(
+			*this,
+			path,
+			magic::c_BGrassF,
+			AssetCodec<BGrassFields>::c_BakeToken,
+			"bgrassfields");
+		if (!checked.stale)
+		{
+			RegenGrassFields current{ load<BGrassFields>(*m_Files, path), {} };
+			if (checked.document)
+				current.unboundBindings =
+					applyGrassBindings(current.fields, checked.document->bindings);
+			return current;
+		}
+
+		RegeneratedGroup group = regenerate(*this, std::move(checked), "bgrassfields");
+		core::throw_runtime_error_if(
+			group.import.grass.fields.empty(),
+			"'{}': its re-exported source no longer carries a POINTS primitive; restore it in the "
+			"DCC, or delete this file",
+			path);
+
+		RegenGrassFields current{ std::move(group.import.grass), {} };
+		current.fields.source   = group.ref;
+		current.unboundBindings = applyGrassBindings(current.fields, group.document->bindings);
+		return current;
+	}
+
+	std::vector<std::string>
+	AssetStore::LoadRegenGrassLooks(std::string_view path) const
+	{
+		if (!IsReadOnly())
+		{
+			MountedFileReader      reader(GetFiles(), path, "bgrassfields");
+			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BGrassF, "bgrassfields");
+			if (key.bakeToken != AssetCodec<BGrassFields>::c_BakeToken)
+			{
+				core::throw_runtime_error_if(
+					key.source.key.empty(),
+					"bgrassfields '{}': written at another bake revision and no source was ever "
+					"recorded, so what it references cannot be known; re-import it",
+					path);
+
+				const std::string documentKey = importDocumentKeyFor(key.source.key);
+				core::throw_runtime_error_if(
+					!GetFiles().Exists(documentKey),
+					"bgrassfields '{}': written at another bake revision and the import document "
+					"beside '{}' is gone, so what it references cannot be known",
+					path,
+					key.source.key);
+
+				auto looks = std::vector<std::string>();
+				for (const MaterialBinding& binding :
+				     loadImportDocument(GetFiles(), documentKey).bindings)
+					if (isGrassBinding(binding))
+						looks.push_back(binding.material);
+				return looks;
+			}
+		}
+		return loadGrassLooks(*m_Files, path);
 	}
 
 	Skeleton

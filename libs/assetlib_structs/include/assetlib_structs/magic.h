@@ -30,6 +30,7 @@ namespace assetlib
 		constexpr uint32_t c_BEnvL     = fourCC("BENL");
 		constexpr uint32_t c_BSkel     = fourCC("BSKL");
 		constexpr uint32_t c_BAnim     = fourCC("BANM");
+		constexpr uint32_t c_BGrassF   = fourCC("BGRF");
 
 		constexpr uint32_t c_BPak = fourCC("BPAK");
 	}

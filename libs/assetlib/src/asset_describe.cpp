@@ -4,6 +4,7 @@
 #include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -20,6 +21,7 @@
 #include <string_view>
 
 #include "mounted_io.h"
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -637,6 +639,42 @@ namespace assetlib
 
 		for (const ClipPlantWeight& entry : avatar.clipWeights)
 			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
+
+		return out;
+	}
+
+	std::string
+	describe(const BGrassFields& grass)
+	{
+		std::string out;
+
+		out += "bgrassfields\n";
+		out += std::format("  source       '{}'\n", grass.source.key);
+		out += std::format(
+			"  fields       {} ({} chunks, {} clumps)\n",
+			grass.fields.size(),
+			grass.chunks.size(),
+			grass.clumps.size());
+
+		for (size_t f = 0; f < grass.fields.size(); ++f)
+		{
+			const GrassField& field = grass.fields[f];
+			const std::string look  = field.look < grass.looks.size() ?
+			                              "'" + grass.looks[field.look] + "'" :
+			                              std::string("unbound");
+
+			uint32_t clumps = 0;
+			for (uint32_t c = 0; c < field.chunkCount; ++c)
+				clumps += grass.chunks[field.firstChunk + c].clumpCount;
+
+			out += std::format(
+				"    '{}' on mesh {}: {} chunks, {} clumps, look {}\n",
+				grass.names[f],
+				field.mesh,
+				field.chunkCount,
+				clumps,
+				look);
+		}
 
 		return out;
 	}

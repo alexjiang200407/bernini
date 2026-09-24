@@ -7,6 +7,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -90,6 +91,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 	{
 		AnimationSet animations;
 		CheckStoreWritesCodecBytes(animations, "a.banim");
+	}
+
+	SECTION("bgrassfields")
+	{
+		BGrassFields grass;
+		CheckStoreWritesCodecBytes(grass, "a.bgrassfields");
 	}
 
 	SECTION("bsky")
@@ -184,6 +191,7 @@ TEST_CASE("The container table is the only list", "[codec]")
 		CHECK(containerKindFor(AssetType::kAnimation).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kSky).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kEnvLighting).IsCacheEntry());
+		CHECK(containerKindFor(AssetType::kGrassFields).IsCacheEntry());
 
 		CHECK_FALSE(containerKindFor(AssetType::kMaterial).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kEnvironment).IsCacheEntry());
