@@ -155,8 +155,8 @@ should find that out before reading the decomposition that assumes them:
   the grill did not reach get the same one-line treatment; one that crosses a stated non-goal goes
   back to § 0 instead of into this list.
 - **Non-goals** — what the feature is explicitly not doing. [`bcp-precheck`](.claude/agents/bcp-precheck.md)
-  § 4 reads every task's diff against these, so a boundary written vaguely is a boundary that does
-  not hold.
+  § 4 reads the landing diff against these (§ 5), and the user reads every task against them, so a
+  boundary written vaguely is a boundary that does not hold.
 - **Acceptance** — the gate that proves the feature as a whole.
 - **What the survey found** — the state of the code the feature must work with, as facts with file
   references. This is what stops the next session re-reading the same forty files.
@@ -176,8 +176,7 @@ pushed, and there is no plan PR: a file that cannot land cannot be proposed.
 What that costs is the gate the plan PR used to be, and § 3's first task PR is where it moves. Its
 body carries `## Design notes` — one line per ADR, with the alternative each rejected — so the
 boundaries are still the first thing the user reads, and a wrong one still comes back as a review
-comment before a second task is cut. Spawn [`bcp-precheck`](.claude/agents/bcp-precheck.md) on that
-first task with the plan in hand, exactly as the plan PR used to.
+comment before a second task is cut.
 
 The plan is still where a design finding is cheapest of all — it costs a paragraph here and a rewrite
 once the tasks have landed.
@@ -254,23 +253,18 @@ just run bgl_extended_tests -- --gpu-validation       # if it touches shaders, b
 just format <files...>
 git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
 just build && just test                             # again — a rebase is a real merge
-# spawn bcp-precheck here, and act on it before pushing
+just tidy --changed origin/feat/<name>
 git push -u origin HEAD
 just pr create --base feat/<name> --body-file <file>
 ```
 
-**Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**,
-§ 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below
-your own model, after the last verification step and before the push — § 5 needs its base named
-explicitly. § 2 opens no PR, so the first task's is where the plan is first read back against a
-diff. It reads the diff against the base for code that already
-exists in `core`, a design that fights `ROADMAP.md` or departs from the standard with no ADR saying
-so, work that crosses a non-goal or contradicts an ADR in the plan, cost that is infeasible at AAA
-asset scale, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does not open
-on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
-
-`bernini.feature` is what tells the precheck its base, so a slice reviewed while that config is unset
-gets diffed against `master` and reports the whole feature. § 1 sets it; check it is still set.
+**A task PR is not prechecked.** [`bcp-precheck`](.claude/agents/bcp-precheck.md) reads the
+feature once, as one diff, before § 5's landing PR. Run per task it was slow and token-heavy and
+found little the other gates did not: across `feat/gpu-grass`'s task PRs it caught one error-path
+leak in code the review then replaced, a doc sentence and a latent duplicate, while the design
+problems came from the user's review and the compiler failures from CI. Read at landing it costs one
+run and sees what actually reaches `master`: every task together. So the gates on a task PR are the
+build, the suites, `just format`, `just tidy` and the user's review.
 
 `--base` is not optional, and it is not defaulted: name the feature branch or the PR proposes the
 work to `master`. The body goes in a file, headed by `# type(scope): the title` — the title is lifted
@@ -410,8 +404,9 @@ just pr create --base master --head feat/<name> --body-file <file>
 ```
 
 This run matters more than any single task's did: each was verified against the branch as it stood at
-the time, and this is the first time all of them exist together. The critical read is the same: it is
-the first time anyone reads the feature as one diff.
+the time, and this is the first time all of them exist together. It is also the feature's one
+precheck (§ 3): the first time anything reads the feature as one diff, and the diff that reaches
+`master`. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for acting on its verdict.
 
 **Tell it the base explicitly here.** `bernini.feature` is still set until the merge, so a precheck
 left to resolve its own base would diff against `origin/feat/<name>` — the stale remote ref, whose
