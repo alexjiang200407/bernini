@@ -150,18 +150,6 @@ namespace bgl
 		UpdateGrass(GrassHandle grass, const GrassDesc& desc) = 0;
 
 		/**
-		 * The desc CreateGrass or UpdateGrass last accepted.
-		 *
-		 * @throws SceneError if the handle is null or deleted.
-		 */
-		[[nodiscard]] virtual GrassDesc
-		GetGrass(GrassHandle grass) const = 0;
-
-		/** Whether `grass` still names a live look in this scene. */
-		[[nodiscard]] virtual bool
-		IsGrassAlive(GrassHandle grass) const noexcept = 0;
-
-		/**
 		 * Destroys a grass look.
 		 *
 		 * @pre No geom bound to it is still alive. Refused rather than permitted, like DeleteRig: a

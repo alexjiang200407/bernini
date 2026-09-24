@@ -91,7 +91,7 @@ namespace
 
 		for (uint32_t c = 0; c < clumps; ++c)
 		{
-			mesh.grassClumps.emplace_back(
+			mesh.grass.clumps.emplace_back(
 				assetlib::GrassClump{ .position    = glm::vec3(static_cast<float>(c) * 0.1f, 0, 0),
 			                          .heightScale = 1.0f,
 			                          .normal      = glm::vec3(0.0f, 1.0f, 0.0f),
@@ -104,7 +104,7 @@ namespace
 		for (uint32_t first = 0; first < clumps; first += assetlib::c_GrassClumpsPerChunk)
 		{
 			const uint32_t count = std::min(assetlib::c_GrassClumpsPerChunk, clumps - first);
-			mesh.grassChunks.emplace_back(
+			mesh.grass.chunks.emplace_back(
 				assetlib::GrassChunk{ .boundingCenter = glm::vec3(0.0f),
 			                          .boundingRadius = 10.0f,
 			                          .firstClump     = first,
@@ -112,7 +112,7 @@ namespace
 			                          .maxHeightScale = 1.0f });
 			++field.chunkCount;
 		}
-		mesh.grassFields.emplace_back(field);
+		mesh.grass.fields.emplace_back(field);
 
 		return mesh;
 	}
@@ -126,28 +126,20 @@ namespace
 	}
 }
 
-TEST_CASE("a grass look round-trips and dies with DeleteGrass", "[grass][contract]")
+TEST_CASE("a grass look takes updates until DeleteGrass", "[grass][contract]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
-	auto desc                    = ValidLook(scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
-	desc.blade.maxHeight         = 0.9f;
-	desc.lighting.translucency   = 0.4f;
+	auto                   desc  = ValidLook(scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
 	const bgl::GrassHandle grass = scene->CreateGrass(desc);
-
-	REQUIRE(scene->IsGrassAlive(grass));
-	CHECK(scene->GetGrass(grass).blade.maxHeight == 0.9f);
-	CHECK(scene->GetGrass(grass).lighting.translucency == 0.4f);
+	REQUIRE(grass.IsValid());
 
 	desc.blade.maxHeight = 0.7f;
-	scene->UpdateGrass(grass, desc);
-	CHECK(scene->GetGrass(grass).blade.maxHeight == 0.7f);
+	CHECK_NOTHROW(scene->UpdateGrass(grass, desc));
 
 	scene->DeleteGrass(grass);
-	CHECK_FALSE(scene->IsGrassAlive(grass));
-	CHECK_THROWS_AS(scene->GetGrass(grass), bgl::SceneError);
 	CHECK_THROWS_AS(scene->UpdateGrass(grass, desc), bgl::SceneError);
 	CHECK_THROWS_AS(scene->DeleteGrass(grass), bgl::SceneError);
 	CHECK_THROWS_AS(scene->DeleteGrass(bgl::GrassHandle()), bgl::SceneError);
@@ -210,9 +202,6 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 		CHECK_THROWS_AS(scene->CreateGrass(desc), bgl::SceneError);
 		CHECK_THROWS_AS(scene->UpdateGrass(live, desc), bgl::SceneError);
 	}
-
-	// A refused update writes nothing.
-	CHECK(scene->GetGrass(live).blade.maxHeight == bgl::GrassDesc().blade.maxHeight);
 }
 
 TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
@@ -296,64 +285,59 @@ TEST_CASE("CookStaticMesh refuses grass ranges the file cannot back", "[grass][c
 		auto mesh = MakeGrassMesh();
 		CHECK_NOTHROW(bgl::CookStaticMesh(mesh, 0));
 
-		mesh.grassFields.front().mesh       = 1;
-		mesh.grassFields.front().firstChunk = 1000;
+		mesh.grass.fields.front().mesh       = 1;
+		mesh.grass.fields.front().firstChunk = 1000;
 		CHECK_NOTHROW(bgl::CookStaticMesh(mesh, 0));
 	}
 
 	SECTION("a field with no chunks")
 	{
-		auto mesh                           = MakeGrassMesh();
-		mesh.grassFields.front().chunkCount = 0;
+		auto mesh                            = MakeGrassMesh();
+		mesh.grass.fields.front().chunkCount = 0;
 		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
 	}
 
 	SECTION("chunks past the end of the pool")
 	{
-		auto mesh                           = MakeGrassMesh();
-		mesh.grassFields.front().firstChunk = 1;
+		auto mesh                            = MakeGrassMesh();
+		mesh.grass.fields.front().firstChunk = 1;
 		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
 	}
 
 	SECTION("a chunk with no clumps")
 	{
-		auto mesh                          = MakeGrassMesh();
-		mesh.grassChunks.back().clumpCount = 0;
+		auto mesh                           = MakeGrassMesh();
+		mesh.grass.chunks.back().clumpCount = 0;
 		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
 	}
 
 	SECTION("a chunk larger than the cook's chunk size")
 	{
-		auto mesh                           = MakeGrassMesh(2 * assetlib::c_GrassClumpsPerChunk);
-		mesh.grassChunks.front().clumpCount = assetlib::c_GrassClumpsPerChunk + 1;
+		auto mesh                            = MakeGrassMesh(2 * assetlib::c_GrassClumpsPerChunk);
+		mesh.grass.chunks.front().clumpCount = assetlib::c_GrassClumpsPerChunk + 1;
 		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
 	}
 
 	SECTION("clumps past the end of the pool")
 	{
 		auto mesh = MakeGrassMesh();
-		mesh.grassClumps.pop_back();
+		mesh.grass.clumps.pop_back();
 		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
 	}
 }
 
-TEST_CASE("a view is calm until SetWind, and refuses a wind it cannot evaluate", "[grass][wind]")
+TEST_CASE("SetWind refuses a wind no pass could evaluate", "[grass][wind]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 1);
 
-	CHECK(view->GetWind().strength == 0.0f);
-	CHECK(view->GetWind().gustStrength == 0.0f);
-
 	auto wind         = bgl::WindDesc();
 	wind.direction    = glm::vec3(0.0f, 0.0f, 2.0f);
 	wind.strength     = 0.3f;
 	wind.gustStrength = 0.2f;
-	view->SetWind(wind);
-	CHECK(view->GetWind().strength == 0.3f);
-	CHECK(view->GetWind().direction == glm::vec3(0.0f, 0.0f, 2.0f));
+	CHECK_NOTHROW(view->SetWind(wind));
 
 	const float nan    = std::numeric_limits<float>::quiet_NaN();
 	using Break        = std::function<void(bgl::WindDesc&)>;
@@ -376,6 +360,4 @@ TEST_CASE("a view is calm until SetWind, and refuses a wind it cannot evaluate",
 		broken(desc);
 		CHECK_THROWS_AS(view->SetWind(desc), bgl::SceneError);
 	}
-
-	CHECK(view->GetWind().strength == 0.3f);
 }

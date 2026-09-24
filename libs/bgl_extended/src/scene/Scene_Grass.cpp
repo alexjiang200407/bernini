@@ -161,17 +161,6 @@ namespace bgl
 		++m_TemporalEpoch;
 	}
 
-	GrassDesc
-	Scene::GetGrass(const GrassHandle grass) const
-	{
-		if (!IsGrassAlive(grass))
-		{
-			throw SceneError("GrassHandle passed to GetGrass refers to a deleted or unknown look");
-		}
-
-		return m_Grass[grass.handle.index].desc;
-	}
-
 	void
 	Scene::DeleteGrass(const GrassHandle grass)
 	{

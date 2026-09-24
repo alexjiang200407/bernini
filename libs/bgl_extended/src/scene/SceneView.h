@@ -238,7 +238,7 @@ namespace bgl
 		SetWind(const WindDesc& desc) override;
 
 		[[nodiscard]] const WindDesc&
-		GetWind() const noexcept override
+		GetWind() const noexcept
 		{
 			return m_Wind;
 		}

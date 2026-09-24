@@ -489,11 +489,8 @@ namespace bgl
 		void
 		UpdateGrass(GrassHandle grass, const GrassDesc& desc) override;
 
-		[[nodiscard]] GrassDesc
-		GetGrass(GrassHandle grass) const override;
-
 		[[nodiscard]] bool
-		IsGrassAlive(GrassHandle grass) const noexcept override
+		IsGrassAlive(GrassHandle grass) const noexcept
 		{
 			return grass.IsValid() && m_Grass.valid(grass.handle);
 		}

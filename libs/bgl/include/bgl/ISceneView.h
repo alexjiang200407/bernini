@@ -363,10 +363,6 @@ namespace bgl
 		virtual void
 		SetWind(const WindDesc& desc) = 0;
 
-		/** The wind SetWind last accepted, or the calm default. */
-		[[nodiscard]] virtual const WindDesc&
-		GetWind() const noexcept = 0;
-
 	protected:
 		ISceneView() noexcept = default;
 	};

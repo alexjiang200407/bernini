@@ -396,14 +396,14 @@ flowchart TD
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
   baked-vs-loose branch that does it, so reach for it rather than rebuilding it. `grass` is parallel
-  to the same slots: a grass field (`BMesh::grassFields`, one per glTF POINTS primitive) is bound to
+  to the same slots: a grass field (`BMesh::grass.fields`, one per glTF POINTS primitive) is bound to
   the look in its slot, and every instance of the geom draws it. A field whose slot is out of range
   or null is not drawn; a slot naming a deleted look throws. `CookStaticMesh` checks every grass
   range against the pool it names before reading it, as it does the meshlet ranges.
-* **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `GetGrass(grass)` / `DeleteGrass(grass)`** —
+* **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `DeleteGrass(grass)`** —
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
-  the temporal epoch. The desc's ranges are listed on `CreateGrass`; an update refused for one
-  writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
+  the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
+  are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
 
 ### ISceneView
 
@@ -477,7 +477,7 @@ flowchart TD
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
 * **`SetWind(desc)`** — @pre every field finite, strengths and gust speed non-negative, `gustScale`
-  positive, `direction` with a horizontal part. Per view, like the light. **Not** an epoch change:
+  positive, `direction` with a horizontal part. Per view, like the light, and write-only like it. **Not** an epoch change:
   grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
 
 ---

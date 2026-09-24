@@ -668,9 +668,9 @@ namespace bgl
 			const uint32_t                                     meshIndex,
 			std::vector<PreparedStaticMesh::Impl::GrassField>& out)
 		{
-			for (size_t f = 0; f < mesh.grassFields.size(); ++f)
+			for (size_t f = 0; f < mesh.grass.fields.size(); ++f)
 			{
-				const assetlib::GrassField& src = mesh.grassFields[f];
+				const assetlib::GrassField& src = mesh.grass.fields[f];
 				if (src.mesh != meshIndex)
 				{
 					continue;
@@ -694,7 +694,7 @@ namespace bgl
 				}
 
 				if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount >
-				    mesh.grassChunks.size())
+				    mesh.grass.chunks.size())
 				{
 					throw SceneError(
 						std::format(
@@ -704,7 +704,7 @@ namespace bgl
 							f,
 							src.chunkCount,
 							src.firstChunk,
-							mesh.grassChunks.size()));
+							mesh.grass.chunks.size()));
 				}
 
 				PreparedStaticMesh::Impl::GrassField& field = out.emplace_back();
@@ -713,11 +713,11 @@ namespace bgl
 
 				for (uint32_t c = 0; c < src.chunkCount; ++c)
 				{
-					assetlib::GrassChunk chunk = mesh.grassChunks[src.firstChunk + c];
+					assetlib::GrassChunk chunk = mesh.grass.chunks[src.firstChunk + c];
 					if (chunk.clumpCount == 0 ||
 					    chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
 					    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
-					        mesh.grassClumps.size())
+					        mesh.grass.clumps.size())
 					{
 						throw SceneError(
 							std::format(
@@ -727,10 +727,10 @@ namespace bgl
 								f,
 								c,
 								assetlib::c_GrassClumpsPerChunk,
-								mesh.grassClumps.size()));
+								mesh.grass.clumps.size()));
 					}
 
-					const auto first = mesh.grassClumps.begin() + chunk.firstClump;
+					const auto first = mesh.grass.clumps.begin() + chunk.firstClump;
 					chunk.firstClump = static_cast<uint32_t>(field.clumps.size());
 					field.clumps.insert(field.clumps.end(), first, first + chunk.clumpCount);
 					field.chunks.emplace_back(chunk);

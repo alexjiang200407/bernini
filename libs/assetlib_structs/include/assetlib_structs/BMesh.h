@@ -40,9 +40,7 @@ namespace assetlib
 		// submesh, a `.bgrass` for a field.
 		std::vector<std::string> materials;
 
-		std::vector<GrassField> grassFields;
-		std::vector<GrassChunk> grassChunks;  // one bound per c_GrassClumpsPerChunk clumps
-		std::vector<GrassClump> grassClumps;
+		GrassPools grass;
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 
