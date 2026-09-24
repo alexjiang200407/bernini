@@ -1,0 +1,25 @@
+key,en
+builtin_plugin_description,"The Material, Animation and Blend Space editors built into this editor."
+builtin_plugin_name,Bernini Editors
+cannot_copy_file,Cannot copy plugin file: {0}
+cannot_create_copy_directory,Cannot create plugin copy directory: {0}
+cannot_load_module,Cannot load plugin module {0}: {1}
+cannot_open_config,Cannot open editor config: {0}
+dependency_missing,Plugin dependency is missing: {0}
+dependency_path_escapes,Plugin dependency path escapes its directory: {0}
+descriptor_incomplete,Plugin descriptor is incomplete: {0}
+descriptor_malformed,Malformed plugin descriptor {0}: {1}
+descriptor_missing,Plugin descriptor is missing: {0}
+descriptor_version_unsupported,Plugin descriptor version is unsupported: {0}
+duplicate_directory,Plugin {0} is in more than one directory: {1}
+editor_entry_point_missing,Editor plugin entry point is missing: {0}
+editor_factory_null,Editor plugin factory returned null: {0}
+malformed_config,Malformed editor config: {0}
+missing_required_plugins,"{0} requires plugins this editor did not load: {1}. Put each one in {2}/<id>/ or name its directory in pluginDirectories in config.json, then restart."
+module_path_escapes,Plugin module path escapes its directory: {0}
+plugin_older_than_sdk,Plugin {0} is older than this editor SDK: {1}
+runtime_entry_point_missing,Runtime plugin entry point is missing: {0}
+runtime_factory_null,Runtime plugin factory returned null: {0}
+sdk_stamp_missing,Editor SDK stamp is missing: {0}
+wrong_configuration,"Plugin {0} was built as {1}, not {2}"
+wrong_engine,"Plugin {0} was built for engine {1}, not {2}"

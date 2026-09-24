@@ -24,7 +24,7 @@ namespace editor
 	class TextArg
 	{
 	public:
-		using Value = std::variant<std::string, int64_t, uint64_t, double>;
+		using Value = std::variant<std::string, int64_t, uint64_t, float, double>;
 
 		TextArg(const std::string_view value) : m_Value(std::string(value)) {}
 		TextArg(const char* value) : m_Value(std::string(value)) {}
@@ -32,7 +32,8 @@ namespace editor
 		TextArg(const QString& value) : m_Value(value.toStdString()) {}
 		TextArg(const std::signed_integral auto value) : m_Value(static_cast<int64_t>(value)) {}
 		TextArg(const std::unsigned_integral auto value) : m_Value(static_cast<uint64_t>(value)) {}
-		TextArg(const std::floating_point auto value) : m_Value(static_cast<double>(value)) {}
+		TextArg(const float value) : m_Value(value) {}
+		TextArg(const double value) : m_Value(value) {}
 
 		[[nodiscard]] const Value&
 		Get() const noexcept

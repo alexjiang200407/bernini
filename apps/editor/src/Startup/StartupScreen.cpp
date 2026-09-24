@@ -1,4 +1,5 @@
 #include "Startup/StartupScreen.h"
+#include "util/editor_language.h"
 #include <editor_sdk/BackgroundTask.h>
 
 #include <QApplication>
@@ -11,7 +12,6 @@
 #include <qfont.h>
 #include <qnamespace.h>
 #include <qobject.h>
-#include <qstringliteral.h>
 #include <qwidget.h>
 #include <utility>
 
@@ -39,7 +39,7 @@ namespace editor
 		name->setFont(heading);
 		layout->addWidget(name);
 
-		m_Step = new QLabel(QStringLiteral("Starting..."), this);
+		m_Step = new QLabel(editor::Localize("editor.startup.starting", "Starting..."), this);
 
 		// The label carries file names and shader names, either of which can be longer than the
 		// screen; eliding keeps a long one from widening it mid-startup, which reads as a flicker.
