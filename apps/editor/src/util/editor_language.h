@@ -2,11 +2,12 @@
 
 #include <QString>
 #include <editor_plugin_api/LanguageResolver.h>
-#include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
+#include <editor_plugin_api/localize.h>
 #include <filesystem>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace editor
@@ -32,9 +33,13 @@ namespace editor
 		const std::string&                  locale,
 		std::span<const TranslationCatalog> plugins = {});
 
-	/** `text` in the editor's locale, or its fallback when no catalog has it. */
+	/** editor::Localize through EditorLanguage(): `key` is `context.name`, `args` fill `{0}`, `{1}`. */
+	template <typename... Args>
 	[[nodiscard]] QString
-	Localize(const LocalizedText& text);
+	Localize(const std::string_view key, const std::string_view fallback, const Args&... args)
+	{
+		return Localize(EditorLanguage(), key, fallback, args...);
+	}
 
 	/** `localization/` beside the executable, holding the host's own catalogs. */
 	[[nodiscard]] std::filesystem::path

@@ -2,8 +2,9 @@
 
 Two findings. A *raw literal* is a string literal with a letter in it passed straight to a Qt call
 that shows text -- what a user would read in English whatever the locale. A *catalog mismatch* is a
-`{ "context", "key", "fallback" }` triple whose context has no CSV, whose key has no row, or whose
-fallback differs from the row's `en` -- the English in code and the English on disk disagreeing.
+localized string -- a `Localize(..., "context.key", "fallback"` call or a descriptor's
+`{ "context", "key", "fallback" }` triple -- whose context has no CSV, whose key has no row, or whose
+fallback differs from the row's `en`: the English in code and the English on disk disagreeing.
 
 Regex over text, not an AST: it finds the shapes the editor writes and misses a literal reached
 through a variable. See docs/editor_plugins.md § Localization.
@@ -70,6 +71,11 @@ _LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"')
 _TRIPLE = re.compile(
     r'\{\s*"([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)"\s*,\s*"([a-z][a-z0-9_]*)"\s*,\s*'
     r'((?:"(?:[^"\\\n]|\\.)*"\s*)+)\}')
+_STRINGS = r'((?:"(?:[^"\\\n]|\\.)*"\s*)+)'
+# The resolver argument, when there is one, holds no string literal.
+_LOCALIZE = re.compile(
+    r'\bLocalize\(\s*[^";]*?"([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\.([a-z][a-z0-9_]*)"\s*,\s*'
+    + _STRINGS)
 _LETTER = re.compile(r"[A-Za-z]")
 _ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "'": "'", "r": "\r"}
 
@@ -143,7 +149,7 @@ def raw_literals(text):
     text = strip_comments(text)
     found = []
     for call in _CALL.finditer(text):
-        args = _TRIPLE.sub("{}", _arguments(text, call.end() - 1))
+        args = _LOCALIZE.sub("Localize(", _TRIPLE.sub("{}", _arguments(text, call.end() - 1)))
         for literal in _LITERAL.findall(args):
             if _LETTER.search(decode(literal)):
                 found.append((text.count("\n", 0, call.start()) + 1, call.group(1), literal))
@@ -151,11 +157,12 @@ def raw_literals(text):
 
 
 def triples(text):
-    """(line, context, key, fallback) for every localized-text triple in `text`."""
+    """(line, context, key, fallback) for every localized string in `text`, in source order."""
     text = strip_comments(text)
+    matches = sorted([*_TRIPLE.finditer(text), *_LOCALIZE.finditer(text)], key=lambda m: m.start())
     return [
         (text.count("\n", 0, m.start()) + 1, m.group(1), m.group(2), decode(m.group(3)))
-        for m in _TRIPLE.finditer(text)
+        for m in matches
     ]
 
 

@@ -65,6 +65,7 @@ and fix the map.
 | `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_plugin_api/include/editor_plugin_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
 | `LocalizedText` | [LocalizedText.h](libs/editor_plugin_api/include/editor_plugin_api/LocalizedText.h) | Deferred label lookup with fallback |
+| `Localize` | [localize.h](libs/editor_plugin_api/include/editor_plugin_api/localize.h) | Resolve a `context.key` now and fill its `{0}`, `{1}` |
 | `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
 | `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_plugin_api/include/editor_plugin_api/TranslationCatalog.h), [translation_csv.h](libs/editor_plugin_api/include/editor_plugin_api/translation_csv.h) | Module data and optional CSV ingestion |
 | `MenuDesc` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
@@ -288,9 +289,14 @@ exercise both services through the end of viewport teardown.
   allowing an entire catalog to be validated before it becomes visible.
 - **Language changes:** changing the resolver locale affects the next lookup, not already displayed
   strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
-  on the GUI thread. The sample resolves its widget title when constructed; live widget refresh,
-  pluralization and parameter formatting are not implemented -- a template carries `%1` and the
-  caller fills it with `QString::arg` after resolving.
+  on the GUI thread. The sample resolves its widget title when constructed; live widget refresh
+  and pluralization are not implemented.
+- **Text shown now:** `Localize(resolver, "context.key", "English {0}", args...)` resolves and
+  formats in one call; a descriptor title stays a `LocalizedText`, resolved when the host shows it.
+  The key splits at its last dot, and a key with no context throws. Arguments fill positional
+  `std::format` fields, so a translation may reorder them; a translation that does not format falls
+  back to the English, which is the one string a test can prove does. A `QString` argument is
+  formatted as UTF-8. Literal braces are doubled in every string, argument or not.
 - **Menus:** the host supplies `c_FileMenuId` and `c_ToolsMenuId` before plugin registration.
   `AddMenu` creates a plugin-qualified ID with a localized label; empty parent means a root menu,
   otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
@@ -392,7 +398,7 @@ The first column must be `key`, followed by one or more distinct locale columns.
 same width and unique keys. Empty cells are missing translations. UTF-8 BOM, LF/CRLF records,
 quoted commas/newlines and doubled quotes are supported; malformed UTF-8, NUL bytes, bad quoting,
 duplicate keys/locales and invalid identifiers throw. Whitespace is preserved rather than trimmed.
-Placeholders remain literal text; this importer supplies neither interpolation nor plural selection.
+The reader keeps `{0}` fields as literal text; `Localize` fills them. No plural selection.
 Resolve the returned catalog through `LanguageResolver` after registering it. A plugin that ships
 `localization/<context>.csv` has the host do this for it, as the sample does; one may instead
 construct `TranslationCatalog` directly and call `AddTranslations`.

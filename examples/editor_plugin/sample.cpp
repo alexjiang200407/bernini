@@ -12,6 +12,7 @@
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/localize.h>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -27,9 +28,13 @@ namespace
 	public:
 		explicit OverviewPanel(editor::IEditorHost& host, QWidget* parent) : EditorPanel(parent)
 		{
-			auto*                       layout = new QVBoxLayout(this);
-			const editor::LocalizedText title{ "sample.editor", "overview", "Project tools" };
-			layout->addWidget(new QLabel(title.Resolve(host.GetLanguageResolver()), this));
+			auto* layout = new QVBoxLayout(this);
+			layout->addWidget(new QLabel(
+				editor::Localize(
+					host.GetLanguageResolver(),
+					"sample.editor.overview",
+					"Project tools"),
+				this));
 		}
 
 		std::vector<std::string>

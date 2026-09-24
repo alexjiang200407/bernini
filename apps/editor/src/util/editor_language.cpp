@@ -8,7 +8,6 @@
 #include <core/settings/Settings.h>
 #include <cstddef>
 #include <editor_plugin_api/LanguageResolver.h>
-#include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
 #include <editor_plugin_api/translation_csv.h>
 #include <exception>
@@ -49,12 +48,6 @@ namespace editor
 			language.RegisterCatalog(catalog);
 		for (const TranslationCatalog& catalog : plugins) language.RegisterCatalog(catalog);
 		Language() = std::move(language);
-	}
-
-	QString
-	Localize(const LocalizedText& text)
-	{
-		return text.Resolve(EditorLanguage());
 	}
 
 	std::filesystem::path

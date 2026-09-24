@@ -111,12 +111,12 @@ main(int argc, char* argv[])
 
 		QMessageBox::critical(
 			nullptr,
-			editor::Localize({ "editor.main", "title", "Bernini Editor" }),
+			editor::Localize("editor.main.title", "Bernini Editor"),
 			editor::Localize(
-				{ "editor.main",
-		          "could_not_start",
-		          "The editor could not start:\n\n%1\n\nSee %2/editor.log." })
-				.arg(QString::fromUtf8(e.what()), directory));
+				"editor.main.could_not_start",
+				"The editor could not start:\n\n{0}\n\nSee {1}/editor.log.",
+				e.what(),
+				directory));
 	};
 
 	// Before anything is shown: the launcher and the startup screen read the host's catalogs too.
@@ -185,7 +185,7 @@ main(int argc, char* argv[])
 	// Up before the window, because building the window is what takes the time: the renderer
 	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
 	// with nothing on screen at all. Hidden explicitly on both ways out below.
-	editor::StartupScreen startup(editor::Localize({ "editor.main", "title", "Bernini Editor" }));
+	editor::StartupScreen startup(editor::Localize("editor.main.title", "Bernini Editor"));
 	startup.show();
 
 	// Building the window creates the device, which fails on a machine rather than in the code -- a
