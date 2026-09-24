@@ -10,6 +10,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -44,7 +45,8 @@ namespace assetlib
 			ImportDocument,
 			Avatar,
 			BlendSet,
-			BGrass>;
+			BGrass,
+			BGrassFields>;
 
 		template <AssetCodecFor T>
 		[[nodiscard]] constexpr ContainerKind
