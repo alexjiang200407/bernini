@@ -291,8 +291,8 @@ exercise both services through the end of viewport teardown.
   strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
   on the GUI thread. The sample resolves its widget title when constructed; live widget refresh
   and pluralization are not implemented.
-- **Text shown now:** `Localize(resolver, "context.key", "English {0}", { args })` resolves and
-  formats in one call; a descriptor title stays a `LocalizedText`, resolved when the host shows it.
+- **Text shown now:** `Localize(resolver, "context.key", { args }, "English {0}")` resolves and
+  formats in one call, and `Localize(resolver, "context.key", "English")` is the form with none; a descriptor title stays a `LocalizedText`, resolved when the host shows it.
   The key splits at its last dot, and a key with no context throws. Arguments fill positional
   `std::format` fields, so a translation may reorder them; a translation that does not format falls
   back to the English, which is the one string a test can prove does. The arguments are one

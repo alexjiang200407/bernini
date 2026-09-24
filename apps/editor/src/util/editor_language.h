@@ -35,7 +35,11 @@ namespace editor
 
 	/** editor::Localize through EditorLanguage(): `key` is `context.name`, `args` fill `{0}`, `{1}`. */
 	[[nodiscard]] QString
-	Localize(std::string_view key, std::string_view fallback, const TextArgs& args = {});
+	Localize(std::string_view key, const TextArgs& args, std::string_view fallback);
+
+	/** editor::Localize through EditorLanguage(), with no `{n}` fields to fill. */
+	[[nodiscard]] QString
+	Localize(std::string_view key, std::string_view fallback);
 
 	/** `localization/` beside the executable, holding the host's own catalogs. */
 	[[nodiscard]] std::filesystem::path

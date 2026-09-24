@@ -20,7 +20,7 @@ def test_a_call_spanning_lines_is_read_whole():
 
 def test_a_localized_triple_and_a_letterless_literal_pass():
     source = (
-        'setText(Localize("editor.main.save", "Save {0}", name));\n'
+        'setText(Localize("editor.main.save", { name, f(x) }, "Save {0}"));\n'
         'setText(Localize(m_Host.GetLanguageResolver(), "bernini.material.save", "Save"));\n'
         'setText(QStringLiteral("%1 / %2").arg(a, b));\n'
         'setText(name);\n')
@@ -38,13 +38,18 @@ def test_a_similar_name_and_a_comment_are_not_text_calls():
 def test_a_localize_call_is_read_with_or_without_a_resolver():
     source = (
         'Localize("editor.main.title", "Bernini Editor");\n'
-        'Localize(host.GetLanguageResolver(), "sample.editor.overview", "Project {0}", n);\n'
+        'Localize(host.GetLanguageResolver(), "sample.editor.overview", { n }, "Project {0}");\n'
         'setText("Raw", Localize("editor.main.title", "Bernini Editor"));\n')
     assert el.triples(source) == [
         (1, "editor.main", "title", "Bernini Editor"),
         (2, "sample.editor", "overview", "Project {0}"),
         (3, "editor.main", "title", "Bernini Editor")]
     assert [literal for _, _, literal in el.raw_literals(source)] == ['"Raw"']
+
+
+def test_a_lettered_literal_passed_as_an_argument_is_still_raw():
+    source = 'setText(Localize("editor.main.save", { "Untitled" }, "Save {0}"));\n'
+    assert [literal for _, _, literal in el.raw_literals(source)] == ['"Untitled"']
 
 
 def test_a_split_fallback_is_concatenated_and_unescaped():

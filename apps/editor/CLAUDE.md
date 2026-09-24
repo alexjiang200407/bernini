@@ -216,7 +216,7 @@ lives beside it, and the split is by responsibility rather than by line count:
 ## Text
 
 Every string a user reads goes through the one editor-wide resolver:
-`editor::Localize("editor.<area>.key", "English {0}", { args })` from `util/editor_language.h`, with
+`editor::Localize("editor.<area>.key", { args }, "English {0}")` from `util/editor_language.h`, with
 the row in `localization/editor.<area>.csv`. The plugin half cannot reach that overload -- it calls
 `editor::Localize(m_Host.GetLanguageResolver(), "context.key", ...)` from `<editor_plugin_api/localize.h>`.
 See [docs/editor_plugins.md](../../docs/editor_plugins.md) § CSV authoring for the gate.

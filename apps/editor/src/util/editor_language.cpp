@@ -52,9 +52,15 @@ namespace editor
 	}
 
 	QString
-	Localize(const std::string_view key, const std::string_view fallback, const TextArgs& args)
+	Localize(const std::string_view key, const TextArgs& args, const std::string_view fallback)
 	{
-		return Localize(EditorLanguage(), key, fallback, args);
+		return Localize(EditorLanguage(), key, args, fallback);
+	}
+
+	QString
+	Localize(const std::string_view key, const std::string_view fallback)
+	{
+		return Localize(EditorLanguage(), key, fallback);
 	}
 
 	std::filesystem::path

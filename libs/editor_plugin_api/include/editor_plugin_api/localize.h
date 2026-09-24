@@ -128,8 +128,8 @@ namespace editor
 	Localize(
 		const ILanguageResolver& resolver,
 		const std::string_view   key,
-		const std::string_view   fallback,
-		const TextArgs&          args = {})
+		const TextArgs&          args,
+		const std::string_view   fallback)
 	{
 		const std::size_t dot = key.rfind('.');
 		if (dot == std::string_view::npos || dot == 0 || dot + 1 == key.size())
@@ -153,5 +153,15 @@ namespace editor
 		{
 			return QString::fromStdString(localize_detail::Format(std::string(fallback), args));
 		}
+	}
+
+	/** Localize with no `{n}` fields to fill. */
+	[[nodiscard]] inline QString
+	Localize(
+		const ILanguageResolver& resolver,
+		const std::string_view   key,
+		const std::string_view   fallback)
+	{
+		return Localize(resolver, key, TextArgs(), fallback);
 	}
 }

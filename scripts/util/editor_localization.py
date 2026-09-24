@@ -73,8 +73,10 @@ _TRIPLE = re.compile(
     r'((?:"(?:[^"\\\n]|\\.)*"\s*)+)\}')
 _STRINGS = r'((?:"(?:[^"\\\n]|\\.)*"\s*)+)'
 # The resolver argument, when there is one, holds no string literal.
+# Groups: context, key, the `{ args }` object when there is one, fallback.
 _LOCALIZE = re.compile(
     r'\bLocalize\(\s*[^";]*?"([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\.([a-z][a-z0-9_]*)"\s*,\s*'
+    r'(\{(?:[^{};]|\{[^{};]*\})*\}\s*,\s*)?'
     + _STRINGS)
 _LETTER = re.compile(r"[A-Za-z]")
 _ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "'": "'", "r": "\r"}
@@ -149,7 +151,10 @@ def raw_literals(text):
     text = strip_comments(text)
     found = []
     for call in _CALL.finditer(text):
-        args = _LOCALIZE.sub("Localize(", _TRIPLE.sub("{}", _arguments(text, call.end() - 1)))
+        # An argument is data the caller supplies, which may itself be text a user reads.
+        args = _LOCALIZE.sub(
+            lambda m: "Localize(" + (m.group(3) or ""),
+            _TRIPLE.sub("{}", _arguments(text, call.end() - 1)))
         for literal in _LITERAL.findall(args):
             if _LETTER.search(decode(literal)):
                 found.append((text.count("\n", 0, call.start()) + 1, call.group(1), literal))
@@ -159,10 +164,11 @@ def raw_literals(text):
 def triples(text):
     """(line, context, key, fallback) for every localized string in `text`, in source order."""
     text = strip_comments(text)
-    matches = sorted([*_TRIPLE.finditer(text), *_LOCALIZE.finditer(text)], key=lambda m: m.start())
+    found = [(m.start(), m.group(1), m.group(2), m.group(3)) for m in _TRIPLE.finditer(text)]
+    found += [(m.start(), m.group(1), m.group(2), m.group(4)) for m in _LOCALIZE.finditer(text)]
     return [
-        (text.count("\n", 0, m.start()) + 1, m.group(1), m.group(2), decode(m.group(3)))
-        for m in matches
+        (text.count("\n", 0, start) + 1, context, key, decode(fallback))
+        for start, context, key, fallback in sorted(found)
     ]
 
 
