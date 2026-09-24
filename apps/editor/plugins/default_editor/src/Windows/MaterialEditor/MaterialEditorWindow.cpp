@@ -1507,9 +1507,6 @@ MaterialEditorWindow::Reset()
 	// The prompt goes up first, before the preview falls back to its sphere. Raising it afterwards
 	// puts the sphere on screen for the frames in between, which reads as the panel opening
 	// something on its way out. Hiding the page also stops the viewport drawing it at all.
-	// The prompt goes up first, before the preview falls back to its sphere. Raising it afterwards
-	// puts the sphere on screen for the frames in between, which reads as the panel opening
-	// something on its way out. Hiding the page also stops the viewport drawing it at all.
 	if (m_Stage != nullptr)
 		m_Stage->setCurrentIndex(0);
 

@@ -297,8 +297,11 @@ Two things a test cannot drive, and why:
   called directly on the concrete Qt types, with no injection seam. A test must drive their nested
   event loop or it hangs. `MainWindow_test` exercises project replacement with a non-native file
   dialog, a timer entering the filename, and a deadline rejecting dialogs on failure. Native file
-  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup
-   and Material save retain untested modal paths; their extracted data operations are tested.
+  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup,
+  and the Material list's Add/Rename prompts and its context menu retain untested modal paths; their
+  extracted data operations are tested (`editor::CanRegisterMaterialName`,
+  `NewOverrideMaterialPath`). Material *save* is no longer one of them: the panel writes by itself
+  and raises no dialog to drive.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
