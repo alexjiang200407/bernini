@@ -85,9 +85,22 @@ namespace editor
 		[[nodiscard]] float
 		GetWindowEndSeconds() const noexcept;
 
-		/** Starts advancing; a one-shot or a transition window parked on its end rewinds first. */
+		/** Starts advancing; a clock parked where it has nothing left to play rewinds first. */
 		void
 		Play() noexcept;
+
+		/**
+		 * Whether the clock has run out of domain to play: a one-shot at its last frame, or a
+		 * transition window at its end -- and at the other end of either when the speed is
+		 * negative. False for a looping clip, which has no end, and with no clips.
+		 *
+		 * Here rather than in the caller because *which end* depends on which of the two domains
+		 * the clock is in, and that is this class's to know: a caller comparing GetTimeSeconds
+		 * against GetPeriodSeconds reads a window's absolute clock against the active clip's span
+		 * and finds every fade already finished.
+		 */
+		[[nodiscard]] bool
+		AtEnd() const noexcept;
 
 		void
 		Pause() noexcept;

@@ -574,10 +574,8 @@ AnimationEditorWindow::Tick()
 	const float dt = static_cast<float>(m_ClockDelta.restart()) / 1000.0f;
 	m_Transport.Advance(dt);
 
-	// A one-shot that reached either end is done, not playing a frozen frame; Play rewinds it.
-	if (m_Transport.HasClips() && !m_Transport.GetActiveClip().loop &&
-	    (m_Transport.GetTimeSeconds() >= m_Transport.GetPeriodSeconds() ||
-	     (m_Transport.GetSpeed() < 0.0f && m_Transport.GetTimeSeconds() <= 0.0f)))
+	// A clock with nothing left to play is done, not playing a frozen frame; Play rewinds it.
+	if (m_Transport.AtEnd())
 	{
 		m_Transport.Pause();
 		m_Clock->stop();
