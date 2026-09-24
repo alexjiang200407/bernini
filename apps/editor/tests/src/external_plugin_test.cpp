@@ -143,7 +143,6 @@ TEST_CASE(
 	language.SetLocale("en");
 	editor::plugins::EditorHost host(
 		project.GetStore(),
-		language,
 		nullptr,
 		nullptr,
 		true,

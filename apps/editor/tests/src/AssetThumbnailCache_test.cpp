@@ -11,7 +11,6 @@
 #include <bgl/types/SceneDesc.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
-#include <editor_plugin_api/LanguageResolver.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <memory>
 
@@ -215,11 +214,9 @@ TEST_CASE("A live environment is held by the cache lit from it", "[thumbnails][r
 
 TEST_CASE("The plugin host owns headless viewport rendering", "[plugins][viewport][render]")
 {
-	Fixture                  fixture;
-	assetlib::AssetStore     store(c_DataRoot);
-	editor::LanguageResolver language;
-	editor::plugins::EditorHost
-		host(store, language, &*fixture.renderer, &*fixture.assets, true, {});
+	Fixture                           fixture;
+	assetlib::AssetStore              store(c_DataRoot);
+	editor::plugins::EditorHost       host(store, &*fixture.renderer, &*fixture.assets, true, {});
 	QPointer<editor::IEditorViewport> observed;
 	{
 		QWidget root;

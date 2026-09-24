@@ -1181,7 +1181,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
 	m_EditorHost = std::make_unique<editor::plugins::EditorHost>(
 		m_Project->GetStore(),
-		editor::EditorLanguage(),
 		m_Renderer.get(),
 		m_Assets.get(),
 		m_Headless,

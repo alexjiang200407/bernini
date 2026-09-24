@@ -33,7 +33,6 @@ namespace editor::plugins
 	public:
 		EditorHost(
 			const assetlib::AssetStore& store,
-			const ILanguageResolver&    language,
 			Renderer*                   renderer,
 			game::AssetManager*         assets,
 			bool                        headless,
@@ -65,7 +64,6 @@ namespace editor::plugins
 
 	private:
 		const assetlib::AssetStore& m_Store;
-		const ILanguageResolver&    m_Language;
 		Renderer*                   m_Renderer = nullptr;
 		game::AssetManager*         m_Assets   = nullptr;
 		bool                        m_Headless = false;

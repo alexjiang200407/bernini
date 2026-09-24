@@ -2,6 +2,7 @@
 
 #include "Render/Renderer.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/editor_language.h"
 #include <editor_plugin_api/ILanguageResolver.h>
 
 #include <assetlib/AssetStore.h>
@@ -19,13 +20,12 @@ namespace editor::plugins
 {
 	EditorHost::EditorHost(
 		const assetlib::AssetStore& store,
-		const ILanguageResolver&    language,
 		Renderer*                   renderer,
 		game::AssetManager*         assets,
 		const bool                  headless,
 		EditorHostDispatch          dispatch) :
-		m_Store(store), m_Language(language), m_Renderer(renderer), m_Assets(assets),
-		m_Headless(headless), m_Dispatch(std::move(dispatch))
+		m_Store(store), m_Renderer(renderer), m_Assets(assets), m_Headless(headless),
+		m_Dispatch(std::move(dispatch))
 	{}
 
 	const assetlib::AssetStore&
@@ -37,7 +37,7 @@ namespace editor::plugins
 	const ILanguageResolver&
 	EditorHost::GetLanguageResolver() const noexcept
 	{
-		return m_Language;
+		return EditorLanguage();
 	}
 
 	void
