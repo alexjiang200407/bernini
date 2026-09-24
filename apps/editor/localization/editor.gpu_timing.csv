@@ -1,0 +1,18 @@
+key,en
+clear_button,Clear
+export_button,Export CSV…
+export_tooltip,"Write retained timings and current editor context beside editor.log, as CSV."
+frame_total,frame {0} — {1:.3f} ms
+latest_of_frames,latest {0} of {1} frames
+ms_axis_label,ms
+newest_label,newest
+no_timed_frames,No timed frames yet
+no_viewport,No viewport is rendering.
+pass_cost,{0:.3f} ms
+pass_cost_missing,—
+pause_button,Pause
+pause_tooltip,"Stop recording, so a spike stays on screen instead of scrolling away."
+resume_button,Resume
+status,{0} — {1} frames
+status_paused,"{0} — {1} frames, paused"
+window_title,GPU Pass Timing

@@ -1,5 +1,6 @@
 #include "content_explorer_ui.h"
 
+#include "util/editor_language.h"
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QListView>
@@ -10,7 +11,6 @@
 #include <QWidget>
 #include <qnamespace.h>
 #include <qsizepolicy.h>
-#include <qstringliteral.h>
 
 namespace editor
 {
@@ -42,20 +42,29 @@ namespace editor
 
 		widgets.backButton = new QToolButton(currentDirectoryPane);
 		widgets.backButton->setObjectName("BackButton");
-		widgets.backButton->setText(QStringLiteral("Back"));
-		widgets.backButton->setToolTip(QStringLiteral("Back to the folder shown before"));
+		widgets.backButton->setText(
+			editor::Localize("editor.content_explorer.back_button", "Back"));
+		widgets.backButton->setToolTip(
+			editor::Localize(
+				"editor.content_explorer.back_button_tooltip",
+				"Back to the folder shown before"));
 		widgets.backButton->setEnabled(false);
 
 		widgets.modeSelector = new QComboBox(currentDirectoryPane);
 		widgets.modeSelector->setObjectName("ModeSelector");
-		widgets.modeSelector->setToolTip(QStringLiteral(
-			"What the browser shows: the project's authored assets, or the textures "
-			"its imports extracted"));
+		widgets.modeSelector->setToolTip(
+			editor::Localize(
+				"editor.content_explorer.mode_selector_tooltip",
+				"What the browser shows: the project's authored assets, or the textures its "
+				"imports "
+				"extracted"));
 
 		// The order the window reads back as a BrowseMode: index 1 is textures, anything else is
 		// assets.
-		widgets.modeSelector->addItem(QStringLiteral("Assets"));
-		widgets.modeSelector->addItem(QStringLiteral("Textures"));
+		widgets.modeSelector->addItem(
+			editor::Localize("editor.content_explorer.mode_assets", "Assets"));
+		widgets.modeSelector->addItem(
+			editor::Localize("editor.content_explorer.mode_textures", "Textures"));
 
 		auto* navigation = new QHBoxLayout();
 		navigation->addWidget(widgets.backButton);

@@ -5,6 +5,7 @@
 #include "Windows/ContentExplorer/AssetOperations.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/content_explorer_ui.h"
+#include "util/editor_language.h"
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/source_mesh.h>
 
@@ -128,9 +129,12 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 		this,
 		&ContentExplorerWindow::ShowFileMenu);
 
-	auto* viewport = m_Ui.currentDirectory->viewport();
-	m_EmptyPlaceholder =
-		new QLabel("Nothing exists in this directory.\nRight-click to add.", viewport);
+	auto* viewport     = m_Ui.currentDirectory->viewport();
+	m_EmptyPlaceholder = new QLabel(
+		editor::Localize(
+			"editor.content_explorer.empty_directory",
+			"Nothing exists in this directory.\nRight-click to add."),
+		viewport);
 	m_EmptyPlaceholder->setAlignment(Qt::AlignCenter);
 	m_EmptyPlaceholder->setWordWrap(true);
 	m_EmptyPlaceholder->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -517,7 +521,8 @@ ContentExplorerWindow::ShowAssetMenu(
 		return;
 
 	auto  menu   = QMenu(this);
-	auto* addDir = menu.addAction("Add Directory");
+	auto* addDir = menu.addAction(
+		editor::Localize("editor.content_explorer.add_directory_action", "Add Directory"));
 
 	QAction* bake          = nullptr;
 	QAction* createAvatar  = nullptr;
@@ -528,20 +533,26 @@ ContentExplorerWindow::ShowAssetMenu(
 	{
 		menu.addSeparator();
 		if (editor::IsMaterialAsset(asset))
-			bake = menu.addAction("Bake");
+			bake = menu.addAction(editor::Localize("editor.content_explorer.bake_action", "Bake"));
 
 		// On the source, because the source is the row that stands for a rig here: its `.bskel`
 		// lives in the half the views do not reach, and its `.bimport` is hidden.
 		if (!editor::GetSourceSkeleton(m_RootPath, QDir(m_RootPath).filePath(asset)).isEmpty())
-			createAvatar = menu.addAction("Create Avatar");
-		rename = menu.addAction("Rename");
+			createAvatar = menu.addAction(
+				editor::Localize("editor.content_explorer.create_avatar_action", "Create Avatar"));
+		rename =
+			menu.addAction(editor::Localize("editor.content_explorer.rename_action", "Rename"));
 
 		// An imported source renames -- moving everything it produced with it -- but does not
 		// delete: `planDeletion` throws for one, and grouped deletion is ADR-8's non-goal.
 		if (editor::IsRemovableAsset(asset))
 		{
-			remove        = menu.addAction("Delete");
-			removeCascade = menu.addAction("Delete Cascade");
+			remove =
+				menu.addAction(editor::Localize("editor.content_explorer.delete_action", "Delete"));
+			removeCascade = menu.addAction(
+				editor::Localize(
+					"editor.content_explorer.delete_cascade_action",
+					"Delete Cascade"));
 		}
 	}
 	if (m_AppendPluginActions && !asset.isEmpty())

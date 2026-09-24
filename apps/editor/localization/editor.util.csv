@@ -1,0 +1,9 @@
+key,en
+frame_stats_measuring,{0} — measuring…
+frame_stats_reported,{0} — frame {1:.1f} ms avg  {2:.1f} ms max  {3} over 20 ms
+new_project_title,New Project
+open_project_title,Open Project
+project_file_filter,Bernini Project (*{0})
+project_name_label,Project name:
+select_project_location,Select Project Location
+window_title,Bernini Editor

@@ -1,0 +1,95 @@
+key,en
+add_directory_failed,Could not create directory '{0}'.
+add_directory_title,Add Directory
+bake_failed,"Could not bake '{0}':
+
+{1}"
+bake_material_title,Bake Material
+baking,Baking {0}
+checking_references,Checking references...
+create_avatar_failed,"Could not create an avatar for '{0}':
+
+{1}"
+create_avatar_title,Create Avatar
+delete_blocked_directory_many,{0} assets outside this folder still reference something inside it. Re-route or delete them first.
+delete_blocked_directory_one,One asset outside this folder still references something inside it. Re-route or delete it first.
+delete_blocked_many,{0} assets still reference it. Re-route or delete them first.
+delete_blocked_one,One asset still references it. Re-route or delete it first.
+delete_blocked_text,'{0}' cannot be deleted.
+delete_cascade_held_open,"'{0}' would be deleted with '{1}', but it is open in an editor panel.
+
+Close it there first."
+delete_confirm,Delete '{0}'?
+delete_directory_confirm,Delete '{0}' and everything in it?
+delete_failed,"'{0}' could not be deleted:
+
+{1}
+
+It may be open in another program."
+delete_folder_contents,"{0} file(s) will be deleted. Nothing outside the folder references any of them.
+
+This cannot be undone."
+delete_folder_contents_with_cascade,"{0} file(s) will be deleted. Nothing outside the folder references any of them.
+
+{1} asset(s) outside the folder are referenced only from inside it, and will be deleted too.
+
+This cannot be undone."
+delete_folder_empty,"The folder is empty.
+
+This cannot be undone."
+delete_folder_empty_with_cascade,"The folder is empty.
+
+{0} asset(s) outside the folder are referenced only from inside it, and will be deleted too.
+
+This cannot be undone."
+delete_held_open_directory,"'{0}' holds an asset that is open in an editor panel.
+
+Close it there first: the Material Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
+delete_held_open_file,"'{0}' is open in an editor panel.
+
+Close it there first: the Material Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
+delete_mesh_no_refs,"Nothing references it. The materials it uses are shared, and stay in place."
+delete_no_refs,Nothing references it. This cannot be undone.
+delete_refused,"'{0}' is referenced again, and was not deleted."
+delete_scan_failed,"Could not work out what references '{0}', so it was not deleted:
+
+{1}"
+delete_title,Delete
+delete_with_cascade,"Nothing references it. {0} asset(s) that nothing else references will be deleted with it.
+
+This cannot be undone."
+directory_name_prompt,Directory name:
+invalid_name,'{0}' is not a name every platform this project is shared with can use.
+name_prompt,Name:
+new_folder_default,New Folder
+rename_blocked,"'{0}' cannot be renamed:
+
+{1}"
+rename_confirm,Rename '{0}' to '{1}'?
+rename_confirm_info,"{0} asset(s) reference it, and will be rewritten to the new name."
+rename_failed,"'{0}' could not be renamed:
+
+{1}"
+rename_failed_in_use,"'{0}' could not be renamed:
+
+{1}
+
+It may be open in another program."
+rename_held_open_directory,"'{0}' holds an asset that is open in an editor panel.
+
+Close it there first: the Material Editor's next Save would write the old name back, and the Animation panel would go on offering it."
+rename_held_open_file,"'{0}' is open in an editor panel.
+
+Close it there first: the Material Editor's next Save would write the old name back, and the Animation panel would go on offering it."
+rename_output_held_open,"'{0}' was produced by it and is open in an editor panel.
+
+Close it there first: renaming moves it, and the panel would go on offering the old path."
+rename_referrer_held_open,"'{0}' references it and is open in an editor panel.
+
+Close it there first."
+rename_scan_failed,"Could not work out what references '{0}', so it was not renamed:
+
+{1}"
+rename_title,Rename
+renaming,Renaming {0}
+rewriting_references,Rewriting references...
