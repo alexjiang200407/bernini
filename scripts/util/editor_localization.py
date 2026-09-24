@@ -77,7 +77,7 @@ _STRINGS = r'((?:"(?:[^"\\\n]|\\.)*"\s*)+)'
 # The resolver argument, when there is one, holds no string literal.
 # Groups: context, key, the `{ args }` object when there is one, fallback.
 _LOCALIZE = re.compile(
-    r'\bLocalize\(\s*[^";]*?"([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\.([a-z][a-z0-9_]*)"\s*,\s*'
+    r'\b(?:Localize|LocalizedError)\(\s*[^";]*?"([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*)\.([a-z][a-z0-9_]*)"\s*,\s*'
     r'(\{(?:[^{};]|\{[^{};]*\})*\}\s*,\s*)?'
     + _STRINGS)
 _LETTER = re.compile(r"[A-Za-z]")

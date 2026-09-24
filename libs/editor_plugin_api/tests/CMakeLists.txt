@@ -28,7 +28,7 @@ if(BERNINI_EDITOR_SDK)
         BUILD_ALWAYS TRUE
         LIST_SEPARATOR "|"
         INSTALL_COMMAND ""
-        DEPENDS assetlib gamelib core_process editor_sdk)
+        DEPENDS assetlib gamelib core_process editor_localize editor_sdk)
     target_link_libraries(editor_plugin_tests PRIVATE editor_sdk)
     add_dependencies(editor_plugin_tests editor_sdk_consumer)
     target_sources(editor_plugin_tests PRIVATE sdk_consumer_test.cpp)

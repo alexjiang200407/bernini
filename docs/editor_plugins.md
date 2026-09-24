@@ -264,7 +264,9 @@ exercise both services through the end of viewport teardown.
   Locale tokens begin with an ASCII letter and contain only ASCII letters, digits, `_` or `-`;
   matching is case-sensitive, without normalization or regional fallback.
 - **Resolver ownership:** link the static `editor_localization` target in the host. It depends only
-  on core and Qt Core; `editor_plugin_api` does not link its implementation into every client. Plugins borrow the
+  on core and Qt Core; `editor_plugin_api` does not link it into every client. What every client
+  does link is `editor_localize`, which holds `Localize` alone, compiled once: `<format>` inline in
+  a header every source includes costs minutes of MSVC build. Plugins borrow the
   const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
   through that interface. All calls, including catalog registration and locale changes, run on the
   GUI thread. The resolver outlives its borrowers. The production editor keeps one per process in
@@ -424,7 +426,9 @@ leaves the screen:
 - **A log line.** `qWarning` and `core::logging` stay English, and a localized string is never
   logged: when a message is both shown and logged, the log gets the English.
 - **Another library's words.** An exception's `what()` is passed as an argument to a localized frame
-  (`"Could not open {0}: {1}"`), never translated.
+  (`"Could not open {0}: {1}"`), never translated. The host's own error that a user reads is thrown
+  as `editor::LocalizedError`, whose `what()` is the English and `Shown()` the locale's; a frame
+  takes `editor::ShownText(e)`, a log line `e.what()`.
 
 A translatable string is **a whole sentence**. One is never assembled from localized pieces -- a verb
 beside a file name, a subject spliced into a clause -- because a translation must be free to order

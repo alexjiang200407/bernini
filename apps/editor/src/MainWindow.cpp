@@ -838,7 +838,7 @@ MainWindow::NewProject()
 		QMessageBox::warning(
 			this,
 			editor::Localize("editor.main_window.new_project_title", "New Project"),
-			e.what());
+			editor::ShownText(e));
 	}
 }
 
@@ -921,7 +921,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 		QMessageBox::warning(
 			this,
 			editor::Localize("editor.main_window.open_project_title", "Open Project"),
-			e.what());
+			editor::ShownText(e));
 		return false;
 	}
 }
@@ -1009,7 +1009,7 @@ MainWindow::RefreshTextures()
 					// Each source is a separate group: one failing does not abandon the rest.
 					failed << editor::Localize(
 						"editor.main_window.failed_item_line",
-						{ name, e.what() },
+						{ name, editor::ShownText(e) },
 						"{0}: {1}");
 				}
 			}

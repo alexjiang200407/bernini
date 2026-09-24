@@ -52,6 +52,11 @@ def test_a_lettered_literal_passed_as_an_argument_is_still_raw():
     assert [literal for _, _, literal in el.raw_literals(source)] == ['"Untitled"']
 
 
+def test_a_localized_error_is_read_like_a_localize_call():
+    source = 'throw editor::LocalizedError("editor.plugins.missing", { path }, "Missing: {0}");\n'
+    assert el.triples(source) == [(1, "editor.plugins", "missing", "Missing: {0}")]
+
+
 def test_a_split_fallback_is_concatenated_and_unescaped():
     source = '{ "editor.main",\n  "could_not_start",\n  "The editor could not start:\\n\\n%1"\n  " See log." }'
     assert el.triples(source) == [

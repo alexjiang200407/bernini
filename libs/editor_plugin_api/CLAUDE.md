@@ -6,7 +6,8 @@ editor-only; asset-kind semantics belong in assetlib's Qt-free plugin contract.
 Headers must compile individually without a PCH and without apps/editor/src on the include path.
 editor_plugin_api_selfcheck enforces that. The static editor_localization target in localization/ implements
 host-owned language resolution and optional CSV ingestion using core and Qt Core. Plugins borrow the resolver
-interface; they do not link the host implementation. No production registry lives here yet.
+interface; they do not link the host implementation. The static editor_localize target in localize/ is
+`Localize` alone, and every client links it through editor_plugin_api: its std::format stays out of the header. No production registry lives here yet.
 editor_plugin_tests exercises examples/editor_plugin through a recording host and tests the concrete
 resolver and CSV reader, with no GPU work. In a top-level renderer build, this directory also exports
 the build-tree `BerniniEditorSDK` package. Its external ABI fixture and local sample configure as separate CMake

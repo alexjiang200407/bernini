@@ -145,7 +145,7 @@ namespace editor
 			QMessageBox::warning(
 				this,
 				editor::Localize("editor.startup.new_project_title", "New Project"),
-				e.what());
+				editor::ShownText(e));
 		}
 	}
 
@@ -170,7 +170,7 @@ namespace editor
 			QMessageBox::warning(
 				this,
 				editor::Localize("editor.startup.open_project_title", "Open Project"),
-				e.what());
+				editor::ShownText(e));
 		}
 	}
 }
