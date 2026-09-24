@@ -61,7 +61,6 @@ This cannot be undone."
 directory_name_prompt,Directory name:
 invalid_name,'{0}' is not a name every platform this project is shared with can use.
 name_prompt,Name:
-new_folder_default,New Folder
 rename_blocked,"'{0}' cannot be renamed:
 
 {1}"

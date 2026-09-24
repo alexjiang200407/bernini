@@ -4,13 +4,15 @@ animation_file_label,Animation file:
 animation_file_tip,What the clips are written as. Every clip in the source goes into this one file; the Animation Editor picks one out of it.
 animation_folder_label,Animation folder:
 animation_folder_tip,Folder under Derived/Animations/ to write the .banim into.
-duplicate_output,{0} and {1} would both be written as '{2}'.
+animations_need_name,The animations need a name.
+duplicate_output,"Two files would be written as '{0}': {1}, {2}."
 expand_toggle_tip,Show the files this import will write here.
 file_count_plural,{0} files
 file_count_singular,1 file
 file_label,File:
 import_animations,Import animations
 import_animations_tip,"Bring the file's clips across. With the mesh off they attach to the rig already in the project, matched by signature."
+import_document_needs_name,The import document needs a name.
 import_mesh,Import mesh
 import_mesh_tip,"Bring the geometry across. Off imports only the pieces below -- which is how a rig's clips arrive when the artist exported one file per animation, each carrying a copy of the mesh."
 import_pbr_materials,Import PBR materials
@@ -19,29 +21,32 @@ import_pbr_materials_tip_unavailable,This file has no PBR material to derive one
 import_textures,Import textures
 import_textures_tip,Extract the mesh's textures into the project.
 invalid_file_name,'{0}' cannot be a file name.
+label_animations,Animations
+label_import_document,Import document
+label_material,Material '{0}'
+label_mesh,Mesh
+label_skeleton,Skeleton
+label_source,Source
 material_field_label,{0}:
 material_file_tip,What this glTF material is written as.
 material_folder_label,Material folder:
 material_folder_tip,"Folder under Authored/Materials/ to write the derived .bmaterial files into. Materials may share one with another import, since each names its own files."
+material_needs_name,The material '{0}' needs a name.
 mesh_file_label,Mesh file:
 mesh_file_tip,What the geometry is written as. Naming it rather than taking the source's name is what lets two imports share one folder.
 mesh_folder_label,Mesh folder:
 mesh_folder_tip,"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed (animals/coyote); the category itself is fixed, because every reference in the project is written against it."
-needs_name,{0} needs a name.
+mesh_needs_name,The mesh needs a name.
 skeleton_file_label,Skeleton file:
 skeleton_file_tip,"What the rig is written as, when the source carries one. A rig shared by several files wants the same name in each of them."
 skeleton_folder_label,Skeleton folder:
 skeleton_folder_tip,Folder under Derived/Skeletons/ to write the .bskel into. Only written when the source carries a skin.
+skeleton_needs_name,The skeleton needs a name.
 source_file_label,Source file:
 source_file_tip,What the copied source is called in the project. The .bimport beside it takes the same name; naming it is how two exports that came out of the DCC as scene.glb sit in one project.
 source_folder_label,Source folder:
 source_folder_tip,"Folder under Authored/Meshes/ to copy the .glb and its .bimport into. The copy is what a re-import cooks from, so it is kept rather than being a record of where the file came from."
-subject_animations,The animations
-subject_import_document,The import document
-subject_material,The material '{0}'
-subject_mesh,The mesh
-subject_skeleton,The skeleton
-subject_source,The source
+source_needs_name,The source needs a name.
 texture_folder_label,Texture folder:
 texture_folder_tip,"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants its own: they are named after the images they came from, so two imports sharing a folder would overwrite one another."
 unnamed_material,Material {0}

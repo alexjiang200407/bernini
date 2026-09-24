@@ -27,6 +27,12 @@
 #include <string_view>
 #include <utility>
 
+namespace
+{
+	// Untranslated: whatever the field still says becomes a directory every locale's user shares.
+	constexpr auto c_NewDirectoryName = std::string_view("New Folder");
+}
+
 AssetOperations::AssetOperations(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
 	QObject(parent), m_Parent(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))
 {}
@@ -636,7 +642,7 @@ AssetOperations::AddDirectory(QFileSystemModel* model, const QString& parentPath
 			editor::Localize("editor.asset_operations.add_directory_title", "Add Directory"),
 			editor::Localize("editor.asset_operations.directory_name_prompt", "Directory name:"),
 			QLineEdit::Normal,
-			editor::Localize("editor.asset_operations.new_folder_default", "New Folder"),
+			QString::fromUtf8(c_NewDirectoryName),
 			&ok)
 			.trimmed();
 	if (!ok || name.isEmpty())

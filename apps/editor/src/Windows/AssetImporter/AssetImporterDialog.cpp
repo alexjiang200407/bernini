@@ -399,15 +399,17 @@ AssetImporterDialog::PlanFiles() const
 {
 	auto planned = std::vector<PlannedFile>();
 
-	const auto plan = [&](const QString&               subject,
+	const auto plan = [&](const QString&               label,
+	                      const QString&               needsName,
 	                      const editor::ImportSection* section,
 	                      const QLineEdit*             name,
 	                      const QString&               category,
 	                      const QString&               extension) {
 		planned.push_back(
-			{ .subject = subject,
-		      .name    = name->text().trimmed(),
-		      .path    = File(Folder(section->GetFolder(), category), name, extension) });
+			{ .label     = label,
+		      .needsName = needsName,
+		      .name      = name->text().trimmed(),
+		      .path      = File(Folder(section->GetFolder(), category), name, extension) });
 	};
 
 	// Copied for a clips-only import as well, which is the one place the source's destination is
@@ -418,9 +420,12 @@ AssetImporterDialog::PlanFiles() const
 		const QString source = File(SourceFolder(), m_SourceName, c_SourceExtension);
 
 		planned.push_back(
-			{ .subject = editor::Localize("editor.asset_importer.subject_source", "The source"),
-		      .name    = name,
-		      .path    = source });
+			{ .label     = editor::Localize("editor.asset_importer.label_source", "Source"),
+		      .needsName = editor::Localize(
+				  "editor.asset_importer.source_needs_name",
+				  "The source needs a name."),
+		      .name = name,
+		      .path = source });
 
 		// Only for a name that could be written: `importDocumentKeyFor` throws on a path with no
 		// extension, and a blank name leaves `Authored/Meshes/.glb`, which is one. The source row
@@ -430,9 +435,12 @@ AssetImporterDialog::PlanFiles() const
 			// Through the library's rule rather than a second `.bimport` beside the field: one name
 			// places both files, so the pair cannot come apart here and nowhere else.
 			planned.push_back(
-				{ .subject = editor::Localize(
-					  "editor.asset_importer.subject_import_document",
-					  "The import document"),
+				{ .label = editor::Localize(
+					  "editor.asset_importer.label_import_document",
+					  "Import document"),
+			      .needsName = editor::Localize(
+					  "editor.asset_importer.import_document_needs_name",
+					  "The import document needs a name."),
 			      .name = name,
 			      .path = QString::fromStdString(
 					  assetlib::importDocumentKeyFor(source.toStdString())) });
@@ -442,7 +450,8 @@ AssetImporterDialog::PlanFiles() const
 	if (m_ImportMesh->isChecked())
 	{
 		plan(
-			editor::Localize("editor.asset_importer.subject_mesh", "The mesh"),
+			editor::Localize("editor.asset_importer.label_mesh", "Mesh"),
+			editor::Localize("editor.asset_importer.mesh_needs_name", "The mesh needs a name."),
 			m_MeshSection,
 			m_MeshName,
 			assetlib::c_MeshesDirectoryName,
@@ -451,7 +460,10 @@ AssetImporterDialog::PlanFiles() const
 		// Planned whether or not the source turns out to carry a skin: that is not known until it is
 		// parsed, and by then a file already there cannot be told from one this import wrote.
 		plan(
-			editor::Localize("editor.asset_importer.subject_skeleton", "The skeleton"),
+			editor::Localize("editor.asset_importer.label_skeleton", "Skeleton"),
+			editor::Localize(
+				"editor.asset_importer.skeleton_needs_name",
+				"The skeleton needs a name."),
 			m_SkeletonSection,
 			m_SkeletonName,
 			assetlib::c_SkeletonsDirectoryName,
@@ -461,7 +473,10 @@ AssetImporterDialog::PlanFiles() const
 	if (m_ImportAnimations->isChecked())
 	{
 		plan(
-			editor::Localize("editor.asset_importer.subject_animations", "The animations"),
+			editor::Localize("editor.asset_importer.label_animations", "Animations"),
+			editor::Localize(
+				"editor.asset_importer.animations_need_name",
+				"The animations need a name."),
 			m_AnimationSection,
 			m_AnimationName,
 			assetlib::c_AnimationsDirectoryName,
@@ -477,9 +492,13 @@ AssetImporterDialog::PlanFiles() const
 
 			plan(
 				editor::Localize(
-					"editor.asset_importer.subject_material",
+					"editor.asset_importer.label_material",
 					{ m_MaterialLabels[i] },
-					"The material '{0}'"),
+					"Material '{0}'"),
+				editor::Localize(
+					"editor.asset_importer.material_needs_name",
+					{ m_MaterialLabels[i] },
+					"The material '{0}' needs a name."),
 				m_MaterialSection,
 				m_MaterialNames[static_cast<size_t>(i)],
 				assetlib::c_MaterialsDirectoryName,
@@ -500,10 +519,7 @@ AssetImporterDialog::GetProblem() const
 	for (const PlannedFile& file : planned)
 	{
 		if (file.name.isEmpty())
-			return editor::Localize(
-				"editor.asset_importer.needs_name",
-				{ file.subject },
-				"{0} needs a name.");
+			return file.needsName;
 
 		if (!editor::IsPlainFileStem(file.name))
 			return editor::Localize(
@@ -515,15 +531,12 @@ AssetImporterDialog::GetProblem() const
 		const QString key   = file.path.toLower();
 		const auto    first = claimed.constFind(key);
 		if (first != claimed.constEnd())
-		{
-			const QString lowered = file.subject.at(0).toLower() + file.subject.mid(1);
 			return editor::Localize(
 				"editor.asset_importer.duplicate_output",
-				{ *first, lowered, file.path },
-				"{0} and {1} would both be written as '{2}'.");
-		}
+				{ file.path, *first, file.label },
+				"Two files would be written as '{0}': {1}, {2}.");
 
-		claimed.insert(key, file.subject);
+		claimed.insert(key, file.label);
 	}
 
 	if (m_DataRoot.isEmpty())
