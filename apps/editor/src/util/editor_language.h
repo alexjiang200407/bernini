@@ -34,12 +34,8 @@ namespace editor
 		std::span<const TranslationCatalog> plugins = {});
 
 	/** editor::Localize through EditorLanguage(): `key` is `context.name`, `args` fill `{0}`, `{1}`. */
-	template <typename... Args>
 	[[nodiscard]] QString
-	Localize(const std::string_view key, const std::string_view fallback, const Args&... args)
-	{
-		return Localize(EditorLanguage(), key, fallback, args...);
-	}
+	Localize(std::string_view key, std::string_view fallback, const TextArgs& args = {});
 
 	/** `localization/` beside the executable, holding the host's own catalogs. */
 	[[nodiscard]] std::filesystem::path

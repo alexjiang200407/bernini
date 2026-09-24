@@ -115,8 +115,7 @@ main(int argc, char* argv[])
 			editor::Localize(
 				"editor.main.could_not_start",
 				"The editor could not start:\n\n{0}\n\nSee {1}/editor.log.",
-				e.what(),
-				directory));
+				{ e.what(), directory }));
 	};
 
 	// Before anything is shown: the launcher and the startup screen read the host's catalogs too.

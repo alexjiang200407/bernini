@@ -137,13 +137,16 @@ TEST_CASE("Localize resolves a dotted key and formats its arguments", "[plugin][
 	      { { "saved", "en", "Saved {0} of {1}" }, { "saved", "fr", "{1} : {0} enregistrés" } } });
 
 	CHECK(
-		editor::Localize(resolver, "sample.editor.saved", "Fallback {0} {1}", 3, 4) ==
+		editor::Localize(resolver, "sample.editor.saved", "Fallback {0} {1}", { 3, 4 }) ==
 		"Saved 3 of 4");
 	resolver.SetLocale("fr");
 	CHECK(
-		editor::Localize(resolver, "sample.editor.saved", "Fallback {0} {1}", QString("x"), "y") ==
-		"y : x enregistrés");
-	CHECK(editor::Localize(resolver, "sample.editor.missing", "Missing {0}", 1) == "Missing 1");
+		editor::Localize(
+			resolver,
+			"sample.editor.saved",
+			"Fallback {0} {1}",
+			{ QString("x"), "y" }) == "y : x enregistrés");
+	CHECK(editor::Localize(resolver, "sample.editor.missing", "Missing {0}", { 1 }) == "Missing 1");
 	CHECK(editor::Localize(resolver, "other.editor.saved", "No catalog") == "No catalog");
 }
 
@@ -152,7 +155,7 @@ TEST_CASE("A translation that does not format falls back to the English", "[plug
 	editor::LanguageResolver resolver;
 	resolver.RegisterCatalog({ "sample.editor", { { "broken", "fr", "Cassé {" } } });
 	resolver.SetLocale("fr");
-	CHECK(editor::Localize(resolver, "sample.editor.broken", "Broken {0}", 1) == "Broken 1");
+	CHECK(editor::Localize(resolver, "sample.editor.broken", "Broken {0}", { 1 }) == "Broken 1");
 	CHECK(
 		editor::Localize(resolver, "sample.editor.broken", "Literal {{braces}}") ==
 		"Literal {braces}");
@@ -164,4 +167,15 @@ TEST_CASE("A key without a context is refused", "[plugin][localization]")
 	CHECK_THROWS_AS(editor::Localize(resolver, "saved", "Saved"), std::invalid_argument);
 	CHECK_THROWS_AS(editor::Localize(resolver, ".saved", "Saved"), std::invalid_argument);
 	CHECK_THROWS_AS(editor::Localize(resolver, "sample.", "Saved"), std::invalid_argument);
+}
+
+TEST_CASE("An argument keeps its type, so a field may format it", "[plugin][localization]")
+{
+	const editor::LanguageResolver resolver;
+	CHECK(
+		editor::Localize(resolver, "sample.editor.frame", "{0:.2f} ms, {1:>3}", { 1.5, 7 }) ==
+		"1.50 ms,   7");
+	CHECK_THROWS_AS(
+		editor::Localize(resolver, "sample.editor.many", "{0}", { 1, 2, 3, 4, 5, 6, 7, 8, 9 }),
+		std::invalid_argument);
 }
