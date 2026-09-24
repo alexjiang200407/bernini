@@ -169,7 +169,7 @@ stride divide inside the type. Its elements are `HandleElement<T>` rather than `
 below. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
 allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
 one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
-record's own struct owns and `Scene.cpp` pins with `static_assert`s.
+record's own struct owns and `Scene_Materials.cpp` pins with `static_assert`s.
 
 `RawHandleArena<T>` pairs it with the raw view, because they are one allocation: bound separately
 they can be handed different buffers. The CPU arena owns both and re-issues the view *inside* its

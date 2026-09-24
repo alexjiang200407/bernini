@@ -281,7 +281,7 @@ source texture.
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h).
 * **Defaults come from the scene**, not the file — a null texture handle resolves to a 1×1 solid
   (white base/ORM, flat normal) built in
-  [libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp). A material can omit any map.
+  [libs/bgl_extended/src/scene/Scene_Materials.cpp](libs/bgl_extended/src/scene/Scene_Materials.cpp). A material can omit any map.
 * **Decoded image hand-off type:** `ImageData` in
   [libs/assetlib_structs/include/assetlib_structs/ImageData.h](libs/assetlib_structs/include/assetlib_structs/ImageData.h)
   — carries the raw **`vkFormat`** (the KTX2 container's native Vulkan format tag), cube flag, and
@@ -398,12 +398,12 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   so the fit must enclose every vertex every meshlet under it draws or the renderer drops geometry
   that is on screen. `assetlib::c_MeshletsPerGroup` and `idl::cMeshletsPerGroup` are separate
   constants — `bgl` does not link `assetlib` — and a `static_assert` in
-  [Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), the one file that sees both, holds them
+  [Scene_Geometry.cpp](libs/bgl_extended/src/scene/Scene_Geometry.cpp), the one file that sees both, holds them
   equal.
 * **A submesh's meshlet count is unbounded**, up to the largest multiple of `c_MeshletsPerGroup`
   under the 65535 thread groups one `DispatchMesh` can launch, since the tier dispatches whole
   groups. `Scene::AddStaticMeshGeom`
-  ([libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp)) emits one GPU submesh per source
+  ([libs/bgl_extended/src/scene/Scene_Geometry.cpp](libs/bgl_extended/src/scene/Scene_Geometry.cpp)) emits one GPU submesh per source
   submesh and rejects anything past that limit; it never splits a submesh.
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
   the up-to-124 primitives — do not assume one thread per vertex or per primitive
@@ -423,7 +423,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **`vertexByteOffset`/`vertexCount` is not the duplicated half, and is not a candidate.** There is
   one `vertexData` pool; `meshletVertices` holds remap *indices* into it, not a second vertex blob.
   So that range is the only addressing into the pool and is read directly by `bgl_extended`
-  ([Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), `CookStaticMesh`) and by `gamelib`
+  ([Scene_Geometry.cpp](libs/bgl_extended/src/scene/Scene_Geometry.cpp), `CookStaticMesh`) and by `gamelib`
   ([Raycaster.cpp](libs/gamelib/src/Raycaster.cpp)).
 
 ### Long thin triangles

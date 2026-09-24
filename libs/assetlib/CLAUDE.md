@@ -120,7 +120,8 @@ The reason is who links what. `bgl` and `bgl_extended` link `assetlib_structs` a
 so a function put down there is one the renderer may call. Keeping that surface to data is what
 makes *the renderer cannot ask a container anything* a fact about the build rather than an
 observation about where somebody happened to leave a file -- and `bgl_extended` pays for it visibly,
-with its own joints/weights loop in `Scene.cpp` and its own `static_cast<size_t>` where it wants
+with its own joints/weights loop in `Scene_Geometry.cpp` and its own `static_cast<size_t>` in
+`Scene_Materials.cpp` where it wants
 `channelIndex`. That duplication is the boundary being enforced, not a gap in it.
 
 So do not add a declaration to an `assetlib_structs` header. `assetlib_structs_selfcheck` compiles
