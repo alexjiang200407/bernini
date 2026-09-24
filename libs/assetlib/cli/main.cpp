@@ -111,6 +111,8 @@ namespace
 			return "blends clips of";
 		case assetlib::RefKind::kGrassMaterial:
 			return "shades its blades with";
+		case assetlib::RefKind::kFieldGrass:
+			return "grows grass, as a point primitive's look,";
 		case assetlib::RefKind::kPlugin:
 			return "references";
 		}

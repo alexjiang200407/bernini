@@ -68,6 +68,7 @@ namespace assetlib
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
 		kGrassMaterial,   // a .bgrass names the .bmaterial its blades shade through
+		kFieldGrass,      // a .bimport's binding names the .bgrass a POINTS primitive is drawn with
 		kPlugin,          // a plugin-registered authored kind reports an opaque field token
 	};
 
