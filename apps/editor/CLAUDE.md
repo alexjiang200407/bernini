@@ -164,6 +164,18 @@ lives beside it, and the split is by responsibility rather than by line count:
   editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
   says so by signal rather than reaching for the view (`AssetOperations::DirectoryDeleted`); a
   collaborator that touched a model would just be the window again under another name.
+- **A panel that writes by itself compares before it writes.** The material editor marks a board
+  edited on anything that *might* have changed it — every model signal, and any click, key, wheel or
+  focus loss on the board or the properties beside it — then skips a write whose compiled material
+  matches what was last written (`MaterialEditorWindow::MarkGraphEdited`). Deliberately over-eager,
+  because the two failures are not symmetric: a missed trigger loses an edit with nothing on screen
+  to say so, and an extra one costs a compile.
+
+  The consequence worth knowing before you add to that panel: **a new texture type or material
+  property needs no change to the save logic**, as long as its value lives in the graph — which is
+  what puts it in the file at all. Marking on the signals a control happens to emit would instead
+  make every future control's author responsible for the save.
+
 - **A rule that takes what it needs** becomes a free function in a `lower_case` file:
   `asset_rules`, `material_io`, `graph_compiler`, `material_graph`. This is also the *only* way most
   editor behaviour becomes testable — see § What is testable below.
