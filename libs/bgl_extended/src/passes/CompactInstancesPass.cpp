@@ -84,95 +84,41 @@ namespace bgl
 			.AddPass(
 				PassDesc()
 					.SetName("Compact Instances Update {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferArg(
-						c_DrawBucketPrefixSumName,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
-					.AddBufferArg(
-						c_CompactDispatchArgsName,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
-					.AddBufferArg(
-						c_CullViewName,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
-					.AddBufferArg(
-						c_CullStatsName,
-						BarrierSyncFlag::kCopy,
-						BarrierAccessFlag::kCopyDest)
+					.AddCopyDest(c_DrawBucketPrefixSumName)
+					.AddCopyDest(c_CompactDispatchArgsName)
+					.AddCopyDest(c_CullViewName)
+					.AddCopyDest(c_CullStatsName)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteClear(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferArg(
-						c_InstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_MeshInstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_GeomBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_SubmeshBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_CullViewName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_InstanceVisibilityName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_CullStatsName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_GeomBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_SubmeshBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_CullViewName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_CullStatsName, BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Histogram and Prefix Sum Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferArg(
-						c_InstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_InstanceVisibilityName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_DrawBucketPrefixSumName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_DrawBucketPrefixSumName, BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) {
 						ExecuteHistogramAndPrefixSum(ctx, draw);
 					}))
 			.AddPass(
 				PassDesc()
 					.SetName("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferArg(
-						c_InstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_InstanceVisibilityName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
 					// Only the visible instances are written, at offsets the prefix sum decides, so
 					// a stale entry left over from the previous frame is a plausible draw.
 					.AddPoisonedBufferArg(c_CompactedInstancesName, BarrierSyncFlag::kComputeShader)
-					.AddBufferArg(
-						c_DrawBucketPrefixSumName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_CompactDispatchArgsName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferReadWrite(c_DrawBucketPrefixSumName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_CompactDispatchArgsName, BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) {
 						ExecuteGenerateInstanceDispatchArgs(ctx, draw);
 					}));

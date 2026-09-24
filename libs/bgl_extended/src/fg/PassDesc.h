@@ -195,6 +195,81 @@ namespace bgl
 			return *this;
 		}
 
+		// The accesses the passes make, each owning its barrier flags so a pass names only the
+		// resource. `stages` is the shader stages that touch it; the geometry stages of a mesh-shader
+		// pipeline sync as kVertexShader. AddBufferArg and AddTextureArg are for any other access.
+
+		/** A texture this pass draws into as a colour target, by its graph name. */
+		PassDesc&
+		AddRenderTarget(std::string_view textureName)
+		{
+			return AddTextureArg(
+				textureName,
+				BarrierSyncFlag::kRenderTarget,
+				BarrierAccessFlag::kRenderTarget,
+				BarrierLayout::kRenderTarget);
+		}
+
+		/** A depth-stencil texture this pass depth-tests against and writes. */
+		PassDesc&
+		AddDepthWrite(std::string_view textureName)
+		{
+			return AddTextureArg(
+				textureName,
+				BarrierSyncFlag::kDepthStencil,
+				BarrierAccessFlag::kDepthWrite,
+				BarrierLayout::kDepthWrite);
+		}
+
+		/** A texture `stages` sample or load. */
+		PassDesc&
+		AddTextureRead(std::string_view textureName, BarrierSync stages)
+		{
+			return AddTextureArg(
+				textureName,
+				stages,
+				BarrierAccessFlag::kShaderResource,
+				BarrierLayout::kShaderResource);
+		}
+
+		/** A buffer `stages` only read. */
+		PassDesc&
+		AddBufferRead(std::string_view bufferName, BarrierSync stages)
+		{
+			return AddBufferArg(bufferName, stages, BarrierAccessFlag::kShaderResource);
+		}
+
+		/** A buffer `stages` bind for unordered access -- read, written, or both. */
+		PassDesc&
+		AddBufferReadWrite(std::string_view bufferName, BarrierSync stages)
+		{
+			return AddBufferArg(bufferName, stages, BarrierAccessFlag::kUnorderedAccess);
+		}
+
+		/** A buffer an indirect dispatch or draw reads its arguments or count from. */
+		PassDesc&
+		AddIndirectArgs(std::string_view bufferName)
+		{
+			return AddBufferArg(
+				bufferName,
+				BarrierSyncFlag::kIndirectArgument,
+				BarrierAccessFlag::kIndirectArgument);
+		}
+
+		/** A buffer this pass copies out of. */
+		PassDesc&
+		AddCopySource(std::string_view bufferName)
+		{
+			return AddBufferArg(bufferName, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopySource);
+		}
+
+		/** A buffer this pass copies into. */
+		PassDesc&
+		AddCopyDest(std::string_view bufferName)
+		{
+			return AddBufferArg(bufferName, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest);
+		}
+
 		/** Formats the name, so a pass keyed on its draw and frustum need not spell out std::format. */
 		template <typename... Args>
 		PassDesc&

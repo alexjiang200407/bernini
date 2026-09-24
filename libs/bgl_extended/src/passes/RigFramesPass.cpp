@@ -53,26 +53,11 @@ namespace bgl
 		fg.AddPass(
 			PassDesc()
 				.SetName("Pose Rig Frames {}", draw.drawIdx)
-				.AddBufferArg(
-					"scene.rigBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.skinnedBoneBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.clipBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.boneSampleBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.boneAnimTables",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kUnorderedAccess)
+				.AddBufferRead("scene.rigBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedBoneBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.clipBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.boneSampleBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferReadWrite("scene.boneAnimTables", BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
 

@@ -113,28 +113,11 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("Blob Shadows {}", draw.drawIdx)
-			.AddTextureArg(
-				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ std::string(c_DepthName),
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddBufferArg(
-				BufferArg{ std::string(c_BlobShadowsName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kShaderResource })
-			.AddBufferArg(
-				BufferArg{ std::string(c_MeshInstanceBufferName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kShaderResource })
-			.AddBufferArg(
-				BufferArg{ std::string(c_BonePaletteName),
-		                   BarrierSyncFlag::kVertexShader,
-		                   BarrierAccessFlag::kShaderResource });
+			.AddRenderTarget(c_BackbufferName)
+			.AddTextureRead(c_DepthName, BarrierSyncFlag::kPixelShader)
+			.AddBufferRead(c_BlobShadowsName, BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_BonePaletteName, BarrierSyncFlag::kVertexShader);
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 

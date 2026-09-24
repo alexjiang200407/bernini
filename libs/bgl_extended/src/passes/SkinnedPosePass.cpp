@@ -39,58 +39,19 @@ namespace bgl
 		fg.AddPass(
 			PassDesc()
 				.SetName("Pose Skinned {}", draw.drawIdx)
-				.AddBufferArg(
-					"scene.posedInstances",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.meshInstanceBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.playbackBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.rigBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.skinnedBoneBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.clipBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.boneSampleBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.skinnedLegBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.plantWeightBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.blendNodeBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.blendSampleBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.footIKBuffer",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kShaderResource)
-				.AddBufferArg(
-					"scene.bonePalettes",
-					BarrierSyncFlag::kComputeShader,
-					BarrierAccessFlag::kUnorderedAccess)
+				.AddBufferRead("scene.posedInstances", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.meshInstanceBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.playbackBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.rigBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedBoneBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.clipBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.boneSampleBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedLegBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.plantWeightBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.blendNodeBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.blendSampleBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.footIKBuffer", BarrierSyncFlag::kComputeShader)
+				.AddBufferReadWrite("scene.bonePalettes", BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
 

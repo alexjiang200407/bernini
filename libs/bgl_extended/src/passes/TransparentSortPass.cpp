@@ -50,64 +50,37 @@ namespace bgl
 		fg.AddPass(
 			  PassDesc()
 				  .SetName("Transparent Sort Clear {}", draw.drawIdx)
-				  .AddBufferArg(
-					  c_TransparentSortCountName,
-					  BarrierSyncFlag::kCopy,
-					  BarrierAccessFlag::kCopyDest)
-				  .AddBufferArg(
-					  c_TransparentDispatchArgsName,
-					  BarrierSyncFlag::kCopy,
-					  BarrierAccessFlag::kCopyDest)
+				  .AddCopyDest(c_TransparentSortCountName)
+				  .AddCopyDest(c_TransparentDispatchArgsName)
 				  .SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Transparent Depth Keys {}", draw.drawIdx)
-					.AddBufferArg(
-						c_InstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_MeshInstanceBufferName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
-					.AddBufferArg(
-						c_InstanceVisibilityName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_DrawBucketFlagsName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kShaderResource)
+					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_DrawBucketFlagsName, BarrierSyncFlag::kComputeShader)
 					// Only the transparent instances take a slot, and the count that says how many
 					// is written by this same pass -- so a leftover entry is indistinguishable
 					// from one this frame produced.
 					.AddPoisonedBufferArg(
 						c_TransparentSortEntriesName,
 						BarrierSyncFlag::kComputeShader)
-					.AddBufferArg(
-						c_TransparentSortCountName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+					.AddBufferReadWrite(c_TransparentSortCountName, BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteDepthKeys(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Transparent Sort {}", draw.drawIdx)
-					.AddBufferArg(
+					.AddBufferReadWrite(
 						c_TransparentSortEntriesName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
-						c_TransparentSortCountName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
+						BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_TransparentSortCountName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
 						c_SortedTransparentInstancesName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
-					.AddBufferArg(
+						BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
 						c_TransparentDispatchArgsName,
-						BarrierSyncFlag::kComputeShader,
-						BarrierAccessFlag::kUnorderedAccess)
+						BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteSort(ctx, draw); }));
 	}
 

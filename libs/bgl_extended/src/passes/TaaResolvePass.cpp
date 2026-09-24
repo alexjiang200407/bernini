@@ -86,31 +86,11 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("TaaResolve")
-			.AddTextureArg(
-				TextureArg{ std::string(c_SceneColorName),
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
-				TextureArg{ std::string(c_MotionVectorsName),
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
-				TextureArg{ std::string(c_DepthName),
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
-				TextureArg{ args.prevHistoryName,
-		                    BarrierSyncFlag::kPixelShader,
-		                    BarrierAccessFlag::kShaderResource,
-		                    BarrierLayout::kShaderResource })
-			.AddTextureArg(
-				TextureArg{ args.historyName,
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget });
+			.AddTextureRead(c_SceneColorName, BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(c_MotionVectorsName, BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(c_DepthName, BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(args.prevHistoryName, BarrierSyncFlag::kPixelShader)
+			.AddRenderTarget(args.historyName);
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
 

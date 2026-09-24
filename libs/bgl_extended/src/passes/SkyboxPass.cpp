@@ -89,21 +89,9 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("Skybox {}", draw.drawIdx)
-			.AddTextureArg(
-				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ std::string(c_MotionVectorsName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ std::string(c_DepthName),
-		                    BarrierSyncFlag::kDepthStencil,
-		                    BarrierAccessFlag::kDepthWrite,
-		                    BarrierLayout::kDepthWrite });
+			.AddRenderTarget(c_BackbufferName)
+			.AddRenderTarget(c_MotionVectorsName)
+			.AddDepthWrite(c_DepthName);
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
