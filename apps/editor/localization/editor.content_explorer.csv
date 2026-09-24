@@ -1,0 +1,16 @@
+key,en
+add_directory_action,Add Directory
+asset_unreadable,Cannot be read: {0}
+back_button,Back
+back_button_tooltip,Back to the folder shown before
+bake_action,Bake
+create_avatar_action,Create Avatar
+delete_action,Delete
+delete_cascade_action,Delete Cascade
+empty_directory,"Nothing exists in this directory.
+Right-click to add."
+mode_assets,Assets
+mode_selector_tooltip,"What the browser shows: the project's authored assets, or the textures its imports extracted"
+mode_textures,Textures
+rename_action,Rename
+source_mesh_unreadable,The mesh it produced cannot be read: {0}

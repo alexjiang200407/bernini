@@ -2,6 +2,7 @@
 
 #include "Import/import_pipeline.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
+#include "util/editor_language.h"
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -57,7 +58,10 @@ namespace editor
 		{
 			QMessageBox::warning(
 				parent,
-				QString("Import %1").arg(QFileInfo(sourceFile).fileName()),
+				editor::Localize(
+					"editor.import.import_title",
+					{ QFileInfo(sourceFile).fileName() },
+					"Import {0}"),
 				e.what());
 			return { .outcome = ImportOutcome::kBlocked };
 		}

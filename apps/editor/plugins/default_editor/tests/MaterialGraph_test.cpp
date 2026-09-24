@@ -25,6 +25,7 @@
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <memory>
 #include <qcoreapplication.h>
@@ -45,6 +46,9 @@ namespace
 	using QtNodes::NodeId;
 	using QtNodes::NodeRole;
 
+	// Outlives every registry Registry() returns, which holds it by reference.
+	const editor::LanguageResolver c_Language;
+
 	/**
 	 * The registry the material editor ships, minus the graphics. TextureNode takes a null scene and a
 	 * null preview cache on purpose -- that is what the editor itself passes when it runs without a
@@ -53,7 +57,7 @@ namespace
 	std::shared_ptr<NodeDelegateModelRegistry>
 	Registry()
 	{
-		return MakeMaterialNodeRegistry(nullptr, nullptr);
+		return MakeMaterialNodeRegistry(c_Language, nullptr, nullptr);
 	}
 
 	/** The sink as the PBR-family node, for the cases that read its factors and modes. */

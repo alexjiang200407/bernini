@@ -4,7 +4,9 @@
 #include <editor_plugin_api/LanguageResolver.h>
 #include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
+#include <editor_plugin_api/localize.h>
 #include <editor_plugin_api/translation_csv.h>
+#include <stdexcept>
 #include <string>
 
 TEST_CASE(
@@ -125,4 +127,62 @@ TEST_CASE(
 	const std::string nulCsv("key,en\nopen_file,A\0B", 20);
 	REQUIRE_THROWS(editor::ReadTranslationCsv("sample.editor", nulCsv));
 	REQUIRE_THROWS(editor::ReadTranslationCsv("bad context", "key,en\n"));
+}
+
+TEST_CASE("Localize resolves a dotted key and formats its arguments", "[plugin][localization]")
+{
+	editor::LanguageResolver resolver;
+	resolver.RegisterCatalog(
+		{ "sample.editor",
+	      { { "saved", "en", "Saved {0} of {1}" }, { "saved", "fr", "{1} : {0} enregistrés" } } });
+
+	CHECK(
+		editor::Localize(resolver, "sample.editor.saved", { 3, 4 }, "Fallback {0} {1}") ==
+		"Saved 3 of 4");
+	resolver.SetLocale("fr");
+	CHECK(
+		editor::Localize(
+			resolver,
+			"sample.editor.saved",
+			{ QString("x"), "y" },
+			"Fallback {0} {1}") == "y : x enregistrés");
+	CHECK(editor::Localize(resolver, "sample.editor.missing", { 1 }, "Missing {0}") == "Missing 1");
+	CHECK(editor::Localize(resolver, "other.editor.saved", "No catalog") == "No catalog");
+}
+
+TEST_CASE("A translation that does not format falls back to the English", "[plugin][localization]")
+{
+	editor::LanguageResolver resolver;
+	resolver.RegisterCatalog({ "sample.editor", { { "broken", "fr", "Cassé {" } } });
+	resolver.SetLocale("fr");
+	CHECK(editor::Localize(resolver, "sample.editor.broken", { 1 }, "Broken {0}") == "Broken 1");
+	CHECK(
+		editor::Localize(resolver, "sample.editor.broken", "Literal {{braces}}") ==
+		"Literal {braces}");
+}
+
+TEST_CASE("A key without a context is refused", "[plugin][localization]")
+{
+	const editor::LanguageResolver resolver;
+	CHECK_THROWS_AS(editor::Localize(resolver, "saved", "Saved"), std::invalid_argument);
+	CHECK_THROWS_AS(editor::Localize(resolver, ".saved", "Saved"), std::invalid_argument);
+	CHECK_THROWS_AS(editor::Localize(resolver, "sample.", "Saved"), std::invalid_argument);
+}
+
+TEST_CASE("An argument keeps its type, so a field may format it", "[plugin][localization]")
+{
+	const editor::LanguageResolver resolver;
+	CHECK(
+		editor::Localize(resolver, "sample.editor.frame", { 1.5, 7 }, "{0:.2f} ms, {1:>3}") ==
+		"1.50 ms,   7");
+	CHECK_THROWS_AS(
+		editor::Localize(resolver, "sample.editor.many", { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, "{0}"),
+		std::invalid_argument);
+}
+
+TEST_CASE("A float formats at its own precision, not as a widened double", "[plugin][localization]")
+{
+	const editor::LanguageResolver resolver;
+	CHECK(editor::Localize(resolver, "sample.editor.width", { 0.8f }, "{0} px") == "0.8 px");
+	CHECK(editor::Localize(resolver, "sample.editor.width", { 0.8 }, "{0} px") == "0.8 px");
 }

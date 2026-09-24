@@ -1,16 +1,18 @@
 #include "Windows/MaterialEditor/nodes/BlendedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <editor_plugin_api/ILanguageResolver.h>
 
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QJsonObject>
 #include <QSignalBlocker>
-#include <qstringliteral.h>
+#include <editor_plugin_api/localize.h>
 #include <qtmetamacros.h>
 
-BlendedMaterialOutputNode::BlendedMaterialOutputNode() :
+BlendedMaterialOutputNode::BlendedMaterialOutputNode(const editor::ILanguageResolver& language) :
 	MaterialOutputNode(
+		language,
 		ChannelData::c_MaxChannels)  // base color is RGBA: the alpha drives the blend
 {}
 
@@ -22,11 +24,16 @@ BlendedMaterialOutputNode::AddExtraRows(QWidget* parent, QFormLayout* form)
 	m_TransmissionSpin->setSingleStep(0.05);
 	m_TransmissionSpin->setDecimals(3);
 	m_TransmissionSpin->setValue(m_Transmission);
-	m_TransmissionSpin->setToolTip(QStringLiteral(
-		"What base-color alpha means: 0 is coverage (hair, foliage), 1 is "
-		"transmission (glass), where the surface keeps its reflection however "
-		"clear it is"));
-	form->addRow(QStringLiteral("Transmission"), m_TransmissionSpin);
+	m_TransmissionSpin->setToolTip(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.transmission_tooltip",
+			"What base-color alpha means: 0 is coverage (hair, foliage), 1 is "
+			"transmission (glass), where the surface keeps its reflection however "
+			"clear it is"));
+	form->addRow(
+		editor::Localize(m_Language, "bernini.material_nodes.transmission_label", "Transmission"),
+		m_TransmissionSpin);
 
 	connect(m_TransmissionSpin, &QDoubleSpinBox::valueChanged, this, [this](double value) {
 		m_Transmission = static_cast<float>(value);

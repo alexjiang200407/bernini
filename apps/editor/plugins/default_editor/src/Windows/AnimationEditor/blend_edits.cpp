@@ -193,13 +193,10 @@ namespace editor
 		return true;
 	}
 
-	std::string_view
-	ClipRefusalReason(const ClipInfo& clip) noexcept
+	ClipRefusal
+	ClipRefusalOf(const ClipInfo& clip) noexcept
 	{
-		if (clip.frameCount < 2)
-			return "has a single frame, so it has no cycle for a blend space to share";
-
-		return {};
+		return clip.frameCount < 2 ? ClipRefusal::kSingleFrame : ClipRefusal::kNone;
 	}
 
 	SpeedThresholds
@@ -216,7 +213,7 @@ namespace editor
 			});
 
 			if (clip == clips.end())
-				return { {}, "'" + sample.clip + "' is not a clip of this set" };
+				return { {}, { SpeedRefusal::Kind::kUnknownClip, { sample.clip } } };
 
 			sample.parameter = clip->locomotionSpeed;
 		}
@@ -228,10 +225,7 @@ namespace editor
 			if (taken[i].parameter > taken[i - 1].parameter)
 				continue;
 
-			return { {},
-				     "'" + taken[i - 1].clip + "' and '" + taken[i].clip +
-				         "' were animated at the same speed, so there is no run of increasing "
-				         "thresholds to take from them" };
+			return { {}, { SpeedRefusal::Kind::kSameSpeed, { taken[i - 1].clip, taken[i].clip } } };
 		}
 
 		return { std::move(taken), {} };

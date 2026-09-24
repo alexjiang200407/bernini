@@ -214,9 +214,9 @@ TEST_CASE("A live environment is held by the cache lit from it", "[thumbnails][r
 
 TEST_CASE("The plugin host owns headless viewport rendering", "[plugins][viewport][render]")
 {
-	Fixture                     fixture;
-	assetlib::AssetStore        store(c_DataRoot);
-	editor::plugins::EditorHost host(store, {}, &*fixture.renderer, &*fixture.assets, true, {});
+	Fixture                           fixture;
+	assetlib::AssetStore              store(c_DataRoot);
+	editor::plugins::EditorHost       host(store, &*fixture.renderer, &*fixture.assets, true, {});
 	QPointer<editor::IEditorViewport> observed;
 	{
 		QWidget root;

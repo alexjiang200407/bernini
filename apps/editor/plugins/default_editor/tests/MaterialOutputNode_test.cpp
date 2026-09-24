@@ -15,6 +15,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <memory>
 #include <qcontainerfwd.h>
 #include <qlayoutitem.h>
@@ -23,6 +24,8 @@
 namespace
 {
 	using QtNodes::PortType;
+
+	const editor::LanguageResolver c_Language;
 
 	/** Canonical channel indices, in the order MaterialOutputNode::Route takes them. */
 	enum Channel : unsigned int
@@ -72,7 +75,7 @@ namespace
 
 TEST_CASE("A material output starts with one port per group", "[materialoutput]")
 {
-	const MaterialOutputNode node;
+	const MaterialOutputNode node(c_Language);
 
 	// A group of more than one channel shows one wide port until it is split, so three groups are
 	// three ports -- not the nine channels behind them -- and the geometry occlusion port follows them.
@@ -108,7 +111,7 @@ TEST_CASE("A material output starts with one port per group", "[materialoutput]"
 
 TEST_CASE("A material output is the sink", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	// Everything flows into it and nothing out.
 	REQUIRE(node.nPorts(PortType::Out) == 0u);
@@ -117,7 +120,7 @@ TEST_CASE("A material output is the sink", "[materialoutput]")
 
 TEST_CASE("A bundle wired into a group routes every channel of it", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	node.setInData(Bundle("Textures/albedo.ktx2", 3), kBaseColorPort);
 	node.setInData(Bundle("Textures/orm.ktx2", 3), kOrmPort);
@@ -140,7 +143,7 @@ TEST_CASE("A bundle wired into a group routes every channel of it", "[materialou
 
 TEST_CASE("An opaque base colour never routes alpha", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	// Even given a full RGBA bundle, an opaque material has nowhere to put the alpha: it exposes
 	// three base-colour channels, so the fourth is not a channel it has.
@@ -152,7 +155,7 @@ TEST_CASE("An opaque base colour never routes alpha", "[materialoutput]")
 
 TEST_CASE("Unwiring a port clears its routes", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	node.setInData(Bundle("Textures/albedo.ktx2", 3), kBaseColorPort);
 	REQUIRE(!node.Route(kBaseR).path.isEmpty());
@@ -166,7 +169,7 @@ TEST_CASE("Unwiring a port clears its routes", "[materialoutput]")
 
 TEST_CASE("Routing past the last channel gives nothing", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	node.setInData(Bundle("Textures/albedo.ktx2", 3), kBaseColorPort);
 
@@ -176,7 +179,7 @@ TEST_CASE("Routing past the last channel gives nothing", "[materialoutput]")
 
 TEST_CASE("Wiring a port announces a change", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 	QSignalSpy         changed(&node, &MaterialOutputNode::Changed);
 
 	node.setInData(Bundle("Textures/albedo.ktx2", 3), kBaseColorPort);
@@ -190,7 +193,7 @@ TEST_CASE("Wiring a port announces a change", "[materialoutput]")
 
 TEST_CASE("Splitting a group gives it a port per channel", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	SECTION("base colour splits into three, and the rest stay collapsed")
 	{
@@ -231,7 +234,7 @@ TEST_CASE("Splitting a group gives it a port per channel", "[materialoutput]")
 
 TEST_CASE("A scalar wired into a split port routes only that channel", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	node.load(State(false, true, false));
 
@@ -249,7 +252,7 @@ TEST_CASE("A scalar wired into a split port routes only that channel", "[materia
 
 TEST_CASE("A material output has sensible default factors", "[materialoutput]")
 {
-	const MaterialOutputNode node;
+	const MaterialOutputNode node(c_Language);
 
 	// Base colour white and metallic 1.0 follow glTF (a factor multiplies its texture, so 1.0 is
 	// "use it as authored"); roughness defaults glossy rather than fully matte, so a fresh material
@@ -263,7 +266,7 @@ TEST_CASE("A material output has sensible default factors", "[materialoutput]")
 
 TEST_CASE("A material output names its factors as factors", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	auto* form = node.embeddedWidget()->findChild<QFormLayout*>();
 	REQUIRE(form != nullptr);
@@ -286,7 +289,7 @@ TEST_CASE("A material output names its factors as factors", "[materialoutput]")
 
 TEST_CASE("A material output round-trips its factors and its splits", "[materialoutput]")
 {
-	MaterialOutputNode saved;
+	MaterialOutputNode saved(c_Language);
 
 	QJsonObject authored   = State(true, false, true);
 	authored["baseColorR"] = 0.25;
@@ -297,7 +300,7 @@ TEST_CASE("A material output round-trips its factors and its splits", "[material
 	authored["roughness"]  = 0.875;
 	saved.load(authored);
 
-	MaterialOutputNode reloaded;
+	MaterialOutputNode reloaded(c_Language);
 	reloaded.load(saved.save());
 
 	REQUIRE(reloaded.BaseColorFactor() == glm::vec4(0.25f, 0.5f, 0.75f, 0.5f));
@@ -312,7 +315,7 @@ TEST_CASE("A material output round-trips its factors and its splits", "[material
 
 TEST_CASE("A missing factor loads as one", "[materialoutput]")
 {
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 	QSignalSpy         changed(&node, &MaterialOutputNode::Changed);
 
 	// A graph written before a factor existed still has to load, and an absent factor means "leave
@@ -329,7 +332,7 @@ TEST_CASE("A missing factor loads as one", "[materialoutput]")
 
 TEST_CASE("An alpha tested material output is a cutout", "[materialoutput]")
 {
-	const AlphaTestedMaterialOutputNode node;
+	const AlphaTestedMaterialOutputNode node(c_Language);
 
 	REQUIRE(node.IsAlphaTested());
 	REQUIRE(node.GetAlphaCutoff() == 0.5f);
@@ -342,7 +345,7 @@ TEST_CASE("An alpha tested material output is a cutout", "[materialoutput]")
 
 TEST_CASE("An alpha tested base colour routes alpha", "[materialoutput]")
 {
-	AlphaTestedMaterialOutputNode node;
+	AlphaTestedMaterialOutputNode node(c_Language);
 
 	node.setInData(Bundle("Textures/leaf.ktx2", 4), kBaseColorPort);
 
@@ -352,14 +355,14 @@ TEST_CASE("An alpha tested base colour routes alpha", "[materialoutput]")
 
 TEST_CASE("An alpha tested material output round-trips its cutoff", "[materialoutput]")
 {
-	AlphaTestedMaterialOutputNode saved;
+	AlphaTestedMaterialOutputNode saved(c_Language);
 
 	QJsonObject authored;
 	authored["alphaCutoff"] = 0.25;
 	saved.load(authored);
 	REQUIRE(saved.GetAlphaCutoff() == 0.25f);
 
-	AlphaTestedMaterialOutputNode reloaded;
+	AlphaTestedMaterialOutputNode reloaded(c_Language);
 	reloaded.load(saved.save());
 
 	REQUIRE(reloaded.GetAlphaCutoff() == 0.25f);
@@ -367,7 +370,7 @@ TEST_CASE("An alpha tested material output round-trips its cutoff", "[materialou
 
 TEST_CASE("A missing cutoff loads as the default", "[materialoutput]")
 {
-	AlphaTestedMaterialOutputNode node;
+	AlphaTestedMaterialOutputNode node(c_Language);
 
 	node.load(QJsonObject{});
 
@@ -400,9 +403,9 @@ TEST_CASE("Every material output offers Double Sided, opaque included", "[materi
 		CHECK_FALSE(node.GetDoubleSided());
 	};
 
-	MaterialOutputNode opaque;
+	MaterialOutputNode opaque(c_Language);
 	offersDoubleSided(opaque);
 
-	AlphaTestedMaterialOutputNode cutout;
+	AlphaTestedMaterialOutputNode cutout(c_Language);
 	offersDoubleSided(cutout);
 }

@@ -1,5 +1,6 @@
 #include "Plugins/plugin_loader.h"
 #include "Plugins/EditorRegistry.h"
+#include "util/editor_language.h"
 #include <plugin_build_config.h>
 
 #include <QCoreApplication>
@@ -11,8 +12,8 @@
 #include <algorithm>
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/IAssetPlugin.h>
-#include <core/err/util.h>
 #include <core/platform/util.h>
+#include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/PluginDescriptor.h>
@@ -87,15 +88,19 @@ namespace editor::plugins
 			const std::filesystem::path file = directory / editor::c_PluginDescriptorFileName;
 			std::ifstream               stream(file);
 			if (!stream)
-				core::throw_runtime_error("Plugin descriptor is missing: {}", file.string());
+				throw editor::LocalizedError(
+					"editor.plugins.descriptor_missing",
+					{ file.string() },
+					"Plugin descriptor is missing: {0}");
 
 			try
 			{
 				const nlohmann::json json = nlohmann::json::parse(stream);
 				if (json.at("version").get<uint32_t>() != editor::c_PluginDescriptorVersion)
-					core::throw_runtime_error(
-						"Plugin descriptor version is unsupported: {}",
-						file.string());
+					throw editor::LocalizedError(
+						"editor.plugins.descriptor_version_unsupported",
+						{ file.string() },
+						"Plugin descriptor version is unsupported: {0}");
 
 				Descriptor descriptor;
 				descriptor.id            = json.at("id").get<std::string>();
@@ -111,27 +116,32 @@ namespace editor::plugins
 
 				if (!ValidPluginId(descriptor.id) ||
 				    (descriptor.runtime.empty() && descriptor.editor.empty()))
-					core::throw_runtime_error("Plugin descriptor is incomplete: {}", file.string());
+					throw editor::LocalizedError(
+						"editor.plugins.descriptor_incomplete",
+						{ file.string() },
+						"Plugin descriptor is incomplete: {0}");
 
 				for (const std::filesystem::path& path : descriptor.dependencies)
 					if (!IsContainedRelativePath(path))
-						core::throw_runtime_error(
-							"Plugin dependency path escapes its directory: {}",
-							path.string());
+						throw editor::LocalizedError(
+							"editor.plugins.dependency_path_escapes",
+							{ path.string() },
+							"Plugin dependency path escapes its directory: {0}");
 				for (const std::filesystem::path& path : { descriptor.runtime, descriptor.editor })
 					if (!path.empty() && !IsContainedRelativePath(path))
-						core::throw_runtime_error(
-							"Plugin module path escapes its directory: {}",
-							path.string());
+						throw editor::LocalizedError(
+							"editor.plugins.module_path_escapes",
+							{ path.string() },
+							"Plugin module path escapes its directory: {0}");
 
 				return descriptor;
 			}
 			catch (const nlohmann::json::exception& error)
 			{
-				core::throw_runtime_error(
-					"Malformed plugin descriptor {}: {}",
-					file.string(),
-					error.what());
+				throw editor::LocalizedError(
+					"editor.plugins.descriptor_malformed",
+					{ file.string(), error.what() },
+					"Malformed plugin descriptor {0}: {1}");
 			}
 		}
 
@@ -150,36 +160,38 @@ namespace editor::plugins
 		ValidateDescriptor(const Descriptor& descriptor, const BuildIdentity& build)
 		{
 			if (descriptor.engineBuildId != build.id)
-				core::throw_runtime_error(
-					"Plugin {} was built for engine {}, not {}",
-					descriptor.id,
-					descriptor.engineBuildId,
-					build.id);
+				throw editor::LocalizedError(
+					"editor.plugins.wrong_engine",
+					{ descriptor.id, descriptor.engineBuildId, build.id },
+					"Plugin {0} was built for engine {1}, not {2}");
 			if (descriptor.configuration != build.configuration)
-				core::throw_runtime_error(
-					"Plugin {} was built as {}, not {}",
-					descriptor.id,
-					descriptor.configuration,
-					build.configuration);
+				throw editor::LocalizedError(
+					"editor.plugins.wrong_configuration",
+					{ descriptor.id, descriptor.configuration, build.configuration },
+					"Plugin {0} was built as {1}, not {2}");
 
 			std::error_code ec;
 			const auto      engineWrite = std::filesystem::last_write_time(build.sdkStamp, ec);
 			if (ec)
-				core::throw_runtime_error(
-					"Editor SDK stamp is missing: {}",
-					build.sdkStamp.string());
+				throw editor::LocalizedError(
+					"editor.plugins.sdk_stamp_missing",
+					{ build.sdkStamp.string() },
+					"Editor SDK stamp is missing: {0}");
 
 			for (const std::filesystem::path& relative : FilesOf(descriptor))
 			{
 				const std::filesystem::path file = descriptor.directory / relative;
 				if (!std::filesystem::is_regular_file(file, ec) || ec)
-					core::throw_runtime_error("Plugin dependency is missing: {}", file.string());
+					throw editor::LocalizedError(
+						"editor.plugins.dependency_missing",
+						{ file.string() },
+						"Plugin dependency is missing: {0}");
 				const auto pluginWrite = std::filesystem::last_write_time(file, ec);
 				if (ec || pluginWrite < engineWrite)
-					core::throw_runtime_error(
-						"Plugin {} is older than this editor SDK: {}",
-						descriptor.id,
-						file.string());
+					throw editor::LocalizedError(
+						"editor.plugins.plugin_older_than_sdk",
+						{ descriptor.id, file.string() },
+						"Plugin {0} is older than this editor SDK: {1}");
 			}
 		}
 
@@ -212,9 +224,10 @@ namespace editor::plugins
 			std::filesystem::remove_all(prepared.directory, ec);
 			std::filesystem::create_directories(prepared.directory, ec);
 			if (ec)
-				core::throw_runtime_error(
-					"Cannot create plugin copy directory: {}",
-					prepared.directory.string());
+				throw editor::LocalizedError(
+					"editor.plugins.cannot_create_copy_directory",
+					{ prepared.directory.string() },
+					"Cannot create plugin copy directory: {0}");
 
 			for (const std::filesystem::path& relative : FilesOf(descriptor))
 			{
@@ -226,7 +239,10 @@ namespace editor::plugins
 					std::filesystem::copy_options::overwrite_existing,
 					ec);
 				if (ec)
-					core::throw_runtime_error("Cannot copy plugin file: {}", destination.string());
+					throw editor::LocalizedError(
+						"editor.plugins.cannot_copy_file",
+						{ destination.string() },
+						"Cannot copy plugin file: {0}");
 			}
 			return prepared;
 		}
@@ -237,6 +253,7 @@ namespace editor::plugins
 		std::vector<std::unique_ptr<QLibrary>>       modules;
 		std::vector<assetlib::AssetPluginPtr>        assetPlugins;
 		std::vector<editor::EditorPluginPtr>         editorPlugins;
+		std::vector<std::filesystem::path>           editorLocalization;
 		EditorRegistry                               contributions;
 		std::shared_ptr<assetlib::AssetKindRegistry> kinds =
 			std::make_shared<assetlib::AssetKindRegistry>();
@@ -324,7 +341,10 @@ namespace editor::plugins
 	{
 		std::ifstream stream(configPath);
 		if (!stream)
-			core::throw_runtime_error("Cannot open editor config: {}", configPath.string());
+			throw editor::LocalizedError(
+				"editor.plugins.cannot_open_config",
+				{ configPath.string() },
+				"Cannot open editor config: {0}");
 		try
 		{
 			const nlohmann::json               json = nlohmann::json::parse(stream);
@@ -338,7 +358,10 @@ namespace editor::plugins
 		}
 		catch (const nlohmann::json::exception& error)
 		{
-			core::throw_runtime_error("Malformed editor config: {}", error.what());
+			throw editor::LocalizedError(
+				"editor.plugins.malformed_config",
+				{ error.what() },
+				"Malformed editor config: {0}");
 		}
 	}
 
@@ -355,10 +378,10 @@ namespace editor::plugins
 		{
 			Descriptor descriptor = ReadDescriptor(directory);
 			if (!seen.emplace(descriptor.id).second)
-				core::throw_runtime_error(
-					"Plugin {} is in more than one directory: {}",
-					descriptor.id,
-					directory.string());
+				throw editor::LocalizedError(
+					"editor.plugins.duplicate_directory",
+					{ descriptor.id, directory.string() },
+					"Plugin {0} is in more than one directory: {1}");
 			ValidateDescriptor(descriptor, build);
 			selected.push_back(std::move(descriptor));
 		}
@@ -374,10 +397,10 @@ namespace editor::plugins
 			auto module = std::make_unique<QLibrary>(QString::fromStdWString(normalized.wstring()));
 			module->setLoadHints(QLibrary::ResolveAllSymbolsHint | QLibrary::PreventUnloadHint);
 			if (!module->load())
-				core::throw_runtime_error(
-					"Cannot load plugin module {}: {}",
-					normalized.string(),
-					module->errorString().toStdString());
+				throw editor::LocalizedError(
+					"editor.plugins.cannot_load_module",
+					{ normalized.string(), module->errorString().toStdString() },
+					"Cannot load plugin module {0}: {1}");
 			QLibrary* result = module.get();
 			session.m_Impl->modules.push_back(std::move(module));
 			loadedModules.emplace(normalized, result);
@@ -398,14 +421,16 @@ namespace editor::plugins
 				const auto create = reinterpret_cast<assetlib::CreateAssetPlugin>(
 					module.resolve(assetlib::c_AssetPluginEntryPoint.data()));
 				if (create == nullptr)
-					core::throw_runtime_error(
-						"Runtime plugin entry point is missing: {}",
-						descriptor.id);
+					throw editor::LocalizedError(
+						"editor.plugins.runtime_entry_point_missing",
+						{ descriptor.id },
+						"Runtime plugin entry point is missing: {0}");
 				assetlib::AssetPluginPtr plugin(create());
 				if (plugin == nullptr)
-					core::throw_runtime_error(
-						"Runtime plugin factory returned null: {}",
-						descriptor.id);
+					throw editor::LocalizedError(
+						"editor.plugins.runtime_factory_null",
+						{ descriptor.id },
+						"Runtime plugin factory returned null: {0}");
 
 				assetlib::AssetKindRegistry staged;
 				plugin->RegisterKinds(staged);
@@ -420,15 +445,18 @@ namespace editor::plugins
 				const auto create = reinterpret_cast<editor::CreateEditorPlugin>(
 					module.resolve(editor::c_EditorPluginEntryPoint.data()));
 				if (create == nullptr)
-					core::throw_runtime_error(
-						"Editor plugin entry point is missing: {}",
-						descriptor.id);
+					throw editor::LocalizedError(
+						"editor.plugins.editor_entry_point_missing",
+						{ descriptor.id },
+						"Editor plugin entry point is missing: {0}");
 				editor::EditorPluginPtr plugin(create());
 				if (plugin == nullptr)
-					core::throw_runtime_error(
-						"Editor plugin factory returned null: {}",
-						descriptor.id);
+					throw editor::LocalizedError(
+						"editor.plugins.editor_factory_null",
+						{ descriptor.id },
+						"Editor plugin factory returned null: {0}");
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
+				session.m_Impl->editorLocalization.push_back(original.directory / "localization");
 				loaded.editorModule = descriptor.directory / descriptor.editor;
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
@@ -439,21 +467,32 @@ namespace editor::plugins
 	}
 
 	void
-	PluginSession::RegisterEditorPlugins(EditorPluginPtr builtIn)
+	PluginSession::RegisterEditorPlugins(
+		EditorPluginPtr              builtIn,
+		const std::filesystem::path& builtInLocalization)
 	{
 		Q_ASSERT(!m_Impl->editorRegistered);
 		m_Impl->editorRegistered = true;
 		if (builtIn)
 		{
 			m_Impl->editorPlugins.insert(m_Impl->editorPlugins.begin(), std::move(builtIn));
+			m_Impl->editorLocalization.insert(
+				m_Impl->editorLocalization.begin(),
+				builtInLocalization);
 			m_Impl->plugins.insert(
 				m_Impl->plugins.begin(),
 				{ std::string(c_BuiltInPluginId),
-			      "Bernini Editors",
-			      "The Material, Animation and Blend Space editors built into this editor." });
+			      editor::Localize("editor.plugins.builtin_plugin_name", "Bernini Editors")
+			          .toStdString(),
+			      editor::Localize(
+					  "editor.plugins.builtin_plugin_description",
+					  "The Material, Animation and Blend Space editors built into this editor.")
+			          .toStdString() });
 		}
-		for (const EditorPluginPtr& plugin : m_Impl->editorPlugins)
-			m_Impl->contributions.Register(*plugin);
+		for (std::size_t i = 0; i < m_Impl->editorPlugins.size(); ++i)
+			m_Impl->contributions.Register(
+				*m_Impl->editorPlugins[i],
+				ReadLocalizationDirectory(m_Impl->editorLocalization[i]));
 	}
 
 	assetlib::Project
@@ -465,13 +504,11 @@ namespace editor::plugins
 		{
 			std::string ids;
 			for (const std::string& id : missing) ids += (ids.empty() ? "" : ", ") + id;
-			core::throw_runtime_error(
-				"{} requires plugins this editor did not load: {}. Put each one in {}/<id>/ or "
-				"name "
-				"its directory in pluginDirectories in config.json, then restart.",
-				projectFile.stem().string(),
-				ids,
-				DefaultPluginRoot().string());
+			throw editor::LocalizedError(
+				"editor.plugins.missing_required_plugins",
+				{ projectFile.stem().string(), ids, DefaultPluginRoot().string() },
+				"{0} requires plugins this editor did not load: {1}. Put each one in {2}/<id>/ "
+				"or name its directory in pluginDirectories in config.json, then restart.");
 		}
 		return assetlib::Project::Open(projectFile, session.KindRegistry());
 	}

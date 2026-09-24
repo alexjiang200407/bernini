@@ -7,6 +7,8 @@
 #include <glm/vec4.hpp>
 
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
 #include <memory>
 #include <qjsonobject.h>
 #include <qobject.h>
@@ -35,12 +37,16 @@ public:
 	// How many channels each group has in BMaterial::routes. Distinct from how many a node exposes.
 	static constexpr std::array<unsigned int, c_GroupCount> c_GroupChannels = { 4, 3, 2 };
 
-	MaterialOutputNode();
+	// `language` must outlive the node.
+	explicit MaterialOutputNode(const editor::ILanguageResolver& language);
 
 	QString
 	caption() const override
 	{
-		return QStringLiteral("Material Output");
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.material_output_caption",
+			"Material Output");
 	}
 
 	QString
@@ -197,12 +203,16 @@ public:
 		const override;
 
 protected:
-	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout.
-	explicit MaterialOutputNode(unsigned int baseColorArity);
+	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout. `language` must
+	// outlive the node.
+	MaterialOutputNode(const editor::ILanguageResolver& language, unsigned int baseColorArity);
 
 	// Rows appended to the embedded form, after the factors. Nothing by default.
 	virtual void
 	AddExtraRows(QWidget* parent, QFormLayout* form);
+
+	// Read by the PBR-family sinks' own caption() and AddExtraRows() overrides.
+	const editor::ILanguageResolver& m_Language;
 
 private:
 	// The window a modal dialog must be parented to; never the embedded widget. See the definition.

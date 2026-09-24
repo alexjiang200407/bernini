@@ -5,6 +5,7 @@
 #include <QStringList>
 
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <filesystem>
 #include <qcontainerfwd.h>
 
@@ -106,7 +107,7 @@ namespace editor
 	 * reports a clean run, and the writes happen on a timer nobody asked to be told about.
 	 */
 	[[nodiscard]] QString
-	MaterialSaveSummary(const MaterialSaveResult& result);
+	MaterialSaveSummary(const ILanguageResolver& language, const MaterialSaveResult& result);
 
 	/**
 	 * Derives a tangent for every submesh of the `.bmesh` at `meshPath` that has none, and rewrites
@@ -117,6 +118,7 @@ namespace editor
 	 */
 	[[nodiscard]] bool
 	GenerateTangents(
+		const ILanguageResolver&     language,
 		QWidget*                     parent,
 		const assetlib::AssetStore&  store,
 		const std::filesystem::path& meshPath);

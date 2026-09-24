@@ -1,5 +1,6 @@
 #include "util/window_title.h"
 
+#include "util/editor_language.h"
 #include <QStringList>
 #include <qobject.h>
 #include <qstringliteral.h>
@@ -16,7 +17,7 @@ namespace editor
 		if (const QString instance = instanceName.trimmed(); !instance.isEmpty())
 			parts << instance;
 
-		parts << QStringLiteral("Bernini Editor");
+		parts << Localize("editor.util.window_title", "Bernini Editor");
 
 		if (const QString project = projectName.trimmed(); !project.isEmpty())
 			parts << project;

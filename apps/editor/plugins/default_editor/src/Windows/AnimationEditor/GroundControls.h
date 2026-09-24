@@ -3,6 +3,11 @@
 #include <QGroupBox>
 #include <qtmetamacros.h>
 
+namespace editor
+{
+	class ILanguageResolver;
+}
+
 class AnimationPreviewWindow;
 class QCheckBox;
 class QLabel;
@@ -27,8 +32,15 @@ class GroundControls : public QGroupBox
 	Q_OBJECT
 
 public:
-	/** `preview` must outlive the group; it is what every control writes to. */
-	GroundControls(AnimationPreviewWindow* preview, QWidget* parent);
+	/**
+	 * `preview` must outlive the group; it is what every control writes to. `resolver` is the
+	 * host's, borrowed for this group's lifetime -- the group has no host of its own to fetch it
+	 * from.
+	 */
+	GroundControls(
+		AnimationPreviewWindow*          preview,
+		const editor::ILanguageResolver& resolver,
+		QWidget*                         parent);
 
 	/**
 	 * Pushes the switch into the preview and shows or hides the sliders it governs.
@@ -41,7 +53,8 @@ public:
 	Apply();
 
 private:
-	AnimationPreviewWindow* m_Preview = nullptr;
+	AnimationPreviewWindow*          m_Preview = nullptr;
+	const editor::ILanguageResolver& m_Resolver;
 
 	// The four sliders sit in one body so the group collapses as a unit; hiding them one by one
 	// would leave the box's own height behind and whatever sits under it would not move up.

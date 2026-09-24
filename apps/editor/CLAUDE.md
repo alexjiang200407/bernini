@@ -72,7 +72,8 @@ open the project's own assets.
 `config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
 `startupProject` names the project to open on launch (read by `main`, never by `MainWindow`),
 `instanceName` names *this* editor, `headless` builds every viewport offscreen, `pluginDirectories`
-names plugin directories beyond the `plugins/` beside the executable, and `memoryReport` (default
+names plugin directories beyond the `plugins/` beside the executable, `locale` (default `en`) picks
+the column of every translation CSV the editor shows, and `memoryReport` (default
 true) decides whether the run's memory
 table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
 § Memory. `MainWindow::Build` reads it for everything but those two: the report is armed in `main`
@@ -212,6 +213,16 @@ lives beside it, and the split is by responsibility rather than by line count:
   takes a bare `QMainWindow`, so the menu bar is pinned by `[menu]` cases that create no `Renderer`,
   while everything reached through `MainWindow` itself is `[render]`.
 
+## Text
+
+Every string a user reads goes through the one editor-wide resolver:
+`editor::Localize("editor.<area>.key", { args }, "English {0}")` from `util/editor_language.h`, with
+the row in `localization/editor.<area>.csv`. The plugin half cannot reach that overload -- it calls
+`editor::Localize(m_Host.GetLanguageResolver(), "context.key", ...)` from `<editor_plugin_api/localize.h>`.
+An error the host throws for a user to read is an `editor::LocalizedError`: its `what()` is the
+English a log line takes, and `editor::ShownText(e)` is what a dialog shows.
+See [docs/editor_plugins.md](../../docs/editor_plugins.md) § CSV authoring for the gate.
+
 ## Rules
 
 - Qt is editor only don't link to other targets
@@ -337,3 +348,4 @@ call, and it drives the screen from inside the loop. Two rules there:
   worker runs, so a worker that waits forever hangs the suite rather than failing one test.
 - A worker must never pump the event loop (`WaitFor`) — it is not on the UI thread. Block
   on an atomic instead.
+

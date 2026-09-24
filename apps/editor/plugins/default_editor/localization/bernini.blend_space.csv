@@ -1,0 +1,60 @@
+key,en
+add_sample_button,Add
+add_sample_title,Add Sample
+add_space_button,New
+add_space_no_clips_tooltip,"A new space is seeded from the clip set, which is read from the mesh this set is shown on -- and there is none."
+add_space_too_few_clips_tooltip,A blend space needs two clips of more than one frame; this set has fewer.
+at_parameter,At {0:.2f}
+clip_set_prompt,Clip set
+clip_single_frame,"'{0}' has a single frame, so it has no cycle for a blend space to share."
+close_button,Close
+commit_failed_title,Blend Set
+cursor_parameter_label,Parameter {0:.2f}
+drop_prompt,"Drop a blend set (.bblend) here, or start a new one"
+dropped_outside_project,'{0}' is outside the project's Data directory.
+mesh_selector_tooltip,Every mesh skinned to the rig this set's clip set was resampled against. Which one is shown is not saved.
+name_label,Name
+new_blend_set_button,New Blend Set...
+new_blend_set_title,New Blend Set
+new_blend_space_title,New Blend Space
+new_button,New...
+new_button_tooltip,Start a blend set on another clip set.
+no_clip_sets_available,"Every clip set in this project already has a blend set, or there is none yet. Import a rig with clips to start one."
+no_mesh_loaded,The mesh this set is shown on could not be loaded.
+no_mesh_to_show,"Nothing is skinned to the rig '{0}' was resampled against, so there is no mesh to show this set on.
+
+Its spaces still edit. Import a mesh on that rig to watch them."
+no_room_for_sample,There is no room past the last sample for another threshold.
+no_spaces_yet,This set holds no blend spaces yet.
+open_blend_set_title,Open Blend Set
+parameter_range,Parameter {0:.2f} to {1:.2f}
+preview_mesh_label,Preview Mesh
+remove_sample_button,Remove
+remove_space_button,Delete
+rename_blend_space_title,Rename Blend Space
+rename_space_button,Rename
+replace_clip_title,Replace Clip
+replace_sample_button,Replace
+replace_sample_tooltip,"Point the selected sample at this clip, keeping its threshold."
+sample_item,{0}    {1:.2f}
+scan_clip_sets_failed,"The project cannot be scanned for clip sets:
+
+{0}"
+scan_mesh_failed,"The project cannot be scanned for a mesh to show this set on:
+
+{0}"
+set_read_failed,"'{0}' cannot be read:
+
+{1}"
+space_name_invalid,A space needs a name of its own; '{0}' is empty or already taken.
+space_selector_placeholder,no spaces
+speed_same_speed,"'{0}' and '{1}' were animated at the same speed, so there is no run of increasing thresholds to take from them."
+speed_suffix,x
+speed_unknown_clip,'{0}' is not a clip of this set.
+threshold_label,Threshold
+thresholds_from_speed_button,Thresholds from speed
+thresholds_from_speed_tooltip,Take every threshold from the speed its clip was animated at.
+title,Blend Space Editor
+unknown_clip,<clip {0}>
+weight_single_clip,{0}  100%
+weight_two_clips,{0}  {1:.0f}%     {2}  {3:.0f}%
