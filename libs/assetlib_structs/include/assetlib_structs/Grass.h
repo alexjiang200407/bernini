@@ -1,7 +1,6 @@
 #pragma once
 #include <core/glm.h>
 #include <cstdint>
-#include <vector>
 
 namespace assetlib
 {
@@ -45,7 +44,7 @@ namespace assetlib
 	{
 		glm::vec3 boundingCenter;
 		float     boundingRadius;
-		uint32_t  firstClump;  // into GrassPools::clumps
+		uint32_t  firstClump;  // into BGrassFields::clumps
 		uint32_t  clumpCount;
 		float     maxHeightScale;
 	};
@@ -53,29 +52,16 @@ namespace assetlib
 	static_assert(sizeof(GrassChunk) == 28);
 
 	/**
-	 * One POINTS primitive: a field of clumps belonging to mesh `mesh`, bound through
-	 * `BMesh::materials[material]` to the grass document that gives it a look -- the same slot a
-	 * triangle primitive names its `.bmaterial` by.
+	 * One POINTS primitive of a mesh source: a field of clumps growing on mesh `mesh`, drawn with
+	 * the grass document `BGrassFields::looks[look]` names.
 	 */
 	struct GrassField
 	{
-		uint32_t mesh;        // into BMesh::meshes
-		uint32_t material;    // into BMesh::materials
-		uint32_t firstChunk;  // into GrassPools::chunks
+		uint32_t mesh;        // into the BMesh's meshes, cooked from the same source
+		uint32_t look;        // into BGrassFields::looks
+		uint32_t firstChunk;  // into BGrassFields::chunks
 		uint32_t chunkCount;
-		uint32_t nameOffset;  // into BMesh::stringPool
 	};
 
-	static_assert(sizeof(GrassField) == 20);
-
-	/**
-	 * Every grass field a mesh file holds, and the chunks and clumps they address: one field per
-	 * POINTS primitive, its chunks a run of `chunks`, each chunk's clumps a run of `clumps`.
-	 */
-	struct GrassPools
-	{
-		std::vector<GrassField> fields;
-		std::vector<GrassChunk> chunks;  // one bound per c_GrassClumpsPerChunk clumps
-		std::vector<GrassClump> clumps;
-	};
+	static_assert(sizeof(GrassField) == 16);
 }

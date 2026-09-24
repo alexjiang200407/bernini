@@ -4,6 +4,7 @@
 #include "util/util.h"
 #include <algorithm>
 #include <array>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Grass.h>
@@ -659,18 +660,18 @@ namespace bgl
 	namespace
 	{
 		/**
-		 * Copies mesh `meshIndex`'s grass fields out of the BMesh's pools. The ranges come from the
-		 * file, so each is checked against the pool it names before anything is read.
+		 * Copies the fields of `grass` growing on mesh `meshIndex` out of their pools. The ranges
+		 * come from a file, so each is checked against the pool it names before anything is read.
 		 */
 		void
 		CookGrassFields(
-			const assetlib::BMesh&                             mesh,
+			const assetlib::BGrassFields&                      grass,
 			const uint32_t                                     meshIndex,
 			std::vector<PreparedStaticMesh::Impl::GrassField>& out)
 		{
-			for (size_t f = 0; f < mesh.grass.fields.size(); ++f)
+			for (size_t f = 0; f < grass.fields.size(); ++f)
 			{
-				const assetlib::GrassField& src = mesh.grass.fields[f];
+				const assetlib::GrassField& src = grass.fields[f];
 				if (src.mesh != meshIndex)
 				{
 					continue;
@@ -693,44 +694,42 @@ namespace bgl
 							c_MaxGrassChunks));
 				}
 
-				if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount >
-				    mesh.grass.chunks.size())
+				if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount > grass.chunks.size())
 				{
 					throw SceneError(
 						std::format(
 							"CookStaticMesh: grass field {} claims {} chunks at offset {}, past "
 							"the "
-							"end of the mesh's {} of them",
+							"end of the {} there are",
 							f,
 							src.chunkCount,
 							src.firstChunk,
-							mesh.grass.chunks.size()));
+							grass.chunks.size()));
 				}
 
 				PreparedStaticMesh::Impl::GrassField& field = out.emplace_back();
-				field.slot                                  = src.material;
+				field.slot                                  = src.look;
 				field.chunks.reserve(src.chunkCount);
 
 				for (uint32_t c = 0; c < src.chunkCount; ++c)
 				{
-					assetlib::GrassChunk chunk = mesh.grass.chunks[src.firstChunk + c];
+					assetlib::GrassChunk chunk = grass.chunks[src.firstChunk + c];
 					if (chunk.clumpCount == 0 ||
 					    chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
 					    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
-					        mesh.grass.clumps.size())
+					        grass.clumps.size())
 					{
 						throw SceneError(
 							std::format(
 								"CookStaticMesh: grass field {} chunk {} holds no clumps, more "
-								"than "
-								"{}, or clumps past the end of the mesh's {}",
+								"than {}, or clumps past the end of the {} there are",
 								f,
 								c,
 								assetlib::c_GrassClumpsPerChunk,
-								mesh.grass.clumps.size()));
+								grass.clumps.size()));
 					}
 
-					const auto first = mesh.grass.clumps.begin() + chunk.firstClump;
+					const auto first = grass.clumps.begin() + chunk.firstClump;
 					chunk.firstClump = static_cast<uint32_t>(field.clumps.size());
 					field.clumps.insert(field.clumps.end(), first, first + chunk.clumpCount);
 					field.chunks.emplace_back(chunk);
@@ -904,10 +903,19 @@ namespace bgl
 			}
 		}
 
-		CookGrassFields(mesh, meshIndex, impl->grassFields);
-
 		auto prepared   = PreparedStaticMesh();
 		prepared.m_Impl = std::move(impl);
+		return prepared;
+	}
+
+	PreparedStaticMesh
+	CookStaticMesh(
+		const assetlib::BMesh&        mesh,
+		const uint32_t                meshIndex,
+		const assetlib::BGrassFields& fields)
+	{
+		PreparedStaticMesh prepared = CookStaticMesh(mesh, meshIndex);
+		CookGrassFields(fields, meshIndex, prepared.m_Impl->grassFields);
 		return prepared;
 	}
 
@@ -915,26 +923,36 @@ namespace bgl
 	Scene::AddStaticMeshGeom(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials,
-		std::span<const GrassHandle>    grass)
+		std::span<const MaterialHandle> materials)
 	{
-		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials, grass);
+		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
+	}
+
+	GeomHandle
+	Scene::AddStaticMeshGeom(
+		const assetlib::BMesh&          mesh,
+		const uint32_t                  meshIndex,
+		std::span<const MaterialHandle> materials,
+		const assetlib::BGrassFields&   fields,
+		std::span<const GrassHandle>    looks)
+	{
+		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex, fields), materials, looks);
 	}
 
 	GeomHandle
 	Scene::AddStaticMeshGeom(
 		PreparedStaticMesh              mesh,
 		std::span<const MaterialHandle> materials,
-		std::span<const GrassHandle>    grass)
+		std::span<const GrassHandle>    looks)
 	{
-		return AddPreparedMesh(std::move(mesh), materials, grass, std::nullopt);
+		return AddPreparedMesh(std::move(mesh), materials, looks, std::nullopt);
 	}
 
 	GeomHandle
 	Scene::AddPreparedMesh(
 		PreparedStaticMesh              mesh,
 		std::span<const MaterialHandle> materials,
-		std::span<const GrassHandle>    grass,
+		std::span<const GrassHandle>    looks,
 		const std::optional<glm::vec4>  sphereOverride)
 	{
 		try
@@ -949,7 +967,7 @@ namespace bgl
 			for (const PreparedStaticMesh::Impl::GrassField& field : mesh.m_Impl->grassFields)
 			{
 				const GrassHandle look =
-					field.slot < grass.size() ? grass[field.slot] : GrassHandle{};
+					field.slot < looks.size() ? looks[field.slot] : GrassHandle{};
 				if (!look.IsValid())
 				{
 					continue;

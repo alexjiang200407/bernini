@@ -17,6 +17,7 @@
 #include <RangeWithCount.h>
 #include <array>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -474,14 +475,21 @@ namespace bgl
 		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials) override;
+
+		GeomHandle
+		AddStaticMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    grass = {}) override;
+			const assetlib::BGrassFields&   fields,
+			std::span<const GrassHandle>    looks) override;
 
 		GeomHandle
 		AddStaticMeshGeom(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    grass = {}) override;
+			std::span<const GrassHandle>    looks = {}) override;
 
 		GrassHandle
 		CreateGrass(const GrassDesc& desc) override;
@@ -604,7 +612,7 @@ namespace bgl
 		AddPreparedMesh(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    grass,
+			std::span<const GrassHandle>    looks,
 			const std::optional<glm::vec4>  sphereOverride);
 
 		/**

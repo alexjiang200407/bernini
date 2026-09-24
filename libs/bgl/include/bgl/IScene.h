@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -88,45 +89,58 @@ namespace bgl
 		 * `materials[submesh.material]`; a submesh whose material index is out of range (e.g. the
 		 * source had none) is left unlit.
 		 *
-		 * Each of the mesh's grass fields is bound to `grass[field.material]`, and every instance
-		 * of the geom draws it. A field whose slot is out of range or holds a null handle is not
-		 * drawn. The geom holds a use of every look it binds; see DeleteGrass.
-		 *
 		 * @param mesh       A BMesh loaded from disk (see assetlib::load).
 		 * @param meshIndex  Index into `mesh.meshes`.
 		 * @param materials  Materials parallel to `mesh.materials`, resolved by the caller.
-		 * @param grass      Grass looks parallel to `mesh.materials`, resolved by the caller.
-		 * @throws SceneError if `meshIndex` is out of range, CookStaticMesh refuses the mesh, a
-		 *         non-null handle in `grass` names a deleted look, or a buffer allocation fails.
+		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddStaticMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials) = 0;
+
+		/**
+		 * The overload above, plus the grass that mesh grows: every field of `fields` on mesh
+		 * `meshIndex` is drawn with `looks[field.look]`, by every instance of the geom. A field
+		 * whose slot is out of range or holds a null handle is not drawn. The geom holds a use of
+		 * every look it binds; see DeleteGrass.
+		 *
+		 * @param fields  The BGrassFields cooked from the same source as `mesh`.
+		 * @param looks   Grass looks parallel to `fields.looks`, resolved by the caller.
+		 * @throws SceneError for anything the overload above refuses, anything CookStaticMesh
+		 *         refuses of `fields`, or a non-null handle in `looks` that names a deleted look.
 		 */
 		virtual GeomHandle
 		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    grass = {}) = 0;
+			const assetlib::BGrassFields&   fields,
+			std::span<const GrassHandle>    looks) = 0;
 
 		/**
 		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,
 		 * consuming it. Cook on a worker, commit here -- the flattening is the dominant cost of a
-		 * large mesh, and the overload above pays it on the calling thread.
+		 * large mesh, and the overloads above pay it on the calling thread.
 		 *
 		 * @param mesh       From CookStaticMesh. Consumed, even on failure.
 		 * @param materials  Materials parallel to the source BMesh's `materials`, resolved by the
 		 *                   caller; a submesh whose material index is out of range is left unlit.
-		 * @param grass      Grass looks parallel to the same slots, as the overload above.
-		 * @throws SceneError if `mesh` was already consumed, a non-null handle in `grass` names a
+		 * @param looks      Grass looks parallel to the cooked BGrassFields' `looks`, as the
+		 *                   overload above; empty for a mesh cooked without grass.
+		 * @throws SceneError if `mesh` was already consumed, a non-null handle in `looks` names a
 		 *         deleted look, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
 		AddStaticMeshGeom(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
-			std::span<const GrassHandle>    grass = {}) = 0;
+			std::span<const GrassHandle>    looks = {}) = 0;
 
 		/**
-		 * Creates a grass look: the blade shape, density, response to what bends it and lighting terms a static
-		 * geom's grass fields are drawn with. See GrassDesc.
+		 * Creates a grass look: the blade shape, density, response to what bends it and
+		 * lighting terms a static geom's grass fields are drawn with. See GrassDesc.
 		 *
 		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert) or in the
 		 *         kBlend layer; a length is not finite and positive where GrassDesc says so; a share

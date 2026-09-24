@@ -184,6 +184,7 @@ disagrees, trust the header, then fix this doc.
 | `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `DirectionalLightDesc` | [libs/bgl/include/bgl/types/DirectionalLightDesc.h](libs/bgl/include/bgl/types/DirectionalLightDesc.h) | The sun: the direction it **travels** (a midday sun is `(0, -1, 0)`), a colour, and an intensity in the irradiance map's units — so a sun and an environment at the same number light a facing surface equally. Casts no shadow. |
+| `BGrassFields`, `GrassField`, `GrassChunk`, `GrassClump` | [libs/assetlib_structs/include/assetlib_structs/BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h), [Grass.h](libs/assetlib_structs/include/assetlib_structs/Grass.h) | The grass a mesh source grows, cooked beside its `.bmesh`: fields (one per POINTS primitive, naming the mesh it grows on and a look slot), chunks of at most `c_GrassClumpsPerChunk` clumps with a bound each, and the clumps — a point, a height scale, a ground normal and a colour. |
 | `GrassDesc` | [libs/bgl/include/bgl/types/GrassDesc.h](libs/bgl/include/bgl/types/GrassDesc.h) | A grass look: the material its blades shade through (drawn opaque whatever its layer; `kBlend` refused), the blade's shape and segment counts, blades per clump, how the field thins between `fadeStart` and `fadeEnd`, how stiffly it answers what bends it (the wind), and the geometry lighting terms — root occlusion, normal rounding, a 0–1 blend toward the ground normal near and far, and a translucency term an engine-lit material receives. No placement: the clumps come with the geom it is bound to. |
 | `WindDesc` | [libs/bgl/include/bgl/types/WindDesc.h](libs/bgl/include/bgl/types/WindDesc.h) | A view's wind: a horizontal direction, a steady strength, and a gust field's size, speed and strength. Calm by default. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
@@ -392,14 +393,18 @@ flowchart TD
   alone (see [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha)). An
   update cannot change the surface, which is what the record's kind and size were fixed by. @throws
   `SceneError` for all of the above.
-* **`AddStaticMeshGeom(mesh, meshIndex, materials, grass = {})`** — `materials` is parallel to `mesh.materials`, and a
+* **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
-  baked-vs-loose branch that does it, so reach for it rather than rebuilding it. `grass` is parallel
-  to the same slots: a grass field (`BMesh::grass.fields`, one per glTF POINTS primitive) is bound to
-  the look in its slot, and every instance of the geom draws it. A field whose slot is out of range
-  or null is not drawn; a slot naming a deleted look throws. `CookStaticMesh` checks every grass
-  range against the pool it names before reading it, as it does the meshlet ranges.
+  baked-vs-loose branch that does it, so reach for it rather than rebuilding it.
+* **`AddStaticMeshGeom(mesh, meshIndex, materials, fields, looks)`** — the same, plus the grass the
+  mesh grows. `fields` is a `BGrassFields`, cooked beside the `.bmesh` from the same source (one
+  field per glTF POINTS primitive) rather than held in it, so a change to how grass is stored
+  re-cooks grass alone. Each field on mesh `meshIndex` is drawn with `looks[field.look]` by every
+  instance of the geom; `looks` is parallel to `fields.looks`. A field whose slot is out of range or
+  null is not drawn, and a slot naming a deleted look throws. `CookStaticMesh(mesh, meshIndex,
+  fields)` is the off-thread half, and checks every grass range against the pool it names before
+  reading it, as it does the meshlet ranges.
 * **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `DeleteGrass(grass)`** —
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
   the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges

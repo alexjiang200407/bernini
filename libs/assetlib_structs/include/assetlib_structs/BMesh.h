@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
@@ -36,11 +35,7 @@ namespace assetlib
 		std::vector<std::byte> indexData;   // all index buffers; unread by bgl, see Submesh
 		core::string_pool      stringPool;
 
-		// The documents submeshes and grass fields are bound to, by slot: a `.bmaterial` for a
-		// submesh, a `.bgrass` for a field.
 		std::vector<std::string> materials;
-
-		GrassPools grass;
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 

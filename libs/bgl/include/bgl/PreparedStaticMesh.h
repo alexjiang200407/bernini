@@ -6,6 +6,7 @@
 
 namespace assetlib
 {
+	struct BGrassFields;
 	struct BMesh;
 }
 
@@ -43,6 +44,12 @@ namespace bgl
 		friend BGL_API PreparedStaticMesh
 		CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);
 
+		friend BGL_API PreparedStaticMesh
+		CookStaticMesh(
+			const assetlib::BMesh&        mesh,
+			uint32_t                      meshIndex,
+			const assetlib::BGrassFields& fields);
+
 		std::unique_ptr<Impl> m_Impl;
 	};
 
@@ -55,11 +62,22 @@ namespace bgl
 	 * into AddStaticMeshGeom it rode the render thread.
 	 *
 	 * @throws SceneError if `meshIndex` is out of range, a submesh has no geometry or is larger than
-	 *         one draw can launch, a submesh's data lies outside the mesh's buffers, or one of the
-	 *         mesh's grass fields has no chunks, more chunks than one dispatch can launch, a chunk
-	 *         of no clumps or more than `assetlib::c_GrassClumpsPerChunk`, or a range outside its
-	 *         pool.
+	 *         one draw can launch, or a submesh's data lies outside the mesh's buffers.
 	 */
 	[[nodiscard]] BGL_API PreparedStaticMesh
 	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);
+
+	/**
+	 * The overload above, plus the fields of `fields` growing on mesh `meshIndex`, copied out of
+	 * their pools. The ranges come from a file, so each is checked before it is read.
+	 *
+	 * @throws SceneError for anything the overload above refuses, or a field on this mesh with no
+	 *         chunks or more than one dispatch can launch, a chunk of no clumps or more than
+	 *         `assetlib::c_GrassClumpsPerChunk`, or a range outside its pool.
+	 */
+	[[nodiscard]] BGL_API PreparedStaticMesh
+	CookStaticMesh(
+		const assetlib::BMesh&        mesh,
+		uint32_t                      meshIndex,
+		const assetlib::BGrassFields& fields);
 }

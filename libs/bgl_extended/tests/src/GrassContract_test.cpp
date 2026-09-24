@@ -1,6 +1,7 @@
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <array>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
@@ -45,12 +46,9 @@ namespace
 		return opts;
 	}
 
-	/**
-	 * One triangle in slot 0 and one grass field of `clumps` clumps in slot 1, chunked the way the
-	 * cook chunks: full runs of c_GrassClumpsPerChunk and a short last one.
-	 */
+	/** One mesh of one triangle, bound to material slot 0. */
 	assetlib::BMesh
-	MakeGrassMesh(const uint32_t clumps = 100)
+	MakeTriangleMesh()
 	{
 		constexpr uint16_t c_Stride = 12;
 
@@ -87,11 +85,24 @@ namespace
 		mesh.submeshes.emplace_back(submesh);
 
 		mesh.meshes.emplace_back(assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1 });
-		mesh.materials = { "Materials/ground.bmaterial", "Grass/verge.bgrass" };
+		mesh.materials = { "Materials/ground.bmaterial" };
+
+		return mesh;
+	}
+
+	/**
+	 * One field of `clumps` clumps growing on mesh 0, drawn with look slot 1 and chunked the way
+	 * the cook chunks: full runs of c_GrassClumpsPerChunk and a short last one.
+	 */
+	assetlib::BGrassFields
+	MakeGrass(const uint32_t clumps = 100)
+	{
+		auto grass  = assetlib::BGrassFields();
+		grass.looks = { "Grass/other.bgrass", "Grass/verge.bgrass" };
 
 		for (uint32_t c = 0; c < clumps; ++c)
 		{
-			mesh.grass.clumps.emplace_back(
+			grass.clumps.emplace_back(
 				assetlib::GrassClump{ .position    = glm::vec3(static_cast<float>(c) * 0.1f, 0, 0),
 			                          .heightScale = 1.0f,
 			                          .normal      = glm::vec3(0.0f, 1.0f, 0.0f),
@@ -99,12 +110,12 @@ namespace
 		}
 
 		auto field       = assetlib::GrassField();
-		field.material   = c_GrassSlot;
+		field.look       = c_GrassSlot;
 		field.firstChunk = 0;
 		for (uint32_t first = 0; first < clumps; first += assetlib::c_GrassClumpsPerChunk)
 		{
 			const uint32_t count = std::min(assetlib::c_GrassClumpsPerChunk, clumps - first);
-			mesh.grass.chunks.emplace_back(
+			grass.chunks.emplace_back(
 				assetlib::GrassChunk{ .boundingCenter = glm::vec3(0.0f),
 			                          .boundingRadius = 10.0f,
 			                          .firstClump     = first,
@@ -112,9 +123,9 @@ namespace
 			                          .maxHeightScale = 1.0f });
 			++field.chunkCount;
 		}
-		mesh.grass.fields.emplace_back(field);
+		grass.fields.emplace_back(field);
 
-		return mesh;
+		return grass;
 	}
 
 	bgl::GrassDesc
@@ -216,9 +227,12 @@ TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
 	const std::array<bgl::MaterialHandle, 2> materials = { ground, bgl::MaterialHandle() };
 	const std::array<bgl::GrassHandle, 2>    looks     = { bgl::GrassHandle(), grass };
 
-	const bgl::GeomHandle first = scene->AddStaticMeshGeom(MakeGrassMesh(), 0, materials, looks);
-	const bgl::GeomHandle second =
-		scene->AddStaticMeshGeom(bgl::CookStaticMesh(MakeGrassMesh(), 0), materials, looks);
+	const bgl::GeomHandle first =
+		scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials, MakeGrass(), looks);
+	const bgl::GeomHandle second = scene->AddStaticMeshGeom(
+		bgl::CookStaticMesh(MakeTriangleMesh(), 0, MakeGrass()),
+		materials,
+		looks);
 
 	CHECK_THROWS_AS(scene->DeleteGrass(grass), bgl::SceneError);
 	scene->DeleteGeom(first);
@@ -240,7 +254,8 @@ TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
 	SECTION("the grass span is shorter than the field's slot")
 	{
 		const std::array<bgl::GrassHandle, 1> looks = { grass };
-		const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeGrassMesh(), 0, materials, looks);
+		const bgl::GeomHandle                 geom =
+			scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials, MakeGrass(), looks);
 		CHECK_NOTHROW(scene->DeleteGrass(grass));
 		scene->DeleteGeom(geom);
 	}
@@ -248,14 +263,17 @@ TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
 	SECTION("the slot holds a null handle")
 	{
 		const std::array<bgl::GrassHandle, 2> looks = { grass, bgl::GrassHandle() };
-		const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeGrassMesh(), 0, materials, looks);
+		const bgl::GeomHandle                 geom =
+			scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials, MakeGrass(), looks);
 		CHECK_NOTHROW(scene->DeleteGrass(grass));
 		scene->DeleteGeom(geom);
 	}
 
-	SECTION("no grass span at all, as every caller before grass passes")
+	SECTION("the grass is cooked but no looks are passed")
 	{
-		const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeGrassMesh(), 0, materials);
+		const bgl::GeomHandle geom = scene->AddStaticMeshGeom(
+			bgl::CookStaticMesh(MakeTriangleMesh(), 0, MakeGrass()),
+			materials);
 		CHECK_NOTHROW(scene->DeleteGrass(grass));
 		scene->DeleteGeom(geom);
 	}
@@ -274,7 +292,7 @@ TEST_CASE("AddStaticMeshGeom refuses a deleted look", "[grass][contract]")
 	const std::array<bgl::MaterialHandle, 1> materials = { ground };
 	const std::array<bgl::GrassHandle, 2>    looks     = { bgl::GrassHandle(), grass };
 	CHECK_THROWS_AS(
-		scene->AddStaticMeshGeom(MakeGrassMesh(), 0, materials, looks),
+		scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials, MakeGrass(), looks),
 		bgl::SceneError);
 }
 
@@ -282,47 +300,47 @@ TEST_CASE("CookStaticMesh refuses grass ranges the file cannot back", "[grass][c
 {
 	SECTION("a well-formed field, and one belonging to another mesh, cook")
 	{
-		auto mesh = MakeGrassMesh();
-		CHECK_NOTHROW(bgl::CookStaticMesh(mesh, 0));
+		auto grass = MakeGrass();
+		CHECK_NOTHROW(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass));
 
-		mesh.grass.fields.front().mesh       = 1;
-		mesh.grass.fields.front().firstChunk = 1000;
-		CHECK_NOTHROW(bgl::CookStaticMesh(mesh, 0));
+		grass.fields.front().mesh       = 1;
+		grass.fields.front().firstChunk = 1000;
+		CHECK_NOTHROW(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass));
 	}
 
 	SECTION("a field with no chunks")
 	{
-		auto mesh                            = MakeGrassMesh();
-		mesh.grass.fields.front().chunkCount = 0;
-		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
+		auto grass                      = MakeGrass();
+		grass.fields.front().chunkCount = 0;
+		CHECK_THROWS_AS(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass), bgl::SceneError);
 	}
 
 	SECTION("chunks past the end of the pool")
 	{
-		auto mesh                            = MakeGrassMesh();
-		mesh.grass.fields.front().firstChunk = 1;
-		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
+		auto grass                      = MakeGrass();
+		grass.fields.front().firstChunk = 1;
+		CHECK_THROWS_AS(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass), bgl::SceneError);
 	}
 
 	SECTION("a chunk with no clumps")
 	{
-		auto mesh                           = MakeGrassMesh();
-		mesh.grass.chunks.back().clumpCount = 0;
-		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
+		auto grass                     = MakeGrass();
+		grass.chunks.back().clumpCount = 0;
+		CHECK_THROWS_AS(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass), bgl::SceneError);
 	}
 
 	SECTION("a chunk larger than the cook's chunk size")
 	{
-		auto mesh                            = MakeGrassMesh(2 * assetlib::c_GrassClumpsPerChunk);
-		mesh.grass.chunks.front().clumpCount = assetlib::c_GrassClumpsPerChunk + 1;
-		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
+		auto grass                      = MakeGrass(2 * assetlib::c_GrassClumpsPerChunk);
+		grass.chunks.front().clumpCount = assetlib::c_GrassClumpsPerChunk + 1;
+		CHECK_THROWS_AS(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass), bgl::SceneError);
 	}
 
 	SECTION("clumps past the end of the pool")
 	{
-		auto mesh = MakeGrassMesh();
-		mesh.grass.clumps.pop_back();
-		CHECK_THROWS_AS(bgl::CookStaticMesh(mesh, 0), bgl::SceneError);
+		auto grass = MakeGrass();
+		grass.clumps.pop_back();
+		CHECK_THROWS_AS(bgl::CookStaticMesh(MakeTriangleMesh(), 0, grass), bgl::SceneError);
 	}
 }
 
