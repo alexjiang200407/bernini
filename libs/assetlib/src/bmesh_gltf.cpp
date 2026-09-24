@@ -19,11 +19,13 @@
 #include <vector>
 
 #include "bmesh_texture.h"
+#include "grass_chunks.h"
 #include <assetlib/cancel.h>
 #include <assetlib/transform.h>
 #include <assetlib/vertex_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -50,6 +52,7 @@
 #include "gltf_util.h"
 
 #include <core/err/util.h>
+#include <core/math.h>
 #include <core/type_traits.h>
 
 #include <meshoptimizer.h>
@@ -877,6 +880,74 @@ namespace assetlib
 			return srgb;
 		}
 
+		/**
+		 * One POINTS primitive's clumps, in its mesh's space: POSITION, and the optional NORMAL,
+		 * COLOR_0 and `_HEIGHT` (a glTF custom attribute, so underscored) that default to up, white
+		 * and one. Empty for a primitive with no positions, which is skipped like a triangle one.
+		 *
+		 * Taken as authored: grass grows on a static mesh, so a rigid attachment's rebinding to a
+		 * bone does not apply to it.
+		 *
+		 * @throws std::runtime_error for a non-finite position or normal, a zero normal, or a
+		 *         height scale that is not finite and positive.
+		 */
+		std::vector<GrassClump>
+		readGrassClumps(const tinygltf::Model& model, const tinygltf::Primitive& primitive)
+		{
+			const AttributeView positions = makeView(model, primitive, "POSITION");
+			if (!positions.Present())
+				return {};
+
+			const auto   posIt    = primitive.attributes.find("POSITION");
+			const auto&  accessor = model.accessors[static_cast<size_t>(posIt->second)];
+			const size_t count    = accessor.count;
+
+			const AttributeView normals = makeView(model, primitive, "NORMAL");
+			const AttributeView colors  = makeView(model, primitive, "COLOR_0", true);
+			const AttributeView heights = makeView(model, primitive, "_HEIGHT");
+			if (heights.Present() && heights.components != 1)
+				throw std::runtime_error("bmesh: a POINTS primitive's _HEIGHT must be a scalar");
+
+			auto clumps = std::vector<GrassClump>();
+			clumps.reserve(count);
+			for (size_t i = 0; i < count; ++i)
+			{
+				auto clump     = GrassClump();
+				clump.position = positions.At<glm::vec3>(i);
+				if (!core::is_finite(clump.position))
+					throw std::runtime_error("bmesh: a POINTS primitive has a non-finite position");
+
+				clump.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+				if (normals.Present())
+				{
+					const glm::vec3 n      = normals.At<glm::vec3>(i);
+					const float     length = glm::length(n);
+					if (!core::is_finite(n) || !(length > 0.0f))
+						throw std::runtime_error(
+							"bmesh: a POINTS primitive has a zero or non-finite normal");
+					clump.normal = n / length;
+				}
+
+				clump.heightScale = heights.Present() ? heights.At<float>(i) : 1.0f;
+				if (!std::isfinite(clump.heightScale) || !(clump.heightScale > 0.0f))
+					throw std::runtime_error(
+						"bmesh: a POINTS primitive has a _HEIGHT that is not finite and positive");
+
+				clump.color = glm::u8vec4(255);
+				if (colors.Present())
+				{
+					for (int c = 0; c < colors.components && c < 4; ++c)
+					{
+						const float linear = std::clamp(colors.FloatAt(i, c), 0.0f, 1.0f);
+						clump.color[c]     = static_cast<uint8_t>(std::lround(linear * 255.0f));
+					}
+				}
+
+				clumps.emplace_back(clump);
+			}
+			return clumps;
+		}
+
 		// Fills imageToTexture so material parsing can map a glTF texture (-> image) to a
 		// BMeshImport::textures index; skipped/unsupported images stay c_InvalidIndex.
 		void
@@ -1536,18 +1607,34 @@ namespace assetlib
 			for (size_t p = 0; p < gltfMesh.primitives.size(); ++p)
 			{
 				const auto& primitive = gltfMesh.primitives[p];
+
+				std::string primitiveName = gltfMesh.name;
+				if (gltfMesh.primitives.size() > 1)
+					primitiveName += "[" + std::to_string(p) + "]";
+
+				if (primitive.mode == TINYGLTF_MODE_POINTS)
+				{
+					std::vector<GrassClump> clumps = readGrassClumps(model, primitive);
+					if (!clumps.empty())
+						appendGrassField(
+							mesh.grass,
+							std::move(clumps),
+							static_cast<uint32_t>(meshIndex),
+							std::move(primitiveName));
+					continue;
+				}
+
 				if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
-					throw std::runtime_error("bmesh: only triangle primitives are supported");
+					throw std::runtime_error(
+						"bmesh: only triangle primitives, and point primitives for grass, are "
+						"supported");
 
 				const size_t before = mesh.submeshes.size();
 				buildSubmesh(mesh, model, primitive, skin.jointToBone, attachments[meshIndex]);
 				if (mesh.submeshes.size() == before)
 					continue;  // primitive was skipped (e.g. no positions)
 
-				std::string submeshName = gltfMesh.name;
-				if (gltfMesh.primitives.size() > 1)
-					submeshName += "[" + std::to_string(p) + "]";
-				mesh.submeshes.back().nameOffset = mesh.stringPool.add(submeshName);
+				mesh.submeshes.back().nameOffset = mesh.stringPool.add(primitiveName);
 			}
 			entry.submeshCount = static_cast<uint32_t>(mesh.submeshes.size()) - entry.firstSubmesh;
 			mesh.meshes.push_back(entry);

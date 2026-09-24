@@ -14,7 +14,9 @@
 #include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
@@ -283,7 +285,8 @@ namespace assetlib
 	{
 		auto bySubmesh = std::unordered_map<std::string_view, std::string_view>();
 		for (const MaterialBinding& binding : bindings)
-			bySubmesh.emplace(binding.submesh, binding.material);
+			if (!isGrassBinding(binding))
+				bySubmesh.emplace(binding.submesh, binding.material);
 
 		mesh.materials.clear();
 		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
@@ -306,7 +309,56 @@ namespace assetlib
 
 		auto unbound = std::vector<std::string>();
 		for (const MaterialBinding& binding : bindings)
-			if (!matched.contains(binding.submesh))
+			if (!isGrassBinding(binding) && !matched.contains(binding.submesh))
+				unbound.emplace_back(binding.submesh);
+		return unbound;
+	}
+
+	bool
+	isGrassBinding(const MaterialBinding& binding) noexcept
+	{
+		return binding.material.ends_with(c_GrassExtension);
+	}
+
+	std::vector<std::string>
+	applyGrassBindings(BGrassFields& grass, std::span<const MaterialBinding> bindings)
+	{
+		auto byField = std::unordered_map<std::string_view, std::string_view>();
+		for (const MaterialBinding& binding : bindings)
+			if (isGrassBinding(binding))
+				byField.emplace(binding.submesh, binding.material);
+
+		auto seen = std::unordered_set<std::string_view>();
+		for (const std::string& name : grass.names)
+			core::throw_runtime_error_if(
+				!seen.insert(name).second,
+				"'{}' names two grass fields; the name is what a grass binding addresses, so name "
+				"the meshes in the DCC",
+				name);
+
+		grass.looks.clear();
+		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
+		auto matched = std::unordered_set<std::string_view>();
+		for (size_t f = 0; f < grass.fields.size(); ++f)
+		{
+			GrassField& field = grass.fields[f];
+			const auto  found = byField.find(grass.names[f]);
+			if (found == byField.end())
+			{
+				field.look = c_InvalidIndex;
+				continue;
+			}
+			const auto [slot, added] =
+				indexOf.emplace(found->second, static_cast<uint32_t>(grass.looks.size()));
+			if (added)
+				grass.looks.emplace_back(found->second);
+			field.look = slot->second;
+			matched.insert(found->first);
+		}
+
+		auto unbound = std::vector<std::string>();
+		for (const MaterialBinding& binding : bindings)
+			if (isGrassBinding(binding) && !matched.contains(binding.submesh))
 				unbound.emplace_back(binding.submesh);
 		return unbound;
 	}
