@@ -1,5 +1,6 @@
 #include "Plugins/plugin_loader.h"
 #include "Plugins/EditorRegistry.h"
+#include "util/editor_language.h"
 #include <plugin_build_config.h>
 
 #include <QCoreApplication>
@@ -13,6 +14,7 @@
 #include <assetlib/IAssetPlugin.h>
 #include <core/err/util.h>
 #include <core/platform/util.h>
+#include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/PluginDescriptor.h>
@@ -237,6 +239,7 @@ namespace editor::plugins
 		std::vector<std::unique_ptr<QLibrary>>       modules;
 		std::vector<assetlib::AssetPluginPtr>        assetPlugins;
 		std::vector<editor::EditorPluginPtr>         editorPlugins;
+		std::vector<std::filesystem::path>           editorLocalization;
 		EditorRegistry                               contributions;
 		std::shared_ptr<assetlib::AssetKindRegistry> kinds =
 			std::make_shared<assetlib::AssetKindRegistry>();
@@ -429,6 +432,7 @@ namespace editor::plugins
 						"Editor plugin factory returned null: {}",
 						descriptor.id);
 				session.m_Impl->editorPlugins.push_back(std::move(plugin));
+				session.m_Impl->editorLocalization.push_back(original.directory / "localization");
 				loaded.editorModule = descriptor.directory / descriptor.editor;
 			}
 			session.m_Impl->ids.push_back(descriptor.id);
@@ -439,21 +443,28 @@ namespace editor::plugins
 	}
 
 	void
-	PluginSession::RegisterEditorPlugins(EditorPluginPtr builtIn)
+	PluginSession::RegisterEditorPlugins(
+		EditorPluginPtr              builtIn,
+		const std::filesystem::path& builtInLocalization)
 	{
 		Q_ASSERT(!m_Impl->editorRegistered);
 		m_Impl->editorRegistered = true;
 		if (builtIn)
 		{
 			m_Impl->editorPlugins.insert(m_Impl->editorPlugins.begin(), std::move(builtIn));
+			m_Impl->editorLocalization.insert(
+				m_Impl->editorLocalization.begin(),
+				builtInLocalization);
 			m_Impl->plugins.insert(
 				m_Impl->plugins.begin(),
 				{ std::string(c_BuiltInPluginId),
 			      "Bernini Editors",
 			      "The Material, Animation and Blend Space editors built into this editor." });
 		}
-		for (const EditorPluginPtr& plugin : m_Impl->editorPlugins)
-			m_Impl->contributions.Register(*plugin);
+		for (std::size_t i = 0; i < m_Impl->editorPlugins.size(); ++i)
+			m_Impl->contributions.Register(
+				*m_Impl->editorPlugins[i],
+				ReadLocalizationDirectory(m_Impl->editorLocalization[i]));
 	}
 
 	assetlib::Project

@@ -19,8 +19,12 @@
 #include <editor_plugin_api/LanguageResolver.h>
 #include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
+#include <editor_plugin_api/translation_csv.h>
 #include <exception>
 #include <filesystem>
+#include <fstream>
+#include <ios>
+#include <iterator>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
@@ -374,8 +378,12 @@ TEST_CASE("Translated labels preserve menu routing and action identity", "[plugi
 	RecordingRegistry registry;
 	plugin->Register(registry);
 	RecordingHost host;
-	REQUIRE(registry.catalogs.size() == 1);
-	host.language.RegisterCatalog(registry.catalogs.front());
+	REQUIRE(registry.catalogs.empty());
+	std::ifstream csv(EDITOR_PLUGIN_SAMPLE_CSV, std::ios::binary);
+	REQUIRE(csv);
+	const std::string bytes{ std::istreambuf_iterator<char>(csv),
+		                     std::istreambuf_iterator<char>() };
+	host.language.RegisterCatalog(editor::ReadTranslationCsv("sample.editor", bytes));
 	const auto resolve = [&host](const editor::LocalizedText& text) {
 		return text.Resolve(host.GetLanguageResolver());
 	};

@@ -5,6 +5,8 @@ add_executable(editor_plugin_tests main.cpp contracts_test.cpp localization_test
 target_link_libraries(editor_plugin_tests PRIVATE
     editor_plugin_api editor_localization editor_plugin_example Catch2::Catch2 nlohmann_json::nlohmann_json)
 set_target_properties(editor_plugin_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF DISABLE_PRECOMPILE_HEADERS ON)
+target_compile_definitions(editor_plugin_tests PRIVATE
+    EDITOR_PLUGIN_SAMPLE_CSV="${BERNINI_ROOT}/examples/editor_plugin/localization/sample.editor.csv")
 add_dependencies(editor_plugin_tests editor_plugin_api_selfcheck assetlib_plugin_api_selfcheck editor_sdk_selfcheck)
 
 if(BERNINI_EDITOR_SDK)

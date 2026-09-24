@@ -20,6 +20,9 @@
 #include <editor_plugin_api/IEditorAction.h>
 #include <editor_plugin_api/IEditorPanelFactory.h>
 #include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/LanguageResolver.h>
+#include <editor_plugin_api/LocalizedText.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -129,11 +132,17 @@ TEST_CASE(
 	session.RegisterEditorPlugins();
 	const auto project =
 		assetlib::Project::Open(sandbox.root / "Sample.bproj", session.KindRegistry());
-	const auto&                 registry = session.Contributions();
-	std::string                 shown;
+	const auto&              registry = session.Contributions();
+	std::string              shown;
+	editor::LanguageResolver language;
+	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
+		language.RegisterCatalog(catalog);
+	const editor::LocalizedText title{ "sample.editor", "overview", "Project tools" };
+	language.SetLocale("zh_CN");
+	CHECK(title.Resolve(language) == QString::fromUtf8("项目工具"));
+	language.SetLocale("en");
 	editor::plugins::EditorHost host(
 		project.GetStore(),
-		registry.Catalogs(),
 		nullptr,
 		nullptr,
 		true,
