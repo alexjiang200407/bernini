@@ -17,6 +17,7 @@
 #include <QJsonObject>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <qobject.h>
 #include <qstringliteral.h>
@@ -26,6 +27,9 @@
 namespace
 {
 	using assetlib::PbrChannel;
+
+	// Outlives every registry MakeMaterialNodeRegistry returns, which holds it by reference.
+	const editor::LanguageResolver c_Language;
 
 	// Where an import puts things: the maps under Derived/SourceTextures/<model>/, the material in
 	// Authored/Materials/.
@@ -56,7 +60,7 @@ namespace
 	assetlib::BMaterial
 	Import(const assetlib::imp::BMaterialImport& imported, const ImportedMaterialMaps& maps)
 	{
-		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 		BuildImportedMaterialGraph(model, imported, maps);
 		return CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
 	}
@@ -78,7 +82,7 @@ TEST_CASE("Opening a material does not round its factors", "[materialimport]")
 	constexpr float c_Roughness = 0.8585786f;
 	constexpr float c_Metallic  = 0.1234567f;
 
-	MaterialOutputNode node;
+	MaterialOutputNode node(c_Language);
 
 	QJsonObject saved;
 	saved[QStringLiteral("roughness")] = c_Roughness;
@@ -218,7 +222,7 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	imported.alphaMode = assetlib::AlphaMode::kBlend;
 
 	// Built directly, to inspect the sink the import chose before compiling it.
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
 	REQUIRE(PbrSink(model) != nullptr);
@@ -248,7 +252,7 @@ TEST_CASE("A blend import carries its transmission through the graph", "[materia
 	imported.alphaMode          = assetlib::AlphaMode::kBlend;
 	imported.transmissionFactor = 0.85f;
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
 	REQUIRE(PbrSink(model) != nullptr);
@@ -268,7 +272,7 @@ TEST_CASE("A cut-out import carries its double-sidedness through the graph", "[m
 	imported.alphaMode   = assetlib::AlphaMode::kMask;
 	imported.doubleSided = false;
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
 	const MaterialOutputNode* output = PbrSink(model);
@@ -282,7 +286,7 @@ TEST_CASE("A cut-out import carries its double-sidedness through the graph", "[m
 // both sides; that is what it has to keep compiling to.
 TEST_CASE("A graph with no double-sidedness of its own compiles to both sides", "[materialimport]")
 {
-	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId id     = model.addNode(QStringLiteral("AlphaTestedMaterialOutput"));
 	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
 	REQUIRE(output != nullptr);
@@ -301,7 +305,7 @@ TEST_CASE("An import carries its specular factors through the graph", "[material
 	imported.specularFactor      = 0.0f;
 	imported.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
 	REQUIRE(PbrSink(model) != nullptr);
@@ -321,7 +325,7 @@ TEST_CASE("An import carries its specular factors through the graph", "[material
 // defaults rather than as whatever the sink happened to hold.
 TEST_CASE("A graph with no specular keys loads at the defaults", "[materialimport]")
 {
-	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId id = model.addNode(QStringLiteral("MaterialOutput"));
 
 	auto* output = model.delegateModel<MaterialOutputNode>(id);
@@ -341,7 +345,7 @@ TEST_CASE("A graph with no specular keys loads at the defaults", "[materialimpor
 // rendering as they did.
 TEST_CASE("A material with no transmission of its own compiles to none", "[materialimport]")
 {
-	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId id     = model.addNode(QStringLiteral("BlendedMaterialOutput"));
 	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
 	REQUIRE(output != nullptr);
@@ -354,7 +358,7 @@ TEST_CASE("A material with no transmission of its own compiles to none", "[mater
 	CHECK(compiled.pbr.transmissionFactor == 0.0f);
 
 	// And the opaque sink has no transmission to give at all.
-	MaterialGraphModel    opaque(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    opaque(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId opaqueId = opaque.addNode(QStringLiteral("MaterialOutput"));
 	REQUIRE(opaque.delegateModel<MaterialOutputNode>(opaqueId) != nullptr);
 	CHECK(opaque.delegateModel<MaterialOutputNode>(opaqueId)->GetTransmission() == 0.0f);
@@ -365,7 +369,7 @@ TEST_CASE("A material with no transmission of its own compiles to none", "[mater
 // no longer exists, and hashed alpha is what a self-occluding surface uses now.
 TEST_CASE("A blend graph saved with the retired occlude keys still loads", "[materialimport]")
 {
-	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId id     = model.addNode(QStringLiteral("BlendedMaterialOutput"));
 	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
 	REQUIRE(output != nullptr);
@@ -418,7 +422,7 @@ TEST_CASE("An imported material reopens as the board that produced it", "[materi
 	// A saved graph stores paths relative to the data root; a live one holds them absolute.
 	RebaseGraphTextures(graph, c_DataRoot, false);
 
-	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	reopened.load(graph);
 
 	const assetlib::BMaterial recompiled =
@@ -503,7 +507,7 @@ TEST_CASE("A split ORM board reopens as the board that produced it", "[materiali
 	REQUIRE_FALSE(graph.isEmpty());
 	RebaseGraphTextures(graph, c_DataRoot, false);
 
-	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	reopened.load(graph);
 
 	const assetlib::BMaterial recompiled =
@@ -590,7 +594,7 @@ TEST_CASE("A PBR material saved with no graph opens with its textures wired", "[
 	const std::string atlas      = "Derived/SourceTextures/hydrant/tex0.ktx2";
 	for (size_t c = 0; c < 4; ++c) document.pbr.routes[c] = { atlas, static_cast<uint16_t>(c) };
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	BuildPbrMaterialGraph(model, document, c_DataRoot);
 	CHECK(model.allNodeIds().size() == 2);
 
@@ -645,7 +649,7 @@ TEST_CASE(
 		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
 	RebaseGraphTextures(graph, c_DataRoot, false);
 
-	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	reopened.load(graph);
 
 	CHECK(
@@ -665,7 +669,7 @@ TEST_CASE(
 		QJsonDocument::fromJson(QByteArray::fromStdString(withoutWire.editorGraph)).object();
 	RebaseGraphTextures(graph, c_DataRoot, false);
 
-	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	reopened.load(graph);
 
 	auto document                         = withoutWire;
@@ -689,7 +693,7 @@ TEST_CASE(
 {
 	// A split base colour is three ports on the opaque sink and four on a cutout, so the geometry occlusion port
 	// sits one further along after the switch: moved by index, the wire would land on ORM.
-	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 	const QtNodes::NodeId outputId = model.addNode(QStringLiteral("MaterialOutput"));
 	PbrSink(model)->load(QJsonObject{ { "split", QJsonArray{ true, false, false } } });
 

@@ -53,6 +53,7 @@
 #include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -85,7 +86,9 @@
 #include <QtNodes/internal/AbstractGraphModel.hpp>
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
+#include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/TexturePreviewCache.h>
 
@@ -147,7 +150,8 @@ MaterialEditorWindow::MaterialEditorWindow(
 {
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(splitter);
+	const editor::MaterialEditorWidgets ui =
+		editor::BuildMaterialEditorUi(m_Host.GetLanguageResolver(), splitter);
 
 	m_GraphView         = ui.graphView;
 	m_OpenButton        = ui.open;
@@ -164,9 +168,15 @@ MaterialEditorWindow::MaterialEditorWindow(
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
 			window(),
-			QStringLiteral("Open Material"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.open_material_title",
+				"Open Material"),
 			QString(),
-			QStringLiteral("Bernini Material (*.bmaterial)"));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.material_file_filter",
+				"Bernini Material (*.bmaterial)"));
 		if (!path.isEmpty())
 			OpenMaterialInto(m_Graphs.Current(), path);
 	});
@@ -186,10 +196,30 @@ MaterialEditorWindow::MaterialEditorWindow(
 
 	// The list's actions are its context menu and its keys, so each one is written once. The strip
 	// under the list triggers the same two.
-	m_AddLook         = new QAction(QStringLiteral("Add Override..."), this);
-	m_RenameLook      = new QAction(QStringLiteral("Rename..."), this);
-	m_RemoveLook      = new QAction(QStringLiteral("Remove"), this);
-	m_MakeLookDefault = new QAction(QStringLiteral("Make Default"), this);
+	m_AddLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.add_override_action",
+			"Add Override..."),
+		this);
+	m_RenameLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.rename_override_action",
+			"Rename..."),
+		this);
+	m_RemoveLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.remove_override_action",
+			"Remove"),
+		this);
+	m_MakeLookDefault = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.make_default_action",
+			"Make Default"),
+		this);
 
 	m_RenameLook->setShortcut(Qt::Key_F2);
 	m_RemoveLook->setShortcut(QKeySequence::Delete);
@@ -266,7 +296,11 @@ MaterialEditorWindow::MaterialEditorWindow(
 		const std::filesystem::path meshPath = m_Preview->MeshPath();
 
 		// Reloading is what puts the new vertex layout in front of the renderer.
-		if (editor::GenerateTangents(this, m_Host.GetStore(), meshPath))
+		if (editor::GenerateTangents(
+				m_Host.GetLanguageResolver(),
+				this,
+				m_Host.GetStore(),
+				meshPath))
 		{
 			m_Preview->LoadMesh(meshPath);
 			m_Host.AssetChanged(m_Host.GetStore().KeyFor(meshPath));
@@ -350,9 +384,13 @@ MaterialEditorWindow::MaterialEditorWindow(
 		});
 	}
 
-	m_Registry = MakeMaterialNodeRegistry(&m_Host, m_TexturePreviews, surfaces);
+	m_Registry = MakeMaterialNodeRegistry(
+		m_Host.GetLanguageResolver(),
+		&m_Host,
+		m_TexturePreviews,
+		surfaces);
 
-	m_OutputTypes = editor::OutputTypesFor(surfaces);
+	m_OutputTypes = editor::OutputTypesFor(m_Host.GetLanguageResolver(), surfaces);
 	for (const editor::OutputType& type : m_OutputTypes) m_OutputSelector->addItem(type.label);
 
 	splitter->addWidget(ui.leftPanel);
@@ -366,7 +404,12 @@ MaterialEditorWindow::MaterialEditorWindow(
 	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of its
 	// compositing, and a hidden viewport leaves the frame loop entirely. The whole editing surface
 	// goes behind it, because a properties column and a blank board read as a material being open.
-	auto* prompt = new QLabel(QStringLiteral("Drop a .glb or .bmesh here"), this);
+	auto* prompt = new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.drop_prompt",
+			"Drop a .glb or .bmesh here"),
+		this);
 	prompt->setAlignment(Qt::AlignCenter);
 	prompt->setEnabled(false);
 
@@ -789,10 +832,14 @@ MaterialEditorWindow::RefreshActions()
 	m_AddOverrideButton->setEnabled(canRegister);
 	m_AddOverrideButton->setToolTip(
 		canRegister || !hasMesh ?
-			QStringLiteral(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.add_override_tooltip",
 				"Register another look for this submesh, copied from the one on the "
 				"board.") :
-			QStringLiteral(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.add_override_no_source_tooltip",
 				"This mesh was not imported from a source, so it has no import document "
 				"to register a look in."));
 
@@ -803,10 +850,15 @@ MaterialEditorWindow::RefreshActions()
 	m_RemoveOverride->setEnabled(shownIsOverride);
 	m_RemoveOverride->setToolTip(
 		shownIsOverride ?
-			QStringLiteral(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_tooltip",
 				"Unregister this look. Its .bmaterial stays on disk -- delete it in the "
 				"Content Explorer.") :
-			QStringLiteral("The default is the mesh's own binding, not a look to unregister."));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_default_tooltip",
+				"The default is the mesh's own binding, not a look to unregister."));
 
 	m_MakeLookDefault->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 
@@ -818,15 +870,26 @@ MaterialEditorWindow::RefreshActions()
 			++stale;
 
 	m_BakeAllButton->setText(
-		stale > 0 ? QStringLiteral("Bake All \u25cf") : QStringLiteral("Bake All"));
+		stale > 0 ? editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.bake_all_stale_button",
+						"Bake All ●") :
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.bake_all_button",
+						"Bake All"));
 	m_BakeAllButton->setStyleSheet(stale > 0 ? QStringLiteral("color: #c08040;") : QString());
 	m_BakeAllButton->setToolTip(
 		stale > 0 ?
-			QStringLiteral(
-				"%1 of this mesh's materials have baked textures that no longer match the "
-				"sources they route. Baking rewrites them.")
-				.arg(stale) :
-			QStringLiteral(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_stale_tooltip",
+				{ stale },
+				"{0} of this mesh's materials have baked textures that no longer match the "
+				"sources they route. Baking rewrites them.") :
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_tooltip",
 				"Composite every material of this mesh down to its baked textures.\nA bake reads "
 				"the routes off disk, so it writes what is still pending first."));
 }
@@ -1036,12 +1099,19 @@ MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
 		}
 	}
 
-	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
+	if (const QString summary = editor::MaterialSaveSummary(m_Host.GetLanguageResolver(), result);
+	    !summary.isEmpty())
 	{
 		if (quiet)
 			qWarning("MaterialEditor: %s", qPrintable(summary));
 		else
-			QMessageBox::warning(window(), QStringLiteral("Material Editor"), summary);
+			QMessageBox::warning(
+				window(),
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.title",
+					"Material Editor"),
+				summary);
 	}
 
 	if (result.saved == 0)
@@ -1071,7 +1141,10 @@ MaterialEditorWindow::BakeAllMaterials()
 	// touches files only, never bgl.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		window(),
-		QStringLiteral("Baking materials"),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.baking_materials_title",
+			"Baking materials"),
 		[&](background::Progress& progress) {
 			editor::BakeMaterials(m_Host.GetStore(), relative, progress);
 		},
@@ -1086,8 +1159,15 @@ MaterialEditorWindow::BakeAllMaterials()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Bake All"),
-			QStringLiteral("Could not bake:\n\n%1").arg(result.error));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_button",
+				"Bake All"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_failed",
+				{ result.error },
+				"Could not bake:\n\n{0}"));
 	}
 }
 
@@ -1134,7 +1214,13 @@ MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 
 	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
 	{
-		QMessageBox::warning(window(), QStringLiteral("Make Default"), error);
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.make_default_action",
+				"Make Default"),
+			error);
 		return;
 	}
 
@@ -1160,11 +1246,19 @@ MaterialEditorWindow::AddMaterialOverride()
 
 	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
 
+	const QString addOverrideTitle = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.material.add_override_dialog_title",
+		"Add Override");
+
 	bool          accepted = false;
 	const QString name     = QInputDialog::getText(
 		window(),
-		QStringLiteral("Add Override"),
-		QStringLiteral("Name this look. A game asks for it by this name."),
+		addOverrideTitle,
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.override_name_label",
+			"Name this look. A game asks for it by this name."),
 		QLineEdit::Normal,
 		QString(),
 		&accepted);
@@ -1175,10 +1269,16 @@ MaterialEditorWindow::AddMaterialOverride()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Add Override"),
-			name.trimmed().isEmpty() ?
-				QStringLiteral("An override needs a name.") :
-				QStringLiteral("This submesh already registers a look called '%1'.").arg(name));
+			addOverrideTitle,
+			name.trimmed().isEmpty() ? editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_required",
+										   "An override needs a name.") :
+									   editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_taken",
+										   { name },
+										   "This submesh already registers a look called '{0}'."));
 		return;
 	}
 
@@ -1215,9 +1315,12 @@ MaterialEditorWindow::AddMaterialOverride()
 		qWarning("MaterialEditor: could not register '%s': %s", qPrintable(name), e.what());
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Add Override"),
-			QStringLiteral("Could not register the override:\n%1")
-				.arg(QString::fromLatin1(e.what())));
+			addOverrideTitle,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_register_failed",
+				{ e.what() },
+				"Could not register the override:\n{0}"));
 		return;
 	}
 
@@ -1253,9 +1356,15 @@ MaterialEditorWindow::RemoveShownMaterialOverride()
 		qWarning("MaterialEditor: could not remove '%s': %s", qPrintable(shown), e.what());
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Remove Override"),
-			QStringLiteral("Could not remove the override:\n%1")
-				.arg(QString::fromLatin1(e.what())));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_dialog_title",
+				"Remove Override"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_remove_failed",
+				{ e.what() },
+				"Could not remove the override:\n{0}"));
 		return;
 	}
 
@@ -1279,11 +1388,19 @@ MaterialEditorWindow::RenameShownMaterialOverride()
 	if (source == assetlib::c_InvalidIndex)
 		return;
 
+	const QString renameOverrideTitle = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.material.rename_override_dialog_title",
+		"Rename Override");
+
 	bool          accepted = false;
 	const QString name     = QInputDialog::getText(
 		window(),
-		QStringLiteral("Rename Override"),
-		QStringLiteral("Name this look. A game asks for it by this name."),
+		renameOverrideTitle,
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.override_name_label",
+			"Name this look. A game asks for it by this name."),
 		QLineEdit::Normal,
 		shown,
 		&accepted);
@@ -1305,10 +1422,16 @@ MaterialEditorWindow::RenameShownMaterialOverride()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Rename Override"),
-			name.trimmed().isEmpty() ?
-				QStringLiteral("An override needs a name.") :
-				QStringLiteral("This submesh already registers a look called '%1'.").arg(name));
+			renameOverrideTitle,
+			name.trimmed().isEmpty() ? editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_required",
+										   "An override needs a name.") :
+									   editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_taken",
+										   { name },
+										   "This submesh already registers a look called '{0}'."));
 		return;
 	}
 
@@ -1336,9 +1459,12 @@ MaterialEditorWindow::RenameShownMaterialOverride()
 		qWarning("MaterialEditor: could not rename '%s': %s", qPrintable(shown), e.what());
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Rename Override"),
-			QStringLiteral("Could not rename the override:\n%1")
-				.arg(QString::fromLatin1(e.what())));
+			renameOverrideTitle,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_rename_failed",
+				{ e.what() },
+				"Could not rename the override:\n{0}"));
 		return;
 	}
 
@@ -1469,24 +1595,35 @@ MaterialEditorWindow::RefreshMaterialList()
 		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submesh) : QString();
 
 	auto* first = new QListWidgetItem(
-		defaultPath.isEmpty() ? QStringLiteral("(unbound)") :
+		defaultPath.isEmpty() ? editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.unbound_material",
+									"(unbound)") :
 								QFileInfo(defaultPath).completeBaseName(),
 		m_MaterialList);
 	first->setData(editor::c_IsDefaultMaterialRole, true);
 	first->setToolTip(
-		defaultPath.isEmpty() ?
-			QStringLiteral("This submesh has no material yet. Saving one binds it.") :
-			QStringLiteral("%1\n\nEvery instance of this mesh loads with this look.")
-				.arg(defaultPath));
+		defaultPath.isEmpty() ? editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.unbound_material_tooltip",
+									"This submesh has no material yet. Saving one binds it.") :
+								editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.default_material_tooltip",
+									{ defaultPath },
+									"{0}\n\nEvery instance of this mesh loads with this look."));
 
 	const std::vector<editor::RegisteredMaterial> registered = ListedMaterialsFor(submesh);
 	for (const editor::RegisteredMaterial& look : registered)
 	{
 		auto* item = new QListWidgetItem(look.name, m_MaterialList);
-		item->setToolTip(QStringLiteral(
-							 "%1\n\nA game wears this look by asking for '%2'. Double-click to "
-							 "make it the default.")
-		                     .arg(look.material, look.name));
+		item->setToolTip(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_material_tooltip",
+				{ look.material, look.name },
+				"{0}\n\nA game wears this look by asking for '{1}'. Double-click to "
+				"make it the default."));
 	}
 
 	const QString shown = ShownOverride(submesh);
@@ -1582,10 +1719,12 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			meshPath.string().c_str(),
 			e.what());
 
-		return QStringLiteral(
-				   "The material was saved, but the mesh could not be updated to "
-				   "reference it:\n%1")
-		    .arg(QString::fromLatin1(e.what()));
+		return editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.attach_failed",
+			{ e.what() },
+			"The material was saved, but the mesh could not be updated to "
+			"reference it:\n{0}");
 	}
 
 	return {};
@@ -1635,9 +1774,15 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		{
 			QMessageBox::warning(
 				window(),
-				QStringLiteral("Open Material"),
-				QStringLiteral("Could not open the material:\n%1")
-					.arg(QString::fromLatin1(e.what())));
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.open_material_title",
+					"Open Material"),
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.open_material_failed",
+					{ e.what() },
+					"Could not open the material:\n{0}"));
 		}
 		return;
 	}
@@ -1686,11 +1831,16 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 			{
 				QMessageBox::warning(
 					window(),
-					QStringLiteral("Open Material"),
-					QStringLiteral(
-						"'%1' is drawn by surface '%2', which this session has not "
-						"registered. Open the project that provides it and relaunch.")
-						.arg(path, QString::fromStdString(material.surface.name)));
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.open_material_title",
+						"Open Material"),
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.surface_not_registered",
+						{ path, material.surface.name },
+						"'{0}' is drawn by surface '{1}', which this session has not "
+						"registered. Open the project that provides it and relaunch."));
 			}
 			return;
 		}

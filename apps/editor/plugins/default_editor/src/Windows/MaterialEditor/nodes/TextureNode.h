@@ -15,6 +15,7 @@
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 #include <bgl/TextureAssetHandle.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 
 class QLabel;
 class TexturePreviewCache;
@@ -36,7 +37,11 @@ public:
 	static constexpr unsigned int c_PortCount    = c_TexturePort + 1;
 
 	// `previews` may be null when the editor runs without graphics; the node then shows no image.
-	TextureNode(editor::IEditorHost* host, TexturePreviewCache* previews);
+	// `language` must outlive the node.
+	TextureNode(
+		const editor::ILanguageResolver& language,
+		editor::IEditorHost*             host,
+		TexturePreviewCache*             previews);
 
 	QString
 	caption() const override
@@ -104,11 +109,12 @@ private:
 	void
 	RefreshPreview();
 
-	editor::IEditorHost*    m_Host     = nullptr;
-	TexturePreviewCache*    m_Previews = nullptr;
-	QString                 m_Path;
-	QString                 m_Caption = QStringLiteral("Texture");
-	bgl::TextureAssetHandle m_Texture;
+	const editor::ILanguageResolver& m_Language;
+	editor::IEditorHost*             m_Host     = nullptr;
+	TexturePreviewCache*             m_Previews = nullptr;
+	QString                          m_Path;
+	QString                          m_Caption;
+	bgl::TextureAssetHandle          m_Texture;
 
 	QLabel* m_PreviewLabel = nullptr;
 	QPixmap m_Preview;

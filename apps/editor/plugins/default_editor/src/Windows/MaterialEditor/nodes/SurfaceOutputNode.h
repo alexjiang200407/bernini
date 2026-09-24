@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <filesystem>
 #include <qjsonobject.h>
 #include <qobject.h>
@@ -43,7 +44,8 @@ class SurfaceOutputNode : public MaterialSinkNode
 	Q_OBJECT
 
 public:
-	explicit SurfaceOutputNode(bgl::SurfaceType surface);
+	// `language` must outlive the node.
+	SurfaceOutputNode(const editor::ILanguageResolver& language, bgl::SurfaceType surface);
 
 	QString
 	caption() const override;
@@ -199,7 +201,8 @@ private:
 	void
 	RefreshSwatch(size_t index);
 
-	bgl::SurfaceType m_Surface;
+	const editor::ILanguageResolver& m_Language;
+	bgl::SurfaceType                 m_Surface;
 
 	// One vec4 per declared value, seeded from the defaults; authoritative over the spin boxes,
 	// which round to their decimals.

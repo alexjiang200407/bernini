@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <bgl/SurfaceType.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -58,6 +59,10 @@ SortGraph(QJsonObject& graph);
 /**
  * The node types a material graph can hold.
  *
+ * `language` resolves every node's shown text; it must outlive the registry and every node it
+ * creates, which is the same requirement `host` and `previews` are held to when they are not
+ * null.
+ *
  * `host` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph
  * be built and compiled with no graphics device.
  *
@@ -68,6 +73,7 @@ SortGraph(QJsonObject& graph);
  */
 [[nodiscard]] std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
 MakeMaterialNodeRegistry(
+	const editor::ILanguageResolver&  language,
 	editor::IEditorHost*              host,
 	TexturePreviewCache*              previews,
 	std::span<const bgl::SurfaceType> surfaces = {});

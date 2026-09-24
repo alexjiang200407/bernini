@@ -13,11 +13,11 @@
 #include <exception>
 #include <filesystem>
 #include <memory>
+#include <qhashfunctions.h>
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qpixmap.h>
-#include <qstringliteral.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
 #include <utility>
@@ -28,6 +28,9 @@
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 #include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/TexturePreviewCache.h>
 
@@ -36,8 +39,12 @@ namespace
 	constexpr int c_PreviewWidgetDim = 96;
 }
 
-TextureNode::TextureNode(editor::IEditorHost* host, TexturePreviewCache* previews) :
-	m_Host(host), m_Previews(previews)
+TextureNode::TextureNode(
+	const editor::ILanguageResolver& language,
+	editor::IEditorHost*             host,
+	TexturePreviewCache*             previews) :
+	m_Language(language), m_Host(host), m_Previews(previews),
+	m_Caption(editor::Localize(m_Language, "bernini.material_nodes.texture_caption", "Texture"))
 {
 	if (m_Previews == nullptr)
 		return;
@@ -115,12 +122,22 @@ TextureNode::outData(QtNodes::PortIndex port)
 QString
 TextureNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	static const char* const c_Captions[c_PortCount] = { "RGBA", "RGB", "RG", "R",
-		                                                 "G",    "B",   "A",  "Texture" };
+	// Channel bundle/scalar codes are universal shorthand (as in any image editor), not sentences,
+	// so only the whole-texture port's caption is a translated word.
+	static const char* const c_ChannelCaptions[c_PortCount - 1] = { "RGBA", "RGB", "RG", "R",
+		                                                            "G",    "B",   "A" };
 
 	if (port < 0 || static_cast<unsigned int>(port) >= c_PortCount)
 		return {};
-	return QString::fromLatin1(c_Captions[static_cast<size_t>(port)]);
+
+	const auto index = static_cast<size_t>(port);
+	if (index == c_TexturePort)
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.texture_port_caption",
+			"Texture");
+
+	return QString::fromLatin1(c_ChannelCaptions[index]);
 }
 
 void
@@ -147,7 +164,10 @@ TextureNode::SetTexturePath(const QString& path)
 	{
 		qWarning("TextureNode: failed to load '%s': %s", qPrintable(path), e.what());
 		m_Texture = {};
-		m_Caption = QStringLiteral("Texture (failed)");
+		m_Caption = editor::Localize(
+			m_Language,
+			"bernini.material_nodes.texture_failed_caption",
+			"Texture (failed)");
 		return;
 	}
 
