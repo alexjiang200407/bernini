@@ -8,10 +8,10 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include <algorithm>
-#include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 #include <cstddef>
-#include <editor_sdk/mesh_drop.h>
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IEditorHost.h>
 #include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
@@ -23,6 +23,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -44,7 +45,6 @@
 #include <optional>
 #include <qcontainerfwd.h>
 #include <qlatin1stringview.h>
-#include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qsizepolicy.h>
@@ -84,37 +84,37 @@ AnimationEditorWindow::AnimationEditorWindow(
 	viewportLayout->addWidget(m_Preview, /*stretch*/ 1);
 	viewportLayout->addWidget(BuildTransportBar());
 
+	auto* splitter = new QSplitter(Qt::Horizontal, this);
+	splitter->addWidget(BuildPropertiesColumn());
+	splitter->addWidget(viewportSide);
+	splitter->setStretchFactor(0, 0);
+	splitter->setStretchFactor(1, 1);
+
 	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of
-	// its compositing, and a hidden viewport leaves the frame loop entirely.
-	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here\n\nor   Open Mesh..."), this);
+	// its compositing, and a hidden viewport leaves the frame loop entirely. The properties go
+	// behind it with the viewport -- a clip list and a transport with no rig to drive read as a
+	// mesh being open.
+	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here"), this);
 	prompt->setAlignment(Qt::AlignCenter);
 	prompt->setEnabled(false);
 
 	m_Stage = new QStackedWidget(this);
+	m_Stage->setObjectName(QStringLiteral("AnimationStage"));
 	m_Stage->addWidget(prompt);
-	m_Stage->addWidget(viewportSide);
-
-	auto* splitter = new QSplitter(Qt::Horizontal, this);
-	splitter->addWidget(BuildPropertiesColumn());
-	splitter->addWidget(m_Stage);
-	splitter->setStretchFactor(0, 0);
-	splitter->setStretchFactor(1, 1);
+	m_Stage->addWidget(splitter);
 
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(splitter);
+	layout->addWidget(m_Stage);
 
 	connect(m_Preview, &AnimationPreviewWindow::MeshChanged, this, [this](const QString& relPath) {
 		m_MeshRelPath = relPath;
-		m_MeshLabel->setText(relPath.isEmpty() ? QStringLiteral("No mesh open") : relPath);
+		m_MeshLabel->setText(
+			relPath.isEmpty() ? QStringLiteral("No mesh open") :
+								QFileInfo(relPath).completeBaseName());
+		m_MeshLabel->setToolTip(relPath);
 		m_Stage->setCurrentIndex(relPath.isEmpty() ? 0 : 1);
 	});
-
-	connect(
-		m_Preview,
-		&AnimationPreviewWindow::BlendSetsChanged,
-		this,
-		[this](const QStringList& sets, int activeIndex) { SetBlendSets(sets, activeIndex); });
 
 	connect(
 		m_Preview,
@@ -170,9 +170,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	auto* layout = new QVBoxLayout(column);
 	layout->setContentsMargins(4, 4, 4, 4);
 
-	auto* openButton = new QPushButton(QStringLiteral("Open Mesh..."), column);
-	connect(openButton, &QPushButton::clicked, this, &AnimationEditorWindow::OpenMeshDialog);
-
 	// The way to let go of the held assets: the explorer refuses to delete or rename what this
 	// panel is offering, and "close it first" needs a close to point at.
 	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
@@ -184,11 +181,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		closeButton,
 		[closeButton](const QString& relPath) { closeButton->setEnabled(!relPath.isEmpty()); });
 
-	auto* fileRow = new QHBoxLayout();
-	fileRow->setContentsMargins(0, 0, 0, 0);
-	fileRow->addWidget(openButton, /*stretch*/ 1);
-	fileRow->addWidget(closeButton);
-	layout->addLayout(fileRow);
+	layout->addWidget(closeButton);
 
 	m_MeshLabel = new QLabel(QStringLiteral("No mesh open"), column);
 	m_MeshLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -210,28 +203,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		LoadShownMesh(m_SourceSelector->itemText(index));
 	});
 	layout->addWidget(m_SourceSelector);
-
-	// Which spaces the rig carries, for the Blend tab to fade onto. In the header because it is a
-	// fact about the clip set on screen, the way the `.banim` above it is -- and because opening
-	// one reloads the rig, which is not something a tab switch should ever do.
-	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Blend Set"), column));
-
-	m_BlendSetSelector = new QComboBox(column);
-	m_BlendSetSelector->setEnabled(false);
-	m_BlendSetSelector->addItem(QStringLiteral("None"));
-	m_BlendSetSelector->setToolTip(QStringLiteral(
-		"The .bblend whose blend spaces this rig carries. Choosing one reloads the mesh: a rig "
-		"already uploaded refuses a set it was not built with."));
-	connect(m_BlendSetSelector, &QComboBox::activated, this, [this](int index) {
-		if (m_SyncingUi || index < 0 || m_MeshRelPath.isEmpty() || m_DataRoot.isEmpty())
-			return;
-		// Index 0 is "None", so the sets themselves start at 1.
-		LoadShownMesh(
-			m_SourceSelector->currentText(),
-			index == 0 ? QString() : m_BlendSetSelector->itemText(index));
-	});
-	layout->addWidget(m_BlendSetSelector);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
@@ -518,29 +489,24 @@ AnimationEditorWindow::SetDockVisible(const bool visible)
 void
 AnimationEditorWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()))
+	if (m_Preview->AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()))
+	if (m_Preview->AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dropEvent(QDropEvent* event)
 {
-	const editor::MeshDrop drop = editor::GetMeshDroppedOn(event->mimeData(), m_DataRoot);
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
-		return;
-	}
-
-	m_Preview->LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
-	event->acceptProposedAction();
+	// The preview's own, answered on its behalf: while the prompt is up it is on the page behind
+	// and no drag can reach it -- including an environment, which it takes whatever else it takes.
+	if (m_Preview->TakeDrop(event->mimeData()))
+		event->acceptProposedAction();
 }
 
 QStringList
@@ -553,8 +519,8 @@ AnimationEditorWindow::GetHeldOpenPaths() const
 
 	auto held = QStringList();
 	held << root.absoluteFilePath(m_MeshRelPath);
-	if (!m_BlendRelPath.isEmpty())
-		held << root.absoluteFilePath(m_BlendRelPath);
+	if (const QString blend = m_Preview->BlendSetKey(); !blend.isEmpty())
+		held << root.absoluteFilePath(blend);
 	for (int i = 0; i < m_SourceSelector->count(); ++i)
 		held << root.absoluteFilePath(m_SourceSelector->itemText(i));
 	return held;
@@ -576,24 +542,11 @@ AnimationEditorWindow::TierSourceAt(const int index) noexcept
 }
 
 void
-AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath)
+AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
 {
 	const auto absolute = std::filesystem::path(m_DataRoot.toStdWString()) /
 	                      std::filesystem::path(m_MeshRelPath.toStdWString());
-	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString(), blendRelPath.toStdString());
-}
-
-void
-AnimationEditorWindow::SetBlendSets(const QStringList& sets, const int activeIndex)
-{
-	m_SyncingUi = true;
-	m_BlendSetSelector->clear();
-	m_BlendSetSelector->addItem(QStringLiteral("None"));
-	m_BlendSetSelector->addItems(sets);
-	m_BlendSetSelector->setCurrentIndex(activeIndex < 0 ? 0 : activeIndex + 1);
-	m_BlendSetSelector->setEnabled(!m_MeshRelPath.isEmpty());
-	m_BlendRelPath = activeIndex < 0 ? QString() : sets.at(activeIndex);
-	m_SyncingUi    = false;
+	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString());
 }
 
 void
@@ -613,24 +566,6 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 }
 
 void
-AnimationEditorWindow::OpenMeshDialog()
-{
-	auto start = QString();
-	if (!m_DataRoot.isEmpty())
-		start = m_DataRoot + QLatin1Char('/') + QLatin1String(assetlib::c_MeshesDirectoryName);
-
-	const QString file = QFileDialog::getOpenFileName(
-		this,
-		QStringLiteral("Open Mesh"),
-		start,
-		QStringLiteral("Baked Mesh (*.bmesh)"));
-	if (file.isEmpty())
-		return;
-
-	m_Preview->LoadMesh(std::filesystem::path(file.toStdWString()));
-}
-
-void
 AnimationEditorWindow::Tick()
 {
 	if (!m_Transport.IsPlaying())
@@ -639,10 +574,8 @@ AnimationEditorWindow::Tick()
 	const float dt = static_cast<float>(m_ClockDelta.restart()) / 1000.0f;
 	m_Transport.Advance(dt);
 
-	// A one-shot that reached either end is done, not playing a frozen frame; Play rewinds it.
-	if (m_Transport.HasClips() && !m_Transport.GetActiveClip().loop &&
-	    (m_Transport.GetTimeSeconds() >= m_Transport.GetPeriodSeconds() ||
-	     (m_Transport.GetSpeed() < 0.0f && m_Transport.GetTimeSeconds() <= 0.0f)))
+	// A clock with nothing left to play is done, not playing a frozen frame; Play rewinds it.
+	if (m_Transport.AtEnd())
 	{
 		m_Transport.Pause();
 		m_Clock->stop();

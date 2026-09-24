@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QString>
 #include <QWidget>
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <catch2/catch_test_macros.hpp>
@@ -19,6 +20,7 @@
 #include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
 #include <exception>
+#include <filesystem>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
@@ -92,7 +94,13 @@ namespace
 	{
 	public:
 		std::vector<std::string> shown;
+		std::vector<std::string> opened;
 		editor::LanguageResolver language;
+
+		// What ImportMeshSource was asked for, and what it answers -- empty standing for every way
+		// an import produces no mesh.
+		std::vector<std::filesystem::path> imported;
+		std::string                        importAnswer;
 
 		const editor::ILanguageResolver&
 		GetLanguageResolver() const noexcept override
@@ -121,9 +129,15 @@ namespace
 			shown.emplace_back(id);
 		}
 		void
-		OpenAsset(std::string_view) override
+		OpenAsset(std::string_view key) override
 		{
-			throw std::runtime_error("Unexpected asset dispatch");
+			opened.emplace_back(key);
+		}
+		std::string
+		ImportMeshSource(const std::filesystem::path& source) override
+		{
+			imported.push_back(source);
+			return importAnswer;
 		}
 		void
 		AssetChanged(std::string_view) override
@@ -149,7 +163,8 @@ TEST_CASE(
 	REQUIRE(registry.kinds.empty());
 	REQUIRE(registry.panels.size() == 1);
 	REQUIRE(registry.panels.front().id == "sample.overview");
-	REQUIRE(registry.actions.size() == 1);
+	REQUIRE(registry.actions.size() == 2);
+	REQUIRE(registry.actions.front().id == "sample.show-overview");
 	REQUIRE(registry.actions.front().extensions.empty());
 	REQUIRE(registry.actions.front().menuId == "sample.tools");
 	REQUIRE(registry.menus.size() == 1);
@@ -284,6 +299,73 @@ TEST_CASE("Unreadable referrers fail instead of appearing unreferenced", "[plugi
 		                                                              "missing" } };
 	REQUIRE_THROWS(kind.RewriteReferences(valid, replacements));
 	REQUIRE(kind.ReadReferences(valid).front().target == "Authored/a.bexample");
+}
+
+namespace
+{
+	/** The sample's importing action, which is not the one every other case reaches for. */
+	const editor::ActionDesc&
+	ImportAction(const RecordingRegistry& registry)
+	{
+		const auto found =
+			std::ranges::find(registry.actions, "sample.import-source", &editor::ActionDesc::id);
+		REQUIRE(found != registry.actions.end());
+		return *found;
+	}
+}
+
+TEST_CASE("An imported source is opened by the key the host answers with", "[plugin][import]")
+{
+	auto              plugin = sample::CreateEditorPlugin();
+	RecordingRegistry registry;
+	plugin->Register(registry);
+
+	RecordingHost host;
+	host.importAnswer = "Derived/Meshes/crate.bmesh";
+
+	const editor::ActionDesc& action    = ImportAction(registry);
+	const auto                selection = std::vector<std::string>{ "/downloads/crate.glb" };
+	REQUIRE(action.action->IsEnabled(host, selection));
+	action.action->Invoke(host, selection);
+
+	// The source reaches the host as given -- a path outside the project, which no key could name.
+	REQUIRE(host.imported == std::vector<std::filesystem::path>{ "/downloads/crate.glb" });
+
+	// And its answer is a key, so it is usable as one without the caller resolving anything.
+	REQUIRE(host.opened == std::vector<std::string>{ "Derived/Meshes/crate.bmesh" });
+}
+
+TEST_CASE("An import that produced no mesh opens nothing", "[plugin][import]")
+{
+	auto              plugin = sample::CreateEditorPlugin();
+	RecordingRegistry registry;
+	plugin->Register(registry);
+
+	// Declined, cancelled, failed, or imported for its clips alone: the contract makes them one
+	// answer, because the host has already reported whichever it was.
+	RecordingHost host;
+	host.importAnswer = std::string();
+
+	const editor::ActionDesc& action    = ImportAction(registry);
+	const auto                selection = std::vector<std::string>{ "/downloads/crate.glb" };
+	action.action->Invoke(host, selection);
+
+	REQUIRE(host.imported.size() == 1);
+	REQUIRE(host.opened.empty());
+}
+
+TEST_CASE("An import is not offered without a source to import", "[plugin][import]")
+{
+	auto              plugin = sample::CreateEditorPlugin();
+	RecordingRegistry registry;
+	plugin->Register(registry);
+
+	RecordingHost host;
+	REQUIRE_FALSE(ImportAction(registry).action->IsEnabled(host, {}));
+
+	// Invoked anyway -- an action reached by a shortcut is not asked first -- it must not import.
+	ImportAction(registry).action->Invoke(host, {});
+	REQUIRE(host.imported.empty());
 }
 
 TEST_CASE("Translated labels preserve menu routing and action identity", "[plugin][localization]")

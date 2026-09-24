@@ -24,13 +24,29 @@ namespace assetlib
 	};
 
 	/**
+	 * One named alternative material registered for a submesh -- a look a game may switch an
+	 * instance to by name (game::AssetManager::SetInstanceSubmeshMaterialOverride). The submesh's default
+	 * stays its MaterialBinding.
+	 */
+	struct MaterialOverrideBinding
+	{
+		std::string submesh;   // as MaterialBinding::submesh
+		std::string name;      // unique per submesh, never empty
+		std::string material;  // data-root-relative .bmaterial key
+
+		bool
+		operator==(const MaterialOverrideBinding&) const = default;
+	};
+
+	/**
 	 * The authored half of one imported source: what a person chose at import and after it. Text,
 	 * beside the source it describes (`Authored/Meshes/kirk.glb` ->
 	 * `Authored/Meshes/kirk.bimport`), so two
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
-	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `skeleton`,
+	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `materialOverrides`,
+	 * `skeleton`,
 	 * `outputs`, `textureDir`, the two stamp-and-token pairs and the per-part hashes an environment
 	 * was written with never key -- none of them changes what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
@@ -90,8 +106,12 @@ namespace assetlib
 		std::vector<std::string> outputs;
 
 		std::vector<MaterialBinding> bindings;
-		std::string                  extraParametersJson = "{}";
-		std::string                  extraJson           = "{}";
+
+		// Sorted by submesh, then name, as the document stores them.
+		std::vector<MaterialOverrideBinding> materialOverrides;
+
+		std::string extraParametersJson = "{}";
+		std::string extraJson           = "{}";
 
 		/**
 		 * The `.bmesh` among `outputs`, or empty for a source that produced none -- a clips-only

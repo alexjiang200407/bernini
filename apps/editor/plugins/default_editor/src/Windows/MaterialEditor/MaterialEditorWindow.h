@@ -14,15 +14,25 @@
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <string>
 #include <vector>
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
+#include "Windows/MaterialEditor/material_overrides.h"
 
 class TexturePreviewCache;
 
+class QAction;
 class QComboBox;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
+class QEvent;
+class QTimer;
+class QListWidget;
+class QStackedWidget;
 class QJsonObject;
 class QLabel;
 class QPointF;
@@ -62,6 +72,18 @@ public:
 	}
 	void
 	SetActive(bool active) override;
+
+	/** Marks the board edited on any interaction with it; see MarkGraphEdited. */
+	bool
+	eventFilter(QObject* watched, QEvent* event) override;
+
+	/** The drop prompt covers the preview, so a mesh dropped on the empty panel arrives here. */
+	void
+	dragEnterEvent(QDragEnterEvent* event) override;
+	void
+	dragMoveEvent(QDragMoveEvent* event) override;
+	void
+	dropEvent(QDropEvent* event) override;
 	void
 	OnAssetChanged(std::string_view key) override;
 	~MaterialEditorWindow() override;
@@ -151,34 +173,110 @@ private:
 	ReleasePreviewMaterials();
 
 	/**
-	 * Writes the material at `materialPath` into the `.bmesh` as `submeshIndex`'s default, so every
-	 * instance of that mesh -- in the preview, in a level, in the game -- picks it up on load.
+	 * Writes the look the Material combo shows as `submeshIndex`'s default -- into the mesh's
+	 * import document, or into the `.bmesh` itself for a mesh with no source -- so every instance
+	 * of that mesh, in the preview, in a level and in the game, picks it up on load.
 	 *
 	 * The deliberate act the preview's instance overrides exist to keep separate from authoring.
 	 */
 	void
-	SetDefaultMaterial(int submeshIndex);
+	MakeShownMaterialDefault(int submeshIndex);
+
+	/** Registers another look for the selected submesh, copied from the one on the board. */
+	void
+	AddMaterialOverride();
+
+	/** Unregisters the shown override and goes back to the submesh's default. */
+	void
+	RemoveShownMaterialOverride();
+
+	/** Renames the shown override, keeping the material it names. */
+	void
+	RenameShownMaterialOverride();
+
+	/** Puts `materialPath` on the board and on the previewed submesh, sharing a graph already open
+	 *  for it. An empty path leaves the submesh its own blank graph. */
+	void
+	ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath);
+
+	/** Fills the Material list for the selected submesh and selects the look on the board. */
+	void
+	RefreshMaterialList();
+
+	/** The drop prompt while no mesh is open, the editing surface once one is. */
+	void
+	RefreshStage();
+
+	/** The look at `row` of the Material list: empty for the default row, which is row 0. */
+	[[nodiscard]] QString
+	OverrideAtRow(int row) const;
+
+	/**
+	 * Re-measures every graph's bake against the sources it routes, and marks Bake All when any of
+	 * them no longer matches.
+	 *
+	 * Called when a material changes -- a load, a write, a bake, an edit from elsewhere -- rather
+	 * than on every refresh: the verdict costs a re-stamp of every routed texture, and a panel
+	 * refresh happens on every click.
+	 */
+	void
+	RefreshBakeState();
+
+	/** What `graphIndex` compiles to right now, hashed, for the comparison a write makes. */
+	[[nodiscard]] uint64_t
+	CompiledHash(int graphIndex) const;
+
+	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
+	void
+	ReloadRegisteredMaterials();
+
+	/** The looks the mesh registers for `submeshIndex`, or none for a mesh that has no file. */
+	[[nodiscard]] std::vector<editor::RegisteredMaterial>
+	RegisteredMaterialsFor(int submeshIndex) const;
+
+	/** Those of them the list shows: the default row already stands for the one it names. */
+	[[nodiscard]] std::vector<editor::RegisteredMaterial>
+	ListedMaterialsFor(int submeshIndex) const;
+
+	/** The override shown for `submeshIndex`, or empty when it shows the submesh's default. */
+	[[nodiscard]] QString
+	ShownOverride(int submeshIndex) const;
 
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
 
-	void
-	SaveCurrentMaterial(bool saveAs);
-
 	/**
-	 * Writes every graph that already has a file, by exactly the rule Save follows -- the mesh binding
-	 * a first write leaves included. A graph with no file yet is skipped rather than prompted.
+	 * Marks `graphIndex` edited and restarts the write timer, so a burst of edits writes once when
+	 * it stops. Does nothing while a graph is being loaded or seeded -- that is not an edit -- or
+	 * for the default sphere, which has no project asset to write to.
 	 *
-	 * Reports only what it skipped or could not write: a clean run is reported by the panel it
-	 * refreshes.
+	 * Deliberately over-eager: it is called for anything that *might* have changed the board,
+	 * including a bare click on it, because a write compares what the graph compiles to against
+	 * what was last written and skips an identical one. Missing a trigger loses an edit silently;
+	 * an extra trigger costs one compile. So a control added to this panel needs nothing here --
+	 * it is enough that the value it edits lives in the graph, which is what puts it in the file.
 	 */
 	void
-	SaveAllMaterials();
+	MarkGraphEdited(int graphIndex);
 
 	/**
-	 * Save All, then composites each of the mesh's distinct materials down to its baked triplet.
+	 * Writes every edited graph now: on the timer, and at every point the edits would otherwise be
+	 * lost or read stale -- switching submesh or look, hiding the panel, closing it, and baking.
 	 *
-	 * Saving first is not a convenience: a bake reads the routes off disk, so an unsaved edit would
+	 * A graph with no file yet is given one (editor::AutoSaveMaterialPath) and bound to its
+	 * submesh, which is what the first Save used to do.
+	 *
+	 * @param quiet Report to the log rather than to a dialog. For the teardown flush, which runs
+	 *              inside the destructor, where a modal would block a panel already going away.
+	 */
+	void
+	FlushEditedGraphs(bool quiet = false);
+
+	/**
+	 * Composites each of the mesh's distinct materials down to its baked triplet, writing what is
+	 * still pending first.
+	 *
+	 * Writing first is not a convenience: a bake reads the routes off disk, so a pending edit would
 	 * otherwise be baked in its previous state without saying so.
 	 */
 	void
@@ -226,17 +324,44 @@ private:
 	QComboBox* m_SubmeshSelector = nullptr;
 	QComboBox* m_OutputSelector  = nullptr;
 
+	// Restarted by every edit; on its timeout the edited graphs are written. Single-shot, so a
+	// burst of keystrokes is one write rather than one per keystroke.
+	QTimer* m_WriteTimer = nullptr;
+
+	// Set while a graph is being loaded or seeded, so the edits that arrive from the load itself
+	// are not read as the user's and written straight back.
+	bool m_Loading = false;
+
+	// Which look each submesh is showing: the name of a registered override, or empty for the
+	// submesh's default. Indexed by panel submesh, sized with the graphs.
+	std::vector<QString> m_ShownOverrides;
+
+	// The mesh's own source, empty for a sourceless one -- which registers no looks, because the
+	// document they live in is the one a source has. Read with the looks below.
+	std::string m_MeshSourceKey;
+
+	// The mesh's registered looks, per panel submesh. Cached because the combo is refilled on
+	// every panel refresh and the answer is a whole `.bmesh` read.
+	std::vector<std::vector<editor::RegisteredMaterial>> m_Registered;
+
 	// The built widgets, kept whole for the free functions that take them (FillLayerSection).
 	editor::MaterialEditorWidgets m_Ui;
-	MaterialGraphView*            m_GraphView          = nullptr;
-	QPushButton*                  m_OpenButton         = nullptr;
-	QPushButton*                  m_SaveButton         = nullptr;
-	QPushButton*                  m_SaveAsButton       = nullptr;
-	QPushButton*                  m_SaveAllButton      = nullptr;
-	QPushButton*                  m_BakeAllButton      = nullptr;
-	QPushButton*                  m_SetDefaultButton   = nullptr;
-	QLabel*                       m_MaterialLabel      = nullptr;
-	QLabel*                       m_BakedTexturesLabel = nullptr;
-	QLabel*                       m_TangentWarning     = nullptr;
-	QPushButton*                  m_GenerateTangents   = nullptr;
+	MaterialGraphView*            m_GraphView         = nullptr;
+	QPushButton*                  m_OpenButton        = nullptr;
+	QPushButton*                  m_BakeAllButton     = nullptr;
+	QPushButton*                  m_AddOverrideButton = nullptr;
+	QPushButton*                  m_RemoveOverride    = nullptr;
+	QListWidget*                  m_MaterialList      = nullptr;
+
+	// The drop prompt and the editing surface. Which one is up is the preview's mesh, not a flag
+	// of this panel's -- a failed load puts the prompt back through the same signal a close does.
+	QStackedWidget* m_Stage = nullptr;
+
+	// The list's own actions: its context menu, and the keys it answers to.
+	QAction*     m_AddLook          = nullptr;
+	QAction*     m_RenameLook       = nullptr;
+	QAction*     m_RemoveLook       = nullptr;
+	QAction*     m_MakeLookDefault  = nullptr;
+	QLabel*      m_TangentWarning   = nullptr;
+	QPushButton* m_GenerateTangents = nullptr;
 };

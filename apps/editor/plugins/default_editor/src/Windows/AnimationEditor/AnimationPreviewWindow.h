@@ -39,6 +39,7 @@ namespace game
 }
 
 class QDragEnterEvent;
+class QMimeData;
 class QDragMoveEvent;
 class QDropEvent;
 class QHideEvent;
@@ -97,15 +98,43 @@ public:
 	}
 
 	/**
+	 * Whether a drag carries something this preview takes: an environment, or -- unless mesh drops
+	 * are off -- a mesh.
+	 */
+	[[nodiscard]] bool
+	AcceptsDrop(const QMimeData* mime) const;
+
+	/**
+	 * Applies an environment, or opens a mesh -- importing the dropped source first when the
+	 * project has never seen it.
+	 *
+	 * Public because the panel answers the drop while this widget is hidden behind the empty
+	 * state's prompt, and what a drop means must not be written down in two places.
+	 *
+	 * @return whether the drag was taken; false leaves it for whoever else wants it.
+	 */
+	bool
+	TakeDrop(const QMimeData* mime);
+
+	/** The `.bblend` whose spaces are loaded, data-root-relative, or empty when none is. */
+	[[nodiscard]] QString
+	BlendSetKey() const
+	{
+		return QString::fromStdString(m_BlendKey);
+	}
+
+	/**
 	 * Replaces the preview with the mesh at `absolutePath` (which must live under the data root),
 	 * played from `animationsRelPath` -- or from the first resolved candidate when empty. A rig
 	 * whose clips are stale re-bakes under the loading screen before anything is uploaded.
 	 *
 	 * `blendRelPath` names a `.bblend` whose spaces become nodes after the clips, so the rig can be
-	 * *shown* a space rather than only its clips. Empty acquires the clips alone, which is every
-	 * load until somebody opens a set. A set that will not resolve is refused like any other
-	 * refusal -- the mesh stays on screen and the reason is shown -- rather than clearing the
-	 * viewport.
+	 * *shown* a space rather than only its clips. **Empty takes the clip set's own set**, at
+	 * `assetlib::blendSetKeyFor`, when the project holds one -- so a rig arrives able to fade into
+	 * its spaces without being told where they are. Name one to preview a set stored elsewhere,
+	 * which is what the Blend Space editor does with the set it is editing. A set that will not
+	 * resolve is refused like any other refusal -- the mesh stays on screen and the reason is
+	 * shown -- rather than clearing the viewport.
 	 *
 	 * What ends up shown is announced by the signals below; a failure warns and clears.
 	 */
@@ -323,15 +352,6 @@ Q_SIGNALS:
 	void
 	ClipsChanged(const std::vector<editor::ClipInfo>& clips);
 
-	/**
-	 * The blend sets authored against the clip set now playing, and which one is open (-1: none).
-	 *
-	 * Emitted with every load, so a panel showing them never has to scan the project itself -- the
-	 * scan is the same one that found the `.banim` candidates, one edge over.
-	 */
-	void
-	BlendSetsChanged(const QStringList& candidates, int activeIndex);
-
 	/** The spaces the open set resolved to, in the acquire's own terms. Empty when none is open. */
 	void
 	SpacesChanged(const std::vector<game::BlendSpaceInfo>& spaces);
@@ -456,6 +476,10 @@ private:
 	// the cycle length at a parameter, which is the clips' and the space's together.
 	std::vector<game::ClipInfo>       m_Clips;
 	std::vector<game::BlendSpaceInfo> m_Spaces;
+
+	// The `.bblend` the spaces above came from, so a panel can hold it open. Empty when the clip
+	// set has none at its key, and when the acquire refused the one it named.
+	std::string m_BlendKey;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included

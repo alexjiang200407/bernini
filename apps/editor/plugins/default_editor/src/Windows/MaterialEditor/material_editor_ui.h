@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <bgl/SurfaceType.h>
+#include <qnamespace.h>
 #include <span>
 #include <vector>
 
@@ -9,6 +10,7 @@ class MaterialGraphView;
 class SurfaceOutputNode;
 class QCheckBox;
 class QComboBox;
+class QListWidget;
 class QDoubleSpinBox;
 class QFormLayout;
 class QLabel;
@@ -17,6 +19,9 @@ class QWidget;
 
 namespace editor
 {
+	/** Set on the Material list's default row, for the delegate that marks it. */
+	constexpr int c_IsDefaultMaterialRole = Qt::UserRole + 1;
+
 	/** One Output selector entry: the label it shows, and the registered sink choosing it swaps
 	 *  in. */
 	struct OutputType
@@ -46,16 +51,13 @@ namespace editor
 		QWidget*           leftPanel        = nullptr;
 		MaterialGraphView* graphView        = nullptr;
 		QPushButton*       open             = nullptr;
-		QPushButton*       save             = nullptr;
-		QPushButton*       saveAs           = nullptr;
-		QPushButton*       saveAll          = nullptr;
 		QPushButton*       bakeAll          = nullptr;
-		QPushButton*       setDefault       = nullptr;
+		QPushButton*       addOverride      = nullptr;
+		QPushButton*       removeOverride   = nullptr;
+		QListWidget*       materialList     = nullptr;
 		QPushButton*       generateTangents = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;
-		QLabel*            materialLabel    = nullptr;
-		QLabel*            bakedTextures    = nullptr;
 		QLabel*            tangentWarning   = nullptr;
 
 		// The surface layer (ADR-9), edited here rather than on the node; FillLayerSection shows,

@@ -7,6 +7,7 @@
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <editor_sdk/BackgroundTask.h>
+#include <editor_sdk/asset_paths.h>
 #include <editor_sdk/mesh_load.h>
 
 #include <QFileInfo>
@@ -46,49 +47,6 @@ namespace editor
 		};
 
 		return normalise(a).compare(normalise(b), Qt::CaseInsensitive) == 0;
-	}
-
-	QString
-	BakedTexturesSummary(const assetlib::BMaterial& material)
-	{
-		// A surface material's bake is per routed slot (ADR-7); a slot bound whole has none.
-		if (assetlib::isSurfaceModel(material.shadingModel))
-		{
-			auto lines = QStringList();
-			for (const assetlib::SurfaceTextureBinding& slot : material.surface.textures)
-				if (!slot.bakedPath.empty())
-					lines << QStringLiteral("%1: %2").arg(
-						QString::fromStdString(slot.name),
-						QString::fromStdString(slot.bakedPath));
-
-			return lines.isEmpty() ?
-			           QString() :
-			           QStringLiteral("Baked textures\n%1").arg(lines.join(QLatin1Char('\n')));
-		}
-
-		// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
-		// never-baked material has nothing to list. A kLoose material keeps the triplet of its
-		// last bake, which is still worth showing: "current baked textures, if any".
-		if (material.shadingModel != assetlib::ShadingModel::kPbr)
-			return {};
-
-		const assetlib::PbrParams& pbr = material.pbr;
-		if (pbr.baseColorTexture.empty() && pbr.normalTexture.empty() && pbr.ormTexture.empty() &&
-		    pbr.geometryOcclusionBakedTexture.empty())
-			return {};
-
-		const auto line = [](const char* label, const std::string& path) {
-			return QStringLiteral("%1: %2").arg(
-				QLatin1String(label),
-				path.empty() ? QStringLiteral("—") : QString::fromStdString(path));
-		};
-
-		return QStringLiteral("Baked textures\n%1\n%2\n%3\n%4")
-		    .arg(
-				line("Base color", pbr.baseColorTexture),
-				line("Normal", pbr.normalTexture),
-				line("ORM", pbr.ormTexture),
-				line("Geometry occlusion", pbr.geometryOcclusionBakedTexture));
 	}
 
 	assetlib::BMaterial
@@ -170,6 +128,23 @@ namespace editor
 		return QString::fromStdWString((dir / name.toStdWString()).wstring());
 	}
 
+	QString
+	AutoSaveMaterialPath(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath,
+		const QString&               submeshName)
+	{
+		const QString stem = ToPlainFileStem(submeshName);
+		const QString file =
+			QStringLiteral("%1.bmaterial").arg(stem.isEmpty() ? QStringLiteral("material") : stem);
+
+		if (meshPath.empty())
+			return DefaultMaterialPath(dataRoot, file);
+
+		const QString mesh = QString::fromStdWString(meshPath.stem().wstring());
+		return DefaultMaterialPath(dataRoot, QStringLiteral("%1/%2").arg(mesh, file));
+	}
+
 	QStringList
 	HeldOpenByMaterialEditor(const QStringList& materials, const std::filesystem::path& previewMesh)
 	{
@@ -204,7 +179,7 @@ namespace editor
 	QString
 	MaterialSaveSummary(const MaterialSaveResult& result)
 	{
-		if (result.unsaved == 0 && result.failed.isEmpty() && result.unattached.isEmpty())
+		if (result.failed.isEmpty() && result.unattached.isEmpty())
 			return {};
 
 		const auto count = [](const int n, const char* one, const char* many) {
@@ -215,13 +190,6 @@ namespace editor
 
 		if (result.saved > 0)
 			lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
-
-		if (result.unsaved > 0)
-		{
-			lines << QStringLiteral(
-						 "Skipped %1 with no material file yet; Save As gives one a file.")
-						 .arg(count(result.unsaved, "submesh", "submeshes"));
-		}
 
 		if (!result.failed.isEmpty())
 			lines << QStringLiteral("Could not write:\n%1")

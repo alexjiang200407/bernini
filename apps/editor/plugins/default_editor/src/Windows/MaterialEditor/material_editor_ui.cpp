@@ -3,15 +3,24 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
+#include <QModelIndex>
+#include <QPainter>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QStyle>
+#include <QStyleOptionViewItem>
+#include <QStyledItemDelegate>
 #include <QVBoxLayout>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
@@ -27,6 +36,74 @@
 
 namespace
 {
+	// Enough of a mesh's looks to read at a glance; the rest scroll.
+	constexpr int c_MaterialListHeight = 132;
+
+	// A strip under the list, not a row of buttons: square, and small enough to read as part of it.
+	constexpr int c_ListButtonSize = 22;
+
+	constexpr int   c_TagGap  = 6;
+	constexpr float c_TagFade = 0.7f;
+
+	/** Draws the default look's row: its name bold, and a grey `default` tag against the margin. */
+	class DefaultTagDelegate : public QStyledItemDelegate
+	{
+	public:
+		using QStyledItemDelegate::QStyledItemDelegate;
+
+		void
+		paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index)
+			const override
+		{
+			if (!index.data(editor::c_IsDefaultMaterialRole).toBool())
+			{
+				QStyledItemDelegate::paint(painter, option, index);
+				return;
+			}
+
+			QStyleOptionViewItem row = option;
+			initStyleOption(&row, index);
+			row.font.setBold(true);
+
+			// The text is drawn below, in two pieces; the base would draw the model's own over it.
+			const QString name = row.text;
+			row.text.clear();
+
+			const QWidget* widget = row.widget;
+			QStyle*        style  = widget != nullptr ? widget->style() : QApplication::style();
+			style->drawControl(QStyle::CE_ItemViewItem, &row, painter, widget);
+
+			const QRect text = style->subElementRect(QStyle::SE_ItemViewItemText, &row, widget);
+			const QFontMetrics metrics(row.font);
+			const QString      tag  = QStringLiteral("default");
+			const int          span = metrics.horizontalAdvance(tag) + c_TagGap;
+
+			const bool selected = row.state.testFlag(QStyle::State_Selected);
+
+			painter->save();
+			painter->setFont(row.font);
+
+			// On the selection the grey would read as unreadable rather than as secondary, so the
+			// tag takes the highlight's own text colour, softened.
+			QColor tagColor = row.palette.color(
+				selected ? QPalette::Normal : QPalette::Disabled,
+				selected ? QPalette::HighlightedText : QPalette::Text);
+			if (selected)
+				tagColor.setAlphaF(c_TagFade);
+
+			painter->setPen(tagColor);
+			painter->drawText(text, Qt::AlignRight | Qt::AlignVCenter, tag);
+
+			painter->setPen(
+				row.palette.color(selected ? QPalette::HighlightedText : QPalette::Text));
+			painter->drawText(
+				text.adjusted(0, 0, -span, 0),
+				Qt::AlignLeft | Qt::AlignVCenter,
+				metrics.elidedText(name, Qt::ElideMiddle, text.width() - span));
+			painter->restore();
+		}
+	};
+
 	// The Layer combo's entries, indexed by assetlib::AlphaMode -- what the window writes through.
 	constexpr const char* c_LayerLabels[] = { "Opaque",
 		                                      "Alpha Tested",
@@ -108,57 +185,54 @@ namespace editor
 		auto* propertiesLayout = new QVBoxLayout(propertiesPanel);
 		propertiesLayout->setContentsMargins(4, 4, 4, 4);
 
-		// Material file actions, acting on the selected submesh's graph.
-		widgets.open   = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
-		widgets.save   = new QPushButton(QStringLiteral("Save"), propertiesPanel);
-		widgets.saveAs = new QPushButton(QStringLiteral("Save As..."), propertiesPanel);
+		// The panel writes by itself, so there is nothing here to save with: what is left is
+		// putting an existing material on the board, and baking what the graphs route.
+		widgets.open = new QPushButton(QStringLiteral("Open..."), propertiesPanel);
+
+		widgets.bakeAll = new QPushButton(QStringLiteral("Bake All"), propertiesPanel);
+		widgets.bakeAll->setToolTip(QStringLiteral(
+			"Composite every material of this mesh down to its baked textures.\nA bake reads the "
+			"routes off disk, so it writes what is still pending first."));
 
 		auto* fileActions = new QHBoxLayout();
 		fileActions->setContentsMargins(0, 0, 0, 0);
 		fileActions->addWidget(widgets.open);
-		fileActions->addWidget(widgets.save);
-		fileActions->addWidget(widgets.saveAs);
+		fileActions->addWidget(widgets.bakeAll);
 		propertiesLayout->addLayout(fileActions);
 
-		// The whole mesh rather than the selected submesh: a mesh with a dozen submeshes is a dozen
-		// trips through the selector otherwise. Submeshes wearing one material share a graph, so the
-		// file is written once however many of them name it.
-		widgets.saveAll = new QPushButton(QStringLiteral("Save All"), propertiesPanel);
-		widgets.saveAll->setToolTip(QStringLiteral(
-			"Write every material of this mesh.\nA submesh whose graph has no file yet is skipped "
-			"-- "
-			"Save As gives it one."));
+		// Every look this submesh can wear: its default, then the overrides the mesh registers. A
+		// game reaches one of these by name (AssetManager::SetInstanceSubmeshMaterialOverride), so
+		// the list is the asset's own, not the panel's. A list rather than a drop-down, for the
+		// reason the Animation editor lists clips: it is a place you work, not a setting you pick.
+		propertiesLayout->addWidget(new QLabel(QStringLiteral("Material"), propertiesPanel));
 
-		widgets.bakeAll = new QPushButton(QStringLiteral("Bake All"), propertiesPanel);
-		widgets.bakeAll->setToolTip(QStringLiteral(
-			"Save every material of this mesh, then composite each down to its baked "
-			"textures.\nA bake reads the routes off disk, so it saves first."));
+		widgets.materialList = new QListWidget(propertiesPanel);
+		widgets.materialList->setEnabled(false);
+		widgets.materialList->setItemDelegate(new DefaultTagDelegate(widgets.materialList));
+		widgets.materialList->setContextMenuPolicy(Qt::CustomContextMenu);
+		widgets.materialList->setMaximumHeight(c_MaterialListHeight);
+		widgets.materialList->setToolTip(QStringLiteral(
+			"The looks this submesh can wear. Click one to edit and preview it; double-click to "
+			"make it the mesh's default.\nRight-click for the rest."));
+		propertiesLayout->addWidget(widgets.materialList);
 
-		auto* meshActions = new QHBoxLayout();
-		meshActions->setContentsMargins(0, 0, 0, 0);
-		meshActions->addWidget(widgets.saveAll);
-		meshActions->addWidget(widgets.bakeAll);
-		propertiesLayout->addLayout(meshActions);
+		// Under the list rather than beside it, and flat: registering a look is an edit to the
+		// list, not one of the panel's actions.
+		widgets.addOverride    = new QPushButton(QStringLiteral("+"), propertiesPanel);
+		widgets.removeOverride = new QPushButton(QStringLiteral("\u2212"), propertiesPanel);
+		for (QPushButton* button : { widgets.addOverride, widgets.removeOverride })
+		{
+			button->setFlat(true);
+			button->setFixedSize(c_ListButtonSize, c_ListButtonSize);
+		}
 
-		widgets.setDefault =
-			new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
-		widgets.setDefault->setToolTip(QStringLiteral(
-			"Bind this material to the submesh in the .bmesh, so every instance of the mesh loads "
-			"with it.\nThe preview only overrides the instances in front of you until you do."));
-		propertiesLayout->addWidget(widgets.setDefault);
-
-		// The path of the `.bmaterial` the selected submesh is bound to, so it is clear what Save writes
-		// to.
-		widgets.materialLabel = new QLabel(propertiesPanel);
-		widgets.materialLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		widgets.materialLabel->setWordWrap(true);
-		widgets.materialLabel->setStyleSheet("color: gray;");
-
-		// A path has no spaces to wrap at, so the label's minimum width would otherwise be a whole
-		// directory name and become the floor for the panel -- and for the splitter above it. Ignored
-		// drops it out of that calculation; the tooltip carries the path once it is too narrow to read.
-		widgets.materialLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-		propertiesLayout->addWidget(widgets.materialLabel);
+		auto* listActions = new QHBoxLayout();
+		listActions->setContentsMargins(0, 0, 0, 0);
+		listActions->setSpacing(0);
+		listActions->addWidget(widgets.addOverride);
+		listActions->addWidget(widgets.removeOverride);
+		listActions->addStretch(1);
+		propertiesLayout->addLayout(listActions);
 
 		propertiesLayout->addSpacing(8);
 
@@ -212,16 +286,6 @@ namespace editor
 
 		widgets.layerSection->hide();
 		propertiesLayout->addWidget(widgets.layerSection);
-
-		// The material's current baked textures, if any. Read-only: the graph authors the routes they are
-		// composited from, and Bake All above -- or the Content Explorer's Bake -- is what rewrites them.
-		widgets.bakedTextures = new QLabel(propertiesPanel);
-		widgets.bakedTextures->setTextInteractionFlags(Qt::TextSelectableByMouse);
-		widgets.bakedTextures->setWordWrap(true);
-		widgets.bakedTextures->setStyleSheet("color: gray;");
-		widgets.bakedTextures->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-		widgets.bakedTextures->hide();
-		propertiesLayout->addWidget(widgets.bakedTextures);
 
 		// A normal map routed onto a submesh with no tangent renders as nothing: the shader rebuilds the
 		// map's frame from the tangent and falls back to the geometric normal without one. Silent until

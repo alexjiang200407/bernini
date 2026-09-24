@@ -234,6 +234,114 @@ TEST_CASE("An empty or reversed window is refused up front", "[animation]")
 	CHECK_FALSE(transport.InTransitionWindow());
 }
 
+TEST_CASE("Play run backwards from the near end starts at the far one", "[animation]")
+{
+	// Reachable from the panel: the speed box takes a negative value before Play is ever pressed,
+	// and both domains park at their start. Without the rewind the clock sits on the boundary
+	// Advance clamps to and plays nothing at all.
+	SECTION("a one-shot at zero")
+	{
+		auto transport = Loaded(false);
+		transport.SetSpeed(-1.0f);
+		REQUIRE(transport.AtEnd());
+
+		transport.Play();
+		CHECK(transport.GetTimeSeconds() == Catch::Approx(transport.GetPeriodSeconds()));
+
+		transport.Advance(0.1f);
+		CHECK(transport.GetTimeSeconds() == Catch::Approx(0.2f));
+	}
+
+	SECTION("a window at its start")
+	{
+		auto transport = Loaded(false);
+		transport.SetTransitionWindow(10.0f, 11.0f);
+		transport.SetSpeed(-1.0f);
+		REQUIRE(transport.AtEnd());
+
+		transport.Play();
+		CHECK(transport.GetTimeSeconds() == Catch::Approx(11.0f));
+	}
+
+	SECTION("and a loop needs none, having no end to be parked on")
+	{
+		auto transport = Loaded(true);
+		transport.SetSpeed(-1.0f);
+		transport.Play();
+
+		// Straight into the wrap, from where it already was.
+		transport.Advance(0.1f);
+		CHECK(transport.GetTimeSeconds() == Catch::Approx(0.2f));
+	}
+}
+
+TEST_CASE("A clock is only at the end of the domain it is actually in", "[animation]")
+{
+	auto transport = Loaded(false);
+
+	SECTION("a fade that has just started has not finished")
+	{
+		transport.SetTransitionWindow(10.0f, 11.0f);
+		transport.Play();
+		transport.Advance(0.016f);
+
+		// The trap this exists to pin: a window's clock is absolute, so after one tick it is far
+		// past the *clip's* 0.3 s period while the fade has barely begun. A caller comparing those
+		// two stops every fade on its first tick.
+		CHECK(transport.GetTimeSeconds() > transport.GetPeriodSeconds());
+		CHECK_FALSE(transport.AtEnd());
+	}
+
+	SECTION("and it does finish, at the window's own end")
+	{
+		transport.SetTransitionWindow(10.0f, 11.0f);
+		transport.Play();
+		transport.Advance(1.0f);
+
+		CHECK(transport.AtEnd());
+	}
+
+	SECTION("a one-shot ends at its last frame")
+	{
+		transport.Play();
+		transport.Advance(0.1f);
+		CHECK_FALSE(transport.AtEnd());
+
+		transport.Advance(0.2f);
+		CHECK(transport.AtEnd());
+	}
+
+	SECTION("a loop never does")
+	{
+		auto looping = Loaded(true);
+		looping.Play();
+		looping.Advance(10.0f);
+
+		CHECK_FALSE(looping.AtEnd());
+	}
+
+	SECTION("played backwards, the end is the start of whichever domain")
+	{
+		transport.SetSpeed(-1.0f);
+		transport.Scrub(0.3f);
+		CHECK_FALSE(transport.AtEnd());
+
+		transport.Play();
+		transport.Advance(0.3f);
+		CHECK(transport.AtEnd());
+
+		transport.SetTransitionWindow(10.0f, 11.0f);
+		transport.Scrub(11.0f);
+		CHECK_FALSE(transport.AtEnd());
+
+		transport.Play();
+		transport.Advance(1.0f);
+		CHECK(transport.AtEnd());
+	}
+
+	SECTION("an empty transport has no end to be at") { CHECK_FALSE(PlaybackTransport().AtEnd()); }
+}
+
 TEST_CASE("Play rewinds a window parked on its end", "[animation]")
 {
 	auto transport = Loaded(/*loop*/ true);
