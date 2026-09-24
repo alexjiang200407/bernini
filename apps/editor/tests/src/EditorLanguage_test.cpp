@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -158,4 +159,36 @@ TEST_CASE("Every staged catalog registers", "[localization]")
 	RegisterAll(language, registry);
 	for (const auto& panel : registry.Panels())
 		CHECK(panel.title.Resolve(language) == panel.title.fallback);
+}
+
+TEST_CASE("A failed install leaves the editor's language as it was", "[localization]")
+{
+	const editor::TranslationCatalog kept{ "fixture.kept", { { "title", "en", "Kept" } } };
+	editor::InstallEditorLanguage("en", { &kept, 1 });
+
+	const editor::TranslationCatalog twice[] = {
+		{ "fixture.twice", { { "title", "en", "First" } } },
+		{ "fixture.twice", { { "title", "en", "Second" } } },
+	};
+	CHECK_THROWS(editor::InstallEditorLanguage("en", twice));
+	CHECK(editor::Localize("fixture.kept.title", "Fallback") == QString("Kept"));
+	CHECK(editor::Localize("fixture.twice.title", "Fallback") == QString("Fallback"));
+
+	editor::InstallEditorLanguage("en");
+}
+
+TEST_CASE("A localized error logs its English and shows the editor's locale", "[localization]")
+{
+	const editor::TranslationCatalog catalog{ "fixture.errors",
+		                                      { { "missing", "en", "Missing: {0}" },
+		                                        { "missing", "xx", "Absent : {0}" } } };
+	editor::InstallEditorLanguage("xx", { &catalog, 1 });
+
+	const editor::LocalizedError error("fixture.errors.missing", { "a.json" }, "Missing: {0}");
+	CHECK(std::string(error.what()) == "Missing: a.json");
+	CHECK(error.Shown() == QString("Absent : a.json"));
+	CHECK(editor::ShownText(error) == QString("Absent : a.json"));
+	CHECK(editor::ShownText(std::runtime_error("library")) == QString("library"));
+
+	editor::InstallEditorLanguage("en");
 }

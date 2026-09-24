@@ -14,6 +14,7 @@
 #include <exception>
 #include <filesystem>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -61,6 +62,34 @@ namespace editor
 	Localize(const std::string_view key, const std::string_view fallback)
 	{
 		return Localize(EditorLanguage(), key, fallback);
+	}
+
+	LocalizedError::LocalizedError(const std::string_view key, const std::string_view fallback) :
+		LocalizedError(key, TextArgs(), fallback)
+	{}
+
+	// The English is the fallback, formatted by a resolver with no catalog: the lint holds it equal
+	// to the `en` row.
+	LocalizedError::LocalizedError(
+		const std::string_view key,
+		const TextArgs&        args,
+		const std::string_view fallback) :
+		std::runtime_error(editor::Localize(LanguageResolver(), key, args, fallback).toStdString()),
+		m_Shown(Localize(key, args, fallback))
+	{}
+
+	const QString&
+	LocalizedError::Shown() const noexcept
+	{
+		return m_Shown;
+	}
+
+	QString
+	ShownText(const std::exception& e)
+	{
+		if (const auto* localized = dynamic_cast<const LocalizedError*>(&e))
+			return localized->Shown();
+		return QString::fromUtf8(e.what());
 	}
 
 	std::filesystem::path

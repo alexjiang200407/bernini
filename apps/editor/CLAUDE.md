@@ -219,6 +219,8 @@ Every string a user reads goes through the one editor-wide resolver:
 `editor::Localize("editor.<area>.key", { args }, "English {0}")` from `util/editor_language.h`, with
 the row in `localization/editor.<area>.csv`. The plugin half cannot reach that overload -- it calls
 `editor::Localize(m_Host.GetLanguageResolver(), "context.key", ...)` from `<editor_plugin_api/localize.h>`.
+An error the host throws for a user to read is an `editor::LocalizedError`: its `what()` is the
+English a log line takes, and `editor::ShownText(e)` is what a dialog shows.
 See [docs/editor_plugins.md](../../docs/editor_plugins.md) § CSV authoring for the gate.
 
 ## Rules

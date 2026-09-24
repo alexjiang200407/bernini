@@ -41,7 +41,7 @@ namespace editor
 			const QString path = QString::fromStdWString(projectFile.wstring());
 			startup.failure    = editor::Localize(
 				"editor.startup.could_not_open_project",
-				{ path, e.what() },
+				{ path, editor::ShownText(e) },
 				"Could not open {0}: {1}");
 			qWarning("Editor: Could not open %s: %s", qPrintable(path), e.what());
 		}

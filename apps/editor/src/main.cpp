@@ -114,7 +114,7 @@ main(int argc, char* argv[])
 			editor::Localize("editor.main.title", "Bernini Editor"),
 			editor::Localize(
 				"editor.main.could_not_start",
-				{ e.what(), directory },
+				{ editor::ShownText(e), directory },
 				"The editor could not start:\n\n{0}\n\nSee {1}/editor.log."));
 	};
 

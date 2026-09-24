@@ -4,8 +4,10 @@
 #include <editor_plugin_api/LanguageResolver.h>
 #include <editor_plugin_api/TranslationCatalog.h>
 #include <editor_plugin_api/localize.h>
+#include <exception>
 #include <filesystem>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,6 +42,27 @@ namespace editor
 	/** editor::Localize through EditorLanguage(), with no `{n}` fields to fill. */
 	[[nodiscard]] QString
 	Localize(std::string_view key, std::string_view fallback);
+
+	/**
+	 * An error the editor words itself. `what()` is its English, for the log; Shown() is the same
+	 * message in the editor's locale, for a user.
+	 */
+	class LocalizedError final : public std::runtime_error
+	{
+	public:
+		LocalizedError(std::string_view key, std::string_view fallback);
+		LocalizedError(std::string_view key, const TextArgs& args, std::string_view fallback);
+
+		[[nodiscard]] const QString&
+		Shown() const noexcept;
+
+	private:
+		QString m_Shown;
+	};
+
+	/** What a user reads for `e`: a LocalizedError's Shown(), any other exception's what(). */
+	[[nodiscard]] QString
+	ShownText(const std::exception& e);
 
 	/** `localization/` beside the executable, holding the host's own catalogs. */
 	[[nodiscard]] std::filesystem::path
