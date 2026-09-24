@@ -1,0 +1,15 @@
+key,en
+blob_shadow_checkbox,Blob shadow
+blob_shadow_tooltip,"Draws a soft contact disc on the ground under the rig, shrinking and fading as it rises. Off when judging the pose's own silhouette."
+foot_shadows_checkbox,Foot shadows
+foot_shadows_tooltip,"Draws a shadow under each foot of a rig with an avatar, dark where the foot stands and fading as it lifts. A crowd-tier preview has no pose of its own, so it keeps the disc alone."
+heading_label,Uphill Heading: {0}°
+heading_tooltip,"Which way the ground rises, in degrees about the up axis from +X. Turn it to face the way the rig moves to see it climb the slope rather than cross it."
+ik_weight_label,IK Weight: {0}%
+ik_weight_tooltip,"How far each foot is carried onto the ground, over what the clip baked. 0 leaves the ankle where the animation put it; 100 seats it on the plane."
+slope_label,Ground Slope: {0}°
+slope_tooltip,Tilts the ground the rig stands on. A rig with an avatar plants its feet against it; one without stands through it. Rises toward +X.
+sole_turn_label,Sole Turn: {0}%
+sole_turn_tooltip,How far each sole turns onto the slope under it. 0 keeps the foot's authored tilt with its contact still on the ground; 100 lays it on the slope.
+title,Plant feet
+tooltip,"Stands the rig on a ground plane and solves each leg onto it. Off, there is no floor and the clip plays exactly as authored, which is the other half of judging the solve."
