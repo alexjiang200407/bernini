@@ -10,6 +10,7 @@
 
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 
 #include <cctype>
@@ -249,6 +250,26 @@ namespace assetlib
 			}
 		}
 
+		/** The material a `.bgrass`'s blades shade through, stored as a path inside it. */
+		void
+		collectGrassEdges(
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
+		{
+			try
+			{
+				const BGrass grass = load<BGrass>(files, referrer);
+				addEdge(edges, referrer, grass.material, RefKind::kGrassMaterial);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the grass look '" + referrer +
+					"', so the material it names cannot be known: " + e.what());
+			}
+		}
+
 		/** The one clip set a `.bblend`'s spaces name clips of, stored as a path inside it. */
 		void
 		collectBlendEdges(
@@ -390,6 +411,11 @@ namespace assetlib
 			{
 				collectBlendEdges(edges, files, referrer);
 				++graph.blendSetsScanned;
+			}
+			else if (kind == c_GrassExtension)
+			{
+				collectGrassEdges(edges, files, referrer);
+				++graph.grassLooksScanned;
 			}
 			else if (graph.m_Registry != nullptr)
 			{

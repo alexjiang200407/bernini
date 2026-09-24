@@ -34,6 +34,7 @@ namespace assetlib
 		kFont,            // .ttf  -- a font a UI document names
 		kAvatar,          // .bavatar -- the authored half of one rig; text
 		kBlend,           // .bblend -- the blend spaces authored against one clip set; text
+		kGrass,           // .bgrass -- a grass look; text
 		// The number of asset kinds. Anchors the assertion that every one of them is either a
 		// container with a codec or a listed foreign kind; anchoring that on whichever enumerator
 		// happens to be last instead means appending one silently satisfies it.
@@ -66,6 +67,7 @@ namespace assetlib
 		kDocumentOutput,    // a .bimport names a container its source produced
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
+		kGrassMaterial,   // a .bgrass names the .bmaterial its blades shade through
 		kPlugin,          // a plugin-registered authored kind reports an opaque field token
 	};
 
@@ -214,6 +216,7 @@ namespace assetlib
 		size_t clipSetsScanned        = 0;
 		size_t avatarsScanned         = 0;
 		size_t blendSetsScanned       = 0;
+		size_t grassLooksScanned      = 0;
 
 	private:
 		struct Range
