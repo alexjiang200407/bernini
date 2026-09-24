@@ -10,6 +10,7 @@
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl/types/MeshInstanceFlags.h>
+#include <bgl/types/WindDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -345,6 +346,22 @@ namespace bgl
 		 */
 		virtual void
 		SetExposure(float exposure) = 0;
+
+		/**
+		 * Sets the wind every grass field in this view sways in. Replaces any previous wind; a view
+		 * that never calls this is calm. Per view, like the light, so two views of one Scene may
+		 * blow differently.
+		 *
+		 * Not a temporal-epoch change: grass evaluates the wind at this frame's time and the last
+		 * one's, so the change arrives as motion. A new wind takes effect in both evaluations at
+		 * once, which reads as a one-frame jump in the velocity rather than a smear.
+		 *
+		 * @throws SceneError if any field is not finite; if `strength`, `gustStrength` or
+		 *         `gustSpeed` is negative; if `gustScale` is not positive; or if `direction` has
+		 *         no horizontal length.
+		 */
+		virtual void
+		SetWind(const WindDesc& desc) = 0;
 
 	protected:
 		ISceneView() noexcept = default;
