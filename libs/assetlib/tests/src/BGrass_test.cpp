@@ -106,11 +106,11 @@ TEST_CASE("A grass document keeps the keys it does not know, at any depth", "[gr
 	edited.material    = std::string(c_MaterialKey);
 	const auto written = nlohmann::json::parse(Text(edited));
 
-	CHECK(written["futureTopLevel"] == nlohmann::json::array({ 1, 2 }));
-	CHECK(written["futureGroup"]["x"] == 1);
-	CHECK(written["blade"]["futureBladeKey"] == "kept");
-	CHECK(written["blade"]["lean"].get<float>() == 0.1f);
-	CHECK(written["material"] == c_MaterialKey);
+	CHECK(written.at("futureTopLevel").get<std::vector<int>>() == std::vector<int>{ 1, 2 });
+	CHECK(written.at("futureGroup").at("x").get<int>() == 1);
+	CHECK(written.at("blade").at("futureBladeKey").get<std::string>() == "kept");
+	CHECK(written.at("blade").at("lean").get<float>() == 0.1f);
+	CHECK(written.at("material").get<std::string>() == c_MaterialKey);
 }
 
 TEST_CASE("A grass document refuses a value of the wrong type", "[grass][codec]")
