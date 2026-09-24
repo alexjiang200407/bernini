@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
@@ -94,7 +95,12 @@ AnimationEditorWindow::AnimationEditorWindow(
 	// its compositing, and a hidden viewport leaves the frame loop entirely. The properties go
 	// behind it with the viewport -- a clip list and a transport with no rig to drive read as a
 	// mesh being open.
-	auto* prompt = new QLabel(QStringLiteral("Drop a rigged mesh here"), this);
+	auto* prompt = new QLabel(
+		editor::Localize(
+			host.GetLanguageResolver(),
+			"bernini.animation.drop_prompt",
+			"Drop a rigged mesh here"),
+		this);
 	prompt->setAlignment(Qt::AlignCenter);
 	prompt->setEnabled(false);
 
@@ -110,7 +116,10 @@ AnimationEditorWindow::AnimationEditorWindow(
 	connect(m_Preview, &AnimationPreviewWindow::MeshChanged, this, [this](const QString& relPath) {
 		m_MeshRelPath = relPath;
 		m_MeshLabel->setText(
-			relPath.isEmpty() ? QStringLiteral("No mesh open") :
+			relPath.isEmpty() ? editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.animation.no_mesh_open",
+									"No mesh open") :
 								QFileInfo(relPath).completeBaseName());
 		m_MeshLabel->setToolTip(relPath);
 		m_Stage->setCurrentIndex(relPath.isEmpty() ? 0 : 1);
@@ -172,7 +181,9 @@ AnimationEditorWindow::BuildPropertiesColumn()
 
 	// The way to let go of the held assets: the explorer refuses to delete or rename what this
 	// panel is offering, and "close it first" needs a close to point at.
-	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
+	auto* closeButton = new QPushButton(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.close_button", "Close"),
+		column);
 	closeButton->setEnabled(false);
 	connect(closeButton, &QPushButton::clicked, this, [this] { m_Preview->Clear(); });
 	connect(
@@ -183,13 +194,23 @@ AnimationEditorWindow::BuildPropertiesColumn()
 
 	layout->addWidget(closeButton);
 
-	m_MeshLabel = new QLabel(QStringLiteral("No mesh open"), column);
+	m_MeshLabel = new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.no_mesh_open",
+			"No mesh open"),
+		column);
 	m_MeshLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	m_MeshLabel->setWordWrap(true);
 	layout->addWidget(m_MeshLabel);
 
 	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Animation Source"), column));
+	layout->addWidget(new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.animation_source_label",
+			"Animation Source"),
+		column));
 
 	m_SourceSelector = new QComboBox(column);
 	m_SourceSelector->setEnabled(false);
@@ -205,16 +226,31 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	layout->addWidget(m_SourceSelector);
 
 	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
+	layout->addWidget(new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.preview_as_label",
+			"Preview As"),
+		column));
 
 	m_TierSelector = new QComboBox(column);
 	m_TierSelector->setEnabled(false);
-	m_TierSelector->addItem(QStringLiteral("Skinned"));
-	m_TierSelector->addItem(QStringLiteral("Crowd"));
-	m_TierSelector->setToolTip(QStringLiteral(
-		"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed once "
-		"and shares. The two draw the same picture -- this is how the crowd path gets exercised, "
-		"not something to look for on screen."));
+	m_TierSelector->addItem(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.tier_skinned",
+			"Skinned"));
+	m_TierSelector->addItem(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.tier_crowd", "Crowd"));
+	m_TierSelector->setToolTip(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.tier_selector_tooltip",
+			"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed "
+			"once "
+			"and shares. The two draw the same picture -- this is how the crowd path gets "
+			"exercised, "
+			"not something to look for on screen."));
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
@@ -228,7 +264,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 
 	layout->addSpacing(8);
 
-	m_GroundControls = new GroundControls(m_Preview, column);
+	m_GroundControls = new GroundControls(m_Preview, m_Host.GetLanguageResolver(), column);
 	layout->addWidget(m_GroundControls);
 
 	// What is being done with the clip set, rather than what it is: one clip watched, or two
@@ -236,8 +272,12 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	// blended plant weight has to be judged on a slope while the blend controls are visible.
 	layout->addSpacing(8);
 	m_Surfaces = new QTabWidget(column);
-	m_Surfaces->addTab(BuildClipTab(), QStringLiteral("Clip"));
-	m_Surfaces->addTab(BuildBlendTab(), QStringLiteral("Blend"));
+	m_Surfaces->addTab(
+		BuildClipTab(),
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.clip_tab", "Clip"));
+	m_Surfaces->addTab(
+		BuildBlendTab(),
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.blend", "Blend"));
 	// The tab decides what is being watched, so leaving Blend puts the clip back and entering it
 	// restores whatever fade its controls describe. That is also how a chosen To is undone.
 	connect(m_Surfaces, &QTabWidget::currentChanged, this, [this](int) {
@@ -307,10 +347,16 @@ AnimationEditorWindow::BuildBlendTab()
 	m_ToEnd   = new QComboBox(m_TransitionGroup);
 	// Nothing to fade to until somebody says so: the panel's resting state is one clip playing, and
 	// a second end filled in by default would offer a transition nobody asked for.
-	m_ToEnd->setPlaceholderText(QStringLiteral("fade to..."));
+	m_ToEnd->setPlaceholderText(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.fade_to_placeholder",
+			"fade to..."));
 
 	ends->addWidget(m_FromEnd, /*stretch*/ 1);
-	ends->addWidget(new QLabel(QStringLiteral("→"), m_TransitionGroup));
+	ends->addWidget(new QLabel(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.transition_arrow", "→"),
+		m_TransitionGroup));
 	ends->addWidget(m_ToEnd, /*stretch*/ 1);
 	fade->addLayout(ends);
 
@@ -320,12 +366,24 @@ AnimationEditorWindow::BuildBlendTab()
 	// controls never both claim to say what the fade arrives at.
 	auto* spaceRow = new QHBoxLayout();
 	spaceRow->setContentsMargins(0, 0, 0, 0);
-	m_SpaceEnabled = new QCheckBox(QStringLiteral("Blend space"), m_TransitionGroup);
-	m_SpaceEnabled->setToolTip(QStringLiteral(
-		"Fade onto one of the open set's blend spaces instead of a clip, at the parameter "
-		"beside it."));
+	m_SpaceEnabled = new QCheckBox(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.blend_space_checkbox",
+			"Blend space"),
+		m_TransitionGroup);
+	m_SpaceEnabled->setToolTip(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.blend_space_tooltip",
+			"Fade onto one of the open set's blend spaces instead of a clip, at the parameter "
+			"beside it."));
 	m_SpaceEnd = new QComboBox(m_TransitionGroup);
-	m_SpaceEnd->setPlaceholderText(QStringLiteral("no blend set open"));
+	m_SpaceEnd->setPlaceholderText(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.no_blend_set_placeholder",
+			"no blend set open"));
 
 	m_SpaceEndParameter = new QDoubleSpinBox(m_TransitionGroup);
 	m_SpaceEndParameter->setDecimals(editor::c_ParameterDecimals);
@@ -339,13 +397,19 @@ AnimationEditorWindow::BuildBlendTab()
 
 	auto* timing = new QHBoxLayout();
 	timing->setContentsMargins(0, 0, 0, 0);
-	timing->addWidget(new QLabel(QStringLiteral("Fade"), m_TransitionGroup));
+	timing->addWidget(new QLabel(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.fade_label", "Fade"),
+		m_TransitionGroup));
 	m_FadeSeconds = new QDoubleSpinBox(m_TransitionGroup);
 	m_FadeSeconds->setRange(c_MinFadeSeconds, c_MaxFadeSeconds);
 	m_FadeSeconds->setSingleStep(0.05);
 	m_FadeSeconds->setDecimals(2);
 	m_FadeSeconds->setValue(c_DefaultFadeSeconds);
-	m_FadeSeconds->setSuffix(QStringLiteral(" s"));
+	m_FadeSeconds->setSuffix(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation.fade_seconds_suffix",
+			" s"));
 	// Committed rather than tracked: with keyboard tracking on, valueChanged fires per keystroke,
 	// and every one of those re-stamps the record and re-parks the clock at the window's start --
 	// so typing "0.35" would snap the playhead back three times and lose the scrub position the
@@ -356,7 +420,9 @@ AnimationEditorWindow::BuildBlendTab()
 	// The comparison the fade has to win. Off, the same two clips meet at the same instant with no
 	// blend between them, so what the fade is worth is the difference between two ticks of one box
 	// rather than a memory of the last time the panel was open -- the argument Plant feet is on.
-	m_BlendEnabled = new QCheckBox(QStringLiteral("Blend"), m_TransitionGroup);
+	m_BlendEnabled = new QCheckBox(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.blend", "Blend"),
+		m_TransitionGroup);
 	m_BlendEnabled->setChecked(true);
 	timing->addWidget(m_BlendEnabled);
 	fade->addLayout(timing);
@@ -469,7 +535,8 @@ AnimationEditorWindow::BuildTransportBar()
 	m_Speed->setRange(-4.0, 4.0);
 	m_Speed->setSingleStep(0.25);
 	m_Speed->setValue(1.0);
-	m_Speed->setSuffix(QStringLiteral("x"));
+	m_Speed->setSuffix(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.speed_suffix", "x"));
 	connect(m_Speed, &QDoubleSpinBox::valueChanged, this, [this](double speed) {
 		m_Transport.SetSpeed(static_cast<float>(speed));
 	});
@@ -705,7 +772,14 @@ AnimationEditorWindow::UpdateTransitionControls()
 	const bool toSpace = SpaceIsDestination();
 	m_ToEnd->setEnabled(usable && !toSpace);
 	m_ToEnd->setPlaceholderText(
-		toSpace ? QStringLiteral("using the blend space") : QStringLiteral("fade to..."));
+		toSpace ? editor::Localize(
+					  m_Host.GetLanguageResolver(),
+					  "bernini.animation.using_blend_space_placeholder",
+					  "using the blend space") :
+				  editor::Localize(
+					  m_Host.GetLanguageResolver(),
+					  "bernini.animation.fade_to_placeholder",
+					  "fade to..."));
 
 	m_SyncingUi = true;
 	if (toSpace)
@@ -739,13 +813,20 @@ AnimationEditorWindow::UpdateTransitionControls()
 	// Disabled with the reason rather than hidden: a control that vanishes on a tier switch reads
 	// as a bug, and this one is a constraint of the tier rather than a missing feature.
 	if (!playable)
-		m_TransitionNote->setText(QStringLiteral("No clips to fade between."));
+		m_TransitionNote->setText(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation.no_clips_note",
+				"No clips to fade between."));
 	else if (!rewritable)
 	{
-		m_TransitionNote->setText(QStringLiteral(
-			"The shared bone table plays one clip per instance and holds no slots, so there "
-			"is nothing to fade between -- it still interpolates frames within that clip. "
-			"Switch to the per-instance source to preview a fade."));
+		m_TransitionNote->setText(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation.crowd_tier_note",
+				"The shared bone table plays one clip per instance and holds no slots, so there "
+				"is nothing to fade between -- it still interpolates frames within that clip. "
+				"Switch to the per-instance source to preview a fade."));
 	}
 	else if (!live)
 	{
@@ -753,10 +834,15 @@ AnimationEditorWindow::UpdateTransitionControls()
 		// in it, which no control on this tab can explain by being empty.
 		m_TransitionNote->setText(
 			m_Spaces.empty() ?
-				QStringLiteral(
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation.no_spaces_note",
 					"Playing one clip. Choose what to fade to. The open set holds no blend "
 					"spaces -- author one in the Blend Space Editor to fade onto it.") :
-				QStringLiteral("Playing one clip. Choose what to fade to."));
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation.choose_fade_note",
+					"Playing one clip. Choose what to fade to."));
 	}
 	else
 		m_TransitionNote->clear();
@@ -866,13 +952,21 @@ AnimationEditorWindow::SyncTransportUi()
 
 	if (const std::optional<float> frame = m_Transport.GetCurrentFrame(); frame)
 	{
-		m_TimeReadout->setText(QStringLiteral("%1s / frame %2")
-		                           .arg(m_Transport.GetTimeSeconds(), 0, 'f', 2)
-		                           .arg(*frame, 0, 'f', 1));
+		m_TimeReadout->setText(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation.time_readout_frame",
+				{ m_Transport.GetTimeSeconds(), *frame },
+				"{0:.2f}s / frame {1:.1f}"));
 	}
 	else if (m_Transport.HasClips())
 	{
-		m_TimeReadout->setText(QStringLiteral("%1s").arg(m_Transport.GetTimeSeconds(), 0, 'f', 2));
+		m_TimeReadout->setText(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation.time_readout",
+				{ m_Transport.GetTimeSeconds() },
+				"{0:.2f}s"));
 	}
 	else
 	{
@@ -954,19 +1048,32 @@ AnimationEditorWindow::SelectClip(const int index)
 	UpdateTransitionControls();
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();
-	m_ClipMetadata->setText(QStringLiteral("%1\n%2 frames @ %3 Hz\n%4 s%5")
-	                            .arg(QString::fromStdString(clip.name))
-	                            .arg(clip.frameCount)
-	                            .arg(clip.sampleRate)
-	                            .arg(clip.duration, 0, 'f', 3)
-	                            .arg(clip.loop ? QStringLiteral(", loops") : QString()));
+	m_ClipMetadata->setText(
+		clip.loop ? editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.animation.clip_metadata_loops",
+						{ QString::fromStdString(clip.name),
+	                      clip.frameCount,
+	                      clip.sampleRate,
+	                      clip.duration },
+						"{0}\n{1} frames @ {2:.6g} Hz\n{3:.3f} s, loops") :
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.animation.clip_metadata",
+						{ QString::fromStdString(clip.name),
+	                      clip.frameCount,
+	                      clip.sampleRate,
+	                      clip.duration },
+						"{0}\n{1} frames @ {2:.6g} Hz\n{3:.3f} s"));
 
 	// Pin the readout to this clip's widest string (its end values, in SyncTransportUi's own
 	// formats): a label that grows with the digits resizes the slider beside it every tick, and
 	// the groove's fill then repaints for geometry the handle has already left.
-	const QString widest = QStringLiteral("%1s / frame %2")
-	                           .arg(m_Transport.GetPeriodSeconds(), 0, 'f', 2)
-	                           .arg(static_cast<double>(clip.frameCount), 0, 'f', 1);
+	const QString widest = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.animation.time_readout_frame",
+		{ m_Transport.GetPeriodSeconds(), static_cast<double>(clip.frameCount) },
+		"{0:.2f}s / frame {1:.1f}");
 	m_TimeReadout->setMinimumWidth(m_TimeReadout->fontMetrics().horizontalAdvance(widest) + 8);
 
 	SyncTransportUi();

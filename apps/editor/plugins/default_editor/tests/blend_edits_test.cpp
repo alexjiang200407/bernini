@@ -4,8 +4,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstddef>
 #include <gamelib/BlendSpaceInfo.h>
 #include <limits>
@@ -412,20 +410,20 @@ TEST_CASE("Any clip with a cycle can be a sample, looping or not", "[animation][
 	SECTION("a one-shot is a sample like any other: the space wraps it")
 	{
 		clip.loop = false;
-		CHECK(editor::ClipRefusalReason(clip).empty());
+		CHECK(editor::ClipRefusalOf(clip) == editor::ClipRefusal::kNone);
 	}
 
 	SECTION("a looping clip is not refused")
 	{
 		clip.loop = true;
-		CHECK(editor::ClipRefusalReason(clip).empty());
+		CHECK(editor::ClipRefusalOf(clip) == editor::ClipRefusal::kNone);
 	}
 
 	SECTION("a single frame has no cycle, and says why")
 	{
 		clip.loop       = true;
 		clip.frameCount = 1;
-		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
+		CHECK(editor::ClipRefusalOf(clip) == editor::ClipRefusal::kSingleFrame);
 	}
 }
 
@@ -454,7 +452,7 @@ TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[
 
 		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
 
-		REQUIRE(taken.refusal.empty());
+		REQUIRE(taken.refusal.kind == editor::SpeedRefusal::Kind::kNone);
 		REQUIRE(taken.run.size() == 2);
 		CHECK(taken.run[0].clip == "walk");
 		CHECK(taken.run[0].parameter == Catch::Approx(1.4f));
@@ -472,7 +470,7 @@ TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[
 
 		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
 
-		REQUIRE(taken.refusal.empty());
+		REQUIRE(taken.refusal.kind == editor::SpeedRefusal::Kind::kNone);
 		REQUIRE(taken.run.size() == 3);
 		CHECK(taken.run[0].clip == "walk");
 		CHECK(taken.run[1].clip == "jog");
@@ -491,7 +489,8 @@ TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[
 		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, tied);
 
 		CHECK(taken.run.empty());
-		CHECK_THAT(taken.refusal, Catch::Matchers::ContainsSubstring("same speed"));
+		CHECK(taken.refusal.kind == editor::SpeedRefusal::Kind::kSameSpeed);
+		CHECK(taken.refusal.clips == std::vector<std::string>{ "walk", "stroll" });
 	}
 
 	SECTION("clips that do not travel are the same refusal, since both measure zero")
@@ -510,7 +509,8 @@ TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[
 		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
 
 		CHECK(taken.run.empty());
-		CHECK_THAT(taken.refusal, Catch::Matchers::ContainsSubstring("canter"));
+		CHECK(taken.refusal.kind == editor::SpeedRefusal::Kind::kUnknownClip);
+		CHECK(taken.refusal.clips == std::vector<std::string>{ "canter" });
 	}
 }
 

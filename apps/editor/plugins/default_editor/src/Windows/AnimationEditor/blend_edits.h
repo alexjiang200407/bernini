@@ -158,22 +158,43 @@ namespace editor
 		std::span<const assetlib::BlendSpace> authored,
 		std::span<game::BlendSpaceInfo>       live) noexcept;
 
+	/** Why a clip cannot be a sample of a blend space. The editor words it; this names it. */
+	enum class ClipRefusal
+	{
+		kNone,
+		kSingleFrame,
+	};
+
 	/**
-	 * Why `clip` cannot be a sample of a blend space, or empty when it can.
+	 * Why `clip` cannot be a sample of a blend space, or `kNone` when it can.
 	 *
 	 * A space wraps every sample by its own phase, whatever the clip's loop flag says, so the only
 	 * clip it cannot hold is one of a single frame -- which has no cycle, and which `AddRig` refuses.
 	 * Offered here so the clip is greyed with the reason beside it rather than accepted and then
 	 * refused by a rig that will not upload.
 	 */
-	[[nodiscard]] std::string_view
-	ClipRefusalReason(const ClipInfo& clip) noexcept;
+	[[nodiscard]] ClipRefusal
+	ClipRefusalOf(const ClipInfo& clip) noexcept;
+
+	/** Why thresholds could not be taken from speed; `clips` names the clips the reason is about. */
+	struct SpeedRefusal
+	{
+		enum class Kind
+		{
+			kNone,
+			kUnknownClip,  // clips[0] is not a clip of the set
+			kSameSpeed,    // clips[0] and clips[1] were animated at the same speed
+		};
+
+		Kind                     kind = Kind::kNone;
+		std::vector<std::string> clips;
+	};
 
 	/** A run taken from measured speed, or the reason it could not be. Exactly one is set. */
 	struct SpeedThresholds
 	{
 		std::vector<assetlib::BlendSpaceSample> run;
-		std::string                             refusal;
+		SpeedRefusal                            refusal;
 	};
 
 	/**

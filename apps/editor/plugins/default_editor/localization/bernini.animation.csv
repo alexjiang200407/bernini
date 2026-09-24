@@ -1,2 +1,33 @@
 key,en
+animation_source_label,Animation Source
+blend,Blend
+blend_space_checkbox,Blend space
+blend_space_tooltip,"Fade onto one of the open set's blend spaces instead of a clip, at the parameter beside it."
+choose_fade_note,Playing one clip. Choose what to fade to.
+clip_metadata,"{0}
+{1} frames @ {2:.6g} Hz
+{3:.3f} s"
+clip_metadata_loops,"{0}
+{1} frames @ {2:.6g} Hz
+{3:.3f} s, loops"
+clip_tab,Clip
+close_button,Close
+crowd_tier_note,"The shared bone table plays one clip per instance and holds no slots, so there is nothing to fade between -- it still interpolates frames within that clip. Switch to the per-instance source to preview a fade."
+drop_prompt,Drop a rigged mesh here
+fade_label,Fade
+fade_seconds_suffix, s
+fade_to_placeholder,fade to...
+no_blend_set_placeholder,no blend set open
+no_clips_note,No clips to fade between.
+no_mesh_open,No mesh open
+no_spaces_note,Playing one clip. Choose what to fade to. The open set holds no blend spaces -- author one in the Blend Space Editor to fade onto it.
+preview_as_label,Preview As
+speed_suffix,x
+tier_crowd,Crowd
+tier_selector_tooltip,"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed once and shares. The two draw the same picture -- this is how the crowd path gets exercised, not something to look for on screen."
+tier_skinned,Skinned
+time_readout,{0:.2f}s
+time_readout_frame,{0:.2f}s / frame {1:.1f}
 title,Animation Editor
+transition_arrow,→
+using_blend_space_placeholder,using the blend space
