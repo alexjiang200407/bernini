@@ -1428,6 +1428,32 @@ namespace bgl
 	}
 
 	void
+	SceneView::SetWind(const WindDesc& desc)
+	{
+		const bool finite = core::is_finite(desc.direction) && std::isfinite(desc.strength) &&
+		                    std::isfinite(desc.gustScale) && std::isfinite(desc.gustSpeed) &&
+		                    std::isfinite(desc.gustStrength);
+		if (!finite)
+		{
+			throw SceneError("SetWind: every field must be finite");
+		}
+		if (desc.strength < 0.0f || desc.gustStrength < 0.0f || desc.gustSpeed < 0.0f)
+		{
+			throw SceneError("SetWind: strength, gustStrength and gustSpeed must be non-negative");
+		}
+		if (desc.gustScale <= 0.0f)
+		{
+			throw SceneError("SetWind: gustScale must be positive");
+		}
+		if (glm::length(glm::vec2(desc.direction.x, desc.direction.z)) == 0.0f)
+		{
+			throw SceneError("SetWind: direction must have a horizontal part");
+		}
+
+		m_Wind = desc;
+	}
+
+	void
 	SceneView::SetSkyBox(SkyboxDesc desc)
 	{
 		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);

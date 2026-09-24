@@ -22,6 +22,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
@@ -30,6 +31,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GrassDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -60,6 +62,7 @@
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -94,6 +97,23 @@ namespace bgl
 		uint32_t boneCount = 0;  // kSkinnedMesh only
 		uint32_t nodeCount = 0;  // kSkinnedMesh only: clips plus authored spaces
 		uint32_t legCount  = 0;  // kSkinnedMesh only; zero on a rig that authored no legs
+
+		// One use per bound grass field, released by DeleteGeom; see GrassMeta::useCount.
+		std::vector<GrassHandle> grass;
+	};
+
+	/**
+	 * One live grass look, and the count that decides whether it may be deleted.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct GrassMeta
+	{
+		GrassDesc desc;
+
+		// Grass fields bound to this look across every live geom. DeleteGrass refuses while it is
+		// nonzero: a field left naming a freed slot would draw with whatever look takes it next.
+		uint32_t useCount = 0;
 	};
 
 	/**
@@ -454,11 +474,32 @@ namespace bgl
 		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials) override;
+			std::span<const MaterialHandle> materials,
+			std::span<const GrassHandle>    grass = {}) override;
 
 		GeomHandle
-		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
-			override;
+		AddStaticMeshGeom(
+			PreparedStaticMesh              mesh,
+			std::span<const MaterialHandle> materials,
+			std::span<const GrassHandle>    grass = {}) override;
+
+		GrassHandle
+		CreateGrass(const GrassDesc& desc) override;
+
+		void
+		UpdateGrass(GrassHandle grass, const GrassDesc& desc) override;
+
+		[[nodiscard]] GrassDesc
+		GetGrass(GrassHandle grass) const override;
+
+		[[nodiscard]] bool
+		IsGrassAlive(GrassHandle grass) const noexcept override
+		{
+			return grass.IsValid() && m_Grass.valid(grass.handle);
+		}
+
+		void
+		DeleteGrass(GrassHandle grass) override;
 
 		RigHandle
 		AddRig(
@@ -566,7 +607,16 @@ namespace bgl
 		AddPreparedMesh(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
+			std::span<const GrassHandle>    grass,
 			const std::optional<glm::vec4>  sphereOverride);
+
+		/**
+		 * Refuses a look no grass pass could draw; see IScene::CreateGrass for the rules. Static
+		 * for the same reason ValidateSkinnedRig is, bar the material, which it reads off the
+		 * handle alone.
+		 */
+		static void
+		ValidateGrass(const GrassDesc& desc, std::string_view caller);
 
 		/**
 		 * Refuses a rig the pose pass could not walk or address: no bones, a `parent` that is not
@@ -672,6 +722,8 @@ namespace bgl
 
 		GroundPlaneDesc m_Ground;
 		bool            m_FootPlanting = true;
+
+		core::slot_vector<GrassMeta> m_Grass;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.

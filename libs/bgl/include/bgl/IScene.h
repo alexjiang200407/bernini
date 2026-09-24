@@ -5,6 +5,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
@@ -14,6 +15,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GrassDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -86,16 +88,23 @@ namespace bgl
 		 * `materials[submesh.material]`; a submesh whose material index is out of range (e.g. the
 		 * source had none) is left unlit.
 		 *
+		 * Each of the mesh's grass fields is bound to `grass[field.material]`, and every instance
+		 * of the geom draws it. A field whose slot is out of range or holds a null handle is not
+		 * drawn. The geom holds a use of every look it binds; see DeleteGrass.
+		 *
 		 * @param mesh       A BMesh loaded from disk (see assetlib::load).
 		 * @param meshIndex  Index into `mesh.meshes`.
 		 * @param materials  Materials parallel to `mesh.materials`, resolved by the caller.
-		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
+		 * @param grass      Grass looks parallel to `mesh.materials`, resolved by the caller.
+		 * @throws SceneError if `meshIndex` is out of range, CookStaticMesh refuses the mesh, a
+		 *         non-null handle in `grass` names a deleted look, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
 		AddStaticMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials) = 0;
+			std::span<const MaterialHandle> materials,
+			std::span<const GrassHandle>    grass = {}) = 0;
 
 		/**
 		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,
@@ -105,10 +114,62 @@ namespace bgl
 		 * @param mesh       From CookStaticMesh. Consumed, even on failure.
 		 * @param materials  Materials parallel to the source BMesh's `materials`, resolved by the
 		 *                   caller; a submesh whose material index is out of range is left unlit.
-		 * @throws SceneError if `mesh` was already consumed, or a buffer allocation fails.
+		 * @param grass      Grass looks parallel to the same slots, as the overload above.
+		 * @throws SceneError if `mesh` was already consumed, a non-null handle in `grass` names a
+		 *         deleted look, or a buffer allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+		AddStaticMeshGeom(
+			PreparedStaticMesh              mesh,
+			std::span<const MaterialHandle> materials,
+			std::span<const GrassHandle>    grass = {}) = 0;
+
+		/**
+		 * Creates a grass look: the blade shape, density, wind response and lighting terms a static
+		 * geom's grass fields are drawn with. See GrassDesc.
+		 *
+		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert) or in the
+		 *         kBlend layer; a length is not finite and positive where GrassDesc says so; a share
+		 *         is outside [0, 1]; `minHeight > maxHeight`; the segment counts are not
+		 *         1 <= far <= near <= c_MaxGrassBladeSegments; `bladesPerClump` is outside
+		 *         [1, c_MaxGrassBladesPerClump]; `fadeEnd <= fadeStart`; or a colour, `widening`,
+		 *         `gustResponse` or `translucency` is negative or not finite.
+		 */
+		virtual GrassHandle
+		CreateGrass(const GrassDesc& desc) = 0;
+
+		/**
+		 * Rewrites a live look in place. Every geom bound to it draws the new look from the next
+		 * frame, with no rebinding.
+		 *
+		 * A change no motion vector describes, so it moves the temporal epoch.
+		 *
+		 * @throws SceneError if the handle is null or deleted, or for anything CreateGrass refuses.
+		 */
+		virtual void
+		UpdateGrass(GrassHandle grass, const GrassDesc& desc) = 0;
+
+		/**
+		 * The desc CreateGrass or UpdateGrass last accepted.
+		 *
+		 * @throws SceneError if the handle is null or deleted.
+		 */
+		[[nodiscard]] virtual GrassDesc
+		GetGrass(GrassHandle grass) const = 0;
+
+		/** Whether `grass` still names a live look in this scene. */
+		[[nodiscard]] virtual bool
+		IsGrassAlive(GrassHandle grass) const noexcept = 0;
+
+		/**
+		 * Destroys a grass look.
+		 *
+		 * @pre No geom bound to it is still alive. Refused rather than permitted, like DeleteRig: a
+		 *      field left naming a freed look would draw with whatever look takes its slot next.
+		 * @throws SceneError if the handle is null, already deleted, or still bound by a live geom.
+		 */
+		virtual void
+		DeleteGrass(GrassHandle grass) = 0;
 
 		/**
 		 * Uploads a rig -- a skeleton and the clips cooked against it -- as a scene object of its

@@ -55,7 +55,10 @@ namespace bgl
 	 * into AddStaticMeshGeom it rode the render thread.
 	 *
 	 * @throws SceneError if `meshIndex` is out of range, a submesh has no geometry or is larger than
-	 *         one draw can launch, or a submesh's data lies outside the mesh's buffers.
+	 *         one draw can launch, a submesh's data lies outside the mesh's buffers, or one of the
+	 *         mesh's grass fields has no chunks, more chunks than one dispatch can launch, a chunk
+	 *         of no clumps or more than `assetlib::c_GrassClumpsPerChunk`, or a range outside its
+	 *         pool.
 	 */
 	[[nodiscard]] BGL_API PreparedStaticMesh
 	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);

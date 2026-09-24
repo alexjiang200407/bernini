@@ -6,10 +6,12 @@
 #include <array>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
@@ -51,6 +53,9 @@ namespace bgl
 		// the ceiling.
 		constexpr uint32_t c_MaxSubmeshMeshlets =
 			c_MaxDispatchMeshGroups - (c_MaxDispatchMeshGroups % idl::cMeshletsPerGroup);
+
+		// A grass field dispatches one amplification group per chunk.
+		constexpr uint32_t c_MaxGrassChunks = c_MaxDispatchMeshGroups;
 
 		// One number declared twice, because bgl does not link assetlib: the cook groups by its
 		// constant and everything below reads by this one. A drift would have a submesh read bounds
@@ -431,6 +436,7 @@ namespace bgl
 		GeomHandle base = AddPreparedMesh(
 			CookStaticMesh(mesh, meshIndex),
 			materials,
+			{},
 			BoundingSphereOf(posedBounds.min, posedBounds.max));
 
 		GeomRecord& geom = m_Geoms[base.handle.index];
@@ -638,8 +644,100 @@ namespace bgl
 			glm::vec4                      boundingSphere = glm::vec4(0.0f);
 		};
 
-		std::vector<Submesh> submeshes;
+		/** One grass field of the mesh, its chunks' `firstClump` rebased onto `clumps`. */
+		struct GrassField
+		{
+			uint32_t                          slot = 0;
+			std::vector<assetlib::GrassChunk> chunks;
+			std::vector<assetlib::GrassClump> clumps;
+		};
+
+		std::vector<Submesh>    submeshes;
+		std::vector<GrassField> grassFields;
 	};
+
+	namespace
+	{
+		/**
+		 * Copies mesh `meshIndex`'s grass fields out of the BMesh's pools. The ranges come from the
+		 * file, so each is checked against the pool it names before anything is read.
+		 */
+		void
+		CookGrassFields(
+			const assetlib::BMesh&                             mesh,
+			const uint32_t                                     meshIndex,
+			std::vector<PreparedStaticMesh::Impl::GrassField>& out)
+		{
+			for (size_t f = 0; f < mesh.grassFields.size(); ++f)
+			{
+				const assetlib::GrassField& src = mesh.grassFields[f];
+				if (src.mesh != meshIndex)
+				{
+					continue;
+				}
+
+				if (src.chunkCount == 0)
+				{
+					throw SceneError(
+						std::format("CookStaticMesh: grass field {} has no chunks", f));
+				}
+
+				if (src.chunkCount > c_MaxGrassChunks)
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: grass field {} has {} chunks, more than the {} thread "
+							"groups one dispatch can launch",
+							f,
+							src.chunkCount,
+							c_MaxGrassChunks));
+				}
+
+				if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount >
+				    mesh.grassChunks.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: grass field {} claims {} chunks at offset {}, past "
+							"the "
+							"end of the mesh's {} of them",
+							f,
+							src.chunkCount,
+							src.firstChunk,
+							mesh.grassChunks.size()));
+				}
+
+				PreparedStaticMesh::Impl::GrassField& field = out.emplace_back();
+				field.slot                                  = src.material;
+				field.chunks.reserve(src.chunkCount);
+
+				for (uint32_t c = 0; c < src.chunkCount; ++c)
+				{
+					assetlib::GrassChunk chunk = mesh.grassChunks[src.firstChunk + c];
+					if (chunk.clumpCount == 0 ||
+					    chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
+					    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
+					        mesh.grassClumps.size())
+					{
+						throw SceneError(
+							std::format(
+								"CookStaticMesh: grass field {} chunk {} holds no clumps, more "
+								"than "
+								"{}, or clumps past the end of the mesh's {}",
+								f,
+								c,
+								assetlib::c_GrassClumpsPerChunk,
+								mesh.grassClumps.size()));
+					}
+
+					const auto first = mesh.grassClumps.begin() + chunk.firstClump;
+					chunk.firstClump = static_cast<uint32_t>(field.clumps.size());
+					field.clumps.insert(field.clumps.end(), first, first + chunk.clumpCount);
+					field.chunks.emplace_back(chunk);
+				}
+			}
+		}
+	}
 
 	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
 	PreparedStaticMesh::~PreparedStaticMesh()                             = default;
@@ -806,6 +904,8 @@ namespace bgl
 			}
 		}
 
+		CookGrassFields(mesh, meshIndex, impl->grassFields);
+
 		auto prepared   = PreparedStaticMesh();
 		prepared.m_Impl = std::move(impl);
 		return prepared;
@@ -815,21 +915,26 @@ namespace bgl
 	Scene::AddStaticMeshGeom(
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials)
+		std::span<const MaterialHandle> materials,
+		std::span<const GrassHandle>    grass)
 	{
-		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
+		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials, grass);
 	}
 
 	GeomHandle
-	Scene::AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
+	Scene::AddStaticMeshGeom(
+		PreparedStaticMesh              mesh,
+		std::span<const MaterialHandle> materials,
+		std::span<const GrassHandle>    grass)
 	{
-		return AddPreparedMesh(std::move(mesh), materials, std::nullopt);
+		return AddPreparedMesh(std::move(mesh), materials, grass, std::nullopt);
 	}
 
 	GeomHandle
 	Scene::AddPreparedMesh(
 		PreparedStaticMesh              mesh,
 		std::span<const MaterialHandle> materials,
+		std::span<const GrassHandle>    grass,
 		const std::optional<glm::vec4>  sphereOverride)
 	{
 		try
@@ -838,6 +943,27 @@ namespace bgl
 			{
 				throw SceneError(
 					"AddStaticMeshGeom: the prepared mesh is empty or already consumed");
+			}
+
+			std::vector<GrassHandle> boundGrass;
+			for (const PreparedStaticMesh::Impl::GrassField& field : mesh.m_Impl->grassFields)
+			{
+				const GrassHandle look =
+					field.slot < grass.size() ? grass[field.slot] : GrassHandle{};
+				if (!look.IsValid())
+				{
+					continue;
+				}
+
+				if (!IsGrassAlive(look))
+				{
+					throw SceneError(
+						std::format(
+							"AddStaticMeshGeom: the grass look bound to slot {} has been deleted",
+							field.slot));
+				}
+
+				boundGrass.emplace_back(look);
 			}
 
 			// One GPU submesh per source submesh, in order: callers address geometry by source
@@ -887,9 +1013,17 @@ namespace bgl
 			auto submeshRange = idl::RangeWithCount();
 			submeshRange      = baseSubmeshGlobal;
 
-			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(GeomRecord{ .submeshes = submeshRange });
+			auto retVal   = GeomHandle();
+			retVal.handle = AllocateGeomSlot(
+				GeomRecord{ .submeshes = submeshRange, .grass = std::move(boundGrass) });
 			retVal.geomType = GeomType::kStaticMesh;
+
+			// After the last throw, as AddSkinnedMeshGeom counts its rig: a use counted for a geom
+			// that failed to build would refuse DeleteGrass forever.
+			for (const GrassHandle look : m_Geoms[retVal.handle.index].grass)
+			{
+				++m_Grass[look.handle.index].useCount;
+			}
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
 			rollback.Commit();
@@ -927,6 +1061,15 @@ namespace bgl
 			if (rig != nullptr && rig->useCount > 0)
 			{
 				--rig->useCount;
+			}
+		}
+
+		for (const GrassHandle look : record.grass)
+		{
+			gassert(IsGrassAlive(look), "a live geom binds a grass look that is already gone");
+			if (IsGrassAlive(look) && m_Grass[look.handle.index].useCount > 0)
+			{
+				--m_Grass[look.handle.index].useCount;
 			}
 		}
 
