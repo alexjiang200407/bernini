@@ -1,4 +1,5 @@
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "util/editor_language.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
 #include <editor_sdk/mesh_load.h>
@@ -517,7 +518,12 @@ AssetThumbnailCache::Request(const QString& path)
 						material = true;
 					if (material && !scene->material.has_value())
 					{
-						Reject(path, stamp, "A primitive thumbnail requires a material");
+						Reject(
+							path,
+							stamp,
+							editor::Localize(
+								"editor.thumbnails.primitive_requires_material",
+								"A primitive thumbnail requires a material"));
 						return;
 					}
 

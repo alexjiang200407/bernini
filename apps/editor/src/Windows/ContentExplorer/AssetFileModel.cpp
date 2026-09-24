@@ -1,6 +1,7 @@
 #include "Windows/ContentExplorer/AssetFileModel.h"
 
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "util/editor_language.h"
 #include <editor_sdk/TexturePreviewCache.h>
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/source_mesh.h>
@@ -110,8 +111,14 @@ AssetFileModel::data(const QModelIndex& index, int role) const
 			// Which file failed is the whole message for a source: its own bytes are fine, and a
 			// container it produced is rebuilt rather than repaired -- the opposite of what
 			// "cannot be read" on a `.glb` would have a person conclude about their model.
-			return path == row ? tr("Cannot be read: %1").arg(rejection) :
-			                     tr("The mesh it produced cannot be read: %1").arg(rejection);
+			return path == row ? editor::Localize(
+									 "editor.content_explorer.asset_unreadable",
+									 { rejection },
+									 "Cannot be read: {0}") :
+			                     editor::Localize(
+									 "editor.content_explorer.source_mesh_unreadable",
+									 { rejection },
+									 "The mesh it produced cannot be read: {0}");
 		return QApplication::style()->standardIcon(QStyle::SP_MessageBoxWarning);
 	}
 

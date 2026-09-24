@@ -2,6 +2,7 @@
 
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/avatar_create.h"
+#include "util/editor_language.h"
 #include <assetlib/asset_refs.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/material_bake.h>
@@ -26,6 +27,12 @@
 #include <string_view>
 #include <utility>
 
+namespace
+{
+	// Untranslated: whatever the field still says becomes a directory every locale's user shares.
+	constexpr auto c_NewDirectoryName = std::string_view("New Folder");
+}
+
 AssetOperations::AssetOperations(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
 	QObject(parent), m_Parent(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))
 {}
@@ -46,7 +53,10 @@ AssetOperations::Bake(const QString& asset)
 	// the ones last saved -- Save in the Material Editor first to bake unsaved edits.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		m_Parent,
-		QString("Baking %1").arg(QFileInfo(asset).fileName()),
+		editor::Localize(
+			"editor.asset_operations.baking",
+			{ QFileInfo(asset).fileName() },
+			"Baking {0}"),
 		[&](background::Progress& progress) {
 			editor::BakeMaterials(assetlib::AssetStore(dataRoot), { asset }, progress);
 		},
@@ -61,8 +71,11 @@ AssetOperations::Bake(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Bake Material",
-			QString("Could not bake '%1':\n\n%2").arg(QFileInfo(asset).fileName(), result.error));
+			editor::Localize("editor.asset_operations.bake_material_title", "Bake Material"),
+			editor::Localize(
+				"editor.asset_operations.bake_failed",
+				{ QFileInfo(asset).fileName(), result.error },
+				"Could not bake '{0}':\n\n{1}"));
 		return;
 	}
 
@@ -88,9 +101,11 @@ AssetOperations::CreateAvatar(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Create Avatar",
-			QString("Could not create an avatar for '%1':\n\n%2")
-				.arg(QFileInfo(asset).fileName(), QString::fromUtf8(e.what())));
+			editor::Localize("editor.asset_operations.create_avatar_title", "Create Avatar"),
+			editor::Localize(
+				"editor.asset_operations.create_avatar_failed",
+				{ QFileInfo(asset).fileName(), e.what() },
+				"Could not create an avatar for '{0}':\n\n{1}"));
 	}
 }
 
@@ -127,15 +142,23 @@ AssetOperations::DeleteWithPlanner(
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Delete",
-			QString(
-				"%1 is open in an editor panel.\n\nClose it there first: the Material Editor's "
-				"next Save would write it back, the Animation panel would go on offering it, and a "
-				"viewport lit by an environment is still drawing it -- which config.json's "
-				"environmentMap names unless a drop replaced it.")
-				.arg(
-					isDirectory ? QString("'%1' holds an asset that").arg(asset) :
-								  QString("'%1'").arg(asset)));
+			editor::Localize("editor.asset_operations.delete_title", "Delete"),
+			isDirectory ?
+				editor::Localize(
+					"editor.asset_operations.delete_held_open_directory",
+					{ asset },
+					"'{0}' holds an asset that is open in an editor panel.\n\nClose it there "
+					"first: the Material Editor's next Save would write it back, the Animation "
+					"panel would go on offering it, and a viewport lit by an environment is still "
+					"drawing it -- which config.json's environmentMap names unless a drop replaced "
+					"it.") :
+				editor::Localize(
+					"editor.asset_operations.delete_held_open_file",
+					{ asset },
+					"'{0}' is open in an editor panel.\n\nClose it there first: the Material "
+					"Editor's next Save would write it back, the Animation panel would go on "
+					"offering it, and a viewport lit by an environment is still drawing it -- "
+					"which config.json's environmentMap names unless a drop replaced it."));
 		return;
 	}
 
@@ -147,9 +170,16 @@ AssetOperations::DeleteWithPlanner(
 	// The scan parses every mesh and material in the project, so it runs off the UI thread. It reads
 	// assetlib only, never bgl, which is what the loading screen requires of its worker. It takes no
 	// cancel token, so the screen offers no button that would not work.
-	const background::TaskResult scanned =
-		background::RunWithLoadingScreen(m_Parent, "Delete", [&](background::Progress& progress) {
-			progress.Report(0, 0, "Checking references...");
+	const background::TaskResult scanned = background::RunWithLoadingScreen(
+		m_Parent,
+		editor::Localize("editor.asset_operations.delete_title", "Delete"),
+		[&](background::Progress& progress) {
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.asset_operations.checking_references",
+					"Checking references..."));
 			store.emplace(std::filesystem::path(m_DataRoot.toStdWString()));
 			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
@@ -160,9 +190,11 @@ AssetOperations::DeleteWithPlanner(
 		// be known, and one of them may be the file about to be deleted.
 		QMessageBox::warning(
 			m_Parent,
-			"Delete",
-			QString("Could not work out what references '%1', so it was not deleted:\n\n%2")
-				.arg(asset, scanned.error));
+			editor::Localize("editor.asset_operations.delete_title", "Delete"),
+			editor::Localize(
+				"editor.asset_operations.delete_scan_failed",
+				{ asset, scanned.error },
+				"Could not work out what references '{0}', so it was not deleted:\n\n{1}"));
 		return;
 	}
 
@@ -179,21 +211,31 @@ AssetOperations::DeleteWithPlanner(
 		const bool one = referrers.size() == 1;
 
 		auto blocked = QMessageBox(m_Parent);
-		blocked.setWindowTitle("Delete");
+		blocked.setWindowTitle(editor::Localize("editor.asset_operations.delete_title", "Delete"));
 		blocked.setIcon(QMessageBox::Warning);
-		blocked.setText(QString("'%1' cannot be deleted.").arg(asset));
+		blocked.setText(
+			editor::Localize(
+				"editor.asset_operations.delete_blocked_text",
+				{ asset },
+				"'{0}' cannot be deleted."));
 		blocked.setInformativeText(
 			isDirectory ?
-				QString(
-					"%1 outside this folder still %2 something inside it. Re-route or delete "
-					"%3 first.")
-					.arg(one ? QString("One asset") : QString("%1 assets").arg(referrers.size()))
-					.arg(one ? "references" : "reference")
-					.arg(one ? "it" : "them") :
-				QString("%1 still %2 it. Re-route or delete %3 first.")
-					.arg(one ? QString("One asset") : QString("%1 assets").arg(referrers.size()))
-					.arg(one ? "references" : "reference")
-					.arg(one ? "it" : "them"));
+				(one ? editor::Localize(
+						   "editor.asset_operations.delete_blocked_directory_one",
+						   "One asset outside this folder still references something inside it. "
+						   "Re-route or delete it first.") :
+		               editor::Localize(
+						   "editor.asset_operations.delete_blocked_directory_many",
+						   { referrers.size() },
+						   "{0} assets outside this folder still reference something inside it. "
+						   "Re-route or delete them first.")) :
+				(one ? editor::Localize(
+						   "editor.asset_operations.delete_blocked_one",
+						   "One asset still references it. Re-route or delete it first.") :
+		               editor::Localize(
+						   "editor.asset_operations.delete_blocked_many",
+						   { referrers.size() },
+						   "{0} assets still reference it. Re-route or delete them first.")));
 		blocked.setDetailedText(referrers.join('\n'));
 		blocked.exec();
 		return;
@@ -209,11 +251,12 @@ AssetOperations::DeleteWithPlanner(
 
 		QMessageBox::warning(
 			m_Parent,
-			"Delete",
-			QString(
-				"'%1' would be deleted with '%2', but it is open in an editor "
-				"panel.\n\nClose it there first.")
-				.arg(member, asset));
+			editor::Localize("editor.asset_operations.delete_title", "Delete"),
+			editor::Localize(
+				"editor.asset_operations.delete_cascade_held_open",
+				{ member, asset },
+				"'{0}' would be deleted with '{1}', but it is open in an editor panel.\n\nClose "
+				"it there first."));
 		return;
 	}
 
@@ -224,53 +267,81 @@ AssetOperations::DeleteWithPlanner(
 	for (const std::string& file : plan.cascade) cascade << QString::fromStdString(file);
 
 	auto confirm = QMessageBox(m_Parent);
-	confirm.setWindowTitle("Delete");
+	confirm.setWindowTitle(editor::Localize("editor.asset_operations.delete_title", "Delete"));
 	confirm.setIcon(QMessageBox::Warning);
 
 	if (plan.IsDirectory())
 	{
-		confirm.setText(QString("Delete '%1' and everything in it?").arg(asset));
+		confirm.setText(
+			editor::Localize(
+				"editor.asset_operations.delete_directory_confirm",
+				{ asset },
+				"Delete '{0}' and everything in it?"));
 
-		QString info = contents.isEmpty() ?
-		                   QString("The folder is empty.") :
-		                   QString(
-							   "%1 file(s) will be deleted. Nothing outside the folder references "
-							   "any of them.")
-		                       .arg(contents.size());
-		if (!cascade.isEmpty())
-			info += QString(
-						"\n\n%1 asset(s) outside the folder are referenced only from inside it, "
-						"and will be deleted too.")
-			            .arg(cascade.size());
+		const QString info =
+			contents.isEmpty() ?
+				(cascade.isEmpty() ?
+		             editor::Localize(
+						 "editor.asset_operations.delete_folder_empty",
+						 "The folder is empty.\n\nThis cannot be undone.") :
+		             editor::Localize(
+						 "editor.asset_operations.delete_folder_empty_with_cascade",
+						 { cascade.size() },
+						 "The folder is empty.\n\n{0} asset(s) outside the folder are referenced "
+						 "only from inside it, and will be deleted too.\n\nThis cannot be "
+						 "undone.")) :
+				(cascade.isEmpty() ?
+		             editor::Localize(
+						 "editor.asset_operations.delete_folder_contents",
+						 { contents.size() },
+						 "{0} file(s) will be deleted. Nothing outside the folder references any "
+						 "of them.\n\nThis cannot be undone.") :
+		             editor::Localize(
+						 "editor.asset_operations.delete_folder_contents_with_cascade",
+						 { contents.size(), cascade.size() },
+						 "{0} file(s) will be deleted. Nothing outside the folder references any "
+						 "of them.\n\n{1} asset(s) outside the folder are referenced only from "
+						 "inside it, and will be deleted too.\n\nThis cannot be undone."));
 
-		confirm.setInformativeText(info + "\n\nThis cannot be undone.");
+		confirm.setInformativeText(info);
 		confirm.setDetailedText((contents + cascade).join('\n'));
 	}
 	else if (!cascade.isEmpty())
 	{
-		confirm.setText(QString("Delete '%1'?").arg(asset));
+		confirm.setText(
+			editor::Localize("editor.asset_operations.delete_confirm", { asset }, "Delete '{0}'?"));
 		confirm.setInformativeText(
-			QString(
-				"Nothing references it. %1 asset(s) that nothing else references will be deleted "
-				"with it.\n\nThis cannot be undone.")
-				.arg(cascade.size()));
+			editor::Localize(
+				"editor.asset_operations.delete_with_cascade",
+				{ cascade.size() },
+				"Nothing references it. {0} asset(s) that nothing else references will be "
+				"deleted with it.\n\nThis cannot be undone."));
 		confirm.setDetailedText(cascade.join('\n'));
 	}
 	else if (plan.assetType == assetlib::AssetType::kMesh)
 	{
 		// The one kind whose deletion leaves something behind, and the user should not have to wonder
 		// whether it took the materials with it.
-		confirm.setText(QString("Delete '%1'?").arg(asset));
+		confirm.setText(
+			editor::Localize("editor.asset_operations.delete_confirm", { asset }, "Delete '{0}'?"));
 		confirm.setInformativeText(
-			"Nothing references it. The materials it uses are shared, and stay in place.");
+			editor::Localize(
+				"editor.asset_operations.delete_mesh_no_refs",
+				"Nothing references it. The materials it uses are shared, and stay in place."));
 	}
 	else
 	{
-		confirm.setText(QString("Delete '%1'?").arg(asset));
-		confirm.setInformativeText("Nothing references it. This cannot be undone.");
+		confirm.setText(
+			editor::Localize("editor.asset_operations.delete_confirm", { asset }, "Delete '{0}'?"));
+		confirm.setInformativeText(
+			editor::Localize(
+				"editor.asset_operations.delete_no_refs",
+				"Nothing references it. This cannot be undone."));
 	}
 
-	auto* remove = confirm.addButton("Delete", QMessageBox::DestructiveRole);
+	auto* remove = confirm.addButton(
+		editor::Localize("editor.asset_operations.delete_title", "Delete"),
+		QMessageBox::DestructiveRole);
 	confirm.addButton(QMessageBox::Cancel);
 	confirm.setDefaultButton(QMessageBox::Cancel);
 	confirm.exec();
@@ -292,17 +363,22 @@ AssetOperations::DeleteWithPlanner(
 	case assetlib::DeletionStatus::kFailed:
 		QMessageBox::warning(
 			m_Parent,
-			"Delete",
-			QString("'%1' could not be deleted:\n\n%2\n\nIt may be open in another program.")
-				.arg(asset, QString::fromStdString(result.error)));
+			editor::Localize("editor.asset_operations.delete_title", "Delete"),
+			editor::Localize(
+				"editor.asset_operations.delete_failed",
+				{ asset, result.error },
+				"'{0}' could not be deleted:\n\n{1}\n\nIt may be open in another program."));
 		return;
 
 	case assetlib::DeletionStatus::kRefused:
 		// Something wrote a reference to it between the scan and the confirmation.
 		QMessageBox::warning(
 			m_Parent,
-			"Delete",
-			QString("'%1' is referenced again, and was not deleted.").arg(asset));
+			editor::Localize("editor.asset_operations.delete_title", "Delete"),
+			editor::Localize(
+				"editor.asset_operations.delete_refused",
+				{ asset },
+				"'{0}' is referenced again, and was not deleted."));
 		return;
 	}
 }
@@ -321,15 +397,19 @@ AssetOperations::Rename(const QString& asset)
 	// reference and menu action dispatches on it.
 	const QString stem = isDirectory ? info.fileName() : info.completeBaseName();
 
-	bool    ok      = false;
-	QString entered = QInputDialog::getText(
-						  m_Parent,
-						  "Rename",
-						  isDirectory ? "Directory name:" : "Name:",
-						  QLineEdit::Normal,
-						  stem,
-						  &ok)
-	                      .trimmed();
+	bool    ok = false;
+	QString entered =
+		QInputDialog::getText(
+			m_Parent,
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			isDirectory ? editor::Localize(
+							  "editor.asset_operations.directory_name_prompt",
+							  "Directory name:") :
+						  editor::Localize("editor.asset_operations.name_prompt", "Name:"),
+			QLineEdit::Normal,
+			stem,
+			&ok)
+			.trimmed();
 
 	// The dialog edits the stem, but a user asked for a file's name types the extension back readily
 	// enough -- taken literally that would yield 'Body.bmaterial.bmaterial'.
@@ -344,9 +424,11 @@ AssetOperations::Rename(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString("'%1' is not a name every platform this project is shared with can use.")
-				.arg(entered));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.invalid_name",
+				{ entered },
+				"'{0}' is not a name every platform this project is shared with can use."));
 		return;
 	}
 
@@ -354,14 +436,20 @@ AssetOperations::Rename(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString(
-				"%1 is open in an editor panel.\n\nClose it there first: the Material Editor's "
-				"next Save would write the old name back, and the Animation panel would go on "
-				"offering it.")
-				.arg(
-					isDirectory ? QString("'%1' holds an asset that").arg(asset) :
-								  QString("'%1'").arg(asset)));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			isDirectory ?
+				editor::Localize(
+					"editor.asset_operations.rename_held_open_directory",
+					{ asset },
+					"'{0}' holds an asset that is open in an editor panel.\n\nClose it there "
+					"first: the Material Editor's next Save would write the old name back, and "
+					"the Animation panel would go on offering it.") :
+				editor::Localize(
+					"editor.asset_operations.rename_held_open_file",
+					{ asset },
+					"'{0}' is open in an editor panel.\n\nClose it there first: the Material "
+					"Editor's next Save would write the old name back, and the Animation panel "
+					"would go on offering it."));
 		return;
 	}
 
@@ -376,9 +464,16 @@ AssetOperations::Rename(const QString& asset)
 
 	// Off the UI thread for the reason Delete's scan is: it parses every mesh and material in the
 	// project, reading assetlib alone.
-	const background::TaskResult scanned =
-		background::RunWithLoadingScreen(m_Parent, "Rename", [&](background::Progress& progress) {
-			progress.Report(0, 0, "Checking references...");
+	const background::TaskResult scanned = background::RunWithLoadingScreen(
+		m_Parent,
+		editor::Localize("editor.asset_operations.rename_title", "Rename"),
+		[&](background::Progress& progress) {
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.asset_operations.checking_references",
+					"Checking references..."));
 			store.emplace(std::filesystem::path(m_DataRoot.toStdWString()));
 			graph = assetlib::AssetRefGraph::Scan(*store);
 		});
@@ -389,9 +484,11 @@ AssetOperations::Rename(const QString& asset)
 		// one of them may name the file about to move -- and would then be left pointing at nothing.
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString("Could not work out what references '%1', so it was not renamed:\n\n%2")
-				.arg(asset, scanned.error));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_scan_failed",
+				{ asset, scanned.error },
+				"Could not work out what references '{0}', so it was not renamed:\n\n{1}"));
 		return;
 	}
 
@@ -404,8 +501,11 @@ AssetOperations::Rename(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString("'%1' cannot be renamed:\n\n%2").arg(asset, QString::fromUtf8(e.what())));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_blocked",
+				{ asset, e.what() },
+				"'{0}' cannot be renamed:\n\n{1}"));
 		return;
 	}
 
@@ -420,11 +520,12 @@ AssetOperations::Rename(const QString& asset)
 
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString(
-				"'%1' was produced by it and is open in an editor panel.\n\nClose it there "
-				"first: renaming moves it, and the panel would go on offering the old path.")
-				.arg(from));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_output_held_open",
+				{ from },
+				"'{0}' was produced by it and is open in an editor panel.\n\nClose it there "
+				"first: renaming moves it, and the panel would go on offering the old path."));
 		return;
 	}
 
@@ -443,26 +544,34 @@ AssetOperations::Rename(const QString& asset)
 
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString(
-				"'%1' references it and is open in an editor panel.\n\nClose it there "
-				"first.")
-				.arg(referrer));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_referrer_held_open",
+				{ referrer },
+				"'{0}' references it and is open in an editor panel.\n\nClose it there first."));
 		return;
 	}
 
 	if (!referrers.isEmpty())
 	{
 		auto confirm = QMessageBox(m_Parent);
-		confirm.setWindowTitle("Rename");
+		confirm.setWindowTitle(editor::Localize("editor.asset_operations.rename_title", "Rename"));
 		confirm.setIcon(QMessageBox::Question);
-		confirm.setText(QString("Rename '%1' to '%2'?").arg(asset, to));
+		confirm.setText(
+			editor::Localize(
+				"editor.asset_operations.rename_confirm",
+				{ asset, to },
+				"Rename '{0}' to '{1}'?"));
 		confirm.setInformativeText(
-			QString("%1 asset(s) reference it, and will be rewritten to the new name.")
-				.arg(referrers.size()));
+			editor::Localize(
+				"editor.asset_operations.rename_confirm_info",
+				{ referrers.size() },
+				"{0} asset(s) reference it, and will be rewritten to the new name."));
 		confirm.setDetailedText(referrers.join('\n'));
 
-		auto* apply = confirm.addButton("Rename", QMessageBox::AcceptRole);
+		auto* apply = confirm.addButton(
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			QMessageBox::AcceptRole);
 		confirm.addButton(QMessageBox::Cancel);
 		confirm.setDefaultButton(apply);
 		confirm.exec();
@@ -477,9 +586,17 @@ AssetOperations::Rename(const QString& asset)
 	// whole mesh, geometry and all, where the scan read its material chunk alone. Files only, no bgl.
 	const background::TaskResult renamed = background::RunWithLoadingScreen(
 		m_Parent,
-		QString("Renaming %1").arg(QFileInfo(asset).fileName()),
+		editor::Localize(
+			"editor.asset_operations.renaming",
+			{ QFileInfo(asset).fileName() },
+			"Renaming {0}"),
 		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Rewriting references...");
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.asset_operations.rewriting_references",
+					"Rewriting references..."));
 			result = store->RenameAsset(plan);
 		});
 
@@ -487,8 +604,11 @@ AssetOperations::Rename(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString("'%1' could not be renamed:\n\n%2").arg(asset, renamed.error));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_failed",
+				{ asset, renamed.error },
+				"'{0}' could not be renamed:\n\n{1}"));
 		return;
 	}
 
@@ -496,9 +616,11 @@ AssetOperations::Rename(const QString& asset)
 	{
 		QMessageBox::warning(
 			m_Parent,
-			"Rename",
-			QString("'%1' could not be renamed:\n\n%2\n\nIt may be open in another program.")
-				.arg(asset, QString::fromStdString(result.error)));
+			editor::Localize("editor.asset_operations.rename_title", "Rename"),
+			editor::Localize(
+				"editor.asset_operations.rename_failed_in_use",
+				{ asset, result.error },
+				"'{0}' could not be renamed:\n\n{1}\n\nIt may be open in another program."));
 		return;
 	}
 
@@ -513,15 +635,16 @@ AssetOperations::AddDirectory(QFileSystemModel* model, const QString& parentPath
 	if (parentPath.isEmpty())
 		return;
 
-	bool       ok   = false;
-	const auto name = QInputDialog::getText(
-						  m_Parent,
-						  "Add Directory",
-						  "Directory name:",
-						  QLineEdit::Normal,
-						  "New Folder",
-						  &ok)
-	                      .trimmed();
+	bool       ok = false;
+	const auto name =
+		QInputDialog::getText(
+			m_Parent,
+			editor::Localize("editor.asset_operations.add_directory_title", "Add Directory"),
+			editor::Localize("editor.asset_operations.directory_name_prompt", "Directory name:"),
+			QLineEdit::Normal,
+			QString::fromUtf8(c_NewDirectoryName),
+			&ok)
+			.trimmed();
 	if (!ok || name.isEmpty())
 		return;
 
@@ -530,6 +653,9 @@ AssetOperations::AddDirectory(QFileSystemModel* model, const QString& parentPath
 	if (!parent.isValid() || !model->mkdir(parent, name).isValid())
 		QMessageBox::warning(
 			m_Parent,
-			"Add Directory",
-			QString("Could not create directory '%1'.").arg(name));
+			editor::Localize("editor.asset_operations.add_directory_title", "Add Directory"),
+			editor::Localize(
+				"editor.asset_operations.add_directory_failed",
+				{ name },
+				"Could not create directory '{0}'."));
 }
