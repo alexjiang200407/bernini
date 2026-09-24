@@ -18,6 +18,11 @@ namespace assetlib
 		std::vector<std::string> looks;
 
 		std::vector<GrassField> fields;
+
+		// Parallel to `fields`: the primitive each came from, named as a `.bimport` binds it --
+		// `<mesh>`, or `<mesh>[p]` for a mesh of several primitives, exactly as a submesh is.
+		std::vector<std::string> names;
+
 		std::vector<GrassChunk> chunks;  // one bound per c_GrassClumpsPerChunk clumps
 		std::vector<GrassClump> clumps;
 	};

@@ -454,6 +454,36 @@ The cost scales with zoom, since zoom multiplies every length on screen, and dou
 render scale for the same reason. Splitting slivers at cook time is recorded as a deferred option
 in `docs/specs/`.
 
+### Grass points
+
+Grass is not modelled as blades. A mesh carries it as a glTF **POINTS primitive** (`mode: 0`), one
+point per clump, which the import reads as a grass field (`BMeshImport::grass`,
+[BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)) instead of a
+submesh. The renderer grows the blades from the points; the DCC never sees one.
+
+| Attribute | Meaning | Absent |
+|---|---|---|
+| `POSITION` | the clump's root, in the mesh's space, on the surface it grows from | the primitive is skipped |
+| `NORMAL` | that surface's normal, which the look's ground-normal blend shades toward | up (`+Y`) |
+| `COLOR_0` | a linear tint on the look's colours, float or normalized unsigned | white |
+| `_HEIGHT` | a scalar multiplying the look's blade heights (a glTF custom attribute, hence the underscore) | 1 |
+
+* **Named and bound like a submesh.** A field is `<mesh>` or `<mesh>[p]`, and a `.bimport` binding
+  from that name to a `.bgrass` gives it a look. What a binding binds is said by the document it
+  names: a `.bgrass` binds a field and is ignored by the mesh's own bindings
+  ([asset_import.h](libs/assetlib/include/assetlib/asset_import.h), `applyGrassBindings`), and the
+  reference graph records it as `RefKind::kFieldGrass`. Two fields of one name -- two meshes named
+  alike, each of one primitive -- are refused where a binding would address them, as two submeshes
+  are.
+* **Chunked spatially, not in export order.** The points are sorted along a Morton curve over the
+  field's bounds and cut into runs of `c_GrassClumpsPerChunk`, each with the sphere its positions
+  fit in, so a chunk is a patch of ground the renderer can cull. The order depends on the positions
+  alone, so a re-import writes the same field.
+* **Refused rather than guessed:** a non-finite position, a zero or non-finite normal, a `_HEIGHT`
+  that is not a positive scalar. Any mode other than triangles and points is refused as before.
+* **Static meshes only.** Points take no rigid attachment's rebinding to a bone; grass on a skinned
+  mesh is not drawn.
+
 ### Containers
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
   meshopt vertex/triangle pools, interleaved `vertexData`, the plain `indexData` pool (above), and

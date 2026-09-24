@@ -1,6 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/glm.h>
@@ -177,4 +178,27 @@ TEST_CASE("Renaming a material rewrites the grass look that names it", "[grass][
 	BGrass expected   = MakeGrass();
 	expected.material = after.material;
 	CHECK(after == expected);
+}
+
+TEST_CASE("A .bimport's grass binding is a grass edge, not a material one", "[grass][assetrefs]")
+{
+	const DataRoot root("bernini_grass_binding_refs");
+	StoreAt(root.path).Save(MakeGrass(), std::string(c_GrassKey));
+
+	auto document     = ImportDocument();
+	document.source   = "Authored/Meshes/street.glb";
+	document.bindings = { { .submesh = "Street[1]", .material = std::string(c_GrassKey) },
+		                  { .submesh = "Street[0]", .material = std::string(c_MaterialKey) } };
+	StoreAt(root.path).Save(document, "Authored/Meshes/street.bimport");
+
+	const AssetRefGraph graph = root.Scan();
+	auto                kinds = std::vector<RefKind>();
+	for (const AssetRef& ref : graph.ReferencesOf("Authored/Meshes/street.bimport"))
+	{
+		if (ref.target == c_GrassKey)
+			kinds.emplace_back(ref.kind);
+		if (ref.target == c_MaterialKey)
+			CHECK(ref.kind == RefKind::kSubmeshMaterial);
+	}
+	CHECK(kinds == std::vector<RefKind>{ RefKind::kFieldGrass });
 }
