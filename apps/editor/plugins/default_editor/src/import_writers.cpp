@@ -9,8 +9,8 @@
 #include <assetlib/AssetStore.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
-#include <qobject.h>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -40,8 +40,11 @@ namespace editor
 		}
 
 		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on
-		// purpose. No surfaces either -- glTF can only describe a PBR material.
-		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr, {});
+		// purpose. No surfaces either -- glTF can only describe a PBR material. No text is ever
+		// shown along this path, so an unregistered resolver -- which only ever answers with the
+		// fallback it is given -- is all a node here needs.
+		const editor::LanguageResolver language;
+		const auto registry = MakeMaterialNodeRegistry(language, nullptr, nullptr, {});
 
 		const std::vector<std::string> textureNames = assetlib::importedTextureFileNames(imported);
 

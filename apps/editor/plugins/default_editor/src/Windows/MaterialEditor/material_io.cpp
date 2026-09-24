@@ -3,9 +3,9 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <algorithm>
-#include <assetlib/bmaterial.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/mesh_load.h>
@@ -18,10 +18,10 @@
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
 #include <qcontainerfwd.h>
-#include <qlatin1stringview.h>
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -177,28 +177,40 @@ namespace editor
 	}
 
 	QString
-	MaterialSaveSummary(const MaterialSaveResult& result)
+	MaterialSaveSummary(const editor::ILanguageResolver& language, const MaterialSaveResult& result)
 	{
 		if (result.failed.isEmpty() && result.unattached.isEmpty())
 			return {};
 
-		const auto count = [](const int n, const char* one, const char* many) {
-			return QStringLiteral("%1 %2").arg(n).arg(QLatin1String(n == 1 ? one : many));
-		};
-
 		auto lines = QStringList();
 
-		if (result.saved > 0)
-			lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
+		if (result.saved == 1)
+			lines << editor::Localize(
+				language,
+				"bernini.material.save_summary_saved_one",
+				{ result.saved },
+				"Saved {0} material.");
+		else if (result.saved > 1)
+			lines << editor::Localize(
+				language,
+				"bernini.material.save_summary_saved_many",
+				{ result.saved },
+				"Saved {0} materials.");
 
 		if (!result.failed.isEmpty())
-			lines << QStringLiteral("Could not write:\n%1")
-						 .arg(result.failed.join(QLatin1Char('\n')));
+			lines << editor::Localize(
+				language,
+				"bernini.material.save_summary_failed",
+				{ result.failed.join(QLatin1Char('\n')) },
+				"Could not write:\n{0}");
 
 		if (!result.unattached.isEmpty())
 		{
-			lines << QStringLiteral("Written, but the mesh could not be made to name them:\n%1")
-						 .arg(result.unattached.join(QLatin1Char('\n')));
+			lines << editor::Localize(
+				language,
+				"bernini.material.save_summary_unattached",
+				{ result.unattached.join(QLatin1Char('\n')) },
+				"Written, but the mesh could not be made to name them:\n{0}");
 		}
 
 		return lines.join(QStringLiteral("\n\n"));
@@ -206,24 +218,42 @@ namespace editor
 
 	bool
 	GenerateTangents(
-		QWidget*                     parent,
-		const assetlib::AssetStore&  store,
-		const std::filesystem::path& meshPath)
+		const editor::ILanguageResolver& language,
+		QWidget*                         parent,
+		const assetlib::AssetStore&      store,
+		const std::filesystem::path&     meshPath)
 	{
 		if (meshPath.empty())
 			return false;
 
-		auto confirm = QMessageBox(parent);
-		confirm.setWindowTitle(QStringLiteral("Generate Tangents"));
-		confirm.setIcon(QMessageBox::Question);
-		confirm.setText(QStringLiteral("Derive tangents for '%1'?")
-		                    .arg(QString::fromStdString(meshPath.filename().string())));
-		confirm.setInformativeText(QStringLiteral(
-			"Every submesh that has none gains one, and the mesh is rewritten and "
-			"reloaded. Unsaved graph edits are lost, and a submesh that already has "
-			"tangents keeps the authored ones."));
+		const QString title = editor::Localize(
+			language,
+			"bernini.material.generate_tangents_button",
+			"Generate Tangents");
 
-		auto* run = confirm.addButton(QStringLiteral("Generate"), QMessageBox::AcceptRole);
+		auto confirm = QMessageBox(parent);
+		confirm.setWindowTitle(title);
+		confirm.setIcon(QMessageBox::Question);
+		confirm.setText(
+			editor::Localize(
+				language,
+				"bernini.material.generate_tangents_confirm_text",
+				{ QString::fromStdString(meshPath.filename().string()) },
+				"Derive tangents for '{0}'?"));
+		confirm.setInformativeText(
+			editor::Localize(
+				language,
+				"bernini.material.generate_tangents_confirm_informative",
+				"Every submesh that has none gains one, and the mesh is rewritten and "
+				"reloaded. Unsaved graph edits are lost, and a submesh that already has "
+				"tangents keeps the authored ones."));
+
+		auto* run = confirm.addButton(
+			editor::Localize(
+				language,
+				"bernini.material.generate_tangents_confirm_button",
+				"Generate"),
+			QMessageBox::AcceptRole);
 		confirm.addButton(QMessageBox::Cancel);
 		confirm.setDefaultButton(run);
 		confirm.exec();
@@ -234,11 +264,15 @@ namespace editor
 		auto result = assetlib::TangentGenResult();
 
 		// Reading, deriving and writing a whole mesh is not instant, and none of it touches bgl.
-		const background::TaskResult done = background::RunWithLoadingScreen(
-			parent,
-			QStringLiteral("Generate Tangents"),
-			[&](background::Progress& progress) {
-				progress.Report(0, 0, "Deriving tangents...");
+		const background::TaskResult done =
+			background::RunWithLoadingScreen(parent, title, [&](background::Progress& progress) {
+				progress.Report(
+					0,
+					0,
+					editor::Localize(
+						language,
+						"bernini.material.generate_tangents_progress",
+						"Deriving tangents..."));
 
 				// Through the seam, so a stale mesh regenerates first rather than refusing --
 				// and a regeneration already derives tangents, which then reports as nothing
@@ -256,8 +290,12 @@ namespace editor
 		{
 			QMessageBox::warning(
 				parent,
-				QStringLiteral("Generate Tangents"),
-				QStringLiteral("Could not rewrite the mesh:\n\n%1").arg(done.error));
+				title,
+				editor::Localize(
+					language,
+					"bernini.material.generate_tangents_failed",
+					{ done.error },
+					"Could not rewrite the mesh:\n\n{0}"));
 			return false;
 		}
 
@@ -265,12 +303,13 @@ namespace editor
 		{
 			QMessageBox::information(
 				parent,
-				QStringLiteral("Generate Tangents"),
-				QStringLiteral(
-					"Nothing to do: %1 submeshes already have tangents, and %2 cannot have "
-					"one derived (no normals, no UVs, or no triangles).")
-					.arg(result.kept)
-					.arg(result.skipped));
+				title,
+				editor::Localize(
+					language,
+					"bernini.material.generate_tangents_nothing_to_do",
+					{ result.kept, result.skipped },
+					"Nothing to do: {0} submeshes already have tangents, and {1} cannot have "
+					"one derived (no normals, no UVs, or no triangles)."));
 			return false;
 		}
 

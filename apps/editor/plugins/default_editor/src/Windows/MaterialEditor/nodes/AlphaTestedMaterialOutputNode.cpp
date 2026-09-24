@@ -1,16 +1,18 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <editor_plugin_api/ILanguageResolver.h>
 
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QJsonObject>
 #include <QSignalBlocker>
-#include <qstringliteral.h>
+#include <editor_plugin_api/localize.h>
 #include <qtmetamacros.h>
 
-AlphaTestedMaterialOutputNode::AlphaTestedMaterialOutputNode() :
-	MaterialOutputNode(ChannelData::c_MaxChannels)  // base color is RGBA here, not RGB
+AlphaTestedMaterialOutputNode::AlphaTestedMaterialOutputNode(
+	const editor::ILanguageResolver& language) :
+	MaterialOutputNode(language, ChannelData::c_MaxChannels)  // base color is RGBA here, not RGB
 {}
 
 void
@@ -21,8 +23,14 @@ AlphaTestedMaterialOutputNode::AddExtraRows(QWidget* parent, QFormLayout* form)
 	m_CutoffSpin->setSingleStep(0.05);
 	m_CutoffSpin->setDecimals(3);
 	m_CutoffSpin->setValue(m_AlphaCutoff);
-	m_CutoffSpin->setToolTip(QStringLiteral("Pixels whose base-color alpha is below this are cut"));
-	form->addRow(QStringLiteral("Alpha Cutoff"), m_CutoffSpin);
+	m_CutoffSpin->setToolTip(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.alpha_cutoff_tooltip",
+			"Pixels whose base-color alpha is below this are cut"));
+	form->addRow(
+		editor::Localize(m_Language, "bernini.material_nodes.alpha_cutoff_label", "Alpha Cutoff"),
+		m_CutoffSpin);
 
 	connect(m_CutoffSpin, &QDoubleSpinBox::valueChanged, this, [this](double value) {
 		m_AlphaCutoff = static_cast<float>(value);

@@ -29,6 +29,7 @@
 #include <QWidget>
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <bgl/glm.h>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <memory>
 #include <qjsonobject.h>
@@ -43,6 +44,9 @@ namespace
 	using QtNodes::PortType;
 
 	const auto c_DataRoot = std::filesystem::path("C:/proj/Data");
+
+	// Outlives every registry and node built below, several of which hold it by reference.
+	const editor::LanguageResolver c_Language;
 
 	/**
 	 * A surface as registration would reflect it: two values with their declared defaults, a colour
@@ -89,7 +93,7 @@ namespace
 	Registry()
 	{
 		static const bgl::SurfaceType c_Surface = RimSurface();
-		return MakeMaterialNodeRegistry(nullptr, nullptr, { &c_Surface, 1 });
+		return MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &c_Surface, 1 });
 	}
 
 	SurfaceOutputNode*
@@ -347,7 +351,7 @@ TEST_CASE("A surface board compiles to the surface document", "[materialgraph][s
 
 TEST_CASE("A surface sink round-trips through save and load", "[materialgraph][surfacesink]")
 {
-	SurfaceOutputNode saved(RimSurface());
+	SurfaceOutputNode saved(c_Language, RimSurface());
 
 	auto edited           = QJsonObject();
 	edited["parameters"]  = QJsonObject{ { "rimColor", QJsonArray{ 0.1, 0.2, 0.3 } } };
@@ -355,7 +359,7 @@ TEST_CASE("A surface sink round-trips through save and load", "[materialgraph][s
 	edited["doubleSided"] = false;
 	saved.load(edited);
 
-	SurfaceOutputNode reloaded(RimSurface());
+	SurfaceOutputNode reloaded(c_Language, RimSurface());
 	reloaded.load(saved.save());
 
 	CHECK(reloaded.Value(1) == glm::vec4(0.1f, 0.2f, 0.3f, 0.0f));
@@ -372,7 +376,7 @@ TEST_CASE("A graph with no rim key loads the rim at its default", "[materialgrap
 {
 	// A graph saved before a value was added to the surface carries no key for it, and must load
 	// as the declaration's default rather than as zero.
-	SurfaceOutputNode node(RimSurface());
+	SurfaceOutputNode node(c_Language, RimSurface());
 
 	node.load(QJsonObject{ { "parameters", QJsonObject{} } });
 
@@ -424,7 +428,7 @@ TEST_CASE(
 	// Registration happens once at startup, so a second project's surface has no sink here. The
 	// board is the surface's or nothing -- a PBR fallback would be compiled into a demotion by
 	// the next Save.
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, {}));
+	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, {}));
 
 	auto material         = assetlib::BMaterial();
 	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
@@ -523,7 +527,7 @@ TEST_CASE("The node re-measures when its widget resizes", "[materialgraph][surfa
 	// QtNodes reads the embedded widget's size only when the node is created, so a widget that
 	// settles on first show -- or a form row shown or hidden later -- must ask for a re-measure
 	// itself, or its contents overflow the frame.
-	SurfaceOutputNode sink(RimSurface());
+	SurfaceOutputNode sink(c_Language, RimSurface());
 	QWidget*          widget = sink.embeddedWidget();
 	REQUIRE(widget != nullptr);
 
@@ -557,7 +561,7 @@ TEST_CASE("A colour value carries a swatch, and picking writes it", "[materialgr
 
 	surface.params.values = { glow, offset };
 
-	SurfaceOutputNode sink(surface);
+	SurfaceOutputNode sink(c_Language, surface);
 	QWidget*          widget = sink.embeddedWidget();
 	REQUIRE(widget != nullptr);
 
@@ -591,7 +595,7 @@ TEST_CASE(
 {
 	// The layer keys are authored in the properties panel (ADR-9); these setters are what its
 	// widgets write, and each change recompiles the preview exactly as a board edit does.
-	SurfaceOutputNode sink(RimSurface());
+	SurfaceOutputNode sink(c_Language, RimSurface());
 	QSignalSpy        changed(&sink, &MaterialSinkNode::Changed);
 
 	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
@@ -618,7 +622,7 @@ TEST_CASE("The node carries no layer widgets", "[materialgraph][surfacesink]")
 {
 	// ADR-9: a combo popup is a child window the proxy embeds unscaled into the zoomed scene, so
 	// the layer moved to the panel and the node's widget holds value spins alone.
-	SurfaceOutputNode sink(RimSurface());
+	SurfaceOutputNode sink(c_Language, RimSurface());
 	QWidget*          widget = sink.embeddedWidget();
 	REQUIRE(widget != nullptr);
 	CHECK(widget->findChild<QComboBox*>() == nullptr);
