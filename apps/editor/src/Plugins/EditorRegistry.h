@@ -12,9 +12,12 @@ namespace editor::plugins
 	class EditorRegistry final : public IEditorRegistry
 	{
 	public:
-		// Startup only; a failed registration destroys its contributions and preserves earlier ones.
+		/**
+		 * Startup only. `catalogs` are the plugin's discovered CSVs, added as if it had registered
+		 * them itself; a failed registration destroys every contribution and preserves earlier ones.
+		 */
 		void
-		Register(IEditorPlugin& plugin);
+		Register(IEditorPlugin& plugin, std::vector<TranslationCatalog> catalogs = {});
 
 		void
 		AddTranslations(TranslationCatalog catalog) override;

@@ -106,18 +106,19 @@ namespace editor::plugins
 	}
 
 	void
-	EditorRegistry::Register(IEditorPlugin& plugin)
+	EditorRegistry::Register(IEditorPlugin& plugin, std::vector<TranslationCatalog> catalogs)
 	{
-		const auto catalogs   = m_Catalogs.size();
-		const auto menus      = m_Menus.size();
-		const auto panels     = m_Panels.size();
-		const auto editors    = m_AssetEditors.size();
-		const auto actions    = m_Actions.size();
-		const auto importers  = m_Importers.size();
-		const auto thumbnails = m_ThumbnailProviders.size();
+		const auto translations = m_Catalogs.size();
+		const auto menus        = m_Menus.size();
+		const auto panels       = m_Panels.size();
+		const auto editors      = m_AssetEditors.size();
+		const auto actions      = m_Actions.size();
+		const auto importers    = m_Importers.size();
+		const auto thumbnails   = m_ThumbnailProviders.size();
 		try
 		{
 			plugin.Register(*this);
+			for (TranslationCatalog& catalog : catalogs) AddTranslations(std::move(catalog));
 		}
 		catch (...)
 		{
@@ -127,7 +128,7 @@ namespace editor::plugins
 			m_AssetEditors.resize(editors);
 			m_Panels.resize(panels);
 			m_Menus.resize(menus);
-			m_Catalogs.resize(catalogs);
+			m_Catalogs.resize(translations);
 			throw;
 		}
 	}
@@ -137,6 +138,8 @@ namespace editor::plugins
 	{
 		LanguageResolver validation;
 		validation.RegisterCatalog(catalog);
+		if (catalog.context.starts_with("editor."))
+			throw std::runtime_error("Translation context is reserved");
 		if (std::ranges::any_of(m_Catalogs, [&](const TranslationCatalog& existing) {
 				return existing.context == catalog.context;
 			}))

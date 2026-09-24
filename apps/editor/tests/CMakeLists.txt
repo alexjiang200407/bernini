@@ -41,6 +41,10 @@ target_link_libraries(editor_tests PRIVATE
 	QtNodes::QtNodes
 )
 
+# The sample's catalogs are read from source: in-process, it has no plugin directory to hold them.
+target_compile_definitions(editor_tests PRIVATE
+	EDITOR_PLUGIN_SAMPLE_LOCALIZATION="${BERNINI_ROOT}/examples/editor_plugin/localization")
+
 if(BERNINI_EDITOR_SDK)
 	add_dependencies(editor_tests editor_sdk_consumer editor_plugin_sample)
 	target_compile_definitions(editor_tests PRIVATE
@@ -65,7 +69,7 @@ enable_coverage(editor_tests)
 
 # The tests read fixtures out of the shared asset directory, which copy_assets stages into the
 # runtime output dir they run from.
-add_dependencies(editor_tests copy_assets)
+add_dependencies(editor_tests copy_assets editor_stage_localization)
 
 if(WIN32)
 	# editor.exe's windeployqt does not know about Qt6Test.dll, so ask for the test binary's own

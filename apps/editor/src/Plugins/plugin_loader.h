@@ -68,12 +68,15 @@ namespace editor::plugins
 			PluginBinaryCopyMode copyMode = PluginBinaryCopyMode::kPlatformDefault);
 
 		/**
-		 * Registers the host-linked plugin, then every loaded editor module, into Contributions().
-		 * GUI thread, once, as the window builds; throws on a contribution collision, leaving the
-		 * earlier registrations standing.
+		 * Registers the host-linked plugin, then every loaded editor module, into Contributions(),
+		 * each with the catalogs in its `localization/` directory -- `builtInLocalization` for the
+		 * host-linked one. GUI thread, once, as the window builds; throws on a contribution
+		 * collision or an unreadable catalog, leaving the earlier registrations standing.
 		 */
 		void
-		RegisterEditorPlugins(EditorPluginPtr builtIn = {});
+		RegisterEditorPlugins(
+			EditorPluginPtr              builtIn             = {},
+			const std::filesystem::path& builtInLocalization = {});
 
 		/** The loaded plugins' IDs, in load order; the host-linked plugin has none. */
 		[[nodiscard]] const std::vector<std::string>&
