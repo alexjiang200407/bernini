@@ -1,6 +1,7 @@
 #include "Startup/ProjectLauncher.h"
 
 #include "Plugins/plugin_loader.h"
+#include "util/editor_language.h"
 
 #include "util/project_dialogs.h"
 
@@ -22,7 +23,6 @@
 #include <optional>
 #include <qfont.h>
 #include <qnamespace.h>
-#include <qstringliteral.h>
 #include <utility>
 #include <vector>
 
@@ -34,14 +34,14 @@ namespace editor
 		const QString&                     notice,
 		QWidget* parent) : QDialog(parent), m_Recent(std::move(recent)), m_Plugins(&plugins)
 	{
-		setWindowTitle(QStringLiteral("Bernini Editor"));
+		setWindowTitle(editor::Localize("editor.main.title", "Bernini Editor"));
 		setMinimumSize(560, 420);
 
 		auto* layout = new QVBoxLayout(this);
 		layout->setContentsMargins(24, 20, 24, 20);
 		layout->setSpacing(12);
 
-		auto* title   = new QLabel(QStringLiteral("Bernini Editor"), this);
+		auto* title   = new QLabel(editor::Localize("editor.main.title", "Bernini Editor"), this);
 		QFont heading = title->font();
 		heading.setPointSize(heading.pointSize() + 6);
 		heading.setBold(true);
@@ -57,7 +57,9 @@ namespace editor
 			layout->addWidget(warning);
 		}
 
-		layout->addWidget(new QLabel(QStringLiteral("Recent Projects"), this));
+		layout->addWidget(new QLabel(
+			editor::Localize("editor.startup.recent_projects", "Recent Projects"),
+			this));
 
 		m_RecentList = new QListWidget(this);
 		m_RecentList->setObjectName("RecentProjects");
@@ -65,7 +67,10 @@ namespace editor
 		{
 			const QString path = QString::fromStdWString(project.wstring());
 			auto*         item = new QListWidgetItem(
-				QString("%1\n%2").arg(QString::fromStdWString(project.stem().wstring()), path),
+				editor::Localize(
+					"editor.startup.recent_project_item",
+					{ QString::fromStdWString(project.stem().wstring()), path },
+					"{0}\n{1}"),
 				m_RecentList);
 			item->setToolTip(path);
 		}
@@ -74,16 +79,22 @@ namespace editor
 		if (m_Recent.empty())
 		{
 			m_RecentList->hide();
-			auto* none = new QLabel(QStringLiteral("No recent projects."), this);
+			auto* none = new QLabel(
+				editor::Localize("editor.startup.no_recent_projects", "No recent projects."),
+				this);
 			none->setAlignment(Qt::AlignCenter);
 			none->setEnabled(false);
 			layout->addWidget(none, 1);
 		}
 
 		auto* buttons = new QHBoxLayout();
-		auto* create  = new QPushButton(QStringLiteral("New Project..."), this);
-		auto* browse  = new QPushButton(QStringLiteral("Open Project..."), this);
-		auto* open    = new QPushButton(QStringLiteral("Open"), this);
+		auto* create  = new QPushButton(
+			editor::Localize("editor.startup.new_project_button", "New Project..."),
+			this);
+		auto* browse = new QPushButton(
+			editor::Localize("editor.startup.open_project_button", "Open Project..."),
+			this);
+		auto* open = new QPushButton(editor::Localize("editor.startup.open_button", "Open"), this);
 		open->setEnabled(false);
 		open->setDefault(true);
 		buttons->addWidget(create);
@@ -131,7 +142,10 @@ namespace editor
 		}
 		catch (const std::exception& e)
 		{
-			QMessageBox::warning(this, QStringLiteral("New Project"), e.what());
+			QMessageBox::warning(
+				this,
+				editor::Localize("editor.startup.new_project_title", "New Project"),
+				e.what());
 		}
 	}
 
@@ -153,7 +167,10 @@ namespace editor
 		}
 		catch (const std::exception& e)
 		{
-			QMessageBox::warning(this, QStringLiteral("Open Project"), e.what());
+			QMessageBox::warning(
+				this,
+				editor::Localize("editor.startup.open_project_title", "Open Project"),
+				e.what());
 		}
 	}
 }

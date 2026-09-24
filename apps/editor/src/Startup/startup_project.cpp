@@ -1,6 +1,7 @@
 #include "Startup/startup_project.h"
 
 #include "Plugins/plugin_loader.h"
+#include "util/editor_language.h"
 
 #include <QString>
 
@@ -37,8 +38,10 @@ namespace editor
 		}
 		catch (const std::exception& e)
 		{
-			startup.failure = QString("Could not open %1: %2")
-			                      .arg(QString::fromStdWString(projectFile.wstring()), e.what());
+			startup.failure = editor::Localize(
+				"editor.startup.could_not_open_project",
+				{ QString::fromStdWString(projectFile.wstring()), e.what() },
+				"Could not open {0}: {1}");
 			qWarning("Editor: %s", qPrintable(startup.failure));
 		}
 		return startup;
