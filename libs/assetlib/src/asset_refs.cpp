@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
@@ -134,7 +135,11 @@ namespace assetlib
 				importedSourceKeyFor(referrer, document),
 				RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
-				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
+				addEdge(
+					edges,
+					referrer,
+					binding.material,
+					isGrassBinding(binding) ? RefKind::kFieldGrass : RefKind::kSubmeshMaterial);
 			for (const MaterialOverrideBinding& entry : document.materialOverrides)
 				addEdge(edges, referrer, entry.material, RefKind::kSubmeshMaterial);
 
