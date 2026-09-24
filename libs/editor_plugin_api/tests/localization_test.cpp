@@ -179,3 +179,10 @@ TEST_CASE("An argument keeps its type, so a field may format it", "[plugin][loca
 		editor::Localize(resolver, "sample.editor.many", { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, "{0}"),
 		std::invalid_argument);
 }
+
+TEST_CASE("A float formats at its own precision, not as a widened double", "[plugin][localization]")
+{
+	const editor::LanguageResolver resolver;
+	CHECK(editor::Localize(resolver, "sample.editor.width", { 0.8f }, "{0} px") == "0.8 px");
+	CHECK(editor::Localize(resolver, "sample.editor.width", { 0.8 }, "{0} px") == "0.8 px");
+}

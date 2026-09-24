@@ -1,0 +1,76 @@
+key,en
+bloom,Bloom
+bloom_tip,"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they bloom is each viewport's `bloom` section in config.json."
+checking_derived_assets,Checking derived assets...
+checking_imported_sources,Checking imported sources...
+clean_unused_textures_title,Clean Unused Textures
+color_grade,Color Grade
+color_grade_tip,White-balance and grade the viewports ahead of the display curve. The grade is each viewport's `colorGrade` section in config.json.
+compiling_shaders,Compiling shaders...
+compressing_progress,Compressing {0} ({1} of {2})...
+content_explorer_title,Content Explorer
+delete_button,Delete
+delete_confirm_info,"No material in this project references them; {0} will be reclaimed.
+
+This cannot be undone, but a deleted map is rebuilt by re-baking the material that needs it."
+delete_confirm_text,Delete {0} unused baked textures?
+delete_partial_failure,"Deleted {0} textures, but {1} could not be removed:
+
+{2}"
+delete_success_status,"Deleted {0} unused baked textures, reclaiming {1}"
+failed_item_line,{0}: {1}
+frame_stats_tooltip,"The rendering viewport's frame time: mean and worst over the last 120 frames, and how many frame-start intervals exceeded 20 ms since the tab was selected. This measures render-loop timing, not missed display refreshes."
+gpu_pass_timing,GPU Pass Timing
+gpu_pass_timing_tip,"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write out. Costs a little per frame, which is why it is off until asked for."
+gpu_timing_graph,GPU Timing Graph
+gpu_timing_graph_tip,"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it."
+loaded_plugins,Loaded Plugins
+loaded_plugins_tip,List the plugins this editor loaded at startup.
+log_gpu_pass_timings,Log GPU Pass Timings
+log_gpu_pass_timings_tip,Write the rendering viewport's next per-pass GPU breakdown to editor.log.
+new_project_title,New Project
+no_unused_textures,"No unused baked textures.
+
+{0} of the {1} baked textures are referenced by the project's {2} materials and {3} environment assets."
+open_project_title,Open Project
+plugin_action_title,Plugin Action
+plugin_asset_open_failed,The plugin could not open this asset
+plugin_asset_title,Plugin Asset
+plugin_import_title,Plugin Import
+plugin_panel_title,Plugin Panel
+plugins_menu,Plugins
+project_data_status,Project data: {0}
+rebuild_failed_info,Anything that draws one will report that the project needs updating until its source is back.
+rebuild_failed_text,Some assets could not be rebuilt.
+rebuilding_derived_assets,Rebuilding derived assets...
+reconstruction_width_menu,TAA Reconstruction Width
+reconstruction_width_tip,"How wide a kernel the temporal resolve rebuilds each output pixel with, in output pixels. Narrower is sharper on a held frame and slower to settle on a moving one; it has no effect at a render scale of 1."
+reconstruction_width_value,{0} px
+refresh_failed_text,Some sources could not be re-extracted.
+refresh_textures_title,Refresh Textures
+render_menu,Render
+render_scale_factor,{0}x
+render_scale_menu,Render Scale
+render_scale_tip,"Render the viewports at a fraction of their window and let the temporal resolve reconstruct it, to judge a resolution-dependent artifact on a display that does not have that density."
+restart_required_message,{0} requires different shaders from the ones this editor loaded at startup. The editor will restart to open it.
+scan_failed,"Could not scan the project:
+
+{0}"
+scanning_materials,Scanning materials...
+selection_outline,Selection Outline
+selection_outline_tip,Contour the selected submesh in the viewports.
+sharpness_menu,TAA Sharpness
+sharpness_off,Off
+sharpness_percent,{0}%
+sharpness_tip,How hard the resolved image is sharpened (RCAS) before the display curve. Only viewports with temporal antialiasing and a render scale below 1 sharpen; it also sharpens hashed alpha's grain.
+taa_disabled_tip,No open viewport allocated temporal-AA history.
+taa_enabled_tip,Jitter the projection and accumulate a temporal history in the viewports.
+taa_initial_disabled_tip,"No viewport enabled temporalAA in config.json, so none allocated a history."
+temporal_antialiasing,Temporal Antialiasing
+texture_moved_line,{0} -> {1}
+textures_moved_info,"Each held the same bytes as a file the extract wrote, so the materials routing at it were re-routed and the old file removed. Nothing is drawing anything new."
+textures_moved_text,Some textures moved to the name the current rule gives them.
+textures_superseded_info,"They are still on disk and nothing has been changed. A material routing at one is drawing what its source held at import -- re-route it in the Material Editor, or delete it once nothing does."
+textures_superseded_text,Some textures are no longer produced by their source.
+tools_menu,Tools
+update_project_title,Update Project
