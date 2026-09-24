@@ -17,6 +17,7 @@
 #include <RangeWithCount.h>
 #include <array>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -26,7 +27,6 @@
 #include <bgl/IScene.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/PreparedGrass.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
 #include <bgl/SurfaceType.h>
@@ -497,8 +497,11 @@ namespace bgl
 		DeleteGrass(GrassHandle grass) override;
 
 		void
-		AttachGrass(GeomHandle geom, PreparedGrass grass, std::span<const GrassHandle> looks)
-			override;
+		AttachGrass(
+			GeomHandle                    geom,
+			const assetlib::BGrassFields& fields,
+			uint32_t                      meshIndex,
+			std::span<const GrassHandle>  looks) override;
 
 		RigHandle
 		AddRig(

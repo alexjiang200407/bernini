@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -7,7 +8,6 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/GrassHandle.h>
 #include <bgl/MaterialHandle.h>
-#include <bgl/PreparedGrass.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
 #include <bgl/TextureAssetHandle.h>
@@ -149,25 +149,31 @@ namespace bgl
 		DeleteGrass(GrassHandle grass) = 0;
 
 		/**
-		 * Gives a static geom the grass its mesh grows: every field of `grass` is drawn with
-		 * `looks[field.look]` by every instance of the geom, and moves with it. A field whose slot
-		 * is out of range or holds a null handle is not drawn. Replaces any grass the geom carried,
-		 * releasing the looks it bound; DeleteGeom releases them too. The geom holds a use of every
-		 * look it binds; see DeleteGrass.
+		 * Gives a static geom the grass its mesh grows: every field of `fields` on mesh `meshIndex`
+		 * is drawn with `looks[field.look]` by every instance of the geom, and moves with it. A
+		 * field whose slot is out of range or holds a null handle is not drawn. Replaces any grass
+		 * the geom carried, releasing the looks it bound; DeleteGeom releases them too. The geom
+		 * holds a use of every look it binds; see DeleteGrass.
 		 *
-		 * A step after AddStaticMeshGeom rather than a part of it: grass is cooked from a container
-		 * of its own (`assetlib::BGrassFields`), so a mesh with none never names it.
+		 * A step after AddStaticMeshGeom rather than a part of it: grass is cooked into a container
+		 * of its own, so a mesh with none never names it.
 		 *
-		 * @param geom   A live geom from AddStaticMeshGeom.
-		 * @param grass  From CookGrass, over the fields cooked from the same source as the geom's
-		 *               mesh. Consumed, even on failure.
-		 * @param looks  Grass looks parallel to the cooked fields' `looks`, resolved by the caller.
-		 * @throws SceneError if `geom` is dead or not a static geom, `grass` was already consumed,
-		 *         or a non-null handle in `looks` names a deleted look. Nothing changes unless all
-		 *         of it passes.
+		 * @param geom       A live geom from AddStaticMeshGeom.
+		 * @param fields     The BGrassFields cooked from the same source as the geom's mesh.
+		 * @param meshIndex  The mesh of that source the geom was added from.
+		 * @param looks      Grass looks parallel to `fields.looks`, resolved by the caller.
+		 * @throws SceneError if `geom` is dead or not a static geom; a field on this mesh has no
+		 *         chunks or more than one dispatch can launch, a chunk holds no clumps or more than
+		 *         `assetlib::c_GrassClumpsPerChunk`, or a range lies outside its pool -- they come
+		 *         from a file, so each is checked before it is read; or a non-null handle in
+		 *         `looks` names a deleted look. Nothing changes unless all of it passes.
 		 */
 		virtual void
-		AttachGrass(GeomHandle geom, PreparedGrass grass, std::span<const GrassHandle> looks) = 0;
+		AttachGrass(
+			GeomHandle                    geom,
+			const assetlib::BGrassFields& fields,
+			uint32_t                      meshIndex,
+			std::span<const GrassHandle>  looks) = 0;
 
 		/**
 		 * Uploads a rig -- a skeleton and the clips cooked against it -- as a scene object of its

@@ -50,8 +50,8 @@ namespace bgl
 	 * Flattens mesh `meshIndex` of a loaded BMesh into what AddStaticMeshGeom uploads: per submesh,
 	 * the remapped vertex and index streams and the tables the renderer draws them from.
 	 *
-	 * Pure CPU over the BMesh alone, so it may run on any thread, as CookGrass may and no other bgl
-	 * entry point does. That is its reason to exist: this is the dominant cost of adding a large mesh, and fused
+	 * Pure CPU over the BMesh alone, so it may run on any thread -- the one bgl entry point that
+	 * may. That is its reason to exist: this is the dominant cost of adding a large mesh, and fused
 	 * into AddStaticMeshGeom it rode the render thread.
 	 *
 	 * @throws SceneError if `meshIndex` is out of range, a submesh has no geometry or is larger than

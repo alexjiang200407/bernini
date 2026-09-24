@@ -9,7 +9,6 @@
 #include <bgl/IScene.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
-#include <bgl/PreparedGrass.h>
 #include <bgl/glm.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl_common/gassert.h>
@@ -18,7 +17,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
-#include <memory>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -53,100 +51,72 @@ namespace bgl
 		{
 			return core::is_finite(color) && color.x >= 0.0f && color.y >= 0.0f && color.z >= 0.0f;
 		}
-	}
 
-	struct PreparedGrass::Impl
-	{
-		/** One field, its chunks' `firstClump` rebased onto `clumps`. */
-		struct Field
+		/**
+		 * Refuses a field on mesh `meshIndex` whose ranges the file cannot back, before anything
+		 * reads them.
+		 */
+		void
+		CheckGrassRanges(const assetlib::BGrassFields& fields, const uint32_t meshIndex)
 		{
-			uint32_t                          look = 0;
-			std::vector<assetlib::GrassChunk> chunks;
-			std::vector<assetlib::GrassClump> clumps;
-		};
-
-		std::vector<Field> fields;
-	};
-
-	PreparedGrass::PreparedGrass() noexcept                = default;
-	PreparedGrass::~PreparedGrass()                        = default;
-	PreparedGrass::PreparedGrass(PreparedGrass&&) noexcept = default;
-	PreparedGrass&
-	PreparedGrass::operator=(PreparedGrass&&) noexcept = default;
-
-	PreparedGrass
-	CookGrass(const assetlib::BGrassFields& fields, const uint32_t meshIndex)
-	{
-		auto impl = std::make_unique<PreparedGrass::Impl>();
-
-		for (size_t f = 0; f < fields.fields.size(); ++f)
-		{
-			const assetlib::GrassField& src = fields.fields[f];
-			if (src.mesh != meshIndex)
+			for (size_t f = 0; f < fields.fields.size(); ++f)
 			{
-				continue;
-			}
+				const assetlib::GrassField& field = fields.fields[f];
+				if (field.mesh != meshIndex)
+				{
+					continue;
+				}
 
-			if (src.chunkCount == 0)
-			{
-				throw SceneError(std::format("CookGrass: field {} has no chunks", f));
-			}
+				if (field.chunkCount == 0)
+				{
+					throw SceneError(std::format("AttachGrass: field {} has no chunks", f));
+				}
 
-			// One amplification group per chunk.
-			if (src.chunkCount > c_MaxDispatchMeshGroups)
-			{
-				throw SceneError(
-					std::format(
-						"CookGrass: field {} has {} chunks, more than the {} thread groups one "
-						"dispatch can launch",
-						f,
-						src.chunkCount,
-						c_MaxDispatchMeshGroups));
-			}
-
-			if (static_cast<uint64_t>(src.firstChunk) + src.chunkCount > fields.chunks.size())
-			{
-				throw SceneError(
-					std::format(
-						"CookGrass: field {} claims {} chunks at offset {}, past the end of the {} "
-						"there are",
-						f,
-						src.chunkCount,
-						src.firstChunk,
-						fields.chunks.size()));
-			}
-
-			PreparedGrass::Impl::Field& field = impl->fields.emplace_back();
-			field.look                        = src.look;
-			field.chunks.reserve(src.chunkCount);
-
-			for (uint32_t c = 0; c < src.chunkCount; ++c)
-			{
-				assetlib::GrassChunk chunk = fields.chunks[src.firstChunk + c];
-				if (chunk.clumpCount == 0 || chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
-				    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
-				        fields.clumps.size())
+				// One amplification group per chunk.
+				if (field.chunkCount > c_MaxDispatchMeshGroups)
 				{
 					throw SceneError(
 						std::format(
-							"CookGrass: field {} chunk {} holds no clumps, more than {}, or clumps "
-							"past the end of the {} there are",
+							"AttachGrass: field {} has {} chunks, more than the {} thread groups "
+							"one dispatch can launch",
 							f,
-							c,
-							assetlib::c_GrassClumpsPerChunk,
-							fields.clumps.size()));
+							field.chunkCount,
+							c_MaxDispatchMeshGroups));
 				}
 
-				const auto first = fields.clumps.begin() + chunk.firstClump;
-				chunk.firstClump = static_cast<uint32_t>(field.clumps.size());
-				field.clumps.insert(field.clumps.end(), first, first + chunk.clumpCount);
-				field.chunks.emplace_back(chunk);
+				if (static_cast<uint64_t>(field.firstChunk) + field.chunkCount >
+				    fields.chunks.size())
+				{
+					throw SceneError(
+						std::format(
+							"AttachGrass: field {} claims {} chunks at offset {}, past the end of "
+							"the {} there are",
+							f,
+							field.chunkCount,
+							field.firstChunk,
+							fields.chunks.size()));
+				}
+
+				for (uint32_t c = 0; c < field.chunkCount; ++c)
+				{
+					const assetlib::GrassChunk& chunk = fields.chunks[field.firstChunk + c];
+					if (chunk.clumpCount == 0 ||
+					    chunk.clumpCount > assetlib::c_GrassClumpsPerChunk ||
+					    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
+					        fields.clumps.size())
+					{
+						throw SceneError(
+							std::format(
+								"AttachGrass: field {} chunk {} holds no clumps, more than {}, or "
+								"clumps past the end of the {} there are",
+								f,
+								c,
+								assetlib::c_GrassClumpsPerChunk,
+								fields.clumps.size()));
+					}
+				}
 			}
 		}
-
-		auto prepared   = PreparedGrass();
-		prepared.m_Impl = std::move(impl);
-		return prepared;
 	}
 
 	void
@@ -290,24 +260,23 @@ namespace bgl
 	void
 	Scene::AttachGrass(
 		const GeomHandle                   geom,
-		PreparedGrass                      grass,
+		const assetlib::BGrassFields&      fields,
+		const uint32_t                     meshIndex,
 		const std::span<const GrassHandle> looks)
 	{
-		const PreparedGrass consumed = std::move(grass);
-		if (consumed.m_Impl == nullptr)
-		{
-			throw SceneError("AttachGrass: the prepared grass was already consumed");
-		}
-
 		if (geom.geomType != GeomType::kStaticMesh || !IsGeomAlive(geom))
 		{
 			throw SceneError("AttachGrass: the geom is dead or not a static geom");
 		}
 
+		CheckGrassRanges(fields, meshIndex);
+
 		std::vector<GrassHandle> bound;
-		for (const PreparedGrass::Impl::Field& field : consumed.m_Impl->fields)
+		for (const assetlib::GrassField& field : fields.fields)
 		{
-			const GrassHandle look = field.look < looks.size() ? looks[field.look] : GrassHandle{};
+			const GrassHandle look = field.mesh == meshIndex && field.look < looks.size() ?
+			                             looks[field.look] :
+			                             GrassHandle{};
 			if (!look.IsValid())
 			{
 				continue;

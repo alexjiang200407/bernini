@@ -240,10 +240,10 @@ flowchart TD
   that the GUI thread reaches only through posted closures.
 * **`IScene` and `ISceneView` are externally synchronized** — one owner, one thread, the same thread
   that draws them. They have no internal locking.
-* **`CookStaticMesh` and `CookGrass` are the two calls allowed off the driving thread.** Each is a
-  free function over its container alone — no scene, no device — and exists so the CPU half of
-  `AddStaticMeshGeom` (the dominant cost of a large mesh) and of `AttachGrass` can run on a worker,
-  leaving only the commit's uploads on the driving thread.
+* **`CookStaticMesh` is the one call allowed off the driving thread.** It is a free function over
+  the `BMesh` alone — no scene, no device — and exists so the CPU half of `AddStaticMeshGeom` (the
+  dominant cost of a large mesh) can run on a worker, leaving only the commit overload's uploads on
+  the driving thread.
 * **Only one frame may be active at a time.** `BeginFrame` throws `GraphicsError` if one already is.
   `Resize`, `SubmitCapture` and `ScreenshotToMemory` throw if called between `BeginFrame` and
   `EndFrame`; `TryResolveCapture` is the exception and may be called mid-frame.
@@ -397,15 +397,16 @@ flowchart TD
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
   baked-vs-loose branch that does it, so reach for it rather than rebuilding it.
-* **`CookGrass(fields, meshIndex)` / `AttachGrass(geom, grass, looks)`** — the grass a static geom's
-  mesh grows, as a step after `AddStaticMeshGeom`. `fields` is a `BGrassFields`, cooked beside the
-  `.bmesh` from the same source (one field per glTF POINTS primitive) rather than held in it, so a
-  change to how grass is stored re-cooks grass alone and a mesh with none never names it. The cook
-  keeps the fields on mesh `meshIndex` and checks every range against the pool it names before
-  reading it, as `CookStaticMesh` does the meshlet ranges. Each field is drawn with
-  `looks[field.look]` by every instance of the geom; `looks` is parallel to `fields.looks`. A field
-  whose slot is out of range or null is not drawn, and a slot naming a deleted look throws. Attaching
-  again replaces the geom's grass and releases the looks it held; `DeleteGeom` releases them too.
+* **`AttachGrass(geom, fields, meshIndex, looks)`** — the grass a static geom's mesh grows, as a
+  step after `AddStaticMeshGeom`. `fields` is a `BGrassFields`, cooked beside the `.bmesh` from the
+  same source (one field per glTF POINTS primitive) rather than held in it, so a change to how grass
+  is stored re-cooks grass alone and a mesh with none never names it. Only the fields on mesh
+  `meshIndex` are taken, and every range is checked against the pool it names before it is read, as
+  `CookStaticMesh` checks the meshlet ranges. Each field is drawn with `looks[field.look]` by every
+  instance of the geom; `looks` is parallel to `fields.looks`. A field whose slot is out of range or
+  null is not drawn, and a slot naming a deleted look throws. Attaching again replaces the geom's
+  grass and releases the looks it held; `DeleteGeom` releases them too. There is no off-thread half:
+  the fields are copied, not flattened, so there is no cost worth moving off the driving thread.
 * **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `DeleteGrass(grass)`** —
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
   the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
