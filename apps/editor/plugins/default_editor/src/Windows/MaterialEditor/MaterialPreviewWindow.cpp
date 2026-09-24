@@ -1,6 +1,9 @@
 #include "MaterialPreviewWindow.h"
+
+#include "mesh_drop_import.h"
 #include <QEvent>
 #include <QVBoxLayout>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/mesh_load.h>
 
 #include <editor_plugin_api/IEditorHost.h>
@@ -34,6 +37,7 @@
 #include <bgl/ISceneView.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
 #include <limits>
@@ -41,7 +45,6 @@
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
-#include <qstringliteral.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <span>
@@ -133,6 +136,10 @@ MaterialPreviewWindow::~MaterialPreviewWindow()
 void
 MaterialPreviewWindow::ClearGeometry()
 {
+	// Before anything is released, so a listener still sees the mesh these submeshes belong to.
+	if (!m_MeshPath.empty())
+		Q_EMIT GeometryAboutToChange();
+
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const InstanceRef& instance : m_Instances)
 		{
@@ -214,7 +221,9 @@ MaterialPreviewWindow::ShowDefaultSphere()
 	}
 
 	m_SubmeshRefs.push_back({ 0, 0, 0, true });  // AddSphereGeom writes a tangent
-	m_SubmeshNames = QStringList{ "Sphere" };    // procedural sphere: a single submesh
+	// Not localized: the submesh selector's itemText() is read back as the stem of an auto-saved
+	// material's filename (FlushEditedGraphs), so translating it would make the path locale-dependent.
+	m_SubmeshNames = QStringList{ "Sphere" };  // procedural sphere: a single submesh
 
 	m_SubmeshMaterialPaths = QStringList{ QString() };
 	FocusOn(glm::vec3(0.0f), 1.0f);
@@ -235,11 +244,26 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 	assetlib::BMesh mesh;
 	const QString   name = QString::fromStdString(path.filename().string());
 
+	const QString title = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.material.load_mesh_title",
+		"Load Mesh");
+
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
-		QString("Loading %1").arg(name),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.loading_mesh_title",
+			{ name },
+			"Loading {0}"),
 		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Reading mesh...");
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.reading_mesh_progress",
+					"Reading mesh..."));
 			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
@@ -254,8 +278,12 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Load Mesh"),
-			QStringLiteral("Could not load '%1':\n\n%2").arg(name, result.error));
+			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.load_mesh_failed",
+				{ name, result.error },
+				"Could not load '{0}':\n\n{1}"));
 
 		ShowDefaultSphere();
 		return;
@@ -311,6 +339,8 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 						const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
 						auto                   name =
 							QString::fromUtf8(pooled.data(), static_cast<qsizetype>(pooled.size()));
+						// Not localized, like the sphere's "Sphere" above: this too is read back as a
+						// filename stem for an unnamed submesh's auto-saved material.
 						if (name.isEmpty())
 							name = QString("Submesh %1").arg(m_SubmeshNames.size());
 						m_SubmeshNames << name;
@@ -351,8 +381,12 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Load Mesh"),
-			QStringLiteral("Could not show '%1':\n\n%2").arg(name, QString::fromUtf8(e.what())));
+			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.show_mesh_failed",
+				{ name, e.what() },
+				"Could not show '{0}':\n\n{1}"));
 
 		ShowDefaultSphere();
 	}
@@ -437,10 +471,34 @@ MaterialPreviewWindow::SetSelectedSubmesh(std::optional<uint32_t> submeshIndex)
 	});
 }
 
+bool
+MaterialPreviewWindow::AcceptsDrop(const QMimeData* mime)
+{
+	return editor::IsMeshDrag(mime) || !FirstEnvironmentUrl(mime).isEmpty();
+}
+
+bool
+MaterialPreviewWindow::TakeDrop(const QMimeData* mime)
+{
+	if (const QString environment = FirstEnvironmentUrl(mime); !environment.isEmpty())
+	{
+		SetEnvironment(environment.toStdString());
+		return true;
+	}
+
+	const QString mesh =
+		editor::MeshForDrop(m_Host, mime, QString::fromStdWString(m_DataRoot.wstring()));
+	if (mesh.isEmpty())
+		return false;
+
+	LoadMesh(std::filesystem::path(mesh.toStdWString()));
+	return true;
+}
+
 void
 MaterialPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -448,30 +506,15 @@ void
 MaterialPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 MaterialPreviewWindow::dropEvent(QDropEvent* event)
 {
-	if (const QString environment = FirstEnvironmentUrl(event->mimeData()); !environment.isEmpty())
-	{
-		SetEnvironment(environment.toStdString());
+	if (TakeDrop(event->mimeData()))
 		event->acceptProposedAction();
-		return;
-	}
-
-	const editor::MeshDrop drop =
-		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
-		return;
-	}
-
-	LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
-	event->acceptProposedAction();
 }
 
 void

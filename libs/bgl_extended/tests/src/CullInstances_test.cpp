@@ -209,31 +209,13 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Upload")
-			.AddBufferArg(
-				"instanceBuffer",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"meshBuffer",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"geomBuffer",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"submeshBuffer",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"cullView",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg(
-				"visibility",
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopyDest)
-			.AddBufferArg("stats", bgl::BarrierSyncFlag::kCopy, bgl::BarrierAccessFlag::kCopyDest)
+			.AddCopyDest("instanceBuffer")
+			.AddCopyDest("meshBuffer")
+			.AddCopyDest("geomBuffer")
+			.AddCopyDest("submeshBuffer")
+			.AddCopyDest("cullView")
+			.AddCopyDest("visibility")
+			.AddCopyDest("stats")
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				submeshBuffer.Update(cmd);
@@ -251,34 +233,13 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Cull")
-			.AddBufferArg(
-				"instanceBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"meshBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"geomBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"submeshBuffer",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kShaderResource)
-			.AddBufferArg(
-				"cullView",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"visibility",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddBufferArg(
-				"stats",
-				bgl::BarrierSyncFlag::kComputeShader,
-				bgl::BarrierAccessFlag::kUnorderedAccess)
+			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("meshBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("geomBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("submeshBuffer", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("cullView", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("stats", bgl::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 

@@ -1,5 +1,6 @@
 #include "Windows/AssetImporter/ImportSection.h"
 #include "Windows/AssetImporter/folder_row.h"
+#include "util/editor_language.h"
 
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -9,7 +10,6 @@
 #include <QVBoxLayout>
 #include <qnamespace.h>
 #include <qobject.h>
-#include <qstringliteral.h>
 #include <qtmetamacros.h>
 #include <qwidget.h>
 
@@ -20,7 +20,9 @@ namespace editor
 		QString
 		FileCount(int files)
 		{
-			return files == 1 ? QStringLiteral("1 file") : QStringLiteral("%1 files").arg(files);
+			return files == 1 ?
+			           Localize("editor.asset_importer.file_count_singular", "1 file") :
+			           Localize("editor.asset_importer.file_count_plural", { files }, "{0} files");
 		}
 	}
 
@@ -34,7 +36,9 @@ namespace editor
 		m_Toggle->setObjectName(desc.objectName + "Toggle");
 		m_Toggle->setAutoRaise(true);
 		m_Toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-		m_Toggle->setToolTip("Show the files this import will write here.");
+		m_Toggle->setToolTip(Localize(
+			"editor.asset_importer.expand_toggle_tip",
+			"Show the files this import will write here."));
 		m_Toggle->hide();
 		connect(m_Toggle, &QToolButton::clicked, this, [this] {
 			SetExpanded(m_Body->isHidden());

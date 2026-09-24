@@ -245,39 +245,19 @@ namespace bgl
 
 		auto desc = PassDesc();
 		desc.SetName("Forward {} {}", c_PhaseNames[static_cast<size_t>(phase)], draw.drawIdx)
-			.AddTextureArg(
-				TextureArg{ std::string(c_BackbufferName),
-		                    BarrierSyncFlag::kRenderTarget,
-		                    BarrierAccessFlag::kRenderTarget,
-		                    BarrierLayout::kRenderTarget })
-			.AddTextureArg(
-				TextureArg{ std::string(c_DepthName),
-		                    BarrierSyncFlag::kDepthStencil,
-		                    BarrierAccessFlag::kDepthWrite,
-		                    BarrierLayout::kDepthWrite });
+			.AddRenderTarget(c_BackbufferName)
+			.AddDepthWrite(c_DepthName);
 
 		if (phase == ForwardPhase::kTransparent)
 		{
-			desc.AddBufferArg(
-					BufferArg{ std::string(c_SortedTransparentInstancesName),
-			                   BarrierSyncFlag::kVertexShader,
-			                   BarrierAccessFlag::kUnorderedAccess })
-				.AddBufferArg(
-					BufferArg{ std::string(c_TransparentDispatchArgsName),
-			                   BarrierSyncFlag::kIndirectArgument,
-			                   BarrierAccessFlag::kIndirectArgument });
+			desc.AddBufferReadWrite(
+					c_SortedTransparentInstancesName,
+					BarrierSyncFlag::kVertexShader)
+				.AddIndirectArgs(c_TransparentDispatchArgsName);
 		}
 		else
 		{
-			desc.AddTextureArg(
-					TextureArg{ std::string(c_MotionVectorsName),
-			                    BarrierSyncFlag::kRenderTarget,
-			                    BarrierAccessFlag::kRenderTarget,
-			                    BarrierLayout::kRenderTarget })
-				.AddBufferArg(
-					BufferArg{ std::string(c_CompactDispatchArgsName),
-			                   BarrierSyncFlag::kIndirectArgument,
-			                   BarrierAccessFlag::kIndirectArgument });
+			desc.AddRenderTarget(c_MotionVectorsName).AddIndirectArgs(c_CompactDispatchArgsName);
 		}
 
 		// The world tier's geometry stage reads no skinned tables; the transparent list is any tier.

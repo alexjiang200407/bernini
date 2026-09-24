@@ -233,7 +233,7 @@ TEST_CASE("A mesh's bindings neither apply nor report a grass binding", "[grass]
 		{ .submesh = "Street[0]", .material = "Authored/Materials/road.bmaterial" },
 		{ .submesh = "Street[1]", .material = "Authored/Grass/verge.bgrass" },
 	};
-	CHECK(applyBindings(mesh, bindings).empty());
+	CHECK(rebuildMaterialSlots(mesh, bindings, {}).empty());
 	CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
 }
 

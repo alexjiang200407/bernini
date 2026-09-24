@@ -5,6 +5,7 @@
 #include <QStringList>
 
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <filesystem>
 #include <qcontainerfwd.h>
 
@@ -28,15 +29,6 @@ namespace editor
 	 */
 	[[nodiscard]] bool
 	IsSameMaterialFile(const QString& a, const QString& b);
-
-	/**
-	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
-	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
-	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and a
-	 * bake -- this panel's Bake All, or the Content Explorer's -- is what rewrites them.
-	 */
-	[[nodiscard]] QString
-	BakedTexturesSummary(const assetlib::BMaterial& material);
 
 	/**
 	 * The material `model` authors, ready to be written to `materialPath`.
@@ -63,6 +55,21 @@ namespace editor
 	DefaultMaterialPath(const std::filesystem::path& dataRoot, const QString& name);
 
 	/**
+	 * Where a submesh's material is written when it has none yet and the panel saves by itself:
+	 * `Materials/<mesh stem>/<submesh>.bmaterial`, or beside the project's Materials directory for
+	 * a mesh with no file.
+	 *
+	 * Under the mesh's own directory because that is how a project keeps them (`Materials/Bear/`),
+	 * and because a submesh name is only unique within its mesh -- two `Box[0]`s would otherwise
+	 * write to one file. The name is `ToPlainFileStem`'d: a submesh may be called anything.
+	 */
+	[[nodiscard]] QString
+	AutoSaveMaterialPath(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath,
+		const QString&               submeshName);
+
+	/**
 	 * Everything a Material Editor showing `materials` over `previewMesh` holds open, absolute.
 	 * The mesh counts: the panel binds materials into it and writes them back through the
 	 * `.bmesh`. An empty path -- the default sphere -- holds nothing.
@@ -82,14 +89,10 @@ namespace editor
 	[[nodiscard]] QStringList
 	UniqueMaterialFiles(const QStringList& paths);
 
-	/** What one Save All wrote, and what it could not. */
+	/** What one write of the edited graphs put on disk, and what it could not. */
 	struct MaterialSaveResult
 	{
 		int saved = 0;
-
-		// Graphs with no file yet. Skipped rather than prompted: a batch action that opens a file
-		// dialog per submesh is not one.
-		int unsaved = 0;
 
 		QStringList failed;
 
@@ -99,11 +102,12 @@ namespace editor
 	};
 
 	/**
-	 * What to tell the user after a Save All, or an empty string when a dialog would say nothing worth
-	 * a click -- everything written and nothing skipped. The panel's own refresh reports a clean run.
+	 * What to tell the user after the panel wrote its edited graphs, or an empty string when a
+	 * dialog would say nothing worth a click -- everything written. The panel's own refresh
+	 * reports a clean run, and the writes happen on a timer nobody asked to be told about.
 	 */
 	[[nodiscard]] QString
-	MaterialSaveSummary(const MaterialSaveResult& result);
+	MaterialSaveSummary(const ILanguageResolver& language, const MaterialSaveResult& result);
 
 	/**
 	 * Derives a tangent for every submesh of the `.bmesh` at `meshPath` that has none, and rewrites
@@ -114,6 +118,7 @@ namespace editor
 	 */
 	[[nodiscard]] bool
 	GenerateTangents(
+		const ILanguageResolver&     language,
 		QWidget*                     parent,
 		const assetlib::AssetStore&  store,
 		const std::filesystem::path& meshPath);

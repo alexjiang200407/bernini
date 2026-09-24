@@ -1,6 +1,7 @@
 #include "Windows/Plugins/PluginsWindow.h"
 
 #include "Plugins/plugin_loader.h"
+#include "util/editor_language.h"
 #include <QFont>
 #include <QFrame>
 #include <QLabel>
@@ -31,9 +32,15 @@ namespace editor
 			if (!plugin.directory.empty())
 				lines << PathText(plugin.directory);
 			if (!plugin.runtimeModule.empty())
-				lines << "Runtime: " + PathText(plugin.runtimeModule.filename());
+				lines << Localize(
+					"editor.plugins_window.runtime_module_line",
+					{ PathText(plugin.runtimeModule.filename()) },
+					"Runtime: {0}");
 			if (!plugin.editorModule.empty())
-				lines << "Editor: " + PathText(plugin.editorModule.filename());
+				lines << Localize(
+					"editor.plugins_window.editor_module_line",
+					{ PathText(plugin.editorModule.filename()) },
+					"Editor: {0}");
 			return lines.join('\n');
 		}
 	}
@@ -42,7 +49,7 @@ namespace editor
 		QWidget(parent, Qt::Window)
 	{
 		setObjectName("PluginsWindow");
-		setWindowTitle("Plugins");
+		setWindowTitle(Localize("editor.plugins_window.window_title", "Plugins"));
 		resize(480, 360);
 
 		auto* list = new QWidget(this);

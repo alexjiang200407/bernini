@@ -1,0 +1,10 @@
+key,en
+clean_unused_textures,Clean Unused Textures...
+clean_unused_textures_tooltip,Delete the baked textures that no material in this project references any more
+edit_menu,Edit
+exit,Exit
+file_menu,File
+new_project,New Project...
+open_project,Open Project...
+save,Save
+window_menu,Window

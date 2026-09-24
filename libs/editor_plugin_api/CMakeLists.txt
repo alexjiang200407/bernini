@@ -1,6 +1,7 @@
 add_library(editor_plugin_api INTERFACE)
 target_include_directories(editor_plugin_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(editor_plugin_api INTERFACE assetlib_plugin_api gamelib Qt6::Widgets)
+add_subdirectory(localize)
+target_link_libraries(editor_plugin_api INTERFACE assetlib_plugin_api gamelib editor_localize Qt6::Widgets)
 
 add_subdirectory(localization)
 add_subdirectory(${BERNINI_ROOT}/libs/editor_sdk ${CMAKE_BINARY_DIR}/libs/editor_sdk)
@@ -32,7 +33,7 @@ if(BERNINI_EDITOR_SDK)
         "Build-tree package directory for native editor plugins")
     file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
     export(TARGETS
-        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_plugin_api editor_sdk
+        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_localize editor_plugin_api editor_sdk
         NAMESPACE Bernini::
         FILE "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKTargets.cmake")
     configure_file(
@@ -45,7 +46,7 @@ if(BERNINI_EDITOR_SDK)
     add_custom_command(
         OUTPUT "${BERNINI_EDITOR_SDK_STAMP}"
         COMMAND ${CMAKE_COMMAND} -E touch "${BERNINI_EDITOR_SDK_STAMP}"
-        DEPENDS core_process assetlib gamelib editor_sdk ${BERNINI_EDITOR_SDK_PUBLIC_HEADERS}
+        DEPENDS core_process assetlib gamelib editor_localize editor_sdk ${BERNINI_EDITOR_SDK_PUBLIC_HEADERS}
         VERBATIM)
     add_custom_target(editor_sdk_stamp DEPENDS "${BERNINI_EDITOR_SDK_STAMP}")
 endif()

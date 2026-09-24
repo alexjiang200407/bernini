@@ -102,19 +102,11 @@ namespace bgl
 
 		auto desc = PassDesc();
 
-		desc.SetName("Overlay").AddTextureArg(
-			TextureArg{ std::string(c_BackbufferName),
-		                BarrierSyncFlag::kRenderTarget,
-		                BarrierAccessFlag::kRenderTarget,
-		                BarrierLayout::kRenderTarget });
+		desc.SetName("Overlay").AddRenderTarget(c_BackbufferName);
 
 		for (const std::string& source : sources)
 		{
-			desc.AddTextureArg(
-				TextureArg{ source,
-			                BarrierSyncFlag::kPixelShader,
-			                BarrierAccessFlag::kShaderResource,
-			                BarrierLayout::kShaderResource });
+			desc.AddTextureRead(source, BarrierSyncFlag::kPixelShader);
 		}
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });

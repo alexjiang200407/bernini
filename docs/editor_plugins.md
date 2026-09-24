@@ -32,9 +32,10 @@ and fix the map.
   and optional camera; no camera means automatic framing. Plugins never advance the frame loop.
 - **Identity is independent of language.** Panel, action and menu IDs are stable; labels retain
   translation context/key and fallback text. The host resolves them through a borrowed
-  `ILanguageResolver` without registering contributions again. Each host owns its locale and copies
-  module catalogs; there is no singleton. The resolver and CSV reader are implemented, but the
-  production editor uses the resolver for plugin menus, actions, tabs and widgets.
+  `ILanguageResolver` without registering contributions again. The editor process owns one
+  resolver, reached by name only from `apps/editor/src` (`editor::EditorLanguage`), so no plugin DLL
+  can hold a copy; every project's host lends that one. Plugins still look text up only through
+  `IEditorHost`.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions. The loader checks the engine build ID, configuration, dependency
@@ -64,11 +65,12 @@ and fix the map.
 | `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_plugin_api/include/editor_plugin_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
 | `IEditorRegistry` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
 | `LocalizedText` | [LocalizedText.h](libs/editor_plugin_api/include/editor_plugin_api/LocalizedText.h) | Deferred label lookup with fallback |
+| `Localize` | [localize.h](libs/editor_plugin_api/include/editor_plugin_api/localize.h) | Resolve a `context.key` now and fill its `{0}`, `{1}` from `TextArgs` |
 | `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
 | `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_plugin_api/include/editor_plugin_api/TranslationCatalog.h), [translation_csv.h](libs/editor_plugin_api/include/editor_plugin_api/translation_csv.h) | Module data and optional CSV ingestion |
 | `MenuDesc` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
 | `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_plugin_api/include/editor_plugin_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
-| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch and editor navigation |
+| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch, editor navigation and the host's mesh import |
 | `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
 | `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_plugin_api/include/editor_plugin_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
 | Loading-screen tasks | [BackgroundTask.h](../libs/editor_sdk/include/editor_sdk/BackgroundTask.h) | Scoped worker execution with GUI-thread progress and cooperative cancellation |
@@ -129,6 +131,12 @@ host import pipeline write Material graphs; it is not a plugin SDK lifecycle int
 
 Each preview composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
 resize events to plugin-owned interaction. The host retains render scheduling and presentation.
+
+A mesh dropped on either mesh panel is opened if the project already holds it and **imported first if
+it does not** — `default_editor`'s `MeshForDrop` over `IEditorHost::ImportMeshSource`. With nothing
+open each panel shows a drop prompt on a stacked page rather than an overlay, because a label floated
+over the native surface is at the mercy of its compositing; the page behind it is hidden, so a panel
+covered by its prompt is one no click reaches.
 The panels borrow the project store for asset operations; an explicitly configured environment from
 another asset root uses its own external store. An omitted environment root uses the project store.
 Content Explorer and rig-editor bakes report
@@ -256,11 +264,22 @@ exercise both services through the end of viewport teardown.
   Locale tokens begin with an ASCII letter and contain only ASCII letters, digits, `_` or `-`;
   matching is case-sensitive, without normalization or regional fallback.
 - **Resolver ownership:** link the static `editor_localization` target in the host. It depends only
-  on core and Qt Core; `editor_plugin_api` does not link its implementation into every client. Plugins borrow the
+  on core and Qt Core; `editor_plugin_api` does not link it into every client. What every client
+  does link is `editor_localize`, which holds `Localize` alone, compiled once: `<format>` inline in
+  a header every source includes costs minutes of MSVC build. Plugins borrow the
   const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
   through that interface. All calls, including catalog registration and locale changes, run on the
-  GUI thread. The resolver outlives its borrowers; independent hosts may choose different locales.
+  GUI thread. The resolver outlives its borrowers. The production editor keeps one per process in
+  the executable, with its locale from `locale` in `config.json` (default `en`), read once at
+  startup; a fake host may own its own.
   This Qt editor service does not implement the game runtime localization system.
+- **Catalog discovery:** a plugin ships `localization/<context>.csv` in its directory, one file per
+  context, and the host reads every one as that plugin registers -- a plugin need not call
+  `AddTranslations` for them, and a context it also registers in code collides. The host-linked
+  plugin's are staged to `plugins/bernini.default/localization/`, the host's own to `localization/`
+  beside the executable. `editor.` contexts are the host's; a plugin catalog naming one is refused.
+  A CSV is not a descriptor `dependencies` entry: those are age-checked against the SDK stamp, which
+  an unchanged catalog would fail after an SDK rebuild.
 - **Catalogs:** `AddTranslations` transfers a module catalog by value, with one catalog per context.
   The host copies strings and owns them beyond registration. `LanguageResolver::RegisterCatalog`
   rejects invalid contexts, keys, locales, empty translations, duplicate key/locale pairs and existing
@@ -272,8 +291,18 @@ exercise both services through the end of viewport teardown.
   allowing an entire catalog to be validated before it becomes visible.
 - **Language changes:** changing the resolver locale affects the next lookup, not already displayed
   strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
-  on the GUI thread. The sample resolves its widget title when constructed; live widget refresh,
-  catalog discovery, pluralization and parameter formatting are not implemented.
+  on the GUI thread. The sample resolves its widget title when constructed; live widget refresh
+  and pluralization are not implemented.
+- **Text shown now:** `Localize(resolver, "context.key", { args }, "English {0}")` resolves and
+  formats in one call, and `Localize(resolver, "context.key", "English")` is the form with none;
+  a descriptor title stays a `LocalizedText`, resolved when the host shows it.
+  The key splits at its last dot, and a key with no context throws. Arguments fill positional
+  `std::format` fields, so a translation may reorder them; a translation that does not format falls
+  back to the English, which is the one string a test can prove does. The arguments are one
+  `TextArgs`, a list of `TextArg`, each a string, `QString` (as UTF-8), integer or floating value
+  that keeps its type, so `{0:.2f}` formats a number. `std::format` takes a count fixed at compile
+  time, so a runtime list is dispatched to its exact arity, up to `c_MaxTextArgs` (8); more
+  throws. Literal braces are doubled in every string, argument or not.
 - **Menus:** the host supplies `c_FileMenuId` and `c_ToolsMenuId` before plugin registration.
   `AddMenu` creates a plugin-qualified ID with a localized label; empty parent means a root menu,
   otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
@@ -290,6 +319,15 @@ exercise both services through the end of viewport teardown.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
   own writes. The host reports thrown errors; a successful write calls `AssetChanged`, which drops
   cached previews and their render assets because another document may reference the changed key.
+- **The host's own mesh import** runs the other way, and the two are not alternatives.
+  `IEditorImporter` is a plugin *supplying* an import for an extension the host would not otherwise
+  know; `IEditorHost::ImportMeshSource` is a plugin *asking* for the glTF cook the editor already
+  has, which it cannot link. It takes a filesystem path — a file the user picked from anywhere —
+  and answers with the mount key of the `.bmesh` it wrote. The host owns the options dialog, the
+  loading screen and every report, and parents them itself.
+  An empty answer covers declined, cancelled, failed, and a source imported for its clips alone: the
+  host has already said which, so a caller shows nothing of its own. A host with no import to offer
+  throws rather than answering empty, so "cannot" is never read as "produced nothing".
 - **Asset changes:** after a successful write, call `IEditorHost::AssetChanged` on the GUI thread
   with a normalized mount key. It invalidates host caches and queues `EditorPanel::OnAssetChanged`
   once for each panel alive at that call, including inactive panels and the writer. Each queued
@@ -366,6 +404,36 @@ The first column must be `key`, followed by one or more distinct locale columns.
 same width and unique keys. Empty cells are missing translations. UTF-8 BOM, LF/CRLF records,
 quoted commas/newlines and doubled quotes are supported; malformed UTF-8, NUL bytes, bad quoting,
 duplicate keys/locales and invalid identifiers throw. Whitespace is preserved rather than trimmed.
-Placeholders remain literal text; this importer supplies neither interpolation nor plural selection.
-Resolve the returned catalog through `LanguageResolver` after registering it; plugins may instead
-construct `TranslationCatalog` directly, as the sample does.
+The reader keeps `{0}` fields as literal text; `Localize` fills them. No plural selection.
+Resolve the returned catalog through `LanguageResolver` after registering it. A plugin that ships
+`localization/<context>.csv` has the host do this for it, as the sample does; one may instead
+construct `TranslationCatalog` directly and call `AddTranslations`.
+
+The `en` column is what the editor shows, and the fallback at each call site must match it.
+`scripts/tests/test_editor_localization.py` holds the editor, the default plugin and the sample to
+that, and fails on a lettered string literal handed straight to a Qt text call (`setText`,
+`QLabel`, `QMessageBox::warning`, …) in the sources it covers.
+
+What goes through a catalog is text a user reads. Four things never do, because each is data that
+leaves the screen:
+
+- **An identity.** A QtNodes model's `name()` is what a saved graph names the node by; a panel, menu
+  or action ID routes. Only a caption is translated.
+- **A value read back or written.** A combo box read by `currentText()`, a default that becomes a
+  directory (`New Folder`) or a file stem (a preview's `Sphere`): translate it and the path, or the
+  document, depends on the locale that wrote it. Read a combo by index; keep such a default a
+  constant.
+- **A log line.** `qWarning` and `core::logging` stay English, and a localized string is never
+  logged: when a message is both shown and logged, the log gets the English.
+- **Another library's words.** An exception's `what()` is passed as an argument to a localized frame
+  (`"Could not open {0}: {1}"`), never translated. The host's own error that a user reads is thrown
+  as `editor::LocalizedError`, whose `what()` is the English and `Shown()` the locale's; a frame
+  takes `editor::ShownText(e)`, a log line `e.what()`.
+
+A translatable string is **a whole sentence**. One is never assembled from localized pieces -- a verb
+beside a file name, a subject spliced into a clause -- because a translation must be free to order
+and inflect its own. So each case gets its own template: one per startup phase, one per delete
+confirmation, one per kind of file an import refuses a name. A helper below the UI returns what
+happened as data (`ClipRefusal`, `SpeedRefusal`), not an English fragment, and the window words it.
+A name that has to sit inside a sentence arrives as a field (`'{0}' has a single frame…`); a label
+listed after a colon stands alone.

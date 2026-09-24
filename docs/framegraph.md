@@ -16,7 +16,11 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 * **Passes declare access; the graph owns the barriers.** A pass never calls
   `ICommandList::Barrier`. It declares each resource it reads/writes as a `BufferArg` / `TextureArg`
   (a name + `BarrierSync` + `BarrierAccess` [+ `BarrierLayout` for textures]) and lists its
-  render/depth attachments. `Compile` walks the kept passes and emits exactly the transitions
+  render/depth attachments. The accesses the passes make each have a `PassDesc` helper that owns
+  the flags, so a pass names only the resource: `AddRenderTarget`, `AddDepthWrite`,
+  `AddTextureRead(name, stages)`, `AddBufferRead(name, stages)`, `AddBufferReadWrite(name, stages)`,
+  `AddIndirectArgs`, `AddCopySource` and `AddCopyDest`. The geometry stages of a mesh-shader
+  pipeline sync as `kVertexShader`. `AddTextureArg` / `AddBufferArg` remain for any other access. `Compile` walks the kept passes and emits exactly the transitions
   needed before each one; `Execute` records those barriers ahead of the pass's `exec`. This is the
   load-bearing decision — it is why the [RHI](docs/rhi.md) says pass code must not barrier.
 

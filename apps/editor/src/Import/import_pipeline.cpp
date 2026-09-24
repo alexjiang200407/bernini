@@ -1,4 +1,5 @@
 #include "import_pipeline.h"
+#include "util/editor_language.h"
 #include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
@@ -54,14 +55,19 @@ namespace
 			return false;
 
 		auto message = QMessageBox(parent);
-		message.setWindowTitle("Import Asset");
+		message.setWindowTitle(
+			editor::Localize("editor.import.import_asset_title", "Import Asset"));
 		message.setIcon(QMessageBox::Warning);
 		message.setText(
-			QString("Cannot import '%1': it would overwrite files already in the project.")
-				.arg(name));
+			editor::Localize(
+				"editor.import.cannot_import_overwrite",
+				{ name },
+				"Cannot import '{0}': it would overwrite files already in the project."));
 		message.setInformativeText(
-			"Import never overwrites. Remove the listed files, or choose a different folder, "
-			"then import again.");
+			editor::Localize(
+				"editor.import.overwrite_informative",
+				"Import never overwrites. Remove the listed files, or choose a different folder, "
+				"then import again."));
 		message.setDetailedText(replaced.join('\n'));
 		message.exec();
 
@@ -112,7 +118,10 @@ namespace editor
 		}
 		catch (const std::exception& e)
 		{
-			QMessageBox::warning(parent, QString("Import %1").arg(name), e.what());
+			QMessageBox::warning(
+				parent,
+				editor::Localize("editor.import.import_title", { name }, "Import {0}"),
+				e.what());
 			return ImportOutcome::kBlocked;
 		}
 
@@ -210,13 +219,16 @@ namespace editor
 
 		background::TaskResult result = background::RunWithLoadingScreen(
 			parent,
-			QString("Importing %1").arg(name),
+			editor::Localize("editor.import.importing_progress_title", { name }, "Importing {0}"),
 			[&](background::Progress& progress) {
 				ZoneScopedN("editor import (worker)");
 
 				const assetlib::CancelToken cancel = progress.Cancellation();
 
-				progress.Report(0, 0, QString("Parsing %1...").arg(name));
+				progress.Report(
+					0,
+					0,
+					editor::Localize("editor.import.parsing_progress", { name }, "Parsing {0}..."));
 				imported = assetlib::loadFromGltf(source, { .cancel = cancel });
 
 				if (options.textures)
@@ -228,9 +240,10 @@ namespace editor
 							progress.Report(
 								static_cast<int>(event.done),
 								static_cast<int>(event.total),
-								QString("Compressing textures (%1 of %2)...")
-									.arg(event.done + 1)
-									.arg(event.total));
+								editor::Localize(
+									"editor.import.compressing_textures_progress",
+									{ event.done + 1, event.total },
+									"Compressing textures ({0} of {1})..."));
 						},
 						cancel);
 				}
@@ -239,7 +252,12 @@ namespace editor
 				// so it belongs beside the parse rather than on the thread drawing the loading screen.
 				if (options.mesh)
 				{
-					progress.Report(0, 0, QString("Building the mesh..."));
+					progress.Report(
+						0,
+						0,
+						editor::Localize(
+							"editor.import.building_mesh_progress",
+							"Building the mesh..."));
 					mesh     = assetlib::toBMesh(*imported);
 					tangents = assetlib::generateTangents(*mesh);
 				}
@@ -250,7 +268,12 @@ namespace editor
 				// working, which reads as a hang.
 				if (options.mesh)
 				{
-					progress.Report(0, 0, QString("Baking the pose bounds..."));
+					progress.Report(
+						0,
+						0,
+						editor::Localize(
+							"editor.import.baking_pose_bounds_progress",
+							"Baking the pose bounds..."));
 					assetlib::requireUniqueSubmeshNames(*mesh);
 
 					const assetlib::AssetStore   store(dataRoot);
@@ -277,7 +300,12 @@ namespace editor
 				}
 				else if (options.animations)
 				{
-					progress.Report(0, 0, QString("Baking the pose bounds..."));
+					progress.Report(
+						0,
+						0,
+						editor::Localize(
+							"editor.import.baking_pose_bounds_progress",
+							"Baking the pose bounds..."));
 
 					const assetlib::AssetStore store(dataRoot);
 					assetlib::ImportTarget     target{ sourceKey,
@@ -355,8 +383,11 @@ namespace editor
 
 		QMessageBox::warning(
 			parent,
-			"Import Asset",
-			QString("Failed to import '%1':\n\n%2").arg(name, result.error));
+			editor::Localize("editor.import.import_asset_title", "Import Asset"),
+			editor::Localize(
+				"editor.import.failed_import",
+				{ name, result.error },
+				"Failed to import '{0}':\n\n{1}"));
 
 		return ImportOutcome::kFailed;
 	}
@@ -403,9 +434,15 @@ namespace editor
 
 		const background::TaskResult result = background::RunWithLoadingScreen(
 			parent,
-			QString("Importing %1").arg(name),
+			editor::Localize("editor.import.importing_progress_title", { name }, "Importing {0}"),
 			[&](background::Progress& progress) {
-				progress.Report(0, 0, QString("Convolving %1...").arg(name));
+				progress.Report(
+					0,
+					0,
+					editor::Localize(
+						"editor.import.convolving_progress",
+						{ name },
+						"Convolving {0}..."));
 				imported = store.ImportEnvironment(desc, progress.Cancellation());
 			},
 			background::Cancellable::kYes);
@@ -419,8 +456,11 @@ namespace editor
 
 		QMessageBox::warning(
 			parent,
-			"Import Environment",
-			QString("Failed to import '%1':\n\n%2").arg(name, result.error));
+			editor::Localize("editor.import.import_environment_title", "Import Environment"),
+			editor::Localize(
+				"editor.import.failed_import",
+				{ name, result.error },
+				"Failed to import '{0}':\n\n{1}"));
 
 		return ImportOutcome::kFailed;
 	}

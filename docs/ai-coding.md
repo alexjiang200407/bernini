@@ -242,8 +242,8 @@ Open a pull request comment with `/review` and
 [`.github/workflows/review.yml`](../.github/workflows/review.yml) reviews it. No machine of yours is
 involved, so a review can be asked for from anywhere and answered whenever.
 
-**It is asked for, never automatic.** Every pull request has already been read once before it opened,
-by [`bcp-precheck`](../.claude/agents/bcp-precheck.md) on the machine that wrote it, so the routine
+**It is asked for, never automatic.** Every pull request to `master` has already been read once before
+it opened, by [`bcp-precheck`](../.claude/agents/bcp-precheck.md) on the machine that wrote it, so the routine
 findings are gone before anyone sees the diff. Spending a run on each pull request would mostly pay
 to rediscover them. `/review` is for the change where a second, independent read is worth it.
 

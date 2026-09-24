@@ -2,6 +2,9 @@
 
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
+#include "mesh_drop_import.h"
+#include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/mesh_load.h>
 
 #include "Windows/AnimationEditor/animation_bindings.h"
@@ -17,6 +20,7 @@
 #include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <editor_plugin_api/localize.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/environment.h>
@@ -316,9 +320,11 @@ AnimationPreviewWindow::Clear()
 	SetTime(0.0f);
 
 	// Both tables, because both are node halves: a panel left listing the old rig's spaces would
-	// offer a fade onto a node nothing holds.
+	// offer a fade onto a node nothing holds. The set they came from goes with them -- it is what
+	// a panel holds open, and nothing is open.
 	m_Clips.clear();
 	m_Spaces.clear();
+	m_BlendKey.clear();
 
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
@@ -406,8 +412,14 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Mesh"),
-			QStringLiteral("Open a project before loading a mesh."));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_mesh_title",
+				"Open Mesh"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_project_first",
+				"Open a project before loading a mesh."));
 		return;
 	}
 
@@ -417,16 +429,22 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Mesh"),
-			QStringLiteral("'%1' is outside the project's Data directory.").arg(name));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_mesh_title",
+				"Open Mesh"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.outside_data_directory",
+				{ name },
+				"'{0}' is outside the project's Data directory."));
 		return;
 	}
 
 	assetlib::BMesh           mesh;
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
-	std::vector<std::string>  blendSets;
-	std::string               blend = blendRelPath;
+	std::string               blend      = blendRelPath;
 
 	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
@@ -444,14 +462,30 @@ AnimationPreviewWindow::LoadMesh(
 	// The mesh read and the candidate scan, off the UI and render threads.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
-		QString("Loading %1").arg(name),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation_preview.loading_mesh_progress",
+			{ name },
+			"Loading {0}"),
 		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Reading mesh...");
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.reading_mesh_progress",
+					"Reading mesh..."));
 			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 
-			progress.Report(0, 0, "Resolving animations...");
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.resolving_animations_progress",
+					"Resolving animations..."));
 
 			// One scan answers both questions. It reads and parses every asset in the project, so
 			// asking each of them for its own would double the cost of every load.
@@ -461,15 +495,23 @@ AnimationPreviewWindow::LoadMesh(
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
-			// One edge over: the sets are per clip set, so which ones exist is only knowable once
-			// the `.banim` is settled.
-			blendSets = editor::ResolveBlendSets(graph, animations);
+			// One edge over: a set belongs to a clip set, so which one to load is only knowable
+			// once the `.banim` is settled. A caller that named its own keeps it -- the Blend
+			// Space editor previews the set it is editing, wherever that is stored.
+			if (blend.empty())
+				blend = editor::BlendSetFor(graph, animations);
 
 			plan = editor::PlanAnimationDraws(mesh);
 
 			if (!animations.empty())
 			{
-				progress.Report(0, 0, "Reading the pose bounds...");
+				progress.Report(
+					0,
+					0,
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.animation_preview.reading_pose_bounds_progress",
+						"Reading the pose bounds..."));
 
 				// Through a store, like every other read: a project opens as a mount, so a rig that
 				// ships inside a .bpak is only reachable that way.
@@ -488,7 +530,13 @@ AnimationPreviewWindow::LoadMesh(
 
 					const std::optional<assetlib::Bounds>& box = baked[placement.meshIndex];
 					if (!box)
-						progress.Report(0, 0, "Measuring the pose...");
+						progress.Report(
+							0,
+							0,
+							editor::Localize(
+								m_Host.GetLanguageResolver(),
+								"bernini.animation_preview.measuring_pose_progress",
+								"Measuring the pose..."));
 
 					skinnedBounds.emplace(
 						placement.meshIndex,
@@ -502,8 +550,15 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Mesh"),
-			QStringLiteral("Could not load '%1':\n\n%2").arg(name, result.error));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_mesh_title",
+				"Open Mesh"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.load_mesh_failed",
+				{ name, result.error },
+				"Could not load '{0}':\n\n{1}"));
 		return;
 	}
 
@@ -513,8 +568,15 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Mesh"),
-			QStringLiteral("'%1' has no rig -- nothing to animate.").arg(name));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_mesh_title",
+				"Open Mesh"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.mesh_no_rig",
+				{ name },
+				"'{0}' has no rig -- nothing to animate."));
 		return;
 	}
 
@@ -549,9 +611,19 @@ AnimationPreviewWindow::LoadMesh(
 		ClearGeometry();
 		const background::TaskResult upload = background::RunWithLoadingScreen(
 			this,
-			QString("Loading %1").arg(name),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.loading_mesh_progress",
+				{ name },
+				"Loading {0}"),
 			[&](background::Progress& progress) {
-				progress.Report(0, 0, "Uploading materials and geometry...");
+				progress.Report(
+					0,
+					0,
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.animation_preview.uploading_progress",
+						"Uploading materials and geometry..."));
 				m_Viewport->Invoke([&](editor::RenderContext&   context,
 			                           const bgl::SceneViewRef& view) {
 					auto out     = Loaded();
@@ -683,8 +755,15 @@ AnimationPreviewWindow::LoadMesh(
 		{
 			QMessageBox::warning(
 				window(),
-				QStringLiteral("Open Mesh"),
-				QStringLiteral("Could not load '%1':\n\n%2").arg(name, upload.error));
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.open_mesh_title",
+					"Open Mesh"),
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.load_mesh_failed",
+					{ name, upload.error },
+					"Could not load '{0}':\n\n{1}"));
 			return;
 		}
 
@@ -703,22 +782,15 @@ AnimationPreviewWindow::LoadMesh(
 			bindings.animations.begin(),
 			std::find(bindings.animations.begin(), bindings.animations.end(), animations)));
 
-		auto setNames = QStringList();
-		for (const std::string& set : blendSets) setNames << QString::fromStdString(set);
-		const auto activeSet =
-			static_cast<int>(std::distance(blendSets.begin(), std::ranges::find(blendSets, blend)));
-
-		m_Clips  = loaded.clips;
-		m_Spaces = loaded.spaces;
+		m_Clips    = loaded.clips;
+		m_Spaces   = loaded.spaces;
+		m_BlendKey = blend;
 
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		// Before SpacesChanged, and the order is read: a space is a node past the clips, so the
 		// panel cannot place one until it knows how many clips there are.
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
-		Q_EMIT BlendSetsChanged(
-			setNames,
-			blend.empty() || activeSet >= setNames.size() ? -1 : activeSet);
 		Q_EMIT SpacesChanged(loaded.spaces);
 
 		if (!loaded.refusal.isEmpty())
@@ -739,8 +811,15 @@ AnimationPreviewWindow::LoadMesh(
 
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Mesh"),
-			QStringLiteral("Could not show '%1':\n\n%2").arg(name, QString::fromUtf8(e.what())));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.open_mesh_title",
+				"Open Mesh"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.show_mesh_failed",
+				{ name, QString::fromUtf8(e.what()) },
+				"Could not show '{0}':\n\n{1}"));
 
 		Clear();
 	}
@@ -756,7 +835,10 @@ namespace
 	 * one it is, and its material is what a reader can act on.
 	 */
 	QString
-	RefusedEntriesLine(const assetlib::BMesh& mesh, std::span<const uint32_t> entries)
+	RefusedEntriesLine(
+		const editor::ILanguageResolver& resolver,
+		const assetlib::BMesh&           mesh,
+		std::span<const uint32_t>        entries)
 	{
 		if (entries.empty())
 			return {};
@@ -784,13 +866,22 @@ namespace
 		if (named.isEmpty())
 			return {};
 
-		return QStringLiteral(
-				   "\n\nStanding still in bind pose: %1 (%2). The rest of the mesh "
-				   "animates normally.")
-		    .arg(named.join(QStringLiteral(", ")))
-		    .arg(
-				entries.size() == 1 ? QStringLiteral("1 part") :
-									  QStringLiteral("%1 parts").arg(entries.size()));
+		const QString parts = entries.size() == 1 ?
+		                          editor::Localize(
+									  resolver,
+									  "bernini.animation_preview.bind_pose_part_one",
+									  "1 part") :
+		                          editor::Localize(
+									  resolver,
+									  "bernini.animation_preview.bind_pose_part_many",
+									  { entries.size() },
+									  "{0} parts");
+
+		return editor::Localize(
+			resolver,
+			"bernini.animation_preview.bind_pose_entries_line",
+			{ named.join(QStringLiteral(", ")), parts },
+			"\n\nStanding still in bind pose: {0} ({1}). The rest of the mesh animates normally.");
 	}
 }
 
@@ -812,21 +903,45 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
-	box.setWindowTitle(QStringLiteral("Open Mesh"));
-	box.setText(QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2%3")
-	                .arg(name, refusal, RefusedEntriesLine(mesh, refusedEntries)));
+	box.setWindowTitle(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation_preview.open_mesh_title",
+			"Open Mesh"));
+	box.setText(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation_preview.bind_pose_refusal",
+			{ name,
+	          refusal,
+	          RefusedEntriesLine(m_Host.GetLanguageResolver(), mesh, refusedEntries) },
+			"'{0}' is shown in bind pose -- its clips cannot play:\n\n{1}{2}"));
 
 	QPushButton* bakeButton = nullptr;
 	if (!loose.empty())
 	{
 		box.setInformativeText(
-			QStringLiteral(
-				"%1 of its materials %2 drawing unbaked (never baked, or the bake is stale "
-				"-- a git pull makes every bake stale here), and this preview draws baked "
-				"materials only.")
-				.arg(loose.size())
-				.arg(loose.size() == 1 ? "is" : "are"));
-		bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
+			loose.size() == 1 ?
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.bake_offer_informative_one",
+					{ loose.size() },
+					"{0} of its materials is drawing unbaked (never baked, or the bake is stale "
+					"-- a git pull makes every bake stale here), and this preview draws baked "
+					"materials only.") :
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.animation_preview.bake_offer_informative_many",
+					{ loose.size() },
+					"{0} of its materials are drawing unbaked (never baked, or the bake is stale "
+					"-- a git pull makes every bake stale here), and this preview draws baked "
+					"materials only."));
+		bakeButton = box.addButton(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.bake_now_button",
+				"Bake Now"),
+			QMessageBox::AcceptRole);
 	}
 	box.addButton(QMessageBox::Ok);
 	box.exec();
@@ -843,7 +958,10 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	// routes composited are the ones last saved.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
-		QStringLiteral("Baking materials"),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation_preview.baking_materials_title",
+			"Baking materials"),
 		[&](background::Progress& progress) {
 			editor::BakeMaterials(m_Host.GetStore(), files, progress);
 		},
@@ -856,8 +974,15 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Bake Material"),
-			QStringLiteral("Could not bake:\n\n%1").arg(result.error));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.bake_material_title",
+				"Bake Material"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.animation_preview.bake_failed",
+				{ result.error },
+				"Could not bake:\n\n{0}"));
 		return;
 	}
 
@@ -975,7 +1100,10 @@ QString
 AnimationPreviewWindow::RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces)
 {
 	if (m_AnimatedDraws.empty())
-		return QStringLiteral("Nothing is loaded to retarget.");
+		return editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.animation_preview.retarget_nothing_loaded",
+			"Nothing is loaded to retarget.");
 
 	auto refusal = QString();
 
@@ -1128,11 +1256,37 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSecon
 	});
 }
 
+bool
+AnimationPreviewWindow::AcceptsDrop(const QMimeData* mime) const
+{
+	return (m_MeshDropsEnabled && editor::IsMeshDrag(mime)) || !FirstEnvironmentUrl(mime).isEmpty();
+}
+
+bool
+AnimationPreviewWindow::TakeDrop(const QMimeData* mime)
+{
+	if (const QString environment = FirstEnvironmentUrl(mime); !environment.isEmpty())
+	{
+		SetEnvironment(environment.toStdString());
+		return true;
+	}
+
+	if (!m_MeshDropsEnabled)
+		return false;
+
+	const QString mesh =
+		editor::MeshForDrop(m_Host, mime, QString::fromStdWString(m_DataRoot.wstring()));
+	if (mesh.isEmpty())
+		return false;
+
+	LoadMesh(std::filesystem::path(mesh.toStdWString()));
+	return true;
+}
+
 void
 AnimationPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if ((m_MeshDropsEnabled && editor::IsMeshDrag(event->mimeData())) ||
-	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -1140,34 +1294,15 @@ void
 AnimationPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if ((m_MeshDropsEnabled && editor::IsMeshDrag(event->mimeData())) ||
-	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (AcceptsDrop(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationPreviewWindow::dropEvent(QDropEvent* event)
 {
-	if (const QString environment = FirstEnvironmentUrl(event->mimeData()); !environment.isEmpty())
-	{
-		SetEnvironment(environment.toStdString());
+	if (TakeDrop(event->mimeData()))
 		event->acceptProposedAction();
-		return;
-	}
-
-	if (!m_MeshDropsEnabled)
-		return;
-
-	const editor::MeshDrop drop =
-		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
-	if (drop.mesh.isEmpty())
-	{
-		editor::ReportUnresolved(window(), drop);
-		return;
-	}
-
-	LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
-	event->acceptProposedAction();
 }
 
 void

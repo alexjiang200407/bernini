@@ -74,24 +74,6 @@ namespace bgl
 
 			return pipelineDesc;
 		}
-
-		TextureArg
-		ReadArg(std::string name)
-		{
-			return TextureArg{ std::move(name),
-				               BarrierSyncFlag::kPixelShader,
-				               BarrierAccessFlag::kShaderResource,
-				               BarrierLayout::kShaderResource };
-		}
-
-		TextureArg
-		WriteArg(std::string name)
-		{
-			return TextureArg{ std::move(name),
-				               BarrierSyncFlag::kRenderTarget,
-				               BarrierAccessFlag::kRenderTarget,
-				               BarrierLayout::kRenderTarget };
-		}
 	}
 
 	void
@@ -129,8 +111,10 @@ namespace bgl
 			auto desc = PassDesc();
 
 			desc.SetName(std::format("BloomDown{}", i))
-				.AddTextureArg(ReadArg(i == 0 ? args.sourceName : args.levels[i - 1].downName))
-				.AddTextureArg(WriteArg(args.levels[i].downName));
+				.AddTextureRead(
+					i == 0 ? args.sourceName : args.levels[i - 1].downName,
+					BarrierSyncFlag::kPixelShader)
+				.AddRenderTarget(args.levels[i].downName);
 
 			desc.SetExec([this, i](const PassContext& resources) {
 				ExecuteDownsample(m_Args, i, resources);
@@ -146,10 +130,11 @@ namespace bgl
 			const bool coarsest = i + 2 == levelCount;
 
 			desc.SetName(std::format("BloomUp{}", i))
-				.AddTextureArg(
-					ReadArg(coarsest ? args.levels[i + 1].downName : args.levels[i + 1].upName))
-				.AddTextureArg(ReadArg(args.levels[i].downName))
-				.AddTextureArg(WriteArg(args.levels[i].upName));
+				.AddTextureRead(
+					coarsest ? args.levels[i + 1].downName : args.levels[i + 1].upName,
+					BarrierSyncFlag::kPixelShader)
+				.AddTextureRead(args.levels[i].downName, BarrierSyncFlag::kPixelShader)
+				.AddRenderTarget(args.levels[i].upName);
 
 			desc.SetExec(
 				[this, i](const PassContext& resources) { ExecuteUpsample(m_Args, i, resources); });

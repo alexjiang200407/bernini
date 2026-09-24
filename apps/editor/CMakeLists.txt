@@ -102,6 +102,20 @@ target_link_libraries(editor PRIVATE editor_lib)
 # that otherwise pull copy_assets in, and without them nothing stages assets at all.
 add_dependencies(editor copy_assets)
 
+# The host's catalogs, and the host-linked plugin's where a loaded plugin keeps its own. Removed
+# first, as the assets are, so a deleted catalog does not linger and keep registering.
+set(EDITOR_LOCALIZATION_OUT "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/localization")
+set(EDITOR_BUILT_IN_LOCALIZATION_OUT "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/plugins/bernini.default/localization")
+add_custom_target(editor_stage_localization
+	COMMAND ${CMAKE_COMMAND} -E rm -rf "${EDITOR_LOCALIZATION_OUT}" "${EDITOR_BUILT_IN_LOCALIZATION_OUT}"
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		"${CMAKE_CURRENT_SOURCE_DIR}/localization" "${EDITOR_LOCALIZATION_OUT}"
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		"${CMAKE_CURRENT_SOURCE_DIR}/plugins/default_editor/localization" "${EDITOR_BUILT_IN_LOCALIZATION_OUT}"
+	COMMENT "Staging the editor's translation catalogs"
+	VERBATIM)
+add_dependencies(editor editor_stage_localization)
+
 # The editor loads every plugin under plugins/ beside its executable, so the sample the test tree
 # builds is staged there and `just run editor` finds it with nothing configured. The directory is
 # named by the plugin ID, which is what the loader's error names when a project wants one.

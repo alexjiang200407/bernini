@@ -1,0 +1,92 @@
+key,en
+add_override_action,Add Override...
+add_override_dialog_title,Add Override
+add_override_glyph,+
+add_override_no_source_tooltip,"This mesh was not imported from a source, so it has no import document to register a look in."
+add_override_tooltip,"Register another look for this submesh, copied from the one on the board."
+alpha_cutoff_row_label,Alpha Cutoff
+attach_failed,"The material was saved, but the mesh could not be updated to reference it:
+{0}"
+bake_all_button,Bake All
+bake_all_failed,"Could not bake:
+
+{0}"
+bake_all_stale_button,Bake All ●
+bake_all_stale_tooltip,{0} of this mesh's materials have baked textures that no longer match the sources they route. Baking rewrites them.
+bake_all_tooltip,"Composite every material of this mesh down to its baked textures.
+A bake reads the routes off disk, so it writes what is still pending first."
+baking_materials_title,Baking materials
+default_look_tag,default
+default_material_tooltip,"{0}
+
+Every instance of this mesh loads with this look."
+double_sided_row_label,Double Sided
+drop_prompt,Drop a .glb or .bmesh here
+generate_tangents_button,Generate Tangents
+generate_tangents_confirm_button,Generate
+generate_tangents_confirm_informative,"Every submesh that has none gains one, and the mesh is rewritten and reloaded. Unsaved graph edits are lost, and a submesh that already has tangents keeps the authored ones."
+generate_tangents_confirm_text,Derive tangents for '{0}'?
+generate_tangents_failed,"Could not rewrite the mesh:
+
+{0}"
+generate_tangents_nothing_to_do,"Nothing to do: {0} submeshes already have tangents, and {1} cannot have one derived (no normals, no UVs, or no triangles)."
+generate_tangents_progress,Deriving tangents...
+generate_tangents_tooltip,"Derive a tangent for every submesh of this mesh that has none, and rewrite the .bmesh."
+layer_label_alpha_blend,Alpha Blend
+layer_label_alpha_tested,Alpha Tested
+layer_label_hashed_alpha,Hashed Alpha
+layer_label_opaque,Opaque
+layer_row_label,Layer
+layer_selector_tooltip,"How this surface material's alpha is read: discarded below a cutoff (Alpha Tested), blended back-to-front (Alpha Blend), or stochastic coverage under temporal AA (Hashed Alpha)."
+load_mesh_failed,"Could not load '{0}':
+
+{1}"
+load_mesh_title,Load Mesh
+loading_mesh_title,Loading {0}
+make_default_action,Make Default
+material_file_filter,Bernini Material (*.bmaterial)
+material_list_label,Material
+material_list_tooltip,"The looks this submesh can wear. Click one to edit and preview it; double-click to make it the mesh's default.
+Right-click for the rest."
+no_submesh_placeholder,No submesh
+open_button,Open...
+open_material_failed,"Could not open the material:
+{0}"
+open_material_title,Open Material
+output_label,Output
+output_selector_tooltip,"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are discarded. Alpha Blend uses that alpha to blend the surface, back-to-front, with no cutoff. A surface entry hands the material to that game surface, whose parameters appear on its output node."
+override_material_tooltip,"{0}
+
+A game wears this look by asking for '{1}'. Double-click to make it the default."
+override_name_label,Name this look. A game asks for it by this name.
+override_name_required,An override needs a name.
+override_name_taken,This submesh already registers a look called '{0}'.
+override_register_failed,"Could not register the override:
+{0}"
+override_remove_failed,"Could not remove the override:
+{0}"
+override_rename_failed,"Could not rename the override:
+{0}"
+reading_mesh_progress,Reading mesh...
+remove_override_action,Remove
+remove_override_default_tooltip,"The default is the mesh's own binding, not a look to unregister."
+remove_override_dialog_title,Remove Override
+remove_override_glyph,−
+remove_override_tooltip,Unregister this look. Its .bmaterial stays on disk -- delete it in the Content Explorer.
+rename_override_action,Rename...
+rename_override_dialog_title,Rename Override
+save_summary_failed,"Could not write:
+{0}"
+save_summary_saved_many,Saved {0} materials.
+save_summary_saved_one,Saved {0} material.
+save_summary_unattached,"Written, but the mesh could not be made to name them:
+{0}"
+show_mesh_failed,"Could not show '{0}':
+
+{1}"
+submesh_label,Submesh
+surface_not_registered,"'{0}' is drawn by surface '{1}', which this session has not registered. Open the project that provides it and relaunch."
+tangent_warning,"This submesh has no tangents, so its normal map is being ignored."
+title,Material Editor
+unbound_material,(unbound)
+unbound_material_tooltip,This submesh has no material yet. Saving one binds it.

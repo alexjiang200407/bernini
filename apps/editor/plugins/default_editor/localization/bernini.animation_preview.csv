@@ -1,0 +1,34 @@
+key,en
+bake_failed,"Could not bake:
+
+{0}"
+bake_material_title,Bake Material
+bake_now_button,Bake Now
+bake_offer_informative_many,"{0} of its materials are drawing unbaked (never baked, or the bake is stale -- a git pull makes every bake stale here), and this preview draws baked materials only."
+bake_offer_informative_one,"{0} of its materials is drawing unbaked (never baked, or the bake is stale -- a git pull makes every bake stale here), and this preview draws baked materials only."
+baking_materials_title,Baking materials
+bind_pose_entries_line,"
+
+Standing still in bind pose: {0} ({1}). The rest of the mesh animates normally."
+bind_pose_part_many,{0} parts
+bind_pose_part_one,1 part
+bind_pose_refusal,"'{0}' is shown in bind pose -- its clips cannot play:
+
+{1}{2}"
+load_mesh_failed,"Could not load '{0}':
+
+{1}"
+loading_mesh_progress,Loading {0}
+measuring_pose_progress,Measuring the pose...
+mesh_no_rig,'{0}' has no rig -- nothing to animate.
+open_mesh_title,Open Mesh
+open_project_first,Open a project before loading a mesh.
+outside_data_directory,'{0}' is outside the project's Data directory.
+reading_mesh_progress,Reading mesh...
+reading_pose_bounds_progress,Reading the pose bounds...
+resolving_animations_progress,Resolving animations...
+retarget_nothing_loaded,Nothing is loaded to retarget.
+show_mesh_failed,"Could not show '{0}':
+
+{1}"
+uploading_progress,Uploading materials and geometry...

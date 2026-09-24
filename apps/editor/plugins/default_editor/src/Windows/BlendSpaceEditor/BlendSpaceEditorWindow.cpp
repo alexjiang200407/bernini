@@ -6,6 +6,9 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/blend_sets.h"
+#include <editor_plugin_api/EditorPanel.h>
+#include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/environment.h>
 #include <editor_sdk/mime_files.h>
@@ -44,6 +47,8 @@
 #include <assetlib/codecs.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
 #include <gamelib/BlendSpaceInfo.h>
@@ -91,31 +96,41 @@ namespace
 	}
 
 	[[nodiscard]] QString
-	SampleText(const assetlib::BlendSpaceSample& sample)
+	SampleText(const editor::ILanguageResolver& language, const assetlib::BlendSpaceSample& sample)
 	{
-		return QStringLiteral("%1    %2")
-		    .arg(QString::fromStdString(sample.clip))
-		    .arg(sample.parameter, 0, 'f', editor::c_ParameterDecimals);
+		return editor::Localize(
+			language,
+			"bernini.blend_space.sample_item",
+			{ sample.clip, sample.parameter },
+			"{0}    {1:.2f}");
 	}
 
 	// Why a space cannot hold `clip`, as a sentence naming it, or empty when it can.
 	[[nodiscard]] QString
-	RefusalOf(const editor::ClipInfo& clip)
+	RefusalOf(const editor::ILanguageResolver& language, const editor::ClipInfo& clip)
 	{
-		const std::string_view reason = editor::ClipRefusalReason(clip);
-		if (reason.empty())
-			return {};
-
-		return QStringLiteral("'%1' %2.")
-		    .arg(QString::fromStdString(clip.name))
-		    .arg(QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
+		switch (editor::ClipRefusalOf(clip))
+		{
+		case editor::ClipRefusal::kSingleFrame:
+			return editor::Localize(
+				language,
+				"bernini.blend_space.clip_single_frame",
+				{ clip.name },
+				"'{0}' has a single frame, so it has no cycle for a blend space to share.");
+		case editor::ClipRefusal::kNone:
+			break;
+		}
+		return {};
 	}
 
 	// Every clip, those a space cannot hold listed and disabled rather than dropped: the author is
 	// looking for the clip, and its absence would read as a bad clip set rather than as one a blend
 	// space cannot hold.
 	void
-	ListClips(QComboBox* combo, const std::span<const editor::ClipInfo> clips)
+	ListClips(
+		const editor::ILanguageResolver&        language,
+		QComboBox*                              combo,
+		const std::span<const editor::ClipInfo> clips)
 	{
 		combo->clear();
 
@@ -124,15 +139,14 @@ namespace
 		{
 			combo->addItem(QString::fromStdString(clip.name));
 
-			const std::string_view reason = editor::ClipRefusalReason(clip);
-			if (reason.empty() || model == nullptr)
+			const QString refusal = RefusalOf(language, clip);
+			if (refusal.isEmpty() || model == nullptr)
 				continue;
 
 			if (QStandardItem* item = model->item(combo->count() - 1); item != nullptr)
 			{
 				item->setEnabled(false);
-				item->setToolTip(
-					QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
+				item->setToolTip(refusal);
 			}
 		}
 	}
@@ -183,13 +197,22 @@ BlendSpaceEditorWindow::BlendSpaceEditorWindow(
 	auto* promptLayout = new QVBoxLayout(prompt);
 	promptLayout->addStretch(1);
 
-	auto* promptText =
-		new QLabel(QStringLiteral("Drop a blend set (.bblend) here, or start a new one"), prompt);
+	auto* promptText = new QLabel(
+		editor::Localize(
+			host.GetLanguageResolver(),
+			"bernini.blend_space.drop_prompt",
+			"Drop a blend set (.bblend) here, or start a new one"),
+		prompt);
 	promptText->setAlignment(Qt::AlignCenter);
 	promptText->setEnabled(false);
 	promptLayout->addWidget(promptText);
 
-	auto* promptNew = new QPushButton(QStringLiteral("New Blend Set..."), prompt);
+	auto* promptNew = new QPushButton(
+		editor::Localize(
+			host.GetLanguageResolver(),
+			"bernini.blend_space.new_blend_set_button",
+			"New Blend Set..."),
+		prompt);
 	promptNew->setObjectName(QStringLiteral("NewBlendSet"));
 	connect(promptNew, &QPushButton::clicked, this, &BlendSpaceEditorWindow::NewBlendSet);
 	promptLayout->addWidget(promptNew, /*stretch*/ 0, Qt::AlignHCenter);
@@ -241,11 +264,19 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 
 	// The way to let go of the held assets: the explorer refuses to delete or rename what this
 	// editor has open, and "close it first" needs a close to point at.
-	auto* closeButton = new QPushButton(QStringLiteral("Close"), column);
+	auto* closeButton = new QPushButton(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.blend_space.close_button", "Close"),
+		column);
 	connect(closeButton, &QPushButton::clicked, this, &BlendSpaceEditorWindow::CloseBlendSet);
 
-	auto* newButton = new QPushButton(QStringLiteral("New..."), column);
-	newButton->setToolTip(QStringLiteral("Start a blend set on another clip set."));
+	auto* newButton = new QPushButton(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.blend_space.new_button", "New..."),
+		column);
+	newButton->setToolTip(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.new_button_tooltip",
+			"Start a blend set on another clip set."));
 	connect(newButton, &QPushButton::clicked, this, &BlendSpaceEditorWindow::NewBlendSet);
 
 	auto* fileRow = new QHBoxLayout();
@@ -255,11 +286,19 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	fileRow->addWidget(closeButton);
 	layout->addLayout(fileRow);
 
-	m_MeshCaption  = new QLabel(QStringLiteral("Preview Mesh"), column);
+	m_MeshCaption = new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.preview_mesh_label",
+			"Preview Mesh"),
+		column);
 	m_MeshSelector = new QComboBox(column);
-	m_MeshSelector->setToolTip(QStringLiteral(
-		"Every mesh skinned to the rig this set's clip set was resampled against. Which one is "
-		"shown is not saved."));
+	m_MeshSelector->setToolTip(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.mesh_selector_tooltip",
+			"Every mesh skinned to the rig this set's clip set was resampled against. Which one is "
+			"shown is not saved."));
 	connect(m_MeshSelector, &QComboBox::activated, this, [this](int index) {
 		if (!m_SyncingUi)
 			ShowMesh(index);
@@ -272,21 +311,40 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	// Whether a space plants -- across the parameter, and at the wrap of a clip that does not close
 	// -- is a question about the space, so the ground it is judged on is here too.
 	layout->addSpacing(8);
-	m_GroundControls = new GroundControls(m_Preview, column);
+	m_GroundControls = new GroundControls(m_Preview, m_Host.GetLanguageResolver(), column);
 	layout->addWidget(m_GroundControls);
 
 	layout->addSpacing(8);
 
 	m_SpaceSelector = new QComboBox(column);
 	m_SpaceSelector->setObjectName(QStringLiteral("BlendSpaceSelector"));
-	m_SpaceSelector->setPlaceholderText(QStringLiteral("no spaces"));
+	m_SpaceSelector->setPlaceholderText(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.space_selector_placeholder",
+			"no spaces"));
 	connect(m_SpaceSelector, &QComboBox::currentIndexChanged, this, [this](int index) {
 		if (!m_SyncingUi)
 			SelectSpace(index);
 	});
-	m_AddSpace    = new QPushButton(QStringLiteral("New"), column);
-	m_RenameSpace = new QPushButton(QStringLiteral("Rename"), column);
-	m_RemoveSpace = new QPushButton(QStringLiteral("Delete"), column);
+	m_AddSpace = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.add_space_button",
+			"New"),
+		column);
+	m_RenameSpace = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.rename_space_button",
+			"Rename"),
+		column);
+	m_RemoveSpace = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.remove_space_button",
+			"Delete"),
+		column);
 	m_AddSpace->setObjectName(QStringLiteral("AddBlendSpace"));
 	m_RenameSpace->setObjectName(QStringLiteral("RenameBlendSpace"));
 	m_RemoveSpace->setObjectName(QStringLiteral("RemoveBlendSpace"));
@@ -310,15 +368,33 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_SampleList, /*stretch*/ 1);
 
-	m_SampleClip    = new QComboBox(column);
-	m_AddSample     = new QPushButton(QStringLiteral("Add"), column);
-	m_ReplaceSample = new QPushButton(QStringLiteral("Replace"), column);
-	m_RemoveSample  = new QPushButton(QStringLiteral("Remove"), column);
+	m_SampleClip = new QComboBox(column);
+	m_AddSample  = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.add_sample_button",
+			"Add"),
+		column);
+	m_ReplaceSample = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.replace_sample_button",
+			"Replace"),
+		column);
+	m_RemoveSample = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.remove_sample_button",
+			"Remove"),
+		column);
 	m_AddSample->setObjectName(QStringLiteral("AddBlendSample"));
 	m_ReplaceSample->setObjectName(QStringLiteral("ReplaceBlendSample"));
 	m_RemoveSample->setObjectName(QStringLiteral("RemoveBlendSample"));
 	m_ReplaceSample->setToolTip(
-		QStringLiteral("Point the selected sample at this clip, keeping its threshold."));
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.replace_sample_tooltip",
+			"Point the selected sample at this clip, keeping its threshold."));
 	connect(m_AddSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::AddSample);
 	connect(m_ReplaceSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::ReplaceSample);
 	connect(m_RemoveSample, &QPushButton::clicked, this, &BlendSpaceEditorWindow::RemoveSample);
@@ -358,14 +434,27 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	});
 
 	auto* thresholdRow = new QHBoxLayout();
-	thresholdRow->addWidget(new QLabel(QStringLiteral("Threshold"), column));
+	thresholdRow->addWidget(new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.threshold_label",
+			"Threshold"),
+		column));
 	thresholdRow->addWidget(m_SampleParameter, /*stretch*/ 1);
 	layout->addLayout(thresholdRow);
 
-	m_FromSpeed = new QPushButton(QStringLiteral("Thresholds from speed"), column);
+	m_FromSpeed = new QPushButton(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.thresholds_from_speed_button",
+			"Thresholds from speed"),
+		column);
 	m_FromSpeed->setObjectName(QStringLiteral("ThresholdsFromSpeed"));
 	m_FromSpeed->setToolTip(
-		QStringLiteral("Take every threshold from the speed its clip was animated at."));
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.thresholds_from_speed_tooltip",
+			"Take every threshold from the speed its clip was animated at."));
 	connect(m_FromSpeed, &QPushButton::clicked, this, &BlendSpaceEditorWindow::ThresholdsFromSpeed);
 	layout->addWidget(m_FromSpeed);
 
@@ -429,7 +518,8 @@ BlendSpaceEditorWindow::BuildTransportBar()
 	m_Speed->setRange(0.0, 4.0);
 	m_Speed->setSingleStep(0.25);
 	m_Speed->setValue(1.0);
-	m_Speed->setSuffix(QStringLiteral("x"));
+	m_Speed->setSuffix(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.blend_space.speed_suffix", "x"));
 	layout->addWidget(m_Speed);
 
 	return bar;
@@ -440,6 +530,11 @@ BlendSpaceEditorWindow::NewBlendSet()
 {
 	if (m_DataRoot.isEmpty())
 		return;
+
+	const QString title = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.blend_space.new_blend_set_title",
+		"New Blend Set");
 
 	auto clipSets = QStringList();
 	try
@@ -452,9 +547,12 @@ BlendSpaceEditorWindow::NewBlendSet()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("New Blend Set"),
-			QStringLiteral("The project cannot be scanned for clip sets:\n\n%1")
-				.arg(QString::fromUtf8(e.what())));
+			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.scan_clip_sets_failed",
+				{ e.what() },
+				"The project cannot be scanned for clip sets:\n\n{0}"));
 		return;
 	}
 
@@ -462,8 +560,10 @@ BlendSpaceEditorWindow::NewBlendSet()
 	{
 		QMessageBox::information(
 			window(),
-			QStringLiteral("New Blend Set"),
-			QStringLiteral(
+			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.no_clip_sets_available",
 				"Every clip set in this project already has a blend set, or there is "
 				"none yet. Import a rig with clips to start one."));
 		return;
@@ -472,8 +572,11 @@ BlendSpaceEditorWindow::NewBlendSet()
 	bool          accepted = false;
 	const QString clipSet  = QInputDialog::getItem(
 		window(),
-		QStringLiteral("New Blend Set"),
-		QStringLiteral("Clip set"),
+		title,
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.clip_set_prompt",
+			"Clip set"),
 		clipSets,
 		0,
 		/*editable*/ false,
@@ -488,10 +591,7 @@ BlendSpaceEditorWindow::NewBlendSet()
 	}
 	catch (const std::exception& e)
 	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("New Blend Set"),
-			QString::fromUtf8(e.what()));
+		QMessageBox::warning(window(), title, QString::fromUtf8(e.what()));
 		return;
 	}
 
@@ -519,8 +619,11 @@ BlendSpaceEditorWindow::OpenBlendSet(const QString& key)
 	}
 	catch (const std::exception& e)
 	{
-		m_ViewReason =
-			QStringLiteral("'%1' cannot be read:\n\n%2").arg(key, QString::fromUtf8(e.what()));
+		m_ViewReason = editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.set_read_failed",
+			{ key, e.what() },
+			"'{0}' cannot be read:\n\n{1}");
 		RefreshSpaces();
 		ShowViewPage();
 		return;
@@ -533,17 +636,21 @@ BlendSpaceEditorWindow::OpenBlendSet(const QString& key)
 			editor::ResolveBlendSetMeshes(assetlib::AssetRefGraph::Scan(m_Host.GetStore()), setKey);
 
 		if (meshes.empty())
-			m_ViewReason = QStringLiteral(
-							   "Nothing is skinned to the rig '%1' was resampled against, so there "
-							   "is no mesh to show this set on.\n\nIts spaces still edit. Import a "
-							   "mesh on that rig to watch them.")
-			                   .arg(QString::fromStdString(m_BlendSet.animations));
+			m_ViewReason = editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.no_mesh_to_show",
+				{ m_BlendSet.animations },
+				"Nothing is skinned to the rig '{0}' was resampled against, so there is no mesh to "
+				"show this set on.\n\nIts spaces still edit. Import a mesh on that rig to watch "
+				"them.");
 	}
 	catch (const std::exception& e)
 	{
-		m_ViewReason =
-			QStringLiteral("The project cannot be scanned for a mesh to show this set on:\n\n%1")
-				.arg(QString::fromUtf8(e.what()));
+		m_ViewReason = editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.scan_mesh_failed",
+			{ e.what() },
+			"The project cannot be scanned for a mesh to show this set on:\n\n{0}");
 	}
 
 	m_SyncingUi = true;
@@ -627,9 +734,11 @@ BlendSpaceEditorWindow::ShowViewPage()
 	}
 
 	m_ViewNote->setText(
-		m_ViewReason.isEmpty() ?
-			QStringLiteral("The mesh this set is shown on could not be loaded.") :
-			m_ViewReason);
+		m_ViewReason.isEmpty() ? editor::Localize(
+									 m_Host.GetLanguageResolver(),
+									 "bernini.blend_space.no_mesh_loaded",
+									 "The mesh this set is shown on could not be loaded.") :
+								 m_ViewReason);
 	m_View->setCurrentIndex(0);
 }
 
@@ -680,9 +789,15 @@ BlendSpaceEditorWindow::dropEvent(QDropEvent* event)
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Open Blend Set"),
-			QStringLiteral("'%1' is outside the project's Data directory.")
-				.arg(QFileInfo(dropped).fileName()));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.open_blend_set_title",
+				"Open Blend Set"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.dropped_outside_project",
+				{ QFileInfo(dropped).fileName() },
+				"'{0}' is outside the project's Data directory."));
 		return;
 	}
 
@@ -748,7 +863,11 @@ BlendSpaceEditorWindow::SelectSpace(const int index)
 	if (space == nullptr)
 	{
 		m_SpaceNote->setText(
-			m_SetReadable ? QStringLiteral("This set holds no blend spaces yet.") : QString());
+			m_SetReadable ? editor::Localize(
+								m_Host.GetLanguageResolver(),
+								"bernini.blend_space.no_spaces_yet",
+								"This set holds no blend spaces yet.") :
+							QString());
 		UpdateSpaceControls();
 		SyncCursor();
 		return;
@@ -757,7 +876,7 @@ BlendSpaceEditorWindow::SelectSpace(const int index)
 	m_SelectedSpace = QString::fromStdString(space->name);
 
 	for (const assetlib::BlendSpaceSample& sample : space->samples)
-		m_SampleList->addItem(SampleText(sample));
+		m_SampleList->addItem(SampleText(m_Host.GetLanguageResolver(), sample));
 
 	const int wanted   = m_PendingSampleRow >= 0 ? m_PendingSampleRow : 0;
 	m_PendingSampleRow = -1;
@@ -771,9 +890,11 @@ BlendSpaceEditorWindow::SelectSpace(const int index)
 	m_SpaceNote->setText(
 		space->samples.empty() ?
 			QString() :
-			QStringLiteral("Parameter %1 to %2")
-				.arg(space->samples.front().parameter, 0, 'f', editor::c_ParameterDecimals)
-				.arg(space->samples.back().parameter, 0, 'f', editor::c_ParameterDecimals));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.parameter_range",
+				{ space->samples.front().parameter, space->samples.back().parameter },
+				"Parameter {0:.2f} to {1:.2f}"));
 
 	UpdateSpaceControls();
 	SyncCursor();
@@ -789,7 +910,7 @@ BlendSpaceEditorWindow::RelabelSamples()
 
 	for (size_t row = 0; row < space->samples.size(); ++row)
 		if (QListWidgetItem* item = m_SampleList->item(static_cast<int>(row)); item != nullptr)
-			item->setText(SampleText(space->samples[row]));
+			item->setText(SampleText(m_Host.GetLanguageResolver(), space->samples[row]));
 }
 
 void
@@ -805,11 +926,15 @@ BlendSpaceEditorWindow::UpdateSpaceControls()
 	m_AddSpace->setEnabled(editable && sampleable >= 2);
 	m_AddSpace->setToolTip(
 		!editable ? QString() :
-		!clips    ? QStringLiteral(
+		!clips    ? editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.blend_space.add_space_no_clips_tooltip",
 						"A new space is seeded from the clip set, which is read from the "
 						"mesh this set is shown on -- and there is none.") :
 		sampleable < 2 ?
-				 QStringLiteral(
+				 editor::Localize(
+					 m_Host.GetLanguageResolver(),
+					 "bernini.blend_space.add_space_too_few_clips_tooltip",
 					 "A blend space needs two clips of more than one frame; this set has fewer.") :
 				 QString());
 	m_RenameSpace->setEnabled(editable && space != nullptr);
@@ -844,7 +969,7 @@ BlendSpaceEditorWindow::ShowSampleClips()
 	m_SyncingUi        = true;
 
 	const QString wanted = m_SampleClip->currentText();
-	ListClips(m_SampleClip, m_Clips);
+	ListClips(m_Host.GetLanguageResolver(), m_SampleClip, m_Clips);
 
 	const int restored = m_SampleClip->findText(wanted);
 	m_SampleClip->setCurrentIndex(restored >= 0 ? restored : NthSampleableClip(0));
@@ -856,7 +981,7 @@ int
 BlendSpaceEditorWindow::SampleableClipCount() const
 {
 	return static_cast<int>(std::ranges::count_if(m_Clips, [](const editor::ClipInfo& clip) {
-		return editor::ClipRefusalReason(clip).empty();
+		return editor::ClipRefusalOf(clip) == editor::ClipRefusal::kNone;
 	}));
 }
 
@@ -866,7 +991,7 @@ BlendSpaceEditorWindow::NthSampleableClip(const int n) const
 	int seen = 0;
 	for (size_t i = 0; i < m_Clips.size(); ++i)
 	{
-		if (!editor::ClipRefusalReason(m_Clips[i]).empty())
+		if (editor::ClipRefusalOf(m_Clips[i]) != editor::ClipRefusal::kNone)
 			continue;
 
 		if (seen++ == n)
@@ -901,7 +1026,11 @@ QString
 BlendSpaceEditorWindow::ClipName(const uint32_t clipIndex) const
 {
 	return clipIndex < m_Clips.size() ? QString::fromStdString(m_Clips[clipIndex].name) :
-	                                    QStringLiteral("<clip %1>").arg(clipIndex);
+	                                    editor::Localize(
+											m_Host.GetLanguageResolver(),
+											"bernini.blend_space.unknown_clip",
+											{ clipIndex },
+											"<clip {0}>");
 }
 
 void
@@ -919,7 +1048,13 @@ BlendSpaceEditorWindow::CommitBlendSet()
 	{
 		// The edit stays on screen: it is the author's, and reverting it would throw away the work
 		// rather than the mistake.
-		QMessageBox::warning(window(), QStringLiteral("Blend Set"), QString::fromUtf8(e.what()));
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.commit_failed_title",
+				"Blend Set"),
+			QString::fromUtf8(e.what()));
 		return;
 	}
 
@@ -971,13 +1106,17 @@ BlendSpaceEditorWindow::AddSpace()
 	// Both clips are asked for with the name: `validateBlendSet` refuses a run under two samples, so
 	// there is no empty space to fill in afterwards, and a guessed pair is one the author then undoes.
 	QDialog dialog(window());
-	dialog.setWindowTitle(QStringLiteral("New Blend Space"));
+	dialog.setWindowTitle(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.new_blend_space_title",
+			"New Blend Space"));
 
 	auto* name       = new QLineEdit(&dialog);
 	auto* firstClip  = new QComboBox(&dialog);
 	auto* secondClip = new QComboBox(&dialog);
-	ListClips(firstClip, m_Clips);
-	ListClips(secondClip, m_Clips);
+	ListClips(m_Host.GetLanguageResolver(), firstClip, m_Clips);
+	ListClips(m_Host.GetLanguageResolver(), secondClip, m_Clips);
 	firstClip->setCurrentIndex(first);
 	secondClip->setCurrentIndex(second);
 
@@ -985,11 +1124,23 @@ BlendSpaceEditorWindow::AddSpace()
 	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
+	const QString nameLabel =
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.blend_space.name_label", "Name");
 	auto* form = new QFormLayout(&dialog);
-	form->addRow(QStringLiteral("Name"), name);
-	form->addRow(QStringLiteral("At %1").arg(0.0f, 0, 'f', editor::c_ParameterDecimals), firstClip);
+	form->addRow(nameLabel, name);
 	form->addRow(
-		QStringLiteral("At %1").arg(c_ParameterGap, 0, 'f', editor::c_ParameterDecimals),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.at_parameter",
+			{ 0.0f },
+			"At {0:.2f}"),
+		firstClip);
+	form->addRow(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.at_parameter",
+			{ c_ParameterGap },
+			"At {0:.2f}"),
 		secondClip);
 	form->addRow(buttons);
 
@@ -1012,7 +1163,9 @@ BlendSpaceEditorWindow::AddSpace()
 		const auto clip = std::ranges::find_if(m_Clips, [&picked](const editor::ClipInfo& c) {
 			return QString::fromStdString(c.name) == picked;
 		});
-		return clip != m_Clips.end() && editor::ClipRefusalReason(*clip).empty() ? &*clip : nullptr;
+		return clip != m_Clips.end() && editor::ClipRefusalOf(*clip) == editor::ClipRefusal::kNone ?
+		           &*clip :
+		           nullptr;
 	};
 	const editor::ClipInfo* firstPicked  = sampleableNamed(firstClip->currentText());
 	const editor::ClipInfo* secondPicked = sampleableNamed(secondClip->currentText());
@@ -1047,11 +1200,16 @@ BlendSpaceEditorWindow::RenameSpace()
 	if (selected == nullptr)
 		return;
 
+	const QString title = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.blend_space.rename_blend_space_title",
+		"Rename Blend Space");
+
 	bool          accepted = false;
 	const QString name     = QInputDialog::getText(
 		window(),
-		QStringLiteral("Rename Blend Space"),
-		QStringLiteral("Name"),
+		title,
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.blend_space.name_label", "Name"),
 		QLineEdit::Normal,
 		QString::fromStdString(selected->name),
 		&accepted);
@@ -1073,9 +1231,12 @@ BlendSpaceEditorWindow::RenameSpace()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Rename Blend Space"),
-			QStringLiteral("A space needs a name of its own; '%1' is empty or already taken.")
-				.arg(name));
+			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.space_name_invalid",
+				{ name },
+				"A space needs a name of its own; '{0}' is empty or already taken."));
 		return;
 	}
 
@@ -1096,9 +1257,15 @@ BlendSpaceEditorWindow::AddSample()
 
 	// A selection restored by name can come back on a clip a space cannot hold, so the refusal is
 	// still owed here.
-	if (const QString refusal = RefusalOf(clip); !refusal.isEmpty())
+	if (const QString refusal = RefusalOf(m_Host.GetLanguageResolver(), clip); !refusal.isEmpty())
 	{
-		QMessageBox::warning(window(), QStringLiteral("Add Sample"), refusal);
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.add_sample_title",
+				"Add Sample"),
+			refusal);
 		return;
 	}
 
@@ -1111,8 +1278,14 @@ BlendSpaceEditorWindow::AddSample()
 		// number again.
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Add Sample"),
-			QStringLiteral("There is no room past the last sample for another threshold."));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.add_sample_title",
+				"Add Sample"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.no_room_for_sample",
+				"There is no room past the last sample for another threshold."));
 		return;
 	}
 
@@ -1152,9 +1325,15 @@ BlendSpaceEditorWindow::ReplaceSample()
 
 	const editor::ClipInfo& clip = m_Clips[static_cast<size_t>(index)];
 
-	if (const QString refusal = RefusalOf(clip); !refusal.isEmpty())
+	if (const QString refusal = RefusalOf(m_Host.GetLanguageResolver(), clip); !refusal.isEmpty())
 	{
-		QMessageBox::warning(window(), QStringLiteral("Replace Clip"), refusal);
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.replace_clip_title",
+				"Replace Clip"),
+			refusal);
 		return;
 	}
 
@@ -1213,7 +1392,8 @@ BlendSpaceEditorWindow::RetargetSample(const float parameter)
 
 	m_SyncingUi = true;
 	if (QListWidgetItem* item = m_SampleList->item(row); item != nullptr)
-		item->setText(SampleText(space->samples[static_cast<size_t>(row)]));
+		item->setText(
+			SampleText(m_Host.GetLanguageResolver(), space->samples[static_cast<size_t>(row)]));
 	m_SyncingUi = false;
 }
 
@@ -1286,7 +1466,11 @@ BlendSpaceEditorWindow::ShowCursorWeights()
 	const game::BlendSpaceStraddle at = space->StraddleAt(m_SpaceParameter);
 
 	m_CursorLabel->setText(
-		QStringLiteral("Parameter %1").arg(m_SpaceParameter, 0, 'f', editor::c_ParameterDecimals));
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.cursor_parameter_label",
+			{ m_SpaceParameter },
+			"Parameter {0:.2f}"));
 
 	const auto clipName = [this, space](const size_t sample) {
 		return ClipName(space->samples[sample].clipIndex);
@@ -1295,15 +1479,24 @@ BlendSpaceEditorWindow::ShowCursorWeights()
 	// Both ends name the same sample outside the authored range, which is that clip playing alone.
 	if (at.lower == at.upper)
 	{
-		m_SpaceWeights->setText(QStringLiteral("%1  100%").arg(clipName(at.lower)));
+		m_SpaceWeights->setText(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.blend_space.weight_single_clip",
+				{ clipName(at.lower) },
+				"{0}  100%"));
 		return;
 	}
 
-	m_SpaceWeights->setText(QStringLiteral("%1  %2%     %3  %4%")
-	                            .arg(clipName(at.lower))
-	                            .arg((1.0f - at.weight) * 100.0f, 0, 'f', 0)
-	                            .arg(clipName(at.upper))
-	                            .arg(at.weight * 100.0f, 0, 'f', 0));
+	m_SpaceWeights->setText(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.blend_space.weight_two_clips",
+			{ clipName(at.lower),
+	          (1.0f - at.weight) * 100.0f,
+	          clipName(at.upper),
+	          at.weight * 100.0f },
+			"{0}  {1:.0f}%     {2}  {3:.0f}%"));
 }
 
 void
@@ -1315,12 +1508,28 @@ BlendSpaceEditorWindow::ThresholdsFromSpeed()
 
 	editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(space->samples, m_Clips);
 
-	if (!taken.refusal.empty())
+	if (taken.refusal.kind != editor::SpeedRefusal::Kind::kNone)
 	{
+		const editor::ILanguageResolver& language = m_Host.GetLanguageResolver();
+		const std::vector<std::string>&  clips    = taken.refusal.clips;
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Thresholds from speed"),
-			QString::fromStdString(taken.refusal));
+			editor::Localize(
+				language,
+				"bernini.blend_space.thresholds_from_speed_button",
+				"Thresholds from speed"),
+			taken.refusal.kind == editor::SpeedRefusal::Kind::kUnknownClip ?
+				editor::Localize(
+					language,
+					"bernini.blend_space.speed_unknown_clip",
+					{ clips[0] },
+					"'{0}' is not a clip of this set.") :
+				editor::Localize(
+					language,
+					"bernini.blend_space.speed_same_speed",
+					{ clips[0], clips[1] },
+					"'{0}' and '{1}' were animated at the same speed, so there is no run of "
+					"increasing thresholds to take from them."));
 		return;
 	}
 

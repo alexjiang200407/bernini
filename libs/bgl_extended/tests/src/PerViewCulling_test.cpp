@@ -242,14 +242,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		fg.AddPass(
 			bgl::PassDesc()
 				.SetName("Readback {}", cullIdx)
-				.AddBufferArg(
-					bgl::c_CompactedInstancesName,
-					bgl::BarrierSyncFlag::kCopy,
-					bgl::BarrierAccessFlag::kCopySource)
-				.AddBufferArg(
-					bgl::c_DrawBucketPrefixSumName,
-					bgl::BarrierSyncFlag::kCopy,
-					bgl::BarrierAccessFlag::kCopySource)
+				.AddCopySource(bgl::c_CompactedInstancesName)
+				.AddCopySource(bgl::c_DrawBucketPrefixSumName)
 				.SetSideEffect()
 				.SetExec([&, cullIdx](const bgl::PassContext& ctx) {
 					auto* cmd = ctx.GetCommandList();

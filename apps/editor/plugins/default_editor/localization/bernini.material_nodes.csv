@@ -1,0 +1,46 @@
+key,en
+alpha_cutoff_label,Alpha Cutoff
+alpha_cutoff_tooltip,Pixels whose base-color alpha is below this are cut
+alpha_swatch_text,A {0:.2f}
+alpha_tested_material_output_caption,Alpha Tested Material Output
+ao_caption,AO
+base_a_caption,Base A
+base_b_caption,Base B
+base_color_factor_label,Base Color Factor
+base_color_group_caption,Base Color
+base_g_caption,Base G
+base_r_caption,Base R
+blended_material_output_caption,Blended Material Output
+double_sided_label,Double Sided
+double_sided_tooltip,"Draw the back of each face too. Off, a face seen from behind is culled before it reaches the rasterizer, which is most of what a dense hair costs at close range."
+geometry_occlusion_port_caption,Geometry Occlusion (UV1)
+hashed_alpha_material_output_caption,Hashed Alpha Material Output
+hashed_alpha_note,"Coverage is stochastic; needs
+temporal antialiasing to resolve."
+hashed_alpha_row_label,Alpha
+material_output_caption,Material Output
+metallic_caption,Metallic
+metallic_factor_label,Metallic Factor
+normal_group_caption,Normal
+normal_x_caption,Normal X
+normal_y_caption,Normal Y
+orm_group_caption,ORM
+pick_color_tooltip,Pick the colour
+roughness_caption,Roughness
+roughness_factor_label,Roughness Factor
+specular_color_factor_label,Specular Color Factor
+specular_factor_label,Specular Factor
+specular_factor_tooltip,"Weights the whole specular lobe. 1 is an ordinary dielectric; 0 is a surface with no reflection at all, which is what a Phong export with its specular switched off means."
+split_group_label,Split {0}
+split_group_tooltip,Route this group's channels individually
+surface_kind_color,Color
+surface_kind_coverage,Coverage
+surface_kind_data,Data
+surface_kind_normal,Normal
+surface_output_caption,{0} Surface Output
+surface_texture_port_caption,{0} ({1})
+texture_caption,Texture
+texture_failed_caption,Texture (failed)
+texture_port_caption,Texture
+transmission_label,Transmission
+transmission_tooltip,"What base-color alpha means: 0 is coverage (hair, foliage), 1 is transmission (glass), where the surface keeps its reflection however clear it is"

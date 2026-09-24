@@ -117,7 +117,7 @@ namespace assetlib
 		}
 
 		/**
-		 * The document holds its source, every material its bindings name, the rig it binds and
+		 * The document holds its source, every material its bindings and overrides name, the rig it binds and
 		 * every container it produced. The last two are references like any other: nothing else
 		 * records them, so a rename that missed one would leave the document naming a file that is
 		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
@@ -141,6 +141,8 @@ namespace assetlib
 					referrer,
 					binding.material,
 					isGrassBinding(binding) ? RefKind::kFieldGrass : RefKind::kSubmeshMaterial);
+			for (const MaterialOverrideBinding& entry : document.materialOverrides)
+				addEdge(edges, referrer, entry.material, RefKind::kSubmeshMaterial);
 
 			if (!document.skeleton.empty())
 				addEdge(edges, referrer, document.skeleton, RefKind::kDocumentSkeleton);

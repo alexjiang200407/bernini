@@ -34,6 +34,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -110,10 +111,10 @@ namespace assetlib
 		 * The one construction the cache key and the file share, so a parameter added in only one
 		 * place cannot silently split the two.
 		 *
-		 * Only the parameter half is carried across. Bindings and the texture stamp describe what
-		 * *this* import wrote, and a previous one's would be a lie -- but an authored `clipFloor`
-		 * is the reason a person edits this file by hand, and a re-import that discarded it would
-		 * take a rig back to the floor the cook measured.
+		 * What was authored rather than derived is carried across: the parameter half and the
+		 * overrides. Bindings and the texture stamp describe what *this* import wrote, and a
+		 * previous one's would be a lie -- but an authored `clipFloor` or a registered override is
+		 * work nothing in the source can put back, and a re-import that discarded it would lose it.
 		 */
 		ImportDocument
 		importParameters(const std::filesystem::path& existing, float sampleRate)
@@ -128,6 +129,7 @@ namespace assetlib
 					const ImportDocument authored = loadImportDocument(existing);
 					document.clipFloors           = authored.clipFloors;
 					document.extraParametersJson  = authored.extraParametersJson;
+					document.materialOverrides    = authored.materialOverrides;
 
 					// Authored after the import rather than derived by it, like the floors: a
 					// re-import has no way to put a grass binding back.
@@ -305,15 +307,31 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings)
+	rebuildMaterialSlots(
+		BMesh&                                   mesh,
+		std::span<const MaterialBinding>         bindings,
+		std::span<const MaterialOverrideBinding> overrides)
 	{
 		auto bySubmesh = std::unordered_map<std::string_view, std::string_view>();
 		for (const MaterialBinding& binding : bindings)
 			if (!isGrassBinding(binding))
 				bySubmesh.emplace(binding.submesh, binding.material);
 
+		auto submeshByName = std::unordered_map<std::string_view, uint32_t>();
+		for (uint32_t i = 0; i < mesh.submeshes.size(); ++i)
+			submeshByName.emplace(mesh.stringPool.at(mesh.submeshes[i].nameOffset), i);
+
 		mesh.materials.clear();
+		mesh.materialOverrides.clear();
 		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
+		auto slotFor = [&](const std::string_view material) {
+			const auto [slot, added] =
+				indexOf.emplace(material, static_cast<uint32_t>(mesh.materials.size()));
+			if (added)
+				mesh.materials.emplace_back(material);
+			return slot->second;
+		};
+
 		auto matched = std::unordered_set<std::string_view>();
 		for (Submesh& submesh : mesh.submeshes)
 		{
@@ -323,18 +341,30 @@ namespace assetlib
 				submesh.material = c_InvalidIndex;
 				continue;
 			}
-			const auto [slot, added] =
-				indexOf.emplace(found->second, static_cast<uint32_t>(mesh.materials.size()));
-			if (added)
-				mesh.materials.emplace_back(found->second);
-			submesh.material = slot->second;
+			submesh.material = slotFor(found->second);
 			matched.insert(found->first);
 		}
+
+		for (const MaterialOverrideBinding& entry : overrides)
+		{
+			const auto found = submeshByName.find(entry.submesh);
+			if (found == submeshByName.end())
+				continue;
+			mesh.materialOverrides.emplace_back(found->second, entry.name, slotFor(entry.material));
+			matched.insert(found->first);
+		}
+		std::ranges::sort(mesh.materialOverrides, [](const auto& a, const auto& b) {
+			return std::tie(a.submesh, a.name) < std::tie(b.submesh, b.name);
+		});
 
 		auto unbound = std::vector<std::string>();
 		for (const MaterialBinding& binding : bindings)
 			if (!isGrassBinding(binding) && !matched.contains(binding.submesh))
 				unbound.emplace_back(binding.submesh);
+		for (const MaterialOverrideBinding& entry : overrides)
+			if (!matched.contains(entry.submesh) &&
+			    std::ranges::find(unbound, entry.submesh) == unbound.end())
+				unbound.emplace_back(entry.submesh);
 		return unbound;
 	}
 
@@ -387,23 +417,29 @@ namespace assetlib
 		return unbound;
 	}
 
-	void
-	AssetStore::RebindSubmeshInDocument(
-		std::string_view sourceKey,
-		std::string_view submesh,
-		std::string_view material) const
+	ImportDocument
+	AssetStore::LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const
 	{
 		core::throw_runtime_error_if(
 			sourceKey.empty(),
 			"'{}': no source was ever recorded, so there is no import document to rebind in",
 			submesh);
 
-		const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(sourceKey);
+		const std::filesystem::path documentPath = ImportDocumentPath(sourceKey);
 		core::throw_runtime_error_if(
 			!std::filesystem::exists(documentPath),
 			"'{}': no import document to rebind in -- re-import the source",
 			documentPath.string());
-		ImportDocument document = loadImportDocument(documentPath);
+		return loadImportDocument(documentPath);
+	}
+
+	void
+	AssetStore::RebindSubmeshInDocument(
+		std::string_view sourceKey,
+		std::string_view submesh,
+		std::string_view material) const
+	{
+		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
 
 		const auto found = std::ranges::find(document.bindings, submesh, &MaterialBinding::submesh);
 		if (found != document.bindings.end())
@@ -411,7 +447,60 @@ namespace assetlib
 		else
 			document.bindings.emplace_back(std::string(submesh), std::string(material));
 
-		core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
+		core::file::write_atomic(
+			ImportDocumentPath(sourceKey),
+			AssetCodec<ImportDocument>::Serialize(document));
+	}
+
+	void
+	AssetStore::SetSubmeshMaterialOverrideInDocument(
+		std::string_view sourceKey,
+		std::string_view submesh,
+		std::string_view name,
+		std::string_view material) const
+	{
+		core::throw_runtime_error_if(name.empty(), "'{}': an override needs a name", submesh);
+		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
+
+		const auto found = std::ranges::find_if(
+			document.materialOverrides,
+			[&](const MaterialOverrideBinding& entry) {
+				return entry.submesh == submesh && entry.name == name;
+			});
+		if (found != document.materialOverrides.end())
+			found->material = std::string(material);
+		else
+			document.materialOverrides.emplace_back(
+				std::string(submesh),
+				std::string(name),
+				std::string(material));
+
+		core::file::write_atomic(
+			ImportDocumentPath(sourceKey),
+			AssetCodec<ImportDocument>::Serialize(document));
+	}
+
+	void
+	AssetStore::RemoveSubmeshMaterialOverrideInDocument(
+		std::string_view sourceKey,
+		std::string_view submesh,
+		std::string_view name) const
+	{
+		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
+
+		const size_t removed =
+			std::erase_if(document.materialOverrides, [&](const MaterialOverrideBinding& entry) {
+				return entry.submesh == submesh && entry.name == name;
+			});
+		core::throw_runtime_error_if(
+			removed == 0,
+			"'{}': no override named '{}' to remove",
+			submesh,
+			name);
+
+		core::file::write_atomic(
+			ImportDocumentPath(sourceKey),
+			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
 	std::vector<ReauthoredDocument>

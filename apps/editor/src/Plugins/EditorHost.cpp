@@ -2,33 +2,31 @@
 
 #include "Render/Renderer.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/editor_language.h"
 #include <editor_plugin_api/ILanguageResolver.h>
-#include <editor_plugin_api/TranslationCatalog.h>
 
 #include <assetlib/AssetStore.h>
 #include <editor_plugin_api/IEditorViewport.h>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <qwidget.h>
-#include <span>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 
 namespace editor::plugins
 {
 	EditorHost::EditorHost(
-		const assetlib::AssetStore&         store,
-		std::span<const TranslationCatalog> catalogs,
-		Renderer*                           renderer,
-		game::AssetManager*                 assets,
-		const bool                          headless,
-		EditorHostDispatch                  dispatch) :
+		const assetlib::AssetStore& store,
+		Renderer*                   renderer,
+		game::AssetManager*         assets,
+		const bool                  headless,
+		EditorHostDispatch          dispatch) :
 		m_Store(store), m_Renderer(renderer), m_Assets(assets), m_Headless(headless),
 		m_Dispatch(std::move(dispatch))
-	{
-		for (const TranslationCatalog& catalog : catalogs) m_Language.RegisterCatalog(catalog);
-	}
+	{}
 
 	const assetlib::AssetStore&
 	EditorHost::GetStore() const noexcept
@@ -39,7 +37,7 @@ namespace editor::plugins
 	const ILanguageResolver&
 	EditorHost::GetLanguageResolver() const noexcept
 	{
-		return m_Language;
+		return EditorLanguage();
 	}
 
 	void
@@ -91,6 +89,14 @@ namespace editor::plugins
 		if (!m_Dispatch.openAsset)
 			throw std::runtime_error("Editor asset dispatch is unavailable");
 		m_Dispatch.openAsset(key);
+	}
+
+	std::string
+	EditorHost::ImportMeshSource(const std::filesystem::path& source)
+	{
+		if (!m_Dispatch.importMeshSource)
+			throw std::runtime_error("Editor import is unavailable");
+		return m_Dispatch.importMeshSource(source);
 	}
 
 	void

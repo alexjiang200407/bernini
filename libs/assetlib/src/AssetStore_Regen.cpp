@@ -226,6 +226,8 @@ namespace assetlib
 				refs.skeleton = document.skeleton;
 				for (const MaterialBinding& binding : document.bindings)
 					refs.materials.push_back(binding.material);
+				for (const MaterialOverrideBinding& entry : document.materialOverrides)
+					refs.materials.push_back(entry.material);
 				return refs;
 			}
 		}
@@ -276,7 +278,10 @@ namespace assetlib
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (checked.document)
-				current.unboundBindings = applyBindings(current.mesh, checked.document->bindings);
+				current.unboundBindings = rebuildMaterialSlots(
+					current.mesh,
+					checked.document->bindings,
+					checked.document->materialOverrides);
 			return current;
 		}
 
@@ -302,7 +307,10 @@ namespace assetlib
 				"skeleton; run `assetlib_cli migrate` to record the one it already uses",
 				path);
 		}
-		current.unboundBindings = applyBindings(current.mesh, group.document->bindings);
+		current.unboundBindings = rebuildMaterialSlots(
+			current.mesh,
+			group.document->bindings,
+			group.document->materialOverrides);
 		return current;
 	}
 

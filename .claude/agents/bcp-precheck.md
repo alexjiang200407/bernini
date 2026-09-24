@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost -- in time and in memory -- that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. On a pull request based on origin/master it also reports the added lines no test executed. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost -- in time and in memory -- that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. On a pull request based on origin/master it also reports the added lines no test executed. Posts nothing and edits nothing. Spawn it as the last step before `just pr create` of a pull request to master -- a single-PR change, or a feature's landing; a task PR into a feature branch is not read.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -13,7 +13,7 @@ it posts no review, opens no pull request and edits no file.
 It runs **one tier below its caller** — Fable → Opus, Opus → Sonnet, Sonnet → Haiku. The `model`
 above is the default for the usual Opus session; a caller on another tier passes the Agent tool's
 `model` instead. Grounding a finding in a line already read is the cheaper half of this job, and the
-gate is worth more run before every pull request than run well before some of them.
+gate is worth more run before every pull request to `master` than run well before some of them.
 
 **Be as critical as the evidence allows.** This is the one review whose findings are cheap: nothing
 has been pushed, no reviewer has spent attention, and the author can reject a finding in a sentence.

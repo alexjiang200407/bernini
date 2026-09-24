@@ -104,6 +104,11 @@ Without that reference `bgl_extended` would happily let the material be deleted 
 still wearing it, since a binding there is a bare slot index with no generation
 (`ISceneView::SetSubmeshMaterialOverride`).
 
+`SetInstanceSubmeshMaterialOverride` is the same override addressed by name: it wears one of the looks the
+mesh registers (`BMesh::materialOverrides`, authored as the `.bimport`'s `materialOverrides`), where
+`SetInstanceSubmeshMaterial` takes any material. The registered material is not loaded until an
+instance wears it, and it is released by the same calls.
+
 ## The UI runtime
 
 The full picture — the layer split, `target://`, the RCSS traps and what replacing RmlUi costs — is

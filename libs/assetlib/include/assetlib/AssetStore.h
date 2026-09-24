@@ -23,6 +23,7 @@ namespace assetlib
 	struct EnvImportDesc;
 	struct EnvImportResult;
 	struct ImageData;
+	struct ImportDocument;
 	struct ImportTarget;
 	struct MeshRefs;
 	struct MigrateReport;
@@ -827,6 +828,34 @@ namespace assetlib
 			std::string_view material) const;
 
 		/**
+		 * Registers `material` as the override `name` of `submesh` in the import document beside
+		 * `sourceKey`'s copied source, replacing an override already registered under that name.
+		 * Outside the cache key, as a binding is: the mesh is neither rewritten nor staled.
+		 *
+		 * @throws std::runtime_error if `sourceKey` or `name` is empty, the document is absent or
+		 *         malformed, or the write fails.
+		 */
+		void
+		SetSubmeshMaterialOverrideInDocument(
+			std::string_view sourceKey,
+			std::string_view submesh,
+			std::string_view name,
+			std::string_view material) const;
+
+		/**
+		 * Removes the override `name` of `submesh` from the import document beside `sourceKey`'s
+		 * copied source. The submesh's binding is left alone, even when it names the same material.
+		 *
+		 * @throws std::runtime_error if no such override is registered, `sourceKey` is empty, the
+		 *         document is absent or malformed, or the write fails.
+		 */
+		void
+		RemoveSubmeshMaterialOverrideInDocument(
+			std::string_view sourceKey,
+			std::string_view submesh,
+			std::string_view name) const;
+
+		/**
 		 * Rewrites every import document's bindings from its mesh's current state, parameters and
 		 * unknown keys preserved -- the one-time adoption pass that makes the documents
 		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
@@ -979,6 +1008,10 @@ namespace assetlib
 		Describe(const BGrassFields& grass) const;
 
 	private:
+		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */
+		[[nodiscard]] ImportDocument
+		LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const;
+
 		/**
 		 * The bytes at `path`, and the bytes of `path` written atomically. What Load and Save are
 		 * built from -- the templates stay in the header and the mount, the write primitive and the

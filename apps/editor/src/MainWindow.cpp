@@ -14,6 +14,7 @@
 #include <QTabWidget>
 #include <qcontainerfwd.h>
 
+#include "Import/drop_import.h"
 #include "Plugins/EditorHost.h"
 #include "Plugins/EditorRegistry.h"
 #include "Plugins/plugin_loader.h"
@@ -39,7 +40,6 @@
 #include <assetlib/progress.h>
 #include <default_editor/plugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
-#include <editor_plugin_api/TranslationCatalog.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/environment.h>
 
@@ -57,6 +57,7 @@
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
+#include "util/editor_language.h"
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -185,7 +186,10 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		// shader cache turns the whole stretch into milliseconds. Cold it is seconds, which is why
 		// the bar below has to keep moving even though nothing here can say how far along it is.
 		if (m_StartupProgress)
-			m_StartupProgress(0, 0, "Compiling shaders...");
+			m_StartupProgress(
+				0,
+				0,
+				editor::Localize("editor.main_window.compiling_shaders", "Compiling shaders..."));
 
 		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
 		// touches them. Every viewport and the thumbnail cache render through it.
@@ -315,7 +319,12 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		if (auto exposure = animSettings["exposure"])
 			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		m_Plugins->RegisterEditorPlugins(editor::defaults::CreatePlugin(defaultConfig));
+		m_Plugins->RegisterEditorPlugins(
+			editor::defaults::CreatePlugin(defaultConfig),
+			editor::BuiltInLocalizationDirectory());
+		editor::InstallEditorLanguage(
+			editor::ConfiguredLocale(configPath),
+			m_Plugins->Contributions().Catalogs());
 
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
@@ -324,7 +333,9 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
 
-	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
+	m_ContentExplorerDock = new QDockWidget(
+		editor::Localize("editor.main_window.content_explorer_title", "Content Explorer"),
+		this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
 
 	// Not floatable: its title bar sits directly under the separator the user drags to make it
@@ -372,51 +383,58 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			}
 			catch (const std::exception& error)
 			{
-				QMessageBox::warning(this, "Plugin Import", error.what());
+				QMessageBox::warning(
+					this,
+					editor::Localize("editor.main_window.plugin_import_title", "Plugin Import"),
+					error.what());
 			}
 		});
-	m_ContentExplorer->SetPluginActions(
-		[this](QMenu& menu, const std::vector<std::string>& selection) {
-			if (m_EditorHost == nullptr)
-				return;
-			for (const editor::ActionDesc& desc : m_Plugins->Contributions().Actions())
-			{
-				if (desc.extensions.empty())
-					continue;
-				const bool matches = std::ranges::all_of(selection, [&](const std::string& key) {
-					std::string extension = std::filesystem::path(key).extension().string();
-					std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
-						return static_cast<char>(std::tolower(c));
-					});
-					return std::ranges::find(desc.extensions, extension) != desc.extensions.end();
+	m_ContentExplorer->SetPluginActions([this](
+											QMenu&                          menu,
+											const std::vector<std::string>& selection) {
+		if (m_EditorHost == nullptr)
+			return;
+		for (const editor::ActionDesc& desc : m_Plugins->Contributions().Actions())
+		{
+			if (desc.extensions.empty())
+				continue;
+			const bool matches = std::ranges::all_of(selection, [&](const std::string& key) {
+				std::string extension = std::filesystem::path(key).extension().string();
+				std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+					return static_cast<char>(std::tolower(c));
 				});
-				if (!matches)
-					continue;
-				bool enabled = false;
+				return std::ranges::find(desc.extensions, extension) != desc.extensions.end();
+			});
+			if (!matches)
+				continue;
+			bool enabled = false;
+			try
+			{
+				enabled = desc.action->IsEnabled(*m_EditorHost, selection);
+			}
+			catch (const std::exception& error)
+			{
+				qWarning("Plugin action predicate failed: %s", error.what());
+			}
+			QAction* action =
+				menu.addAction(desc.title.Resolve(m_EditorHost->GetLanguageResolver()));
+			action->setEnabled(enabled);
+			const editor::ActionDesc* descriptor = &desc;
+			connect(action, &QAction::triggered, &menu, [this, descriptor, selection] {
 				try
 				{
-					enabled = desc.action->IsEnabled(*m_EditorHost, selection);
+					descriptor->action->Invoke(*m_EditorHost, selection);
 				}
 				catch (const std::exception& error)
 				{
-					qWarning("Plugin action predicate failed: %s", error.what());
+					QMessageBox::warning(
+						this,
+						editor::Localize("editor.main_window.plugin_action_title", "Plugin Action"),
+						error.what());
 				}
-				QAction* action =
-					menu.addAction(desc.title.Resolve(m_EditorHost->GetLanguageResolver()));
-				action->setEnabled(enabled);
-				const editor::ActionDesc* descriptor = &desc;
-				connect(action, &QAction::triggered, &menu, [this, descriptor, selection] {
-					try
-					{
-						descriptor->action->Invoke(*m_EditorHost, selection);
-					}
-					catch (const std::exception& error)
-					{
-						QMessageBox::warning(this, "Plugin Action", error.what());
-					}
-				});
-			}
-		});
+			});
+		}
+	});
 
 	connect(
 		m_ContentExplorer,
@@ -458,7 +476,8 @@ MainWindow::RunBehindScreen(
 void
 MainWindow::SetUpRenderMenu()
 {
-	QMenu* render = menuBar()->addMenu("Render");
+	QMenu* render =
+		menuBar()->addMenu(editor::Localize("editor.main_window.render_menu", "Render"));
 
 	// Each viewport is configured on its own, so the menu offers the toggle if any of them has
 	// something to toggle. A window configured without it ignores the call rather than throwing.
@@ -466,7 +485,8 @@ MainWindow::SetUpRenderMenu()
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 		anyTaa = anyTaa || view->IsTaaAvailable();
 
-	auto* taa = render->addAction("Temporal Antialiasing");
+	auto* taa = render->addAction(
+		editor::Localize("editor.main_window.temporal_antialiasing", "Temporal Antialiasing"));
 	taa->setCheckable(true);
 	taa->setChecked(anyTaa);
 
@@ -474,8 +494,13 @@ MainWindow::SetUpRenderMenu()
 	// question gets asked.
 	taa->setEnabled(anyTaa);
 	taa->setStatusTip(
-		anyTaa ? "Jitter the projection and accumulate a temporal history in the viewports." :
-				 "No viewport enabled temporalAA in config.json, so none allocated a history.");
+		anyTaa ?
+			editor::Localize(
+				"editor.main_window.taa_enabled_tip",
+				"Jitter the projection and accumulate a temporal history in the viewports.") :
+			editor::Localize(
+				"editor.main_window.taa_initial_disabled_tip",
+				"No viewport enabled temporalAA in config.json, so none allocated a history."));
 
 	connect(render, &QMenu::aboutToShow, this, [this, taa] {
 		bool available = false;
@@ -485,9 +510,13 @@ MainWindow::SetUpRenderMenu()
 		taa->setEnabled(available);
 		taa->setChecked(m_TaaOverride.value_or(available));
 		taa->setStatusTip(
-			available ?
-				"Jitter the projection and accumulate a temporal history in the viewports." :
-				"No open viewport allocated temporal-AA history.");
+			available ? editor::Localize(
+							"editor.main_window.taa_enabled_tip",
+							"Jitter the projection and accumulate a temporal history in the "
+							"viewports.") :
+						editor::Localize(
+							"editor.main_window.taa_disabled_tip",
+							"No open viewport allocated temporal-AA history."));
 	});
 
 	connect(taa, &QAction::toggled, this, [this](bool enabled) {
@@ -496,10 +525,14 @@ MainWindow::SetUpRenderMenu()
 			view->SetTaaEnabled(enabled);
 	});
 
-	auto* outline = render->addAction("Selection Outline");
+	auto* outline = render->addAction(
+		editor::Localize("editor.main_window.selection_outline", "Selection Outline"));
 	outline->setCheckable(true);
 	outline->setChecked(true);
-	outline->setStatusTip("Contour the selected submesh in the viewports.");
+	outline->setStatusTip(
+		editor::Localize(
+			"editor.main_window.selection_outline_tip",
+			"Contour the selected submesh in the viewports."));
 
 	connect(outline, &QAction::toggled, this, [this](bool enabled) {
 		m_OutlineEnabled = enabled;
@@ -513,12 +546,14 @@ MainWindow::SetUpRenderMenu()
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 		anyBloom = anyBloom || view->IsBloomEnabled();
 
-	auto* bloom = render->addAction("Bloom");
+	auto* bloom = render->addAction(editor::Localize("editor.main_window.bloom", "Bloom"));
 	bloom->setCheckable(true);
 	bloom->setChecked(anyBloom);
 	bloom->setStatusTip(
-		"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
-		"bloom is each viewport's `bloom` section in config.json.");
+		editor::Localize(
+			"editor.main_window.bloom_tip",
+			"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
+			"bloom is each viewport's `bloom` section in config.json."));
 
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
 		m_BloomOverride = enabled;
@@ -531,12 +566,15 @@ MainWindow::SetUpRenderMenu()
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 		anyGrade = anyGrade || view->IsColorGradeEnabled();
 
-	auto* grade = render->addAction("Color Grade");
+	auto* grade =
+		render->addAction(editor::Localize("editor.main_window.color_grade", "Color Grade"));
 	grade->setCheckable(true);
 	grade->setChecked(anyGrade);
 	grade->setStatusTip(
-		"White-balance and grade the viewports ahead of the display curve. The grade is each "
-		"viewport's `colorGrade` section in config.json.");
+		editor::Localize(
+			"editor.main_window.color_grade_tip",
+			"White-balance and grade the viewports ahead of the display curve. The grade is each "
+			"viewport's `colorGrade` section in config.json."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
@@ -544,12 +582,16 @@ MainWindow::SetUpRenderMenu()
 			view->SetColorGradeEnabled(enabled);
 	});
 
-	auto* timing = render->addAction("GPU Pass Timing");
+	auto* timing = render->addAction(
+		editor::Localize("editor.main_window.gpu_pass_timing", "GPU Pass Timing"));
 	timing->setCheckable(true);
 	timing->setChecked(false);
 	timing->setStatusTip(
-		"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write "
-		"out. Costs a little per frame, which is why it is off until asked for.");
+		editor::Localize(
+			"editor.main_window.gpu_pass_timing_tip",
+			"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to "
+			"write "
+			"out. Costs a little per frame, which is why it is off until asked for."));
 
 	connect(timing, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
@@ -559,11 +601,14 @@ MainWindow::SetUpRenderMenu()
 	m_GpuTimingAction = timing;
 
 	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
-	auto* logTiming = render->addAction("Log GPU Pass Timings");
+	auto* logTiming = render->addAction(
+		editor::Localize("editor.main_window.log_gpu_pass_timings", "Log GPU Pass Timings"));
 	logTiming->setShortcut(QKeySequence("Ctrl+Shift+T"));
 	logTiming->setEnabled(false);
 	logTiming->setStatusTip(
-		"Write the rendering viewport's next per-pass GPU breakdown to editor.log.");
+		editor::Localize(
+			"editor.main_window.log_gpu_pass_timings_tip",
+			"Write the rendering viewport's next per-pass GPU breakdown to editor.log."));
 	connect(timing, &QAction::toggled, logTiming, &QAction::setEnabled);
 	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
@@ -575,11 +620,15 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 {
 	static constexpr std::array c_Scales = { 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
 
-	QMenu* scale = render->addMenu("Render Scale");
+	QMenu* scale =
+		render->addMenu(editor::Localize("editor.main_window.render_scale_menu", "Render Scale"));
 	scale->setStatusTip(
-		"Render the viewports at a fraction of their window and let the temporal resolve "
-		"reconstruct it, to judge a resolution-dependent artifact on a display that does not have "
-		"that density.");
+		editor::Localize(
+			"editor.main_window.render_scale_tip",
+			"Render the viewports at a fraction of their window and let the temporal resolve "
+			"reconstruct it, to judge a resolution-dependent artifact on a display that does not "
+			"have "
+			"that density."));
 
 	auto* group = new QActionGroup(scale);
 	group->setExclusive(true);
@@ -591,7 +640,8 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 
 	for (const float factor : c_Scales)
 	{
-		QAction* action = scale->addAction(QString("%1x").arg(factor));
+		QAction* action = scale->addAction(
+			editor::Localize("editor.main_window.render_scale_factor", { factor }, "{0}x"));
 		action->setCheckable(true);
 		action->setChecked(qFuzzyCompare(factor, current));
 		group->addAction(action);
@@ -625,12 +675,18 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 	// would put that out of reach.
 	static constexpr std::array c_Widths = { 0.25f, 0.4f, 0.6f, 0.8f, 1.0f };
 
-	QMenu* width = render->addMenu("TAA Reconstruction Width");
+	QMenu* width = render->addMenu(
+		editor::Localize(
+			"editor.main_window.reconstruction_width_menu",
+			"TAA Reconstruction Width"));
 	width->setStatusTip(
-		"How wide a kernel the temporal resolve rebuilds each output pixel with, in output pixels. "
-		"Narrower is sharper on a held frame and slower to settle on a moving one; it has no "
-		"effect "
-		"at a render scale of 1.");
+		editor::Localize(
+			"editor.main_window.reconstruction_width_tip",
+			"How wide a kernel the temporal resolve rebuilds each output pixel with, in output "
+			"pixels. "
+			"Narrower is sharper on a held frame and slower to settle on a moving one; it has no "
+			"effect "
+			"at a render scale of 1."));
 
 	auto* group = new QActionGroup(width);
 	group->setExclusive(true);
@@ -640,7 +696,8 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 
 	for (const float value : c_Widths)
 	{
-		QAction* action = width->addAction(QString("%1 px").arg(value));
+		QAction* action = width->addAction(
+			editor::Localize("editor.main_window.reconstruction_width_value", { value }, "{0} px"));
 		action->setCheckable(true);
 		action->setChecked(qFuzzyCompare(value, current));
 		group->addAction(action);
@@ -665,11 +722,16 @@ MainWindow::SetUpSharpnessMenu(QMenu* render)
 {
 	static constexpr std::array c_Sharpness = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
 
-	QMenu* sharpness = render->addMenu("TAA Sharpness");
+	QMenu* sharpness =
+		render->addMenu(editor::Localize("editor.main_window.sharpness_menu", "TAA Sharpness"));
 	sharpness->setStatusTip(
-		"How hard the resolved image is sharpened (RCAS) before the display curve. Only viewports "
-		"with temporal antialiasing and a render scale below 1 sharpen; it also sharpens hashed "
-		"alpha's grain.");
+		editor::Localize(
+			"editor.main_window.sharpness_tip",
+			"How hard the resolved image is sharpened (RCAS) before the display curve. Only "
+			"viewports "
+			"with temporal antialiasing and a render scale below 1 sharpen; it also sharpens "
+			"hashed "
+			"alpha's grain."));
 
 	auto* group = new QActionGroup(sharpness);
 	group->setExclusive(true);
@@ -680,7 +742,11 @@ MainWindow::SetUpSharpnessMenu(QMenu* render)
 	for (const float value : c_Sharpness)
 	{
 		QAction* action = sharpness->addAction(
-			value == 0.0f ? QString("Off") : QString("%1%").arg(static_cast<int>(value * 100.0f)));
+			value == 0.0f ? editor::Localize("editor.main_window.sharpness_off", "Off") :
+							editor::Localize(
+								"editor.main_window.sharpness_percent",
+								{ static_cast<int>(value * 100.0f) },
+								"{0}%"));
 		action->setCheckable(true);
 		action->setChecked(qFuzzyCompare(value + 1.0f, current + 1.0f));
 		group->addAction(action);
@@ -750,7 +816,9 @@ MainWindow::NewProject()
 		return;
 
 	// Asked before Create, so declining writes nothing.
-	const ProjectOpening opening = AskHowToOpen("New Project", request->projectFile);
+	const ProjectOpening opening = AskHowToOpen(
+		editor::Localize("editor.main_window.new_project_title", "New Project"),
+		request->projectFile);
 	if (opening == ProjectOpening::kCancelled)
 		return;
 
@@ -767,7 +835,10 @@ MainWindow::NewProject()
 	}
 	catch (const std::exception& e)
 	{
-		QMessageBox::warning(this, "New Project", e.what());
+		QMessageBox::warning(
+			this,
+			editor::Localize("editor.main_window.new_project_title", "New Project"),
+			editor::ShownText(e));
 	}
 }
 
@@ -778,7 +849,9 @@ MainWindow::OpenProject()
 	if (path.empty())
 		return;
 
-	switch (AskHowToOpen("Open Project", path))
+	switch (AskHowToOpen(
+		editor::Localize("editor.main_window.open_project_title", "Open Project"),
+		path))
 	{
 	case ProjectOpening::kHere:
 		OpenProjectAt(path);
@@ -805,10 +878,11 @@ MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& proj
 	const QMessageBox::StandardButton answer = QMessageBox::question(
 		this,
 		title,
-		QString(
-			"%1 requires different shaders from the ones this editor loaded at startup. The "
-			"editor will restart to open it.")
-			.arg(QString::fromStdWString(projectFile.stem().wstring())),
+		editor::Localize(
+			"editor.main_window.restart_required_message",
+			{ QString::fromStdWString(projectFile.stem().wstring()) },
+			"{0} requires different shaders from the ones this editor loaded at startup. The "
+			"editor will restart to open it."),
 		QMessageBox::Ok | QMessageBox::Cancel,
 		QMessageBox::Ok);
 
@@ -844,7 +918,10 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 	}
 	catch (const std::exception& e)
 	{
-		QMessageBox::warning(this, "Open Project", e.what());
+		QMessageBox::warning(
+			this,
+			editor::Localize("editor.main_window.open_project_title", "Open Project"),
+			editor::ShownText(e));
 		return false;
 	}
 }
@@ -861,9 +938,15 @@ MainWindow::RefreshTextures()
 
 	// File I/O, so it belongs on the worker like the prune's scan. No cancel token, so the screen
 	// offers no button that would not work.
-	const background::TaskResult scanned =
-		RunBehindScreen("Open Project", [&](background::Progress& progress) {
-			progress.Report(0, 0, "Checking imported sources...");
+	const background::TaskResult scanned = RunBehindScreen(
+		editor::Localize("editor.main_window.open_project_title", "Open Project"),
+		[&](background::Progress& progress) {
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.main_window.checking_imported_sources",
+					"Checking imported sources..."));
 			stale = m_Project->GetStore().GetStaleImportedTextureSources();
 		});
 
@@ -885,7 +968,7 @@ MainWindow::RefreshTextures()
 
 	// The same cost an import pays, and the same reason it runs off the UI thread.
 	const background::TaskResult refreshed = RunBehindScreen(
-		"Refresh Textures",
+		editor::Localize("editor.main_window.refresh_textures_title", "Refresh Textures"),
 		[&](background::Progress& progress) {
 			const assetlib::CancelToken cancel = progress.Cancellation();
 
@@ -901,10 +984,10 @@ MainWindow::RefreshTextures()
 								progress.Report(
 									static_cast<int>(event.done),
 									static_cast<int>(event.total),
-									QString("Compressing %1 (%2 of %3)...")
-										.arg(name)
-										.arg(event.done + 1)
-										.arg(event.total));
+									editor::Localize(
+										"editor.main_window.compressing_progress",
+										{ name, event.done + 1, event.total },
+										"Compressing {0} ({1} of {2})..."));
 							},
 							cancel);
 
@@ -912,9 +995,10 @@ MainWindow::RefreshTextures()
 						superseded << QString::fromStdString(left);
 
 					for (const assetlib::MovedTexture& move : result.moved)
-						moved << QString("%1 -> %2")
-									 .arg(QString::fromStdString(move.from))
-									 .arg(QString::fromStdString(move.to));
+						moved << editor::Localize(
+							"editor.main_window.texture_moved_line",
+							{ move.from, move.to },
+							"{0} -> {1}");
 				}
 				catch (const assetlib::Cancelled&)
 				{
@@ -923,7 +1007,10 @@ MainWindow::RefreshTextures()
 				catch (const std::exception& e)
 				{
 					// Each source is a separate group: one failing does not abandon the rest.
-					failed << QString("%1: %2").arg(name, QString::fromLatin1(e.what()));
+					failed << editor::Localize(
+						"editor.main_window.failed_item_line",
+						{ name, editor::ShownText(e) },
+						"{0}: {1}");
 				}
 			}
 		},
@@ -935,9 +1022,13 @@ MainWindow::RefreshTextures()
 	if (!failed.isEmpty())
 	{
 		auto problem = QMessageBox(this);
-		problem.setWindowTitle("Refresh Textures");
+		problem.setWindowTitle(
+			editor::Localize("editor.main_window.refresh_textures_title", "Refresh Textures"));
 		problem.setIcon(QMessageBox::Warning);
-		problem.setText("Some sources could not be re-extracted.");
+		problem.setText(
+			editor::Localize(
+				"editor.main_window.refresh_failed_text",
+				"Some sources could not be re-extracted."));
 		problem.setDetailedText(failed.join('\n'));
 		problem.exec();
 	}
@@ -945,12 +1036,19 @@ MainWindow::RefreshTextures()
 	if (!moved.isEmpty())
 	{
 		auto followed = QMessageBox(this);
-		followed.setWindowTitle("Refresh Textures");
+		followed.setWindowTitle(
+			editor::Localize("editor.main_window.refresh_textures_title", "Refresh Textures"));
 		followed.setIcon(QMessageBox::Information);
-		followed.setText("Some textures moved to the name the current rule gives them.");
+		followed.setText(
+			editor::Localize(
+				"editor.main_window.textures_moved_text",
+				"Some textures moved to the name the current rule gives them."));
 		followed.setInformativeText(
-			"Each held the same bytes as a file the extract wrote, so the materials routing at it "
-			"were re-routed and the old file removed. Nothing is drawing anything new.");
+			editor::Localize(
+				"editor.main_window.textures_moved_info",
+				"Each held the same bytes as a file the extract wrote, so the materials routing at "
+				"it "
+				"were re-routed and the old file removed. Nothing is drawing anything new."));
 		followed.setDetailedText(moved.join('\n'));
 		followed.exec();
 	}
@@ -959,13 +1057,19 @@ MainWindow::RefreshTextures()
 	{
 		// Reported and not acted on -- see docs/asset_containers.md.
 		auto left = QMessageBox(this);
-		left.setWindowTitle("Refresh Textures");
+		left.setWindowTitle(
+			editor::Localize("editor.main_window.refresh_textures_title", "Refresh Textures"));
 		left.setIcon(QMessageBox::Information);
-		left.setText("Some textures are no longer produced by their source.");
+		left.setText(
+			editor::Localize(
+				"editor.main_window.textures_superseded_text",
+				"Some textures are no longer produced by their source."));
 		left.setInformativeText(
-			"They are still on disk and nothing has been changed. A material routing at one is "
-			"drawing what its source held at import -- re-route it in the Material Editor, or "
-			"delete it once nothing does.");
+			editor::Localize(
+				"editor.main_window.textures_superseded_info",
+				"They are still on disk and nothing has been changed. A material routing at one is "
+				"drawing what its source held at import -- re-route it in the Material Editor, or "
+				"delete it once nothing does."));
 		left.setDetailedText(superseded.join('\n'));
 		left.exec();
 	}
@@ -986,9 +1090,15 @@ MainWindow::UpdateProject()
 	// would re-cook every stale group to answer the same question. Kept as a gate even though the
 	// rebuild is no longer offered: Migrate walks and re-saves the whole data root, which a settled
 	// project should not pay for on every launch.
-	const background::TaskResult scanned =
-		RunBehindScreen("Open Project", [&](background::Progress& progress) {
-			progress.Report(0, 0, "Checking derived assets...");
+	const background::TaskResult scanned = RunBehindScreen(
+		editor::Localize("editor.main_window.open_project_title", "Open Project"),
+		[&](background::Progress& progress) {
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.main_window.checking_derived_assets",
+					"Checking derived assets..."));
 			stale = m_Project->GetStore().GetStaleGeometry();
 			for (const assetlib::ReimportedSource& source :
 		         m_Project->GetStore().Reimport(/*dryRun*/ true).sources)
@@ -1006,9 +1116,15 @@ MainWindow::UpdateProject()
 
 	auto failed = QStringList();
 
-	const background::TaskResult migrated =
-		RunBehindScreen("Update Project", [&](background::Progress& progress) {
-			progress.Report(0, 0, "Rebuilding derived assets...");
+	const background::TaskResult migrated = RunBehindScreen(
+		editor::Localize("editor.main_window.update_project_title", "Update Project"),
+		[&](background::Progress& progress) {
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					"editor.main_window.rebuilding_derived_assets",
+					"Rebuilding derived assets..."));
 
 			// Migrate reports in phases, each with its own count, so the label and the range are
 			// taken from the event rather than remembered across them.
@@ -1022,9 +1138,10 @@ MainWindow::UpdateProject()
 			for (const assetlib::MigratedFile& file :
 		         m_Project->GetStore().Migrate(/*dryRun*/ false, onProgress).files)
 				if (file.outcome == assetlib::MigratedFile::Outcome::kFailed)
-					failed << QString("%1: %2").arg(
-						QString::fromStdString(file.path.filename().string()),
-						QString::fromStdString(file.message));
+					failed << editor::Localize(
+						"editor.main_window.failed_item_line",
+						{ file.path.filename().string(), file.message },
+						"{0}: {1}");
 		});
 
 	if (!migrated.Completed())
@@ -1036,12 +1153,18 @@ MainWindow::UpdateProject()
 	if (!failed.isEmpty())
 	{
 		auto problem = QMessageBox(this);
-		problem.setWindowTitle("Update Project");
+		problem.setWindowTitle(
+			editor::Localize("editor.main_window.update_project_title", "Update Project"));
 		problem.setIcon(QMessageBox::Warning);
-		problem.setText("Some assets could not be rebuilt.");
+		problem.setText(
+			editor::Localize(
+				"editor.main_window.rebuild_failed_text",
+				"Some assets could not be rebuilt."));
 		problem.setInformativeText(
-			"Anything that draws one will report that the project needs updating until its "
-			"source is back.");
+			editor::Localize(
+				"editor.main_window.rebuild_failed_info",
+				"Anything that draws one will report that the project needs updating until its "
+				"source is back."));
 		problem.setDetailedText(failed.join('\n'));
 		problem.exec();
 	}
@@ -1060,9 +1183,12 @@ MainWindow::CleanUnusedTextures()
 	// takes no cancel token, so the screen offers no button that would not work.
 	const background::TaskResult scanned = background::RunWithLoadingScreen(
 		this,
-		"Clean Unused Textures",
+		editor::Localize("editor.main_window.clean_unused_textures_title", "Clean Unused Textures"),
 		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Scanning materials...");
+			progress.Report(
+				0,
+				0,
+				editor::Localize("editor.main_window.scanning_materials", "Scanning materials..."));
 
 			// The project's store was mounted when the project opened, and a data directory can go
 			// away after that -- renamed from a file manager, or on a volume that unmounted. Asked
@@ -1081,8 +1207,13 @@ MainWindow::CleanUnusedTextures()
 	{
 		QMessageBox::warning(
 			this,
-			"Clean Unused Textures",
-			QString("Could not scan the project:\n\n%1").arg(scanned.error));
+			editor::Localize(
+				"editor.main_window.clean_unused_textures_title",
+				"Clean Unused Textures"),
+			editor::Localize(
+				"editor.main_window.scan_failed",
+				{ scanned.error },
+				"Could not scan the project:\n\n{0}"));
 		return;
 	}
 
@@ -1094,14 +1225,14 @@ MainWindow::CleanUnusedTextures()
 	{
 		QMessageBox::information(
 			this,
-			"Clean Unused Textures",
-			QString(
-				"No unused baked textures.\n\n%1 of the %2 baked textures are referenced by the "
-				"project's %3 materials and %4 environment assets.")
-				.arg(scan.liveMaps)
-				.arg(scan.candidates)
-				.arg(scan.materialsScanned)
-				.arg(scan.environmentsScanned));
+			editor::Localize(
+				"editor.main_window.clean_unused_textures_title",
+				"Clean Unused Textures"),
+			editor::Localize(
+				"editor.main_window.no_unused_textures",
+				{ scan.liveMaps, scan.candidates, scan.materialsScanned, scan.environmentsScanned },
+				"No unused baked textures.\n\n{0} of the {1} baked textures are referenced by the "
+				"project's {2} materials and {3} environment assets."));
 		return;
 	}
 
@@ -1110,18 +1241,27 @@ MainWindow::CleanUnusedTextures()
 		details << QString::fromStdString(texture.path);
 
 	auto confirm = QMessageBox(this);
-	confirm.setWindowTitle("Clean Unused Textures");
+	confirm.setWindowTitle(
+		editor::Localize(
+			"editor.main_window.clean_unused_textures_title",
+			"Clean Unused Textures"));
 	confirm.setIcon(QMessageBox::Warning);
-	confirm.setText(QString("Delete %1 unused baked textures?")
-	                    .arg(static_cast<qulonglong>(scan.unused.size())));
+	confirm.setText(
+		editor::Localize(
+			"editor.main_window.delete_confirm_text",
+			{ static_cast<uint64_t>(scan.unused.size()) },
+			"Delete {0} unused baked textures?"));
 	confirm.setInformativeText(
-		QString(
-			"No material in this project references them; %1 will be reclaimed.\n\nThis cannot be "
-			"undone, but a deleted map is rebuilt by re-baking the material that needs it.")
-			.arg(formatSize(scan.bytes)));
+		editor::Localize(
+			"editor.main_window.delete_confirm_info",
+			{ formatSize(scan.bytes) },
+			"No material in this project references them; {0} will be reclaimed.\n\nThis cannot be "
+			"undone, but a deleted map is rebuilt by re-baking the material that needs it."));
 	confirm.setDetailedText(details.join('\n'));
 
-	auto* deleteButton = confirm.addButton("Delete", QMessageBox::DestructiveRole);
+	auto* deleteButton = confirm.addButton(
+		editor::Localize("editor.main_window.delete_button", "Delete"),
+		QMessageBox::DestructiveRole);
 	confirm.addButton(QMessageBox::Cancel);
 	confirm.setDefaultButton(QMessageBox::Cancel);
 	confirm.exec();
@@ -1136,18 +1276,23 @@ MainWindow::CleanUnusedTextures()
 	{
 		QMessageBox::warning(
 			this,
-			"Clean Unused Textures",
-			QString("Deleted %1 textures, but %2 could not be removed:\n\n%3")
-				.arg(static_cast<qulonglong>(result.deleted))
-				.arg(static_cast<qulonglong>(result.failed.size()))
-				.arg(QString::fromStdString(result.failed.front())));
+			editor::Localize(
+				"editor.main_window.clean_unused_textures_title",
+				"Clean Unused Textures"),
+			editor::Localize(
+				"editor.main_window.delete_partial_failure",
+				{ static_cast<uint64_t>(result.deleted),
+		          static_cast<uint64_t>(result.failed.size()),
+		          result.failed.front() },
+				"Deleted {0} textures, but {1} could not be removed:\n\n{2}"));
 		return;
 	}
 
 	statusBar()->showMessage(
-		QString("Deleted %1 unused baked textures, reclaiming %2")
-			.arg(static_cast<qulonglong>(result.deleted))
-			.arg(formatSize(result.bytes)),
+		editor::Localize(
+			"editor.main_window.delete_success_status",
+			{ static_cast<uint64_t>(result.deleted), formatSize(result.bytes) },
+			"Deleted {0} unused baked textures, reclaiming {1}"),
 		5000);
 }
 
@@ -1175,7 +1320,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
 	m_EditorHost = std::make_unique<editor::plugins::EditorHost>(
 		m_Project->GetStore(),
-		m_Plugins->Contributions().Catalogs(),
 		m_Renderer.get(),
 		m_Assets.get(),
 		m_Headless,
@@ -1222,6 +1366,14 @@ MainWindow::SetActiveProject(assetlib::Project project)
 					}
 				},
 			.viewportCreated = [this](RenderTargetWindow& view) { ConfigureViewport(view); },
+			.importMeshSource =
+				[this, dataDir](const std::filesystem::path& source) {
+					return editor::RunMeshImport(
+							   this,
+							   dataDir,
+							   QString::fromStdWString(source.wstring()))
+		                .mesh.toStdString();
+				},
 		});
 
 	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);
@@ -1245,8 +1397,10 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	setWindowTitle(
 		editor::WindowTitle(m_InstanceName, QString::fromStdString(m_Project->GetName())));
 	statusBar()->showMessage(
-		QString("Project data: %1")
-			.arg(QString::fromStdString(m_Project->GetDataDirectory().string())));
+		editor::Localize(
+			"editor.main_window.project_data_status",
+			{ m_Project->GetDataDirectory().string() },
+			"Project data: {0}"));
 }
 
 void
@@ -1269,11 +1423,15 @@ MainWindow::SetUpGpuTimingEntry()
 		m_GpuTimingAction->setChecked(wanted || m_GpuTimingWasOn);
 	});
 
-	auto* graph = m_Ui.windowMenu->addAction("GPU Timing Graph");
+	auto* graph = m_Ui.windowMenu->addAction(
+		editor::Localize("editor.main_window.gpu_timing_graph", "GPU Timing Graph"));
 	graph->setCheckable(true);
 	graph->setShortcut(QKeySequence("Ctrl+Shift+G"));
 	graph->setStatusTip(
-		"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it.");
+		editor::Localize(
+			"editor.main_window.gpu_timing_graph_tip",
+			"Graph what each pass of the rendering viewport's frames costs on the GPU, and export "
+			"it."));
 
 	connect(graph, &QAction::toggled, this, [this](bool shown) {
 		m_GpuTiming->setVisible(shown);
@@ -1294,9 +1452,14 @@ MainWindow::SetUpPluginsEntry()
 {
 	m_PluginsWindow = new editor::PluginsWindow(*m_Plugins, this);
 
-	QMenu* plugins = menuBar()->addMenu("Plugins");
-	auto*  loaded  = plugins->addAction("Loaded Plugins");
-	loaded->setStatusTip("List the plugins this editor loaded at startup.");
+	QMenu* plugins =
+		menuBar()->addMenu(editor::Localize("editor.main_window.plugins_menu", "Plugins"));
+	auto* loaded =
+		plugins->addAction(editor::Localize("editor.main_window.loaded_plugins", "Loaded Plugins"));
+	loaded->setStatusTip(
+		editor::Localize(
+			"editor.main_window.loaded_plugins_tip",
+			"List the plugins this editor loaded at startup."));
 	connect(loaded, &QAction::triggered, this, [this] {
 		m_PluginsWindow->show();
 		m_PluginsWindow->raise();
@@ -1311,16 +1474,15 @@ MainWindow::SetUpPluginContributions()
 	if (registry.Menus().empty() && registry.Actions().empty())
 		return;
 
-	editor::LanguageResolver language;
-	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
-		language.RegisterCatalog(catalog);
+	const editor::LanguageResolver& language = editor::EditorLanguage();
 
 	core::str::unordered_str_map<QMenu*> menus;
 	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);
 	const auto toolsMenu = [&]() {
 		if (m_Ui.toolsMenu == nullptr)
 		{
-			m_Ui.toolsMenu = new QMenu("Tools", this);
+			m_Ui.toolsMenu =
+				new QMenu(editor::Localize("editor.main_window.tools_menu", "Tools"), this);
 			menuBar()->insertMenu(m_Ui.windowMenu->menuAction(), m_Ui.toolsMenu);
 		}
 		menus.emplace(editor::c_ToolsMenuId, m_Ui.toolsMenu);
@@ -1375,7 +1537,10 @@ MainWindow::SetUpPluginContributions()
 			}
 			catch (const std::exception& error)
 			{
-				QMessageBox::warning(this, "Plugin Action", error.what());
+				QMessageBox::warning(
+					this,
+					editor::Localize("editor.main_window.plugin_action_title", "Plugin Action"),
+					error.what());
 			}
 		});
 	}
@@ -1456,11 +1621,19 @@ MainWindow::OpenPluginAsset(const std::string_view key)
 	}
 	catch (const std::exception& error)
 	{
-		QMessageBox::warning(this, "Plugin Asset", error.what());
+		QMessageBox::warning(
+			this,
+			editor::Localize("editor.main_window.plugin_asset_title", "Plugin Asset"),
+			error.what());
 	}
 	catch (...)
 	{
-		QMessageBox::warning(this, "Plugin Asset", "The plugin could not open this asset");
+		QMessageBox::warning(
+			this,
+			editor::Localize("editor.main_window.plugin_asset_title", "Plugin Asset"),
+			editor::Localize(
+				"editor.main_window.plugin_asset_open_failed",
+				"The plugin could not open this asset"));
 	}
 }
 
@@ -1479,7 +1652,10 @@ MainWindow::CanClosePluginPanels()
 			}
 			catch (const std::exception& error)
 			{
-				QMessageBox::warning(this, "Plugin Panel", error.what());
+				QMessageBox::warning(
+					this,
+					editor::Localize("editor.main_window.plugin_panel_title", "Plugin Panel"),
+					error.what());
 				return false;
 			}
 		}
@@ -1517,9 +1693,11 @@ MainWindow::SetUpFrameStats()
 	// All three figures describe the current visit: a viewport clears them when it leaves the frame
 	// loop, so none of them reaches back to a previous time the tab was up.
 	m_FrameStats->setToolTip(
-		"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
-		"many frame-start intervals exceeded 20 ms since the tab was selected. "
-		"This measures render-loop timing, not missed display refreshes.");
+		editor::Localize(
+			"editor.main_window.frame_stats_tooltip",
+			"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
+			"many frame-start intervals exceeded 20 ms since the tab was selected. "
+			"This measures render-loop timing, not missed display refreshes."));
 
 	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
 	// texture-cleanup messages cannot overwrite the readout.

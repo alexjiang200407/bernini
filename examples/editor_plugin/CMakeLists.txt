@@ -30,6 +30,13 @@ if(PROJECT_IS_TOP_LEVEL)
     endforeach()
     file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/plugin/$<CONFIG>/bernini-plugin.json" CONTENT
 "{\n  \"version\": 1,\n  \"id\": \"sample.document\",\n  \"name\": \"Sample Document\",\n  \"description\": \"A .bexample document kind with a project tools tab and a document tab.\",\n  \"engineBuildId\": \"${BerniniEditorSDK_BUILD_ID}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"runtime\": \"$<TARGET_FILE_NAME:sample_runtime>\",\n  \"editor\": \"$<TARGET_FILE_NAME:sample_editor>\",\n  \"dependencies\": []\n}\n")
+    # A plugin's catalogs are localization/<context>.csv in its directory; the host reads them.
+    add_custom_target(sample_localization ALL
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_CURRENT_BINARY_DIR}/plugin/$<CONFIG>/localization"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/localization"
+            "${CMAKE_CURRENT_BINARY_DIR}/plugin/$<CONFIG>/localization"
+        VERBATIM)
     return()
 endif()
 

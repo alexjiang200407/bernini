@@ -196,7 +196,9 @@ takes about a second", "X is the only place that branch lives"). Those sentences
 
 ## 8. The critical read
 
-**Every pull request is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) before it opens.**
+**Every pull request to `master` is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) before
+it opens.** A task PR into a feature branch is not: [bcp-feature](.claude/skills/bcp-feature/SKILL.md)
+reads the feature once, at its landing (§ 5).
 It reads the diff against the base, so it runs *inside* § 9's sequence — after the format, the commit
 and the rebase, and before the push. This section is what it does; § 9's block is where it goes.
 

@@ -118,14 +118,8 @@ namespace bgl
 	inline void
 	DeclareMeshletCullBuffers(PassDesc& desc)
 	{
-		desc.AddBufferArg(
-			c_CullViewName,
-			BarrierSyncFlag::kVertexShader,
-			BarrierAccessFlag::kShaderResource);
-		desc.AddBufferArg(
-			c_CullStatsName,
-			BarrierSyncFlag::kVertexShader,
-			BarrierAccessFlag::kUnorderedAccess);
+		desc.AddBufferRead(c_CullViewName, BarrierSyncFlag::kVertexShader);
+		desc.AddBufferReadWrite(c_CullStatsName, BarrierSyncFlag::kVertexShader);
 	}
 
 	/**

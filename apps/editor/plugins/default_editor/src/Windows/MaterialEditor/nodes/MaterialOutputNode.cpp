@@ -4,6 +4,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <editor_plugin_api/ILanguageResolver.h>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -18,6 +19,7 @@
 #include <QString>
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/localize.h>
 #include <filesystem>
 #include <memory>
 #include <qlatin1stringview.h>
@@ -29,10 +31,72 @@
 
 namespace
 {
-	// Caption of each group's single collapsed port.
-	const char* const c_GroupCaptions[MaterialOutputNode::c_GroupCount] = { "Base Color",
-		                                                                    "ORM",
-		                                                                    "Normal" };
+	/**
+	 * The caption of group `group`'s single collapsed port -- indexed like
+	 * MaterialOutputNode::c_GroupChannels -- and what "Split {0}" names it by.
+	 */
+	QString
+	GroupCaptionOf(const editor::ILanguageResolver& language, unsigned int group)
+	{
+		switch (group)
+		{
+		case 0:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.base_color_group_caption",
+				"Base Color");
+		case 1:
+			return editor::Localize(language, "bernini.material_nodes.orm_group_caption", "ORM");
+		case 2:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.normal_group_caption",
+				"Normal");
+		default:
+			return {};
+		}
+	}
+
+	/** The caption of canonical channel `index` -- order matches bgl::idl::PbrChannel. */
+	QString
+	ChannelCaptionOf(const editor::ILanguageResolver& language, unsigned int index)
+	{
+		switch (index)
+		{
+		case 0:
+			return editor::Localize(language, "bernini.material_nodes.base_r_caption", "Base R");
+		case 1:
+			return editor::Localize(language, "bernini.material_nodes.base_g_caption", "Base G");
+		case 2:
+			return editor::Localize(language, "bernini.material_nodes.base_b_caption", "Base B");
+		case 3:
+			return editor::Localize(language, "bernini.material_nodes.base_a_caption", "Base A");
+		case 4:
+			return editor::Localize(language, "bernini.material_nodes.ao_caption", "AO");
+		case 5:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.roughness_caption",
+				"Roughness");
+		case 6:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.metallic_caption",
+				"Metallic");
+		case 7:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.normal_x_caption",
+				"Normal X");
+		case 8:
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.normal_y_caption",
+				"Normal Y");
+		default:
+			return {};
+		}
+	}
 
 	QColor
 	ToColor(const glm::vec4& factor)
@@ -62,9 +126,13 @@ namespace
 	}
 }
 
-MaterialOutputNode::MaterialOutputNode() : MaterialOutputNode(3) {}
+MaterialOutputNode::MaterialOutputNode(const editor::ILanguageResolver& language) :
+	MaterialOutputNode(language, 3)
+{}
 
-MaterialOutputNode::MaterialOutputNode(unsigned int baseColorArity)
+MaterialOutputNode::MaterialOutputNode(
+	const editor::ILanguageResolver& language,
+	unsigned int                     baseColorArity) : m_Language(language)
 {
 	m_GroupSizes[0] = std::min(baseColorArity, c_GroupChannels[0]);
 }
@@ -307,34 +375,69 @@ MaterialOutputNode::embeddedWidget()
 	RefreshColorSwatch();
 	// "Factor", not the quantity: the shader multiplies these into the routed channels
 	// unconditionally, and an unrouted channel samples white.
-	form->addRow(QStringLiteral("Base Color Factor"), m_ColorButton);
+	form->addRow(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.base_color_factor_label",
+			"Base Color Factor"),
+		m_ColorButton);
 
 	m_Metallic = MakeFactorSpin(m_Widget, m_MetallicFactor);
-	form->addRow(QStringLiteral("Metallic Factor"), m_Metallic);
+	form->addRow(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.metallic_factor_label",
+			"Metallic Factor"),
+		m_Metallic);
 
 	m_Roughness = MakeFactorSpin(m_Widget, m_RoughnessFactor);
-	form->addRow(QStringLiteral("Roughness Factor"), m_Roughness);
+	form->addRow(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.roughness_factor_label",
+			"Roughness Factor"),
+		m_Roughness);
 
 	m_SpecularColorButton = new QPushButton(m_Widget);
 	m_SpecularColorButton->setFlat(true);
 	m_SpecularColorButton->setAutoFillBackground(true);
 	RefreshSpecularSwatch();
-	form->addRow(QStringLiteral("Specular Color Factor"), m_SpecularColorButton);
+	form->addRow(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.specular_color_factor_label",
+			"Specular Color Factor"),
+		m_SpecularColorButton);
 
 	m_Specular = MakeFactorSpin(m_Widget, m_SpecularFactor);
-	m_Specular->setToolTip(QStringLiteral(
-		"Weights the whole specular lobe. 1 is an ordinary dielectric; 0 is a surface with no "
-		"reflection at all, which is what a Phong export with its specular switched off means."));
-	form->addRow(QStringLiteral("Specular Factor"), m_Specular);
+	m_Specular->setToolTip(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.specular_factor_tooltip",
+			"Weights the whole specular lobe. 1 is an ordinary dielectric; 0 is a surface with no "
+			"reflection at all, which is what a Phong export with its specular switched off "
+			"means."));
+	form->addRow(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.specular_factor_label",
+			"Specular Factor"),
+		m_Specular);
 
 	AddExtraRows(m_Widget, form);
 
 	m_DoubleSidedBox = new QCheckBox(m_Widget);
 	m_DoubleSidedBox->setChecked(m_DoubleSided);
-	m_DoubleSidedBox->setToolTip(QStringLiteral(
-		"Draw the back of each face too. Off, a face seen from behind is culled before it reaches "
-		"the rasterizer, which is most of what a dense hair costs at close range."));
-	form->addRow(QStringLiteral("Double Sided"), m_DoubleSidedBox);
+	m_DoubleSidedBox->setToolTip(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.double_sided_tooltip",
+			"Draw the back of each face too. Off, a face seen from behind is culled before it "
+			"reaches "
+			"the rasterizer, which is most of what a dense hair costs at close range."));
+	form->addRow(
+		editor::Localize(m_Language, "bernini.material_nodes.double_sided_label", "Double Sided"),
+		m_DoubleSidedBox);
 
 	connect(m_DoubleSidedBox, &QCheckBox::toggled, this, [this](bool checked) {
 		m_DoubleSided = checked;
@@ -379,8 +482,18 @@ MaterialOutputNode::embeddedWidget()
 	{
 		auto* box = new QCheckBox(m_Widget);
 		box->setChecked(m_GroupPorts[group] > 1);
-		box->setToolTip(QStringLiteral("Route this group's channels individually"));
-		form->addRow(QStringLiteral("Split %1").arg(QLatin1String(c_GroupCaptions[group])), box);
+		box->setToolTip(
+			editor::Localize(
+				m_Language,
+				"bernini.material_nodes.split_group_tooltip",
+				"Route this group's channels individually"));
+		form->addRow(
+			editor::Localize(
+				m_Language,
+				"bernini.material_nodes.split_group_label",
+				{ GroupCaptionOf(m_Language, group) },
+				"Split {0}"),
+			box);
 
 		connect(box, &QCheckBox::toggled, this, [this, group](bool checked) {
 			SetGroupExpanded(group, checked);
@@ -405,7 +518,10 @@ MaterialOutputNode::PickBaseColor()
 	const QColor picked = QColorDialog::getColor(
 		ToColor(m_BaseColorFactor),
 		DialogOwner(),
-		QStringLiteral("Base Color Factor"),
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.base_color_factor_label",
+			"Base Color Factor"),
 		QColorDialog::ShowAlphaChannel);
 
 	if (!picked.isValid())
@@ -422,7 +538,10 @@ MaterialOutputNode::PickSpecularColor()
 	const QColor picked = QColorDialog::getColor(
 		ToColor(glm::vec4(m_SpecularColorFactor, 1.0f)),
 		DialogOwner(),
-		QStringLiteral("Specular Color Factor"));
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.specular_color_factor_label",
+			"Specular Color Factor"));
 
 	if (!picked.isValid())
 		return;
@@ -443,7 +562,12 @@ MaterialOutputNode::RefreshColorSwatch()
 	// The swatch is opaque; alpha is shown as text so a fully transparent factor is still readable.
 	m_ColorButton->setStyleSheet(
 		QStringLiteral("background-color: %1; border: 1px solid #202020;").arg(color.name()));
-	m_ColorButton->setText(QStringLiteral("A %1").arg(m_BaseColorFactor.a, 0, 'f', 2));
+	m_ColorButton->setText(
+		editor::Localize(
+			m_Language,
+			"bernini.material_nodes.alpha_swatch_text",
+			{ m_BaseColorFactor.a },
+			"A {0:.2f}"));
 }
 
 void
@@ -560,20 +684,18 @@ MaterialOutputNode::load(const QJsonObject& json)
 QString
 MaterialOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	// Order matches bgl::idl::PbrChannel.
-	static const char* const c_Captions[c_ChannelCount] = { "Base R",   "Base G",   "Base B",
-		                                                    "Base A",   "AO",       "Roughness",
-		                                                    "Metallic", "Normal X", "Normal Y" };
-
 	if (port == GeometryOcclusionPort())
-		return QStringLiteral("Geometry Occlusion (UV1)");
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.geometry_occlusion_port_caption",
+			"Geometry Occlusion (UV1)");
 
 	const PortRef ref = ResolvePort(port);
 	if (ref.group >= c_GroupCount)
 		return {};
 
 	if (IsCollapsed(ref.group))
-		return QString::fromLatin1(c_GroupCaptions[ref.group]);
+		return GroupCaptionOf(m_Language, ref.group);
 
-	return QString::fromLatin1(c_Captions[GroupChannelOffset(ref.group) + ref.offset]);
+	return ChannelCaptionOf(m_Language, GroupChannelOffset(ref.group) + ref.offset);
 }

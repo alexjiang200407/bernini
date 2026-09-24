@@ -110,7 +110,8 @@ namespace assetlib
 					mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
 				}
 
-				static_cast<void>(applyBindings(mesh, document.bindings));
+				static_cast<void>(
+					rebuildMaterialSlots(mesh, document.bindings, document.materialOverrides));
 				store.Save(mesh, key);
 				return;
 			}

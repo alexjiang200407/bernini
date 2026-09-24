@@ -1,5 +1,6 @@
 #include "Windows/GpuTiming/pass_graph_paint.h"
 
+#include "util/editor_language.h"
 #include <QBrush>
 #include <QColor>
 #include <QFontMetrics>
@@ -50,12 +51,6 @@ namespace
 				return step * magnitude;
 		}
 		return 10.0 * magnitude;
-	}
-
-	[[nodiscard]] QString
-	Milliseconds(const double value)
-	{
-		return QString::asprintf("%.3f ms", value);
 	}
 
 	// Where the bands are drawn inside the whole chart: the axis labels take a column on the left,
@@ -122,7 +117,10 @@ namespace editor
 		if (samples == 0)
 		{
 			painter.setPen(palette.color(QPalette::Disabled, QPalette::Text));
-			painter.drawText(rect, Qt::AlignCenter, "No timed frames yet");
+			painter.drawText(
+				rect,
+				Qt::AlignCenter,
+				Localize("editor.gpu_timing.no_timed_frames", "No timed frames yet"));
 			painter.restore();
 			return;
 		}
@@ -158,7 +156,7 @@ namespace editor
 		painter.drawText(
 			QRect(rect.left(), rect.top(), c_AxisWidth, c_RowHeight),
 			Qt::AlignRight | Qt::AlignBottom,
-			"ms");
+			Localize("editor.gpu_timing.ms_axis_label", "ms"));
 
 		// Antialiasing shared span edges leaves seams between adjacent fills.
 		painter.setRenderHint(QPainter::Antialiasing, false);
@@ -200,11 +198,14 @@ namespace editor
 		painter.drawText(
 			QRect(plot.left(), plot.bottom() + 2, plot.width(), c_AxisHeight),
 			Qt::AlignLeft | Qt::AlignVCenter,
-			QString("latest %1 of %2 frames").arg(samples).arg(history.SampleCount()));
+			Localize(
+				"editor.gpu_timing.latest_of_frames",
+				{ samples, history.SampleCount() },
+				"latest {0} of {1} frames"));
 		painter.drawText(
 			QRect(plot.left(), plot.bottom() + 2, plot.width(), c_AxisHeight),
 			Qt::AlignRight | Qt::AlignVCenter,
-			"newest");
+			Localize("editor.gpu_timing.newest_label", "newest"));
 
 		// The legend is the breakdown of the marked frame: the same rows the log table carries, in
 		// the colours the bands above are drawn in.
@@ -218,9 +219,10 @@ namespace editor
 		painter.drawText(
 			row,
 			Qt::AlignLeft | Qt::AlignVCenter,
-			QString("frame %1 — %2")
-				.arg(history.FrameAt(marked))
-				.arg(Milliseconds(history.TotalAt(marked))));
+			Localize(
+				"editor.gpu_timing.frame_total",
+				{ history.FrameAt(marked), history.TotalAt(marked) },
+				"frame {0} — {1:.3f} ms"));
 		row.translate(0, c_RowHeight);
 
 		const QFontMetrics metrics = painter.fontMetrics();
@@ -247,7 +249,9 @@ namespace editor
 			painter.drawText(
 				row,
 				Qt::AlignRight | Qt::AlignVCenter,
-				cost.has_value() ? Milliseconds(*cost) : QString("—"));
+				cost.has_value() ?
+					Localize("editor.gpu_timing.pass_cost", { *cost }, "{0:.3f} ms") :
+					Localize("editor.gpu_timing.pass_cost_missing", "—"));
 
 			row.translate(0, c_RowHeight);
 		}

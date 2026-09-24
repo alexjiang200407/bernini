@@ -5,7 +5,8 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
-#include <qstringliteral.h>
+
+#include "util/editor_language.h"
 
 namespace editor
 {
@@ -16,28 +17,35 @@ namespace editor
 
 		parent->resize(1280, 720);
 
-		QMenu* file      = parent->menuBar()->addMenu(QStringLiteral("File"));
+		QMenu* file =
+			parent->menuBar()->addMenu(Localize("editor.main_window_ui.file_menu", "File"));
 		widgets.fileMenu = file;
 
-		widgets.newProject = file->addAction(QStringLiteral("New Project..."));
-		widgets.newProject->setShortcut(QKeySequence(QStringLiteral("Ctrl+N")));
+		widgets.newProject =
+			file->addAction(Localize("editor.main_window_ui.new_project", "New Project..."));
+		widgets.newProject->setShortcut(QKeySequence("Ctrl+N"));
 
-		widgets.openProject = file->addAction(QStringLiteral("Open Project..."));
-		widgets.openProject->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
+		widgets.openProject =
+			file->addAction(Localize("editor.main_window_ui.open_project", "Open Project..."));
+		widgets.openProject->setShortcut(QKeySequence("Ctrl+O"));
 
 		file->addSeparator();
-		widgets.save = file->addAction(QStringLiteral("Save"));
+		widgets.save = file->addAction(Localize("editor.main_window_ui.save", "Save"));
 
 		file->addSeparator();
-		widgets.cleanUnusedTextures = file->addAction(QStringLiteral("Clean Unused Textures..."));
-		widgets.cleanUnusedTextures->setToolTip(QStringLiteral(
+		widgets.cleanUnusedTextures = file->addAction(
+			Localize("editor.main_window_ui.clean_unused_textures", "Clean Unused Textures..."));
+		widgets.cleanUnusedTextures->setToolTip(Localize(
+			"editor.main_window_ui.clean_unused_textures_tooltip",
 			"Delete the baked textures that no material in this project references any more"));
 
 		file->addSeparator();
-		widgets.exit = file->addAction(QStringLiteral("Exit"));
+		widgets.exit = file->addAction(Localize("editor.main_window_ui.exit", "Exit"));
 
-		widgets.editMenu   = parent->menuBar()->addMenu(QStringLiteral("Edit"));
-		widgets.windowMenu = parent->menuBar()->addMenu(QStringLiteral("Window"));
+		widgets.editMenu =
+			parent->menuBar()->addMenu(Localize("editor.main_window_ui.edit_menu", "Edit"));
+		widgets.windowMenu =
+			parent->menuBar()->addMenu(Localize("editor.main_window_ui.window_menu", "Window"));
 
 		return widgets;
 	}

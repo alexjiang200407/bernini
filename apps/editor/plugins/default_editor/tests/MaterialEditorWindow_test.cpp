@@ -25,6 +25,7 @@
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
@@ -33,7 +34,13 @@
 #include <string>
 #include <vector>
 
-// Set Default Material writes the material into the `.bmesh`. Doing that when the mesh already names
+namespace
+{
+	// Outlives every registry MakeMaterialNodeRegistry returns, which holds it by reference.
+	const editor::LanguageResolver c_Language;
+}
+
+// Make Default writes the material into the mesh's document. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling
 // "the same file" from "a different one", and the two paths being compared reach the window by
 // different routes: one from a file dialog, one from the mesh's own relative path resolved against the
@@ -116,7 +123,7 @@ TEST_CASE("A real file reached two ways is already default", "[materialeditor]")
 TEST_CASE("Two materials that do not exist are still told apart", "[materialeditor]")
 {
 	// A material can be deleted out from under a mesh that still names it. If the two compared equal
-	// merely by both being absent, Set Default Material would grey out on every mesh.
+	// merely by both being absent, Make Default would grey out on every mesh.
 	CHECK_FALSE(
 		editor::IsSameMaterialFile("C:/Nowhere/Leaf.bmaterial", "C:/Nowhere/Wood.bmaterial"));
 }
@@ -131,55 +138,47 @@ TEST_CASE("Case is not what tells two materials apart", "[materialeditor]")
 			"C:/data/materials/leaf.bmaterial"));
 }
 
-TEST_CASE("A baked material lists the textures it names", "[materialeditor]")
+TEST_CASE("A submesh with no material writes under its mesh's own folder", "[materialeditor]")
 {
-	// "Show the current baked textures if any": the paths the material's last bake wrote, one per line,
-	// so the artist can see what the mesh actually samples without opening the files.
-	auto material                 = assetlib::BMaterial();
-	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
-	material.pbr.normalTexture    = "Textures/normal_c3d4.ktx2";
-	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
 
-	const QString summary = editor::BakedTexturesSummary(material);
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+	REQUIRE(QDir(root.path()).mkpath(QStringLiteral("Authored/Materials")));
 
-	CHECK(summary.contains("Textures/basecolor_a1b2.ktx2"));
-	CHECK(summary.contains("Textures/normal_c3d4.ktx2"));
-	CHECK(summary.contains("Textures/orm_e5f6.ktx2"));
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("Box[0]"));
+
+	// Under the mesh, because a submesh name is only unique within its mesh: two `Box[0]`s in two
+	// meshes would otherwise be written to one file, each overwriting the other.
+	CHECK(
+		made ==
+		QDir(root.path()).filePath(QStringLiteral("Authored/Materials/crate/Box_0_.bmaterial")));
 }
 
-TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
+TEST_CASE("A submesh name that is no filename still gets one", "[materialeditor]")
 {
-	// A material authored but never baked carries only routes, no triplet -- there is nothing baked to
-	// show, and the empty string is what keeps the label hidden.
-	auto material         = assetlib::BMaterial();
-	material.shadingModel = assetlib::ShadingModel::kPbr;
-	material.pbr.routes[0].texture =
-		"Derived/SourceTextures/albedo.ktx2";  // a source route, not a baked map
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
 
-	CHECK(editor::BakedTexturesSummary(material).isEmpty());
+	const auto dataRoot = std::filesystem::path(root.path().toStdWString());
+
+	// A `.glb` may call a submesh anything at all, and the panel writes without asking, so there is
+	// nobody to correct a name the filesystem refuses.
+	const QString made = editor::AutoSaveMaterialPath(
+		dataRoot,
+		dataRoot / "Derived" / "Meshes" / "crate.bmesh",
+		QStringLiteral("  ***  "));
+
+	CHECK(made.endsWith(QStringLiteral(".bmaterial")));
+	CHECK_FALSE(made.contains(QStringLiteral("*")));
 }
 
-TEST_CASE(
-	"A material baked without every map shows a dash for the one it lacks",
-	"[materialeditor]")
-{
-	// Base colour and ORM baked, no normal routed: the missing map reads as a dash rather than a blank
-	// that looks like a bug, and the listing still shows because something is baked.
-	auto material                 = assetlib::BMaterial();
-	material.shadingModel         = assetlib::ShadingModel::kPbr;
-	material.pbr.baseColorTexture = "Textures/basecolor_a1b2.ktx2";
-	material.pbr.ormTexture       = "Textures/orm_e5f6.ktx2";
-
-	const QString summary = editor::BakedTexturesSummary(material);
-
-	REQUIRE_FALSE(summary.isEmpty());
-	CHECK(summary.contains(QString::fromUtf8("—")));
-}
-
-// Save All and Bake All act on the mesh rather than on the selected submesh, and the two rules that
-// decides are here rather than in the window: which files a batch touches, and what it says
-// afterwards. The window itself cannot be driven -- both end in a modal, and without a graphics
+// Bake All acts on the mesh rather than on the selected submesh, and the two rules that decides are
+// here rather than in the window: which files it touches, and what it says
+// afterwards. The window itself cannot be driven -- it ends in a modal, and without a graphics
 // device there are no submesh graphs to batch over in the first place.
 
 TEST_CASE("A material two submeshes wear is one file to bake", "[materialeditor]")
@@ -227,24 +226,7 @@ TEST_CASE("Nothing is said when every material was written", "[materialeditor]")
 	auto clean  = editor::MaterialSaveResult();
 	clean.saved = 3;
 
-	CHECK(editor::MaterialSaveSummary(clean).isEmpty());
-}
-
-TEST_CASE("A skipped submesh says how to give it a file", "[materialeditor]")
-{
-	// Silently writing four of five materials is the failure mode this exists to prevent: the user
-	// has to be told the fifth was left, and that Save As is what fixes it.
-	auto skipped    = editor::MaterialSaveResult();
-	skipped.saved   = 4;
-	skipped.unsaved = 1;
-
-	const QString summary = editor::MaterialSaveSummary(skipped);
-
-	REQUIRE_FALSE(summary.isEmpty());
-	CHECK(summary.contains("4 materials"));
-	CHECK(summary.contains("1 submesh"));
-	CHECK_FALSE(summary.contains("1 submeshes"));
-	CHECK(summary.contains("Save As"));
+	CHECK(editor::MaterialSaveSummary(c_Language, clean).isEmpty());
 }
 
 TEST_CASE("A material that could not be written is named", "[materialeditor]")
@@ -255,7 +237,7 @@ TEST_CASE("A material that could not be written is named", "[materialeditor]")
 	failed.saved  = 1;
 	failed.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(failed);
+	const QString summary = editor::MaterialSaveSummary(c_Language, failed);
 
 	CHECK(summary.contains("1 material"));
 	CHECK(summary.contains("Leaf.bmaterial"));
@@ -263,15 +245,15 @@ TEST_CASE("A material that could not be written is named", "[materialeditor]")
 
 TEST_CASE("Nothing written is not reported as saving nothing", "[materialeditor]")
 {
-	// Every graph skipped -- the default sphere, or a mesh nothing has been saved for yet. "Saved 0
-	// materials." leads with a non-event; what the user needs is the reason and the way out.
-	auto none    = editor::MaterialSaveResult();
-	none.unsaved = 2;
+	// A write that failed before any material landed. "Saved 0 materials." leads with a non-event;
+	// what the user needs is which file it was.
+	auto none   = editor::MaterialSaveResult();
+	none.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(none);
+	const QString summary = editor::MaterialSaveSummary(c_Language, none);
 
 	CHECK_FALSE(summary.contains("Saved 0"));
-	CHECK(summary.startsWith("Skipped 2 submeshes"));
+	CHECK(summary.startsWith("Could not write"));
 }
 
 TEST_CASE("A material the mesh could not be made to name is reported once", "[materialeditor]")
@@ -284,7 +266,7 @@ TEST_CASE("A material the mesh could not be made to name is reported once", "[ma
 	partial.saved      = 2;
 	partial.unattached = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(partial);
+	const QString summary = editor::MaterialSaveSummary(c_Language, partial);
 
 	CHECK(summary.contains("Saved 2 materials"));
 	CHECK(summary.contains("Leaf.bmaterial"));
@@ -347,7 +329,8 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[materialedi
 	surface.params.values = { power };
 
 	// The board the panel now shows for it: the surface's own sink, seeded from the document.
-	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	const assetlib::BMaterial onDisk =
 		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
 	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
@@ -405,7 +388,8 @@ TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]"
 	orm.kind                = bgl::SurfaceTextureKind::kData;
 	surface.params.textures = { orm };
 
-	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	const assetlib::BMaterial onDisk =
 		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
 	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
@@ -445,7 +429,7 @@ TEST_CASE(
 
 	SECTION("a board still wiring the map keeps the bake")
 	{
-		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 		BuildPbrMaterialGraph(model, onDisk, root);
 
 		const assetlib::BMaterial saved =
@@ -463,7 +447,7 @@ TEST_CASE(
 		auto dropped = onDisk;
 		dropped.pbr.geometryOcclusionTexture.clear();
 
-		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 		BuildPbrMaterialGraph(model, dropped, root);
 
 		const assetlib::BMaterial saved =
@@ -509,7 +493,8 @@ TEST_CASE("A surface board previews through its own surface", "[materialeditor][
 	material.surface.values    = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
 	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	REQUIRE(BuildSurfaceMaterialGraph(model, material, std::filesystem::path("C:/proj/Data")));
 
 	const auto* sink = qobject_cast<const SurfaceOutputNode*>(model.OutputNode());
@@ -550,7 +535,7 @@ TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[
 
 	const bgl::SurfaceType surfaces[] = { rim, fur };
 
-	const std::vector<editor::OutputType> types = editor::OutputTypesFor(surfaces);
+	const std::vector<editor::OutputType> types = editor::OutputTypesFor(c_Language, surfaces);
 
 	// The four static entries first, in the order the selector has always listed them -- an index
 	// into this list is an index into the combo.
@@ -574,7 +559,7 @@ TEST_CASE("The panel's Layer section starts hidden, with the four modes", "[mate
 	// combo indexes match assetlib::AlphaMode, which is what the window writes through.
 	QWidget parent;
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(c_Language, &parent);
 
 	REQUIRE(ui.layerSection != nullptr);
 	REQUIRE(ui.layerSelector != nullptr);
@@ -597,11 +582,11 @@ TEST_CASE(
 {
 	QWidget parent;
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(c_Language, &parent);
 
 	auto rim = bgl::SurfaceType();
 	rim.name = "Rim";
-	SurfaceOutputNode sink(rim);
+	SurfaceOutputNode sink(c_Language, rim);
 	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
 	sink.SetAlphaCutoff(0.25f);
 	sink.SetDoubleSided(false);

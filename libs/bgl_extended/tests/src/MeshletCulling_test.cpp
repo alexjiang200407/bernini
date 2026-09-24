@@ -541,10 +541,7 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Cull Stats Readback")
-			.AddBufferArg(
-				bgl::c_CullStatsName,
-				bgl::BarrierSyncFlag::kCopy,
-				bgl::BarrierAccessFlag::kCopySource)
+			.AddCopySource(bgl::c_CullStatsName)
 			.SetSideEffect()
 			.SetExec([&](const bgl::PassContext& ctx) {
 				ctx.GetCommandList()->CopyBufferToReadback(

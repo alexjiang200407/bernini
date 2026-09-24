@@ -72,7 +72,8 @@ open the project's own assets.
 `config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
 `startupProject` names the project to open on launch (read by `main`, never by `MainWindow`),
 `instanceName` names *this* editor, `headless` builds every viewport offscreen, `pluginDirectories`
-names plugin directories beyond the `plugins/` beside the executable, and `memoryReport` (default
+names plugin directories beyond the `plugins/` beside the executable, `locale` (default `en`) picks
+the column of every translation CSV the editor shows, and `memoryReport` (default
 true) decides whether the run's memory
 table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
 § Memory. `MainWindow::Build` reads it for everything but those two: the report is armed in `main`
@@ -164,6 +165,18 @@ lives beside it, and the split is by responsibility rather than by line count:
   editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
   says so by signal rather than reaching for the view (`AssetOperations::DirectoryDeleted`); a
   collaborator that touched a model would just be the window again under another name.
+- **A panel that writes by itself compares before it writes.** The material editor marks a board
+  edited on anything that *might* have changed it — every model signal, and any click, key, wheel or
+  focus loss on the board or the properties beside it — then skips a write whose compiled material
+  matches what was last written (`MaterialEditorWindow::MarkGraphEdited`). Deliberately over-eager,
+  because the two failures are not symmetric: a missed trigger loses an edit with nothing on screen
+  to say so, and an extra one costs a compile.
+
+  The consequence worth knowing before you add to that panel: **a new texture type or material
+  property needs no change to the save logic**, as long as its value lives in the graph — which is
+  what puts it in the file at all. Marking on the signals a control happens to emit would instead
+  make every future control's author responsible for the save.
+
 - **A rule that takes what it needs** becomes a free function in a `lower_case` file:
   `asset_rules`, `material_io`, `graph_compiler`, `material_graph`. This is also the *only* way most
   editor behaviour becomes testable — see § What is testable below.
@@ -199,6 +212,16 @@ lives beside it, and the split is by responsibility rather than by line count:
   behaviour. It is also what makes a layout testable without a graphics device: `BuildMainWindowUi`
   takes a bare `QMainWindow`, so the menu bar is pinned by `[menu]` cases that create no `Renderer`,
   while everything reached through `MainWindow` itself is `[render]`.
+
+## Text
+
+Every string a user reads goes through the one editor-wide resolver:
+`editor::Localize("editor.<area>.key", { args }, "English {0}")` from `util/editor_language.h`, with
+the row in `localization/editor.<area>.csv`. The plugin half cannot reach that overload -- it calls
+`editor::Localize(m_Host.GetLanguageResolver(), "context.key", ...)` from `<editor_plugin_api/localize.h>`.
+An error the host throws for a user to read is an `editor::LocalizedError`: its `what()` is the
+English a log line takes, and `editor::ShownText(e)` is what a dialog shows.
+See [docs/editor_plugins.md](../../docs/editor_plugins.md) § CSV authoring for the gate.
 
 ## Rules
 
@@ -297,8 +320,11 @@ Two things a test cannot drive, and why:
   called directly on the concrete Qt types, with no injection seam. A test must drive their nested
   event loop or it hangs. `MainWindow_test` exercises project replacement with a non-native file
   dialog, a timer entering the filename, and a deadline rejecting dialogs on failure. Native file
-  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup
-   and Material save retain untested modal paths; their extracted data operations are tested.
+  dialogs still require human verification. Import, delete/rename/bake, New Project, texture cleanup,
+  and the Material list's Add/Rename prompts and its context menu retain untested modal paths; their
+  extracted data operations are tested (`editor::CanRegisterMaterialName`,
+  `NewOverrideMaterialPath`). Material *save* is no longer one of them: the panel writes by itself
+  and raises no dialog to drive.
 - **A `Drop` event** cannot be synthesized: Qt only delivers one to a widget that is
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
@@ -322,3 +348,4 @@ call, and it drives the screen from inside the loop. Two rules there:
   worker runs, so a worker that waits forever hangs the suite rather than failing one test.
 - A worker must never pump the event loop (`WaitFor`) — it is not on the UI thread. Block
   on an atomic instead.
+

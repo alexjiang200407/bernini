@@ -3,7 +3,6 @@
 
 #include <assetlib/asset_refs.h>
 #include <assetlib/blend.h>
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -11,17 +10,19 @@
 namespace editor
 {
 	/**
-	 * Every `.bblend` in `graph` authored against the clip set at `animationsKey`, sorted.
+	 * The set a clip set's blend spaces live in: `assetlib::blendSetKeyFor(animationsKey)` when the
+	 * project holds a file there, and empty otherwise.
 	 *
-	 * A query over its `kBlendClips` edges, for the reason `ResolveAnimationBindings` is one over
-	 * `kClipSkeleton`: matching, path normalization and the error policy have one home, and the
-	 * panel already knows the clip set it is playing. An empty `animationsKey` resolves to nothing.
+	 * By name rather than by search. A `.bblend` records the clip set it was authored against, so
+	 * the referrers of a `.banim` could be asked instead -- but that answers with every file that
+	 * happens to name it, which is a list where there is only ever a choice by accident. A set
+	 * stored off its clip set's key is one nothing offers (ADR-9).
 	 *
-	 * Takes the scanned graph for the same reason that one does: the two are asked together on
-	 * every load, and a scan reads and parses every asset in the project.
+	 * Empty for a clip set the convention cannot name -- one outside `Derived/Animations`, or not a
+	 * `.banim` at all -- rather than throwing: having no set is a state every caller already handles.
 	 */
-	[[nodiscard]] std::vector<std::string>
-	ResolveBlendSets(const assetlib::AssetRefGraph& graph, std::string_view animationsKey);
+	[[nodiscard]] std::string
+	BlendSetFor(const assetlib::AssetRefGraph& graph, std::string_view animationsKey);
 
 	/**
 	 * Every `.bmesh` in `graph` that can show the set at `blendSetKey`, sorted: the meshes skinned to

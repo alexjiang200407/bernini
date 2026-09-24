@@ -39,34 +39,37 @@ namespace
 	}
 }
 
-TEST_CASE("A clip set's blend sets are the ones naming it", "[animation][blend]")
+TEST_CASE("A clip set's spaces come from the set at its own key", "[animation][blend]")
 {
 	QTemporaryDir dir;
 	REQUIRE(dir.isValid());
 	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
 
-	WriteSet(root, "Authored/Animations/loco.bblend", "Derived/Animations/loco.banim");
-	WriteSet(root, "Authored/Animations/extra.bblend", "Derived/Animations/loco.banim");
-	WriteSet(root, "Authored/Animations/other.bblend", "Derived/Animations/other.banim");
+	const std::string conventional = assetlib::blendSetKeyFor("Derived/Animations/loco.banim");
+	WriteSet(root, conventional, "Derived/Animations/loco.banim");
 
-	SECTION("only the sets authored against that clip set come back, sorted")
+	CHECK(editor::BlendSetFor(Graph(root), "Derived/Animations/loco.banim") == conventional);
+
+	SECTION("and a set stored anywhere else is not offered, however it names the clip set")
 	{
-		const std::vector<std::string> sets =
-			editor::ResolveBlendSets(Graph(root), "Derived/Animations/loco.banim");
+		// The cost ADR-9 accepts: a second set naming the same clips used to be a choice in a
+		// combo, and is now a file nothing here opens.
+		WriteSet(root, "Authored/Animations/extra.bblend", "Derived/Animations/loco.banim");
 
-		REQUIRE(sets.size() == 2);
-		CHECK(sets[0] == "Authored/Animations/extra.bblend");
-		CHECK(sets[1] == "Authored/Animations/loco.bblend");
+		CHECK(editor::BlendSetFor(Graph(root), "Derived/Animations/loco.banim") == conventional);
 	}
 
-	SECTION("a clip set with none comes back empty rather than refusing")
+	SECTION("a clip set with no set at its key has none")
 	{
-		CHECK(editor::ResolveBlendSets(Graph(root), "Derived/Animations/none.banim").empty());
+		CHECK(editor::BlendSetFor(Graph(root), "Derived/Animations/other.banim").empty());
 	}
 
-	SECTION("no clip set at all resolves to nothing without a scan")
+	SECTION("and one the convention cannot name has none, rather than refusing")
 	{
-		CHECK(editor::ResolveBlendSets(Graph(root), "").empty());
+		// Every caller already handles "no set"; none of them handles a throw from asking.
+		CHECK(editor::BlendSetFor(Graph(root), "").empty());
+		CHECK(editor::BlendSetFor(Graph(root), "Authored/Meshes/loco.glb").empty());
+		CHECK(editor::BlendSetFor(Graph(root), "Derived/Animations/loco.bskel").empty());
 	}
 }
 
@@ -193,14 +196,11 @@ TEST_CASE("The first blend set is written empty, beside its clip set", "[animati
 		CHECK(set.animations == "Derived/Animations/loco.banim");
 	}
 
-	SECTION("and is found by the scan straight away")
+	SECTION("at the key its clip set names, which is how the panel finds it again")
 	{
-		// The reason the empty document carries `animations` at all: nothing else attaches a set to
-		// a clip set, so one written without it would be a file the panel could never offer again.
-		const std::vector<std::string> sets =
-			editor::ResolveBlendSets(Graph(root), "Derived/Animations/loco.banim");
-		REQUIRE(sets.size() == 1);
-		CHECK(sets[0] == key);
+		// The whole attachment: the panel asks for this key rather than searching for a file that
+		// names the clip set, so a set written anywhere else is one it could never offer.
+		CHECK(key == assetlib::blendSetKeyFor("Derived/Animations/loco.banim"));
 	}
 
 	SECTION("a second create refuses rather than writing over the first")

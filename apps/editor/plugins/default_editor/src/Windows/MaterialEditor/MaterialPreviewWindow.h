@@ -28,6 +28,7 @@
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QMimeData;
 class QMouseEvent;
 class QWheelEvent;
 
@@ -69,7 +70,7 @@ public:
 	 *
 	 * An *instance override*, not a change to the geometry's default: authoring a graph must not
 	 * rewrite the shared asset. Committing it to the mesh is a deliberate act -- see the editor's
-	 * Set Default Material.
+	 * Make Default.
 	 */
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
@@ -163,6 +164,22 @@ public:
 	void
 	LoadMesh(const std::filesystem::path& path);
 
+	/** Whether a drag carries something the preview takes: a mesh, or an environment. */
+	[[nodiscard]] static bool
+	AcceptsDrop(const QMimeData* mime);
+
+	/**
+	 * Applies an environment, or opens a mesh -- importing the dropped source first when the
+	 * project has never seen it.
+	 *
+	 * Public because the panel answers the drop while this widget is hidden behind the empty
+	 * state's prompt, and what a drop means must not be written down in two places.
+	 *
+	 * @return whether the drag was taken; false leaves it for whoever else wants it.
+	 */
+	bool
+	TakeDrop(const QMimeData* mime);
+
 	/**
 	 * Back to what the window opens as: the default sphere, lit by the configured environment.
 	 *
@@ -173,6 +190,12 @@ public:
 	Reset();
 
 Q_SIGNALS:
+	// The preview is about to drop the geometry it holds, while the mesh behind it is still the
+	// current one. What a panel holding unwritten edits to that mesh's materials acts on: after
+	// GeometryChanged the mesh is already the new one, and a write would reach the wrong asset.
+	void
+	GeometryAboutToChange();
+
 	// The preview geometry changed, so its submeshes did too.
 	void
 	GeometryChanged();

@@ -2,31 +2,46 @@
 #include <algorithm>
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPointF>
 #include <QPushButton>
 #include <QSplitter>
+#include <QStackedWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 
+#include <QEvent>
+#include <QScopeGuard>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/mesh_tangents.h>
@@ -34,8 +49,11 @@
 #include <assetlib_structs/BMesh.h>
 #include <bgl/IGraphics.h>
 #include <bgl/SurfaceType.h>
+#include <core/err/util.h>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -60,18 +78,51 @@
 #include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/MaterialEditor/material_overrides.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include <QtNodes/internal/AbstractGraphModel.hpp>
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
+#include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/TexturePreviewCache.h>
 
 namespace
 {
+	// Long enough that a drag or a run of keystrokes is one write, short enough that a glance at
+	// the Content Explorer after an edit shows it.
+	constexpr int c_WriteDelayMs = 500;
+
+	/**
+	 * Holds a flag for a scope, so an early return cannot leave the panel thinking it is loading.
+	 *
+	 * Restores what it found rather than clearing: a mesh load opens one of these and then opens a
+	 * second per bound submesh, and clearing on the inner scope's exit would leave the rest of the
+	 * load looking like the user's own edits.
+	 */
+	class LoadGuard
+	{
+	public:
+		explicit LoadGuard(bool& flag) noexcept : m_Flag(flag), m_Was(flag) { m_Flag = true; }
+		~LoadGuard() { m_Flag = m_Was; }
+
+		LoadGuard(const LoadGuard&) = delete;
+		LoadGuard(LoadGuard&&)      = delete;
+		LoadGuard&
+		operator=(const LoadGuard&) = delete;
+		LoadGuard&
+		operator=(LoadGuard&&) = delete;
+
+	private:
+		bool& m_Flag;
+		bool  m_Was;
+	};
+
 	/** Whether the graph routes anything into the sink's normal channels. */
 	bool
 	RoutesNormalMap(const MaterialOutputNode& output)
@@ -99,39 +150,143 @@ MaterialEditorWindow::MaterialEditorWindow(
 {
 	auto* splitter = new QSplitter(Qt::Horizontal, this);
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(splitter);
+	const editor::MaterialEditorWidgets ui =
+		editor::BuildMaterialEditorUi(m_Host.GetLanguageResolver(), splitter);
 
-	m_GraphView          = ui.graphView;
-	m_OpenButton         = ui.open;
-	m_SaveButton         = ui.save;
-	m_SaveAsButton       = ui.saveAs;
-	m_SaveAllButton      = ui.saveAll;
-	m_BakeAllButton      = ui.bakeAll;
-	m_SetDefaultButton   = ui.setDefault;
-	m_GenerateTangents   = ui.generateTangents;
-	m_SubmeshSelector    = ui.submeshSelector;
-	m_OutputSelector     = ui.outputSelector;
-	m_MaterialLabel      = ui.materialLabel;
-	m_BakedTexturesLabel = ui.bakedTextures;
-	m_TangentWarning     = ui.tangentWarning;
-	m_Ui                 = ui;
+	m_GraphView         = ui.graphView;
+	m_OpenButton        = ui.open;
+	m_BakeAllButton     = ui.bakeAll;
+	m_AddOverrideButton = ui.addOverride;
+	m_RemoveOverride    = ui.removeOverride;
+	m_MaterialList      = ui.materialList;
+	m_GenerateTangents  = ui.generateTangents;
+	m_SubmeshSelector   = ui.submeshSelector;
+	m_OutputSelector    = ui.outputSelector;
+	m_TangentWarning    = ui.tangentWarning;
+	m_Ui                = ui;
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
 			window(),
-			QStringLiteral("Open Material"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.open_material_title",
+				"Open Material"),
 			QString(),
-			QStringLiteral("Bernini Material (*.bmaterial)"));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.material_file_filter",
+				"Bernini Material (*.bmaterial)"));
 		if (!path.isEmpty())
 			OpenMaterialInto(m_Graphs.Current(), path);
 	});
-	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
-	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
-	connect(m_SaveAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::SaveAllMaterials);
 	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
 
-	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
-		SetDefaultMaterial(m_Graphs.CurrentSubmesh());
+	// Every interaction with the board and with the properties beside it, not only the signals
+	// the controls emit; an identical write is skipped, so this costs nothing when it is nothing.
+	m_GraphView->viewport()->installEventFilter(this);
+	m_Ui.leftPanel->installEventFilter(this);
+
+	// The panel writes by itself. One shot, restarted by every edit, so a drag or a run of
+	// keystrokes writes once when it stops rather than once per event.
+	m_WriteTimer = new QTimer(this);
+	m_WriteTimer->setSingleShot(true);
+	m_WriteTimer->setInterval(c_WriteDelayMs);
+	connect(m_WriteTimer, &QTimer::timeout, this, [this]() { FlushEditedGraphs(); });
+
+	// The list's actions are its context menu and its keys, so each one is written once. The strip
+	// under the list triggers the same two.
+	m_AddLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.add_override_action",
+			"Add Override..."),
+		this);
+	m_RenameLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.rename_override_action",
+			"Rename..."),
+		this);
+	m_RemoveLook = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.remove_override_action",
+			"Remove"),
+		this);
+	m_MakeLookDefault = new QAction(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.make_default_action",
+			"Make Default"),
+		this);
+
+	m_RenameLook->setShortcut(Qt::Key_F2);
+	m_RemoveLook->setShortcut(QKeySequence::Delete);
+	for (QAction* action : { m_AddLook, m_RenameLook, m_RemoveLook, m_MakeLookDefault })
+	{
+		action->setShortcutContext(Qt::WidgetShortcut);
+		m_MaterialList->addAction(action);
+	}
+
+	connect(m_AddLook, &QAction::triggered, this, &MaterialEditorWindow::AddMaterialOverride);
+	connect(
+		m_RenameLook,
+		&QAction::triggered,
+		this,
+		&MaterialEditorWindow::RenameShownMaterialOverride);
+	connect(
+		m_RemoveLook,
+		&QAction::triggered,
+		this,
+		&MaterialEditorWindow::RemoveShownMaterialOverride);
+	connect(m_MakeLookDefault, &QAction::triggered, this, [this]() {
+		MakeShownMaterialDefault(m_Graphs.CurrentSubmesh());
+	});
+
+	connect(m_AddOverrideButton, &QPushButton::clicked, m_AddLook, &QAction::trigger);
+	connect(m_RemoveOverride, &QPushButton::clicked, m_RemoveLook, &QAction::trigger);
+
+	// itemActivated, not doubleClicked: Enter on the keyboard is the same gesture, and a list you
+	// arrow through should not need the mouse to commit.
+	connect(m_MaterialList, &QListWidget::itemActivated, this, [this]() {
+		MakeShownMaterialDefault(m_Graphs.CurrentSubmesh());
+	});
+
+	connect(
+		m_MaterialList,
+		&QListWidget::customContextMenuRequested,
+		this,
+		[this](const QPoint& at) {
+			QMenu menu(m_MaterialList);
+			menu.addAction(m_AddLook);
+			menu.addAction(m_RenameLook);
+			menu.addAction(m_RemoveLook);
+			menu.addSeparator();
+			menu.addAction(m_MakeLookDefault);
+			menu.exec(m_MaterialList->viewport()->mapToGlobal(at));
+		});
+
+	// currentRowChanged, so the arrow keys move the board exactly as a click does.
+	connect(m_MaterialList, &QListWidget::currentRowChanged, this, [this](int row) {
+		const int submesh = m_Graphs.CurrentSubmesh();
+		if (row < 0 || !m_Graphs.HasSubmesh(submesh) || m_Preview == nullptr)
+			return;
+
+		// The board is about to change under the pending edit, exactly as a submesh switch does.
+		FlushEditedGraphs();
+
+		const QString look                             = OverrideAtRow(row);
+		m_ShownOverrides[static_cast<size_t>(submesh)] = look;
+
+		const std::vector<editor::RegisteredMaterial> registered = ListedMaterialsFor(submesh);
+		const auto found = std::ranges::find(registered, look, &editor::RegisteredMaterial::name);
+
+		ShowMaterialForSubmesh(
+			submesh,
+			found == registered.end() ? m_Preview->SubmeshMaterialPaths().value(submesh) :
+										Rebase(found->material, m_DataRoot, false));
+		RefreshActions();
 	});
 
 	connect(m_GenerateTangents, &QPushButton::clicked, this, [this]() {
@@ -141,7 +296,11 @@ MaterialEditorWindow::MaterialEditorWindow(
 		const std::filesystem::path meshPath = m_Preview->MeshPath();
 
 		// Reloading is what puts the new vertex layout in front of the renderer.
-		if (editor::GenerateTangents(this, m_Host.GetStore(), meshPath))
+		if (editor::GenerateTangents(
+				m_Host.GetLanguageResolver(),
+				this,
+				m_Host.GetStore(),
+				meshPath))
 		{
 			m_Preview->LoadMesh(meshPath);
 			m_Host.AssetChanged(m_Host.GetStore().KeyFor(meshPath));
@@ -194,9 +353,16 @@ MaterialEditorWindow::MaterialEditorWindow(
 		m_Preview = new MaterialPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
 		rightPanel = m_Preview;
 
+		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
+		// reloading -- so what they hold unwritten is written while it is still theirs.
+		connect(m_Preview, &MaterialPreviewWindow::GeometryAboutToChange, this, [this]() {
+			FlushEditedGraphs();
+		});
+
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MaterialPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
+			RefreshStage();
 		});
 
 		// A click in the preview picks through the selector, so the graph swap and the outline
@@ -218,9 +384,13 @@ MaterialEditorWindow::MaterialEditorWindow(
 		});
 	}
 
-	m_Registry = MakeMaterialNodeRegistry(&m_Host, m_TexturePreviews, surfaces);
+	m_Registry = MakeMaterialNodeRegistry(
+		m_Host.GetLanguageResolver(),
+		&m_Host,
+		m_TexturePreviews,
+		surfaces);
 
-	m_OutputTypes = editor::OutputTypesFor(surfaces);
+	m_OutputTypes = editor::OutputTypesFor(m_Host.GetLanguageResolver(), surfaces);
 	for (const editor::OutputType& type : m_OutputTypes) m_OutputSelector->addItem(type.label);
 
 	splitter->addWidget(ui.leftPanel);
@@ -231,9 +401,29 @@ MaterialEditorWindow::MaterialEditorWindow(
 	splitter->setStretchFactor(0, 3);
 	splitter->setStretchFactor(1, 2);
 
+	// A page, not an overlay: a label floated over the native Metal surface is at the mercy of its
+	// compositing, and a hidden viewport leaves the frame loop entirely. The whole editing surface
+	// goes behind it, because a properties column and a blank board read as a material being open.
+	auto* prompt = new QLabel(
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.drop_prompt",
+			"Drop a .glb or .bmesh here"),
+		this);
+	prompt->setAlignment(Qt::AlignCenter);
+	prompt->setEnabled(false);
+
+	m_Stage = new QStackedWidget(this);
+	m_Stage->setObjectName(QStringLiteral("MaterialStage"));
+	m_Stage->addWidget(prompt);
+	m_Stage->addWidget(splitter);
+
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(splitter);
+	layout->addWidget(m_Stage);
+
+	// The preview is hidden while the prompt is up, so the drop it would have taken lands here.
+	setAcceptDrops(true);
 
 	// Populate the selector from the preview geometry (the default sphere for now). Each submesh has
 	// its own graph, and the graph is bound to a `.bmaterial` once saved or opened. The sphere is not
@@ -242,12 +432,55 @@ MaterialEditorWindow::MaterialEditorWindow(
 		SetPreviewGeometry(m_Preview->SubmeshNames());
 	else
 		RefreshActions();  // no preview scene, so no graphs: everything stays disabled
+
+	RefreshStage();
+}
+
+void
+MaterialEditorWindow::RefreshStage()
+{
+	m_Stage->setCurrentIndex(m_Preview != nullptr && !m_Preview->MeshPath().empty() ? 1 : 0);
+}
+
+void
+MaterialEditorWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+	if (m_Preview != nullptr && MaterialPreviewWindow::AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+MaterialEditorWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+	if (m_Preview != nullptr && MaterialPreviewWindow::AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+MaterialEditorWindow::dropEvent(QDropEvent* event)
+{
+	// The preview's own, answered on its behalf: an environment dropped while the prompt is up is
+	// still the preview's to apply, and it cannot be reached under the page it is hidden on.
+	if (m_Preview != nullptr && m_Preview->TakeDrop(event->mimeData()))
+		event->acceptProposedAction();
 }
 
 MaterialEditorWindow::~MaterialEditorWindow()
 {
+	// The last chance: the panel is going away, and a pending edit goes with it. Closing it is not
+	// a way to discard one -- there has not been one since the panel started writing by itself.
+	// Quietly: a modal raised from a destructor would block a panel already being torn down.
+	FlushEditedGraphs(/*quiet*/ true);
+
 	if (m_Preview != nullptr)
+	{
+		// Stop listening before anything else: ~QWidget deletes the preview *after* this body, and
+		// the geometry it drops on the way out announces itself. Answering that would run
+		// FlushEditedGraphs against a panel whose members are already gone -- and the flush that
+		// matters has just happened, a line above.
+		m_Preview->disconnect(this);
 		m_Preview->SetRenderingEnabled(false);
+	}
 	ReleasePreviewMaterials();
 
 	// Detach the view before the per-submesh scenes/models are destroyed, so the view never holds a
@@ -291,6 +524,22 @@ MaterialEditorWindow::RebuildGraph(
 
 	if (current)
 		m_GraphView->setScene(entry.scene.get());
+
+	// Every edit the board makes, not only the ones that reach the sink: a node moved or deleted
+	// changes the document too, and the panel is what saves it.
+	for (const auto signal : { &QtNodes::AbstractGraphModel::nodeCreated,
+	                           &QtNodes::AbstractGraphModel::nodeDeleted,
+	                           &QtNodes::AbstractGraphModel::nodePositionUpdated,
+	                           &QtNodes::AbstractGraphModel::nodeUpdated })
+		connect(entry.model.get(), signal, this, [this, graphIndex]() {
+			MarkGraphEdited(graphIndex);
+		});
+
+	for (const auto signal : { &QtNodes::AbstractGraphModel::connectionCreated,
+	                           &QtNodes::AbstractGraphModel::connectionDeleted })
+		connect(entry.model.get(), signal, this, [this, graphIndex]() {
+			MarkGraphEdited(graphIndex);
+		});
 
 	MaterialSinkNode* output = WatchOutputNode(graphIndex);
 
@@ -336,6 +585,7 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 	{
 		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
 			CompileGraph(graphIndex);
+			MarkGraphEdited(graphIndex);
 
 			// A load or a seed changes the sink's layer without touching the panel; the panel
 			// follows only while this graph is the one on screen.
@@ -414,6 +664,8 @@ MaterialEditorWindow::SyncLayerSection()
 void
 MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 {
+	const LoadGuard loading(m_Loading);
+
 	// The preview's instances -- and the overrides naming these materials -- were destroyed before
 	// this was emitted, so nothing wears them any more.
 	ReleasePreviewMaterials();
@@ -421,6 +673,9 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
 	m_Graphs.Reset(static_cast<int>(submeshNames.size()));
+
+	// A new mesh shows every submesh's default; what the previous one was showing means nothing here.
+	m_ShownOverrides.assign(static_cast<size_t>(submeshNames.size()), QString());
 
 	const QStringList materialPaths =
 		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths() : QStringList();
@@ -460,6 +715,11 @@ MaterialEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 	}
 
 	m_SubmeshSelector->setEnabled(!submeshNames.isEmpty());
+
+	// After the selector is filled, so the looks are indexed by the same submeshes it lists.
+	ReloadRegisteredMaterials();
+	RefreshBakeState();
+
 	if (!submeshNames.isEmpty())
 		m_SubmeshSelector->setCurrentIndex(0);
 
@@ -484,6 +744,10 @@ MaterialEditorWindow::SelectSubmesh(int index)
 		SyncLayerSection();
 		return;
 	}
+
+	// What is on the board is about to change, and an edit still pending belongs to the graph
+	// leaving rather than the one arriving.
+	FlushEditedGraphs();
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
@@ -510,6 +774,7 @@ void
 MaterialEditorWindow::RefreshMaterialState()
 {
 	m_Graphs.ForgetOnDisk();
+	RefreshBakeState();
 	RefreshActions();
 }
 
@@ -539,19 +804,12 @@ MaterialEditorWindow::RefreshActions()
 	const bool hasGraph   = graphIndex >= 0;
 
 	m_OpenButton->setEnabled(hasGraph);
-	m_SaveAsButton->setEnabled(hasGraph);
 
-	// Both act on the mesh's materials, so neither needs a selection -- but with nothing bound to a
-	// file yet there is nothing for either to act on.
-	const bool anyBound = !m_Graphs.OpenPaths().isEmpty();
-	m_SaveAllButton->setEnabled(anyBound);
-	m_BakeAllButton->setEnabled(anyBound);
+	// It acts on the mesh's materials, so it needs no selection -- but with nothing bound to a file
+	// yet there is nothing to bake.
+	m_BakeAllButton->setEnabled(!m_Graphs.OpenPaths().isEmpty());
 
 	const QString materialPath = hasGraph ? m_Graphs.At(graphIndex).materialPath : QString();
-
-	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
-	// there until the graph has been given a path by Save As.
-	m_SaveButton->setEnabled(!materialPath.isEmpty());
 
 	// Binding a submesh needs a saved material to bind, and a `.bmesh` to write it into: the default
 	// sphere is procedural and has neither.
@@ -564,59 +822,76 @@ MaterialEditorWindow::RefreshActions()
 
 	RefreshTangentWarning();
 
-	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
-	m_SetDefaultButton->setToolTip(
-		isDefault ?
-			QStringLiteral("The mesh already uses this material for this submesh") :
-			QStringLiteral(
-				"Write this material into the mesh, so every instance of it loads with it"));
+	RefreshMaterialList();
 
-	if (materialPath.isEmpty())
-	{
-		m_MaterialLabel->setText(QStringLiteral("(unsaved)"));
-		m_MaterialLabel->setToolTip(QString());
-		m_BakedTexturesLabel->clear();
-		m_BakedTexturesLabel->hide();
-		return;
-	}
+	// A look is registered against a submesh of a real mesh, and it is copied from the board, so
+	// both need something behind them. A sourceless mesh has no import document to register one in
+	// -- it carries its bindings itself -- so it keeps the single default it has.
+	const bool canRegister = hasGraph && hasMesh && !m_MeshSourceKey.empty();
+	m_AddLook->setEnabled(canRegister);
+	m_AddOverrideButton->setEnabled(canRegister);
+	m_AddOverrideButton->setToolTip(
+		canRegister || !hasMesh ?
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.add_override_tooltip",
+				"Register another look for this submesh, copied from the one on the "
+				"board.") :
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.add_override_no_source_tooltip",
+				"This mesh was not imported from a source, so it has no import document "
+				"to register a look in."));
 
-	// Whether the baked maps still match the source textures the graph routes. A material saved but
-	// never baked reads as stale, which is what it is: it has no optimized textures yet. Loaded once for
-	// both this and the baked-texture listing below.
-	bool    stale = true;
-	QString bakedSummary;
-	if (const assetlib::BMaterial* material =
-	        m_Graphs.At(graphIndex).onDisk.Get(m_Host.GetStore(), materialPath))
-	{
-		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
-		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
-		try
-		{
-			stale = m_Host.GetStore().BakeIsStale(*material);
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
-		}
+	// The default row is the mesh's own binding, so there is no registration to rename or remove.
+	const bool shownIsOverride = !ShownOverride(m_Graphs.CurrentSubmesh()).isEmpty();
+	m_RemoveLook->setEnabled(shownIsOverride);
+	m_RenameLook->setEnabled(shownIsOverride);
+	m_RemoveOverride->setEnabled(shownIsOverride);
+	m_RemoveOverride->setToolTip(
+		shownIsOverride ?
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_tooltip",
+				"Unregister this look. Its .bmaterial stays on disk -- delete it in the "
+				"Content Explorer.") :
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_default_tooltip",
+				"The default is the mesh's own binding, not a look to unregister."));
 
-		bakedSummary = editor::BakedTexturesSummary(*material);
-	}
+	m_MakeLookDefault->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 
-	m_BakedTexturesLabel->setText(bakedSummary);
-	m_BakedTexturesLabel->setVisible(!bakedSummary.isEmpty());
+	// The bake's state rides on the button that fixes it: a badge and its colour, where the panel
+	// used to print the material's path and the maps it names.
+	int stale = 0;
+	for (int i = 0; m_Graphs.Holds(i); ++i)
+		if (m_Graphs.At(i).bakeStale)
+			++stale;
 
-	// The material's path, word-wrapped in the properties panel. A stale marker says the baked maps no
-	// longer match the sources the graph routes.
-	m_MaterialLabel->setText(stale ? QStringLiteral("%1 (stale)").arg(materialPath) : materialPath);
-	m_MaterialLabel->setStyleSheet(stale ? "color: #c08040;" : "color: gray;");
-
-	// The path leads, because the label clips it once the panel is narrow.
-	m_MaterialLabel->setToolTip(
-		stale ? QStringLiteral(
-					"%1\n\nThe baked textures do not match its sources. Bake All, or the "
-					"Content Explorer's Bake, updates them.")
-					.arg(materialPath) :
-				materialPath);
+	m_BakeAllButton->setText(
+		stale > 0 ? editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.bake_all_stale_button",
+						"Bake All ●") :
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.bake_all_button",
+						"Bake All"));
+	m_BakeAllButton->setStyleSheet(stale > 0 ? QStringLiteral("color: #c08040;") : QString());
+	m_BakeAllButton->setToolTip(
+		stale > 0 ?
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_stale_tooltip",
+				{ stale },
+				"{0} of this mesh's materials have baked textures that no longer match the "
+				"sources they route. Baking rewrites them.") :
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_tooltip",
+				"Composite every material of this mesh down to its baked textures.\nA bake reads "
+				"the routes off disk, so it writes what is still pending first."));
 }
 
 void
@@ -636,109 +911,175 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 }
 
 void
-MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
+MaterialEditorWindow::RefreshBakeState()
 {
-	const int graphIndex = m_Graphs.Current();
-	if (graphIndex < 0)
-		return;
-
-	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
-
-	QString path = entry.materialPath;
-	if (saveAs || path.isEmpty())
-	{
-		path = QFileDialog::getSaveFileName(
-			window(),
-			QStringLiteral("Save Material"),
-			path.isEmpty() ?
-				editor::DefaultMaterialPath(m_DataRoot, m_SubmeshSelector->currentText()) :
-				path,
-			QStringLiteral("Bernini Material (*.bmaterial)"));
-		if (path.isEmpty())
-			return;  // cancelled
-
-		if (QFileInfo(path).suffix().isEmpty())
-			path += QStringLiteral(".bmaterial");
-	}
-
-	try
-	{
-		const assetlib::AssetStore& store = m_Host.GetStore();
-		store.Save(
-			editor::BuildMaterial(*entry.model, path, m_Host.GetStore()),
-			store.KeyFor(std::filesystem::path(path.toStdWString())));
-		m_Host.AssetChanged(store.KeyFor(std::filesystem::path(path.toStdWString())));
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("MaterialEditor: failed to save '%s': %s", qPrintable(path), e.what());
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Save Material"),
-			QStringLiteral("Could not save the material:\n%1").arg(QString::fromLatin1(e.what())));
-		return;
-	}
-
-	entry.materialPath = path;
-
-	// Every graph, not just this one: Save As can put a second graph on a path another already
-	// holds, and a stamp cannot separate two writes inside one millisecond.
-	m_Graphs.ForgetOnDisk();
-
-	// A submesh with no material yet is bound by its first Save -- there is nothing to overwrite, and
-	// leaving it unbound would mean saving a material the mesh never references. Once it has one,
-	// Save writes only the `.bmaterial`: rebinding the mesh is Set Default Material's job, and doing
-	// it here would edit the shared asset every time the user pressed Ctrl+S.
-	const int submesh = m_Graphs.CurrentSubmesh();
-	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(submesh).isEmpty())
-	{
-		if (const QString error = AttachMaterialToMesh(submesh, path); !error.isEmpty())
-			QMessageBox::warning(window(), QStringLiteral("Save Material"), error);
-	}
-
-	RefreshActions();
-}
-
-void
-MaterialEditorWindow::SaveAllMaterials()
-{
-	auto result = editor::MaterialSaveResult();
-
 	for (MaterialGraphSet::Graph& entry : m_Graphs.All())
 	{
-		if (entry.model == nullptr)
-			continue;
-
 		if (entry.materialPath.isEmpty())
 		{
-			++result.unsaved;
+			// Nothing on disk to have baked: not stale, just not there yet.
+			entry.bakeStale = false;
+			continue;
+		}
+
+		// Unreadable -- deleted or corrupted behind the panel -- is not an all-clear: the badge is
+		// the only thing on screen that would say so, and the bake is what puts a map back.
+		const assetlib::BMaterial* material =
+			entry.onDisk.Get(m_Host.GetStore(), entry.materialPath);
+		if (material == nullptr)
+		{
+			entry.bakeStale = true;
 			continue;
 		}
 
 		try
 		{
+			// A material written but never baked reads as stale, which is what it is: it has no
+			// optimized textures yet.
+			entry.bakeStale = m_Host.GetStore().BakeIsStale(*material);
+		}
+		catch (const std::exception& e)
+		{
+			// A data root that has gone reads as needing a bake rather than throwing out of a
+			// slot: the pessimistic answer costs a bake nobody needed, the other loses one.
+			entry.bakeStale = true;
+			qWarning("MaterialEditor: cannot judge the bake: %s", e.what());
+		}
+	}
+}
+
+uint64_t
+MaterialEditorWindow::CompiledHash(int graphIndex) const
+{
+	if (!m_Graphs.Holds(graphIndex))
+		return 0;
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.model == nullptr || entry.materialPath.isEmpty())
+		return 0;
+
+	try
+	{
+		const std::vector<std::byte> bytes = assetlib::AssetCodec<assetlib::BMaterial>::Serialize(
+			editor::BuildMaterial(*entry.model, entry.materialPath, m_Host.GetStore()));
+
+		return core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
+	}
+	catch (const std::exception& e)
+	{
+		// Zero is "not known", which costs a write that turns out to be identical -- never a
+		// skipped one.
+		qWarning("MaterialEditor: cannot measure the board: %s", e.what());
+		return 0;
+	}
+}
+
+bool
+MaterialEditorWindow::eventFilter(QObject* watched, QEvent* event)
+{
+	// Anything the board or the panel answers to, rather than the signals a particular control
+	// happens to emit: a control added here that forgets to announce itself would otherwise be
+	// edited and never written, and nothing on screen would say so.
+	switch (event->type())
+	{
+	case QEvent::MouseButtonRelease:
+	case QEvent::KeyRelease:
+	case QEvent::Wheel:
+	case QEvent::FocusOut:
+		MarkGraphEdited(m_Graphs.Current());
+		break;
+
+	default:
+		break;
+	}
+
+	return EditorPanel::eventFilter(watched, event);
+}
+
+void
+MaterialEditorWindow::MarkGraphEdited(int graphIndex)
+{
+	// A load is not an edit: seeding a board fires the same signals, and writing them back would
+	// rewrite every material the panel merely opened.
+	if (m_Loading || !m_Graphs.Holds(graphIndex))
+		return;
+
+	// The default sphere is procedural: it has no asset behind it, and inventing one for it would
+	// put a file in the project for a mesh nobody opened.
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	m_Graphs.At(graphIndex).dirty = true;
+	m_WriteTimer->start();
+}
+
+void
+MaterialEditorWindow::FlushEditedGraphs(const bool quiet)
+{
+	m_WriteTimer->stop();
+
+	auto result = editor::MaterialSaveResult();
+
+	for (int graphIndex = 0; m_Graphs.Holds(graphIndex); ++graphIndex)
+	{
+		MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+		if (!entry.dirty || entry.model == nullptr)
+			continue;
+
+		// A graph with no file yet is given one, and the submesh it drives is bound to it: what
+		// the first Save used to do, at the moment the first edit lands instead.
+		const bool fresh = entry.materialPath.isEmpty();
+		if (fresh)
+		{
+			entry.materialPath = editor::AutoSaveMaterialPath(
+				m_DataRoot,
+				m_Preview != nullptr ? m_Preview->MeshPath() : std::filesystem::path(),
+				m_SubmeshSelector->itemText(
+					entry.submeshes.empty() ? 0 : static_cast<int>(entry.submeshes.front())));
+		}
+
+		try
+		{
 			const assetlib::AssetStore& store = m_Host.GetStore();
-			store.Save(
-				editor::BuildMaterial(*entry.model, entry.materialPath, m_Host.GetStore()),
-				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString())));
-			m_Host.AssetChanged(
-				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString())));
+			const std::string           key =
+				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString()));
+
+			const assetlib::BMaterial material =
+				editor::BuildMaterial(*entry.model, entry.materialPath, store);
+
+			// What the board compiles to, against what was last written: a mark that turned out to
+			// be nothing -- a click, a node dragged and put back -- writes no file and notifies
+			// nobody. That is what lets the marking above be as eager as it is.
+			const std::vector<std::byte> bytes =
+				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material);
+			const uint64_t hash = core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed());
+			if (!fresh && hash == entry.writtenHash)
+			{
+				entry.dirty = false;
+				continue;
+			}
+
+			store.Save(material, key);
+			entry.writtenHash = hash;
+			m_Host.AssetChanged(key);
 		}
 		catch (const std::exception& e)
 		{
 			qWarning(
-				"MaterialEditor: failed to save '%s': %s",
+				"MaterialEditor: failed to write '%s': %s",
 				qPrintable(entry.materialPath),
 				e.what());
 			result.failed << entry.materialPath;
+
+			if (fresh)
+				entry.materialPath.clear();  // it has no file after all
 			continue;
 		}
 
+		entry.dirty = false;
 		++result.saved;
 
-		// Save's rule, applied to every submesh the graph drives: one with no material yet is bound by
-		// its first write, and one that already has a material is left to Set Default Material.
-		if (m_Preview == nullptr)
+		if (!fresh)
 			continue;
 
 		for (const uint32_t submesh : entry.submeshes)
@@ -747,8 +1088,9 @@ MaterialEditorWindow::SaveAllMaterials()
 			if (!m_Preview->SubmeshMaterialPaths().value(index).isEmpty())
 				continue;
 
-			// Whatever stopped the write is the `.bmesh` itself, which every submesh here shares, so
-			// the rest would fail the same way -- and a batch must not raise one modal per submesh.
+			// Whatever stopped the write is the mesh itself, which every submesh here shares, so
+			// the rest would fail the same way. Reported: the material is on disk and the mesh
+			// still points elsewhere, which nothing else on screen would say.
 			if (!AttachMaterialToMesh(index, entry.materialPath).isEmpty())
 			{
 				result.unattached << entry.materialPath;
@@ -757,19 +1099,35 @@ MaterialEditorWindow::SaveAllMaterials()
 		}
 	}
 
+	if (const QString summary = editor::MaterialSaveSummary(m_Host.GetLanguageResolver(), result);
+	    !summary.isEmpty())
+	{
+		if (quiet)
+			qWarning("MaterialEditor: %s", qPrintable(summary));
+		else
+			QMessageBox::warning(
+				window(),
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.title",
+					"Material Editor"),
+				summary);
+	}
+
+	if (result.saved == 0)
+		return;
+
 	// Every graph, not just the ones written: two graphs can hold one path, and a stamp cannot
 	// separate two writes inside one millisecond.
 	m_Graphs.ForgetOnDisk();
+	RefreshBakeState();
 	RefreshActions();
-
-	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
-		QMessageBox::information(window(), QStringLiteral("Save All"), summary);
 }
 
 void
 MaterialEditorWindow::BakeAllMaterials()
 {
-	SaveAllMaterials();
+	FlushEditedGraphs();
 
 	const QStringList files = editor::UniqueMaterialFiles(m_Graphs.OpenPaths());
 	if (files.isEmpty())
@@ -783,14 +1141,16 @@ MaterialEditorWindow::BakeAllMaterials()
 	// touches files only, never bgl.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		window(),
-		QStringLiteral("Baking materials"),
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.baking_materials_title",
+			"Baking materials"),
 		[&](background::Progress& progress) {
 			editor::BakeMaterials(m_Host.GetStore(), relative, progress);
 		},
 		background::Cancellable::kYes);
 
-	// The panel reads its staleness marker and its baked-texture listing off the file, which the bake
-	// has just rewritten -- a cancelled run included, since the files before the cancel are baked.
+	// The panel reads its staleness marker off the file, which the bake has just rewritten -- a cancelled run included, since the files before the cancel are baked.
 	RefreshMaterialState();
 	if (result.Completed())
 		for (const QString& key : relative) m_Host.AssetChanged(key.toStdString());
@@ -799,13 +1159,20 @@ MaterialEditorWindow::BakeAllMaterials()
 	{
 		QMessageBox::warning(
 			window(),
-			QStringLiteral("Bake All"),
-			QStringLiteral("Could not bake:\n\n%1").arg(result.error));
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_button",
+				"Bake All"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.bake_all_failed",
+				{ result.error },
+				"Could not bake:\n\n{0}"));
 	}
 }
 
 void
-MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
+MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 {
 	const int graphIndex = m_Graphs.ForSubmesh(submeshIndex);
 	if (graphIndex < 0)
@@ -815,15 +1182,471 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 	if (path.isEmpty())
 		return;  // nothing on disk to point the mesh at; Save first
 
-	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
-		QMessageBox::warning(window(), QStringLiteral("Set Default Material"), error);
+	// The look the submesh is giving up: registered before it is replaced, or it leaves the list
+	// and nothing in the project names it any more.
+	const QString outgoing = editor::NameForOutgoingDefault(
+		RegisteredMaterialsFor(submeshIndex),
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submeshIndex) : QString(),
+		m_DataRoot);
 
+	if (!outgoing.isEmpty() && !m_MeshSourceKey.empty())
+	{
+		try
+		{
+			const assetlib::AssetStore& store = m_Host.GetStore();
+			const auto     mesh   = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
+
+			store.SetSubmeshMaterialOverrideInDocument(
+				mesh.source.key,
+				mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+				outgoing.toStdString(),
+				Rebase(m_Preview->SubmeshMaterialPaths().value(submeshIndex), m_DataRoot, true)
+					.toStdString());
+		}
+		catch (const std::exception& e)
+		{
+			// Keeping the old look is a courtesy; failing it must not stop the rebind the user
+			// asked for.
+			qWarning("MaterialEditor: could not keep '%s': %s", qPrintable(outgoing), e.what());
+		}
+	}
+
+	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
+	{
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.make_default_action",
+				"Make Default"),
+			error);
+		return;
+	}
+
+	ReloadRegisteredMaterials();
+
+	// The look is the default now, so it is no longer an override being shown -- the combo's first
+	// entry is what it is.
+	m_ShownOverrides[static_cast<size_t>(submeshIndex)].clear();
 	RefreshActions();
+}
+
+void
+MaterialEditorWindow::AddMaterialOverride()
+{
+	const int submesh    = m_Graphs.CurrentSubmesh();
+	const int graphIndex = m_Graphs.ForSubmesh(submesh);
+	if (graphIndex < 0 || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+
+	const QString addOverrideTitle = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.material.add_override_dialog_title",
+		"Add Override");
+
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		addOverrideTitle,
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.override_name_label",
+			"Name this look. A game asks for it by this name."),
+		QLineEdit::Normal,
+		QString(),
+		&accepted);
+	if (!accepted)
+		return;
+
+	if (!editor::CanRegisterMaterialName(registered, name))
+	{
+		QMessageBox::warning(
+			window(),
+			addOverrideTitle,
+			name.trimmed().isEmpty() ? editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_required",
+										   "An override needs a name.") :
+									   editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_taken",
+										   { name },
+										   "This submesh already registers a look called '{0}'."));
+		return;
+	}
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	const QString path = editor::NewOverrideMaterialPath(m_DataRoot, entry.materialPath, name);
+
+	try
+	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+
+		// Read before anything is written: a mesh with no source has no document to register in,
+		// and a copy saved first would be a `.bmaterial` nothing names.
+		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		core::throw_runtime_error_if(
+			mesh.source.key.empty(),
+			"'{}': it was not imported from a source, so it has no import document to register a "
+			"look in",
+			m_Preview->MeshPath().string());
+
+		// The copy is written before it is registered: a registration naming a file that is not
+		// there is one every later load reports as a broken reference.
+		const std::string key = store.KeyFor(std::filesystem::path(path.toStdWString()));
+		store.Save(editor::BuildMaterial(*entry.model, path, store), key);
+
+		store.SetSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+			name.trimmed().toStdString(),
+			key);
+		m_Host.AssetChanged(key);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not register '%s': %s", qPrintable(name), e.what());
+		QMessageBox::warning(
+			window(),
+			addOverrideTitle,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_register_failed",
+				{ e.what() },
+				"Could not register the override:\n{0}"));
+		return;
+	}
+
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)] = name.trimmed();
+	ShowMaterialForSubmesh(submesh, path);
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::RemoveShownMaterialOverride()
+{
+	const int     submesh = m_Graphs.CurrentSubmesh();
+	const QString shown   = ShownOverride(submesh);
+	if (shown.isEmpty() || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	try
+	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		store.RemoveSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+			shown.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not remove '%s': %s", qPrintable(shown), e.what());
+		QMessageBox::warning(
+			window(),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.remove_override_dialog_title",
+				"Remove Override"),
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_remove_failed",
+				{ e.what() },
+				"Could not remove the override:\n{0}"));
+		return;
+	}
+
+	// The `.bmaterial` is left on disk: unregistering a look is not deleting an asset, and the
+	// Content Explorer is where a file is deleted.
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)].clear();
+	ShowMaterialForSubmesh(submesh, m_Preview->SubmeshMaterialPaths().value(submesh));
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::RenameShownMaterialOverride()
+{
+	const int     submesh = m_Graphs.CurrentSubmesh();
+	const QString shown   = ShownOverride(submesh);
+	if (shown.isEmpty() || m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	const QString renameOverrideTitle = editor::Localize(
+		m_Host.GetLanguageResolver(),
+		"bernini.material.rename_override_dialog_title",
+		"Rename Override");
+
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		renameOverrideTitle,
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.override_name_label",
+			"Name this look. A game asks for it by this name."),
+		QLineEdit::Normal,
+		shown,
+		&accepted);
+	if (!accepted || name.trimmed() == shown)
+		return;
+
+	const std::vector<editor::RegisteredMaterial> registered = RegisteredMaterialsFor(submesh);
+	const auto found = std::ranges::find(registered, shown, &editor::RegisteredMaterial::name);
+	if (found == registered.end())
+		return;
+
+	// Every look but this one: renaming it to what it is already called is not a collision.
+	auto others = registered;
+	std::erase_if(others, [&shown](const editor::RegisteredMaterial& look) {
+		return look.name == shown;
+	});
+
+	if (!editor::CanRegisterMaterialName(others, name))
+	{
+		QMessageBox::warning(
+			window(),
+			renameOverrideTitle,
+			name.trimmed().isEmpty() ? editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_required",
+										   "An override needs a name.") :
+									   editor::Localize(
+										   m_Host.GetLanguageResolver(),
+										   "bernini.material.override_name_taken",
+										   { name },
+										   "This submesh already registers a look called '{0}'."));
+		return;
+	}
+
+	try
+	{
+		const assetlib::AssetStore& store = m_Host.GetStore();
+		const auto        mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const std::string submeshName =
+			std::string(mesh.stringPool.at(mesh.submeshes[source].nameOffset));
+
+		// Registered under the new name before the old one goes, so a failure between the two
+		// leaves the look reachable rather than unregistered.
+		store.SetSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			submeshName,
+			name.trimmed().toStdString(),
+			found->material.toStdString());
+		store.RemoveSubmeshMaterialOverrideInDocument(
+			mesh.source.key,
+			submeshName,
+			shown.toStdString());
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: could not rename '%s': %s", qPrintable(shown), e.what());
+		QMessageBox::warning(
+			window(),
+			renameOverrideTitle,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_rename_failed",
+				{ e.what() },
+				"Could not rename the override:\n{0}"));
+		return;
+	}
+
+	ReloadRegisteredMaterials();
+	m_ShownOverrides[static_cast<size_t>(submesh)] = name.trimmed();
+	RefreshActions();
+}
+
+void
+MaterialEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materialPath)
+{
+	if (!m_Graphs.HasSubmesh(submeshIndex))
+		return;
+
+	// A graph already open for this file is the one to show: two submeshes wearing one material
+	// share a graph, so editing it once updates both.
+	int graphIndex = materialPath.isEmpty() ? -1 : m_Graphs.FindForPath(materialPath);
+	if (graphIndex >= 0)
+		m_Graphs.Share(graphIndex, submeshIndex);
+	else
+	{
+		graphIndex = m_Graphs.Add(submeshIndex);
+		ResetGraph(graphIndex, QJsonObject());
+
+		if (!materialPath.isEmpty() &&
+		    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
+			OpenMaterialInto(graphIndex, materialPath, false);  // compiles the graph it loads
+		else
+			CompileGraph(graphIndex);
+	}
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (m_Preview != nullptr && entry.preview.IsValid())
+		m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(submeshIndex), entry.preview);
+
+	m_GraphView->setScene(entry.scene.get());
+	SyncOutputSelector();
+	SyncLayerSection();
+	FrameOnOutput();
+}
+
+void
+MaterialEditorWindow::ReloadRegisteredMaterials()
+{
+	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
+	m_MeshSourceKey.clear();
+
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+		return;
+
+	try
+	{
+		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		m_MeshSourceKey = mesh.source.key;
+
+		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
+		{
+			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+			if (source == assetlib::c_InvalidIndex)
+				continue;
+
+			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh, source);
+		}
+	}
+	catch (const std::exception& e)
+	{
+		// A UI refresh, so a mesh that will not read leaves the looks unlisted rather than
+		// throwing out of a slot; the panel still shows the default the preview loaded.
+		qWarning("MaterialEditor: cannot read the registered materials: %s", e.what());
+	}
+}
+
+std::vector<editor::RegisteredMaterial>
+MaterialEditorWindow::RegisteredMaterialsFor(int submeshIndex) const
+{
+	if (submeshIndex < 0 || static_cast<size_t>(submeshIndex) >= m_Registered.size())
+		return {};
+
+	return m_Registered[static_cast<size_t>(submeshIndex)];
+}
+
+std::vector<editor::RegisteredMaterial>
+MaterialEditorWindow::ListedMaterialsFor(int submeshIndex) const
+{
+	return editor::LooksBesidesDefault(
+		RegisteredMaterialsFor(submeshIndex),
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submeshIndex) : QString(),
+		m_DataRoot);
+}
+
+QString
+MaterialEditorWindow::ShownOverride(int submeshIndex) const
+{
+	if (submeshIndex < 0 || static_cast<size_t>(submeshIndex) >= m_ShownOverrides.size())
+		return {};
+
+	return m_ShownOverrides[static_cast<size_t>(submeshIndex)];
+}
+
+QString
+MaterialEditorWindow::OverrideAtRow(int row) const
+{
+	const std::vector<editor::RegisteredMaterial> registered =
+		ListedMaterialsFor(m_Graphs.CurrentSubmesh());
+
+	// Row 0 is the submesh's default, so the registered looks start at 1.
+	if (row <= 0 || static_cast<size_t>(row) > registered.size())
+		return {};
+
+	return registered[static_cast<size_t>(row - 1)].name;
+}
+
+void
+MaterialEditorWindow::RefreshMaterialList()
+{
+	const int submesh = m_Graphs.CurrentSubmesh();
+
+	const QSignalBlocker blocker(m_MaterialList);
+	m_MaterialList->clear();
+
+	if (!m_Graphs.HasSubmesh(submesh))
+	{
+		m_MaterialList->setEnabled(false);
+		return;
+	}
+
+	const QString defaultPath =
+		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths().value(submesh) : QString();
+
+	auto* first = new QListWidgetItem(
+		defaultPath.isEmpty() ? editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.unbound_material",
+									"(unbound)") :
+								QFileInfo(defaultPath).completeBaseName(),
+		m_MaterialList);
+	first->setData(editor::c_IsDefaultMaterialRole, true);
+	first->setToolTip(
+		defaultPath.isEmpty() ? editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.unbound_material_tooltip",
+									"This submesh has no material yet. Saving one binds it.") :
+								editor::Localize(
+									m_Host.GetLanguageResolver(),
+									"bernini.material.default_material_tooltip",
+									{ defaultPath },
+									"{0}\n\nEvery instance of this mesh loads with this look."));
+
+	const std::vector<editor::RegisteredMaterial> registered = ListedMaterialsFor(submesh);
+	for (const editor::RegisteredMaterial& look : registered)
+	{
+		auto* item = new QListWidgetItem(look.name, m_MaterialList);
+		item->setToolTip(
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.override_material_tooltip",
+				{ look.material, look.name },
+				"{0}\n\nA game wears this look by asking for '{1}'. Double-click to "
+				"make it the default."));
+	}
+
+	const QString shown = ShownOverride(submesh);
+	const auto    found = std::ranges::find(registered, shown, &editor::RegisteredMaterial::name);
+	m_MaterialList->setCurrentRow(
+		found == registered.end() ? 0 :
+									static_cast<int>(std::distance(registered.begin(), found)) + 1);
+
+	m_MaterialList->setEnabled(true);
 }
 
 void
 MaterialEditorWindow::Reset()
 {
+	// The graphs are about to be dropped, and with them anything not yet written.
+	FlushEditedGraphs();
+
+	// The prompt goes up first, before the preview falls back to its sphere. Raising it afterwards
+	// puts the sphere on screen for the frames in between, which reads as the panel opening
+	// something on its way out. Hiding the page also stops the viewport drawing it at all.
+	if (m_Stage != nullptr)
+		m_Stage->setCurrentIndex(0);
+
 	// The preview's Reset clears its geometry, mesh path and material paths, then emits
 	// GeometryChanged -- which is what rebuilds the graphs, empty, one per submesh.
 	if (m_Preview)
@@ -896,10 +1719,12 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			meshPath.string().c_str(),
 			e.what());
 
-		return QStringLiteral(
-				   "The material was saved, but the mesh could not be updated to "
-				   "reference it:\n%1")
-		    .arg(QString::fromLatin1(e.what()));
+		return editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.material.attach_failed",
+			{ e.what() },
+			"The material was saved, but the mesh could not be updated to "
+			"reference it:\n{0}");
 	}
 
 	return {};
@@ -910,6 +1735,30 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 {
 	if (!m_Graphs.Holds(graphIndex))
 		return;
+
+	// The board is about to be replaced, so what it holds is written before it goes -- except
+	// during a load, where the graph is being built rather than edited.
+	if (!m_Loading)
+		FlushEditedGraphs();
+
+	// Seeding the board fires every signal an edit does; none of it is the user's.
+	const LoadGuard loading(m_Loading);
+
+	// On every way out of this function, not at the end of it: a surface document returns early,
+	// and a load that left either of these behind would leave the panel describing the material it
+	// used to hold. Whatever the board compiles to once the load lands is what the file holds, and
+	// what its bake is worth is the new material's.
+	const auto measureLoaded = qScopeGuard([this, graphIndex] {
+		if (!m_Graphs.Holds(graphIndex))
+			return;
+
+		m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
+		RefreshBakeState();
+
+		// Last, and again: a branch that refreshed on its way out painted the badge from the
+		// material it was replacing.
+		RefreshActions();
+	});
 
 	auto material = assetlib::BMaterial();
 	try
@@ -925,9 +1774,15 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		{
 			QMessageBox::warning(
 				window(),
-				QStringLiteral("Open Material"),
-				QStringLiteral("Could not open the material:\n%1")
-					.arg(QString::fromLatin1(e.what())));
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.open_material_title",
+					"Open Material"),
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.open_material_failed",
+					{ e.what() },
+					"Could not open the material:\n{0}"));
 		}
 		return;
 	}
@@ -976,11 +1831,16 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 			{
 				QMessageBox::warning(
 					window(),
-					QStringLiteral("Open Material"),
-					QStringLiteral(
-						"'%1' is drawn by surface '%2', which this session has not "
-						"registered. Open the project that provides it and relaunch.")
-						.arg(path, QString::fromStdString(material.surface.name)));
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.open_material_title",
+						"Open Material"),
+					editor::Localize(
+						m_Host.GetLanguageResolver(),
+						"bernini.material.surface_not_registered",
+						{ path, material.surface.name },
+						"'{0}' is drawn by surface '{1}', which this session has not "
+						"registered. Open the project that provides it and relaunch."));
 			}
 			return;
 		}
@@ -1027,6 +1887,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	m_Graphs.At(graphIndex).materialPath = path;
 
 	CompileGraph(graphIndex);
+
 	RefreshActions();
 }
 

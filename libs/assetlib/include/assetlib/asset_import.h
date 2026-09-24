@@ -10,6 +10,7 @@ namespace assetlib
 	struct BGrassFields;
 	struct BMesh;
 	struct MaterialBinding;
+	struct MaterialOverrideBinding;
 	struct Skeleton;
 	struct SourceRef;
 
@@ -79,20 +80,25 @@ namespace assetlib
 	isGrassBinding(const MaterialBinding& binding) noexcept;
 
 	/**
-	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
-	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
-	 * one document hold one array. A submesh the document does not name is unbound. A grass
-	 * binding (isGrassBinding) is not this function's, and is neither applied nor reported.
+	 * Rebuilds `mesh.materials`, every `Submesh::material` and `mesh.materialOverrides`
+	 * canonically from the document's bindings and overrides -- a pure function of the document,
+	 * never a mutation of what was loaded, so two checkouts with one document hold one array. A
+	 * submesh the document does not name is unbound and has no overrides. Override-only materials
+	 * follow every default in `mesh.materials`. A grass binding (isGrassBinding) is not this
+	 * function's, and is neither applied nor reported.
 	 *
-	 * @return The submeshes named by bindings this mesh does not have -- the source changed shape
-	 *         under the document. Never guessed at: the editor warns, `migrate` fails the file,
-	 *         `pack` fails the pack.
+	 * @return The submeshes named by bindings or overrides this mesh does not have -- the source
+	 *         changed shape under the document. Never guessed at: the editor warns, `migrate`
+	 *         fails the file, `pack` fails the pack.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+	rebuildMaterialSlots(
+		BMesh&                                   mesh,
+		std::span<const MaterialBinding>         bindings,
+		std::span<const MaterialOverrideBinding> overrides);
 
 	/**
-	 * The grass half of applyBindings: rebuilds `grass.looks` and every `GrassField::look` from the
+	 * The grass half of rebuildMaterialSlots: rebuilds `grass.looks` and every `GrassField::look` from the
 	 * grass bindings among `bindings`, matched by field name. A field the document does not name
 	 * is unbound, and its `look` is `c_InvalidIndex`. Material bindings are not this function's.
 	 *
