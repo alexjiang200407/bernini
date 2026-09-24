@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <bgl/SurfaceType.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <qnamespace.h>
 #include <span>
 #include <vector>
@@ -37,7 +38,7 @@ namespace editor
 	 * always names a sink that exists.
 	 */
 	[[nodiscard]] std::vector<OutputType>
-	OutputTypesFor(std::span<const bgl::SurfaceType> surfaces);
+	OutputTypesFor(const ILanguageResolver& language, std::span<const bgl::SurfaceType> surfaces);
 
 	/**
 	 * The widgets BuildMaterialEditorUi creates, so the window can connect and drive them.
@@ -83,7 +84,9 @@ namespace editor
 	 *
 	 * Nothing is connected -- what each widget *does* is the window's, and keeping the two apart is
 	 * what lets this be read as a layout rather than as behaviour.
+	 *
+	 * `language` must outlive the widgets it builds.
 	 */
 	[[nodiscard]] MaterialEditorWidgets
-	BuildMaterialEditorUi(QWidget* parent);
+	BuildMaterialEditorUi(const ILanguageResolver& language, QWidget* parent);
 }

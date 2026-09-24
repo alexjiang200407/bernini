@@ -2,6 +2,8 @@
 
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
 #include <qjsonobject.h>
 #include <qobject.h>
 #include <qstringliteral.h>
@@ -17,12 +19,16 @@ class BlendedMaterialOutputNode : public MaterialOutputNode
 	Q_OBJECT
 
 public:
-	BlendedMaterialOutputNode();
+	// `language` must outlive the node.
+	explicit BlendedMaterialOutputNode(const editor::ILanguageResolver& language);
 
 	QString
 	caption() const override
 	{
-		return QStringLiteral("Blended Material Output");
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.blended_material_output_caption",
+			"Blended Material Output");
 	}
 
 	QString

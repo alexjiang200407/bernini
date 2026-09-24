@@ -9,12 +9,16 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <memory>
 #include <qobject.h>
 
 namespace
 {
 	using QtNodes::PortType;
+
+	// Outlives every node HeadlessNode() returns, which holds it by reference.
+	const editor::LanguageResolver c_Language;
 
 	/**
 	 * A TextureNode with neither a scene nor a preview cache -- which the node explicitly supports,
@@ -23,7 +27,7 @@ namespace
 	std::unique_ptr<TextureNode>
 	HeadlessNode()
 	{
-		return std::make_unique<TextureNode>(nullptr, nullptr);
+		return std::make_unique<TextureNode>(c_Language, nullptr, nullptr);
 	}
 }
 

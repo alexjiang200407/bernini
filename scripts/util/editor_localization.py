@@ -23,6 +23,7 @@ REPO_ROOT = ct.REPO_ROOT
 COVERED = [
     "apps/editor/src",
     "apps/editor/plugins/default_editor/src/plugin.cpp",
+    "apps/editor/plugins/default_editor/src/Windows/MaterialEditor",
     "examples/editor_plugin",
 ]
 

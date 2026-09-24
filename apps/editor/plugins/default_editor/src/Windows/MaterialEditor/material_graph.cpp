@@ -38,6 +38,7 @@
 #include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 
 namespace
 {
@@ -204,6 +205,7 @@ RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool t
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
 MakeMaterialNodeRegistry(
+	const editor::ILanguageResolver&  language,
 	editor::IEditorHost*              host,
 	TexturePreviewCache*              previews,
 	std::span<const bgl::SurfaceType> surfaces)
@@ -211,22 +213,24 @@ MakeMaterialNodeRegistry(
 	auto registry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
 
 	registry->registerModel<TextureNode>(
-		[host, previews]() { return std::make_unique<TextureNode>(host, previews); },
+		[&language, host, previews]() {
+			return std::make_unique<TextureNode>(language, host, previews);
+		},
 		"Input");
 
 	// Registered so the graph can create one by name and restore one from a saved graph -- but hidden
 	// from the context menu, because a sink is switched, not added.
 	registry->registerModel<MaterialOutputNode>(
-		[]() { return std::make_unique<MaterialOutputNode>(); },
+		[&language]() { return std::make_unique<MaterialOutputNode>(language); },
 		QLatin1String(c_OutputCategory));
 	registry->registerModel<AlphaTestedMaterialOutputNode>(
-		[]() { return std::make_unique<AlphaTestedMaterialOutputNode>(); },
+		[&language]() { return std::make_unique<AlphaTestedMaterialOutputNode>(language); },
 		QLatin1String(c_OutputCategory));
 	registry->registerModel<BlendedMaterialOutputNode>(
-		[]() { return std::make_unique<BlendedMaterialOutputNode>(); },
+		[&language]() { return std::make_unique<BlendedMaterialOutputNode>(language); },
 		QLatin1String(c_OutputCategory));
 	registry->registerModel<HashedAlphaMaterialOutputNode>(
-		[]() { return std::make_unique<HashedAlphaMaterialOutputNode>(); },
+		[&language]() { return std::make_unique<HashedAlphaMaterialOutputNode>(language); },
 		QLatin1String(c_OutputCategory));
 
 	// One sink per reflected surface, each carrying its SurfaceType by value so the registry owns
@@ -234,7 +238,9 @@ MakeMaterialNodeRegistry(
 	for (const bgl::SurfaceType& surface : surfaces)
 	{
 		registry->registerModel<SurfaceOutputNode>(
-			[surface]() { return std::make_unique<SurfaceOutputNode>(surface); },
+			[&language, surface]() {
+				return std::make_unique<SurfaceOutputNode>(language, surface);
+			},
 			QLatin1String(c_OutputCategory));
 	}
 

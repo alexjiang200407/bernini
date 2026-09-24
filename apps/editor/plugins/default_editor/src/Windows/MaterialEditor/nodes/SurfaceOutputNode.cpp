@@ -5,6 +5,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <gamelib/shading_model.h>
 
 #include <QColor>
@@ -23,6 +24,7 @@
 #include <bgl/TextureAssetHandle.h>
 #include <cstddef>
 #include <cstdint>
+#include <editor_plugin_api/localize.h>
 #include <filesystem>
 #include <glm/vec4.hpp>
 #include <iterator>
@@ -46,21 +48,27 @@ namespace
 	static_assert(
 		std::size(c_AlphaModeNames) == static_cast<size_t>(assetlib::AlphaMode::kHashed) + 1);
 
-	const char*
-	KindWord(bgl::SurfaceTextureKind kind)
+	QString
+	KindWord(const editor::ILanguageResolver& language, bgl::SurfaceTextureKind kind)
 	{
 		switch (kind)
 		{
 		case bgl::SurfaceTextureKind::kData:
-			return "Data";
+			return editor::Localize(language, "bernini.material_nodes.surface_kind_data", "Data");
 		case bgl::SurfaceTextureKind::kNormal:
-			return "Normal";
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.surface_kind_normal",
+				"Normal");
 		case bgl::SurfaceTextureKind::kCoverage:
-			return "Coverage";
+			return editor::Localize(
+				language,
+				"bernini.material_nodes.surface_kind_coverage",
+				"Coverage");
 		case bgl::SurfaceTextureKind::kColor:
 			break;
 		}
-		return "Color";
+		return editor::Localize(language, "bernini.material_nodes.surface_kind_color", "Color");
 	}
 
 	QDoubleSpinBox*
@@ -78,7 +86,9 @@ namespace
 	}
 }
 
-SurfaceOutputNode::SurfaceOutputNode(bgl::SurfaceType surface) : m_Surface(std::move(surface))
+SurfaceOutputNode::SurfaceOutputNode(
+	const editor::ILanguageResolver& language,
+	bgl::SurfaceType                 surface) : m_Language(language), m_Surface(std::move(surface))
 {
 	m_Values.reserve(m_Surface.params.values.size());
 	for (const bgl::SurfaceValue& value : m_Surface.params.values)
@@ -91,7 +101,11 @@ SurfaceOutputNode::SurfaceOutputNode(bgl::SurfaceType surface) : m_Surface(std::
 QString
 SurfaceOutputNode::caption() const
 {
-	return QStringLiteral("%1 Surface Output").arg(QString::fromStdString(m_Surface.name));
+	return editor::Localize(
+		m_Language,
+		"bernini.material_nodes.surface_output_caption",
+		{ m_Surface.name },
+		"{0} Surface Output");
 }
 
 QString
@@ -221,9 +235,11 @@ SurfaceOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 
 	const bgl::SurfaceTexture& texture = m_Surface.params.textures[ref.slot];
 	if (ref.whole)
-		return QStringLiteral("%1 (%2)").arg(
-			QString::fromStdString(texture.name),
-			QLatin1String(KindWord(texture.kind)));
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.surface_texture_port_caption",
+			{ texture.name, KindWord(m_Language, texture.kind) },
+			"{0} ({1})");
 
 	constexpr const char* c_ChannelLetters[] = { "r", "g", "b", "a" };
 	return QStringLiteral("%1.%2").arg(
@@ -258,7 +274,11 @@ SurfaceOutputNode::embeddedWidget()
 		if (value.isColor)
 		{
 			auto* swatch = new QPushButton(field);
-			swatch->setToolTip(QStringLiteral("Pick the colour"));
+			swatch->setToolTip(
+				editor::Localize(
+					m_Language,
+					"bernini.material_nodes.pick_color_tooltip",
+					"Pick the colour"));
 			row->addWidget(swatch);
 			m_Swatches[i] = swatch;
 			RefreshSwatch(i);
@@ -403,7 +423,12 @@ SurfaceOutputNode::RefreshSwatch(size_t index)
 	swatch->setStyleSheet(
 		QStringLiteral("background-color: %1; border: 1px solid #202020;").arg(color.name()));
 	if (m_Surface.params.values[index].type == bgl::SurfaceValueType::kFloat4)
-		swatch->setText(QStringLiteral("A %1").arg(value.a, 0, 'f', 2));
+		swatch->setText(
+			editor::Localize(
+				m_Language,
+				"bernini.material_nodes.alpha_swatch_text",
+				{ value.a },
+				"A {0:.2f}"));
 }
 
 QJsonObject

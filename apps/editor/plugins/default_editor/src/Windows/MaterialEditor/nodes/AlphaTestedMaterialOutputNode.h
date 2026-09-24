@@ -2,6 +2,8 @@
 
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
 #include <qjsonobject.h>
 #include <qobject.h>
 #include <qstringliteral.h>
@@ -15,12 +17,16 @@ class AlphaTestedMaterialOutputNode : public MaterialOutputNode
 	Q_OBJECT
 
 public:
-	AlphaTestedMaterialOutputNode();
+	// `language` must outlive the node.
+	explicit AlphaTestedMaterialOutputNode(const editor::ILanguageResolver& language);
 
 	QString
 	caption() const override
 	{
-		return QStringLiteral("Alpha Tested Material Output");
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.alpha_tested_material_output_caption",
+			"Alpha Tested Material Output");
 	}
 
 	QString

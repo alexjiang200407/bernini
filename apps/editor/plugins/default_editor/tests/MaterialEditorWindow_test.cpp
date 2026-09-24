@@ -25,6 +25,7 @@
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
@@ -32,6 +33,12 @@
 #include <qstringliteral.h>
 #include <string>
 #include <vector>
+
+namespace
+{
+	// Outlives every registry MakeMaterialNodeRegistry returns, which holds it by reference.
+	const editor::LanguageResolver c_Language;
+}
 
 // Make Default writes the material into the mesh's document. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling
@@ -219,7 +226,7 @@ TEST_CASE("Nothing is said when every material was written", "[materialeditor]")
 	auto clean  = editor::MaterialSaveResult();
 	clean.saved = 3;
 
-	CHECK(editor::MaterialSaveSummary(clean).isEmpty());
+	CHECK(editor::MaterialSaveSummary(c_Language, clean).isEmpty());
 }
 
 TEST_CASE("A material that could not be written is named", "[materialeditor]")
@@ -230,7 +237,7 @@ TEST_CASE("A material that could not be written is named", "[materialeditor]")
 	failed.saved  = 1;
 	failed.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(failed);
+	const QString summary = editor::MaterialSaveSummary(c_Language, failed);
 
 	CHECK(summary.contains("1 material"));
 	CHECK(summary.contains("Leaf.bmaterial"));
@@ -243,7 +250,7 @@ TEST_CASE("Nothing written is not reported as saving nothing", "[materialeditor]
 	auto none   = editor::MaterialSaveResult();
 	none.failed = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(none);
+	const QString summary = editor::MaterialSaveSummary(c_Language, none);
 
 	CHECK_FALSE(summary.contains("Saved 0"));
 	CHECK(summary.startsWith("Could not write"));
@@ -259,7 +266,7 @@ TEST_CASE("A material the mesh could not be made to name is reported once", "[ma
 	partial.saved      = 2;
 	partial.unattached = { "C:/Data/Materials/Leaf.bmaterial" };
 
-	const QString summary = editor::MaterialSaveSummary(partial);
+	const QString summary = editor::MaterialSaveSummary(c_Language, partial);
 
 	CHECK(summary.contains("Saved 2 materials"));
 	CHECK(summary.contains("Leaf.bmaterial"));
@@ -322,7 +329,8 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[materialedi
 	surface.params.values = { power };
 
 	// The board the panel now shows for it: the surface's own sink, seeded from the document.
-	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	const assetlib::BMaterial onDisk =
 		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
 	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
@@ -380,7 +388,8 @@ TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]"
 	orm.kind                = bgl::SurfaceTextureKind::kData;
 	surface.params.textures = { orm };
 
-	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	const assetlib::BMaterial onDisk =
 		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
 	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
@@ -420,7 +429,7 @@ TEST_CASE(
 
 	SECTION("a board still wiring the map keeps the bake")
 	{
-		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 		BuildPbrMaterialGraph(model, onDisk, root);
 
 		const assetlib::BMaterial saved =
@@ -438,7 +447,7 @@ TEST_CASE(
 		auto dropped = onDisk;
 		dropped.pbr.geometryOcclusionTexture.clear();
 
-		MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+		MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr));
 		BuildPbrMaterialGraph(model, dropped, root);
 
 		const assetlib::BMaterial saved =
@@ -484,7 +493,8 @@ TEST_CASE("A surface board previews through its own surface", "[materialeditor][
 	material.surface.values    = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
 	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
 
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
 	REQUIRE(BuildSurfaceMaterialGraph(model, material, std::filesystem::path("C:/proj/Data")));
 
 	const auto* sink = qobject_cast<const SurfaceOutputNode*>(model.OutputNode());
@@ -525,7 +535,7 @@ TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[
 
 	const bgl::SurfaceType surfaces[] = { rim, fur };
 
-	const std::vector<editor::OutputType> types = editor::OutputTypesFor(surfaces);
+	const std::vector<editor::OutputType> types = editor::OutputTypesFor(c_Language, surfaces);
 
 	// The four static entries first, in the order the selector has always listed them -- an index
 	// into this list is an index into the combo.
@@ -549,7 +559,7 @@ TEST_CASE("The panel's Layer section starts hidden, with the four modes", "[mate
 	// combo indexes match assetlib::AlphaMode, which is what the window writes through.
 	QWidget parent;
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(c_Language, &parent);
 
 	REQUIRE(ui.layerSection != nullptr);
 	REQUIRE(ui.layerSelector != nullptr);
@@ -572,11 +582,11 @@ TEST_CASE(
 {
 	QWidget parent;
 
-	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(c_Language, &parent);
 
 	auto rim = bgl::SurfaceType();
 	rim.name = "Rim";
-	SurfaceOutputNode sink(rim);
+	SurfaceOutputNode sink(c_Language, rim);
 	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
 	sink.SetAlphaCutoff(0.25f);
 	sink.SetDoubleSided(false);
