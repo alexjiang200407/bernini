@@ -177,6 +177,7 @@ namespace assetlib
 			case AssetType::kFont:
 			case AssetType::kAvatar:
 			case AssetType::kBlend:
+			case AssetType::kGrass:
 			case AssetType::kCount:
 				break;
 			}

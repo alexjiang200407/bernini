@@ -9,6 +9,7 @@
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -42,7 +43,8 @@ namespace assetlib
 			AnimationSet,
 			ImportDocument,
 			Avatar,
-			BlendSet>;
+			BlendSet,
+			BGrass>;
 
 		template <AssetCodecFor T>
 		[[nodiscard]] constexpr ContainerKind
