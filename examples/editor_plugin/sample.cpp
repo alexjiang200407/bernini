@@ -177,10 +177,6 @@ namespace
 		void
 		Register(editor::IEditorRegistry& registry) override
 		{
-			registry.AddTranslations(
-				{ "sample.editor",
-			      { { "overview", "zh_CN", QString::fromUtf8("项目工具") },
-			        { "tools", "zh_CN", QString::fromUtf8("示例工具") } } });
 			registry.AddMenu(
 				editor::MenuDesc()
 					.SetId("sample.tools")

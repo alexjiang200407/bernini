@@ -1,0 +1,7 @@
+key,en
+could_not_start,"The editor could not start:
+
+%1
+
+See %2/editor.log."
+title,Bernini Editor

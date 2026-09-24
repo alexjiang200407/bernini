@@ -1,5 +1,6 @@
 #include "Plugins/EditorHost.h"
 #include "Plugins/EditorRegistry.h"
+#include "util/editor_language.h"
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorImporter.h>
@@ -13,8 +14,10 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
+#include <editor_plugin_api/LanguageResolver.h>
 #include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/Thumbnail.h>
+#include <editor_plugin_api/TranslationCatalog.h>
 #include <filesystem>
 #include <memory>
 #include <sample.h>
@@ -86,7 +89,9 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 {
 	auto                            plugin = sample::CreateEditorPlugin();
 	editor::plugins::EditorRegistry registry;
-	plugin->Register(registry);
+	registry.Register(
+		*plugin,
+		editor::ReadLocalizationDirectory(EDITOR_PLUGIN_SAMPLE_LOCALIZATION));
 
 	REQUIRE(registry.Catalogs().size() == 1);
 	REQUIRE(registry.Menus().size() == 1);
@@ -97,11 +102,14 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 	CHECK(registry.FindAssetEditor(".bexample") != nullptr);
 	CHECK(registry.FindAssetEditor(".unknown") == nullptr);
 
+	editor::LanguageResolver language;
+	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
+		language.RegisterCatalog(catalog);
 	TemporaryStore              store;
 	std::string                 shown;
 	editor::plugins::EditorHost host(
 		store.store,
-		registry.Catalogs(),
+		language,
 		nullptr,
 		nullptr,
 		true,
@@ -116,7 +124,8 @@ TEST_CASE("The production registry owns and dispatches sample contributions", "[
 TEST_CASE("A host with no import refuses rather than answering empty", "[plugins][registry]")
 {
 	TemporaryStore              store;
-	editor::plugins::EditorHost host(store.store, {}, nullptr, nullptr, true, {});
+	editor::LanguageResolver    language;
+	editor::plugins::EditorHost host(store.store, language, nullptr, nullptr, true, {});
 
 	// An empty key means an import produced no mesh, which a caller drops in silence. A host that
 	// cannot import at all must not arrive as that same answer.

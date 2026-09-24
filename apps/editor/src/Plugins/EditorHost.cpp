@@ -3,7 +3,6 @@
 #include "Render/Renderer.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include <editor_plugin_api/ILanguageResolver.h>
-#include <editor_plugin_api/TranslationCatalog.h>
 
 #include <assetlib/AssetStore.h>
 #include <editor_plugin_api/IEditorViewport.h>
@@ -11,7 +10,6 @@
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <qwidget.h>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -20,17 +18,15 @@
 namespace editor::plugins
 {
 	EditorHost::EditorHost(
-		const assetlib::AssetStore&         store,
-		std::span<const TranslationCatalog> catalogs,
-		Renderer*                           renderer,
-		game::AssetManager*                 assets,
-		const bool                          headless,
-		EditorHostDispatch                  dispatch) :
-		m_Store(store), m_Renderer(renderer), m_Assets(assets), m_Headless(headless),
-		m_Dispatch(std::move(dispatch))
-	{
-		for (const TranslationCatalog& catalog : catalogs) m_Language.RegisterCatalog(catalog);
-	}
+		const assetlib::AssetStore& store,
+		const ILanguageResolver&    language,
+		Renderer*                   renderer,
+		game::AssetManager*         assets,
+		const bool                  headless,
+		EditorHostDispatch          dispatch) :
+		m_Store(store), m_Language(language), m_Renderer(renderer), m_Assets(assets),
+		m_Headless(headless), m_Dispatch(std::move(dispatch))
+	{}
 
 	const assetlib::AssetStore&
 	EditorHost::GetStore() const noexcept

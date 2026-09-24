@@ -19,7 +19,6 @@
 #include <qlogging.h>
 #include <qobject.h>
 #include <qstringlist.h>
-#include <qstringliteral.h>
 #include <qtypes.h>
 #include <spdlog/common.h>
 #include <string_view>
@@ -34,6 +33,7 @@
 #include "Startup/StartupScreen.h"
 #include "Startup/startup_project.h"
 #include "util/editor_config.h"
+#include "util/editor_language.h"
 #include "util/qt_logging.h"
 #include "util/recent_projects.h"
 
@@ -111,10 +111,24 @@ main(int argc, char* argv[])
 
 		QMessageBox::critical(
 			nullptr,
-			QStringLiteral("Bernini Editor"),
-			QStringLiteral("The editor could not start:\n\n%1\n\nSee %2/editor.log.")
+			editor::Localize({ "editor.main", "title", "Bernini Editor" }),
+			editor::Localize(
+				{ "editor.main",
+		          "could_not_start",
+		          "The editor could not start:\n\n%1\n\nSee %2/editor.log." })
 				.arg(QString::fromUtf8(e.what()), directory));
 	};
+
+	// Before anything is shown: the launcher and the startup screen read the host's catalogs too.
+	try
+	{
+		editor::InstallEditorLanguage(editor::ConfiguredLocale(configPath));
+	}
+	catch (const std::exception& e)
+	{
+		couldNotStart(e);
+		return 1;
+	}
 
 	// Plugins first, because a project opens against their kinds: every descriptor under plugins/
 	// beside the executable, then whatever config.json adds. The window registers their editor
@@ -171,7 +185,7 @@ main(int argc, char* argv[])
 	// Up before the window, because building the window is what takes the time: the renderer
 	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
 	// with nothing on screen at all. Hidden explicitly on both ways out below.
-	editor::StartupScreen startup(QStringLiteral("Bernini Editor"));
+	editor::StartupScreen startup(editor::Localize({ "editor.main", "title", "Bernini Editor" }));
 	startup.show();
 
 	// Building the window creates the device, which fails on a machine rather than in the code -- a

@@ -4,13 +4,10 @@
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
-#include <editor_plugin_api/LanguageResolver.h>
-#include <editor_plugin_api/TranslationCatalog.h>
 #include <filesystem>
 #include <functional>
 #include <gamelib/AssetManager.h>
 #include <qwidget.h>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -35,12 +32,12 @@ namespace editor::plugins
 	{
 	public:
 		EditorHost(
-			const assetlib::AssetStore&         store,
-			std::span<const TranslationCatalog> catalogs,
-			Renderer*                           renderer,
-			game::AssetManager*                 assets,
-			bool                                headless,
-			EditorHostDispatch                  dispatch);
+			const assetlib::AssetStore& store,
+			const ILanguageResolver&    language,
+			Renderer*                   renderer,
+			game::AssetManager*         assets,
+			bool                        headless,
+			EditorHostDispatch          dispatch);
 
 		[[nodiscard]] const assetlib::AssetStore&
 		GetStore() const noexcept override;
@@ -68,7 +65,7 @@ namespace editor::plugins
 
 	private:
 		const assetlib::AssetStore& m_Store;
-		LanguageResolver            m_Language;
+		const ILanguageResolver&    m_Language;
 		Renderer*                   m_Renderer = nullptr;
 		game::AssetManager*         m_Assets   = nullptr;
 		bool                        m_Headless = false;

@@ -40,7 +40,6 @@
 #include <assetlib/progress.h>
 #include <default_editor/plugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
-#include <editor_plugin_api/TranslationCatalog.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/environment.h>
 
@@ -58,6 +57,7 @@
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
+#include "util/editor_language.h"
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -316,7 +316,12 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		if (auto exposure = animSettings["exposure"])
 			defaultConfig.rigEnvironment.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		m_Plugins->RegisterEditorPlugins(editor::defaults::CreatePlugin(defaultConfig));
+		m_Plugins->RegisterEditorPlugins(
+			editor::defaults::CreatePlugin(defaultConfig),
+			editor::BuiltInLocalizationDirectory());
+		editor::InstallEditorLanguage(
+			editor::ConfiguredLocale(configPath),
+			m_Plugins->Contributions().Catalogs());
 
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
@@ -1176,7 +1181,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
 	m_EditorHost = std::make_unique<editor::plugins::EditorHost>(
 		m_Project->GetStore(),
-		m_Plugins->Contributions().Catalogs(),
+		editor::EditorLanguage(),
 		m_Renderer.get(),
 		m_Assets.get(),
 		m_Headless,
@@ -1320,9 +1325,7 @@ MainWindow::SetUpPluginContributions()
 	if (registry.Menus().empty() && registry.Actions().empty())
 		return;
 
-	editor::LanguageResolver language;
-	for (const editor::TranslationCatalog& catalog : registry.Catalogs())
-		language.RegisterCatalog(catalog);
+	const editor::LanguageResolver& language = editor::EditorLanguage();
 
 	core::str::unordered_str_map<QMenu*> menus;
 	menus.emplace(editor::c_FileMenuId, m_Ui.fileMenu);

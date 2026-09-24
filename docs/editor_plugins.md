@@ -32,9 +32,10 @@ and fix the map.
   and optional camera; no camera means automatic framing. Plugins never advance the frame loop.
 - **Identity is independent of language.** Panel, action and menu IDs are stable; labels retain
   translation context/key and fallback text. The host resolves them through a borrowed
-  `ILanguageResolver` without registering contributions again. Each host owns its locale and copies
-  module catalogs; there is no singleton. The resolver and CSV reader are implemented, but the
-  production editor uses the resolver for plugin menus, actions, tabs and widgets.
+  `ILanguageResolver` without registering contributions again. The editor process owns one
+  resolver, reached by name only from `apps/editor/src` (`editor::EditorLanguage`), so no plugin DLL
+  can hold a copy; every project's host lends that one. Plugins still look text up only through
+  `IEditorHost`.
 - **Matched-build C++ boundary.** STL and Qt types intentionally cross it. These are not interfaces
   for an arbitrary compiler or engine version. Entry-point aliases name factory signatures, not
   implemented loader functions. The loader checks the engine build ID, configuration, dependency
@@ -265,8 +266,17 @@ exercise both services through the end of viewport teardown.
   on core and Qt Core; `editor_plugin_api` does not link its implementation into every client. Plugins borrow the
   const `ILanguageResolver` returned by their host and cannot register catalogs or select its locale
   through that interface. All calls, including catalog registration and locale changes, run on the
-  GUI thread. The resolver outlives its borrowers; independent hosts may choose different locales.
+  GUI thread. The resolver outlives its borrowers. The production editor keeps one per process in
+  the executable, with its locale from `locale` in `config.json` (default `en`), read once at
+  startup; a fake host may own its own.
   This Qt editor service does not implement the game runtime localization system.
+- **Catalog discovery:** a plugin ships `localization/<context>.csv` in its directory, one file per
+  context, and the host reads every one as that plugin registers -- a plugin need not call
+  `AddTranslations` for them, and a context it also registers in code collides. The host-linked
+  plugin's are staged to `plugins/bernini.default/localization/`, the host's own to `localization/`
+  beside the executable. `editor.` contexts are the host's; a plugin catalog naming one is refused.
+  A CSV is not a descriptor `dependencies` entry: those are age-checked against the SDK stamp, which
+  an unchanged catalog would fail after an SDK rebuild.
 - **Catalogs:** `AddTranslations` transfers a module catalog by value, with one catalog per context.
   The host copies strings and owns them beyond registration. `LanguageResolver::RegisterCatalog`
   rejects invalid contexts, keys, locales, empty translations, duplicate key/locale pairs and existing
@@ -279,7 +289,8 @@ exercise both services through the end of viewport teardown.
 - **Language changes:** changing the resolver locale affects the next lookup, not already displayed
   strings. The future host must re-resolve its menu, action and tab labels and notify plugin widgets
   on the GUI thread. The sample resolves its widget title when constructed; live widget refresh,
-  catalog discovery, pluralization and parameter formatting are not implemented.
+  pluralization and parameter formatting are not implemented -- a template carries `%1` and the
+  caller fills it with `QString::arg` after resolving.
 - **Menus:** the host supplies `c_FileMenuId` and `c_ToolsMenuId` before plugin registration.
   `AddMenu` creates a plugin-qualified ID with a localized label; empty parent means a root menu,
   otherwise the parent must already exist. Register parents before children. Reject duplicate IDs,
@@ -382,5 +393,11 @@ same width and unique keys. Empty cells are missing translations. UTF-8 BOM, LF/
 quoted commas/newlines and doubled quotes are supported; malformed UTF-8, NUL bytes, bad quoting,
 duplicate keys/locales and invalid identifiers throw. Whitespace is preserved rather than trimmed.
 Placeholders remain literal text; this importer supplies neither interpolation nor plural selection.
-Resolve the returned catalog through `LanguageResolver` after registering it; plugins may instead
-construct `TranslationCatalog` directly, as the sample does.
+Resolve the returned catalog through `LanguageResolver` after registering it. A plugin that ships
+`localization/<context>.csv` has the host do this for it, as the sample does; one may instead
+construct `TranslationCatalog` directly and call `AddTranslations`.
+
+The `en` column is what the editor shows, and the fallback at each call site must match it.
+`scripts/tests/test_editor_localization.py` holds the editor, the default plugin and the sample to
+that, and fails on a lettered string literal handed straight to a Qt text call (`setText`,
+`QLabel`, `QMessageBox::warning`, …) in the sources it covers.
