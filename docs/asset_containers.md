@@ -30,7 +30,7 @@ when this page disagrees, trust the header, then fix this page.
 | Kind | Files | Written by |
 |---|---|---|
 | Authored text | `.bmaterial`, `.benv`, `.bimport`, `.bavatar`, `.bblend`, `.bgrass` | the editor, `migrate`, deliberate saves |
-| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
+| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/BC/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 | Foreign, authored | `.rml`, `.rcss` (UI documents and styles), `.ttf` (fonts) | a person, in `Authored/UI` and `Authored/Fonts`; this library stores and packs them and parses none of them |
 | Foreign, authored, unpacked | `.slang` (game surfaces) | a person, in `Authored/Shaders`; the renderer opens them off a host path rather than through the mount, so `pack` skips them — see [Game-Defined Surfaces](game_defined_surfaces.md) |
@@ -214,7 +214,7 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel`, `.banim` and `.bgrassfields` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
 | **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/` — the triplet and the occlusion map alike. `assetlib_cli migrate` re-bakes one whose maps its sources no longer produce, when those sources are there to cook from, as do `assetlib_cli bakematerials` and the editor's **Bake All**. Until one of those has run, a fresh checkout opens with every material stale, drawing untextured where it routes and from the extracted source where it names an occlusion map. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it, and `migrate` re-bakes one lost from under a container still on disk. |
 | **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky` or `.benvl` back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 

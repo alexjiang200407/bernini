@@ -461,6 +461,15 @@ point per clump, which the import reads as a grass field (`BMeshImport::grass`,
 [BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)) instead of a
 submesh. The renderer grows the blades from the points; the DCC never sees one.
 
+The fields are cooked into a `.bgrassfields` beside the `.bmesh` (`AssetStore::WriteImportedGrass`),
+written and listed in the `.bimport`'s `outputs` only when the source has a POINTS primitive. It is
+a cache entry of its own with its own bake token, so a change to how clumps are stored re-cooks
+grass and no mesh -- and a fourth member of the geometry group, so `Reimport`, `migrate`, `pack`,
+staleness and rename carry it exactly as they carry the `.bmesh` beside it. It stores the looks it
+was written with; `LoadRegenGrassFields` applies the document's grass bindings over them on every
+load, as `LoadRegenMesh` does the material ones, and reports a binding naming a field the source no
+longer has. A re-import keeps the grass bindings authored since, as it keeps the clip floors.
+
 | Attribute | Meaning | Absent |
 |---|---|---|
 | `POSITION` | the clump's root, in the mesh's space, on the surface it grows from | the primitive is skipped |
@@ -655,7 +664,7 @@ submesh. The renderer grows the blades from the points; the DCC never sees one.
     never the source, which is an image to convolve rather than one to sample. A route with no baked
     map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
-**`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
+**`.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an

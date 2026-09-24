@@ -35,6 +35,7 @@ namespace assetlib
 		kAvatar,          // .bavatar -- the authored half of one rig; text
 		kBlend,           // .bblend -- the blend spaces authored against one clip set; text
 		kGrass,           // .bgrass -- a grass look; text
+		kGrassFields,  // .bgrassfields -- the grass a mesh source grows, cooked beside its .bmesh
 		// The number of asset kinds. Anchors the assertion that every one of them is either a
 		// container with a codec or a listed foreign kind; anchoring that on whichever enumerator
 		// happens to be last instead means appending one silently satisfies it.
@@ -42,14 +43,14 @@ namespace assetlib
 	};
 
 	/**
-	 * Whether `type` is one of the three containers a mesh import produces together. They travel as a
+	 * Whether `type` is one of the containers a mesh import produces together. They travel as a
 	 * group everywhere: regenerated as one, produced as one, counted as one.
 	 */
 	[[nodiscard]] constexpr bool
 	isGeometryContainer(const AssetType type) noexcept
 	{
 		return type == AssetType::kMesh || type == AssetType::kSkeleton ||
-		       type == AssetType::kAnimation;
+		       type == AssetType::kAnimation || type == AssetType::kGrassFields;
 	}
 
 	/** Why one asset holds another alive. */
@@ -68,8 +69,8 @@ namespace assetlib
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
 		kGrassMaterial,   // a .bgrass names the .bmaterial its blades shade through
-		kFieldGrass,      // a .bimport's binding names the .bgrass a POINTS primitive is drawn with
-		kPlugin,          // a plugin-registered authored kind reports an opaque field token
+		kFieldGrass,  // a .bgrassfields, or a .bimport's binding, names the .bgrass a field is drawn with
+		kPlugin,  // a plugin-registered authored kind reports an opaque field token
 	};
 
 	/**
@@ -218,6 +219,7 @@ namespace assetlib
 		size_t avatarsScanned         = 0;
 		size_t blendSetsScanned       = 0;
 		size_t grassLooksScanned      = 0;
+		size_t grassFieldsScanned     = 0;
 
 	private:
 		struct Range
