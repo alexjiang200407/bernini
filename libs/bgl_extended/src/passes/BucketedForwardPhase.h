@@ -1,47 +1,45 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
+#include "passes/IForwardPhase.h"
 #include <string_view>
 
 namespace bgl
 {
-	class ForwardPhases;
-	class PassContext;
-
-	struct DrawData;
-	struct MeshletState;
-	struct PassDesc;
-
 	/**
 	 * The opaque and alpha-test buckets of one geometry stage, each drawn indirect over the instance
 	 * compaction's output to the count it left on the GPU.
 	 */
-	class BucketedForwardPhase
+	class BucketedForwardPhase final : public IForwardPhase
 	{
 	public:
 		BucketedForwardPhase(GeometryStage stage, std::string_view name) noexcept;
 
+		BucketedForwardPhase(const BucketedForwardPhase&) noexcept = delete;
+		BucketedForwardPhase(BucketedForwardPhase&&) noexcept      = delete;
+
+		BucketedForwardPhase&
+		operator=(const BucketedForwardPhase&) noexcept = delete;
+
+		BucketedForwardPhase&
+		operator=(BucketedForwardPhase&&) noexcept = delete;
+
+		~BucketedForwardPhase() noexcept override = default;
+
 		[[nodiscard]] std::string_view
-		Name() const noexcept
+		Name() const noexcept override
 		{
 			return m_Name;
 		}
 
-		/** Always: the bucket counts live on the GPU, so an empty bucket is found there, not here. */
-		[[nodiscard]] bool
-		HasWork(const DrawData& /*draw*/) const noexcept
-		{
-			return true;
-		}
-
 		void
-		Declare(PassDesc& desc) const;
+		Declare(PassDesc& desc) const override;
 
 		void
 		Record(
 			ForwardPhases&     kernels,
 			MeshletState&      state,
 			const DrawData&    draw,
-			const PassContext& resources) const;
+			const PassContext& resources) const override;
 
 	private:
 		GeometryStage    m_Stage;

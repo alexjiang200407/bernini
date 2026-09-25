@@ -7,7 +7,6 @@
 #include "pipeline/MeshletKernel.h"
 #include "types/DrawBucketMask.h"
 #include "types/MeshletState.h"
-#include <concepts>
 #include <cstdint>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -38,25 +37,6 @@ namespace bgl
 		kGrass,        // the grass the view's geoms grow
 		kSkinned,      // the skinned tier's non-transparent buckets
 		kTransparent,  // the depth-sorted list, every tier
-	};
-
-	/**
-	 * One graph pass of the forward render: which draws it records and how it dispatches them. The
-	 * kernels, the uniforms every forward kernel shares and the targets are ForwardPhases'; a phase
-	 * declares only what its own dispatch reads, and records with kernels handed to it bound.
-	 */
-	template <class Phase>
-	concept ForwardPhaseRecorder = requires(
-		const Phase&       phase,
-		PassDesc&          desc,
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) {
-		{ phase.Name() } -> std::convertible_to<std::string_view>;
-		{ phase.HasWork(draw) } -> std::same_as<bool>;
-		phase.Declare(desc);
-		phase.Record(kernels, state, draw, resources);
 	};
 
 	/**
@@ -156,13 +136,11 @@ namespace bgl
 			const PassContext& resources);
 
 	private:
-		template <ForwardPhaseRecorder Phase>
-		void
-		AttachPhase(FrameGraph& fg, const DrawData& draw, const Phase& phase);
+		[[nodiscard]] const IForwardPhase&
+		Phase(ForwardPhase phase) const noexcept;
 
-		template <ForwardPhaseRecorder Phase>
 		void
-		Execute(const Phase& phase, const DrawData& draw, const PassContext& resources);
+		Execute(const IForwardPhase& phase, const DrawData& draw, const PassContext& resources);
 
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
 		void

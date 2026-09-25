@@ -576,8 +576,8 @@ list; `TransparentForwardPhase` is the sorted list, one dispatch through the sha
 A phase takes its kernels already bound, with the framebuffer that kernel declares -- colour,
 velocity and depth for a bucket's, colour and depth for the blend kernel -- and never builds one. The set is fixed and ordered, because
 the frame's order is `RenderContext`'s and Blob Shadows draws between two of them, so the phases are
-concrete members held by value, and what they have in common is the `ForwardPhaseRecorder` concept
-rather than a base class. **Forward World** draws the non-transparent buckets of the static tier -- the
+concrete members held by value behind one interface, `IForwardPhase`: a phase that may have
+nothing to draw (grass) overrides `HasWork`, and every other takes its default. **Forward World** draws the non-transparent buckets of the static tier -- the
 world, moving placements included; **Forward Grass** the grass those placements grow; **Forward
 Skinned** the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the
 grass the depth holds the world and its grass alone -- everything a blob shadow lands on, the seam [Blob Shadows](#blob-shadows) draws at, and where the HZB of

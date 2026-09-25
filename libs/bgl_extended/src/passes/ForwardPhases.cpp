@@ -236,34 +236,30 @@ namespace bgl
 		GrassForwardPhase::CheckBindings(check);
 	}
 
-	void
-	ForwardPhases::AttachToFrameGraph(
-		FrameGraph&        fg,
-		const DrawData&    draw,
-		const ForwardPhase phase)
+	const IForwardPhase&
+	ForwardPhases::Phase(const ForwardPhase phase) const noexcept
 	{
 		switch (phase)
 		{
 		case ForwardPhase::kWorld:
-			AttachPhase(fg, draw, m_World);
-			return;
+			return m_World;
 		case ForwardPhase::kGrass:
-			AttachPhase(fg, draw, m_Grass);
-			return;
+			return m_Grass;
 		case ForwardPhase::kSkinned:
-			AttachPhase(fg, draw, m_Skinned);
-			return;
+			return m_Skinned;
 		case ForwardPhase::kTransparent:
-			AttachPhase(fg, draw, m_Transparent);
-			return;
+			return m_Transparent;
 		}
 		gfatal("An unknown forward phase");
 	}
 
-	template <ForwardPhaseRecorder Phase>
 	void
-	ForwardPhases::AttachPhase(FrameGraph& fg, const DrawData& draw, const Phase& phase)
+	ForwardPhases::AttachToFrameGraph(
+		FrameGraph&        fg,
+		const DrawData&    draw,
+		const ForwardPhase which)
 	{
+		const IForwardPhase& phase = Phase(which);
 		if (!phase.HasWork(draw))
 		{
 			return;
@@ -397,9 +393,11 @@ namespace bgl
 		}
 	}
 
-	template <ForwardPhaseRecorder Phase>
 	void
-	ForwardPhases::Execute(const Phase& phase, const DrawData& draw, const PassContext& resources)
+	ForwardPhases::Execute(
+		const IForwardPhase& phase,
+		const DrawData&      draw,
+		const PassContext&   resources)
 	{
 		if (draw.view->GetInstanceCount() == 0)
 		{
