@@ -126,7 +126,7 @@ public struct BiasedArenaReader : IMaterialReader
 // The reader a surface gets on a grass blade: uv1 there is the blade's random, not a second UV set, so
 // a surface sampling geometry occlusion through it reads the map as absent. The face is always the
 // front: the grass stage has already turned the normal toward the camera.
-public struct BladeArenaReader : IMaterialReader
+public struct GrassMaterialArenaReader : IMaterialReader
 {
     MaterialArenaReader inner;
 
@@ -151,9 +151,9 @@ MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFr
     return reader;
 }
 
-BladeArenaReader BladeArenaReaderAt(uint byteOffset, ForwardVSOut input)
+GrassMaterialArenaReader GrassMaterialArenaReaderAt(uint byteOffset, ForwardVSOut input)
 {
-    BladeArenaReader reader;
+    GrassMaterialArenaReader reader;
     reader.inner = ArenaReaderAt(byteOffset, input, true);
     return reader;
 }
@@ -192,7 +192,7 @@ public struct GameRecord<G : ISurfaceSource>
 
     public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
     public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace) { return G.Evaluate(Reader(input, isFrontFace), params); }
-    public PbrSurface EvaluateOnBlade(ForwardVSOut input) { return G.Evaluate(BladeArenaReaderAt(byteOffset, input), params); }
+    public PbrSurface EvaluateOnGrass(ForwardVSOut input) { return G.Evaluate(GrassMaterialArenaReaderAt(byteOffset, input), params); }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 
     public float CoverageAtBias(ForwardVSOut input, bool isFrontFace, float lodBias)
@@ -259,9 +259,9 @@ public struct LitGameRecord<G : ILitSurfaceSource>
     {
         return G.Shade(Reader(input, isFrontFace), MaterialSurfaceLight(), params);
     }
-    public float4 ShadeOnBlade(ForwardVSOut input)
+    public float4 ShadeOnGrass(ForwardVSOut input)
     {
-        return G.Shade(BladeArenaReaderAt(byteOffset, input), MaterialSurfaceLight(), params);
+        return G.Shade(GrassMaterialArenaReaderAt(byteOffset, input), MaterialSurfaceLight(), params);
     }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 

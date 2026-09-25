@@ -33,7 +33,7 @@ public extension MaterialData
 
     // A blade's surface lit through the entry every Forward program uses, with the blade's tint and
     // occlusion applied first and its translucency added after.
-    ForwardPSOut ShadeBlade(GrassVSOut input, PbrSurface evaluated)
+    ForwardPSOut ShadeGrassBlade(GrassVSOut input, PbrSurface evaluated)
     {
         var surface = evaluated;
         surface.baseColor.rgb *= input.tint.rgb;
@@ -57,14 +57,14 @@ public extension MaterialData
 
         var unmapped = input.Surface();
         unmapped.uv1 = cNoUv1;
-        return ShadeBlade(input, SurfaceOf(material, unmapped, material.GetBaseColor(unmapped.uv)));
+        return ShadeGrassBlade(input, SurfaceOf(material, unmapped, material.GetBaseColor(unmapped.uv)));
     }
 
     public ForwardPSOut GrassGameProgram<G : ISurfaceSource>(GrassVSOut input)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
 
-        return ShadeBlade(input, record.EvaluateOnBlade(input.Surface()));
+        return ShadeGrassBlade(input, record.EvaluateOnGrass(input.Surface()));
     }
 
     // A lit surface draws a blade exactly as it shades it: no tint, occlusion or translucency.
@@ -73,7 +73,7 @@ public extension MaterialData
         let record = LitGameRecord<G>.Load(input.materialOffset);
 
         ForwardPSOut output;
-        output.color = float4(record.ShadeOnBlade(input.Surface()).rgb * exposure, 1.0);
+        output.color = float4(record.ShadeOnGrass(input.Surface()).rgb * exposure, 1.0);
         output.motion = ComputeMotionVector(input.Surface());
         return output;
     }
