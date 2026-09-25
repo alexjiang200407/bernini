@@ -18,7 +18,10 @@ along a Morton curve before cutting chunks (`assetlib/src/grass_chunks.cpp`), so
 compact patch and its sphere is tight.
 
 `IScene::AttachGrass` binds fields to a static geom and looks to its slots; every instance of the geom
-then draws them, placed by its transform. `docs/bgl_api.md` has the call's rules.
+then draws them, placed by its transform. `docs/bgl_api.md` has the call's rules. A game never calls
+it: `game::AssetManager::AcquireMesh` follows the mesh's `grass` reference, creates each look its
+fields name from the `.bgrass` and attaches them, and the geom's release gives them back
+(`libs/gamelib/CLAUDE.md`).
 
 ## A blade
 
