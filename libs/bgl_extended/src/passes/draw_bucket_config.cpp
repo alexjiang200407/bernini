@@ -67,6 +67,12 @@ namespace bgl
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent draw bucket owns no pixel program");
 
+		// A blade shades from what the grass stage builds, which no mesh's program reads.
+		if (desc.geom == GeometryStage::kGrass)
+		{
+			return std::format("programs.forward.Grass_{}", ProgramStem(desc.material));
+		}
+
 		return std::format(
 			"programs.forward.{}{}",
 			ProgramStem(desc.material),

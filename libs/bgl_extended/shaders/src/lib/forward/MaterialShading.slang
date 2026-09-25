@@ -13,7 +13,7 @@ public extension MaterialData
 {
     // Base colour is passed in rather than sampled here, so the tested paths can test it without
     // sampling the texture a second time.
-    PbrSurface SurfaceOf<M : IPbrMaterial>(M material, ForwardVSOut input, float4 baseColor)
+    public PbrSurface SurfaceOf<M : IPbrMaterial>(M material, ForwardVSOut input, float4 baseColor)
     {
         PbrSurface surface;
         surface.baseColor = baseColor;

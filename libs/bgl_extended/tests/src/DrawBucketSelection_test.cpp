@@ -170,7 +170,7 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 		bgl::RasterCullMode::kBack);
 	CHECK(bgl::DrawBucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
 
-	// Grass pairs its own geometry stage with the material's opaque pixel program, and culls
+	// Grass pairs its own geometry stage with its own program for the material's kind, and culls
 	// nothing in hardware whatever the material: a blade is seen from both sides.
 	const DrawBucketDesc grassPbr  = { GeometryStage::kGrass,
 		                               MaterialType::kPBR,
@@ -179,10 +179,11 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 		                               MaterialType::kNull,
 		                               LayerType::kOpaque };
 	CHECK(bgl::DrawBucketGeometrySrc(grassPbr) == "programs.forward.Grass"sv);
+	CHECK(bgl::DrawBucketPixelSrc(grassPbr) == "programs.forward.Grass_PBR"sv);
 	CHECK(
-		bgl::DrawBucketPixelSrc(grassPbr) ==
 		bgl::DrawBucketPixelSrc(
-			{ GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque }));
+			{ GeometryStage::kGrass, MaterialType::kLoosePbr, LayerType::kOpaque }) ==
+		"programs.forward.Grass_PBR_Loose"sv);
 	CHECK(bgl::DrawBucketCullMode(grassPbr) == bgl::RasterCullMode::kNone);
 	CHECK(bgl::DrawBucketCullMode(grassNull) == bgl::RasterCullMode::kNone);
 }
@@ -215,6 +216,10 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[d
 				bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kHashed }) ==
 				program("_HashedAlpha"));
 		}
+
+		CHECK(
+			bgl::DrawBucketPixelSrc({ bgl::GeometryStage::kGrass, kind, LayerType::kOpaque }) ==
+			"programs.forward.Grass_GameSlot" + std::to_string(slot));
 
 		// The skinned door is open for every layer a game surface can carry, hashed included: a
 		// surface's tiers differ in nothing but the geometry stage.

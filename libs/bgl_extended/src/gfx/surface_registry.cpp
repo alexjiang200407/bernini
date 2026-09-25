@@ -78,6 +78,21 @@ namespace bgl
 				slot);
 		}
 
+		// A surface's grass program: the blade's vertex in, and the surface shaded on it.
+		std::string
+		GrassProgramSource(uint32_t slot, std::string_view program)
+		{
+			return std::format(
+				"import {};\nimport lib.forward.GrassShading;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.common;\nimport lib.forward.grass_vertex;\n\n"
+				"[shader(\"pixel\")]\n"
+				"ForwardPSOut PSMain(GrassVSOut input)\n{{\n"
+				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
+				BindingModuleName(slot),
+				program,
+				slot);
+		}
+
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
 		// kinds -- the arm's function picked by the surface's contract; it shadows
 		// programs/forward/Transparent.slang, which is this with no arms.
@@ -114,7 +129,7 @@ namespace bgl
 		}
 
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
-		// program -- the lit family where the surface owns its lighting. Named by the draw-bucket
+		// program and a grass one -- the lit family where the surface owns its lighting. Named by the draw-bucket
 		// config, so the names generated here are the names the passes build.
 		std::vector<SlangSourceModule>
 		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
@@ -139,6 +154,10 @@ namespace bgl
 				  ColorProgramSource(
 					  slot,
 					  lit ? "GameLitHashedAlphaProgram" : "GameHashedAlphaProgram"),
+				  false },
+				{ DrawBucketPixelSrc(
+					  DrawBucketDesc{ GeometryStage::kGrass, kind, LayerType::kOpaque }),
+				  GrassProgramSource(slot, lit ? "GrassGameLitProgram" : "GrassGameProgram"),
 				  false },
 			};
 		}

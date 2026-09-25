@@ -1,53 +1,20 @@
 import idl.Constants;
 import idl.GrassChunk;
-import idl.GrassChunkRef;
 import idl.GrassClump;
-import idl.GrassDraw;
 import idl.GrassLook;
 import idl.MeshInstance;
 import lib.forward.common;
 import lib.forward.ExpansionData;
 import lib.forward.grass;
+import lib.forward.GrassData;
+import lib.forward.grass_vertex;
 import lib.forward.mesh_stage;
-import lib.geom.vertexdecode;
 import lib.math.frustum;
-import lib.types.EntryBuffer;
-import lib.types.UploadBuffer;
 
 // The grass geometry stage: one amplification group per chunk of a view's grass list, culled to the
 // frustum and thinned by distance, launching mesh groups that each build a run of the chunk's blades.
-// Everything after ForwardVSOut is an ordinary material draw -- the pixel program is the one the
-// material's own bucket uses.
-
-struct GrassData
-{
-    UploadBuffer<GrassDraw> draws;
-    UploadBuffer<GrassChunkRef> chunkRefs;
-    EntryBuffer<GrassLook> looks;
-
-    // Scene ranges, but addressed by the global indices the chunk references and chunks store.
-    StructuredBuffer<GrassChunk, ScalarDataLayout>.Handle chunks;
-    StructuredBuffer<GrassClump, ScalarDataLayout>.Handle clumps;
-
-    float3 cameraPos;
-
-    // What one world unit spans on the render grid, in pixels, at a distance of one.
-    float pixelsPerUnit;
-
-    // The view's wind (GrassWind): the direction's xz, unit.
-    float2 windDirection;
-    float windStrength;
-    float windGustScale;
-    float windGustSpeed;
-    float windGustStrength;
-
-    // This dispatch's run of the chunk references, laid out dispatchWidth groups to a row.
-    uint firstRef;
-    uint refCount;
-    uint dispatchWidth;
-};
-
-ConstantBuffer<GrassData> grassData;
+// The pixel side is the material's grass program (lib.forward.GrassShading), which lights the blade
+// through the same entry Forward's programs do.
 
 GrassWind ViewWind()
 {
@@ -155,7 +122,12 @@ struct PosedBlade
     BladePose before;
     float3 side;
     float3 sideBefore;
-    float width; // the root's, widened as the field thins
+    float width;  // the root's, widened as the field thins
+    float facing; // 1 or -1: which way the face turns toward the camera
+    float3 ground;
+    float groundBlend;
+    float3 color;
+    float random;
 };
 groupshared PosedBlade gPosed[cGrassVerticesPerGroup / 4u];
 
@@ -166,7 +138,7 @@ void MSMain(
     uint gid: SV_GroupID,
     uint gtid: SV_GroupThreadID,
     payload GrassPayload launch,
-    OutputVertices<ForwardVSOut, cGrassVerticesPerGroup> verts,
+    OutputVertices<GrassVSOut, cGrassVerticesPerGroup> verts,
     OutputIndices<uint3, cGrassPrimsPerGroup> tris
 )
 {
@@ -231,7 +203,8 @@ void MSMain(
         let wind = ViewWind();
         let placed = PlacedShape(mesh, shape, false);
         let placedBefore = PlacedShape(mesh, shape, true);
-        let thinning = ThinningAt(look, distance(grassData.cameraPos, placed.root), grassData.pixelsPerUnit);
+        let distanceToCamera = distance(grassData.cameraPos, placed.root);
+        let thinning = ThinningAt(look, distanceToCamera, grassData.pixelsPerUnit);
 
         PosedBlade posed;
         posed.now = PoseAt(look, wind, placed, viewData.time);
@@ -239,6 +212,14 @@ void MSMain(
         posed.side = placed.side;
         posed.sideBefore = placedBefore.side;
         posed.width = look.rootWidth * thinning.widen;
+
+        // One side per blade, judged at its middle, so a bending blade never shades half from each.
+        let middleFace = cross(placed.side, BezierTangent(posed.now, 0.5));
+        posed.facing = dot(middleFace, grassData.cameraPos - BezierPoint(posed.now, 0.5)) < 0.0 ? -1.0 : 1.0;
+        posed.ground = placed.up;
+        posed.groundBlend = GroundNormalBlend(look, distanceToCamera);
+        posed.color = BladeColor(look, grassData.clumps[clumpIndex], shape.random);
+        posed.random = shape.random;
         gPosed[gtid] = posed;
     }
     GroupMemoryBarrierWithGroupSync();
@@ -254,14 +235,16 @@ void MSMain(
         let position = BezierPoint(posed.now, t) + posed.side * across;
         let positionBefore = BezierPoint(posed.before, t) + posed.sideBefore * across;
 
-        ForwardVSOut vertex;
-        ProjectVertex(vertex, float4(position, 1.0), float4(positionBefore, 1.0));
-        vertex.normal = normalize(cross(posed.side, BezierTangent(posed.now, t)));
-        vertex.uv = float2(edge, t);
-        vertex.uv1 = cNoUv1;
-        vertex.tangent = float4(posed.side, 1.0);
-        vertex.materialOffset = look.materialOffset;
-        verts[v] = vertex;
+        let face = normalize(cross(posed.side, BezierTangent(posed.now, t))) * posed.facing;
+
+        ForwardVSOut surface;
+        ProjectVertex(surface, float4(position, 1.0), float4(positionBefore, 1.0));
+        surface.normal = BladeNormal(face, posed.side, edge * 2.0 - 1.0, look.normalRounding, posed.ground, posed.groundBlend);
+        surface.uv = float2(edge, t);
+        surface.uv1 = float2(posed.random, float(draw.look));
+        surface.tangent = float4(posed.side, posed.facing);
+        surface.materialOffset = look.materialOffset;
+        verts[v] = GrassVSOut(surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)));
     }
 
     for (uint p = gtid; p < survivors * trisPerBlade; p += cMeshGroupSize)

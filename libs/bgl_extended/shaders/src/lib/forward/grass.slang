@@ -248,3 +248,36 @@ public float3 BezierTangent(BladePose pose, float t)
 {
     return 2.0 * (1.0 - t) * (pose.p1 - pose.p0) + 2.0 * t * (pose.p2 - pose.p1);
 }
+
+// How far a blade at `distance` shades with its ground's normal rather than its own: the look's near
+// share at the camera, its far share at the fade end.
+public float GroundNormalBlend(GrassLook look, float distance)
+{
+    return lerp(look.groundNormalNear, look.groundNormalFar, saturate(distance / look.fadeEnd));
+}
+
+// The shading normal at a vertex of a blade: its face, already turned toward the camera, tilted toward
+// the edge the vertex sits on (`edgeSign` -1 or 1 along `side`), then blended toward the ground.
+public float3 BladeNormal(float3 face, float3 side, float edgeSign, float rounding, float3 ground, float groundBlend)
+{
+    let rounded = normalize(face + side * (edgeSign * rounding));
+    return normalize(lerp(rounded, ground, groundBlend));
+}
+
+// What a blade's base colour is multiplied by along it, from its root (t = 0) to its tip: the look's
+// tints over the blade's own colour -- its clump's, darkened by up to the look's variation.
+public float3 BladeTint(GrassLook look, float3 bladeColor, float t)
+{
+    return lerp(look.rootTint.rgb, look.tipTint.rgb, t) * bladeColor;
+}
+
+public float3 BladeColor(GrassLook look, GrassClump clump, float random)
+{
+    return UnpackColor(clump.color).rgb * (1.0 - look.tipTint.w * random);
+}
+
+// Occlusion from the root, where the field is densest, to an open tip.
+public float BladeOcclusion(GrassLook look, float t)
+{
+    return lerp(1.0 - look.rootOcclusion, 1.0, t);
+}
