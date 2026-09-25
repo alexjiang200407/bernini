@@ -41,7 +41,7 @@ ConstantBuffer<GrassData> grassData;
 
 struct GrassPayload
 {
-    uint ref;
+    uint chunkRefIndex;
     uint keptBlades;
     uint segments;
     uint bladesPerGroup;
@@ -58,10 +58,10 @@ void ASMain(uint3 gid: SV_GroupID)
 
     if (refIndex < grassData.refCount)
     {
-        let ref = grassData.chunkRefs[grassData.firstRef + refIndex];
-        let draw = grassData.draws[ref.draw];
+        let chunkRef = grassData.chunkRefs[grassData.firstRef + refIndex];
+        let draw = grassData.draws[chunkRef.draw];
         let look = grassData.looks.Get(draw.look);
-        let chunk = grassData.chunks[ref.chunk];
+        let chunk = grassData.chunks[chunkRef.chunk];
         let mesh = forwardData.meshBuffer.Get(draw.mesh);
 
         let local = float4(chunk.boundingSphere.xyz, chunk.boundingSphere.w + BladeReach(look, chunk.maxHeightScale) + look.clumpRadius);
@@ -85,7 +85,7 @@ void ASMain(uint3 gid: SV_GroupID)
             let segments = max(1u, SegmentsAt(look, nearest));
             let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
 
-            gGrassPayload.ref = refIndex;
+            gGrassPayload.chunkRefIndex = refIndex;
             gGrassPayload.keptBlades = kept;
             gGrassPayload.segments = segments;
             gGrassPayload.bladesPerGroup = perGroup;
@@ -105,20 +105,20 @@ groupshared uint gSurvivorCount;
 void MSMain(
     uint gid: SV_GroupID,
     uint gtid: SV_GroupThreadID,
-    payload GrassPayload payload,
+    payload GrassPayload launch,
     OutputVertices<ForwardVSOut, cGrassVerticesPerGroup> verts,
     OutputIndices<uint3, cGrassPrimsPerGroup> tris
 )
 {
-    let ref = grassData.chunkRefs[grassData.firstRef + payload.ref];
-    let draw = grassData.draws[ref.draw];
+    let chunkRef = grassData.chunkRefs[grassData.firstRef + launch.chunkRefIndex];
+    let draw = grassData.draws[chunkRef.draw];
     let look = grassData.looks.Get(draw.look);
-    let chunk = grassData.chunks[ref.chunk];
+    let chunk = grassData.chunks[chunkRef.chunk];
     let mesh = forwardData.meshBuffer.Get(draw.mesh);
     let total = chunk.clumpCount * look.bladesPerClump;
 
-    let first = gid * payload.bladesPerGroup;
-    let last = min(payload.keptBlades, first + payload.bladesPerGroup);
+    let first = gid * launch.bladesPerGroup;
+    let last = min(launch.keptBlades, first + launch.bladesPerGroup);
 
     if (gtid == 0u)
     {
@@ -147,7 +147,7 @@ void MSMain(
     GroupMemoryBarrierWithGroupSync();
 
     let survivors = gSurvivorCount;
-    let segments = payload.segments;
+    let segments = launch.segments;
     let vertsPerBlade = 2u * (segments + 1u);
     let trisPerBlade = 2u * segments;
 
