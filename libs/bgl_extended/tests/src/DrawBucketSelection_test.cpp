@@ -104,11 +104,11 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 				}
 
 				INFO("kind " << kind << " layer " << static_cast<uint32_t>(layer));
-				const uint32_t bucket = table.Resolve(geom, material, layer);
+				const uint32_t bucket = table.Resolve(bgl::GeometryStageOf(geom), material, layer);
 
 				// Distinct keys, distinct ids; and the desc reads back exactly the key.
 				CHECK(seen.insert(bucket).second);
-				CHECK(table.Desc(bucket).geom == geom);
+				CHECK(table.Desc(bucket).geom == bgl::GeometryStageOf(geom));
 				CHECK(table.Desc(bucket).material == material);
 				CHECK(table.Desc(bucket).layer == layer);
 
@@ -140,14 +140,14 @@ TEST_CASE("a draw bucket's command count is the first word of its dispatch args"
 TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 {
 	using bgl::DrawBucketDesc;
-	using bgl::GeomType;
+	using bgl::GeometryStage;
 	using bgl::LayerType;
 	using bgl::MaterialType;
 
-	const DrawBucketDesc staticCutout  = { GeomType::kStaticMesh,
+	const DrawBucketDesc staticCutout  = { GeometryStage::kStaticMesh,
 		                                   MaterialType::kPBR,
 		                                   LayerType::kMask };
-	const DrawBucketDesc skinnedCutout = { GeomType::kSkinnedMesh,
+	const DrawBucketDesc skinnedCutout = { GeometryStage::kSkinnedMesh,
 		                                   MaterialType::kPBR,
 		                                   LayerType::kMask };
 
@@ -162,11 +162,11 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 	// mesh stage and the material's doubleSided flag.
 	CHECK(
 		bgl::DrawBucketCullMode(
-			{ GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque }) ==
+			{ GeometryStage::kStaticMesh, MaterialType::kNull, LayerType::kOpaque }) ==
 		bgl::RasterCullMode::kBack);
 	CHECK(
 		bgl::DrawBucketCullMode(
-			{ GeomType::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque }) ==
+			{ GeometryStage::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque }) ==
 		bgl::RasterCullMode::kBack);
 	CHECK(bgl::DrawBucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
 }
@@ -189,7 +189,8 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[d
 			return "programs.forward.GameSlot" + std::to_string(slot) + std::string(layerSuffix);
 		};
 
-		for (const GeomType geom : { GeomType::kStaticMesh, GeomType::kSkinnedMesh })
+		for (const auto geom :
+		     { bgl::GeometryStage::kStaticMesh, bgl::GeometryStage::kSkinnedMesh })
 		{
 			CHECK(bgl::DrawBucketPixelSrc({ geom, kind, LayerType::kOpaque }) == program(""));
 			CHECK(

@@ -9,12 +9,28 @@ namespace bgl
 	namespace
 	{
 		uint64_t
-		PackKey(const GeomType geom, const MaterialType material, const LayerType layer)
+		PackKey(const GeometryStage geom, const MaterialType material, const LayerType layer)
 		{
 			return static_cast<uint64_t>(static_cast<uint32_t>(material)) |
 			       (static_cast<uint64_t>(static_cast<uint32_t>(geom)) << 32u) |
 			       (static_cast<uint64_t>(static_cast<uint32_t>(layer)) << 40u);
 		}
+	}
+
+	GeometryStage
+	GeometryStageOf(const GeomType geom)
+	{
+		switch (geom)
+		{
+		case GeomType::kStaticMesh:
+			return GeometryStage::kStaticMesh;
+		case GeomType::kSkinnedMesh:
+			return GeometryStage::kSkinnedMesh;
+		case GeomType::kInvalid:
+		case GeomType::kCount:
+			break;
+		}
+		gfatal("A bucket's geometry kind is a drawable tier");
 	}
 
 	DrawBucketTable::DrawBucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
@@ -23,11 +39,11 @@ namespace bgl
 			ceiling >= 1 && ceiling <= idl::cMaxDrawBuckets,
 			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
 		m_Flags.assign(ceiling, 0u);
-		(void)Resolve(GeomType::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
+		(void)Resolve(GeometryStage::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
 	}
 
 	uint32_t
-	DrawBucketTable::Resolve(const GeomType geom, const MaterialType material, LayerType layer)
+	DrawBucketTable::Resolve(const GeometryStage geom, const MaterialType material, LayerType layer)
 	{
 		// Neither shades a base color, so there is no alpha for a coverage or blend layer to read.
 		if (material == MaterialType::kNull || material == MaterialType::kAssert)
@@ -35,10 +51,6 @@ namespace bgl
 			layer = LayerType::kOpaque;
 		}
 
-		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
-		{
-			gfatal("A bucket's geometry kind is a drawable tier");
-		}
 		if (material == MaterialType::kInvalid)
 		{
 			gfatal("A bucket's material kind is a real one");
@@ -47,7 +59,7 @@ namespace bgl
 		{
 			gfatal("A bucket's layer is a real one");
 		}
-		if (geom == GeomType::kSkinnedMesh && material != MaterialType::kPBR &&
+		if (geom == GeometryStage::kSkinnedMesh && material != MaterialType::kPBR &&
 		    !GameSlot(material).has_value())
 		{
 			gfatal("Skinned geometry is only drawable with a kPBR or a game surface material");
@@ -85,7 +97,7 @@ namespace bgl
 	}
 
 	uint32_t
-	DrawBucketTable::Resolve(const GeomType geom, const MaterialHandle material)
+	DrawBucketTable::Resolve(const GeometryStage geom, const MaterialHandle material)
 	{
 		const MaterialType type  = material.IsValid() ? material.materialType : MaterialType::kNull;
 		const LayerType    layer = material.IsValid() ? material.layerType : LayerType::kOpaque;

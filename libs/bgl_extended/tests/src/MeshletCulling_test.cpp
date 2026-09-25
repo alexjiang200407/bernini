@@ -9,7 +9,7 @@
 #include "gfx/RenderTargetBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
-#include "passes/ForwardPass.h"
+#include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
@@ -486,17 +486,17 @@ TEST_CASE(
 	REQUIRE(surelyCulled > groups / 2u);
 	REQUIRE(surelyCulled < groups);
 
-	auto compactPass = bgl::CompactInstancesPass();
-	auto forwardPass = bgl::ForwardPass();
+	auto compactPass   = bgl::CompactInstancesPass();
+	auto forwardPhases = bgl::ForwardPhases();
 	{
 		const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
 		auto                        pipelines = bgl::PipelineBatch(device);
 		const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 		compactPass.Init(ctx);
-		forwardPass.Init(ctx);
-		forwardPass.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
+		forwardPhases.Init(ctx);
+		forwardPhases.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
 		pipelines.Build();
-		forwardPass.CheckBindings();
+		forwardPhases.CheckBindings();
 	}
 
 	auto rbDesc      = bgl::ReadbackBufferDesc();
@@ -536,7 +536,7 @@ TEST_CASE(
 
 	fg.SetResourceNamespace(view->GetCullNamespace(0));
 	compactPass.AttachToFrameGraph(fg, draw);
-	forwardPass.AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kWorld);
+	forwardPhases.AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kWorld);
 
 	fg.AddPass(
 		bgl::PassDesc()
@@ -571,7 +571,7 @@ TEST_CASE(
 
 	resourceManager->UnmapReadback(rbStats);
 	compactPass.Release(false);
-	forwardPass.Release();
+	forwardPhases.Release();
 }
 
 #endif

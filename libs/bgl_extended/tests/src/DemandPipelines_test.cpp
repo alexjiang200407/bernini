@@ -1,7 +1,7 @@
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
-#include "passes/ForwardPass.h"
+#include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
@@ -38,7 +38,7 @@ namespace
 	std::optional<uint32_t>
 	FindDrawBucket(
 		const bgl::DrawBucketTable& table,
-		bgl::GeomType               geom,
+		bgl::GeometryStage          geom,
 		bgl::MaterialType           material,
 		bgl::LayerType              layer)
 	{
@@ -133,7 +133,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	const auto opaqueBucket = FindDrawBucket(
 		table,
-		bgl::GeomType::kStaticMesh,
+		bgl::GeometryStage::kStaticMesh,
 		bgl::MaterialType::kPBR,
 		bgl::LayerType::kOpaque);
 	REQUIRE(opaqueBucket.has_value());
@@ -159,7 +159,7 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	const auto cutoutBucket = FindDrawBucket(
 		table,
-		bgl::GeomType::kStaticMesh,
+		bgl::GeometryStage::kStaticMesh,
 		bgl::MaterialType::kPBR,
 		bgl::LayerType::kMask);
 	REQUIRE(cutoutBucket.has_value());
@@ -227,14 +227,14 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 		                          bgl::LayerType::kBlend,
 		                          bgl::LayerType::kHashed })
 		{
-			(void)table.Resolve(bgl::GeomType::kStaticMesh, material, layer);
+			(void)table.Resolve(bgl::GeometryStage::kStaticMesh, material, layer);
 
 			auto handle         = bgl::MaterialHandle();
 			handle.materialType = material;
 			handle.layerType    = layer;
 			if (bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, handle))
 			{
-				(void)table.Resolve(bgl::GeomType::kSkinnedMesh, material, layer);
+				(void)table.Resolve(bgl::GeometryStage::kSkinnedMesh, material, layer);
 			}
 		}
 	}
@@ -245,7 +245,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 		opaqueShaped.set(bucket, !table.Transparent(bucket));
 	}
 
-	bgl::ForwardPass forward;
+	bgl::ForwardPhases forward;
 
 	auto       pipelines       = bgl::PipelineBatch(device);
 	const auto resourceManager = gfxBase->GetResourceManagerCpy();

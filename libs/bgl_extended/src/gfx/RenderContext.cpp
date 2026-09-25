@@ -634,7 +634,7 @@ namespace bgl
 		const DrawBucketTable& table = *m_DrawBucketTable;
 
 		// A transparent bucket owns no kernel: the whole depth-sorted list draws through the one
-		// shared blend kernel (ForwardPass), so its demand is satisfied the moment that exists.
+		// shared blend kernel (ForwardPhases), so its demand is satisfied the moment that exists.
 		DrawBucketMask transparent;
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{

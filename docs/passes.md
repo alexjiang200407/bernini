@@ -349,7 +349,7 @@ with. `ViewMatrices` carries last frame's offset beside the matrices it already 
 AA off every offset is zero and the arithmetic collapses to what it was.
 
 **The transparent phase writes no velocity** — a blended surface has no single depth to reproject —
-so its PSOs declare one render target and `DrawTransparent` binds a framebuffer without the velocity
+so its PSOs declare one render target and `ForwardPhases::BindTransparentKernel` binds a framebuffer without the velocity
 attachment. The skybox does write it, reprojecting the view ray through the previous frame's
 rotation-only view-projection; the sky is at infinity, so a camera translation displaces it nowhere.
 
@@ -563,10 +563,19 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
   a table is written once and a discarded one would otherwise stay discarded.
 
-### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl_extended/src/passes/ForwardPass.cpp)
+### Forward — [passes/ForwardPhases.{h,cpp}](libs/bgl_extended/src/passes/ForwardPhases.cpp)
 
-The main geometry pass: a mesh-shader forward render, attached as three graph passes by
-`ForwardPhase`. **Forward World** draws the non-transparent buckets of the static tier -- the
+The main geometry render: a mesh-shader forward render, attached as one graph pass per
+`ForwardPhase`. `ForwardPhases` owns what every phase shares -- the kernels, the uniforms bound to
+all of them (`BindKernel`) and the targets -- and composes one phase object per pass, which owns
+the rest: which draws it records, what its dispatch reads beyond the shared set, and how it dispatches.
+`BucketedForwardPhase` is World and Skinned, one per `GeometryStage`, indirect over the compaction's
+output; `TransparentForwardPhase` is the sorted list, one dispatch through the shared blend kernel.
+A phase takes its kernels already bound, with the framebuffer that kernel declares -- colour,
+velocity and depth for a bucket's, colour and depth for the blend kernel -- and never builds one. The set is fixed and ordered, because
+the frame's order is `RenderContext`'s and Blob Shadows draws between two of them, so the phases are
+concrete members held by value, and what they have in common is the `ForwardPhaseRecorder` concept
+rather than a base class. **Forward World** draws the non-transparent buckets of the static tier -- the
 world, which is everything a blob shadow lands on, moving placements included; **Forward Skinned**
 the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the world the
 depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where the HZB of
@@ -575,7 +584,9 @@ tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
 [passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h) (pixel-shader module,
-mesh-shader module, cull mode) — each built by the first `Draw` whose view demands the draw bucket
+mesh-shader module, cull mode). The desc's geometry axis is the renderer's own `GeometryStage`,
+not the client's `GeomType`: it names the mesh-stage program a bucket's triangles come from, which a
+client's geom kind maps to (`GeometryStageOf`) but need not be one of — each built by the first `Draw` whose view demands the draw bucket
 (`RenderContext::EnsureDrawBucketPipelinesExist`), and skipped while unbuilt, which by construction is
 only while no instance can be in it. A transparent draw bucket owns no kernel: the whole depth-sorted
 list draws through one shared blend kernel, a named member built when any transparent draw bucket is
@@ -621,7 +632,7 @@ zero grid on Metal ([RHI](docs/rhi.md) § the count verb), and a zero count can 
 grid.
 
 **Transparent draw buckets are skipped there** — blending needs depth order, not PSO order — and drawn
-afterwards by `DrawTransparent`, in Forward Transparent, off the depth-sorted
+afterwards by `TransparentForwardPhase`, in Forward Transparent, off the depth-sorted
 `sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent
 PSO shares one pipeline and the list is drawn whole, so the transparent phase is **one
 `DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees. Their blend state is
@@ -941,5 +952,5 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
   optional keys (no assert), so keep the string and the shader declaration in step.
 * **Passes are rebuilt every frame; the pass objects are not.** `AttachToFrameGraph` re-adds the
   `PassDesc` (and everything its `exec` lambda captured) each frame, but the kernels and scratch
-  buffers on `ForwardPass`/`SkyboxPass`/`CompactInstancesPass` persist. Release them through their
+  buffers on `ForwardPhases`/`SkyboxPass`/`CompactInstancesPass` persist. Release them through their
   `Release(...)` with the queue's fence before destroying the device.

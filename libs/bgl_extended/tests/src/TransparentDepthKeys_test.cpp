@@ -20,7 +20,6 @@
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
-#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
@@ -141,7 +140,7 @@ TEST_CASE(
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0;
 		instance.drawBucket =
-			buckets.Resolve(bgl::GeomType::kStaticMesh, placement.material, placement.layer);
+			buckets.Resolve(bgl::GeometryStage::kStaticMesh, placement.material, placement.layer);
 
 		const auto instanceHandle = instanceBuffer.Add(std::move(instance));
 		const auto denseIndex     = static_cast<uint32_t>(zOfInstance.size());
