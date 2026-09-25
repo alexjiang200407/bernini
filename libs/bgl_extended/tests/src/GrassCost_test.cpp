@@ -108,11 +108,11 @@ namespace
 		const std::string&          row)
 	{
 		std::vector<double> samples;
-		for (int frame = 0; frame < 12; ++frame)
+		for (int frame = 0; frame < 64; ++frame)
 		{
 			gfx.DrawFrame(target, job);
 			gfx.WaitIdle();
-			if (frame < 4)
+			if (frame < 16)
 			{
 				continue;
 			}
