@@ -45,6 +45,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -249,6 +250,18 @@ namespace bgl
 			m_BlobShadows.Init(std::move(desc), m_ResourceManager);
 		}
 
+		{
+			auto draws         = UploadBufferDesc();
+			draws.initialCount = 1;
+			draws.debugName    = "Grass Draws";
+			m_GrassDraws.Init(std::move(draws), m_ResourceManager);
+
+			auto refs         = UploadBufferDesc();
+			refs.initialCount = 1;
+			refs.debugName    = "Grass Chunk Refs";
+			m_GrassChunkRefs.Init(std::move(refs), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -314,6 +327,8 @@ namespace bgl
 		m_FootIK.Release();
 		m_PosedInstances.Release();
 		m_BlobShadows.Release();
+		m_GrassDraws.Release();
+		m_GrassChunkRefs.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -449,6 +464,10 @@ namespace bgl
 		{
 			// The CPU-built lists skip a hidden placement, so a toggle stales the ones it is in.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+			if (!m_SceneRaw->GetGeomGrass(meta.geom).empty())
+			{
+				m_GrassDirty = true;
+			}
 			if (meta.blobShadow.has_value())
 			{
 				m_BlobShadowsDirty = true;
@@ -497,6 +516,11 @@ namespace bgl
 		{
 			throw SceneError(
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
+		}
+
+		if (!m_SceneRaw->GetGeomGrass(geom).empty())
+		{
+			m_GrassDirty = true;
 		}
 
 		// No playback record: a static placement's MeshInstance.playback stays null.
@@ -1036,6 +1060,7 @@ namespace bgl
 
 			auto& meta       = m_MeshBuffer.MetaAt(meshHandle.index);
 			meta.geomType    = geom.geomType;
+			meta.geom        = geom;
 			meta.animState   = animState;
 			meta.submeshRoot = submeshes.range.offsetStart;
 
@@ -1120,6 +1145,10 @@ namespace bgl
 		if (meta.blobShadow.has_value())
 		{
 			m_BlobShadowsDirty = true;
+		}
+		if (!m_SceneRaw->GetGeomGrass(meta.geom).empty())
+		{
+			m_GrassDirty = true;
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
@@ -1215,6 +1244,66 @@ namespace bgl
 
 		m_PosedInstances.Assign(list);
 		m_PosedDirty = false;
+	}
+
+	void
+	SceneView::RefreshGrass()
+	{
+		const uint64_t epoch = m_SceneRaw->GetGrassEpoch();
+		if (!m_GrassDirty && epoch == m_SceneGrassEpoch)
+		{
+			return;
+		}
+
+		auto draws    = std::vector<idl::GrassDraw>();
+		auto byBucket = std::map<uint32_t, std::vector<idl::GrassChunkRef>>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex) ||
+			    HasMeshInstanceFlag(m_MeshBuffer.AtIndex(meshIndex), MeshInstanceFlag::kHidden))
+			{
+				continue;
+			}
+
+			for (const GrassFieldRecord& field :
+			     m_SceneRaw->GetGeomGrass(m_MeshBuffer.MetaAt(meshIndex).geom))
+			{
+				const Scene::GrassLookRef look   = m_SceneRaw->GetGrassLook(field.look);
+				const uint32_t            bucket = m_DrawBucketTable->Resolve(
+					GeometryStage::kGrass,
+					look.material.materialType,
+					LayerType::kOpaque);
+
+				const auto draw = static_cast<uint32_t>(draws.size());
+				draws.push_back(idl::GrassDraw{ .mesh = meshIndex, .look = look.entry });
+
+				std::vector<idl::GrassChunkRef>& refs = byBucket[bucket];
+				for (uint32_t c = 0; c < field.chunkCount; ++c)
+				{
+					refs.push_back(
+						idl::GrassChunkRef{ .draw = draw, .chunk = field.chunks.index + c });
+				}
+			}
+		}
+
+		auto refs = std::vector<idl::GrassChunkRef>();
+		m_GrassBatches.clear();
+		m_GrassDrawBuckets.reset();
+		for (const auto& [bucket, bucketRefs] : byBucket)
+		{
+			m_GrassBatches.push_back(
+				GrassBatch{ .bucket   = bucket,
+			                .firstRef = static_cast<uint32_t>(refs.size()),
+			                .refCount = static_cast<uint32_t>(bucketRefs.size()) });
+			m_GrassDrawBuckets.set(bucket);
+			refs.insert(refs.end(), bucketRefs.begin(), bucketRefs.end());
+		}
+
+		m_GrassDraws.Assign(draws);
+		m_GrassChunkRefs.Assign(refs);
+		m_GrassDirty      = false;
+		m_SceneGrassEpoch = epoch;
 	}
 
 	void
@@ -1582,6 +1671,10 @@ namespace bgl
 		}
 		m_BlobShadows.Update(cmdList);
 
+		RefreshGrass();
+		m_GrassDraws.Update(cmdList);
+		m_GrassChunkRefs.Update(cmdList);
+
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
 			buffer.Update(cmdList);
 		});
@@ -1679,6 +1772,18 @@ namespace bgl
 			auto blobs = std::string(c_BlobShadowsName);
 			fg.ImportBuffer(blobs, m_BlobShadows.GetBufferHandle());
 			resourceNames.push_back(std::move(blobs));
+		}
+
+		{
+			RefreshGrass();
+
+			auto draws = std::string(c_GrassDrawsName);
+			fg.ImportBuffer(draws, m_GrassDraws.GetBufferHandle());
+			resourceNames.push_back(std::move(draws));
+
+			auto refs = std::string(c_GrassChunkRefsName);
+			fg.ImportBuffer(refs, m_GrassChunkRefs.GetBufferHandle());
+			resourceNames.push_back(std::move(refs));
 		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the

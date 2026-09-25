@@ -169,6 +169,22 @@ TEST_CASE("a bucket's programs follow its desc", "[drawbucket]")
 			{ GeometryStage::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque }) ==
 		bgl::RasterCullMode::kBack);
 	CHECK(bgl::DrawBucketCullMode(staticCutout) == bgl::RasterCullMode::kNone);
+
+	// Grass pairs its own geometry stage with the material's opaque pixel program, and culls
+	// nothing in hardware whatever the material: a blade is seen from both sides.
+	const DrawBucketDesc grassPbr  = { GeometryStage::kGrass,
+		                               MaterialType::kPBR,
+		                               LayerType::kOpaque };
+	const DrawBucketDesc grassNull = { GeometryStage::kGrass,
+		                               MaterialType::kNull,
+		                               LayerType::kOpaque };
+	CHECK(bgl::DrawBucketGeometrySrc(grassPbr) == "programs.forward.Grass"sv);
+	CHECK(
+		bgl::DrawBucketPixelSrc(grassPbr) ==
+		bgl::DrawBucketPixelSrc(
+			{ GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque }));
+	CHECK(bgl::DrawBucketCullMode(grassPbr) == bgl::RasterCullMode::kNone);
+	CHECK(bgl::DrawBucketCullMode(grassNull) == bgl::RasterCullMode::kNone);
 }
 
 // Each surface's slot is its own material kind, so its layers resolve to buckets of their own on

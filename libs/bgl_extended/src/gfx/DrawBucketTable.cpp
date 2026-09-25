@@ -59,6 +59,10 @@ namespace bgl
 		{
 			gfatal("A bucket's layer is a real one");
 		}
+		if (geom == GeometryStage::kGrass && layer != LayerType::kOpaque)
+		{
+			gfatal("Grass is drawn opaque whatever its material's layer");
+		}
 		if (geom == GeometryStage::kSkinnedMesh && material != MaterialType::kPBR &&
 		    !GameSlot(material).has_value())
 		{

@@ -16,7 +16,7 @@ namespace bgl
 	[[nodiscard]] std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc);
 
-	/** The amplification/mesh module for the bucket's tier. @pre the bucket is not transparent. */
+	/** The amplification/mesh module for the bucket's stage. @pre the bucket is not transparent. */
 	[[nodiscard]] std::string_view
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc);
 

@@ -403,7 +403,8 @@ flowchart TD
   is stored re-cooks grass alone and a mesh with none never names it. Only the fields on mesh
   `meshIndex` are taken, and every range is checked against the pool it names before it is read, as
   `CookStaticMesh` checks the meshlet ranges. Each field is drawn with `looks[field.look]` by every
-  instance of the geom; `looks` is parallel to `fields.looks`. A field whose slot is out of range or
+  instance of the geom that is not hidden, in the opaque phase after the world
+  ([Grass](grass.md)); `looks` is parallel to `fields.looks`. A field whose slot is out of range or
   null is not drawn, and a slot naming a deleted look throws. Attaching again replaces the geom's
   grass and releases the looks it held; `DeleteGeom` releases them too. There is no off-thread half:
   the fields are copied, not flattened, so there is no cost worth moving off the driving thread.

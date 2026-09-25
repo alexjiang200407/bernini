@@ -32,6 +32,16 @@ public static const uint cMeshletsPerGroup = 8;
 // dispatch-everything path.
 public static const uint cMaxCompactedGroups = 8192;
 
+// Clumps one cooked grass chunk holds at most: the unit the grass stage's amplification group culls
+// and thins. The cook names the same number as assetlib::c_GrassClumpsPerChunk, and a static_assert
+// in Scene_Grass.cpp holds them equal.
+public static const uint cGrassClumpsPerChunk = 64;
+
+// What one grass mesh group may emit: the static tier's per-meshlet limits, so both mesh stages
+// size their outputs alike.
+public static const uint cGrassVerticesPerGroup = 64;
+public static const uint cGrassPrimsPerGroup = 124;
+
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;

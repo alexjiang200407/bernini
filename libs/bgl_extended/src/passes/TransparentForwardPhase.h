@@ -23,6 +23,13 @@ namespace bgl
 			return "Transparent";
 		}
 
+		/** Always: the bucket counts live on the GPU, so an empty bucket is found there, not here. */
+		[[nodiscard]] bool
+		HasWork(const DrawData& /*draw*/) const noexcept
+		{
+			return true;
+		}
+
 		void
 		Declare(PassDesc& desc) const;
 

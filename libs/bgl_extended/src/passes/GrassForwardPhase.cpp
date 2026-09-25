@@ -1,0 +1,135 @@
+#include "passes/GrassForwardPhase.h"
+#include "cmd/CommandList.h"
+#include "constants/constants.h"
+#include "fg/PassDesc.h"
+#include "passes/BindingNameCheck.h"
+#include "passes/DrawData.h"
+#include "passes/ForwardPhases.h"
+#include "passes/SceneBindings.h"
+#include "pipeline/MeshletKernel.h"
+#include "scene/SceneView.h"
+#include "scene/dispatch_limits.h"
+#include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "types/MeshletState.h"
+#include "uniforms/Uniforms.h"
+#include <algorithm>
+#include <array>
+#include <bgl/ISceneView.h>
+#include <bgl_common/gassert.h>
+#include <cstdint>
+#include <string_view>
+
+namespace bgl
+{
+	namespace
+	{
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in Grass.slang.
+		constexpr auto c_Cbuffer = "grassData"sv;
+
+		constexpr std::array<SceneBuffer, 5> c_GrassBuffers = {
+			{ { c_GrassDrawsName,
+			    "draws",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { c_GrassChunkRefsName,
+			    "chunkRefs",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { c_GrassLookBufferName,
+			    "looks",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { c_GrassChunkBufferName,
+			    "chunks",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { c_GrassClumpBufferName,
+			    "clumps",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader } }
+		};
+
+		constexpr std::array<std::string_view, 4> c_Fields = {
+			"cameraPos"sv,
+			"firstRef"sv,
+			"refCount"sv,
+			"dispatchWidth"sv,
+		};
+
+		[[nodiscard]] const SceneView&
+		ViewOf(const DrawData& draw)
+		{
+			const auto* view = draw.view->As<SceneView>();
+			gassert(view != nullptr, "The grass phase requires a bgl::SceneView");
+			return *view;
+		}
+	}
+
+	bool
+	GrassForwardPhase::HasWork(const DrawData& draw) const
+	{
+		return !ViewOf(draw).GetGrassBatches().empty();
+	}
+
+	void
+	GrassForwardPhase::Declare(PassDesc& desc) const
+	{
+		desc.AddRenderTarget(c_MotionVectorsName);
+		for (const auto& binding : c_GrassBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+	}
+
+	void
+	GrassForwardPhase::Record(
+		ForwardPhases&     kernels,
+		MeshletState&      state,
+		const DrawData&    draw,
+		const PassContext& resources) const
+	{
+		ICommandList* cmd = resources.GetCommandList();
+		gassert(cmd != nullptr, "Pass commandlist must be initialized");
+
+		for (const SceneView::GrassBatch& batch : ViewOf(draw).GetGrassBatches())
+		{
+			MeshletKernel* kernel =
+				kernels.BindDrawBucketKernel(batch.bucket, state, draw, resources);
+			gassert(
+				kernel != nullptr,
+				"a grass batch's bucket was drawn before its kernel was built");
+			if (kernel == nullptr || batch.refCount == 0)
+			{
+				continue;
+			}
+
+			// One amplification group per chunk reference, laid out in rows no wider than one
+			// dispatch can launch, so a view past that many chunks still dispatches once.
+			const uint32_t width = std::min(batch.refCount, c_MaxDispatchMeshGroups);
+			const uint32_t rows  = (batch.refCount + width - 1) / width;
+
+			auto found = kernel->FindUniforms(c_Cbuffer);
+			if (!found)
+			{
+				gfatal("Grass shader is missing its '{}' constant buffer", c_Cbuffer);
+			}
+			auto& uniforms = *found;
+			BindSceneBuffers(uniforms, c_GrassBuffers, resources);
+			uniforms["cameraPos"]     = draw.viewState.cameraPos;
+			uniforms["firstRef"]      = batch.firstRef;
+			uniforms["refCount"]      = batch.refCount;
+			uniforms["dispatchWidth"] = width;
+
+			cmd->SetMeshletState(state);
+			cmd->DispatchMesh(width, rows, 1);
+		}
+	}
+
+	void
+	GrassForwardPhase::CheckBindings(BindingNameCheck& check)
+	{
+		check.Check(c_Cbuffer, GetUniformKeys(c_GrassBuffers)).Check(c_Cbuffer, c_Fields);
+	}
+}

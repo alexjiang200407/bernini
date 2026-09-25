@@ -77,8 +77,16 @@ namespace bgl
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no geometry program");
-		return desc.geom == GeometryStage::kSkinnedMesh ? "programs.forward.SkinnedMesh"sv :
-		                                                  "programs.forward.StaticMesh"sv;
+		switch (desc.geom)
+		{
+		case GeometryStage::kStaticMesh:
+			return "programs.forward.StaticMesh"sv;
+		case GeometryStage::kSkinnedMesh:
+			return "programs.forward.SkinnedMesh"sv;
+		case GeometryStage::kGrass:
+			return "programs.forward.Grass"sv;
+		}
+		gfatal("An unknown geometry stage");
 	}
 
 	uint32_t
@@ -90,6 +98,11 @@ namespace bgl
 	RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{
+		// A blade is seen from either side, and a material's doubleSided flag is a mesh's question.
+		if (desc.geom == GeometryStage::kGrass)
+		{
+			return RasterCullMode::kNone;
+		}
 		return desc.material == MaterialType::kNull || desc.material == MaterialType::kAssert ?
 		           RasterCullMode::kBack :
 		           RasterCullMode::kNone;

@@ -929,7 +929,7 @@ namespace bgl
 			}
 		}
 
-		ReleaseGrass(record.grass);
+		ReleaseGrass(m_Geoms[geom.handle.index].grass);
 
 		const auto& submeshes = record.submeshes;
 

@@ -20,6 +20,7 @@ namespace bgl
 	{
 		kStaticMesh,
 		kSkinnedMesh,
+		kGrass,  // blades built from a static geom's clumps, drawn opaque whatever the layer
 	};
 
 	/** The stage a geom's instances draw through. @pre geom is kStaticMesh or kSkinnedMesh. */

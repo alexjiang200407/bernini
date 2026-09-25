@@ -749,8 +749,10 @@ namespace bgl
 		auto view  = job.view->As<SceneView>();
 		auto scene = view->GetScene()->As<Scene>();
 
-		EnsureDrawBucketPipelinesExist(view->DemandedDrawBuckets());
-		EnsureBrdfLutExists(view->DemandedDrawBuckets());
+		view->RefreshGrass();
+		const DrawBucketMask demanded = view->DemandedDrawBuckets() | view->GrassDrawBuckets();
+		EnsureDrawBucketPipelinesExist(demanded);
+		EnsureBrdfLutExists(demanded);
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
@@ -905,7 +907,8 @@ namespace bgl
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
-		// The depth holds the world alone here: the seam an HZB build belongs at.
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
+		// The depth holds the world and its grass alone here: the seam an HZB build belongs at.
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);

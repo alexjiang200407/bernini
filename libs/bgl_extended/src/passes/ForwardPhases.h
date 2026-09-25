@@ -1,6 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
 #include "passes/BucketedForwardPhase.h"
+#include "passes/GrassForwardPhase.h"
 #include "passes/PassInitContext.h"
 #include "passes/TransparentForwardPhase.h"
 #include "pipeline/MeshletKernel.h"
@@ -27,13 +28,14 @@ namespace bgl
 	struct PassDesc;
 
 	/**
-	 * Which part of the forward render a pass records, in the order they draw. After `kWorld` the
-	 * depth holds the world alone -- the static tier's opaque surfaces, moving or not: the blob-shadow
-	 * pass draws there, and it is where an HZB build belongs.
+	 * Which part of the forward render a pass records, in the order they draw. After `kGrass` the
+	 * depth holds the world alone -- the static tier's opaque surfaces and their grass, moving or
+	 * not: the blob-shadow pass draws there, and it is where an HZB build belongs.
 	 */
 	enum class ForwardPhase : uint8_t
 	{
 		kWorld,        // the static tier's non-transparent buckets
+		kGrass,        // the grass the view's geoms grow
 		kSkinned,      // the skinned tier's non-transparent buckets
 		kTransparent,  // the depth-sorted list, every tier
 	};
@@ -52,6 +54,7 @@ namespace bgl
 		const DrawData&    draw,
 		const PassContext& resources) {
 		{ phase.Name() } -> std::convertible_to<std::string_view>;
+		{ phase.HasWork(draw) } -> std::same_as<bool>;
 		phase.Declare(desc);
 		phase.Record(kernels, state, draw, resources);
 	};
@@ -179,6 +182,7 @@ namespace bgl
 
 		BucketedForwardPhase    m_World{ GeometryStage::kStaticMesh, "World" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };
+		GrassForwardPhase       m_Grass;
 		TransparentForwardPhase m_Transparent;
 	};
 }

@@ -44,7 +44,8 @@ flowchart TD
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
+        FWW --> GRS["Forward Grass (only when a drawn geom has grass; one dispatch per grass bucket)"]
+        GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
         FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
         FWT --> SM["Outline Mask (only when the view has a selection)"]
@@ -407,8 +408,8 @@ under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInst
 `CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
 in `BERNINI_GPU_DEBUG` builds -- here per instance, and per meshlet by the static tier's
-amplification stage in Forward World ([Meshlet culling](#meshlet-culling)) -- and read by
-nothing on the CPU.
+amplification stage in Forward World ([Meshlet culling](#meshlet-culling)), and per grass chunk
+and blade by [Forward Grass](#forward-grass) -- and read by nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
@@ -570,15 +571,16 @@ The main geometry render: a mesh-shader forward render, attached as one graph pa
 all of them (`BindKernel`) and the targets -- and composes one phase object per pass, which owns
 the rest: which draws it records, what its dispatch reads beyond the shared set, and how it dispatches.
 `BucketedForwardPhase` is World and Skinned, one per `GeometryStage`, indirect over the compaction's
-output; `TransparentForwardPhase` is the sorted list, one dispatch through the shared blend kernel.
+output; `GrassForwardPhase` is the grass, a direct dispatch per grass bucket over the view's chunk
+list; `TransparentForwardPhase` is the sorted list, one dispatch through the shared blend kernel.
 A phase takes its kernels already bound, with the framebuffer that kernel declares -- colour,
 velocity and depth for a bucket's, colour and depth for the blend kernel -- and never builds one. The set is fixed and ordered, because
 the frame's order is `RenderContext`'s and Blob Shadows draws between two of them, so the phases are
 concrete members held by value, and what they have in common is the `ForwardPhaseRecorder` concept
 rather than a base class. **Forward World** draws the non-transparent buckets of the static tier -- the
-world, which is everything a blob shadow lands on, moving placements included; **Forward Skinned**
-the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the world the
-depth holds it alone -- the seam [Blob Shadows](#blob-shadows) draws at, and where the HZB of
+world, moving placements included; **Forward Grass** the grass those placements grow; **Forward
+Skinned** the skinned tier's; **Forward Transparent** the depth-sorted list, every tier. After the
+grass the depth holds the world and its grass alone -- everything a blob shadow lands on, the seam [Blob Shadows](#blob-shadows) draws at, and where the HZB of
 two-phase occlusion culling will be built (ROADMAP.md § Culling). One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
 tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
@@ -666,6 +668,34 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.
 
+#### Forward Grass
+
+Draws the grass the view's geoms grow (`IScene::AttachGrass`); blades are built in the mesh stage
+from the clumps, never stored. What it draws, how a blade is shaped and thinned, and what it costs
+are in [Grass](grass.md); this is the phase's contract.
+
+`SceneView::RefreshGrass` lists, on a frame the grass changed, one `GrassChunkRef` per chunk of
+every field on every visible static instance, grouped by the draw bucket the look's material
+resolves to on the `GeometryStage::kGrass` stage -- always opaque, whatever the material's layer.
+A grass bucket is an ordinary bucket to `ForwardPhases`: its kernel pairs `programs.forward.Grass`
+with the bucket's own pixel program, culls nothing in hardware (a blade is seen from both sides) and
+writes depth, built by the first `Draw` whose view has grass in it. `GrassForwardPhase` dispatches
+each bucket once, directly, with one amplification group per chunk reference in rows at most
+65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData` constant buffer.
+
+It culls in two places. The amplification group tests the chunk's sphere, inflated by the furthest
+a blade can reach, against the same `cull.view` planes Forward World uses, and launches as many mesh
+groups as the chunk keeps blades at its nearest point. Each mesh group keeps or drops each blade
+against its own root's distance. In `BERNINI_GPU_DEBUG` builds it adds to `cull.stats`'
+`grassChunksTested`, `grassChunksCulled` and `grassBladesEmitted`. Velocity comes from the
+placement's current and previous transform through the same `ProjectVertex` the world's meshlets
+use, so moved grass moves in the motion vectors and still grass writes none.
+
+* **In:** beyond the shared set, the velocity target and `scene.grassLookBuffer`,
+  `scene.grassChunkBuffer`, `scene.grassClumpBuffer`, `scene.grassDraws`, `scene.grassChunkRefs`.
+* **Out:** scene colour, the velocity buffer, depth.
+* **Skipped** -- no pass attached -- when no drawn geom has grass.
+
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPass.cpp)
 
 Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
@@ -677,7 +707,7 @@ normal) once that box is clipped to the near plane, so a volume reaching behind 
 bounded by where its edges cross it; a volume wholly outside any
 one frustum plane — most often, all of it behind the camera — emits no quad at all
 (`lib.math.box_bounds`). The pixel shader reconstructs the surface under each pixel from the scene
-depth as Forward World left it -- the world alone, sampled rather than attached -- through the
+depth as Forward World and Forward Grass left it -- the world and its grass, sampled rather than attached -- through the
 inverse view-projection, darkening it by a
 radial falloff around the caster's axis and fading with the caster's per-pixel height above that
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather

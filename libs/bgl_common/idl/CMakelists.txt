@@ -71,6 +71,11 @@ set(IDL_CPP_SOURCES
     FootIKLeg.slang
     PosedInstance.slang
     BlobShadow.slang
+    GrassLook.slang
+    GrassChunk.slang
+    GrassClump.slang
+    GrassDraw.slang
+    GrassChunkRef.slang
     Rig.slang
     BlendNodeKind.slang
     BlendSpaceSample.slang

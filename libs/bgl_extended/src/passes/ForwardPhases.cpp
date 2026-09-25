@@ -225,14 +225,15 @@ namespace bgl
 			return;
 		}
 
-		BindingNameCheck("ForwardPhases"sv, kernels)
-			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+		auto check = BindingNameCheck("ForwardPhases"sv, kernels);
+		check.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
+		GrassForwardPhase::CheckBindings(check);
 	}
 
 	void
@@ -245,6 +246,9 @@ namespace bgl
 		{
 		case ForwardPhase::kWorld:
 			AttachPhase(fg, draw, m_World);
+			return;
+		case ForwardPhase::kGrass:
+			AttachPhase(fg, draw, m_Grass);
 			return;
 		case ForwardPhase::kSkinned:
 			AttachPhase(fg, draw, m_Skinned);
@@ -260,6 +264,11 @@ namespace bgl
 	void
 	ForwardPhases::AttachPhase(FrameGraph& fg, const DrawData& draw, const Phase& phase)
 	{
+		if (!phase.HasWork(draw))
+		{
+			return;
+		}
+
 		auto desc = PassDesc();
 		desc.SetName("Forward {} {}", phase.Name(), draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)

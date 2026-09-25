@@ -37,6 +37,12 @@ namespace bgl
 	constexpr std::string_view c_BlendNodeBufferName   = "scene.blendNodeBuffer"sv;
 	constexpr std::string_view c_BlendSampleBufferName = "scene.blendSampleBuffer"sv;
 
+	// One GrassLook per CreateGrass, and every attached field's chunks and clumps, each a range a
+	// geom owns and DeleteGeom frees.
+	constexpr std::string_view c_GrassLookBufferName  = "scene.grassLookBuffer"sv;
+	constexpr std::string_view c_GrassChunkBufferName = "scene.grassChunkBuffer"sv;
+	constexpr std::string_view c_GrassClumpBufferName = "scene.grassClumpBuffer"sv;
+
 	constexpr std::string_view c_InstanceBufferName     = "scene.instanceBuffer"sv;
 	constexpr std::string_view c_MeshInstanceBufferName = "scene.meshInstanceBuffer"sv;
 	// One arena for every animated placement's playback record, of either tier.
@@ -47,6 +53,11 @@ namespace bgl
 
 	// One entry per placement carrying a blob shadow, dense and CPU-authored like the pose list.
 	constexpr std::string_view c_BlobShadowsName = "scene.blobShadows"sv;
+
+	// Every visible placement's grass fields, and one reference per chunk of them grouped by the
+	// pixel program they draw through: dense and CPU-authored like the blob list.
+	constexpr std::string_view c_GrassDrawsName     = "scene.grassDraws"sv;
+	constexpr std::string_view c_GrassChunkRefsName = "scene.grassChunkRefs"sv;
 
 	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
