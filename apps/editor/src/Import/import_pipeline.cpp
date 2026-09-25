@@ -294,6 +294,7 @@ namespace editor
 
 					for (std::string& grass : store.WriteImportedGrass(
 							 imported->grass,
+							 *mesh,
 							 store.KeyFor(grassPath),
 							 sourceRef))
 						rigOutputs.push_back(std::move(grass));

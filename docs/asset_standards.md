@@ -462,7 +462,8 @@ point per clump, which the import reads as a grass field (`BMeshImport::grass`,
 submesh. The renderer grows the blades from the points; the DCC never sees one.
 
 The fields are cooked into a `.bgrassfields` beside the `.bmesh` (`AssetStore::WriteImportedGrass`),
-written and listed in the `.bimport`'s `outputs` only when the source has a POINTS primitive. It is
+written, listed in the `.bimport`'s `outputs` and named by the `.bmesh` (`BMesh::grass`) only when
+the source has a POINTS primitive. It is
 a cache entry of its own with its own bake token, so a change to how clumps are stored re-cooks
 grass and no mesh -- and a fourth member of the geometry group, so `Reimport`, `migrate`, `pack`,
 staleness and rename carry it exactly as they carry the `.bmesh` beside it. It stores the looks it

@@ -99,6 +99,8 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
+		case assetlib::RefKind::kMeshGrass:
+			return "grows the grass of";
 		case assetlib::RefKind::kDocumentSkeleton:
 			return "binds its source's joints to";
 		case assetlib::RefKind::kDocumentOutput:
@@ -615,6 +617,7 @@ main(int argc, char** argv)
 
 				for (std::string& grass : importStore.WriteImportedGrass(
 						 imported.grass,
+						 mesh,
 						 importStore.KeyFor(grassPath),
 						 source))
 					outputs.push_back(std::move(grass));

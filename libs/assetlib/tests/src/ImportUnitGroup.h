@@ -64,6 +64,7 @@ namespace assetlib::test
 
 		for (std::string& grass : store.WriteImportedGrass(
 				 imported.grass,
+				 mesh,
 				 std::format("Derived/Meshes/{}{}", name, c_GrassFieldsExtension),
 				 source))
 			outputs.push_back(std::move(grass));

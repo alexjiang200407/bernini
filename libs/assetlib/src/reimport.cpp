@@ -97,6 +97,7 @@ namespace assetlib
 				generateTangents(mesh);
 				requireUniqueSubmeshNames(mesh);
 				mesh.source = group.ref;
+				mesh.grass  = document.GetGrassOutput();
 
 				if (isSkinned(mesh))
 				{
