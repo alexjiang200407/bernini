@@ -14,8 +14,20 @@ jobs:
   compile:
     name: compile (ninja-msvc, Debug)
     runs-on: windows-latest
+    # packages: write is what lets GITHUB_TOKEN push vcpkg's binaries to this repo's feed.
+    permissions:
+      contents: read
+      packages: write
+    # vcpkg's binaries live on GitHub Packages, one NuGet package per port per ABI hash. Every run
+    # reads the one feed: an actions/cache entry is scoped to the ref that saved it, so a PR's could
+    # serve no other PR, and a key naming the runner image missed on every PR while the image pool
+    # was mixed. A package's ABI hash covers the compiler, so an image that changes it rebuilds each
+    # affected port once and every later run, on any branch, reuses it.
     env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-cache
+      FEED_URL: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+      VCPKG_BINARY_SOURCES: clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite
+      # GITHUB_TOKEN may publish only a package linked to this repository; the nuspec links it.
+      VCPKG_NUGET_REPOSITORY: https://github.com/${{ github.repository }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,28 +42,17 @@ jobs:
         shell: pwsh
         run: |
           "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
 
-      # A package's vcpkg ABI covers the compiler and the vcpkg tool, and both ship with the
-      # runner image, so the image belongs in the cache key. `${{ env.ImageVersion }}` cannot
-      # reach it: the env context sees this workflow's own `env:` blocks and nothing else, so it
-      # expands to the empty string. Re-exporting through $GITHUB_ENV is what puts it in reach.
-      - name: Put the runner image in reach of the cache key
-        shell: bash
-        run: echo "IMAGE=${ImageVersion:-unknown}" >> "$GITHUB_ENV"
-
-      # Without this every run rebuilds slang, ktx, sdl3 and the rest from source. vcpkg.json
-      # carries the builtin-baseline, so hashing it keys the whole dep set; the overlay ports and
-      # the preset's triplet are the rest of what the plan is built from.
-      - name: Restore vcpkg binaries
-        id: vcpkg-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-x64-windows-${{ env.IMAGE }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/ports/**', 'CMakePresets.json') }}
-          # No entry from another image holds anything usable, since every package's ABI covers
-          # the compiler -- so the fallback stops at this image's own entries.
-          restore-keys: vcpkg-x64-windows-${{ env.IMAGE }}-
+      # A push the token cannot make -- a fork's pull request -- is a warning, not a failure: the
+      # run still reads the feed and builds what it misses.
+      - name: Give vcpkg's NuGet the package feed
+        shell: pwsh
+        run: |
+          $nuget = & "$env:VCPKG_ROOT\vcpkg.exe" fetch nuget | Select-Object -Last 1
+          & $nuget sources add -Source "$env:FEED_URL" -Name GitHubPackages `
+            -UserName "${{ github.repository_owner }}" -Password "${{ secrets.GITHUB_TOKEN }}" `
+            -StorePasswordInClearText
+          & $nuget setapikey "${{ secrets.GITHUB_TOKEN }}" -Source "$env:FEED_URL"
 
       # Compile only: the ninja-msvc-debug preset has BUILD_TESTS=ON, so the suites are
       # built but never run -- they need a GPU and a machine this runner isn't. Qt is
@@ -59,22 +60,6 @@ jobs:
       # build.py locates vcvars via vswhere when config.json is absent, as it is here.
       - name: Build
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
-
-      # Named after its contents, not after what we believe determines them: an ABI input the key
-      # above forgets still moves the digest, so the rebuild is saved instead of wedging the cache.
-      - name: Key the binaries by what is in them
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: echo "VCPKG_CACHE_KEY=${{ steps.vcpkg-cache.outputs.cache-primary-key }}-${{ hashFiles('.vcpkg-cache/**') }}" >> "$GITHUB_ENV"
-
-      # Saved on failure too: vcpkg writes each package as it completes, so a build that died
-      # later still leaves binaries a retry can use.
-      - name: Save vcpkg binaries
-        if: ${{ !cancelled() && steps.vcpkg-cache.outputs.cache-matched-key != env.VCPKG_CACHE_KEY }}
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: ${{ env.VCPKG_CACHE_KEY }}
 
   macos:
     name: compile (macos-clang, Debug + Metal)
@@ -117,10 +102,16 @@ jobs:
           fi
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
 
-      # The compile job explains this and the three cache steps below; they differ only in triplet.
+      # A key naming the runner image, because a package's vcpkg ABI covers the compiler and the
+      # image ships it. `${{ env.ImageVersion }}` cannot reach it -- the env context sees this
+      # workflow's own `env:` blocks only -- so it is re-exported through $GITHUB_ENV. This job still
+      # caches through actions/cache, whose entries are scoped to the ref that saved them; the
+      # Windows job moved to a package feed for that reason (NuGet needs mono here).
       - name: Put the runner image in reach of the cache key
         run: echo "IMAGE=${ImageVersion:-unknown}" >> "$GITHUB_ENV"
 
+      # vcpkg.json carries the builtin-baseline, so hashing it keys the whole dep set; the overlay
+      # ports and the preset's triplet are the rest of what the plan is built from.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
         uses: actions/cache/restore@v4
@@ -135,10 +126,14 @@ jobs:
       - name: Build (Metal)
         run: python scripts/build.py --preset macos-clang-metal-debug
 
+      # Named after its contents, not after what we believe determines them: an ABI input the key
+      # above forgets still moves the digest, so the rebuild is saved instead of wedging the cache.
       - name: Key the binaries by what is in them
         if: ${{ !cancelled() }}
         run: echo "VCPKG_CACHE_KEY=${{ steps.vcpkg-cache.outputs.cache-primary-key }}-${{ hashFiles('.vcpkg-cache/**') }}" >> "$GITHUB_ENV"
 
+      # Saved on failure too: vcpkg writes each package as it completes, so a build that died
+      # later still leaves binaries a retry can use.
       - name: Save vcpkg binaries
         if: ${{ !cancelled() && steps.vcpkg-cache.outputs.cache-matched-key != env.VCPKG_CACHE_KEY }}
         uses: actions/cache/save@v4
