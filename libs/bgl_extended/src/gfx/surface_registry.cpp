@@ -5,7 +5,6 @@
 #include "passes/draw_bucket_config.h"
 #include "slang/SlangSessions.h"
 #include "util/util.h"
-#include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
@@ -121,7 +120,8 @@ namespace bgl
 		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
 		{
 			const auto colour = [kind](LayerType layer) {
-				return DrawBucketPixelSrc(DrawBucketDesc{ GeomType::kStaticMesh, kind, layer });
+				return DrawBucketPixelSrc(
+					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
 			};
 			const bool lit = shading == SurfaceShading::kLit;
 

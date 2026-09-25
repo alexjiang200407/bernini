@@ -1488,7 +1488,7 @@ namespace bgl
 			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
-		instance.drawBucket = m_DrawBucketTable->Resolve(geomType, material);
+		instance.drawBucket = m_DrawBucketTable->Resolve(GeometryStageOf(geomType), material);
 		m_DemandedDrawBuckets.set(instance.drawBucket);
 	}
 

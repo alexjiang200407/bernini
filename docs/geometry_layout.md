@@ -89,11 +89,11 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 
   **Transparent draw buckets are the exception.** Blending must composite back-to-front, which is a
   depth order, not a draw bucket order. The counting sort still counts a transparent instance into its draw bucket like any
-  other, but `ForwardPass::Execute` skips those draw buckets in the opaque draw loop
+  other, but `BucketedForwardPhase::Record` skips those draw buckets in the opaque draw loop
   (`DrawBucketTable::Transparent`) — they are never dispatched — and the instance is instead drawn from a separate, per-frame depth-sorted list
   (`scene.sortedTransparentInstances`) after the opaque draw buckets, in the same forward pass. That list
   is built entirely on the GPU by `TransparentSortPass`; see
-  [TransparentSortPass.h](libs/bgl_extended/src/passes/TransparentSortPass.h) and `ForwardPass::DrawTransparent`.
+  [TransparentSortPass.h](libs/bgl_extended/src/passes/TransparentSortPass.h) and `TransparentForwardPhase::Record`.
 
   The **default** material lives host-side on the `Scene`, in a vector parallel to the submesh buffer
   (`Scene::GetSubmeshDefaultMaterial`), not in `idl::Submesh`. The GPU has no use for it — the

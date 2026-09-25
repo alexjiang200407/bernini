@@ -2,7 +2,6 @@
 #include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include "util/util.h"
-#include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/gassert.h>
@@ -78,8 +77,8 @@ namespace bgl
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no geometry program");
-		return desc.geom == GeomType::kSkinnedMesh ? "programs.forward.SkinnedMesh"sv :
-		                                             "programs.forward.StaticMesh"sv;
+		return desc.geom == GeometryStage::kSkinnedMesh ? "programs.forward.SkinnedMesh"sv :
+		                                                  "programs.forward.StaticMesh"sv;
 	}
 
 	uint32_t

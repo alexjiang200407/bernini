@@ -13,15 +13,29 @@
 namespace bgl
 {
 	/**
+	 * The geometry program a draw bucket's triangles come from. The renderer's own axis rather than
+	 * the client's GeomType, which names only the geoms a client can create.
+	 */
+	enum class GeometryStage : uint8_t
+	{
+		kStaticMesh,
+		kSkinnedMesh,
+	};
+
+	/** The stage a geom's instances draw through. @pre geom is kStaticMesh or kSkinnedMesh. */
+	[[nodiscard]] GeometryStage
+	GeometryStageOf(GeomType geom);
+
+	/**
 	 * What a draw bucket draws: the key its id was allocated for. Everything a pass needs to build or
 	 * pick the bucket's kernels derives from these three -- the pixel program from (material,
 	 * layer), the geometry program from geom, the raster state from material and layer.
 	 */
 	struct DrawBucketDesc
 	{
-		GeomType     geom;
-		MaterialType material;
-		LayerType    layer;
+		GeometryStage geom;
+		MaterialType  material;
+		LayerType     layer;
 	};
 
 	/**
@@ -61,11 +75,11 @@ namespace bgl
 		 * here -- every door binding a material to animated geometry checks AcceptsMaterial first.
 		 */
 		[[nodiscard]] uint32_t
-		Resolve(GeomType geom, MaterialType material, LayerType layer);
+		Resolve(GeometryStage geom, MaterialType material, LayerType layer);
 
 		/** The bucket a submesh draws through. An invalid handle resolves to the unlit fallback. */
 		[[nodiscard]] uint32_t
-		Resolve(GeomType geom, MaterialHandle material);
+		Resolve(GeometryStage geom, MaterialHandle material);
 
 		/** @pre bucket < Count(). */
 		[[nodiscard]] const DrawBucketDesc&
