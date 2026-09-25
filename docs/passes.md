@@ -678,10 +678,12 @@ are in [Grass](grass.md); this is the phase's contract.
 every field on every visible static instance, grouped by the draw bucket the look's material
 resolves to on the `GeometryStage::kGrass` stage -- always opaque, whatever the material's layer.
 A grass bucket is an ordinary bucket to `ForwardPhases`: its kernel pairs `programs.forward.Grass`
-with the bucket's own pixel program, culls nothing in hardware (a blade is seen from both sides) and
-writes depth, built by the first `Draw` whose view has grass in it. `GrassForwardPhase` dispatches
-each bucket once, directly, with one amplification group per chunk reference in rows at most
-65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData` constant buffer.
+with the material kind's grass program (`programs.forward.Grass_<kind>`, which lights the blade the
+way [Grass § Lighting](grass.md#lighting) describes), culls nothing in hardware (a blade is seen
+from both sides) and writes depth, built by the first `Draw` whose view has grass in it.
+`GrassForwardPhase` dispatches each bucket once, directly, with one amplification group per chunk
+reference in rows at most 65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData`
+constant buffer, which the grass program reads a blade's look from as well.
 
 It culls in two places. The amplification group tests the chunk's sphere, inflated by the furthest
 a blade can reach, against the same `cull.view` planes Forward World uses, and launches as many mesh

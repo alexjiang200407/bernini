@@ -123,6 +123,23 @@ public struct BiasedArenaReader : IMaterialReader
     public float3 CameraPos() { return inner.CameraPos(); }
 }
 
+// The reader a surface gets on a grass blade: uv1 there is the blade's random, not a second UV set, so
+// a surface sampling geometry occlusion through it reads the map as absent. The face is always the
+// front: the grass stage has already turned the normal toward the camera.
+public struct BladeArenaReader : IMaterialReader
+{
+    MaterialArenaReader inner;
+
+    public float4 Sample<S : ISlot>(S slot, float2 uv) { return inner.Sample(slot, uv); }
+    public float2 Uv() { return inner.Uv(); }
+    public float2 Uv1() { return inner.Uv1(); }
+    public bool HasUv1() { return false; }
+    public float3 WorldPos() { return inner.WorldPos(); }
+    public float3 WorldNormal() { return inner.WorldNormal(); }
+    public float4 WorldTangent() { return inner.WorldTangent(); }
+    public float3 CameraPos() { return inner.CameraPos(); }
+}
+
 // The readers a record hands its surface, built by the record's location alone: neither depends
 // on the surface's type, so both record structs below share these.
 MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFrontFace)
@@ -131,6 +148,13 @@ MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFr
     reader.byteOffset = byteOffset;
     reader.input = input;
     reader.isFrontFace = isFrontFace;
+    return reader;
+}
+
+BladeArenaReader BladeArenaReaderAt(uint byteOffset, ForwardVSOut input)
+{
+    BladeArenaReader reader;
+    reader.inner = ArenaReaderAt(byteOffset, input, true);
     return reader;
 }
 
@@ -168,6 +192,7 @@ public struct GameRecord<G : ISurfaceSource>
 
     public float Coverage(ForwardVSOut input, bool isFrontFace) { return G.Coverage(Reader(input, isFrontFace), params); }
     public PbrSurface Evaluate(ForwardVSOut input, bool isFrontFace) { return G.Evaluate(Reader(input, isFrontFace), params); }
+    public PbrSurface EvaluateOnBlade(ForwardVSOut input) { return G.Evaluate(BladeArenaReaderAt(byteOffset, input), params); }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 
     public float CoverageAtBias(ForwardVSOut input, bool isFrontFace, float lodBias)
@@ -233,6 +258,10 @@ public struct LitGameRecord<G : ILitSurfaceSource>
     public float4 Shade(ForwardVSOut input, bool isFrontFace)
     {
         return G.Shade(Reader(input, isFrontFace), MaterialSurfaceLight(), params);
+    }
+    public float4 ShadeOnBlade(ForwardVSOut input)
+    {
+        return G.Shade(BladeArenaReaderAt(byteOffset, input), MaterialSurfaceLight(), params);
     }
     public float AlphaCutoff() { return engine.alphaCutoff; }
 

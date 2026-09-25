@@ -81,12 +81,45 @@ count: 16 at one segment, 8 at three, 4 at seven.
 Grass is a forward phase, `Forward Grass <n>`, after Forward World and before Blob Shadows
 ([passes.md](passes.md#forward-grass)), and a geometry stage of its own: a look's material picks a
 draw bucket on the `kGrass` stage, keyed by material kind as a static opaque mesh's is, whose kernel
-pairs the grass stage with that material's pixel program. So every material kind draws and a blade
-shades as a surface of that material. Blades are solid, two-sided and depth-tested, with no alpha test: a blade is its own
-geometry, not a card.
+pairs the grass stage with that kind's grass program (`programs.forward.Grass_<kind>`, generated for
+each registered surface). So every material kind draws and a blade shades as a surface of that
+material. Blades are solid, two-sided and depth-tested, with no alpha test: a blade is its own
+geometry, not a card, and a mask or hashed material's alpha is never read.
 
 Grass writes depth and velocity like the world. Still grass under a still camera writes no motion;
 a placement that moves carries its blades' motion with it.
+
+## Lighting
+
+Grass has no lighting model of its own. A grass program evaluates the material's surface and lights it
+through `ShadeSurface`, the entry every Forward program uses, so grass takes whatever the scene's
+materials take, and a surface that restyles them restyles the grass with them. What grass adds is
+geometry, which the mesh stage builds into the vertex it hands the pixel stage
+(`lib/forward/grass_vertex.slang`), and one term:
+
+- **The normal** is built, never taken from the face. Each blade turns its face toward the camera,
+  judged once at its middle, so both sides of a blade shade alike and the program always shades the
+  front. The normal then tilts toward the edge a vertex sits on by `normalRounding`, which makes the
+  flat strip read as rounded, and blends toward its clump's ground normal by a share that runs from
+  `groundNormalNear` at the camera to `groundNormalFar` at the fade end. At 1 and 1 every blade
+  shades as the ground under it: the usual stylized setup, and what hides a field's thin far blades.
+- **Colour and occlusion.** The base colour is multiplied by the look's tints from root to tip, the
+  clump's colour and the blade's variation, and the occlusion by `rootOcclusion` falling off to the
+  tip. Occlusion scales the environment's light and not the sun's, as it does on every surface.
+- **Translucency** (`GrassTranslucency`) is the sun through a blade seen against it: a wrapped
+  diffuse term on the far side of the normal, in the look's colour and strength, added after
+  `ShadeSurface`. It is the one lighting term PBR lacks, and one function, so a toon path swaps its
+  body and nothing else.
+
+A surface on the lit contract (`ILitSurfaceSource`) owns all of its lighting, so a blade drawn with
+one gets none of the above but the normal: the program calls its `Shade` and adds nothing. The rest
+reaches it through the interpolants any surface reads -- `Uv().y` runs root to tip and `Uv1().x` is
+the blade's own random -- so a game can ship its own grass shading before the engine has a toon path.
+
+uv1 on a blade is never a second UV set, so `HasUv1()` is false there and a geometry occlusion map
+is read as white, for the engine's kinds and a surface's alike. Its `y` carries the entry of the
+blade's look, which the program reads the translucency from: an interpolant constant along the blade
+costs nothing where a flat attribute for it cost the pass a third more on Apple silicon.
 
 ## Cost
 
@@ -102,6 +135,11 @@ grass visibly chunky. The rest is the look's own density near the camera: the sa
 5-20 m cost 0.83 ms before thinning. Per-blade frustum rejection in the mesh stage was tried and
 saved nothing on a verge the camera looks along, so it is not there.
 
+Lighting took the same verge from 1.12 ms to about 1.25 ms. The tint interpolant is 0.04 ms of that
+and the translucency term the rest, paid whether a look uses it or not: branching on its strength
+saved nothing measurable. Carrying the translucency as a flat per-vertex attribute instead cost
+0.42 ms, and as an interpolated one 0.18 ms, which is why the program reads it from the look.
+
 ## Where it comes from
 
 - **The blade and the field.** A blade as a tapered strip of solid triangles along a quadratic
@@ -116,6 +154,9 @@ saved nothing on a verge the camera looks along, so it is not there.
   (`BladeAddress`) so that keeping the first K thins every clump evenly is what lets a chunk launch
   mesh groups for only the blades it keeps. Neither source does this: Tsushima's compute pass
   compacts survivors instead.
+- **The lighting terms.** A normal rounded across the blade's width, blended toward the terrain's
+  with distance, and a translucency term for the sun behind a blade: Tsushima again. Turning each
+  blade's face toward the camera is the engine's own, so a blade needs no back-face flip.
 
 ## What it does not do
 

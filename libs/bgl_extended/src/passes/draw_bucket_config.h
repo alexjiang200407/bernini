@@ -9,7 +9,8 @@
 namespace bgl
 {
 	/**
-	 * The colour-pass pixel program a bucket draws with.
+	 * The colour-pass pixel program a bucket draws with: `programs.forward.<kind><layer>`, or
+	 * `programs.forward.Grass_<kind>` for a grass bucket, which is always opaque.
 	 * @pre the bucket is not transparent -- the depth-sorted list draws through the one shared
 	 * blend program, which no bucket owns.
 	 */

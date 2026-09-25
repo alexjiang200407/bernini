@@ -83,6 +83,9 @@ public struct ColorAttribute
  * square, so a surface sampling through it answers the absent case itself, as the engine's PBR does:
  * sample first, then select, so the sample stays in uniform control flow --
  * `let ao = reader.Sample(params.occlusion, reader.Uv1()).r; surface.orm.r *= reader.HasUv1() ? ao : 1.0;`
+ *
+ * On a grass blade HasUv1 is false and Uv1().x is the blade's own random in [0, 1); Uv runs across
+ * the blade and root to tip, and WorldNormal is already turned toward the camera (docs/grass.md).
  */
 public interface IMaterialReader
 {
