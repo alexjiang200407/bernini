@@ -5,11 +5,14 @@
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/SourceStamp.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GrassDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
@@ -27,6 +30,7 @@
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
+#include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
 #include <assetlib/benv.h>
@@ -38,9 +42,12 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl_common/MemoryTag.h>
@@ -68,6 +75,45 @@ namespace game
 		 * and pays that again on the next load. A read-only mount never refuses -- `pack` made its
 		 * keys true.
 		 */
+		/** The look a `.bgrass` authors, drawn through `material`. The two structs mirror each other. */
+		bgl::GrassDesc
+		GrassDescOf(const assetlib::BGrass& look, const bgl::MaterialHandle material)
+		{
+			auto desc     = bgl::GrassDesc();
+			desc.material = material;
+
+			desc.blade.minHeight    = look.blade.minHeight;
+			desc.blade.maxHeight    = look.blade.maxHeight;
+			desc.blade.rootWidth    = look.blade.rootWidth;
+			desc.blade.tipWidth     = look.blade.tipWidth;
+			desc.blade.curvature    = look.blade.curvature;
+			desc.blade.lean         = look.blade.lean;
+			desc.blade.nearSegments = look.blade.nearSegments;
+			desc.blade.farSegments  = look.blade.farSegments;
+
+			desc.clump.bladesPerClump = look.clump.bladesPerClump;
+			desc.clump.radius         = look.clump.radius;
+
+			desc.density.fadeStart = look.density.fadeStart;
+			desc.density.fadeEnd   = look.density.fadeEnd;
+			desc.density.widening  = look.density.widening;
+
+			desc.response.stiffness    = look.response.stiffness;
+			desc.response.gustResponse = look.response.gustResponse;
+
+			desc.lighting.rootOcclusion     = look.lighting.rootOcclusion;
+			desc.lighting.normalRounding    = look.lighting.normalRounding;
+			desc.lighting.groundNormalNear  = look.lighting.groundNormalNear;
+			desc.lighting.groundNormalFar   = look.lighting.groundNormalFar;
+			desc.lighting.translucencyColor = look.lighting.translucencyColor;
+			desc.lighting.translucency      = look.lighting.translucency;
+
+			desc.color.rootTint  = look.color.rootTint;
+			desc.color.tipTint   = look.color.tipTint;
+			desc.color.variation = look.color.variation;
+			return desc;
+		}
+
 		void
 		RequireCurrent(const assetlib::AssetStore& store, std::string_view relPath)
 		{
@@ -329,6 +375,10 @@ namespace game
 			for (const auto& [slot, geom] : m_Geoms) m_Scene->DeleteGeom(geom.handle);
 			m_Geoms.clear();
 
+			// Below the geoms that bind them, above the materials they shade through.
+			for (const auto& [key, look] : m_GrassByPath) m_Scene->DeleteGrass(look.handle);
+			m_GrassByPath.clear();
+
 			// Its own level, because nothing else frees a rig: DeleteGeom only releases the geom's
 			// use of one. A scene outliving this manager -- the editor rebuilds one over the same
 			// scene on every project switch -- would otherwise keep a bone table and sample pool per
@@ -587,6 +637,16 @@ namespace game
 		record.submeshMaterials         = std::move(submeshMaterials);
 		record.submeshMaterialOverrides = MaterialOverridesOf(mesh, entry);
 		record.refCount                 = 1;
+
+		try
+		{
+			AttachMeshGrass(record, mesh, meshIndex);
+		}
+		catch (...)
+		{
+			DestroyGeom(record);
+			throw;
+		}
 
 		const uint32_t slot = record.handle.handle.index;
 
@@ -1311,6 +1371,109 @@ namespace game
 		// geom is still skinned to the rig, and DeleteGeom is what releases that use.
 		if (!record.skinnedAnimations.empty())
 			ReleaseRig(record.skinnedAnimations);
+
+		// After the geom too: DeleteGrass refuses a look a live geom still binds.
+		for (const std::string& look : record.grassLooks)
+			if (!look.empty())
+				ReleaseGrassLook(look);
+	}
+
+	void
+	AssetManager::AttachMeshGrass(
+		GeomRecord&            record,
+		const assetlib::BMesh& mesh,
+		const uint32_t         meshIndex)
+	{
+		if (mesh.grass.empty())
+			return;
+
+		RequireCurrent(m_Store, mesh.grass);
+
+		assetlib::RegenGrassFields current = m_Store.LoadRegenGrassFields(mesh.grass);
+		for (const std::string& field : current.unboundBindings)
+			logger::warn(
+				"AssetManager: '{}': its import document binds grass field '{}', which the source "
+				"no longer has; rebind or re-export",
+				mesh.grass,
+				field);
+
+		const assetlib::BGrassFields& grass = current.fields;
+
+		// Only the looks this mesh's fields draw with: another mesh of the source may name others.
+		auto looks = std::vector<bgl::GrassHandle>(grass.looks.size());
+		auto tried = std::vector<bool>(grass.looks.size(), false);
+		record.grassLooks.assign(grass.looks.size(), std::string());
+
+		for (const assetlib::GrassField& field : grass.fields)
+		{
+			if (field.mesh != meshIndex || field.look >= grass.looks.size() || tried[field.look])
+				continue;
+
+			tried[field.look] = true;
+			looks[field.look] = AcquireGrassLook(grass.looks[field.look]);
+			if (looks[field.look].IsValid())
+				record.grassLooks[field.look] = grass.looks[field.look];
+		}
+
+		m_Scene->AttachGrass(record.handle, grass, meshIndex, looks);
+	}
+
+	bgl::GrassHandle
+	AssetManager::AcquireGrassLook(const std::string& key)
+	{
+		if (const auto it = m_GrassByPath.find(key); it != m_GrassByPath.end())
+		{
+			++it->second.refCount;
+			return it->second.handle;
+		}
+
+		const auto look = m_Store.Load<assetlib::BGrass>(key);
+		if (look.material.empty())
+		{
+			logger::warn(
+				"AssetManager: grass look '{}' names no material, so the fields drawn with it are "
+				"left bare",
+				key);
+			return {};
+		}
+
+		const bgl::MaterialHandle material = AcquireMaterial(look.material);
+
+		auto handle = bgl::GrassHandle();
+		try
+		{
+			handle = m_Scene->CreateGrass(GrassDescOf(look, material));
+		}
+		catch (const bgl::SceneError& e)
+		{
+			ReleaseMaterial(material);
+			logger::warn(
+				"AssetManager: grass look '{}' cannot be drawn, so the fields drawn with it are "
+				"left bare: {}",
+				key,
+				e.what());
+			return {};
+		}
+
+		m_GrassByPath.emplace(key, GrassRecord{ handle, material, 1 });
+		return handle;
+	}
+
+	void
+	AssetManager::ReleaseGrassLook(const std::string& key)
+	{
+		const auto it = m_GrassByPath.find(key);
+		if (it == m_GrassByPath.end())
+			return;
+
+		GrassRecord& record = it->second;
+		assert(record.refCount > 0 && "AssetManager: grass look reference count underflow");
+		if (--record.refCount > 0)
+			return;
+
+		m_Scene->DeleteGrass(record.handle);
+		ReleaseMaterial(record.material);
+		m_GrassByPath.erase(it);
 	}
 
 	void

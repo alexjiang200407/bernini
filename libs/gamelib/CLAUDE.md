@@ -62,11 +62,17 @@ rebind is served from the cache until something else invalidates the entry.
 
 ```
 instance -> geom -> material -> texture
+         |       \-> grass look -> material
          \-> material (per-submesh override, when one is worn)
 ```
 
 `AcquireMesh` acquires the materials its submeshes name, which acquires the textures those materials
-name; `Release*` runs the chain in reverse and destroys only at zero.
+name; `Release*` runs the chain in reverse and destroys only at zero. A mesh that grows grass
+(`BMesh::grass`) also gets its fields attached, and the geom holds the `.bgrass` looks they draw
+with, keyed by path like a material; a look holds its material. The grass file is found through
+that reference and never by the mesh's name, since a packed game has no `.bimport` to look it up
+in. A look with no material, or one the renderer refuses, is warned about and its fields drawn
+bare.
 
 That is not just tidy — **it is what makes deletion safe**. `bgl_extended` deliberately tracks nothing, and
 documents preconditions it cannot check: a material may not be deleted while a submesh is bound to it,
