@@ -13,6 +13,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/WindDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -239,4 +240,45 @@ TEST_CASE(
 	INFO("centre velocity " << centre.x << ", " << centre.y);
 	CHECK(std::abs(centre.x) > 1e-3f);
 	CHECK(std::abs(centre.y) < std::abs(centre.x));
+}
+
+namespace
+{
+	/** The largest motion any texel of the frame just drawn wrote, in either axis. */
+	[[nodiscard]] float
+	LargestMotion(const GrassScene& grass)
+	{
+		float largest = 0.0f;
+		for (const glm::vec4& texel :
+		     bgl::test::ReadVelocityTexels(grass.gfx.Get(), grass.target.Get(), c_Width, c_Height))
+		{
+			largest = std::max({ largest, std::abs(texel.x), std::abs(texel.y) });
+		}
+		return largest;
+	}
+}
+
+// Wind is evaluated at this frame's time and the last one's, so a blowing field writes its sway
+// into the velocity TAA reprojects with, and a calm one writes none however the clock runs.
+TEST_CASE("Wind moves blades, and says so in the velocity", "[grass][render][motionvectors]")
+{
+	GrassScene grass;
+	grass.Attach(MakeField(40, 0.12f));
+
+	grass.job.time = 0.0f;
+	grass.gfx->DrawFrame(grass.target, grass.job);
+	grass.job.time = 0.1f;
+	grass.gfx->DrawFrame(grass.target, grass.job);
+	CHECK(LargestMotion(grass) < 1e-4f);
+
+	auto wind         = bgl::WindDesc();
+	wind.strength     = 0.4f;
+	wind.gustStrength = 0.4f;
+	grass.view->SetWind(wind);
+
+	grass.job.time = 0.2f;
+	grass.gfx->DrawFrame(grass.target, grass.job);
+	grass.job.time = 0.3f;
+	grass.gfx->DrawFrame(grass.target, grass.job);
+	CHECK(LargestMotion(grass) > 1e-3f);
 }

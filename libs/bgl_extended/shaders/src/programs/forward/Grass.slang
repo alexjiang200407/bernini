@@ -31,6 +31,13 @@ struct GrassData
 
     float3 cameraPos;
 
+    // The view's wind (GrassWind): the direction's xz, unit.
+    float2 windDirection;
+    float windStrength;
+    float windGustScale;
+    float windGustSpeed;
+    float windGustStrength;
+
     // This dispatch's run of the chunk references, laid out dispatchWidth groups to a row.
     uint firstRef;
     uint refCount;
@@ -38,6 +45,43 @@ struct GrassData
 };
 
 ConstantBuffer<GrassData> grassData;
+
+GrassWind ViewWind()
+{
+    GrassWind wind;
+    wind.direction = grassData.windDirection;
+    wind.strength = grassData.windStrength;
+    wind.gustScale = grassData.windGustScale;
+    wind.gustSpeed = grassData.windGustSpeed;
+    wind.gustStrength = grassData.windGustStrength;
+    return wind;
+}
+
+// A blade's shape carried into world space by the placement's transform this frame or last.
+BladeShape PlacedShape(MeshInstance mesh, BladeShape shape, bool previous)
+{
+    let root = previous ? mesh.PrevTransformPoint(shape.root) : mesh.TransformPoint(shape.root);
+    let top = shape.root + shape.up * shape.height;
+    let ahead = shape.root + shape.facing;
+    let upWorld = (previous ? mesh.PrevTransformPoint(top) : mesh.TransformPoint(top)) - root;
+    let facingWorld = (previous ? mesh.PrevTransformPoint(ahead) : mesh.TransformPoint(ahead)) - root;
+
+    BladeShape placed = shape;
+    placed.root = root;
+    placed.height = length(upWorld);
+    placed.up = upWorld / placed.height;
+    placed.facing = normalize(facingWorld);
+    placed.side = cross(placed.up, placed.facing);
+    return placed;
+}
+
+// The blade posed in world space at `time`, the wind blowing along the ground under it.
+BladePose PoseAt(GrassLook look, GrassWind wind, BladeShape placed, float time)
+{
+    let along = float3(wind.direction.x, 0.0, wind.direction.y);
+    let push = along * (placed.height * WindPush(look, wind, placed.root, placed.random, time));
+    return PoseBlade(look, placed, push);
+}
 
 struct GrassPayload
 {
@@ -98,6 +142,17 @@ void ASMain(uint3 gid: SV_GroupID)
 
 groupshared uint gSurvivors[cGrassVerticesPerGroup];
 groupshared uint gSurvivorCount;
+
+// Each surviving blade posed once, by one thread, and read by every vertex along it.
+struct PosedBlade
+{
+    BladePose now;
+    BladePose before;
+    float3 side;
+    float3 sideBefore;
+    float width; // the root's, widened as the field thins
+};
+groupshared PosedBlade gPosed[cGrassVerticesPerGroup / 4u];
 
 [shader("mesh")]
 [numthreads(cMeshGroupSize, 1, 1)]
@@ -161,36 +216,45 @@ void MSMain(
     }
 #endif
 
+    if (gtid < survivors)
+    {
+        uint clumpLocal;
+        uint bladeInClump;
+        BladeAddress(gSurvivors[gtid], chunk.clumpCount, clumpLocal, bladeInClump);
+        let clumpIndex = chunk.firstClump + clumpLocal;
+        let shape = MakeBladeShape(look, grassData.clumps[clumpIndex], clumpIndex, bladeInClump);
+        let wind = ViewWind();
+        let placed = PlacedShape(mesh, shape, false);
+        let placedBefore = PlacedShape(mesh, shape, true);
+        let keep = KeptShare(look, distance(grassData.cameraPos, placed.root));
+
+        PosedBlade posed;
+        posed.now = PoseAt(look, wind, placed, viewData.time);
+        posed.before = PoseAt(look, wind, placedBefore, viewData.prevTime);
+        posed.side = placed.side;
+        posed.sideBefore = placedBefore.side;
+        posed.width = look.rootWidth * (1.0 + look.widening * (1.0 - keep));
+        gPosed[gtid] = posed;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
     for (uint v = gtid; v < survivors * vertsPerBlade; v += cMeshGroupSize)
     {
-        let blade = gSurvivors[v / vertsPerBlade];
+        let posed = gPosed[v / vertsPerBlade];
         let row = (v % vertsPerBlade) / 2u;
         let edge = float((v % vertsPerBlade) & 1u);
 
-        uint clumpLocal;
-        uint bladeInClump;
-        BladeAddress(blade, chunk.clumpCount, clumpLocal, bladeInClump);
-        let clumpIndex = chunk.firstClump + clumpLocal;
-        let clump = grassData.clumps[clumpIndex];
-        let shape = MakeBladeShape(look, clump, clumpIndex, bladeInClump);
-        let pose = PoseBlade(look, shape);
-
-        let rootWorld = mesh.TransformPoint(shape.root);
-        let keep = KeptShare(look, distance(grassData.cameraPos, rootWorld));
-        let widen = 1.0 + look.widening * (1.0 - keep);
-
         let t = float(row) / float(segments);
-        let width = look.rootWidth * lerp(1.0, look.tipWidth, t) * widen;
-        let centre = BezierPoint(pose, t);
-        let position = centre + shape.side * (edge - 0.5) * width;
-        let normal = normalize(cross(shape.side, BezierTangent(pose, t)));
+        let across = (edge - 0.5) * posed.width * lerp(1.0, look.tipWidth, t);
+        let position = BezierPoint(posed.now, t) + posed.side * across;
+        let positionBefore = BezierPoint(posed.before, t) + posed.sideBefore * across;
 
         ForwardVSOut vertex;
-        ProjectVertex(vertex, float4(mesh.TransformPoint(position), 1.0), float4(mesh.PrevTransformPoint(position), 1.0));
-        vertex.normal = normalize(mesh.TransformDirection(normal));
+        ProjectVertex(vertex, float4(position, 1.0), float4(positionBefore, 1.0));
+        vertex.normal = normalize(cross(posed.side, BezierTangent(posed.now, t)));
         vertex.uv = float2(edge, t);
         vertex.uv1 = cNoUv1;
-        vertex.tangent = float4(normalize(mesh.TransformDirection(shape.side)), 1.0);
+        vertex.tangent = float4(posed.side, 1.0);
         vertex.materialOffset = look.materialOffset;
         verts[v] = vertex;
     }

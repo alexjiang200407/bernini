@@ -55,11 +55,12 @@ public uint SegmentsAt(GrassLook look, float distance)
     return uint(round(lerp(float(look.nearSegments), float(look.farSegments), t)));
 }
 
-// How far a blade may reach from its root: the Bezier's hull, so every pose inside it stays within
-// the chunk's inflated bound (ADR-13: a force bends a blade about its root and never stretches it).
+// How far a blade may reach from its root, whatever bends it: a pose keeps the blade's length
+// (ADR-13), so its hull stays within the height, with slack for the length correction's estimate
+// and half the widest blade.
 public float BladeReach(GrassLook look, float heightScale)
 {
-    return look.maxHeight * heightScale * (1.0 + look.lean + look.curvature);
+    return look.maxHeight * heightScale * 1.25 + 0.5 * look.rootWidth * (1.0 + look.widening);
 }
 
 // Blades a mesh group holds at `segments`, each 2 * (segments + 1) vertices and 2 * segments
@@ -118,9 +119,53 @@ public BladeShape MakeBladeShape(GrassLook look, GrassClump clump, uint clumpInd
     return blade;
 }
 
+// A view's wind, world space: a steady push along `direction` plus a gust field scrolling with it.
+public struct GrassWind
+{
+    public float2 direction; // unit, in the xz plane
+    public float strength;
+    public float gustScale;
+    public float gustSpeed;
+    public float gustStrength;
+};
+
+float LatticeValue(int2 corner)
+{
+    return HashFloat(uint(corner.x) * 0x8da6b343u ^ uint(corner.y) * 0xd8163841u);
+}
+
+// Smooth value noise in [0, 1] over a lattice of hashed corners.
+public float ValueNoise(float2 p)
+{
+    let cell = floor(p);
+    let f = p - cell;
+    let u = f * f * (3.0 - 2.0 * f);
+    let c = int2(cell);
+    let bottom = lerp(LatticeValue(c), LatticeValue(c + int2(1, 0)), u.x);
+    let top = lerp(LatticeValue(c + int2(0, 1)), LatticeValue(c + int2(1, 1)), u.x);
+    return lerp(bottom, top, u.y);
+}
+
+// What the wind pushes a blade's tip by at `time`, as a share of the blade's height along the wind:
+// the steady push and the gust under the root, softened by the look's stiffness, with a flutter of
+// the blade's own so neighbours do not move as one.
+public float WindPush(GrassLook look, GrassWind wind, float3 root, float random, float time)
+{
+    let scroll = wind.direction * (wind.gustSpeed * time);
+    let gust = wind.gustStrength * ValueNoise((root.xz - scroll) / wind.gustScale);
+    let push = (wind.strength + look.gustResponse * gust) * (1.0 - look.stiffness);
+    let flutter = 0.15 * push * sin(cTwoPi * (time * (1.2 + 0.6 * random) + random));
+    return push + flutter;
+}
+
 // A blade posed: the quadratic Bezier's three control points. The one place anything bends a blade
-// (ADR-13) -- wind and every later force are terms here, evaluated once at the frame's time and once
-// at the previous frame's so a velocity describes them.
+// (ADR-13) -- wind and every later force add to `push`, evaluated once at the frame's time and once at
+// the previous frame's so a velocity describes them.
+//
+// The tip leans out by the look's lean plus `push`, never past most of the height, and drops so the
+// blade keeps its length; the middle point bows between a straight blade (curvature 0) and a guide
+// that stands above the root and sinks as the tip leans (curvature 1). A length correction then
+// brings the curve back to the blade's height. See docs/grass.md for where the model comes from.
 public struct BladePose
 {
     public float3 p0;
@@ -128,12 +173,32 @@ public struct BladePose
     public float3 p2;
 };
 
-public BladePose PoseBlade(GrassLook look, BladeShape blade)
+public BladePose PoseBlade(GrassLook look, BladeShape blade, float3 push)
 {
+    let h = blade.height;
+
+    var lean = blade.facing * (h * look.lean) + push;
+    lean -= blade.up * dot(lean, blade.up);
+    let reach = length(lean);
+    let maxReach = 0.95 * h;
+    if (reach > maxReach)
+    {
+        lean *= maxReach / reach;
+    }
+    let out = min(reach, maxReach) / h;
+
     BladePose pose;
     pose.p0 = blade.root;
-    pose.p1 = blade.root + blade.up * blade.height;
-    pose.p2 = blade.root + blade.up * blade.height * (1.0 - look.curvature) + blade.facing * blade.height * (look.lean + look.curvature);
+    pose.p2 = blade.root + lean + blade.up * (h * sqrt(1.0 - out * out));
+
+    let guide = blade.root + blade.up * (h * max(1.0 - out, 0.05 * max(out, 1.0)));
+    pose.p1 = lerp((pose.p0 + pose.p2) * 0.5, guide, look.curvature);
+
+    let chord = distance(pose.p0, pose.p2);
+    let polygon = distance(pose.p0, pose.p1) + distance(pose.p1, pose.p2);
+    let scale = h / ((2.0 * chord + polygon) / 3.0);
+    pose.p1 = pose.p0 + scale * (pose.p1 - pose.p0);
+    pose.p2 = pose.p1 + scale * (pose.p2 - pose.p1);
     return pose;
 }
 
