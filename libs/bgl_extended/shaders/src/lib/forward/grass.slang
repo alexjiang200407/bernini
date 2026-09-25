@@ -2,9 +2,7 @@ import idl.GrassClump;
 import idl.GrassLook;
 
 // A grass blade, built rather than stored: every value comes from its clump and a hash of its index,
-// so a blade has no state of its own and a chunk costs its clumps, never its blades. The blade is a
-// tapered strip along a quadratic Bezier, widened as the field thins with distance -- Ghost of
-// Tsushima's grass (Wohllaib, "Procedural Grass in Ghost of Tsushima", GDC 2021).
+// so a blade has no state of its own and a chunk costs its clumps, never its blades.
 
 public static const float cTwoPi = 6.28318530718;
 
@@ -73,8 +71,7 @@ public uint BladesPerGroup(uint segments, uint maxVertices, uint maxPrims)
 
 // The clump and the blade within it that blade `b` of a chunk of `clumpCount` clumps is. Blades
 // interleave across clumps, so keeping the first K of a chunk thins every clump evenly and drops
-// one blade at a time as K falls. Bernini's own, so a chunk launches mesh groups for the blades it
-// keeps and no more; Ghost of Tsushima thins in a compute pass instead.
+// one blade at a time as K falls.
 public void BladeAddress(uint b, uint clumpCount, out uint clump, out uint bladeInClump)
 {
     clump = b % clumpCount;
@@ -121,9 +118,7 @@ public BladeShape MakeBladeShape(GrassLook look, GrassClump clump, uint clumpInd
     return blade;
 }
 
-// A blade posed: the quadratic Bezier's three control points -- the root, a guide at the blade's
-// height above it, and the tip -- Jahrmann and Wimmer's blade model ("Responsive Real-Time Grass
-// Rendering for General 3D Scenes", I3D 2017). The one place anything bends a blade
+// A blade posed: the quadratic Bezier's three control points. The one place anything bends a blade
 // (ADR-13) -- wind and every later force are terms here, evaluated once at the frame's time and once
 // at the previous frame's so a velocity describes them.
 public struct BladePose

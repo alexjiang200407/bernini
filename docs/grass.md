@@ -72,6 +72,21 @@ thinner than a pixel, the worst case for a rasterizer -- while the amplification
 So the fade distance is the first lever: on that verge, fading over 10-60 m costs 2.2-2.4 ms,
 5-30 m 1.08 ms and 5-20 m 0.83 ms.
 
+## Where it comes from
+
+- **The blade and the field.** A blade as a tapered strip of solid triangles along a quadratic
+  Bezier, fewer segments far away, and a field that thins per blade with distance while the
+  survivors widen to hold its cover: Ghost of Tsushima's grass (Eric Wohllaib, "Procedural Grass in
+  'Ghost of Tsushima'", GDC 2021). Tsushima places and culls blades in a compute pass writing an
+  indirect draw; here the mesh stage builds them, with no blade buffer (ADR-1 of the plan).
+- **The blade's three control points.** The root, a guide at the blade's height above it, and the
+  tip, with forces acting on the tip: Jahrmann and Wimmer, "Responsive Real-Time Grass Rendering
+  for General 3D Scenes", I3D 2017. `PoseBlade` holds the rest pose; wind is its first force.
+- **The interleaved addressing is the engine's own.** Numbering blades across a chunk's clumps
+  (`BladeAddress`) so that keeping the first K thins every clump evenly is what lets a chunk launch
+  mesh groups for only the blades it keeps. Neither source does this: Tsushima's compute pass
+  compacts survivors instead.
+
 ## What it does not do
 
 - **A blob shadow barely reaches grass.** Blob Shadows darkens a surface only where it faces up, and a
