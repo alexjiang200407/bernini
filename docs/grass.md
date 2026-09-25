@@ -56,17 +56,22 @@ differs from the last, and the velocity says so.
 
 ## Distance
 
-Two things fall off with distance, both on the look's `fadeStart` and `fadeEnd`:
+Two things fall off with distance: the look's fade, and what the screen can show.
 
 - **How many blades.** All of them up to `fadeStart`, none past `fadeEnd`, linearly between
-  (`KeptShare`). Blades are addressed interleaved across a chunk's clumps -- blade `b` is clump
+  (`KeptShare`) -- and on top of that, the engine keeps only as many as stay at least
+  `cGrassMinBladePixels` (8) wide at the root on the render grid, widening the survivors by the
+  inverse, up to four times, so the field holds its cover (`ThinningAt`). A blade narrower than that
+  costs its rasterization and shows nothing fewer, wider ones would not; the rule follows the render
+  grid, so the same look thins sooner at a lower resolution or a wider field of view. Blades are addressed interleaved across a chunk's clumps -- blade `b` is clump
   `b % clumpCount`'s blade `b / clumpCount` -- so keeping the first K of a chunk thins every clump
   evenly. The amplification group launches enough mesh groups for the share kept at the chunk's
   *nearest* point, and each mesh group keeps a blade only if its index is under the share at the
   blade's *own* root. So a field thins smoothly across a chunk rather than in steps between chunks.
 - **How finely.** Segments along a blade go from `nearSegments` at the camera to `farSegments` at
-  `fadeEnd`, chosen once per chunk at its nearest point. As blades thin, the survivors widen by
-  `widening` so the field keeps its cover.
+  `fadeEnd`, and no more than one per `cGrassPixelsPerSegment` (6) pixels of the blade's height on
+  screen, chosen once per chunk at its nearest point. As the fade thins blades, the survivors also
+  widen by the look's `widening`.
 
 A mesh group holds as many blades as fit its 64 vertices and 124 triangles at the chunk's segment
 count: 16 at one segment, 8 at three, 4 at seven.
@@ -89,8 +94,13 @@ a placement that moves carries its blades' motion with it.
 verge at 4K with 0.667 render scale and prints the `Forward Grass 0` row. The cost follows the blades
 emitted, about half of it in the mesh stage and half in rasterizing them -- distant blades are
 thinner than a pixel, the worst case for a rasterizer -- while the amplification stage is near free.
-So the fade distance is the first lever: on that verge, fading over 10-60 m costs 2.2-2.4 ms,
-5-30 m 1.08 ms and 5-20 m 0.83 ms.
+
+Screen-size thinning took that verge, fading over 10-60 m, from 2.0 ms to 1.13 ms (best of three
+runs; single runs on the M-series machine vary by up to 2x with the GPU's clock). The threshold is
+the trade: 6 px read 1.32 ms and is indistinguishable from no thinning, 12 px read 0.88 ms with far
+grass visibly chunky. The rest is the look's own density near the camera: the same verge fading over
+5-20 m cost 0.83 ms before thinning. Per-blade frustum rejection in the mesh stage was tried and
+saved nothing on a verge the camera looks along, so it is not there.
 
 ## Where it comes from
 

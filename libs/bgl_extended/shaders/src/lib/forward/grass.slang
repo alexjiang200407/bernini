@@ -48,11 +48,46 @@ public float KeptShare(GrassLook look, float distance)
     return saturate(1.0 - (distance - look.fadeStart) / (look.fadeEnd - look.fadeStart));
 }
 
-// Segments along a blade at `distance`, from nearSegments at the camera to farSegments at fadeEnd.
-public uint SegmentsAt(GrassLook look, float distance)
+// The narrowest a drawn blade's root may project, in pixels, and the most any one blade widens to
+// get there. A blade thinner than this costs its rasterization and shows nothing that fewer, wider
+// ones would not.
+public static const float cGrassMinBladePixels = 8.0;
+public static const float cGrassMaxScreenWidening = 4.0;
+
+// Pixels a blade's height spans per segment before another segment is worth drawing.
+public static const float cGrassPixelsPerSegment = 6.0;
+
+// How a field thins at `distance`: the share of its blades kept -- the look's fade, and on top of it
+// whatever keeps the survivors at least cGrassMinBladePixels wide on screen -- and how much wider
+// the survivors grow to hold the field's cover. `pixelsPerUnit` is what one world unit spans at a
+// distance of one.
+public struct Thinning
+{
+    public float kept;
+    public float widen;
+};
+
+public Thinning ThinningAt(GrassLook look, float distance, float pixelsPerUnit)
+{
+    let fade = KeptShare(look, distance);
+    let rootPixels = look.rootWidth * pixelsPerUnit / max(distance, 1e-3);
+    let screen = saturate(rootPixels / cGrassMinBladePixels);
+
+    Thinning thinning;
+    thinning.kept = fade * screen;
+    thinning.widen = (1.0 + look.widening * (1.0 - fade)) / max(screen, 1.0 / cGrassMaxScreenWidening);
+    return thinning;
+}
+
+// Segments along a blade at `distance`: from nearSegments at the camera to farSegments at fadeEnd,
+// and no more than the blade's height on screen is worth.
+public uint SegmentsAt(GrassLook look, float distance, float bladeHeight, float pixelsPerUnit)
 {
     let t = saturate(distance / look.fadeEnd);
-    return uint(round(lerp(float(look.nearSegments), float(look.farSegments), t)));
+    let byDistance = uint(round(lerp(float(look.nearSegments), float(look.farSegments), t)));
+    let heightPixels = bladeHeight * pixelsPerUnit / max(distance, 1e-3);
+    let byScreen = uint(ceil(heightPixels / cGrassPixelsPerSegment));
+    return max(1u, min(byDistance, byScreen));
 }
 
 // How far a blade may reach from its root, whatever bends it: a pose keeps the blade's length
@@ -60,7 +95,8 @@ public uint SegmentsAt(GrassLook look, float distance)
 // and half the widest blade.
 public float BladeReach(GrassLook look, float heightScale)
 {
-    return look.maxHeight * heightScale * 1.25 + 0.5 * look.rootWidth * (1.0 + look.widening);
+    let widest = look.rootWidth * (1.0 + look.widening) * cGrassMaxScreenWidening;
+    return look.maxHeight * heightScale * 1.25 + 0.5 * widest;
 }
 
 // Blades a mesh group holds at `segments`, each 2 * (segments + 1) vertices and 2 * segments

@@ -31,6 +31,9 @@ struct GrassData
 
     float3 cameraPos;
 
+    // What one world unit spans on the render grid, in pixels, at a distance of one.
+    float pixelsPerUnit;
+
     // The view's wind (GrassWind): the direction's xz, unit.
     float2 windDirection;
     float windStrength;
@@ -125,8 +128,10 @@ void ASMain(uint3 gid: SV_GroupID)
             // The nearest any blade of the chunk can be: the most it can keep.
             let nearest = max(0.0, distance(grassData.cameraPos, world.xyz) - world.w);
             let total = chunk.clumpCount * look.bladesPerClump;
-            let kept = min(total, uint(ceil(float(total) * KeptShare(look, nearest))));
-            let segments = max(1u, SegmentsAt(look, nearest));
+            let thinning = ThinningAt(look, nearest, grassData.pixelsPerUnit);
+            let kept = min(total, uint(ceil(float(total) * thinning.kept)));
+            let tallest = look.maxHeight * chunk.maxHeightScale;
+            let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
             let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
 
             gGrassPayload.chunkRefIndex = refIndex;
@@ -191,8 +196,8 @@ void MSMain(
         BladeAddress(b, chunk.clumpCount, clumpLocal, bladeInClump);
         let clump = grassData.clumps[chunk.firstClump + clumpLocal];
         let rootWorld = mesh.TransformPoint(clump.position.xyz);
-        let keep = KeptShare(look, distance(grassData.cameraPos, rootWorld));
-        if (float(b) < float(total) * keep)
+        let thinning = ThinningAt(look, distance(grassData.cameraPos, rootWorld), grassData.pixelsPerUnit);
+        if (float(b) < float(total) * thinning.kept)
         {
             uint slot;
             InterlockedAdd(gSurvivorCount, 1u, slot);
@@ -226,14 +231,14 @@ void MSMain(
         let wind = ViewWind();
         let placed = PlacedShape(mesh, shape, false);
         let placedBefore = PlacedShape(mesh, shape, true);
-        let keep = KeptShare(look, distance(grassData.cameraPos, placed.root));
+        let thinning = ThinningAt(look, distance(grassData.cameraPos, placed.root), grassData.pixelsPerUnit);
 
         PosedBlade posed;
         posed.now = PoseAt(look, wind, placed, viewData.time);
         posed.before = PoseAt(look, wind, placedBefore, viewData.prevTime);
         posed.side = placed.side;
         posed.sideBefore = placedBefore.side;
-        posed.width = look.rootWidth * (1.0 + look.widening * (1.0 - keep));
+        posed.width = look.rootWidth * thinning.widen;
         gPosed[gtid] = posed;
     }
     GroupMemoryBarrierWithGroupSync();
