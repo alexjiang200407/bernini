@@ -288,14 +288,20 @@ namespace assetlib
 		/**
 		 * Writes the grass an import's source grows -- every POINTS primitive, as `imp::BMeshImport`
 		 * read it -- to `key`, beside its `.bmesh`. Its fields are unbound: the `.bimport`'s grass
-		 * bindings are applied over them wherever they are loaded (LoadRegenGrassFields).
+		 * bindings are applied over them wherever they are loaded (LoadRegenGrassFields). `mesh`,
+		 * written after, is pointed at it (`BMesh::grass`), which is how a runtime finds a mesh's
+		 * grass.
 		 *
 		 * @return `key` when the source had grass and a file was written; empty when it had none,
 		 *         so a source without POINTS names no grass file among its outputs.
 		 * @throws std::runtime_error if the container cannot be written.
 		 */
 		std::vector<std::string>
-		WriteImportedGrass(BGrassFields grass, std::string_view key, const SourceRef& source) const;
+		WriteImportedGrass(
+			BGrassFields     grass,
+			BMesh&           mesh,
+			std::string_view key,
+			const SourceRef& source) const;
 
 		/**
 		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.

@@ -13,6 +13,7 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
 
 #include <cctype>
 #include <core/err/util.h>
@@ -92,6 +93,7 @@ namespace assetlib
 				addEdge(edges, referrer, material, RefKind::kSubmeshMaterial);
 
 			addEdge(edges, referrer, refs.skeleton, RefKind::kMeshSkeleton);
+			addEdge(edges, referrer, refs.grass, RefKind::kMeshGrass);
 		}
 
 		/** The skeleton a `.banim`'s clips were resampled against. */
@@ -634,6 +636,8 @@ namespace assetlib
 		{
 			if (ref.kind == RefKind::kDocumentOutput)
 				plan.producers.push_back(ref.referrer);
+			else if (ref.kind == RefKind::kMeshGrass)
+				plan.grassMeshes.push_back(ref.referrer);
 			else
 				plan.blockers.push_back(ref);
 		}
@@ -732,6 +736,24 @@ namespace assetlib
 		else
 			gone.insert(plan.target);
 		gone.insert(plan.cascade.begin(), plan.cascade.end());
+
+		for (const std::string& meshKey : plan.grassMeshes)
+		{
+			// Going too, or stale and so regenerated from the document rewritten below.
+			if (gone.contains(meshKey) || GeometryIsStale(meshKey))
+				continue;
+
+			try
+			{
+				BMesh mesh = Load<BMesh>(meshKey);
+				mesh.grass.clear();
+				Save(mesh, meshKey);
+			}
+			catch (const std::exception& error)
+			{
+				return DeletionResult{ DeletionStatus::kFailed, error.what() };
+			}
+		}
 
 		for (const std::string& documentKey : plan.producers)
 		{

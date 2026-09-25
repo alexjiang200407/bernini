@@ -11,7 +11,7 @@ or in memory: a field costs its clumps.
 | | where | what |
 |---|---|---|
 | a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade, the response to wind, the lighting terms |
-| the fields | `assetlib::BGrassFields` ([BGrassFields.h](../libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)), cooked as a `.bgrassfields` beside the `.bmesh` | per field the mesh it grows on and a look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
+| the fields | `assetlib::BGrassFields` ([BGrassFields.h](../libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)), cooked as a `.bgrassfields` beside the `.bmesh`, which names it (`BMesh::grass`) | per field the mesh it grows on and a look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 
 A clump is a point, a height scale, a ground normal and a colour. The cook sorts a field's clumps
 along a Morton curve before cutting chunks (`assetlib/src/grass_chunks.cpp`), so a chunk is a

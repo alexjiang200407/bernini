@@ -119,7 +119,8 @@ namespace assetlib
 			kGeometrySignature,  // the vertex blob and the tables addressing it, hashed at cook
 			kMeshletGroups,      // one bound per run of c_MeshletsPerGroup meshlets
 			kMaterialOverrides,  // (submesh, material) pairs; absent when there are none
-			kMaterialOverrideNames
+			kMaterialOverrideNames,
+			kGrassPath,  // the .bgrassfields cooked from the same source; absent when none
 		};
 
 		struct PackedOverride
@@ -180,6 +181,7 @@ namespace assetlib
 			ChunkId::kSkeletonSignature,
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
+		writer.Add(ChunkId::kGrassPath, std::span<const char>(mesh.grass));
 
 		// Written only when present, so a mesh with none stays byte-identical to one from before.
 		if (!mesh.materialOverrides.empty())
@@ -232,6 +234,9 @@ namespace assetlib
 		mesh.skeletonBoneNames =
 			cache::unpackStrings(reader.Read<char>(ChunkId::kSkeletonBoneNames));
 
+		const auto grass = reader.Read<char>(ChunkId::kGrassPath);
+		mesh.grass.assign(grass.begin(), grass.end());
+
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
 		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
 
@@ -252,15 +257,16 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
+		constexpr std::array<uint32_t, 3> c_WantedRefChunks = {
 			{ static_cast<uint32_t>(ChunkId::kMaterialPaths),
-			  static_cast<uint32_t>(ChunkId::kSkeletonPath) }
+			  static_cast<uint32_t>(ChunkId::kSkeletonPath),
+			  static_cast<uint32_t>(ChunkId::kGrassPath) }
 		};
 
 		MeshRefs
 		refsFromChunks(const cache::CacheData& chunks)
 		{
-			// Absent, not malformed: both chunks are optional, and a mesh that names neither is
+			// Absent, not malformed: every chunk here is optional, and a mesh that names none is
 			// exactly what a static import produces.
 			MeshRefs   refs;
 			const auto paths = chunks.Read<char>(ChunkId::kMaterialPaths, c_What);
@@ -269,6 +275,9 @@ namespace assetlib
 
 			const auto skeleton = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
 			refs.skeleton.assign(skeleton.begin(), skeleton.end());
+
+			const auto grass = chunks.Read<char>(ChunkId::kGrassPath, c_What);
+			refs.grass.assign(grass.begin(), grass.end());
 
 			return refs;
 		}

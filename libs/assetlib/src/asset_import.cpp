@@ -249,15 +249,18 @@ namespace assetlib
 	std::vector<std::string>
 	AssetStore::WriteImportedGrass(
 		BGrassFields     grass,
+		BMesh&           mesh,
 		std::string_view key,
 		const SourceRef& source) const
 	{
+		mesh.grass.clear();
 		if (grass.fields.empty())
 			return {};
 
 		grass.source = source;
 		Save(grass, key);
-		return { std::string(key) };
+		mesh.grass = std::string(key);
+		return { mesh.grass };
 	}
 
 	void

@@ -54,6 +54,10 @@ namespace assetlib
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 
+		// The .bgrassfields cooked from the same source: the grass this mesh grows. Empty when the
+		// source has no POINTS primitive.
+		std::string grass;
+
 		/** The rig the joint indices were cooked against -- see assetlib::skeletonSignature. */
 		uint64_t skeletonSignature = 0;
 

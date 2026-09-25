@@ -225,6 +225,7 @@ namespace assetlib
 				BMesh mesh = AssetCodec<BMesh>::Deserialize(bytes);
 				for (std::string& material : mesh.materials) material = mapTarget(plan, material);
 				mesh.skeleton = mapTarget(plan, mesh.skeleton);
+				mesh.grass    = mapTarget(plan, mesh.grass);
 				return AssetCodec<BMesh>::Serialize(mesh);
 			}
 

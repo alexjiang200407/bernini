@@ -124,6 +124,10 @@ namespace assetlib
 		[[nodiscard]] std::string
 		GetMeshOutput() const;
 
+		/** The `.bgrassfields` among `outputs`, or empty for a source that grows no grass. */
+		[[nodiscard]] std::string
+		GetGrassOutput() const;
+
 		bool
 		operator==(const ImportDocument&) const = default;
 	};

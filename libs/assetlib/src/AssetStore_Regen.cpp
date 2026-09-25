@@ -224,6 +224,7 @@ namespace assetlib
 
 				MeshRefs refs;
 				refs.skeleton = document.skeleton;
+				refs.grass    = document.GetGrassOutput();
 				for (const MaterialBinding& binding : document.bindings)
 					refs.materials.push_back(binding.material);
 				for (const MaterialOverrideBinding& entry : document.materialOverrides)
@@ -296,6 +297,7 @@ namespace assetlib
 		generateTangents(current.mesh);
 		requireUniqueSubmeshNames(current.mesh);
 		current.mesh.source = group.ref;
+		current.mesh.grass  = group.document->GetGrassOutput();
 		if (isSkinned(current.mesh))
 		{
 			current.mesh.skeleton          = group.document->skeleton;

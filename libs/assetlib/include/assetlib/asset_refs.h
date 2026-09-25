@@ -62,6 +62,7 @@ namespace assetlib
 		kEnvironmentPart,   // a .benv names the .bsky or .benvl it composes
 		kEnvSource,         // a .bsky or .benvl names the radiance its bake read
 		kMeshSkeleton,      // a .bmesh's joint indices address a .bskel
+		kMeshGrass,         // a .bmesh names the .bgrassfields cooked from the same source
 		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
 		kImportedSource,    // a .bimport names the source it was imported from, and stores it
 		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
@@ -259,6 +260,13 @@ namespace assetlib
 		 * put it straight back.
 		 */
 		std::vector<std::string> producers;
+
+		/**
+		 * The `.bmesh` files naming a `.bgrassfields` this plan deletes, which DeleteAsset rewrites
+		 * to name none. Not blockers, for `producers`' reason: the grass is the mesh's sibling
+		 * output, and a mesh without it is a mesh that grows no grass.
+		 */
+		std::vector<std::string> grassMeshes;
 
 		/**
 		 * For a directory: every file beneath it, which all go with it -- including files of no kind this

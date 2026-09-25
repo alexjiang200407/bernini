@@ -13,6 +13,7 @@
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BGrassFields.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Node.h>
 #include <catch2/catch_test_macros.hpp>
@@ -42,6 +43,7 @@ namespace
 
 	constexpr std::string_view c_SourceKey = "Authored/Meshes/street.glb";
 	constexpr std::string_view c_GrassKey  = "Derived/Meshes/street.bgrassfields";
+	constexpr std::string_view c_MeshKey   = "Derived/Meshes/street.bmesh";
 	constexpr std::string_view c_LookKey   = "Authored/Grass/verge.bgrass";
 	constexpr std::string_view c_Field     = "Street[1]";
 
@@ -148,6 +150,8 @@ TEST_CASE(
 	CHECK(grass.fields[0].look == c_InvalidIndex);
 	CHECK(grass.source.key == c_SourceKey);
 	CHECK_FALSE(project.Store().GeometryIsStale(c_GrassKey));
+
+	CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass == c_GrassKey);
 }
 
 TEST_CASE("A source with no POINTS writes no grass file", "[grass][container]")
@@ -163,6 +167,52 @@ TEST_CASE("A source with no POINTS writes no grass file", "[grass][container]")
 	for (const std::string& output : document.outputs)
 		CHECK_FALSE(output.ends_with(c_GrassFieldsExtension));
 	CHECK_FALSE(project.GetStore().Exists("Derived/Meshes/unit.bgrassfields"));
+	CHECK(project.GetStore().Load<BMesh>("Derived/Meshes/unit.bmesh").grass.empty());
+}
+
+// The mesh is how a runtime finds its grass -- a packed game has no `.bimport` to read -- so every
+// path that writes or moves the pair keeps the mesh pointing at it.
+TEST_CASE("A mesh names its grass file wherever the pair is written", "[grass][container]")
+{
+	const GrassyProject project("bernini_grass_mesh_names");
+
+	SECTION("Reimport")
+	{
+		fs::remove(project.dataRoot / c_MeshKey);
+		REQUIRE(project.Store().Reimport(false).GetFailedCount() == 0);
+		CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass == c_GrassKey);
+	}
+
+	SECTION("the reference scan")
+	{
+		const AssetRefGraph         graph = AssetRefGraph::Scan(project.Store());
+		const std::vector<AssetRef> named = graph.ReferencesOf(c_MeshKey);
+		CHECK(
+			std::ranges::find(
+				named,
+				AssetRef{ std::string(c_MeshKey), std::string(c_GrassKey), RefKind::kMeshGrass }) !=
+			named.end());
+	}
+
+	SECTION("a rename of the grass file")
+	{
+		constexpr std::string_view c_Renamed = "Derived/Meshes/verge.bgrassfields";
+		const RenamePlan           plan =
+			planRename(AssetRefGraph::Scan(project.Store()), c_GrassKey, c_Renamed);
+		REQUIRE(project.Store().RenameAsset(plan).status == RenameStatus::kRenamed);
+		CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass == c_Renamed);
+	}
+
+	SECTION("pack")
+	{
+		const fs::path archive = project.dataRoot.parent_path() / "Data.bpak";
+		static_cast<void>(project.Store().Pack(PackDesc{ archive }));
+
+		const AssetStore shipped(project.dataRoot, std::make_shared<PakFile>(archive));
+		const BMesh      mesh = shipped.Load<BMesh>(std::string(c_MeshKey));
+		CHECK(mesh.grass == c_GrassKey);
+		CHECK(shipped.Exists(mesh.grass));
+	}
 }
 
 TEST_CASE("Reimport puts a deleted grass file back, byte for byte", "[grass][container][reimport]")
@@ -342,6 +392,10 @@ TEST_CASE(
 	const ImportDocument document =
 		project.Store().Load<ImportDocument>(importDocumentKeyFor(c_SourceKey));
 	CHECK(std::ranges::find(document.outputs, c_GrassKey) == document.outputs.end());
+
+	// The mesh's pointer is a claim on a sibling, like the document's: dropped, never a blocker.
+	CHECK(plan.grassMeshes == std::vector<std::string>{ std::string(c_MeshKey) });
+	CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass.empty());
 }
 
 TEST_CASE(
