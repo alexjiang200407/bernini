@@ -267,6 +267,24 @@ namespace bgl
 
 			m_BlendSamples.Init(std::move(blendSampleBufferDesc), m_ResourceManager);
 		}
+
+		// Like the animated buffers: most scenes hold no grass, and these grow on the first field.
+		{
+			auto grassLookDesc         = EntryBufferDesc();
+			grassLookDesc.initialCount = 1;
+			grassLookDesc.debugName    = "Grass Look Buffer";
+			m_GrassLooks.Init(std::move(grassLookDesc), m_ResourceManager);
+
+			auto grassChunkDesc         = RangeBufferDesc();
+			grassChunkDesc.initialCount = 1;
+			grassChunkDesc.debugName    = "Grass Chunk Buffer";
+			m_GrassChunks.Init(std::move(grassChunkDesc), m_ResourceManager);
+
+			auto grassClumpDesc         = RangeBufferDesc();
+			grassClumpDesc.initialCount = 1;
+			grassClumpDesc.debugName    = "Grass Clump Buffer";
+			m_GrassClumps.Init(std::move(grassClumpDesc), m_ResourceManager);
+		}
 	}
 
 	core::slot_handle

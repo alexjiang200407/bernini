@@ -32,6 +32,8 @@
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/FootIKLeg.h>
+#include <bgl_common/idl/GrassChunkRef.h>
+#include <bgl_common/idl/GrassDraw.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/PosedInstance.h>
@@ -65,6 +67,10 @@ namespace bgl
 		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
 		// bucket for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
+
+		// The geom it places, generation and all, so the grass list reads the geom's grass only
+		// while the geom is alive.
+		GeomHandle geom;
 
 		// Whether a write has already rolled this placement's prevTransform this frame.
 		bool movedThisFrame = false;
@@ -432,6 +438,36 @@ namespace bgl
 			return m_DemandedDrawBuckets;
 		}
 
+		/** A run of the view's grass chunk references drawn through one bucket's pixel program. */
+		struct GrassBatch
+		{
+			uint32_t bucket   = 0;
+			uint32_t firstRef = 0;
+			uint32_t refCount = 0;
+		};
+
+		/**
+		 * Rebuilds the grass list if a placement or the scene's grass changed since it was built.
+		 * The renderer calls it before it asks for the grass buckets, so a Draw builds the grass
+		 * pipelines it is about to use.
+		 */
+		void
+		RefreshGrass();
+
+		/** @pre RefreshGrass has run this frame. */
+		[[nodiscard]] std::span<const GrassBatch>
+		GetGrassBatches() const noexcept
+		{
+			return m_GrassBatches;
+		}
+
+		/** Every bucket the grass list draws through. @pre RefreshGrass has run this frame. */
+		[[nodiscard]] const DrawBucketMask&
+		GrassDrawBuckets() const noexcept
+		{
+			return m_GrassDrawBuckets;
+		}
+
 	private:
 		/**
 		 * Fills `instance`'s material and draw bucket: `override` if it is valid, else the Scene's default for
@@ -593,6 +629,15 @@ namespace bgl
 		// The placements carrying a blob shadow, one disc each -- the blob-shadow pass
 		// dispatches over it. Dense and CPU-authored for the pose list's reason.
 		UploadBuffer<idl::BlobShadow> m_BlobShadows;
+
+		// Every visible placement's grass fields, and one reference per chunk of them, grouped into
+		// m_GrassBatches by the bucket they draw through. Rebuilt whole, like the blob list.
+		UploadBuffer<idl::GrassDraw>     m_GrassDraws;
+		UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
+		std::vector<GrassBatch>          m_GrassBatches;
+		DrawBucketMask                   m_GrassDrawBuckets;
+		bool                             m_GrassDirty      = true;
+		uint64_t                         m_SceneGrassEpoch = 0;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;

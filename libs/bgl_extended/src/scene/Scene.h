@@ -43,6 +43,9 @@
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Geom.h>
+#include <bgl_common/idl/GrassChunk.h>
+#include <bgl_common/idl/GrassClump.h>
+#include <bgl_common/idl/GrassLook.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
@@ -74,6 +77,18 @@ namespace bgl
 	class FrameGraph;
 
 	/**
+	 * One grass field bound to a geom: the look it draws with, and where its chunks and clumps sit in
+	 * the scene's grass buffers. `chunks.index` is the field's first chunk there.
+	 */
+	struct GrassFieldRecord
+	{
+		GrassHandle             look;
+		core::multi_slot_handle chunks;
+		core::multi_slot_handle clumps;
+		uint32_t                chunkCount = 0;
+	};
+
+	/**
 	 * One live geom. Every geom has a submesh range; a kSkinnedMesh one additionally *names* a rig it
 	 * shares with every other geom skinned to it, and records its clip count for instance-creation
 	 * validation.
@@ -99,8 +114,9 @@ namespace bgl
 		uint32_t nodeCount = 0;  // kSkinnedMesh only: clips plus authored spaces
 		uint32_t legCount  = 0;  // kSkinnedMesh only; zero on a rig that authored no legs
 
-		// One use per bound grass field, released by DeleteGeom; see GrassMeta::useCount.
-		std::vector<GrassHandle> grass;
+		// Every bound grass field, each holding a use of its look (see GrassMeta::useCount) and the
+		// chunk and clump ranges it was uploaded into. Released by AttachGrass and DeleteGeom.
+		std::vector<GrassFieldRecord> grass;
 	};
 
 	/**
@@ -111,6 +127,9 @@ namespace bgl
 	struct GrassMeta
 	{
 		GrassDesc desc;
+
+		// The look's GrassLook record, which every field bound to it names.
+		core::slot_handle entry;
 
 		// Grass fields bound to this look across every live geom. DeleteGrass refuses while it is
 		// nonzero: a field left naming a freed slot would draw with whatever look takes it next.
@@ -493,6 +512,45 @@ namespace bgl
 			return grass.IsValid() && m_Grass.valid(grass.handle);
 		}
 
+		/**
+		 * The grass fields a geom draws, for a view to list. Empty for a dead geom -- an instance
+		 * may outlive its geom (see IScene::DeleteGeom), and its grass then draws nothing.
+		 */
+		[[nodiscard]] std::span<const GrassFieldRecord>
+		GetGeomGrass(GeomHandle geom) const noexcept
+		{
+			if (!IsGeomAlive(geom))
+			{
+				return {};
+			}
+			return m_Geoms[geom.handle.index].grass;
+		}
+
+		/** The GrassLook record `grass` names, and the material it draws through. */
+		struct GrassLookRef
+		{
+			uint32_t       entry = 0;
+			MaterialHandle material;
+		};
+
+		/** @pre IsGrassAlive(grass). */
+		[[nodiscard]] GrassLookRef
+		GetGrassLook(GrassHandle grass) const noexcept
+		{
+			const GrassMeta& meta = m_Grass[grass.handle.index];
+			return { meta.entry.index, meta.desc.material };
+		}
+
+		/**
+		 * Moves whenever a view's grass list could change without any of its own placements
+		 * changing: grass attached or released, a look rewritten. A SceneView polls it.
+		 */
+		[[nodiscard]] uint64_t
+		GetGrassEpoch() const noexcept
+		{
+			return m_GrassEpoch;
+		}
+
 		void
 		DeleteGrass(GrassHandle grass) override;
 
@@ -619,9 +677,16 @@ namespace bgl
 		static void
 		ValidateGrass(const GrassDesc& desc, std::string_view caller);
 
-		/** Gives back the use each of `looks` holds for one geom; see GrassMeta::useCount. */
+		/**
+		 * Gives back what each of `fields` holds -- its look's use (see GrassMeta::useCount) and its
+		 * chunk and clump ranges -- and empties it.
+		 */
 		void
-		ReleaseGrass(std::span<const GrassHandle> looks) noexcept;
+		ReleaseGrass(std::vector<GrassFieldRecord>& fields) noexcept;
+
+		/** The GrassLook record CreateGrass and UpdateGrass write for `desc`. */
+		[[nodiscard]] static idl::GrassLook
+		BuildGrassLook(const GrassDesc& desc) noexcept;
 
 		/**
 		 * Refuses a rig the pose pass could not walk or address: no bones, a `parent` that is not
@@ -729,6 +794,11 @@ namespace bgl
 		bool            m_FootPlanting = true;
 
 		core::slot_vector<GrassMeta> m_Grass;
+		uint64_t                     m_GrassEpoch = 0;
+
+		EntryBuffer<idl::GrassLook>  m_GrassLooks;
+		RangeBuffer<idl::GrassChunk> m_GrassChunks;
+		RangeBuffer<idl::GrassClump> m_GrassClumps;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
@@ -805,6 +875,9 @@ namespace bgl
 			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
 			NamedBuffer{ c_BlendNodeBufferName, &Scene::m_BlendNodes },
 			NamedBuffer{ c_BlendSampleBufferName, &Scene::m_BlendSamples },
+			NamedBuffer{ c_GrassLookBufferName, &Scene::m_GrassLooks },
+			NamedBuffer{ c_GrassChunkBufferName, &Scene::m_GrassChunks },
+			NamedBuffer{ c_GrassClumpBufferName, &Scene::m_GrassClumps },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

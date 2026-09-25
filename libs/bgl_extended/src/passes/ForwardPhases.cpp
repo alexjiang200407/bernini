@@ -225,41 +225,46 @@ namespace bgl
 			return;
 		}
 
-		BindingNameCheck("ForwardPhases"sv, kernels)
-			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+		auto check = BindingNameCheck("ForwardPhases"sv, kernels);
+		check.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
+		GrassForwardPhase::CheckBindings(check);
+	}
+
+	const IForwardPhase&
+	ForwardPhases::Phase(const ForwardPhase phase) const noexcept
+	{
+		switch (phase)
+		{
+		case ForwardPhase::kWorld:
+			return m_World;
+		case ForwardPhase::kGrass:
+			return m_Grass;
+		case ForwardPhase::kSkinned:
+			return m_Skinned;
+		case ForwardPhase::kTransparent:
+			return m_Transparent;
+		}
+		gfatal("An unknown forward phase");
 	}
 
 	void
 	ForwardPhases::AttachToFrameGraph(
 		FrameGraph&        fg,
 		const DrawData&    draw,
-		const ForwardPhase phase)
+		const ForwardPhase which)
 	{
-		switch (phase)
+		const IForwardPhase& phase = Phase(which);
+		if (!phase.HasWork(draw))
 		{
-		case ForwardPhase::kWorld:
-			AttachPhase(fg, draw, m_World);
-			return;
-		case ForwardPhase::kSkinned:
-			AttachPhase(fg, draw, m_Skinned);
-			return;
-		case ForwardPhase::kTransparent:
-			AttachPhase(fg, draw, m_Transparent);
 			return;
 		}
-		gfatal("An unknown forward phase");
-	}
 
-	template <ForwardPhaseRecorder Phase>
-	void
-	ForwardPhases::AttachPhase(FrameGraph& fg, const DrawData& draw, const Phase& phase)
-	{
 		auto desc = PassDesc();
 		desc.SetName("Forward {} {}", phase.Name(), draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)
@@ -388,9 +393,11 @@ namespace bgl
 		}
 	}
 
-	template <ForwardPhaseRecorder Phase>
 	void
-	ForwardPhases::Execute(const Phase& phase, const DrawData& draw, const PassContext& resources)
+	ForwardPhases::Execute(
+		const IForwardPhase& phase,
+		const DrawData&      draw,
+		const PassContext&   resources)
 	{
 		if (draw.view->GetInstanceCount() == 0)
 		{
