@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
+#include <bgl/glm.h>
+#include <bgl/types/WindDesc.h>
 #include <bgl_common/gassert.h>
 #include <cstdint>
 #include <string_view>
@@ -51,12 +53,18 @@ namespace bgl
 			    BarrierSyncFlag::kVertexShader } }
 		};
 
-		constexpr std::array<std::string_view, 4> c_Fields = {
-			"cameraPos"sv,
-			"firstRef"sv,
-			"refCount"sv,
-			"dispatchWidth"sv,
+		constexpr std::array<std::string_view, 9> c_Fields = {
+			"cameraPos"sv,     "firstRef"sv,      "refCount"sv,
+			"dispatchWidth"sv, "windDirection"sv, "windStrength"sv,
+			"windGustScale"sv, "windGustSpeed"sv, "windGustStrength"sv,
 		};
+
+		/** The wind's horizontal direction, unit; SetWind refused a direction without one. */
+		[[nodiscard]] glm::vec2
+		WindDirection(const WindDesc& wind)
+		{
+			return glm::normalize(glm::vec2(wind.direction.x, wind.direction.z));
+		}
 
 		[[nodiscard]] const SceneView&
 		ViewOf(const DrawData& draw)
@@ -93,7 +101,10 @@ namespace bgl
 		ICommandList* cmd = resources.GetCommandList();
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
 
-		for (const SceneView::GrassBatch& batch : ViewOf(draw).GetGrassBatches())
+		const SceneView& view = ViewOf(draw);
+		const WindDesc&  wind = view.GetWind();
+
+		for (const SceneView::GrassBatch& batch : view.GetGrassBatches())
 		{
 			MeshletKernel* kernel =
 				kernels.BindDrawBucketKernel(batch.bucket, state, draw, resources);
@@ -121,6 +132,12 @@ namespace bgl
 			uniforms["firstRef"]      = batch.firstRef;
 			uniforms["refCount"]      = batch.refCount;
 			uniforms["dispatchWidth"] = width;
+
+			uniforms["windDirection"]    = WindDirection(wind);
+			uniforms["windStrength"]     = wind.strength;
+			uniforms["windGustScale"]    = wind.gustScale;
+			uniforms["windGustSpeed"]    = wind.gustSpeed;
+			uniforms["windGustStrength"] = wind.gustStrength;
 
 			cmd->SetMeshletState(state);
 			cmd->DispatchMesh(width, rows, 1);

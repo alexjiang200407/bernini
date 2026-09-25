@@ -25,14 +25,34 @@ then draws them, placed by its transform. `docs/bgl_api.md` has the call's rules
 A blade is a quadratic Bézier strip, built from its clump and a hash of its index
 ([lib/forward/grass.slang](../libs/bgl_extended/shaders/src/lib/forward/grass.slang)): its root is a
 uniform point on the clump's disc (`clumpRadius`), its height is between `minHeight` and `maxHeight`
-times the clump's scale, and it faces a random way around the clump's ground normal. `curvature` and
-`lean` bend it forward about its root. Its width tapers from `rootWidth` to `rootWidth * tipWidth`.
+times the clump's scale, and it faces a random way around the clump's ground normal. Its width
+tapers from `rootWidth` to `rootWidth * tipWidth`.
 
-**Everything that bends a blade goes through `PoseBlade`**, which returns the three control points.
-Any force is a term there, evaluated at the frame's time and at the previous frame's so the velocity
-describes it. A force may bend a blade about its root and may not stretch it, so a chunk's culling
-bound -- its clumps' sphere inflated by `BladeReach`, the Bézier hull of the tallest blade -- holds
-whatever bends it.
+**Everything that bends a blade goes through `PoseBlade`**, which returns the three control points:
+the root, a middle point, and the tip. The tip leans out from above the root by the look's `lean`
+plus whatever pushes it -- wind, and every later force -- but never past 95% of the height, and it
+drops so the blade keeps its length. The middle point bows between a straight blade (`curvature` 0)
+and a guide standing above the root that sinks as the tip leans out (`curvature` 1), and a length
+correction then brings the curve back to the blade's height. Posed this way a blade arcs over rather
+than folding: a middle point held at full height above the root, whatever the tip does, bends every
+leaning blade through a corner near its tip.
+
+A pose is computed in world space, from the root, up and facing the placement's transform gives the
+blade, once at the frame's time and once at the previous frame's with the previous transform, so
+the velocity describes both the placement's motion and the pose's. Because a pose never lengthens a
+blade, a chunk's culling bound -- its clumps' sphere inflated by `BladeReach`, the blade's height
+with slack for the length correction and half its widest width -- holds whatever bends it.
+
+## Wind
+
+The wind is the view's (`ISceneView::SetWind`), and how a blade answers it is the look's
+(`GrassResponseDesc`). It pushes the tip along the wind's horizontal direction by a share of the
+blade's height: the steady `strength`, plus a gust -- smooth value noise over the ground's xz,
+`gustScale` across and scrolling downwind at `gustSpeed` -- up to `gustStrength`, scaled by the
+look's `gustResponse`; the sum is softened by `1 - stiffness`. Each blade adds a small flutter of its
+own, in phase with its hash, so neighbours do not sway as one. A calm view pushes nothing, however
+the clock runs. Changing the wind is not a temporal-epoch event: the next frame's pose simply
+differs from the last, and the velocity says so.
 
 ## Distance
 

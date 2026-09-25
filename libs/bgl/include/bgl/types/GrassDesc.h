@@ -26,10 +26,12 @@ namespace bgl
 		// The tip's width as a share of the root's, in [0, 1]. Zero comes to a point.
 		float tipWidth = 0.0f;
 
-		// How far the curve's control point bows the blade forward, in [0, 1] of its height.
+		// How the blade bends on its way to a leaning tip, in [0, 1]: zero runs straight from root to
+		// tip, one stands upright at the root and arcs over near the tip.
 		float curvature = 0.3f;
 
-		// How far the tip leans out from the clump centre, in [0, 1] of its height.
+		// How far the tip leans out from above its root at rest, in [0, 1] of its height. The blade
+		// keeps its length, so a leaning tip also sits lower.
 		float lean = 0.2f;
 
 		// Segments along the blade at the camera and at the fade end, interpolated between.
