@@ -147,9 +147,10 @@ and the translucency term the rest, paid whether a look uses it or not: branchin
 saved nothing measurable. Carrying the translucency as a flat per-vertex attribute instead cost
 0.42 ms, and as an interpolated one 0.18 ms, which is why the program reads it from the look.
 
-The verge the feature landed with draws in 1.25 ms (best of three), against 0.82 ms for the same
-street's grass baked into its mesh and drawn by Forward World. The difference buys wind, a field
-that thins and coarsens rather than popping, and no grass geometry in the file.
+At landing the test verge draws in 1.25 ms (best of three). The reference it was set beside is
+animal-run's street, whose grass is baked into its mesh and costs Forward World 0.82 ms; the verge is
+shaped after that street, not the same field. The difference buys wind, a field that thins and
+coarsens rather than popping, and no grass geometry in the file.
 
 ## Where it comes from
 
