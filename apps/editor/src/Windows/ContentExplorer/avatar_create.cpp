@@ -20,10 +20,12 @@ namespace editor
 
 		const assetlib::AssetStore store(std::filesystem::path(dataRoot.toStdWString()));
 
-		core::throw_runtime_error_if(
-			store.GetFiles().Stat(key).has_value(),
-			"'{}' already exists; edit it rather than starting over",
-			key);
+		if (store.GetFiles().Stat(key).has_value())
+		{
+			core::throw_runtime_error(
+				"'{}' already exists; edit it rather than starting over",
+				key);
+		}
 
 		store.Save(assetlib::Avatar(), key);
 		return QString::fromStdString(key);

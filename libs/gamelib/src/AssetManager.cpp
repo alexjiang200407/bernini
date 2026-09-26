@@ -119,11 +119,13 @@ namespace game
 		void
 		RequireCurrent(const assetlib::AssetStore& store, std::string_view relPath)
 		{
-			core::throw_runtime_error_if(
-				store.GeometryIsStale(relPath),
-				"AssetManager: '{}' was cooked from a source that has changed since; run "
-				"`assetlib_cli migrate` on this project to bring it up to date",
-				relPath);
+			if (store.GeometryIsStale(relPath))
+			{
+				core::throw_runtime_error(
+					"AssetManager: '{}' was cooked from a source that has changed since; run "
+					"`assetlib_cli migrate` on this project to bring it up to date",
+					relPath);
+			}
 		}
 
 		/**
@@ -763,25 +765,29 @@ namespace game
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
 			GeomRecord& record = m_Geoms.at(it->second);
-			core::throw_runtime_error_if(
-				record.skinnedAnimations != assetlib::normalizePath(animationsRelPath),
-				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
-				"acquiring with '{}'",
-				key,
-				record.skinnedAnimations,
-				animationsRelPath);
+			if (record.skinnedAnimations != assetlib::normalizePath(animationsRelPath))
+			{
+				core::throw_runtime_error(
+					"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
+					"acquiring with '{}'",
+					key,
+					record.skinnedAnimations,
+					animationsRelPath);
+			}
 			// Unlike posedBounds, which a shared acquire ignores without even validating: a blend
 			// set is part of what the rig is, so naming a different one is refused here the way a
 			// different `.banim` is. Naming none accepts whatever the rig has.
 			const auto sharedBlendNorm =
 				blendRelPath.empty() ? std::string() : assetlib::normalizePath(blendRelPath);
-			core::throw_runtime_error_if(
-				!sharedBlendNorm.empty() && sharedBlendNorm != record.skinnedBlend,
-				"AssetManager: '{}' is live with the blend set '{}'; release it to zero before "
-				"acquiring with '{}'",
-				key,
-				record.skinnedBlend.empty() ? "<none>" : record.skinnedBlend,
-				blendRelPath);
+			if (!sharedBlendNorm.empty() && sharedBlendNorm != record.skinnedBlend)
+			{
+				core::throw_runtime_error(
+					"AssetManager: '{}' is live with the blend set '{}'; release it to zero before "
+					"acquiring with '{}'",
+					key,
+					record.skinnedBlend.empty() ? "<none>" : record.skinnedBlend,
+					blendRelPath);
+			}
 
 			++record.refCount;
 			return SkinnedMesh{ record.handle, record.skinnedClips, record.skinnedSpaces };
@@ -807,17 +813,20 @@ namespace game
 			const std::vector<std::string> gained =
 				BonesWithoutSamples(animations.skeletonBoneNames, skeleton);
 
-			core::throw_runtime_error_if(
-				!RemapCached(
+			if (!RemapCached(
 					m_Reads->animations,
 					animationsNorm,
 					skeleton,
-					assetlib::remapAnimations),
-				"AssetManager: '{}' was cooked against a different version of '{}'; a bone has "
-				"been inserted, removed or reordered since, so its joint indices name different "
-				"bones now",
-				animationsNorm,
-				animations.skeleton);
+					assetlib::remapAnimations))
+			{
+				core::throw_runtime_error(
+					"AssetManager: '{}' was cooked against a different version of '{}'; a bone has "
+					"been inserted, removed or reordered since, so its joint indices name "
+					"different "
+					"bones now",
+					animationsNorm,
+					animations.skeleton);
+			}
 
 			// Said out loud, once per pairing: the remap is a cost nobody can see, and a rig that
 			// silently re-addresses every load is one nobody thinks to bake down (ADR-6).
@@ -840,25 +849,29 @@ namespace game
 			// A set is authored against exactly one clip set, and its samples are clip names in
 			// that one. Against the normalized path on both sides: the two spellings of one key
 			// are the same key.
-			core::throw_runtime_error_if(
-				assetlib::normalizePath(blendSet->animations) != animationsNorm,
-				"AssetManager: the blend set '{}' is authored against '{}', not the '{}' this "
-				"acquire names",
-				blendNorm,
-				blendSet->animations,
-				animationsNorm);
+			if (assetlib::normalizePath(blendSet->animations) != animationsNorm)
+			{
+				core::throw_runtime_error(
+					"AssetManager: the blend set '{}' is authored against '{}', not the '{}' this "
+					"acquire names",
+					blendNorm,
+					blendSet->animations,
+					animationsNorm);
+			}
 		}
 
 		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
 		if (!assetlib::meshMatchesSkeleton(mesh, skeleton))
 		{
-			core::throw_runtime_error_if(
-				!RemapCached(m_Reads->meshes, relPath, skeleton, assetlib::remapMesh),
-				"AssetManager: '{}' was cooked against a different rig than '{}'; its joint "
-				"indices name different bones now, so it would be posed by the wrong bones",
-				relPath,
-				animations.skeleton);
+			if (!RemapCached(m_Reads->meshes, relPath, skeleton, assetlib::remapMesh))
+			{
+				core::throw_runtime_error(
+					"AssetManager: '{}' was cooked against a different rig than '{}'; its joint "
+					"indices name different bones now, so it would be posed by the wrong bones",
+					relPath,
+					animations.skeleton);
+			}
 
 			spdlog::info(
 				"AssetManager: the mesh '{}' re-addressed to '{}'; `assetlib_cli migrate` bakes "
@@ -867,11 +880,13 @@ namespace game
 				animations.skeleton);
 		}
 
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"AssetManager: mesh index {} out of range in '{}'",
-			meshIndex,
-			relPath);
+		if (meshIndex >= mesh.meshes.size())
+		{
+			core::throw_runtime_error(
+				"AssetManager: mesh index {} out of range in '{}'",
+				meshIndex,
+				relPath);
+		}
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
 
@@ -984,23 +999,29 @@ namespace game
 			// check is not reached on this path. Before an acquire could re-address a grown rig
 			// the mismatch threw earlier, in AcquireSkinnedMesh; now it resolves, so it is refused
 			// here instead of sharing tables the caller's joint indices overrun.
-			core::throw_runtime_error_if(
-				it->second.skeletonSignature != rigSignature,
-				"AssetManager: the rig from '{}' is live against a different version of '{}'; it "
-				"has changed since, so release this rig to zero and acquire it again",
-				animationsNorm,
-				animations.skeleton);
+			if (it->second.skeletonSignature != rigSignature)
+			{
+				core::throw_runtime_error(
+					"AssetManager: the rig from '{}' is live against a different version of '{}'; "
+					"it "
+					"has changed since, so release this rig to zero and acquire it again",
+					animationsNorm,
+					animations.skeleton);
+			}
 
 			// One-sided on purpose: the tables are the rig's and nothing attaches a set to one
 			// already uploaded, but a caller that asked for no spaces is not wrong to find some.
 			// Checked before the reference is taken, so a refusal owns nothing.
-			core::throw_runtime_error_if(
-				!blendNorm.empty() && blendNorm != it->second.blend,
-				"AssetManager: the rig from '{}' is live with the blend set '{}'; release it to "
-				"zero before acquiring with '{}'",
-				animationsNorm,
-				it->second.blend.empty() ? "<none>" : it->second.blend,
-				blendNorm);
+			if (!blendNorm.empty() && blendNorm != it->second.blend)
+			{
+				core::throw_runtime_error(
+					"AssetManager: the rig from '{}' is live with the blend set '{}'; release it "
+					"to "
+					"zero before acquiring with '{}'",
+					animationsNorm,
+					it->second.blend.empty() ? "<none>" : it->second.blend,
+					blendNorm);
+			}
 
 			++it->second.refCount;
 
@@ -1049,12 +1070,15 @@ namespace game
 			for (const assetlib::BlendSpaceSample& sample : space.samples)
 			{
 				const std::optional<uint32_t> clip = assetlib::findClip(animations, sample.clip);
-				core::throw_runtime_error_if(
-					!clip.has_value(),
-					"AssetManager: blend space '{}' names the clip '{}', which '{}' does not hold",
-					space.name,
-					sample.clip,
-					blendSet->animations);
+				if (!clip.has_value())
+				{
+					core::throw_runtime_error(
+						"AssetManager: blend space '{}' names the clip '{}', which '{}' does not "
+						"hold",
+						space.name,
+						sample.clip,
+						blendSet->animations);
+				}
 
 				resolved.samples.push_back({ *clip, sample.parameter });
 			}

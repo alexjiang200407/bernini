@@ -101,11 +101,14 @@ namespace assetlib
 
 				if (isSkinned(mesh))
 				{
-					core::throw_runtime_error_if(
-						document.skeleton.empty(),
-						"'{}': its source carries a rig but the import document names no "
-						"skeleton; run `assetlib_cli migrate` to record the one it already uses",
-						key);
+					if (document.skeleton.empty())
+					{
+						core::throw_runtime_error(
+							"'{}': its source carries a rig but the import document names no "
+							"skeleton; run `assetlib_cli migrate` to record the one it already "
+							"uses",
+							key);
+					}
 					mesh.skeleton          = document.skeleton;
 					mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 					mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
@@ -118,15 +121,18 @@ namespace assetlib
 			}
 			case AssetType::kAnimation:
 			{
-				core::throw_runtime_error_if(
-					group.import.animations.clips.empty(),
-					"'{}': its source no longer carries clips",
-					key);
-				core::throw_runtime_error_if(
-					document.skeleton.empty(),
-					"'{}': its import document names no skeleton, so which rig its clips address "
-					"cannot be known; run `assetlib_cli migrate` to record it",
-					key);
+				if (group.import.animations.clips.empty())
+				{
+					core::throw_runtime_error("'{}': its source no longer carries clips", key);
+				}
+				if (document.skeleton.empty())
+				{
+					core::throw_runtime_error(
+						"'{}': its import document names no skeleton, so which rig its clips "
+						"address "
+						"cannot be known; run `assetlib_cli migrate` to record it",
+						key);
+				}
 
 				AnimationSet   clips = group.import.animations;
 				const Skeleton rig   = store.Load<Skeleton>(document.skeleton);
@@ -172,10 +178,12 @@ namespace assetlib
 			}
 			case AssetType::kGrassFields:
 			{
-				core::throw_runtime_error_if(
-					group.import.grass.fields.empty(),
-					"'{}': its source no longer carries a POINTS primitive",
-					key);
+				if (group.import.grass.fields.empty())
+				{
+					core::throw_runtime_error(
+						"'{}': its source no longer carries a POINTS primitive",
+						key);
+				}
 
 				BGrassFields grass = group.import.grass;
 				grass.source       = group.ref;
@@ -406,10 +414,13 @@ namespace assetlib
 
 						try
 						{
-							core::throw_runtime_error_if(
-								!Exists(source.key),
-								"'{}' is not in the project, so nothing can be produced from it",
-								source.key);
+							if (!Exists(source.key))
+							{
+								core::throw_runtime_error(
+									"'{}' is not in the project, so nothing can be produced from "
+									"it",
+									source.key);
+							}
 
 							// Parsed once per kind rather than held across all of them: a source's
 							// meshes are the largest thing in this library, and every one of them
@@ -488,10 +499,12 @@ namespace assetlib
 				const PendingSource& source = environments[item.source];
 				try
 				{
-					core::throw_runtime_error_if(
-						!Exists(source.key),
-						"'{}' is not in the project, so nothing can be produced from it",
-						source.key);
+					if (!Exists(source.key))
+					{
+						core::throw_runtime_error(
+							"'{}' is not in the project, so nothing can be produced from it",
+							source.key);
+					}
 
 					produceEnvironmentOutputs(
 						*this,

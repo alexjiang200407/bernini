@@ -122,13 +122,15 @@ namespace assetlib
 		requireSourceCategoryKept(std::string_view from, std::string_view to)
 		{
 			const std::string_view category = sourceCategoryOf(from);
-			core::throw_runtime_error_if(
-				!category.empty() && sourceCategoryOf(to) != category,
-				"assetlib::planRename: '{}' has to stay under '{}', the one place a re-import "
-				"looks "
-				"for it",
-				from,
-				category);
+			if (!category.empty() && sourceCategoryOf(to) != category)
+			{
+				core::throw_runtime_error(
+					"assetlib::planRename: '{}' has to stay under '{}', the one place a re-import "
+					"looks "
+					"for it",
+					from,
+					category);
+			}
 		}
 
 		/**
@@ -178,11 +180,13 @@ namespace assetlib
 			const auto        source =
 				RenameMove{ from, swapExtension(plan.subject.to, extensionOf(from)) };
 
-			core::throw_runtime_error_if(
-				!std::filesystem::exists(dataRoot / source.from),
-				"assetlib::planRename: '{}' describes '{}', which does not exist",
-				plan.subject.from,
-				source.from);
+			if (!std::filesystem::exists(dataRoot / source.from))
+			{
+				core::throw_runtime_error(
+					"assetlib::planRename: '{}' describes '{}', which does not exist",
+					plan.subject.from,
+					source.from);
+			}
 
 			plan.source = source;
 
@@ -357,16 +361,21 @@ namespace assetlib
 		// source, not its extension: an environment's may be a `.ktx2`, otherwise a texture.
 		if (const std::optional<std::string> document = documentNaming(graph, plan.subject.from))
 		{
-			core::throw_runtime_error_if(
-				extensionOf(plan.subject.to) != extensionOf(plan.subject.from),
-				"assetlib::planRename: renaming '{}' to '{}' would change what kind of asset it is",
-				plan.subject.from,
-				plan.subject.to);
+			if (extensionOf(plan.subject.to) != extensionOf(plan.subject.from))
+			{
+				core::throw_runtime_error(
+					"assetlib::planRename: renaming '{}' to '{}' would change what kind of asset "
+					"it is",
+					plan.subject.from,
+					plan.subject.to);
+			}
 
-			core::throw_runtime_error_if(
-				!std::filesystem::exists(graph.DataRoot() / plan.subject.from),
-				"assetlib::planRename: '{}' does not exist",
-				plan.subject.from);
+			if (!std::filesystem::exists(graph.DataRoot() / plan.subject.from))
+			{
+				core::throw_runtime_error(
+					"assetlib::planRename: '{}' does not exist",
+					plan.subject.from);
+			}
 
 			plan.subject.from = *document;
 			plan.subject.to   = importDocumentKeyFor(plan.subject.to);

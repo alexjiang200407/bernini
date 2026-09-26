@@ -109,11 +109,13 @@ main(int argc, char** argv)
 		}
 
 		const auto store = assetlib::AssetStore(std::filesystem::path(project));
-		core::throw_runtime_error_if(
-			!grass.ends_with(".bgrass") || !store.Exists(grass),
-			"--grass {} names no .bgrass in {}",
-			grass,
-			std::filesystem::absolute(project).string());
+		if (!grass.ends_with(".bgrass") || !store.Exists(grass))
+		{
+			core::throw_runtime_error(
+				"--grass {} names no .bgrass in {}",
+				grass,
+				std::filesystem::absolute(project).string());
+		}
 		const auto look = store.Load<assetlib::BGrass>(grass);
 
 		auto wnd = std::optional<demo::DemoWindow>();

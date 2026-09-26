@@ -14,12 +14,14 @@ namespace editor
 	PlaybackTransport::SetClips(std::vector<ClipInfo> clips)
 	{
 		for (const ClipInfo& clip : clips)
-			core::throw_runtime_error_if(
-				clip.frameCount == 0 || clip.sampleRate <= 0.0f,
-				"PlaybackTransport: clip '{}' has {} frames at {} Hz",
-				clip.name,
-				clip.frameCount,
-				clip.sampleRate);
+			if (clip.frameCount == 0 || clip.sampleRate <= 0.0f)
+			{
+				core::throw_runtime_error(
+					"PlaybackTransport: clip '{}' has {} frames at {} Hz",
+					clip.name,
+					clip.frameCount,
+					clip.sampleRate);
+			}
 
 		m_Clips      = std::move(clips);
 		m_ActiveClip = 0;
@@ -31,11 +33,13 @@ namespace editor
 	void
 	PlaybackTransport::SelectClip(const uint32_t index)
 	{
-		core::throw_runtime_error_if(
-			index >= m_Clips.size(),
-			"PlaybackTransport: clip {} out of range ({} clips)",
-			index,
-			m_Clips.size());
+		if (index >= m_Clips.size())
+		{
+			core::throw_runtime_error(
+				"PlaybackTransport: clip {} out of range ({} clips)",
+				index,
+				m_Clips.size());
+		}
 
 		m_ActiveClip = index;
 		m_Time       = 0.0f;
@@ -45,12 +49,14 @@ namespace editor
 	void
 	PlaybackTransport::SetTransitionWindow(const float startSeconds, const float endSeconds)
 	{
-		core::throw_runtime_error_if(
-			!std::isfinite(startSeconds) || !std::isfinite(endSeconds) ||
-				endSeconds <= startSeconds,
-			"PlaybackTransport: transition window [{}, {}] is empty or reversed",
-			startSeconds,
-			endSeconds);
+		if (!std::isfinite(startSeconds) || !std::isfinite(endSeconds) ||
+		    endSeconds <= startSeconds)
+		{
+			core::throw_runtime_error(
+				"PlaybackTransport: transition window [{}, {}] is empty or reversed",
+				startSeconds,
+				endSeconds);
+		}
 
 		m_InWindow    = true;
 		m_WindowStart = startSeconds;
@@ -250,7 +256,10 @@ namespace editor
 	const ClipInfo&
 	PlaybackTransport::GetActiveClip() const
 	{
-		core::throw_runtime_error_if(!HasClips(), "PlaybackTransport: no clips loaded");
+		if (!HasClips())
+		{
+			core::throw_runtime_error("PlaybackTransport: no clips loaded");
+		}
 		return m_Clips[m_ActiveClip];
 	}
 

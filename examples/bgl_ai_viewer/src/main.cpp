@@ -132,13 +132,15 @@ namespace
 		const std::string_view       key,
 		const std::filesystem::path& dataRoot)
 	{
-		core::throw_runtime_error_if(
-			!store.Exists(key),
-			"{} is not on disk. It is a derived container, which a project does not commit: "
-			"`assetlib_cli migrate --project \"{}\" --yes` writes back every one its .bimport "
-			"documents name.",
-			key,
-			ProjectFileHint(dataRoot));
+		if (!store.Exists(key))
+		{
+			core::throw_runtime_error(
+				"{} is not on disk. It is a derived container, which a project does not commit: "
+				"`assetlib_cli migrate --project \"{}\" --yes` writes back every one its .bimport "
+				"documents name.",
+				key,
+				ProjectFileHint(dataRoot));
+		}
 	}
 
 	/** @throws std::runtime_error if `key` is neither a `.bimport` nor a `.glb`. */
@@ -148,10 +150,10 @@ namespace
 		if (key.ends_with(".glb"))
 			return assetlib::importDocumentKeyFor(key);
 
-		core::throw_runtime_error_if(
-			!key.ends_with(".bimport"),
-			"--import {} names neither a .bimport nor a .glb",
-			key);
+		if (!key.ends_with(".bimport"))
+		{
+			core::throw_runtime_error("--import {} names neither a .bimport nor a .glb", key);
+		}
 		return std::string(key);
 	}
 
@@ -221,26 +223,33 @@ namespace
 		const bgl::SceneViewRef&     view)
 	{
 		const std::string documentKey = ImportDocumentKey(opts.import);
-		core::throw_runtime_error_if(
-			!store.Exists(documentKey),
-			"{} is not in {}",
-			documentKey,
-			std::filesystem::absolute(dataRoot).string());
+		if (!store.Exists(documentKey))
+		{
+			core::throw_runtime_error(
+				"{} is not in {}",
+				documentKey,
+				std::filesystem::absolute(dataRoot).string());
+		}
 
 		const assetlib::ImportDocument document =
 			assetlib::loadImportDocument(store.GetFiles(), documentKey);
 
 		const std::string meshKey = document.GetMeshOutput();
-		core::throw_runtime_error_if(meshKey.empty(), "{} produced no .bmesh", documentKey);
+		if (meshKey.empty())
+		{
+			core::throw_runtime_error("{} produced no .bmesh", documentKey);
+		}
 		RequireDerived(store, meshKey, dataRoot);
 
 		const std::string animationsKey = AnimationOutput(document);
 		const bool        rigged        = !animationsKey.empty();
-		core::throw_runtime_error_if(
-			!rigged && !opts.clip.empty(),
-			"--clip {}: {} has no clip set, so there is nothing to play",
-			opts.clip,
-			documentKey);
+		if (!rigged && !opts.clip.empty())
+		{
+			core::throw_runtime_error(
+				"--clip {}: {} has no clip set, so there is nothing to play",
+				opts.clip,
+				documentKey);
+		}
 
 		const auto model = store.Load<assetlib::BMesh>(meshKey);
 
@@ -354,10 +363,10 @@ namespace
 		game::AssetManager&         assets,
 		const bgl::SceneViewRef&    view)
 	{
-		core::throw_runtime_error_if(
-			!opts.grass.ends_with(".bgrass") || !store.Exists(opts.grass),
-			"--grass {} names no .bgrass in the project",
-			opts.grass);
+		if (!opts.grass.ends_with(".bgrass") || !store.Exists(opts.grass))
+		{
+			core::throw_runtime_error("--grass {} names no .bgrass in the project", opts.grass);
+		}
 
 		const auto look = store.Load<assetlib::BGrass>(opts.grass);
 
@@ -501,11 +510,13 @@ try
 	std::ranges::sort(opts.screenshots);
 	const auto [duplicates, end] = std::ranges::unique(opts.screenshots);
 	opts.screenshots.erase(duplicates, end);
-	core::throw_runtime_error_if(
-		!opts.screenshots.empty() && opts.screenshots.back() >= opts.frames,
-		"--screenshot {} is past the last frame, {}",
-		opts.screenshots.empty() ? 0 : opts.screenshots.back(),
-		opts.frames - 1);
+	if (!opts.screenshots.empty() && opts.screenshots.back() >= opts.frames)
+	{
+		core::throw_runtime_error(
+			"--screenshot {} is past the last frame, {}",
+			opts.screenshots.empty() ? 0 : opts.screenshots.back(),
+			opts.frames - 1);
+	}
 
 	const auto dataRoot = std::filesystem::path(opts.project);
 	const auto store    = assetlib::AssetStore(dataRoot);
@@ -624,7 +635,10 @@ try
 
 	const std::filesystem::path csvPath = outDir / "gpu_timings.csv";
 	std::ofstream               csv(csvPath, std::ios::binary | std::ios::trunc);
-	core::throw_runtime_error_if(!csv, "Could not write {}", csvPath.string());
+	if (!csv)
+	{
+		core::throw_runtime_error("Could not write {}", csvPath.string());
+	}
 	csv << bgl::PassHistoryCsv(history);
 	csv.close();
 

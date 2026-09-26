@@ -120,7 +120,7 @@ defect.
 
 | Header | Holds |
 |---|---|
-| `core/err/util.h` | `throw_runtime_error`, `throw_runtime_error_if` (both `std::format`-style), crash handlers |
+| `core/err/util.h` | `throw_runtime_error` (`std::format`-style), crash handlers |
 | `core/math.h` | `align`, `div_ceil`, `round_up`, `c_Pi` |
 | `core/glm.h` | vectors, matrices, quaternions — all real vector math |
 | `core/hash.h` | `hash_bytes`, `hash_string`, `hash_pod`, `hash_seed` |

@@ -42,10 +42,12 @@ namespace bgl
 			return index;
 		}
 
-		core::throw_runtime_error_if(
-			m_NextUntouched >= m_Capacity,
-			"DescriptorAllocator: heap is full ({} descriptors)",
-			m_Capacity);
+		if (m_NextUntouched >= m_Capacity)
+		{
+			core::throw_runtime_error(
+				"DescriptorAllocator: heap is full ({} descriptors)",
+				m_Capacity);
+		}
 
 		const auto index   = m_NextUntouched++;
 		m_Allocated[index] = true;

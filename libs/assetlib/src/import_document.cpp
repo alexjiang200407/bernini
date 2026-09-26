@@ -97,10 +97,12 @@ namespace assetlib
 				auto grounds = nlohmann::json::object();
 				for (const ClipFloor& ground : document.clipFloors)
 				{
-					core::throw_runtime_error_if(
-						grounds.contains(ground.clip),
-						"import document: two authored grounds for clip '{}'",
-						ground.clip);
+					if (grounds.contains(ground.clip))
+					{
+						core::throw_runtime_error(
+							"import document: two authored grounds for clip '{}'",
+							ground.clip);
+					}
 					grounds[ground.clip] = doc::plainFloat(ground.floor);
 				}
 				parameters[c_ClipFloorKey] = std::move(grounds);
@@ -158,41 +160,51 @@ namespace assetlib
 
 		if (auto it = json.find(c_ParametersKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"import document: '{}' is not an object",
-				c_ParametersKey);
+			if (!it->is_object())
+			{
+				core::throw_runtime_error(
+					"import document: '{}' is not an object",
+					c_ParametersKey);
+			}
 			if (auto rate = it->find(c_SampleRateKey); rate != it->end())
 			{
-				core::throw_runtime_error_if(
-					!rate->is_number() || rate->get<float>() <= 0.0f,
-					"import document: '{}' is not a positive number",
-					c_SampleRateKey);
+				if (!rate->is_number() || rate->get<float>() <= 0.0f)
+				{
+					core::throw_runtime_error(
+						"import document: '{}' is not a positive number",
+						c_SampleRateKey);
+				}
 				document.sampleRate = rate->get<float>();
 				it->erase(rate);
 			}
 			if (auto grounds = it->find(c_ClipFloorKey); grounds != it->end())
 			{
-				core::throw_runtime_error_if(
-					!grounds->is_object(),
-					"import document: '{}' is not an object",
-					c_ClipFloorKey);
+				if (!grounds->is_object())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' is not an object",
+						c_ClipFloorKey);
+				}
 				for (const auto& [clip, floor] : grounds->items())
 				{
-					core::throw_runtime_error_if(
-						!floor.is_number(),
-						"import document: the authored ground for clip '{}' is not a number",
-						clip);
+					if (!floor.is_number())
+					{
+						core::throw_runtime_error(
+							"import document: the authored ground for clip '{}' is not a number",
+							clip);
+					}
 					document.clipFloors.push_back({ clip, floor.get<float>() });
 				}
 				it->erase(grounds);
 			}
 			if (auto environment = it->find(c_EnvironmentKey); environment != it->end())
 			{
-				core::throw_runtime_error_if(
-					!environment->is_object(),
-					"import document: '{}' is not an object",
-					c_EnvironmentKey);
+				if (!environment->is_object())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' is not an object",
+						c_EnvironmentKey);
+				}
 
 				auto parameters = EnvironmentImportParameters();
 				for (const auto& [key, field] : c_EnvironmentFields)
@@ -201,11 +213,13 @@ namespace assetlib
 					if (value == environment->end())
 						continue;
 
-					core::throw_runtime_error_if(
-						!value->is_number_unsigned() || value->get<uint64_t>() == 0 ||
-							value->get<uint64_t>() > std::numeric_limits<uint32_t>::max(),
-						"import document: environment '{}' is not a positive 32-bit count",
-						key);
+					if (!value->is_number_unsigned() || value->get<uint64_t>() == 0 ||
+					    value->get<uint64_t>() > std::numeric_limits<uint32_t>::max())
+					{
+						core::throw_runtime_error(
+							"import document: environment '{}' is not a positive 32-bit count",
+							key);
+					}
 					parameters.*field = value->get<uint32_t>();
 					environment->erase(value);
 				}
@@ -221,10 +235,10 @@ namespace assetlib
 
 		if (auto it = json.find(c_TextureDirKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_string(),
-				"import document: '{}' is not a string",
-				c_TextureDirKey);
+			if (!it->is_string())
+			{
+				core::throw_runtime_error("import document: '{}' is not a string", c_TextureDirKey);
+			}
 			document.textureDir = it->get<std::string>();
 			json.erase(it);
 		}
@@ -242,10 +256,12 @@ namespace assetlib
 		{
 			if (const auto it = json.find(stampKey); it != json.end())
 			{
-				core::throw_runtime_error_if(
-					!it->is_number_unsigned(),
-					"import document: '{}' is not an unsigned number",
-					stampKey);
+				if (!it->is_number_unsigned())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' is not an unsigned number",
+						stampKey);
+				}
 				*field = it->get<uint64_t>();
 				json.erase(it);
 			}
@@ -257,10 +273,10 @@ namespace assetlib
 		{
 			if (const auto it = json.find(stringKey); it != json.end())
 			{
-				core::throw_runtime_error_if(
-					!it->is_string(),
-					"import document: '{}' is not a string",
-					stringKey);
+				if (!it->is_string())
+				{
+					core::throw_runtime_error("import document: '{}' is not a string", stringKey);
+				}
 				*field = it->get<std::string>();
 				json.erase(it);
 			}
@@ -268,16 +284,18 @@ namespace assetlib
 
 		if (auto it = json.find(c_OutputsKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_array(),
-				"import document: '{}' is not an array",
-				c_OutputsKey);
+			if (!it->is_array())
+			{
+				core::throw_runtime_error("import document: '{}' is not an array", c_OutputsKey);
+			}
 			for (const auto& output : *it)
 			{
-				core::throw_runtime_error_if(
-					!output.is_string(),
-					"import document: '{}' holds a non-string entry",
-					c_OutputsKey);
+				if (!output.is_string())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' holds a non-string entry",
+						c_OutputsKey);
+				}
 				document.outputs.push_back(output.get<std::string>());
 			}
 			json.erase(it);
@@ -285,16 +303,18 @@ namespace assetlib
 
 		if (auto it = json.find(c_BindingsKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"import document: '{}' is not an object",
-				c_BindingsKey);
+			if (!it->is_object())
+			{
+				core::throw_runtime_error("import document: '{}' is not an object", c_BindingsKey);
+			}
 			for (const auto& [submesh, material] : it->items())
 			{
-				core::throw_runtime_error_if(
-					!material.is_string(),
-					"import document: binding '{}' is not a string",
-					submesh);
+				if (!material.is_string())
+				{
+					core::throw_runtime_error(
+						"import document: binding '{}' is not a string",
+						submesh);
+				}
 				document.bindings.push_back({ submesh, material.get<std::string>() });
 			}
 			json.erase(it);
@@ -302,27 +322,35 @@ namespace assetlib
 
 		if (auto it = json.find(c_MaterialOverridesKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"import document: '{}' is not an object",
-				c_MaterialOverridesKey);
+			if (!it->is_object())
+			{
+				core::throw_runtime_error(
+					"import document: '{}' is not an object",
+					c_MaterialOverridesKey);
+			}
 			for (const auto& [submesh, named] : it->items())
 			{
-				core::throw_runtime_error_if(
-					!named.is_object(),
-					"import document: overrides of '{}' are not an object",
-					submesh);
+				if (!named.is_object())
+				{
+					core::throw_runtime_error(
+						"import document: overrides of '{}' are not an object",
+						submesh);
+				}
 				for (const auto& [name, material] : named.items())
 				{
-					core::throw_runtime_error_if(
-						name.empty(),
-						"import document: an override of '{}' has no name",
-						submesh);
-					core::throw_runtime_error_if(
-						!material.is_string(),
-						"import document: override '{}' of '{}' is not a string",
-						name,
-						submesh);
+					if (name.empty())
+					{
+						core::throw_runtime_error(
+							"import document: an override of '{}' has no name",
+							submesh);
+					}
+					if (!material.is_string())
+					{
+						core::throw_runtime_error(
+							"import document: override '{}' of '{}' is not a string",
+							name,
+							submesh);
+					}
 					document.materialOverrides.push_back(
 						{ submesh, name, material.get<std::string>() });
 				}
@@ -390,10 +418,12 @@ namespace assetlib
 		auto bindings = nlohmann::json::object();
 		for (const MaterialBinding& binding : document.bindings)
 		{
-			core::throw_runtime_error_if(
-				bindings.contains(binding.submesh),
-				"import document: two bindings for submesh '{}'",
-				binding.submesh);
+			if (bindings.contains(binding.submesh))
+			{
+				core::throw_runtime_error(
+					"import document: two bindings for submesh '{}'",
+					binding.submesh);
+			}
 			bindings[binding.submesh] = binding.material;
 		}
 		json[c_BindingsKey] = std::move(bindings);
@@ -404,16 +434,20 @@ namespace assetlib
 			auto overrides = nlohmann::json::object();
 			for (const MaterialOverrideBinding& entry : document.materialOverrides)
 			{
-				core::throw_runtime_error_if(
-					entry.name.empty(),
-					"import document: an override of '{}' has no name",
-					entry.submesh);
+				if (entry.name.empty())
+				{
+					core::throw_runtime_error(
+						"import document: an override of '{}' has no name",
+						entry.submesh);
+				}
 				nlohmann::json& named = overrides[entry.submesh];
-				core::throw_runtime_error_if(
-					named.contains(entry.name),
-					"import document: two overrides named '{}' for submesh '{}'",
-					entry.name,
-					entry.submesh);
+				if (named.contains(entry.name))
+				{
+					core::throw_runtime_error(
+						"import document: two overrides named '{}' for submesh '{}'",
+						entry.name,
+						entry.submesh);
+				}
 				named[entry.name] = entry.material;
 			}
 			json[c_MaterialOverridesKey] = std::move(overrides);

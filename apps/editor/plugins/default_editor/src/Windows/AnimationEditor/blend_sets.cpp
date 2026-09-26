@@ -75,10 +75,12 @@ namespace editor
 	{
 		const std::string key = assetlib::blendSetKeyFor(animationsKey);
 
-		core::throw_runtime_error_if(
-			store.GetFiles().Stat(key).has_value(),
-			"'{}' already exists; edit it rather than starting over",
-			key);
+		if (store.GetFiles().Stat(key).has_value())
+		{
+			core::throw_runtime_error(
+				"'{}' already exists; edit it rather than starting over",
+				key);
+		}
 
 		auto set       = assetlib::BlendSet();
 		set.animations = std::string(animationsKey);

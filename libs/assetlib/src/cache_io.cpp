@@ -26,32 +26,38 @@ namespace assetlib::cache
 		readHeader(IRangeReader& source, uint32_t magic, std::string_view what)
 		{
 			Header header{};
-			core::throw_runtime_error_if(
-				source.GetSize() < sizeof(Header),
-				"{}: {} bytes is shorter than a cache header",
-				what,
-				source.GetSize());
+			if (source.GetSize() < sizeof(Header))
+			{
+				core::throw_runtime_error(
+					"{}: {} bytes is shorter than a cache header",
+					what,
+					source.GetSize());
+			}
 			source.ReadAt(&header, sizeof(Header), 0);
-			core::throw_runtime_error_if(
-				header.magic != magic,
-				"{}: not this container's magic",
-				what);
+			if (header.magic != magic)
+			{
+				core::throw_runtime_error("{}: not this container's magic", what);
+			}
 			// A chunk-era file carries a version pair where this field sits, so a mismatch here
 			// cannot claim "newer" -- it may equally be a file from before the cache format.
-			core::throw_runtime_error_if(
-				header.headerVersion != c_HeaderVersion,
-				"{}: cache header version {} is not the {} this build reads -- a newer build's "
-				"entry, or a file from before the cache format; regenerate it from its source",
-				what,
-				header.headerVersion,
-				c_HeaderVersion);
-			core::throw_runtime_error_if(
-				header.fileSize != source.GetSize(),
-				"{}: header claims {} bytes, the file holds {} -- truncated or corrupt; "
-				"regenerate it from its source",
-				what,
-				header.fileSize,
-				source.GetSize());
+			if (header.headerVersion != c_HeaderVersion)
+			{
+				core::throw_runtime_error(
+					"{}: cache header version {} is not the {} this build reads -- a newer build's "
+					"entry, or a file from before the cache format; regenerate it from its source",
+					what,
+					header.headerVersion,
+					c_HeaderVersion);
+			}
+			if (header.fileSize != source.GetSize())
+			{
+				core::throw_runtime_error(
+					"{}: header claims {} bytes, the file holds {} -- truncated or corrupt; "
+					"regenerate it from its source",
+					what,
+					header.fileSize,
+					source.GetSize());
+			}
 			return header;
 		}
 
@@ -81,12 +87,14 @@ namespace assetlib::cache
 			for (const Entry& entry : table)
 			{
 				source.CheckRange(entry.byteSize, entry.offset);
-				core::throw_runtime_error_if(
-					entry.elementSize == 0 || entry.byteSize % entry.elementSize != 0,
-					"{}: chunk {} is not a whole number of {}-byte elements",
-					what,
-					entry.id,
-					entry.elementSize);
+				if (entry.elementSize == 0 || entry.byteSize % entry.elementSize != 0)
+				{
+					core::throw_runtime_error(
+						"{}: chunk {} is not a whole number of {}-byte elements",
+						what,
+						entry.id,
+						entry.elementSize);
+				}
 			}
 			return table;
 		}
@@ -185,11 +193,13 @@ namespace assetlib::cache
 	{
 		SpanReader reader(bytes, what);
 		m_Header = readHeader(reader, magic, what);
-		core::throw_runtime_error_if(
-			m_Header.bakeToken != bakeToken,
-			"{}: written at another bake revision -- a cache miss, whether stale, newer, or a "
-			"sibling branch's; regenerate it from its source",
-			what);
+		if (m_Header.bakeToken != bakeToken)
+		{
+			core::throw_runtime_error(
+				"{}: written at another bake revision -- a cache miss, whether stale, newer, or a "
+				"sibling branch's; regenerate it from its source",
+				what);
+		}
 		m_Source = readSource(reader, m_Header);
 		m_Table  = readTable(reader, m_Header, what);
 	}
@@ -243,11 +253,13 @@ namespace assetlib::cache
 		ZoneTextF("%.*s, %zu chunks", static_cast<int>(what.size()), what.data(), ids.size());
 
 		const Header header = readHeader(source, magic, what);
-		core::throw_runtime_error_if(
-			header.bakeToken != bakeToken,
-			"{}: written at another bake revision -- a cache miss, whether stale, newer, or a "
-			"sibling branch's; regenerate it from its source",
-			what);
+		if (header.bakeToken != bakeToken)
+		{
+			core::throw_runtime_error(
+				"{}: written at another bake revision -- a cache miss, whether stale, newer, or a "
+				"sibling branch's; regenerate it from its source",
+				what);
+		}
 
 		CacheData data;
 		data.key.bakeToken = header.bakeToken;

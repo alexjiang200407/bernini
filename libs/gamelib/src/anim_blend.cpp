@@ -12,7 +12,7 @@
 
 namespace game
 {
-	using core::throw_runtime_error_if;
+	using core::throw_runtime_error;
 
 	namespace
 	{
@@ -20,17 +20,17 @@ namespace game
 		void
 		RequireWindow(float now, float duration, const char* what)
 		{
-			throw_runtime_error_if(
-				!std::isfinite(now) || !std::isfinite(duration),
-				"{}: a window of [{}, {}] is not finite",
-				what,
-				now,
-				duration);
-			throw_runtime_error_if(
-				duration < 0.0f,
-				"{}: a fade cannot take {} seconds; a write only changes the future",
-				what,
-				duration);
+			if (!std::isfinite(now) || !std::isfinite(duration))
+			{
+				throw_runtime_error("{}: a window of [{}, {}] is not finite", what, now, duration);
+			}
+			if (duration < 0.0f)
+			{
+				throw_runtime_error(
+					"{}: a fade cannot take {} seconds; a write only changes the future",
+					what,
+					duration);
+			}
 		}
 
 		/**
@@ -237,12 +237,14 @@ namespace game
 
 		for (const BlendSpaceSampleInfo& sample : space.samples)
 		{
-			throw_runtime_error_if(
-				sample.clipIndex >= clips.size(),
-				"RetargetParameter: the space '{}' names clip {} of an acquire that holds {}",
-				space.name,
-				sample.clipIndex,
-				clips.size());
+			if (sample.clipIndex >= clips.size())
+			{
+				throw_runtime_error(
+					"RetargetParameter: the space '{}' names clip {} of an acquire that holds {}",
+					space.name,
+					sample.clipIndex,
+					clips.size());
+			}
 		}
 
 		auto next = desc;

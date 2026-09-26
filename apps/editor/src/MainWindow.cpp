@@ -1195,10 +1195,12 @@ MainWindow::CleanUnusedTextures()
 			// here rather than left to the sweep, which enumerates an absent root as empty and would
 			// report a clean project. Inside the worker, so the answer reaches the loading screen's
 			// error rather than leaving a Qt slot.
-			core::throw_runtime_error_if(
-				!std::filesystem::is_directory(m_Project->GetDataDirectory()),
-				"the data directory '{}' is not there any more",
-				m_Project->GetDataDirectory().string());
+			if (!std::filesystem::is_directory(m_Project->GetDataDirectory()))
+			{
+				core::throw_runtime_error(
+					"the data directory '{}' is not there any more",
+					m_Project->GetDataDirectory().string());
+			}
 
 			scan = m_Project->GetStore().FindUnusedBakedTextures();
 		});

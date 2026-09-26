@@ -138,11 +138,13 @@ namespace assetlib
 			{
 				if (const auto value = object.find(stampKey); value != object.end())
 				{
-					core::throw_runtime_error_if(
-						!value->is_number_unsigned(),
-						"bmaterial: {} has an invalid {}",
-						label,
-						stampKey);
+					if (!value->is_number_unsigned())
+					{
+						core::throw_runtime_error(
+							"bmaterial: {} has an invalid {}",
+							label,
+							stampKey);
+					}
 					*field = value->get<uint64_t>();
 					object.erase(value);
 				}
@@ -165,10 +167,10 @@ namespace assetlib
 
 			if (const auto channel = route.find("channel"); channel != route.end())
 			{
-				core::throw_runtime_error_if(
-					!channel->is_number_unsigned() || channel->get<uint64_t>() > 3,
-					"bmaterial: {} has an invalid channel",
-					label);
+				if (!channel->is_number_unsigned() || channel->get<uint64_t>() > 3)
+				{
+					core::throw_runtime_error("bmaterial: {} has an invalid channel", label);
+				}
 				out.channel = static_cast<uint16_t>(channel->get<uint64_t>());
 				route.erase(channel);
 			}
@@ -219,9 +221,10 @@ namespace assetlib
 			if (it == json.end())
 				return;
 
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"bmaterial: 'parameters' is not an object");
+			if (!it->is_object())
+			{
+				core::throw_runtime_error("bmaterial: 'parameters' is not an object");
+			}
 
 			out.reserve(out.size() + it->size());
 			for (const auto& [name, value] : it->items())
@@ -234,11 +237,14 @@ namespace assetlib
 					continue;
 				}
 
-				core::throw_runtime_error_if(
-					!value.is_array() || value.empty() || value.size() > 4 ||
-						!std::ranges::all_of(value, [](const auto& v) { return v.is_number(); }),
-					"bmaterial: parameter '{}' is not a number or an array of one to four numbers",
-					name);
+				if (!value.is_array() || value.empty() || value.size() > 4 ||
+				    !std::ranges::all_of(value, [](const auto& v) { return v.is_number(); }))
+				{
+					core::throw_runtime_error(
+						"bmaterial: parameter '{}' is not a number or an array of one to four "
+						"numbers",
+						name);
+				}
 
 				for (const auto& component : value)
 					parameter.value.push_back(component.get<float>());
@@ -271,9 +277,10 @@ namespace assetlib
 			if (it == json.end())
 				return;
 
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"bmaterial: 'textures' is not an object");
+			if (!it->is_object())
+			{
+				core::throw_runtime_error("bmaterial: 'textures' is not an object");
+			}
 
 			out.reserve(out.size() + it->size());
 			for (auto& [name, value] : it->items())
@@ -287,10 +294,12 @@ namespace assetlib
 					continue;
 				}
 
-				core::throw_runtime_error_if(
-					!value.is_object(),
-					"bmaterial: texture '{}' is not a path or a routed slot",
-					name);
+				if (!value.is_object())
+				{
+					core::throw_runtime_error(
+						"bmaterial: texture '{}' is not a path or a routed slot",
+						name);
+				}
 
 				auto& slot = out.emplace_back(name);
 
@@ -300,10 +309,12 @@ namespace assetlib
 
 				if (const auto token = value.find("token"); token != value.end())
 				{
-					core::throw_runtime_error_if(
-						!token->is_number_unsigned(),
-						"bmaterial: texture '{}' has an invalid bake token",
-						name);
+					if (!token->is_number_unsigned())
+					{
+						core::throw_runtime_error(
+							"bmaterial: texture '{}' has an invalid bake token",
+							name);
+					}
 					slot.bakeToken = token->get<uint64_t>();
 					value.erase(token);
 				}
@@ -312,23 +323,29 @@ namespace assetlib
 				if (routes == value.end())
 					continue;
 
-				core::throw_runtime_error_if(
-					!routes->is_object(),
-					"bmaterial: texture '{}' routes are not an object",
-					name);
+				if (!routes->is_object())
+				{
+					core::throw_runtime_error(
+						"bmaterial: texture '{}' routes are not an object",
+						name);
+				}
 				for (auto& [channelName, route] : routes->items())
 				{
 					const auto found = std::ranges::find(c_SlotChannelKeys, channelName);
-					core::throw_runtime_error_if(
-						found == c_SlotChannelKeys.end(),
-						"bmaterial: texture '{}' routes unknown channel '{}'",
-						name,
-						channelName);
-					core::throw_runtime_error_if(
-						!route.is_object(),
-						"bmaterial: texture '{}' route '{}' is not an object",
-						name,
-						channelName);
+					if (found == c_SlotChannelKeys.end())
+					{
+						core::throw_runtime_error(
+							"bmaterial: texture '{}' routes unknown channel '{}'",
+							name,
+							channelName);
+					}
+					if (!route.is_object())
+					{
+						core::throw_runtime_error(
+							"bmaterial: texture '{}' route '{}' is not an object",
+							name,
+							channelName);
+					}
 
 					const size_t index = static_cast<size_t>(found - c_SlotChannelKeys.begin());
 					takeRoute(
@@ -446,11 +463,14 @@ namespace assetlib
 			auto parameters = nlohmann::json::object();
 			for (const SurfaceValueBinding& value : surface.values)
 			{
-				core::throw_runtime_error_if(
-					value.value.empty() || value.value.size() > 4,
-					"bmaterial: parameter '{}' holds {} numbers, and a parameter is one to four",
-					value.name,
-					value.value.size());
+				if (value.value.empty() || value.value.size() > 4)
+				{
+					core::throw_runtime_error(
+						"bmaterial: parameter '{}' holds {} numbers, and a parameter is one to "
+						"four",
+						value.name,
+						value.value.size());
+				}
 
 				// One number as a number: a scalar an author typed as `2.0` is written back as
 				// `2.0` rather than promoted to a one-element array.
@@ -536,10 +556,10 @@ namespace assetlib
 			std::string shadingModel(c_ShadingModelNames[0]);
 			taker.Take("shadingModel", shadingModel);
 			const auto model = std::ranges::find(c_ShadingModelNames, shadingModel);
-			core::throw_runtime_error_if(
-				model == c_ShadingModelNames.end(),
-				"bmaterial: unknown shading model '{}'",
-				shadingModel);
+			if (model == c_ShadingModelNames.end())
+			{
+				core::throw_runtime_error("bmaterial: unknown shading model '{}'", shadingModel);
+			}
 			material.shadingModel = static_cast<ShadingModel>(model - c_ShadingModelNames.begin());
 
 			taker.Take("name", material.name);
@@ -553,10 +573,10 @@ namespace assetlib
 			std::string alphaMode(c_AlphaModeNames[0]);
 			taker.Take("alphaMode", alphaMode);
 			const auto mode = std::ranges::find(c_AlphaModeNames, alphaMode);
-			core::throw_runtime_error_if(
-				mode == c_AlphaModeNames.end(),
-				"bmaterial: unknown alpha mode '{}'",
-				alphaMode);
+			if (mode == c_AlphaModeNames.end())
+			{
+				core::throw_runtime_error("bmaterial: unknown alpha mode '{}'", alphaMode);
+			}
 			layer.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
 			taker.Take("alphaCutoff", layer.alphaCutoff);
@@ -587,9 +607,10 @@ namespace assetlib
 			// in the json and rides `extraJson` through the round-trip.
 			if (const auto it = json.find("baked"); it != json.end())
 			{
-				core::throw_runtime_error_if(
-					!it->is_object(),
-					"bmaterial: 'baked' is not an object");
+				if (!it->is_object())
+				{
+					core::throw_runtime_error("bmaterial: 'baked' is not an object");
+				}
 				const doc::Taker baked(*it, c_What);
 				baked.Take("baseColor", pbr.baseColorTexture);
 				baked.Take("normal", pbr.normalTexture);
@@ -597,10 +618,12 @@ namespace assetlib
 				baked.Take("geometryOcclusion", pbr.geometryOcclusionBakedTexture);
 				if (const auto source = it->find(c_OcclusionSourceKey); source != it->end())
 				{
-					core::throw_runtime_error_if(
-						!source->is_object(),
-						"bmaterial: 'baked.{}' is not an object",
-						c_OcclusionSourceKey);
+					if (!source->is_object())
+					{
+						core::throw_runtime_error(
+							"bmaterial: 'baked.{}' is not an object",
+							c_OcclusionSourceKey);
+					}
 					takeStamp(
 						*source,
 						std::string("baked.") + std::string(c_OcclusionSourceKey),
@@ -610,9 +633,11 @@ namespace assetlib
 				}
 				if (const auto token = it->find("token"); token != it->end())
 				{
-					core::throw_runtime_error_if(
-						!token->is_number_unsigned(),
-						"bmaterial: 'baked.token' is not an unsigned number");
+					if (!token->is_number_unsigned())
+					{
+						core::throw_runtime_error(
+							"bmaterial: 'baked.token' is not an unsigned number");
+					}
 					pbr.bakeToken = token->get<uint64_t>();
 					it->erase(token);
 				}
@@ -622,20 +647,25 @@ namespace assetlib
 
 			if (const auto it = json.find("routes"); it != json.end())
 			{
-				core::throw_runtime_error_if(
-					!it->is_object(),
-					"bmaterial: 'routes' is not an object");
+				if (!it->is_object())
+				{
+					core::throw_runtime_error("bmaterial: 'routes' is not an object");
+				}
 				for (auto& [channelName, route] : it->items())
 				{
 					const auto found = std::ranges::find(c_ChannelNames, channelName);
-					core::throw_runtime_error_if(
-						found == c_ChannelNames.end(),
-						"bmaterial: unknown route channel '{}'",
-						channelName);
-					core::throw_runtime_error_if(
-						!route.is_object(),
-						"bmaterial: route '{}' is not an object",
-						channelName);
+					if (found == c_ChannelNames.end())
+					{
+						core::throw_runtime_error(
+							"bmaterial: unknown route channel '{}'",
+							channelName);
+					}
+					if (!route.is_object())
+					{
+						core::throw_runtime_error(
+							"bmaterial: route '{}' is not an object",
+							channelName);
+					}
 
 					const size_t index = static_cast<size_t>(found - c_ChannelNames.begin());
 					takeRoute(
@@ -699,10 +729,12 @@ namespace assetlib
 	BMaterial
 	AssetCodec<BMaterial>::Deserialize(std::span<const std::byte> bytes)
 	{
-		core::throw_runtime_error_if(
-			!isTextAssetDocument(bytes),
-			"bmaterial: not a text document; a chunk-era file is no longer convertible -- "
-			"re-author the material");
+		if (!isTextAssetDocument(bytes))
+		{
+			core::throw_runtime_error(
+				"bmaterial: not a text document; a chunk-era file is no longer convertible -- "
+				"re-author the material");
+		}
 		return materialFromDocument(
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}

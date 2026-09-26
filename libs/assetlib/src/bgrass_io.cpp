@@ -14,7 +14,7 @@
 
 namespace assetlib
 {
-	using core::throw_runtime_error_if;
+	using core::throw_runtime_error;
 
 	namespace
 	{
@@ -41,7 +41,10 @@ namespace assetlib
 				return;
 			}
 
-			throw_runtime_error_if(!it->is_object(), "bgrass: '{}' is not an object", key);
+			if (!it->is_object())
+			{
+				throw_runtime_error("bgrass: '{}' is not an object", key);
+			}
 
 			const std::string what = std::format("bgrass.{}", key);
 			const doc::Taker  taker(*it, what);
@@ -69,9 +72,10 @@ namespace assetlib
 	BGrass
 	AssetCodec<BGrass>::Deserialize(std::span<const std::byte> bytes)
 	{
-		throw_runtime_error_if(
-			!isTextAssetDocument(bytes),
-			"bgrass: the bytes are not a text document");
+		if (!isTextAssetDocument(bytes))
+		{
+			throw_runtime_error("bgrass: the bytes are not a text document");
+		}
 
 		const auto text =
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());

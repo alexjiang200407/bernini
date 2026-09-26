@@ -90,18 +90,22 @@ namespace assetlib
 			std::span<const PlantWeightsRef> ref,
 			std::span<const uint8_t>         weights)
 		{
-			core::throw_runtime_error_if(
-				ref.size() > 1,
-				"banim: the plant weight reference chunk holds {} entries",
-				ref.size());
+			if (ref.size() > 1)
+			{
+				core::throw_runtime_error(
+					"banim: the plant weight reference chunk holds {} entries",
+					ref.size());
+			}
 			if (ref.empty())
 				return;
 
-			core::throw_runtime_error_if(
-				ref[0].legCount == 0 || weights.size() % ref[0].legCount != 0,
-				"banim: {} plant weight bytes are not a whole number of frames of {} legs",
-				weights.size(),
-				ref[0].legCount);
+			if (ref[0].legCount == 0 || weights.size() % ref[0].legCount != 0)
+			{
+				core::throw_runtime_error(
+					"banim: {} plant weight bytes are not a whole number of frames of {} legs",
+					weights.size(),
+					ref[0].legCount);
+			}
 
 			animations.plantWeights.signature = ref[0].signature;
 			animations.plantWeights.legCount  = ref[0].legCount;
@@ -114,10 +118,12 @@ namespace assetlib
 			std::span<const SkeletonRef> ref,
 			std::span<const char>        path)
 		{
-			core::throw_runtime_error_if(
-				ref.size() > 1,
-				"banim: the skeleton reference chunk holds {} entries",
-				ref.size());
+			if (ref.size() > 1)
+			{
+				core::throw_runtime_error(
+					"banim: the skeleton reference chunk holds {} entries",
+					ref.size());
+			}
 			if (!ref.empty())
 			{
 				animations.skeletonSignature = ref[0].signature;

@@ -39,10 +39,12 @@ namespace game
 		public:
 			LiveClaim()
 			{
-				core::throw_runtime_error_if(
-					g_Live.exchange(true),
-					"game::UiRuntime: one per process -- RmlUi's lifetime and interfaces are "
-					"global");
+				if (g_Live.exchange(true))
+				{
+					core::throw_runtime_error(
+						"game::UiRuntime: one per process -- RmlUi's lifetime and interfaces are "
+						"global");
+				}
 			}
 
 			~LiveClaim() noexcept
@@ -143,28 +145,35 @@ namespace game
 	UiContextPtr
 	UiRuntime::CreateContext(std::string name, uint32_t width, uint32_t height)
 	{
-		core::throw_runtime_error_if(
-			name.empty(),
-			"game::UiRuntime::CreateContext: a context needs a name");
+		if (name.empty())
+		{
+			core::throw_runtime_error("game::UiRuntime::CreateContext: a context needs a name");
+		}
 
-		core::throw_runtime_error_if(
-			width == 0 || height == 0,
-			"game::UiRuntime::CreateContext: '{}' needs a non-empty size",
-			name);
+		if (width == 0 || height == 0)
+		{
+			core::throw_runtime_error(
+				"game::UiRuntime::CreateContext: '{}' needs a non-empty size",
+				name);
+		}
 
-		core::throw_runtime_error_if(
-			Rml::GetContext(name) != nullptr,
-			"game::UiRuntime::CreateContext: '{}' is already a context in this process",
-			name);
+		if (Rml::GetContext(name) != nullptr)
+		{
+			core::throw_runtime_error(
+				"game::UiRuntime::CreateContext: '{}' is already a context in this process",
+				name);
+		}
 
 		Rml::Context* context = Rml::CreateContext(
 			name,
 			Rml::Vector2i(static_cast<int>(width), static_cast<int>(height)));
 
-		core::throw_runtime_error_if(
-			context == nullptr,
-			"game::UiRuntime::CreateContext: RmlUi refused a context named '{}'",
-			name);
+		if (context == nullptr)
+		{
+			core::throw_runtime_error(
+				"game::UiRuntime::CreateContext: RmlUi refused a context named '{}'",
+				name);
+		}
 
 		return UiContextPtr(new UiContext(*context, std::move(name)));
 	}
@@ -175,10 +184,12 @@ namespace game
 		ZoneScopedN("game LoadFontFace");
 		ZoneTextF("%.*s", static_cast<int>(key.size()), key.data());
 
-		core::throw_runtime_error_if(
-			!Rml::LoadFontFace(std::string(key), fallbackFace),
-			"game::UiRuntime::LoadFontFace: '{}' is not a font face this build can read",
-			key);
+		if (!Rml::LoadFontFace(std::string(key), fallbackFace))
+		{
+			core::throw_runtime_error(
+				"game::UiRuntime::LoadFontFace: '{}' is not a font face this build can read",
+				key);
+		}
 	}
 
 	void
@@ -224,11 +235,14 @@ namespace game
 
 		Rml::ElementDocument* document = m_Context.LoadDocument(std::string(key));
 
-		core::throw_runtime_error_if(
-			document == nullptr,
-			"game::UiContext::LoadDocument: '{}' is absent or does not parse; the log above says "
-			"which",
-			key);
+		if (document == nullptr)
+		{
+			core::throw_runtime_error(
+				"game::UiContext::LoadDocument: '{}' is absent or does not parse; the log above "
+				"says "
+				"which",
+				key);
+		}
 
 		return document;
 	}
@@ -236,9 +250,11 @@ namespace game
 	void
 	UiContext::SetDimensions(uint32_t width, uint32_t height)
 	{
-		core::throw_runtime_error_if(
-			width == 0 || height == 0,
-			"game::UiContext::SetDimensions: a context needs a non-empty size");
+		if (width == 0 || height == 0)
+		{
+			core::throw_runtime_error(
+				"game::UiContext::SetDimensions: a context needs a non-empty size");
+		}
 
 		m_Context.SetDimensions(Rml::Vector2i(static_cast<int>(width), static_cast<int>(height)));
 	}

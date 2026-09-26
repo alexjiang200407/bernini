@@ -5,6 +5,7 @@
 #include <core/err/util.h>
 #include <cstddef>
 #include <nlohmann/json.hpp>
+#include <string>
 #include <utility>
 
 #include "json_doc.h"
@@ -14,7 +15,6 @@
 namespace assetlib
 {
 	using core::throw_runtime_error;
-	using core::throw_runtime_error_if;
 
 	namespace
 	{
@@ -30,29 +30,29 @@ namespace assetlib
 		BlendSpaceSample
 		sampleFromJson(const nlohmann::json& json, size_t space, size_t index)
 		{
-			throw_runtime_error_if(
-				!json.is_object(),
-				"bblend: sample {} of space {} is not an object",
-				index,
-				space);
+			if (!json.is_object())
+			{
+				throw_runtime_error("bblend: sample {} of space {} is not an object", index, space);
+			}
 
 			auto sample = BlendSpaceSample();
 
 			const auto clip = json.find(c_ClipKey);
-			throw_runtime_error_if(
-				clip == json.end() || !clip->is_string() || clip->get<std::string>().empty(),
-				"bblend: sample {} of space {} names no clip",
-				index,
-				space);
+			if (clip == json.end() || !clip->is_string() || clip->get<std::string>().empty())
+			{
+				throw_runtime_error("bblend: sample {} of space {} names no clip", index, space);
+			}
 			sample.clip = clip->get<std::string>();
 
 			const auto parameter = json.find(c_ParameterKey);
-			throw_runtime_error_if(
-				parameter == json.end() || !parameter->is_number(),
-				"bblend: sample {} of space {} has no numeric '{}'",
-				index,
-				space,
-				c_ParameterKey);
+			if (parameter == json.end() || !parameter->is_number())
+			{
+				throw_runtime_error(
+					"bblend: sample {} of space {} has no numeric '{}'",
+					index,
+					space,
+					c_ParameterKey);
+			}
 			sample.parameter = parameter->get<float>();
 
 			return sample;
@@ -61,23 +61,28 @@ namespace assetlib
 		BlendSpace
 		spaceFromJson(const nlohmann::json& json, size_t index)
 		{
-			throw_runtime_error_if(!json.is_object(), "bblend: space {} is not an object", index);
+			if (!json.is_object())
+			{
+				throw_runtime_error("bblend: space {} is not an object", index);
+			}
 
 			auto space = BlendSpace();
 
 			const auto name = json.find(c_NameKey);
-			throw_runtime_error_if(
-				name == json.end() || !name->is_string() || name->get<std::string>().empty(),
-				"bblend: space {} is unnamed",
-				index);
+			if (name == json.end() || !name->is_string() || name->get<std::string>().empty())
+			{
+				throw_runtime_error("bblend: space {} is unnamed", index);
+			}
 			space.name = name->get<std::string>();
 
 			const auto samples = json.find(c_SamplesKey);
-			throw_runtime_error_if(
-				samples == json.end() || !samples->is_array(),
-				"bblend: space '{}' has no '{}' array",
-				space.name,
-				c_SamplesKey);
+			if (samples == json.end() || !samples->is_array())
+			{
+				throw_runtime_error(
+					"bblend: space '{}' has no '{}' array",
+					space.name,
+					c_SamplesKey);
+			}
 
 			for (size_t i = 0; i < samples->size(); ++i)
 				space.samples.push_back(sampleFromJson((*samples)[i], index, i));
@@ -160,9 +165,10 @@ namespace assetlib
 	BlendSet
 	AssetCodec<BlendSet>::Deserialize(std::span<const std::byte> bytes)
 	{
-		throw_runtime_error_if(
-			!isTextAssetDocument(bytes),
-			"bblend: the bytes are not a text document");
+		if (!isTextAssetDocument(bytes))
+		{
+			throw_runtime_error("bblend: the bytes are not a text document");
+		}
 
 		const auto text =
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -177,7 +183,10 @@ namespace assetlib
 
 		if (auto it = json.find(c_SpacesKey); it != json.end())
 		{
-			throw_runtime_error_if(!it->is_array(), "bblend: '{}' is not an array", c_SpacesKey);
+			if (!it->is_array())
+			{
+				throw_runtime_error("bblend: '{}' is not an array", c_SpacesKey);
+			}
 
 			for (size_t i = 0; i < it->size(); ++i)
 				set.spaces.push_back(spaceFromJson((*it)[i], i));

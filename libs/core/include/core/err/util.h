@@ -30,18 +30,4 @@ namespace core
 		throw std::runtime_error(std::vformat(msg.get(), std::make_format_args(args...)));
 	}
 
-	/**
-	 * Every argument is evaluated whether or not `cond` holds, so one valid only when it does
-	 * (`*optional`, `*pointer`) belongs behind an `if` and `throw_runtime_error` instead.
-	 */
-	template <typename... Args>
-	void
-	throw_runtime_error_if(bool cond, std::format_string<Args...> msg, Args&&... args)
-	{
-		if (cond)
-		{
-			throw std::runtime_error(std::vformat(msg.get(), std::make_format_args(args...)));
-		}
-	}
-
 }

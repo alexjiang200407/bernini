@@ -52,7 +52,10 @@ namespace assetlib
 	swapExtension(std::string_view key, std::string_view extension)
 	{
 		const std::string ext = extensionOf(key);
-		core::throw_runtime_error_if(ext.empty(), "assetlib: '{}' has no extension", key);
+		if (ext.empty())
+		{
+			core::throw_runtime_error("assetlib: '{}' has no extension", key);
+		}
 		return std::string(key.substr(0, key.size() - ext.size())).append(extension);
 	}
 
@@ -88,13 +91,15 @@ namespace assetlib
 	{
 		const std::filesystem::path path(normalized);
 
-		core::throw_runtime_error_if(
-			normalized.empty() || normalized == "." || normalized == ".." ||
-				normalized.starts_with("../") || normalized.starts_with('/') ||
-				path.is_absolute() || path.has_root_name(),
-			"{}: '{}' does not name something inside the data root",
-			who,
-			normalized);
+		if (normalized.empty() || normalized == "." || normalized == ".." ||
+		    normalized.starts_with("../") || normalized.starts_with('/') || path.is_absolute() ||
+		    path.has_root_name())
+		{
+			core::throw_runtime_error(
+				"{}: '{}' does not name something inside the data root",
+				who,
+				normalized);
+		}
 	}
 
 	std::string
@@ -106,19 +111,19 @@ namespace assetlib
 	{
 		const std::string key = normalizeRef(from);
 
-		core::throw_runtime_error_if(
-			extensionOf(key) != fromHalf.extension,
-			"{}: '{}' is not a '{}'",
-			subject,
-			from,
-			fromHalf.extension);
+		if (extensionOf(key) != fromHalf.extension)
+		{
+			core::throw_runtime_error("{}: '{}' is not a '{}'", subject, from, fromHalf.extension);
+		}
 
-		core::throw_runtime_error_if(
-			!isUnder(key, fromHalf.directory),
-			"{}: '{}' is not under '{}'",
-			subject,
-			from,
-			fromHalf.directory);
+		if (!isUnder(key, fromHalf.directory))
+		{
+			core::throw_runtime_error(
+				"{}: '{}' is not under '{}'",
+				subject,
+				from,
+				fromHalf.directory);
+		}
 
 		const std::string_view tail = std::string_view(key).substr(
 			fromHalf.directory.size(),

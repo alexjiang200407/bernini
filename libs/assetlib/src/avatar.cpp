@@ -40,29 +40,33 @@ namespace assetlib
 		takeBone(const nlohmann::json& leg, std::string_view key, std::string& out, size_t index)
 		{
 			const auto it = leg.find(key);
-			core::throw_runtime_error_if(
-				it == leg.end() || !it->is_string() || it->get<std::string>().empty(),
-				"avatar: leg {} has no '{}' bone name",
-				index,
-				key);
+			if (it == leg.end() || !it->is_string() || it->get<std::string>().empty())
+			{
+				core::throw_runtime_error("avatar: leg {} has no '{}' bone name", index, key);
+			}
 			out = it->get<std::string>();
 		}
 
 		void
 		addClipWeight(Avatar& avatar, std::string clip, float weight, std::string_view key)
 		{
-			core::throw_runtime_error_if(clip.empty(), "avatar: '{}' names an empty clip", key);
-			core::throw_runtime_error_if(
-				!std::isfinite(weight) || weight < 0.0f || weight > 1.0f,
-				"avatar: '{}' weights '{}' at {}, outside 0 to 1",
-				key,
-				clip,
-				weight);
+			if (clip.empty())
+			{
+				core::throw_runtime_error("avatar: '{}' names an empty clip", key);
+			}
+			if (!std::isfinite(weight) || weight < 0.0f || weight > 1.0f)
+			{
+				core::throw_runtime_error(
+					"avatar: '{}' weights '{}' at {}, outside 0 to 1",
+					key,
+					clip,
+					weight);
+			}
 			for (const ClipPlantWeight& entry : avatar.clipWeights)
-				core::throw_runtime_error_if(
-					entry.clip == clip,
-					"avatar: '{}' is weighted twice",
-					clip);
+				if (entry.clip == clip)
+				{
+					core::throw_runtime_error("avatar: '{}' is weighted twice", clip);
+				}
 			// Negative zero passes the range check and would print and hash as its own value.
 			avatar.clipWeights.emplace_back(std::move(clip), weight == 0.0f ? 0.0f : weight);
 		}
@@ -75,12 +79,14 @@ namespace assetlib
 			std::string_view joint)
 		{
 			const std::optional<uint32_t> found = findBone(skeleton, name);
-			core::throw_runtime_error_if(
-				!found.has_value(),
-				"avatar: leg {}'s {} names bone '{}', which the skeleton does not carry",
-				leg,
-				joint,
-				name);
+			if (!found.has_value())
+			{
+				core::throw_runtime_error(
+					"avatar: leg {}'s {} names bone '{}', which the skeleton does not carry",
+					leg,
+					joint,
+					name);
+			}
 			return *found;
 		}
 	}
@@ -183,18 +189,18 @@ namespace assetlib
 
 		if (auto it = json.find(c_LegsKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_array(),
-				"avatar: '{}' is not an array",
-				c_LegsKey);
+			if (!it->is_array())
+			{
+				core::throw_runtime_error("avatar: '{}' is not an array", c_LegsKey);
+			}
 
 			for (size_t i = 0; i < it->size(); ++i)
 			{
 				const nlohmann::json& leg = (*it)[i];
-				core::throw_runtime_error_if(
-					!leg.is_object(),
-					"avatar: leg {} is not an object",
-					i);
+				if (!leg.is_object())
+				{
+					core::throw_runtime_error("avatar: leg {} is not an object", i);
+				}
 
 				auto chain = AvatarLeg();
 				takeBone(leg, c_HipKey, chain.hipBoneName, i);
@@ -208,18 +214,22 @@ namespace assetlib
 
 		if (auto it = json.find(c_PlantKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_object(),
-				"avatar: '{}' is not an object of clip name to weight",
-				c_PlantKey);
+			if (!it->is_object())
+			{
+				core::throw_runtime_error(
+					"avatar: '{}' is not an object of clip name to weight",
+					c_PlantKey);
+			}
 
 			for (const auto& [clip, weight] : it->items())
 			{
-				core::throw_runtime_error_if(
-					!weight.is_number(),
-					"avatar: '{}' weights '{}' with something that is not a number",
-					c_PlantKey,
-					clip);
+				if (!weight.is_number())
+				{
+					core::throw_runtime_error(
+						"avatar: '{}' weights '{}' with something that is not a number",
+						c_PlantKey,
+						clip);
+				}
 				addClipWeight(avatar, clip, weight.get<float>(), c_PlantKey);
 			}
 			json.erase(it);
@@ -227,19 +237,21 @@ namespace assetlib
 
 		if (auto it = json.find(c_UnplantedKey); it != json.end())
 		{
-			core::throw_runtime_error_if(
-				!it->is_array(),
-				"avatar: '{}' is not an array",
-				c_UnplantedKey);
+			if (!it->is_array())
+			{
+				core::throw_runtime_error("avatar: '{}' is not an array", c_UnplantedKey);
+			}
 
 			for (size_t i = 0; i < it->size(); ++i)
 			{
 				const nlohmann::json& name = (*it)[i];
-				core::throw_runtime_error_if(
-					!name.is_string(),
-					"avatar: '{}' entry {} is not a clip name",
-					c_UnplantedKey,
-					i);
+				if (!name.is_string())
+				{
+					core::throw_runtime_error(
+						"avatar: '{}' entry {} is not a clip name",
+						c_UnplantedKey,
+						i);
+				}
 				addClipWeight(avatar, name.get<std::string>(), 0.0f, c_UnplantedKey);
 			}
 			json.erase(it);

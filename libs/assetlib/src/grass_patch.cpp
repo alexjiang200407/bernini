@@ -23,20 +23,24 @@ namespace assetlib
 	BGrassFields
 	makeGrassPatch(const GrassPatchDesc& desc, std::string look)
 	{
-		core::throw_runtime_error_if(
-			!std::isfinite(desc.size) || !std::isfinite(desc.spacing) || desc.size <= 0.0f ||
-				desc.spacing <= 0.0f,
-			"makeGrassPatch: size {} and spacing {} must be finite and positive",
-			desc.size,
-			desc.spacing);
+		if (!std::isfinite(desc.size) || !std::isfinite(desc.spacing) || desc.size <= 0.0f ||
+		    desc.spacing <= 0.0f)
+		{
+			core::throw_runtime_error(
+				"makeGrassPatch: size {} and spacing {} must be finite and positive",
+				desc.size,
+				desc.spacing);
+		}
 
 		const float side = std::floor(desc.size / desc.spacing);
-		core::throw_runtime_error_if(
-			side < 1.0f || side * side > c_MaxPatchClumps,
-			"makeGrassPatch: a {} square at {} spacing holds {} clumps, outside [1, 2^24]",
-			desc.size,
-			desc.spacing,
-			side * side);
+		if (side < 1.0f || side * side > c_MaxPatchClumps)
+		{
+			core::throw_runtime_error(
+				"makeGrassPatch: a {} square at {} spacing holds {} clumps, outside [1, 2^24]",
+				desc.size,
+				desc.spacing,
+				side * side);
+		}
 
 		const auto  count  = static_cast<uint32_t>(side);
 		const float origin = -0.5f * desc.spacing * static_cast<float>(count - 1);

@@ -1292,11 +1292,14 @@ MaterialEditorWindow::AddMaterialOverride()
 		// Read before anything is written: a mesh with no source has no document to register in,
 		// and a copy saved first would be a `.bmaterial` nothing names.
 		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
-		core::throw_runtime_error_if(
-			mesh.source.key.empty(),
-			"'{}': it was not imported from a source, so it has no import document to register a "
-			"look in",
-			m_Preview->MeshPath().string());
+		if (mesh.source.key.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': it was not imported from a source, so it has no import document to register "
+				"a "
+				"look in",
+				m_Preview->MeshPath().string());
+		}
 
 		// The copy is written before it is registered: a registration naming a file that is not
 		// there is one every later load reports as a broken reference.

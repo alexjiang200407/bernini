@@ -17,11 +17,10 @@ namespace assetlib
 		std::string_view what) : IRangeReader(what), m_FileSystem(&fileSystem), m_Path(path)
 	{
 		const auto stamp = m_FileSystem->Stat(m_Path);
-		core::throw_runtime_error_if(
-			!stamp.has_value(),
-			"{}: '{}' is not in the mounted filesystem",
-			m_What,
-			m_Path);
+		if (!stamp.has_value())
+		{
+			core::throw_runtime_error("{}: '{}' is not in the mounted filesystem", m_What, m_Path);
+		}
 
 		m_Size = stamp->size;
 	}

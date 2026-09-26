@@ -162,13 +162,19 @@ main(int argc, char** argv)
 			CLI11_PARSE(app, argc, argv);
 		}
 
-		core::throw_runtime_error_if(
-			!importKey.empty() && project.empty(),
-			"--import needs --project to key it against");
-		core::throw_runtime_error_if(
-			!staticKey.empty() && staticProject.empty() && project.empty(),
-			"--static needs --static-project (or --project) to key it against");
-		core::throw_runtime_error_if(feet && importKey.empty(), "--feet needs a skinned --import");
+		if (!importKey.empty() && project.empty())
+		{
+			core::throw_runtime_error("--import needs --project to key it against");
+		}
+		if (!staticKey.empty() && staticProject.empty() && project.empty())
+		{
+			core::throw_runtime_error(
+				"--static needs --static-project (or --project) to key it against");
+		}
+		if (feet && importKey.empty())
+		{
+			core::throw_runtime_error("--feet needs a skinned --import");
+		}
 
 		// Headless renders offscreen, so the example is runnable unattended -- which is how anything
 		// but a person can tell it still starts.
@@ -270,20 +276,24 @@ main(int argc, char** argv)
 				std::filesystem::path(staticProject.empty() ? project : staticProject);
 			const auto staticStore = assetlib::AssetStore(staticRoot);
 
-			core::throw_runtime_error_if(
-				!staticStore.Exists(staticKey),
-				"{} is not in {}",
-				staticKey,
-				std::filesystem::absolute(staticRoot).string());
+			if (!staticStore.Exists(staticKey))
+			{
+				core::throw_runtime_error(
+					"{} is not in {}",
+					staticKey,
+					std::filesystem::absolute(staticRoot).string());
+			}
 
 			const assetlib::ImportDocument staticDoc =
 				assetlib::loadImportDocument(staticStore.GetFiles(), staticKey);
 
 			const std::string staticMeshKey = staticDoc.GetMeshOutput();
-			core::throw_runtime_error_if(
-				staticMeshKey.empty() || !staticStore.Exists(staticMeshKey),
-				"{}'s .bmesh is not on disk; `assetlib_cli migrate` writes it back",
-				staticKey);
+			if (staticMeshKey.empty() || !staticStore.Exists(staticMeshKey))
+			{
+				core::throw_runtime_error(
+					"{}'s .bmesh is not on disk; `assetlib_cli migrate` writes it back",
+					staticKey);
+			}
 
 			const auto staticModel = staticStore.Load<assetlib::BMesh>(staticMeshKey);
 			staticAssets.emplace(scene, staticRoot);
@@ -317,17 +327,22 @@ main(int argc, char** argv)
 			const auto dataRoot = std::filesystem::path(project);
 			const auto store    = assetlib::AssetStore(dataRoot);
 
-			core::throw_runtime_error_if(
-				!store.Exists(importKey),
-				"{} is not in {}",
-				importKey,
-				std::filesystem::absolute(dataRoot).string());
+			if (!store.Exists(importKey))
+			{
+				core::throw_runtime_error(
+					"{} is not in {}",
+					importKey,
+					std::filesystem::absolute(dataRoot).string());
+			}
 
 			const assetlib::ImportDocument document =
 				assetlib::loadImportDocument(store.GetFiles(), importKey);
 
 			const std::string meshKey = document.GetMeshOutput();
-			core::throw_runtime_error_if(meshKey.empty(), "{} produced no .bmesh", importKey);
+			if (meshKey.empty())
+			{
+				core::throw_runtime_error("{} produced no .bmesh", importKey);
+			}
 
 			std::string animationsKey;
 			for (const std::string& output : document.outputs)
@@ -339,12 +354,15 @@ main(int argc, char** argv)
 			for (const std::string_view key :
 			     { std::string_view(meshKey), std::string_view(animationsKey) })
 			{
-				core::throw_runtime_error_if(
-					!key.empty() && !store.Exists(key),
-					"{} is not on disk. It is a derived container, which a project does not "
-					"commit: `assetlib_cli migrate` writes back every one its .bimport documents "
-					"name.",
-					key);
+				if (!key.empty() && !store.Exists(key))
+				{
+					core::throw_runtime_error(
+						"{} is not on disk. It is a derived container, which a project does not "
+						"commit: `assetlib_cli migrate` writes back every one its .bimport "
+						"documents "
+						"name.",
+						key);
+				}
 			}
 
 			const auto model = store.Load<assetlib::BMesh>(meshKey);
@@ -424,7 +442,10 @@ main(int argc, char** argv)
 				                                  bgl::PoseSource::kPerInstance }),
 					placement.local);
 			}
-			core::throw_runtime_error_if(casterParts.empty(), "{} placed no meshes", importKey);
+			if (casterParts.empty())
+			{
+				core::throw_runtime_error("{} placed no meshes", importKey);
+			}
 
 			// A rigged placement's origin is at its feet, so it hovers by the gap under them; size
 			// the disc to its standing footprint.
@@ -472,10 +493,12 @@ main(int argc, char** argv)
 			const auto posed = std::ranges::find_if(casterParts, [&](const CasterPart& part) {
 				return view->HasFootIK(part.instance);
 			});
-			core::throw_runtime_error_if(
-				posed == casterParts.end(),
-				"--feet: {} places no skinned mesh whose rig has an avatar",
-				importKey);
+			if (posed == casterParts.end())
+			{
+				core::throw_runtime_error(
+					"--feet: {} places no skinned mesh whose rig has an avatar",
+					importKey);
+			}
 			shadowed = posed->instance;
 		}
 

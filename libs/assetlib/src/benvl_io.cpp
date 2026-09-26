@@ -41,10 +41,12 @@ namespace assetlib
 	{
 		// Both sources, or neither: a one-sided pair written silently would drop the recorded
 		// half from the key, and the entry would then read as current-without-source forever.
-		core::throw_runtime_error_if(
-			lighting.prefilter.source.empty() != lighting.irradiance.source.empty(),
-			"benvl: one convolution routes a source and the other does not; the pair bakes "
-			"together or not at all");
+		if (lighting.prefilter.source.empty() != lighting.irradiance.source.empty())
+		{
+			core::throw_runtime_error(
+				"benvl: one convolution routes a source and the other does not; the pair bakes "
+				"together or not at all");
+		}
 
 		cache::Writer writer;
 		writer.Add(ChunkId::kName, std::span<const char>(lighting.name));

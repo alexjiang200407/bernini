@@ -717,10 +717,12 @@ namespace assetlib
 		if (group == c_SurfaceSlotBakePrefix)
 			role = TextureRole::kSurfaceSlot;
 
-		core::throw_runtime_error_if(
-			!role.has_value(),
-			"assetlib::bakedTextureKey: '{}' is neither a texture file nor a baked map's name",
-			reference);
+		if (!role.has_value())
+		{
+			core::throw_runtime_error(
+				"assetlib::bakedTextureKey: '{}' is neither a texture file nor a baked map's name",
+				reference);
+		}
 
 		return bakedMapEncodedName(reference, textureEncoding(*role));
 	}
@@ -750,20 +752,26 @@ namespace assetlib
 					"routes would leave nothing to render");
 			}
 
-			core::throw_runtime_error_if(
-				!pbr.geometryOcclusionTexture.empty() && pbr.geometryOcclusionBakedTexture.empty(),
-				"assetlib::stripAuthoringData: the geometry occlusion map has never been baked; "
-				"stripping its source would leave nothing to sample through UV1");
+			if (!pbr.geometryOcclusionTexture.empty() && pbr.geometryOcclusionBakedTexture.empty())
+			{
+				core::throw_runtime_error(
+					"assetlib::stripAuthoringData: the geometry occlusion map has never been "
+					"baked; "
+					"stripping its source would leave nothing to sample through UV1");
+			}
 		}
 
 		if (isSurface)
 		{
 			for (const SurfaceTextureBinding& slot : material.surface.textures)
-				core::throw_runtime_error_if(
-					slotIsRouted(slot) && slot.bakedPath.empty(),
-					"assetlib::stripAuthoringData: slot '{}' has never been baked; stripping its "
-					"routes would leave nothing to render",
-					slot.name);
+				if (slotIsRouted(slot) && slot.bakedPath.empty())
+				{
+					core::throw_runtime_error(
+						"assetlib::stripAuthoringData: slot '{}' has never been baked; stripping "
+						"its "
+						"routes would leave nothing to render",
+						slot.name);
+				}
 		}
 
 		if (isPbr)
@@ -817,17 +825,21 @@ namespace assetlib
 		const auto slot = std::ranges::find_if(
 			material.surface.textures,
 			[&](const SurfaceTextureBinding& binding) { return binding.name == slotName; });
-		core::throw_runtime_error_if(
-			slot == material.surface.textures.end(),
-			"assetlib::ComposeSurfaceSlot: material '{}' has no slot '{}'",
-			material.name,
-			slotName);
+		if (slot == material.surface.textures.end())
+		{
+			core::throw_runtime_error(
+				"assetlib::ComposeSurfaceSlot: material '{}' has no slot '{}'",
+				material.name,
+				slotName);
+		}
 
 		const auto routes = std::span<const ChannelRoute>(slot->routes);
-		core::throw_runtime_error_if(
-			!anyRouted(routes),
-			"assetlib::ComposeSurfaceSlot: slot '{}' routes nothing",
-			slotName);
+		if (!anyRouted(routes))
+		{
+			core::throw_runtime_error(
+				"assetlib::ComposeSurfaceSlot: slot '{}' routes nothing",
+				slotName);
+		}
 
 		SourceCache sources(m_DataRoot);
 

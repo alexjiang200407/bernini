@@ -192,20 +192,24 @@ namespace assetlib
 		const EnvironmentFileSink&      onWritten,
 		const CancelToken&              cancel)
 	{
-		core::throw_runtime_error_if(
-			!document.environment,
-			"'{}': its import document records no environment parameters",
-			sourceKey);
+		if (!document.environment)
+		{
+			core::throw_runtime_error(
+				"'{}': its import document records no environment parameters",
+				sourceKey);
+		}
 
 		auto keys = std::unordered_map<EnvironmentPart, std::string>();
 		for (const std::string& output : document.outputs)
 		{
 			const std::optional<EnvironmentPart> part = environmentPartOf(output);
-			core::throw_runtime_error_if(
-				!part,
-				"'{}': its import document claims '{}', which no environment import writes",
-				sourceKey,
-				output);
+			if (!part)
+			{
+				core::throw_runtime_error(
+					"'{}': its import document claims '{}', which no environment import writes",
+					sourceKey,
+					output);
+			}
 			keys[*part] = output;
 		}
 
