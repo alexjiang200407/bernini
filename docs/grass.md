@@ -147,6 +147,10 @@ and the translucency term the rest, paid whether a look uses it or not: branchin
 saved nothing measurable. Carrying the translucency as a flat per-vertex attribute instead cost
 0.42 ms, and as an interpolated one 0.18 ms, which is why the program reads it from the look.
 
+The verge the feature landed with draws in 1.25 ms (best of three), against 0.82 ms for the same
+street's grass baked into its mesh and drawn by Forward World. The difference buys wind, a field
+that thins and coarsens rather than popping, and no grass geometry in the file.
+
 ## Where it comes from
 
 - **The blade and the field.** A blade as a tapered strip of solid triangles along a quadratic
@@ -175,3 +179,38 @@ saved nothing measurable. Carrying the translucency as a flat per-vertex attribu
 - Grass does not follow deforming ground: clumps are in their mesh's space, and only a static geom
   takes grass.
 - Blades are not in a shadow map, and do not collide.
+- There is no grass editor: a `.bgrass` is edited as text and looked at with
+  `bgl_ai_viewer --grass`.
+
+## Kept open
+
+Three things were left unbuilt on purpose, each with the seam it will arrive through, so none needs
+the pass rewritten.
+
+**Collision and trampling.** The standard is a few sphere or capsule displacers evaluated per blade
+(Ghost of Tsushima; Unreal's world-position offset) and a camera-following trample texture a splat
+pass writes and that relaxes over time. The seams:
+
+- every force is a term into `PoseBlade`, evaluated at `time` and `prevTime`, and wind is the first;
+- a force bends a blade about its root and never stretches it, which keeps a chunk's culling bound
+  true whatever pushes it;
+- a blade carries no state, since it is built from a hash, so anything persistent is a world-space
+  texture, ping-ponged so `prevTime` has a previous state as TAA history does;
+- a displacer attaches to a mesh instance, the way `SetBlobShadow` does, so its previous position
+  comes from the transform history the renderer keeps and its velocity is free;
+- a look's response is one group, `GrassResponseDesc`, which collision's parameters join.
+
+The API itself is not designed: it faces gameplay and has no consumer yet.
+
+**Terrain grass.** When terrain lands, grass on it is placed from a density map over the heightfield,
+generated per tile on the GPU as Tsushima and Unreal's Landscape Grass Type do, because a stored clump
+list grows with area and a density map does not. It adds its own attach beside `AttachGrass`, which
+stays the source for grass on meshes, and shares the look, the blade model, the forces and the
+lighting. The seams: the chunk is the unit the pass tests, whatever made it; the grass stage reads a
+clump through one function, which a density map can implement by sampling; and placement parameters
+that mean something only to stored clumps (`bladesPerClump`, the clump radius) sit in their own group,
+where a density in blades per square metre would join them. Baking terrain density into clumps at
+cook was rejected: the file grows with area and re-cooks on every painted change.
+
+**Toon lighting.** Covered in [Lighting](#lighting): grass has no model of its own, translucency is
+one function, and the root-to-tip value and per-blade random ride the interpolants.
