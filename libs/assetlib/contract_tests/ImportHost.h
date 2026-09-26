@@ -18,6 +18,14 @@ namespace assetlib::test
 	class ImportHost final : public core::file::IFileSystem
 	{
 	public:
+		ImportHost()                  = default;
+		ImportHost(const ImportHost&) = delete;
+		ImportHost(ImportHost&&)      = delete;
+		ImportHost&
+		operator=(const ImportHost&) = delete;
+		ImportHost&
+		operator=(ImportHost&&) = delete;
+
 		std::map<std::pair<std::string, AssetType>, ResolvedImport> imports;
 		std::map<std::string, RegenMesh>                            meshes;
 		std::string                                                 failure;
