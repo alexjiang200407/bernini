@@ -402,7 +402,9 @@ save_file,Save file,保存文件
 
 The first column must be `key`, followed by one or more distinct locale columns. Rows must have the
 same width and unique keys. Empty cells are missing translations. UTF-8 BOM, LF/CRLF records,
-quoted commas/newlines and doubled quotes are supported; malformed UTF-8, NUL bytes, bad quoting,
+quoted commas/newlines and doubled quotes are supported — a CRLF inside a quoted field reads as one
+newline, since the break belongs to the message and not to the file, which is also why `.gitattributes`
+pins these to LF; malformed UTF-8, NUL bytes, bad quoting,
 duplicate keys/locales and invalid identifiers throw. Whitespace is preserved rather than trimmed.
 The reader keeps `{0}` fields as literal text; `Localize` fills them. No plural selection.
 Resolve the returned catalog through `LanguageResolver` after registering it. A plugin that ships

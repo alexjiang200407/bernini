@@ -43,6 +43,10 @@ namespace
 					while (position < csv.size())
 					{
 						const auto c = csv[position++];
+						// A newline inside a quoted field is the message's own, and a catalog a
+						// spreadsheet saved spells it CRLF. A lone CR is content and stays one.
+						if (c == '\r' && position < csv.size() && csv[position] == '\n')
+							continue;
 						if (c != '"')
 							field += c;
 						else if (position < csv.size() && csv[position] == '"')

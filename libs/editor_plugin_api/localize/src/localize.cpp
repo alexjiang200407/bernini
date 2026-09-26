@@ -61,10 +61,12 @@ namespace editor
 		{
 			using Formatter = std::string (*)(const std::string&, const TextArgs&);
 			static constexpr auto c_Formatters = []<std::size_t... N>(std::index_sequence<N...>) {
-				return std::array<Formatter, sizeof...(N)>{ [](const std::string& t,
-					                                           const TextArgs&    a) {
+				// The inner braces are the array's own aggregate member; MSVC's /Wall reports a
+				// pack expanded straight into the outer ones as an unbraced subobject.
+				return std::array<Formatter, sizeof...(N)>{ { [](const std::string& t,
+					                                             const TextArgs&    a) {
 					return FormatExactly(t, a, std::make_index_sequence<N>());
-				}... };
+				}... } };
 			}(std::make_index_sequence<c_MaxTextArgs + 1>());
 			return c_Formatters[args.values.size()](text, args);
 		}
