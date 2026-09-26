@@ -61,6 +61,11 @@ jobs:
       - name: Build
         run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
 
+      # A game consuming the build above rather than compiling the engine into its own: the package
+      # links, the runtime DLLs stage beside it, and the executable starts. One translation unit.
+      - name: Consume the engine package
+        run: python scripts/embed.py --package --preset windows-ninja-msvc-dx12-debug
+
   macos:
     name: compile (macos-clang, Debug + Metal)
     runs-on: macos-latest
@@ -125,6 +130,9 @@ jobs:
       # used to run first is gone.
       - name: Build (Metal)
         run: python scripts/build.py --preset macos-clang-metal-debug
+
+      - name: Consume the engine package
+        run: python scripts/embed.py --package --preset macos-clang-metal-debug
 
       # Named after its contents, not after what we believe determines them: an ABI input the key
       # above forgets still moves the digest, so the rebuild is saved instead of wedging the cache.
