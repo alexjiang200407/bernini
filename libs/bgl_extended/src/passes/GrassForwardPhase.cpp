@@ -19,6 +19,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/WindDesc.h>
 #include <bgl_common/gassert.h>
+#include <core/math.h>
 #include <cstdint>
 #include <string_view>
 
@@ -133,7 +134,7 @@ namespace bgl
 			// One amplification group per chunk reference, laid out in rows no wider than one
 			// dispatch can launch, so a view past that many chunks still dispatches once.
 			const uint32_t width = std::min(batch.refCount, c_MaxDispatchMeshGroups);
-			const uint32_t rows  = (batch.refCount + width - 1) / width;
+			const uint32_t rows  = core::div_ceil(batch.refCount, width);
 
 			auto found = kernel->FindUniforms(c_Cbuffer);
 			if (!found)

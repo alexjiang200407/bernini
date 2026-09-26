@@ -1,3 +1,4 @@
+#include "CacheTamper.h"
 #include "ImportUnitGroup.h"
 #include "MountAt.h"  // IWYU pragma: keep
 #include "PointsGltf.h"
@@ -9,6 +10,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
+#include <assetlib/migrate.h>
 #include <assetlib/pak.h>
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BGrass.h>
@@ -417,4 +419,43 @@ TEST_CASE(
 	CHECK(
 		std::ranges::find(document.outputs, "Derived/Meshes/avenue.bgrassfields") !=
 		document.outputs.end());
+}
+
+// A grass file cooked at another revision regenerates from its source like the mesh beside it --
+// in memory on a load, on disk under migrate. A binding its source lost is reported by the load and
+// refuses the migrate, never dropped silently.
+TEST_CASE("A stale grass file regenerates from its source", "[grass][container][regen]")
+{
+	const GrassyProject project("bernini_grass_stale");
+	project.Bind(c_Field, c_LookKey);
+	test::TamperHeaderByte(project.dataRoot / c_GrassKey, test::c_TokenOffset);
+	REQUIRE(project.Store().GeometryIsStale(c_GrassKey));
+
+	SECTION("a load serves it from the source, bound")
+	{
+		const RegenGrassFields current = project.Store().LoadRegenGrassFields(c_GrassKey);
+		CHECK(current.fields.clumps.size() == 144);
+		CHECK(current.fields.looks == std::vector<std::string>{ std::string(c_LookKey) });
+		CHECK(
+			project.Store().LoadRegenGrassLooks(c_GrassKey) ==
+			std::vector<std::string>{ std::string(c_LookKey) });
+	}
+
+	SECTION("migrate writes it back, once")
+	{
+		const MigrateReport first = project.Store().Migrate(false);
+		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
+		CHECK(first.Count(MigratedFile::Outcome::kRewritten) >= 1);
+		CHECK_FALSE(project.Store().GeometryIsStale(c_GrassKey));
+		CHECK(project.Store().Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);
+	}
+
+	SECTION("a binding its source lost is reported by the load, and refuses the migrate")
+	{
+		project.Bind("Gone[4]", "Authored/Grass/old.bgrass");
+		CHECK(
+			project.Store().LoadRegenGrassFields(c_GrassKey).unboundBindings ==
+			std::vector<std::string>{ "Gone[4]" });
+		CHECK(project.Store().Migrate(false).Count(MigratedFile::Outcome::kFailed) >= 1);
+	}
 }
