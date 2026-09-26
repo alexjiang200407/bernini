@@ -57,8 +57,8 @@ Reading the answer right:
 * Run the suites that could plausibly reach the change (`just coverage core --diff` while iterating
   on `libs/core`); the full default run is the honest final answer.
 
-[`bcp-precheck`](../.claude/agents/bcp-precheck.md) § 7 is the one place in the workflow that reaches
-for this: on a pull request whose base is `origin/master`, where the diff adds executable lines under
+The pre-PR read ([`.bcp/profile.md`](../.bcp/profile.md) § Precheck) is the one place in the
+workflow that reaches for this: on a pull request whose base is `origin/master`, where the diff adds executable lines under
 `libs/` or `apps/`, and on macOS. It reports ranges and never a ratio, and its verdict never turns on
 them — so the rule above holds unchanged. A slice landing on a feature branch is not measured; the
 pull request that makes the feature permanent is.

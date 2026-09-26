@@ -120,7 +120,7 @@ Skip it if you like; `python scripts/<script>.py` does everything the recipes do
 
 ### gh (GitHub CLI)
 
-Only needed for the `bcp-revise` AI code-review workflow, which reads PR reviews and posts replies with it (see [docs/ai-coding.md](docs/ai-coding.md)). Not a Python package — the `gh` on PyPI is an unrelated project — so `python scripts/init.py` offers it through winget or brew, or install it from [cli.github.com](https://cli.github.com/) and add it to PATH.
+Nothing in `scripts/` calls it; it is how you reach this repo's pull requests from the shell, and the agent flows in the bernini-workspace repo need it (see [docs/ai-coding.md](docs/ai-coding.md)). Not a Python package — the `gh` on PyPI is an unrelated project — so `python scripts/init.py` offers it through winget or brew, or install it from [cli.github.com](https://cli.github.com/) and add it to PATH.
 
 ### clang-format
 

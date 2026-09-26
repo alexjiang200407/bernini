@@ -1,15 +1,12 @@
 Bernini is a 3D game engine. It uses CMake as the buildsystem. 
 
 **Claude and Codex share these instructions.** Init creates `AGENTS.md` as a symlink to this
-file. In Codex, read [docs/codex.md](docs/codex.md) for tool, skill, and PR-watcher mappings.
+file. In Codex, read [docs/codex.md](docs/codex.md).
 
-**Grill questions use selectable options.** For decision forks in `bcp-grill`, use the native
-question UI, put the recommendation first, and explain each option's trade-off. Claude uses
-`AskUserQuestion`. Codex prefers `request_user_input_async` when available and permitted, or
-`request_user_input` when its active-mode restrictions allow it. A Plan-only restriction on the
-blocking tool does not rule out the asynchronous tool. If neither is available or permitted,
-explain that briefly and ask in chat. Wait for the user's answer before dependent work;
-a preselected option or elapsed time is not an answer.
+**The agent flows live in the bernini-workspace repo.** Grilling, implementing, the pre-PR read,
+opening, watching and revising pull requests are its skills, hooks and scripts. This repo carries
+only [`.bcp/profile.md`](.bcp/profile.md): the commands those flows run here and the engine's lenses
+they apply. See [docs/ai-coding.md](docs/ai-coding.md).
 
 # General Notes
 
@@ -61,10 +58,10 @@ acting on it. Use the LSP to understand, grep to be exhaustive.
 Grep is still right for what is not a C++ symbol: text in `docs/`, a key in a `.json` or
 `.bmaterial`, a CMake variable, a string literal, a `.slang` identifier (Slang has no server here).
 
-`.claude/hooks/lsp_nudge.py` enforces this at the moment it matters, because advice that arrives
-beside the results it was meant to prevent is advice that gets read after them. A bare identifier —
-or an alternation of them — is **refused** when the search reaches the C++ sources: a `.cpp`/`.h`
-file, a directory under `libs/`, `apps/` or `examples/`, or no path at all.
+The workspace's LSP hook enforces this at the moment it matters, because advice that arrives beside
+the results it was meant to prevent is advice that gets read after them. A bare identifier — or an
+alternation of them — is **refused** when the search reaches the C++ sources: a `.cpp`/`.h` file, a
+directory under `libs/`, `apps/` or `examples/`, or no path at all.
 
 **Where the search points decides it, never what the pattern looks like.** The shape of a name
 cannot say which language it is: STYLE.md gives `core/`, `core/containers/` and `core/str/` a
@@ -329,7 +326,8 @@ cause is a different one.
 
 **[AI Coding Bots](./docs/ai-coding.md)**
 
-The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
+Where the agent flows live (the bernini-workspace repo) and what bernini keeps of them
+(`.bcp/profile.md`). Then the two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which replies to reviews and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers commit attribution, registration, key custody, secrets, and revocation for both.
 
 **Specs** — not here, and not in `docs/`
 
@@ -339,11 +337,11 @@ claim, what a shipping engine does about it, the solutions considered with the r
 rejected or kept, and the trigger that makes it urgent, so nobody re-derives any of it. That is why
 it is not documentation and is not on master: every page above says what the tree *is*, and the rule
 that keeps them worth reading — change the code, change the doc — has nothing to say about a file
-describing code nobody has written. [bcp-spec](.claude/skills/bcp-spec/SKILL.md) writes one, and the
-first thing it says is how a spec differs from a plan.
+describing code nobody has written. The workspace's `bcp-spec` skill writes one, and the first thing
+it says is how a spec differs from a plan.
 
 They live on `artefacts`, an orphan branch worktree'd once per workspace and symlinked into every
-checkout as `docs/specs/`, committed on every write by `.claude/hooks/draft_commit.py`. The branch is
+checkout as `docs/specs/`, committed on every write by the workspace's draft hook. The branch is
 local, never pushed and never merged: a spec is written, revised and deleted there, and no pull
 request ever moves one onto master. Read one before building the thing it describes, and delete it
 when that thing lands. In a checkout the workspace has not set up, and in CI, the directory is simply
@@ -389,14 +387,10 @@ just idl                          # regenerate the IDL C++ headers
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately
-just cleanup [--delete]           # list the local branches whose PR merged; --delete cuts them, nothing else
-just pr <cmd> ...                 # the only way to write to a PR: create/comments/reply/comment/edit/check. Opens PRs as you, comments as the bot, routes replies into their thread, and tabulates the diff by category into the body
-just watch-pr <pr>                # block until the PR fails CI, gets a submitted review or new comments, or merges; prints one JSON event. --interval, --timeout, --once, --since
 ```
 
-`gh pr create`, `gh pr comment`, `gh pr review` and `gh pr merge` are blocked by a hook — `just pr`
-is the path, and a turn that opens a PR cannot end until `just watch-pr` runs on it. See
-[docs/ai-coding.md](./docs/ai-coding.md).
+Opening, watching and answering pull requests is not a recipe here: it is the workspace's PR
+tooling. See [docs/ai-coding.md](./docs/ai-coding.md).
 
 `just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `tidy` → `tidy.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
 
@@ -407,7 +401,7 @@ is the path, and a turn that opens a PR cannot end until `just watch-pr` runs on
 `BUILD_TESTS` is on, which the debug presets set and the release ones do not.
 
 One more suite is not a CMake target: `scripts_tests` is the pytest cases under `scripts/tests`,
-covering the Python in `scripts/` itself and the Claude Code hooks in `.claude/hooks/`. It runs
+covering the Python in `scripts/` itself. It runs
 from `just test` like any other and reports in the same summary — but it takes no Catch2 filter,
 so `just test -- "[tag]"` skips it and says so. It needs `pytest` (pinned in
 `scripts/requirements.txt`, offered by `just init`). Nothing in CI
@@ -422,8 +416,8 @@ suite, use `just run`, which forwards it — `just run bgl_extended_tests -- --g
 One tag is not about behaviour: **`[perf]`** pins what a cook costs as its inputs grow — a read count
 that must not scale with an input, a ratio between two problem sizes that must stay far below the
 ratio of the sizes. Never a wall-clock ceiling, so the cases hold in a debug build and under load.
-[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 5 runs them when a diff touches a path they cover:
-`just run assetlib_tests -- "[perf]" --no-lock`.
+The pre-PR read runs them when a diff touches a path they cover ([`.bcp/profile.md`](.bcp/profile.md)
+§ Precheck): `just run assetlib_tests -- "[perf]" --no-lock`.
 
 **Only one suite runs on the machine at a time.** A suite is expensive — each one is split
 across several processes, each holding a graphics device — so several checkouts testing at once
