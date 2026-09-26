@@ -70,10 +70,6 @@ exes *args:
 count:
     @{{ python }} scripts/count_source.py
 
-# List the local branches whose pull request merged (--delete to cut them).
-cleanup *args:
-    @{{ python }} scripts/cleanup_branches.py {{ args }}
-
 # Upload every referenced Git LFS object from the local cache to the object store.
 lfs-seed *args:
     @{{ python }} scripts/lfs_seed.py {{ args }}
@@ -81,11 +77,3 @@ lfs-seed *args:
 # Report what the Git LFS object store holds, against its ceiling.
 lfs-usage *args:
     @{{ python }} scripts/lfs_usage.py {{ args }}
-
-# Open, read, answer and check a pull request, as the morgana-coding-agent bot.
-pr *args:
-    @{{ python }} scripts/pr.py {{ args }}
-
-# Block until a PR gets a submitted review, new comments, or merges; prints one JSON event.
-watch-pr *args:
-    @{{ python }} scripts/watch_pr.py {{ args }}

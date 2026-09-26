@@ -24,7 +24,6 @@ MODULE_PREFIXES = (
     ('apps/editor', 'editor'),
     ('examples', 'examples'),
     ('scripts', 'scripts'),
-    ('.claude/hooks', 'claude-hooks'),
     ('PCH', 'pch'),
 )
 
