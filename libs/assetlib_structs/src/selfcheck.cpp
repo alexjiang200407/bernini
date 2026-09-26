@@ -13,6 +13,7 @@
 #include <assetlib_structs/BMesh.h>            // IWYU pragma: keep
 #include <assetlib_structs/BMeshImport.h>      // IWYU pragma: keep
 #include <assetlib_structs/Bounds.h>           // IWYU pragma: keep           // IWYU pragma: keep
+#include <assetlib_structs/GrassGeometry.h>    // IWYU pragma: keep
 #include <assetlib_structs/ImageData.h>        // IWYU pragma: keep
 #include <assetlib_structs/Mesh.h>             // IWYU pragma: keep
 #include <assetlib_structs/Node.h>             // IWYU pragma: keep
