@@ -44,7 +44,11 @@ namespace bgl
 			return true;
 		}
 
-		/** Declares what its dispatches read beyond what every forward phase declares. */
+		/**
+		 * Declares what its dispatches read. Naming a resource the shared set already declares is
+		 * harmless -- one pass's accesses to a resource merge into one state -- so a phase declares
+		 * everything it reads and needs no knowledge of what the others do.
+		 */
 		virtual void
 		Declare(PassDesc& desc) const = 0;
 

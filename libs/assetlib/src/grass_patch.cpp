@@ -14,6 +14,12 @@
 
 namespace assetlib
 {
+	namespace
+	{
+		// The most clumps a patch holds, where a float still counts them exactly.
+		constexpr float c_MaxPatchClumps = 16777216.0f;  // 2^24
+	}
+
 	BGrassFields
 	makeGrassPatch(const GrassPatchDesc& desc, std::string look)
 	{
@@ -26,7 +32,7 @@ namespace assetlib
 
 		const float side = std::floor(desc.size / desc.spacing);
 		core::throw_runtime_error_if(
-			side < 1.0f || side * side > 16777216.0f,
+			side < 1.0f || side * side > c_MaxPatchClumps,
 			"makeGrassPatch: a {} square at {} spacing holds {} clumps, outside [1, 2^24]",
 			desc.size,
 			desc.spacing,

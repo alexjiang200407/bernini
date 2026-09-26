@@ -4,11 +4,8 @@ import lib.forward.common;
 // terms that are the blade's geometry rather than its surface. Flat rather than holding a
 // ForwardVSOut, because Metal refuses a mesh output with a nested struct.
 //
-// uv runs across the blade (x) and root to tip (y). uv1 is never a second UV set, which is why a grass
-// program reads no geometry occlusion: x is the blade's own random, and y the entry of its look in
-// grassData.looks -- constant along the blade, where a flat attribute would cost the pass a third
-// more on Apple silicon. The normal is final: turned toward the camera, rounded across the width
-// and blended toward the ground.
+// The normal is final: turned toward the camera, rounded across the width and blended toward the
+// ground. What the UVs carry is docs/grass.md § Lighting.
 public struct GrassVSOut
 {
     public float4 position : SV_Position;

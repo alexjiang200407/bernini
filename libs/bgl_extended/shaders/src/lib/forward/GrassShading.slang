@@ -33,7 +33,7 @@ public extension MaterialData
 
     // A blade's surface lit through the entry every Forward program uses, with the blade's tint and
     // occlusion applied first and its translucency added after.
-    ForwardPSOut ShadeGrassBlade(GrassVSOut input, PbrSurface evaluated)
+    float4 ShadeGrassSurface(GrassVSOut input, PbrSurface evaluated)
     {
         var surface = evaluated;
         surface.baseColor.rgb *= input.tint.rgb;
@@ -43,32 +43,33 @@ public extension MaterialData
         let look = grassData.looks.Get(uint(round(input.uv1.y)));
         let translucent = GrassTranslucency(surface, normalize(input.normal), GetShadingParams(), look.translucency);
 
-        ForwardPSOut output;
-        output.color = float4(lit + translucent, 1.0);
-        output.motion = ComputeMotionVector(input.Surface());
-        return output;
+        return float4(lit + translucent, 1.0);
     }
 
-    // An engine kind's grass program. Its geometry occlusion is read as white: uv1 on a blade is not
-    // a second UV set.
-    public ForwardPSOut GrassProgram<M : IPbrMaterial>(GrassVSOut input)
+    // An engine kind on a blade, as Shade is on a mesh. Its geometry occlusion is read as white: uv1
+    // on a blade is not a second UV set.
+    public float4 ShadeGrass<M : IPbrMaterial>(GrassVSOut input)
     {
         M material = M.Load(input.materialOffset);
 
         var unmapped = input.Surface();
         unmapped.uv1 = cNoUv1;
-        return ShadeGrassBlade(input, SurfaceOf(material, unmapped, material.GetBaseColor(unmapped.uv)));
+        return ShadeGrassSurface(input, SurfaceOf(material, unmapped, material.GetBaseColor(unmapped.uv)));
     }
 
-    public ForwardPSOut GrassGameProgram<G : ISurfaceSource>(GrassVSOut input)
+    // A registered surface's grass program, as GameOpaqueProgram is its mesh program.
+    public ForwardPSOut GameGrassProgram<G : ISurfaceSource>(GrassVSOut input)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
 
-        return ShadeGrassBlade(input, record.EvaluateOnGrass(input.Surface()));
+        ForwardPSOut output;
+        output.color = ShadeGrassSurface(input, record.EvaluateOnGrass(input.Surface()));
+        output.motion = ComputeMotionVector(input.Surface());
+        return output;
     }
 
     // A lit surface draws a blade exactly as it shades it: no tint, occlusion or translucency.
-    public ForwardPSOut GrassGameLitProgram<G : ILitSurfaceSource>(GrassVSOut input)
+    public ForwardPSOut GameLitGrassProgram<G : ILitSurfaceSource>(GrassVSOut input)
     {
         let record = LitGameRecord<G>.Load(input.materialOffset);
 

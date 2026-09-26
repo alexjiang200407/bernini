@@ -8,7 +8,6 @@
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletKernel.h"
 #include "scene/SceneView.h"
-#include "scene/dispatch_limits.h"
 #include "scene/scene_buffer_names.h"
 #include "types/Barrier.h"
 #include "types/MeshletState.h"
@@ -19,6 +18,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/WindDesc.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/Constants.h>
 #include <core/math.h>
 #include <cstdint>
 #include <string_view>
@@ -133,7 +133,7 @@ namespace bgl
 
 			// One amplification group per chunk reference, laid out in rows no wider than one
 			// dispatch can launch, so a view past that many chunks still dispatches once.
-			const uint32_t width = std::min(batch.refCount, c_MaxDispatchMeshGroups);
+			const uint32_t width = std::min(batch.refCount, idl::cMaxDispatchMeshGroups);
 			const uint32_t rows  = core::div_ceil(batch.refCount, width);
 
 			auto found = kernel->FindUniforms(c_Cbuffer);
