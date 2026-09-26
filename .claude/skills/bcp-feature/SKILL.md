@@ -114,7 +114,7 @@ git config --worktree bernini.feature feat/<name>
 ```
 
 It starts **empty**, identical to `master`, and changes only when a PR merges. **Nothing is ever
-committed on it directly.**
+committed on it directly** -- until § 5 opens the landing PR, whose head it then is.
 
 If `feat/<name>` already exists, this is a **resume**: fast-forward, read the plan and the tracker,
 and reconcile the tracker with reality before anything else — a `[>]` may have merged since.
@@ -422,6 +422,13 @@ it against [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s list �
 the editor — over the whole feature's diff rather than any one task's, and name the commands to run.
 Then § 4 again.
 
+**Once the landing PR is open, a change for it is a commit on `feat/<name>` itself**, pushed to the
+PR -- never a task PR into the branch. A review comment, a precheck finding, a doc the landing needs:
+each is a commit there, answered in its thread as § 4 answers any review. The task PRs were the
+review of the pieces; the landing PR is the review of the whole, and a change routed around it is
+one its reviewer has to go and find. Rebasing it is still the user's call, as it is for any branch
+others have seen.
+
 Read the plan against what actually shipped first: anything it still promises that the feature did
 not do is a correction for the last task PR. Whatever in it should outlive the feature — how the
 code now *behaves*, the decisions worth keeping — belongs in a subsystem page under `docs/`: move it
@@ -450,7 +457,8 @@ needs no cleanup either way: it went with the landing PR.
 
 - **Never merge a PR.** Continuous review is the entire point, and it only works if a human approves.
 - **Never cut the branch before the grill closes.** § 0 comes first, and it may end the feature.
-- **Never commit directly onto `feat/<name>` or `master`.** Everything arrives by PR.
+- **Never commit directly onto `feat/<name>` or `master`.** Everything arrives by PR -- except a
+  change for an open landing PR, which is a commit on `feat/<name>`, its head (§ 5).
 - **Never cut a task branch before the plan is written.** § 2 is what task 1 is measured against,
   and the first task PR's body is where the user first sees the boundaries.
 - **Never let a task quietly cross a non-goal.** Either it goes back to the grill and the ADR is
