@@ -8,5 +8,8 @@ import lib.forward.MaterialData;
 [shader("pixel")]
 ForwardPSOut PSMain(GrassVSOut input)
 {
-    return materialData.GrassProgram<LoosePbrMaterialRecord>(input);
+    ForwardPSOut output;
+    output.color = materialData.ShadeGrass<LoosePbrMaterialRecord>(input);
+    output.motion = ComputeMotionVector(input.Surface());
+    return output;
 }

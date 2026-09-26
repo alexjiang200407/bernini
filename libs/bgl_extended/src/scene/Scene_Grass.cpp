@@ -1,6 +1,5 @@
 #include "scene/GeomRollback.h"
 #include "scene/Scene.h"
-#include "scene/dispatch_limits.h"
 #include <algorithm>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
@@ -113,7 +112,7 @@ namespace bgl
 				}
 
 				// One amplification group per chunk.
-				if (field.chunkCount > c_MaxDispatchMeshGroups)
+				if (field.chunkCount > idl::cMaxDispatchMeshGroups)
 				{
 					throw SceneError(
 						std::format(
@@ -121,7 +120,7 @@ namespace bgl
 							"one dispatch can launch",
 							f,
 							field.chunkCount,
-							c_MaxDispatchMeshGroups));
+							idl::cMaxDispatchMeshGroups));
 				}
 
 				if (static_cast<uint64_t>(field.firstChunk) + field.chunkCount >

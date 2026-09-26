@@ -292,11 +292,9 @@ namespace editor
 						options.animations,
 						sourceRef);
 
-					for (std::string& grass : store.WriteImportedGrass(
-							 imported->grass,
-							 *mesh,
-							 store.KeyFor(grassPath),
-							 sourceRef))
+					const std::string grassKey = store.KeyFor(grassPath);
+					for (std::string& grass :
+				         store.WriteImportedGrass(imported->grass, *mesh, grassKey, sourceRef))
 						rigOutputs.push_back(std::move(grass));
 				}
 				else if (options.animations)

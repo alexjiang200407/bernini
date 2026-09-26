@@ -90,11 +90,11 @@ float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_
 [shader("pixel")]
 ForwardPSOut PSGrass(GrassVSOut input)
 {
-    return materialData.GrassGameProgram<NullSurface>(input);
+    return materialData.GameGrassProgram<NullSurface>(input);
 }
 
 [shader("pixel")]
 ForwardPSOut PSGrassLit(GrassVSOut input)
 {
-    return materialData.GrassGameLitProgram<NullLitSurface>(input);
+    return materialData.GameLitGrassProgram<NullLitSurface>(input);
 }

@@ -1,6 +1,5 @@
 #include "scene/GeomRollback.h"
 #include "scene/Scene.h"
-#include "scene/dispatch_limits.h"
 #include "types/VertexGen.h"
 #include "util/util.h"
 #include <algorithm>
@@ -49,7 +48,7 @@ namespace bgl
 		// multiple of the group size that fits. A submesh past it would round its last group up over
 		// the ceiling.
 		constexpr uint32_t c_MaxSubmeshMeshlets =
-			c_MaxDispatchMeshGroups - (c_MaxDispatchMeshGroups % idl::cMeshletsPerGroup);
+			idl::cMaxDispatchMeshGroups - (idl::cMaxDispatchMeshGroups % idl::cMeshletsPerGroup);
 
 		// One number declared twice, because bgl does not link assetlib: the cook groups by its
 		// constant and everything below reads by this one. A drift would have a submesh read bounds

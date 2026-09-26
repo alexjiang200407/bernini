@@ -27,10 +27,13 @@ public static const uint cMeshletsPerGroup = 8;
 // Meshlet groups the static tier's amplification group compacts into its payload, as a bit per group
 // and a running count per 32 of them -- about 1.5 KiB. The payload is copied out whole per group, on
 // Metal once per lane, so its size costs every instance drawn: 8 KiB measured +3 ms a pass in
-// animal-run. At this many groups it covers 65536 meshlets, more than the 65535 thread groups one
+// animal-run. At this many groups it covers 65536 meshlets, more than the cMaxDispatchMeshGroups one
 // DispatchMesh can launch -- so every submesh a scene can hold compacts, and there is no
 // dispatch-everything path.
 public static const uint cMaxCompactedGroups = 8192;
+
+// Thread groups one DispatchMesh can launch along an axis, on every backend.
+public static const uint cMaxDispatchMeshGroups = 65535;
 
 // Clumps one cooked grass chunk holds at most: the unit the grass stage's amplification group culls
 // and thins. The cook names the same number as assetlib::c_GrassClumpsPerChunk, and a static_assert

@@ -157,7 +157,7 @@ namespace bgl
 				  false },
 				{ DrawBucketPixelSrc(
 					  DrawBucketDesc{ GeometryStage::kGrass, kind, LayerType::kOpaque }),
-				  GrassProgramSource(slot, lit ? "GrassGameLitProgram" : "GrassGameProgram"),
+				  GrassProgramSource(slot, lit ? "GameLitGrassProgram" : "GameGrassProgram"),
 				  false },
 			};
 		}

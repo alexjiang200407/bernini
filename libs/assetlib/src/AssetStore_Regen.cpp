@@ -170,15 +170,23 @@ namespace assetlib
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
 
-		const uint32_t magic = extension == c_MeshExtension      ? magic::c_BMesh :
-		                       extension == c_SkeletonExtension  ? magic::c_BSkel :
-		                       extension == c_AnimationExtension ? magic::c_BAnim :
-		                                                           magic::c_BGrassF;
-
-		const std::string_view what = extension == c_MeshExtension      ? "bmesh" :
-		                              extension == c_SkeletonExtension  ? "bskel" :
-		                              extension == c_AnimationExtension ? "banim" :
-		                                                                  "bgrassfields";
+		uint32_t         magic = magic::c_BGrassF;
+		std::string_view what  = "bgrassfields";
+		if (extension == c_MeshExtension)
+		{
+			magic = magic::c_BMesh;
+			what  = "bmesh";
+		}
+		else if (extension == c_SkeletonExtension)
+		{
+			magic = magic::c_BSkel;
+			what  = "bskel";
+		}
+		else if (extension == c_AnimationExtension)
+		{
+			magic = magic::c_BAnim;
+			what  = "banim";
+		}
 
 		MountedFileReader reader(GetFiles(), path, what);
 		SourceRef         current;
