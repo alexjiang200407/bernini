@@ -23,6 +23,10 @@ it: `game::AssetManager::AcquireMesh` follows the mesh's `grass` reference, crea
 fields name from the `.bgrass` and attaches them, and the geom's release gives them back
 (`libs/gamelib/CLAUDE.md`).
 
+A look with no mesh under it grows on a patch: `assetlib::makeGrassPatch` jitters clumps over a
+square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That is what
+`bgl_ai_viewer --grass` draws ([AI Viewer](ai_viewer.md) § Looking at grass).
+
 ## A blade
 
 A blade is a quadratic Bézier strip, built from its clump and a hash of its index

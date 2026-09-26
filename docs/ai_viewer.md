@@ -40,11 +40,33 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |
+| `--grass` | none | a `.bgrass` to grow on a patch of bare ground, in place of `--import` |
+| `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres |
+| `--distance` | 10 | how far from the patch's centre its camera stands, in metres, at eye height |
+| `--wind` | 0, calm | the patch's wind: steady and gust strength both, in [0, 1] |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
 `>` on the one playing — run once without `--clip` to learn the names; `lit` or `unlit`; one line
 per screenshot, `frame  t = …  <absolute path>`; then median and max per pass, costliest first, and
 the CSV's path. It exits non-zero only when it could not render.
+
+## Looking at grass
+
+A mesh that grows grass draws it under `--import` as any other load does
+(`game::AssetManager::AcquireMesh`, [Grass](grass.md)). To look at a grass *look* on its own, name
+the `.bgrass` with `--grass`: the viewer grows it on a square of bare ground
+(`AssetManager::CreateGrassPatch` over `assetlib::makeGrassPatch`) and stands the camera at eye height, `--distance` from its centre. Near, mid and
+far are three runs; `assets/Data` carries `meadow.bgrass` to try it on:
+
+```bash
+for d in 2 10 40; do
+	just run bgl_ai_viewer -- --project "$PWD/assets/Data" --grass Authored/Grass/meadow.bgrass \
+		--distance $d --sun 2 --frames 30 --screenshot 29 --out-dir "<a directory of your own>/d$d"
+done
+```
+
+Add `--wind 0.5` to see it bend. The patch is twice the look's fade end across by default, so the
+far run shows the field thinning to nothing; its `Forward Grass 0` row is what the look costs there.
 
 ## Decisions a reader relies on
 
@@ -91,6 +113,6 @@ the CSV's path. It exits non-zero only when it could not render.
 
 ## What it does not do
 
-No window and no input; one mesh and one clip per run — no blend spaces, no crossfades; no
+No window and no input; one mesh, or one grass look, and one clip per run — no blend spaces, no crossfades; no
 golden-image comparison. A *wrong* frame is diagnosed with [Graphics Debug](gfx_debug.md); this
 only shows you the frame.

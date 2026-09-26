@@ -5,17 +5,22 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/grass_patch.h>
 #include <assetlib/import_document.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
+#include <bgl/Camera.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
 #include <bgl/PassHistory.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
@@ -23,6 +28,8 @@
 #include <bgl/glm.h>
 #include <bgl/pass_timing_csv.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/WindDesc.h>
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +39,7 @@
 #include <fstream>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ClipInfo.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include <headless/PassCosts.h>
 #include <headless/framing.h>
 #include <headless/headless_render.h>
@@ -80,7 +88,18 @@ namespace
 		float              sunElevation = 38.0f;
 		float              sunIntensity = 0.0f;
 		std::vector<float> sunColor{ 1.0f, 1.0f, 1.0f };
+
+		// A `.bgrass` grown on a patch of bare ground, in place of --import. Size 0 is twice the
+		// look's fade end.
+		std::string grass;
+		float       patchSize    = 0.0f;
+		float       patchSpacing = 0.25f;
+		float       distance     = 10.0f;
+		float       wind         = 0.0f;
 	};
+
+	// Where a patch's camera stands above its ground.
+	constexpr float c_EyeHeight = 1.6f;
 
 	// Timed frames drawn past the last one, held at its time, to collect rows that trail their frame.
 	constexpr uint32_t c_DrainFrames = 16;
@@ -185,6 +204,206 @@ namespace
 				clip.loop ? ", loops" : "");
 		}
 	}
+
+	/**
+	 * Places every mesh entry of `opts.import`'s `.bmesh`, a skinned one playing its clip, and
+	 * returns the camera framing them. Grass the mesh grows comes with it (AssetManager::AcquireMesh).
+	 *
+	 * @throws std::runtime_error when the import or a container it names is missing, or `--clip`
+	 *         names nothing.
+	 */
+	[[nodiscard]] bgl::Camera
+	PlaceImport(
+		const Options&               opts,
+		const assetlib::AssetStore&  store,
+		const std::filesystem::path& dataRoot,
+		game::AssetManager&          assets,
+		const bgl::SceneViewRef&     view)
+	{
+		const std::string documentKey = ImportDocumentKey(opts.import);
+		core::throw_runtime_error_if(
+			!store.Exists(documentKey),
+			"{} is not in {}",
+			documentKey,
+			std::filesystem::absolute(dataRoot).string());
+
+		const assetlib::ImportDocument document =
+			assetlib::loadImportDocument(store.GetFiles(), documentKey);
+
+		const std::string meshKey = document.GetMeshOutput();
+		core::throw_runtime_error_if(meshKey.empty(), "{} produced no .bmesh", documentKey);
+		RequireDerived(store, meshKey, dataRoot);
+
+		const std::string animationsKey = AnimationOutput(document);
+		const bool        rigged        = !animationsKey.empty();
+		core::throw_runtime_error_if(
+			!rigged && !opts.clip.empty(),
+			"--clip {}: {} has no clip set, so there is nothing to play",
+			opts.clip,
+			documentKey);
+
+		const auto model = store.Load<assetlib::BMesh>(meshKey);
+
+		std::vector<std::optional<assetlib::Bounds>> posedBounds;
+		std::optional<assetlib::AnimationSet>        animations;
+		std::optional<assetlib::Skeleton>            skeleton;
+		if (rigged)
+		{
+			RequireDerived(store, animationsKey, dataRoot);
+			animations = store.Load<assetlib::AnimationSet>(animationsKey);
+			RequireDerived(store, animations->skeleton, dataRoot);
+			skeleton    = store.Load<assetlib::Skeleton>(animations->skeleton);
+			posedBounds = assetlib::findPosedBounds(*animations, model, *skeleton);
+		}
+
+		struct SkinnedPlacement
+		{
+			bgl::GeomHandle geom;
+			glm::mat4       world;
+			uint32_t        meshIndex;
+		};
+
+		auto                          bounds = headless::EmptyBounds();
+		std::vector<SkinnedPlacement> skinned;
+		std::vector<game::ClipInfo>   clips;
+		for (uint32_t n = 0; n < model.nodes.size(); ++n)
+		{
+			const uint32_t meshIndex = model.nodes[n].mesh;
+			if (meshIndex == assetlib::c_InvalidIndex)
+				continue;
+
+			const glm::mat4 world = headless::InstanceTransform(model, n);
+			if (!rigged || !assetlib::isSkinned(model, meshIndex))
+			{
+				assets.CreateInstance(view, assets.AcquireMesh(meshKey, meshIndex), world);
+				headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
+				continue;
+			}
+
+			// The box the geom culls by is also the camera's frame, so it is resolved here once for both.
+			const assetlib::Bounds posed =
+				posedBounds[meshIndex] ?
+					*posedBounds[meshIndex] :
+					assetlib::posedBounds(model, meshIndex, *skeleton, *animations);
+
+			game::AssetManager::SkinnedMesh acquired =
+				assets.AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
+			skinned.emplace_back(acquired.geom, world, meshIndex);
+			clips = std::move(acquired.clips);
+			headless::GrowBounds(bounds, world, posed);
+		}
+
+		const uint32_t clip = rigged && !skinned.empty() ? FindClip(clips, opts.clip) : 0;
+
+		// The culling box stays the whole clip set's; only the camera narrows to the one clip, measured
+		// the same way over a set holding that clip alone.
+		if (opts.frameClip && !skinned.empty())
+		{
+			assetlib::AnimationSet playing = *animations;
+			playing.clips                  = { animations->clips.at(clip) };
+			playing.posedBoxes.clear();
+
+			bounds = headless::EmptyBounds();
+			for (uint32_t n = 0; n < model.nodes.size(); ++n)
+			{
+				const uint32_t meshIndex = model.nodes[n].mesh;
+				if (meshIndex != assetlib::c_InvalidIndex && !assetlib::isSkinned(model, meshIndex))
+					headless::GrowBounds(
+						bounds,
+						headless::InstanceTransform(model, n),
+						headless::MeshEntryBounds(model, meshIndex));
+			}
+			for (const SkinnedPlacement& placement : skinned)
+				headless::GrowBounds(
+					bounds,
+					placement.world,
+					assetlib::posedBounds(model, placement.meshIndex, *skeleton, playing));
+		}
+		for (const SkinnedPlacement& placement : skinned)
+		{
+			assets.CreateSkinnedInstance(
+				view,
+				placement.geom,
+				placement.world,
+				bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, bgl::PoseSource::kPerInstance });
+		}
+
+		std::cout << std::format(
+			"{}\nmesh   {} ({})\n",
+			documentKey,
+			meshKey,
+			skinned.empty() ? "static" : std::format("skinned, {}", animationsKey));
+		if (!skinned.empty())
+			PrintClips(clips, clip);
+
+		return headless::FrameBounds(bounds, opts.width, opts.height);
+	}
+
+	/**
+	 * Grows `opts.grass` on a patch of bare ground and returns a camera standing in it, eye height
+	 * above the ground and `opts.distance` from the patch's centre, looking at it.
+	 *
+	 * @throws std::runtime_error when the look is not a `.bgrass` in the project, or what
+	 *         AssetManager::CreateGrassPatch throws.
+	 */
+	[[nodiscard]] bgl::Camera
+	PlaceGrassPatch(
+		const Options&              opts,
+		const assetlib::AssetStore& store,
+		bgl::IScene&                scene,
+		game::AssetManager&         assets,
+		const bgl::SceneViewRef&    view)
+	{
+		core::throw_runtime_error_if(
+			!opts.grass.ends_with(".bgrass") || !store.Exists(opts.grass),
+			"--grass {} names no .bgrass in the project",
+			opts.grass);
+
+		const auto look = store.Load<assetlib::BGrass>(opts.grass);
+
+		// Twice the fade end unless asked, so a camera anywhere in the fade sees grass to its end.
+		auto patch    = assetlib::GrassPatchDesc();
+		patch.size    = opts.patchSize > 0.0f ? opts.patchSize : 2.0f * look.density.fadeEnd;
+		patch.spacing = opts.patchSpacing;
+
+		const bgl::MaterialHandle ground = scene.CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(0.22f, 0.19f, 0.15f, 1.0f),
+		      .metallicFactor  = 0.0f,
+		      .roughnessFactor = 1.0f });
+		assets.CreateInstance(
+			view,
+			assets.CreateGrassPatch(patch, opts.grass, ground),
+			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+
+		if (opts.wind > 0.0f)
+		{
+			view->SetWind(
+				{ .direction    = glm::vec3(1.0f, 0.0f, 0.4f),
+			      .strength     = opts.wind,
+			      .gustStrength = opts.wind });
+		}
+
+		std::cout << std::format(
+			"{}\npatch  {:.0f} m square, a clump every {} m, camera {} m out\nwind   {}\n",
+			opts.grass,
+			patch.size,
+			patch.spacing,
+			opts.distance,
+			opts.wind > 0.0f ? std::format("{} with gusts", opts.wind) : std::string("calm"));
+
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.0f, c_EyeHeight, opts.distance),
+				glm::vec3(0.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				glm::radians(60.0f),
+				static_cast<float>(opts.width) / static_cast<float>(opts.height),
+				0.05f,
+				2.0f * patch.size);
+		return camera;
+	}
 }
 
 int
@@ -199,7 +418,7 @@ try
 			"--project",
 			opts.project,
 			"The project's Data directory, absolute: every key below is relative to it");
-		app.add_option(
+		auto* import = app.add_option(
 			"--import",
 			opts.import,
 			"The .bimport to render, or the .glb it describes; its outputs name the .bmesh and, "
@@ -253,6 +472,28 @@ try
 			"Sun azimuth in degrees about the up axis");
 		app.add_option("--sun-elevation", opts.sunElevation, "Sun elevation in degrees");
 		app.add_option("--sun-color", opts.sunColor, "Sun colour as three floats")->expected(3);
+		app.add_option(
+			   "--grass",
+			   opts.grass,
+			   "A .bgrass to grow on a patch of bare ground, in place of --import")
+			->excludes(import);
+		app.add_option(
+			   "--patch-size",
+			   opts.patchSize,
+			   "The patch's side in metres; 0 is twice the look's fade end")
+			->check(CLI::NonNegativeNumber);
+		app.add_option("--patch-spacing", opts.patchSpacing, "Metres between the patch's clumps")
+			->check(CLI::PositiveNumber);
+		app.add_option(
+			   "--distance",
+			   opts.distance,
+			   "How far from the patch's centre its camera stands, in metres")
+			->check(CLI::NonNegativeNumber);
+		app.add_option(
+			   "--wind",
+			   opts.wind,
+			   "The patch's wind: steady strength and gust strength both, in [0, 1]; 0 is calm")
+			->check(CLI::Range(0.0f, 1.0f));
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -268,42 +509,6 @@ try
 
 	const auto dataRoot = std::filesystem::path(opts.project);
 	const auto store    = assetlib::AssetStore(dataRoot);
-
-	const std::string documentKey = ImportDocumentKey(opts.import);
-	core::throw_runtime_error_if(
-		!store.Exists(documentKey),
-		"{} is not in {}",
-		documentKey,
-		std::filesystem::absolute(dataRoot).string());
-
-	const assetlib::ImportDocument document =
-		assetlib::loadImportDocument(store.GetFiles(), documentKey);
-
-	const std::string meshKey = document.GetMeshOutput();
-	core::throw_runtime_error_if(meshKey.empty(), "{} produced no .bmesh", documentKey);
-	RequireDerived(store, meshKey, dataRoot);
-
-	const std::string animationsKey = AnimationOutput(document);
-	const bool        rigged        = !animationsKey.empty();
-	core::throw_runtime_error_if(
-		!rigged && !opts.clip.empty(),
-		"--clip {}: {} has no clip set, so there is nothing to play",
-		opts.clip,
-		documentKey);
-
-	const auto model = store.Load<assetlib::BMesh>(meshKey);
-
-	std::vector<std::optional<assetlib::Bounds>> posedBounds;
-	std::optional<assetlib::AnimationSet>        animations;
-	std::optional<assetlib::Skeleton>            skeleton;
-	if (rigged)
-	{
-		RequireDerived(store, animationsKey, dataRoot);
-		animations = store.Load<assetlib::AnimationSet>(animationsKey);
-		RequireDerived(store, animations->skeleton, dataRoot);
-		skeleton    = store.Load<assetlib::Skeleton>(animations->skeleton);
-		posedBounds = assetlib::findPosedBounds(*animations, model, *skeleton);
-	}
 
 	auto graphics = headless::CreateHeadlessGraphics(dataRoot);
 	auto target   = headless::CreateHeadlessTarget(
@@ -337,85 +542,10 @@ try
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
 
-	struct SkinnedPlacement
-	{
-		bgl::GeomHandle geom;
-		glm::mat4       world;
-		uint32_t        meshIndex;
-	};
+	const bgl::Camera camera = opts.grass.empty() ?
+	                               PlaceImport(opts, store, dataRoot, assets, view) :
+	                               PlaceGrassPatch(opts, store, *scene, assets, view);
 
-	auto                          bounds = headless::EmptyBounds();
-	std::vector<SkinnedPlacement> skinned;
-	std::vector<game::ClipInfo>   clips;
-	for (uint32_t n = 0; n < model.nodes.size(); ++n)
-	{
-		const uint32_t meshIndex = model.nodes[n].mesh;
-		if (meshIndex == assetlib::c_InvalidIndex)
-			continue;
-
-		const glm::mat4 world = headless::InstanceTransform(model, n);
-		if (!rigged || !assetlib::isSkinned(model, meshIndex))
-		{
-			assets.CreateInstance(view, assets.AcquireMesh(meshKey, meshIndex), world);
-			headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
-			continue;
-		}
-
-		// The box the geom culls by is also the camera's frame, so it is resolved here once for both.
-		const assetlib::Bounds posed =
-			posedBounds[meshIndex] ?
-				*posedBounds[meshIndex] :
-				assetlib::posedBounds(model, meshIndex, *skeleton, *animations);
-
-		game::AssetManager::SkinnedMesh acquired =
-			assets.AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
-		skinned.emplace_back(acquired.geom, world, meshIndex);
-		clips = std::move(acquired.clips);
-		headless::GrowBounds(bounds, world, posed);
-	}
-
-	const uint32_t clip = rigged && !skinned.empty() ? FindClip(clips, opts.clip) : 0;
-
-	// The culling box stays the whole clip set's; only the camera narrows to the one clip, measured
-	// the same way over a set holding that clip alone.
-	if (opts.frameClip && !skinned.empty())
-	{
-		assetlib::AnimationSet playing = *animations;
-		playing.clips                  = { animations->clips.at(clip) };
-		playing.posedBoxes.clear();
-
-		bounds = headless::EmptyBounds();
-		for (uint32_t n = 0; n < model.nodes.size(); ++n)
-		{
-			const uint32_t meshIndex = model.nodes[n].mesh;
-			if (meshIndex != assetlib::c_InvalidIndex && !assetlib::isSkinned(model, meshIndex))
-				headless::GrowBounds(
-					bounds,
-					headless::InstanceTransform(model, n),
-					headless::MeshEntryBounds(model, meshIndex));
-		}
-		for (const SkinnedPlacement& placement : skinned)
-			headless::GrowBounds(
-				bounds,
-				placement.world,
-				assetlib::posedBounds(model, placement.meshIndex, *skeleton, playing));
-	}
-	for (const SkinnedPlacement& placement : skinned)
-	{
-		assets.CreateSkinnedInstance(
-			view,
-			placement.geom,
-			placement.world,
-			bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, bgl::PoseSource::kPerInstance });
-	}
-
-	std::cout << std::format(
-		"{}\nmesh   {} ({})\n",
-		documentKey,
-		meshKey,
-		skinned.empty() ? "static" : std::format("skinned, {}", animationsKey));
-	if (!skinned.empty())
-		PrintClips(clips, clip);
 	std::cout << std::format(
 		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} warm-up frames "
 		"held at t = 0\n\n",
@@ -436,7 +566,7 @@ try
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
-	job.camera   = headless::FrameBounds(bounds, opts.width, opts.height);
+	job.camera   = camera;
 	job.viewport = bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 	job.time     = 0.0f;
 
