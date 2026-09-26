@@ -25,7 +25,9 @@ fields name from the `.bgrass` and attaches them, and the geom's release gives t
 
 A look with no mesh under it grows on a patch: `assetlib::makeGrassPatch` jitters clumps over a
 square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That is what
-`bgl_ai_viewer --grass` draws ([AI Viewer](ai_viewer.md) § Looking at grass).
+`bgl_ai_viewer --grass` draws ([AI Viewer](ai_viewer.md) § Looking at grass). To watch it move, `just run bgl_grass`
+opens the same patch in a window with a fly camera, and changes the wind as it runs: `[` `]` its
+strength, `,` `.` its heading, `G` the gusts.
 
 ## A blade
 
