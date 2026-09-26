@@ -135,3 +135,25 @@ TEST_CASE("A look with no material leaves its field bare, and the mesh loads", "
 	CHECK(counts.acquired == 2);
 	CHECK(counts.released == 1);
 }
+
+// The patch a preview draws a look on holds that look the way a mesh does, and gives it back.
+TEST_CASE("A grass patch holds its look until released", "[grass][acquire]")
+{
+	const game::test::DataRoot root("bernini_grass_patch");
+	ImportStreet(root.path, c_MaterialKey);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	auto                      assets   = game::AssetManager(scene, root.path);
+	const bgl::MaterialHandle material = assets.AcquireMaterial(c_MaterialKey);
+
+	const bgl::GeomHandle patch =
+		assets.CreateGrassPatch({ .size = 4.0f, .spacing = 0.5f }, c_LookKey);
+	REQUIRE(patch.IsValid());
+	CHECK(assets.MaterialRefCount(material) == 2);
+
+	assets.ReleaseGeom(patch);
+	CHECK(assets.MaterialRefCount(material) == 1);
+}

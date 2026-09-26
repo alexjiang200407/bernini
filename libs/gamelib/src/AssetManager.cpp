@@ -1,6 +1,7 @@
 #include "gamelib/shading_model.h"
 #include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
 #include <algorithm>
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Mesh.h>
@@ -37,6 +38,7 @@
 #include <assetlib/blend.h>
 #include <assetlib/bmaterial.h>
 #include <assetlib/container_info.h>
+#include <assetlib/grass_patch.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/skinning.h>
@@ -1180,6 +1182,43 @@ namespace game
 		record.handle           = m_Scene->AddSphereGeom(xSegments, ySegments, radius, material);
 		record.submeshMaterials = { material };
 		record.refCount         = 1;
+
+		const uint32_t        slot   = record.handle.handle.index;
+		const bgl::GeomHandle handle = record.handle;
+
+		m_Geoms.emplace(slot, std::move(record));
+		return handle;
+	}
+
+	bgl::GeomHandle
+	AssetManager::CreateGrassPatch(
+		const assetlib::GrassPatchDesc& desc,
+		std::string_view                look,
+		bgl::MaterialHandle             ground)
+	{
+		const assetlib::BGrassFields grass = assetlib::makeGrassPatch(desc, std::string(look));
+
+		AddMaterialRef(ground);
+
+		auto record             = GeomRecord();
+		record.handle           = m_Scene->AddPlaneGeom(1, 1, desc.size, desc.size, ground);
+		record.submeshMaterials = { ground };
+		record.refCount         = 1;
+
+		try
+		{
+			const bgl::GrassHandle handle = AcquireGrassLook(grass.looks[0]);
+			if (handle.IsValid())
+				record.grassLooks = { grass.looks[0] };
+
+			const std::array<bgl::GrassHandle, 1> looks = { handle };
+			m_Scene->AttachGrass(record.handle, grass, 0, looks);
+		}
+		catch (...)
+		{
+			DestroyGeom(record);
+			throw;
+		}
 
 		const uint32_t        slot   = record.handle.handle.index;
 		const bgl::GeomHandle handle = record.handle;

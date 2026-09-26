@@ -1,0 +1,13 @@
+{
+	"alphaMode": "opaque",
+	"baseColorFactor": [
+		0.16,
+		0.42,
+		0.09,
+		1.0
+	],
+	"doubleSided": true,
+	"metallicFactor": 0.0,
+	"name": "meadow",
+	"roughnessFactor": 0.8
+}

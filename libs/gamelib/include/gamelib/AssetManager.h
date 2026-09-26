@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/grass_patch.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -328,6 +329,21 @@ namespace game
 			uint32_t            ySegments,
 			float               radius,
 			bgl::MaterialHandle material = {});
+
+		/**
+		 * The `.bgrass` at `look` growing on a square of ground: a plane of `desc.size` shaded with
+		 * `ground`, with assetlib::makeGrassPatch's clumps attached. The plane lies in XY facing +Z,
+		 * as IScene::AddPlaneGeom's does, so an instance lays it flat with a rotation. It holds the
+		 * look and `ground` until released. A look that cannot be drawn leaves the ground bare, as
+		 * AcquireMesh leaves a field.
+		 *
+		 * @throws what makeGrassPatch throws, and std::runtime_error if `look` cannot be read.
+		 */
+		bgl::GeomHandle
+		CreateGrassPatch(
+			const assetlib::GrassPatchDesc& desc,
+			std::string_view                look,
+			bgl::MaterialHandle             ground = {});
 
 		/**
 		 * Places `geom` in `view` at `transform`. The instance holds a reference on the geometry, so

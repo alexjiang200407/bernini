@@ -1,0 +1,24 @@
+{
+	"blade": {
+		"maxHeight": 0.55,
+		"minHeight": 0.3,
+		"rootWidth": 0.035
+	},
+	"color": {
+		"rootTint": [
+			0.55,
+			0.6,
+			0.45
+		],
+		"tipTint": [
+			1.15,
+			1.1,
+			0.75
+		],
+		"variation": 0.3
+	},
+	"lighting": {
+		"translucency": 0.4
+	},
+	"material": "Authored/Materials/grass/meadow.bmaterial"
+}
