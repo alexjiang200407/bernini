@@ -180,7 +180,9 @@ def read_catalog(path):
         rows = list(csv.reader(io.StringIO(f.read())))
     header = rows[0]
     en = header.index("en")
-    return {row[0]: row[en] for row in rows[1:] if row}
+    # csv.reader needs newline="", so a quoted field keeps the CRLF a Windows checkout gave it.
+    # ReadTranslationCsv folds the same pair, and a fallback in a source is written with "\n".
+    return {row[0]: row[en].replace("\r\n", "\n") for row in rows[1:] if row}
 
 
 def source_files(roots, repo_root=REPO_ROOT):

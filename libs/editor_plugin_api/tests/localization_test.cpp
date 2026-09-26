@@ -103,6 +103,20 @@ TEST_CASE(
 	REQUIRE(csv.entries.front().text == "Open");
 }
 
+// The newline inside a quoted field is the message's own. A catalog a spreadsheet saved, or one git
+// checked out under `* text=auto`, spells it CRLF, and the editor shows what it reads.
+TEST_CASE("A quoted field's CRLF reads as one newline", "[plugin][localization]")
+{
+	const auto csv =
+		editor::ReadTranslationCsv("sample.editor", "key,en\r\nwarn,\"first\r\n\r\nsecond\"\r\n");
+	REQUIRE(csv.entries.size() == 1);
+	REQUIRE(csv.entries.front().text == "first\n\nsecond");
+
+	// A lone CR is not a line ending anything writes, so it stays the byte it was.
+	const auto bare = editor::ReadTranslationCsv("sample.editor", "key,en\r\nwarn,\"a\rb\"\r\n");
+	REQUIRE(bare.entries.front().text == "a\rb");
+}
+
 TEST_CASE(
 	"Malformed translation CSV is rejected before catalog registration",
 	"[plugin][localization]")

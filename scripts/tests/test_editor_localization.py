@@ -63,6 +63,14 @@ def test_a_split_fallback_is_concatenated_and_unescaped():
         (1, "editor.main", "could_not_start", "The editor could not start:\n\n%1 See log.")]
 
 
+def test_a_quoted_crlf_reads_as_one_newline(tmp_path):
+    # What a Windows checkout of a catalog looks like. ReadTranslationCsv folds the same pair, and a
+    # fallback in a source is written "\n", so a reader that kept the CR would report every one.
+    catalog = tmp_path / "fixture.editor.csv"
+    catalog.write_bytes(b'key,en\r\nwarn,"first\r\n\r\nsecond"\r\n')
+    assert el.read_catalog(str(catalog)) == {"warn": "first\n\nsecond"}
+
+
 def test_a_fallback_the_csv_disagrees_with_is_reported(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "loc").mkdir()
