@@ -120,11 +120,12 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-`apps/editor/plugins/default_editor` owns Material, Animation and Blend Space, their authoring widgets and the
+`apps/editor/plugins/default_editor` owns Material, Animation, Blend Space and Grass, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;
 its target has no editor-host implementation include path. The host supplies configuration by value
 and opens its three startup contributions once the project host exists. Material and Animation
-register general panels; Blend Space registers an asset editor for `.bblend`. Showing a contribution
+register general panels; Blend Space registers an asset editor for `.bblend`, and Grass one for
+`.bgrass`, created the first time a look is opened. Showing a contribution
 by ID creates either kind, and document opening raises its tab before delivering the key.
 The target-public `default_editor/import_writers.h` lets the
 host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.
@@ -241,7 +242,8 @@ releases owned geometry, materials and environment maps from the persistent scen
 All three use owned factories and borrow `IEditorHost`. Rig acquisitions use the asset manager only
 inside the supplied render context; no panel caches its pointer. Deactivation clears Animation's
 mesh and Blend Space's document, stops their clocks and releases their shared-ground state.
-Blend Space's `CanClose` saves a pending threshold edit and vetoes project close if that save fails.
+Blend Space's `CanClose` saves a pending threshold edit and vetoes project close if that save fails;
+Grass's does the same for a pending edit to its look, which it otherwise writes only on Save.
 Viewport destruction drains queued render work before returning. Replacement and shutdown tests
 exercise both services through the end of viewport teardown.
 

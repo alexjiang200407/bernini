@@ -1,0 +1,52 @@
+key,en
+blade_group,Blade
+blades_per_clump,Blades per clump
+cannot_draw,The look cannot be drawn: {0}
+clump_group,Clump
+color_group,Colour
+curvature,Curvature
+density_group,Distance
+empty_prompt,Open a .bgrass from the Content Explorer to edit the look and watch it grow.
+fade_end,Fade end
+fade_start,Fade start
+far_segments,Segments far
+ground_normal_far,Ground normal far
+ground_normal_near,Ground normal near
+gust_response,Gust response
+lean,Lean
+lighting_group,Lighting
+material_label,Material
+material_placeholder,Authored/Materials/….bmaterial
+material_tooltip,"The .bmaterial every blade shades through, as a key under the data root. Its alpha is never tested: a blade is solid geometry."
+max_height,Max height
+min_height,Min height
+near_segments,Segments near
+no_material,"The look names no material, so there is nothing to draw yet."
+normal_rounding,Normal rounding
+not_drawn,The look cannot be drawn; editor.log says why.
+radius,Radius
+read_failed,'{0}' could not be read: {1}
+refused,The preview keeps the last look it could draw: {0}
+response_group,Wind response
+revert_button,Revert
+revert_tooltip,"Put back what the file says, dropping every unsaved edit."
+root_occlusion,Root occlusion
+root_tint,Root tint
+root_width,Root width
+save_button,Save
+save_failed,'{0}' could not be saved: {1}
+stiffness,Stiffness
+surface_group,Surface
+tip_tint,Tip tint
+tip_width,Tip width
+title,Grass Editor
+translucency,Translucency
+translucency_color,Translucency colour
+variation,Variation
+widening,Widening
+wind_gust_scale,Gust size
+wind_gust_speed,Gust speed
+wind_gusts,Gusts
+wind_heading,Heading
+wind_strength,Wind
+wind_tooltip,The preview's wind. It is not part of the look and is never saved: a game sets its own.
