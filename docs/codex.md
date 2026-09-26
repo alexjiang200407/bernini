@@ -9,7 +9,7 @@ Developer Mode, or permission to create symlinks.
 That link is the whole of the Codex integration bernini carries. The agent flows, their hooks, the
 PR tooling and the Codex adapter that mapped them onto Codex's hooks, MCP tools and agent roles live
 in the bernini-workspace repo, beside the Claude versions they adapt; bernini keeps only
-[`.bcp/profile.md`](../.bcp/profile.md), which either agent reads as plain Markdown. See
+[`ws-profile.md`](../ws-profile.md), which either agent reads as plain Markdown. See
 [ai-coding.md](ai-coding.md).
 
 A Codex session in a plain clone therefore has the map and the profile and no flows: read the code
