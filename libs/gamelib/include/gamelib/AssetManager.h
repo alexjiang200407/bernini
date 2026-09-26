@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <assetlib/grass_patch.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
@@ -344,6 +345,41 @@ namespace game
 			const assetlib::GrassPatchDesc& desc,
 			std::string_view                look,
 			bgl::MaterialHandle             ground = {});
+
+		/**
+		 * The same patch, drawn with `authored` rather than what the store holds at `look` -- for an
+		 * editor whose document is not saved, or not drawable as saved. When `look` is already held
+		 * the patch shares what is drawn and `authored` is not read: SetGrassLook is what changes it.
+		 *
+		 * @throws what makeGrassPatch throws, and std::runtime_error if the material `authored` names
+		 *         cannot be read.
+		 */
+		bgl::GeomHandle
+		CreateGrassPatch(
+			const assetlib::GrassPatchDesc& desc,
+			std::string_view                look,
+			const assetlib::BGrass&         authored,
+			bgl::MaterialHandle             ground = {});
+
+		/**
+		 * Redraws the look held under `look` as `authored` says, in place: every geom drawing it --
+		 * a mesh's fields, a patch -- follows on the next frame, and nothing is released or
+		 * re-attached. The store is not written; a later acquire of `look` while it is held shares
+		 * what this drew. What an editor calls as its author drags a value, as SetBlendParameters is
+		 * for a blend space.
+		 *
+		 * A material named anew is acquired and the old one released only once the look has taken
+		 * the new one, so a refusal leaves both where they were.
+		 *
+		 * @return false, drawing nothing, when no geom holds `look` -- including one acquired bare
+		 *         because the look could not be drawn then. A caller wanting it drawn now acquires
+		 *         again: CreateGrassPatch with `authored`, for a preview.
+		 * @throws std::runtime_error if `authored` names no material, or its material cannot be
+		 *         read; bgl::SceneError for anything IScene::UpdateGrass refuses. Either way the look
+		 *         draws as it did.
+		 */
+		bool
+		SetGrassLook(std::string_view look, const assetlib::BGrass& authored);
 
 		/**
 		 * Places `geom` in `view` at `transform`. The instance holds a reference on the geometry, so
@@ -769,6 +805,18 @@ namespace game
 		 */
 		[[nodiscard]] bgl::GrassHandle
 		AcquireGrassLook(const std::string& key);
+
+		/** AcquireGrassLook, creating the look from `authored` rather than the store when it is not held. */
+		[[nodiscard]] bgl::GrassHandle
+		AcquireGrassLook(const std::string& key, const assetlib::BGrass& authored);
+
+		/** The patch both CreateGrassPatch overloads build: its look from `authored`, or the store when null. */
+		bgl::GeomHandle
+		BuildGrassPatch(
+			const assetlib::GrassPatchDesc& desc,
+			std::string_view                look,
+			const assetlib::BGrass*         authored,
+			bgl::MaterialHandle             ground);
 
 		/** Drops one reference, deleting the look and releasing its material at zero. */
 		void
