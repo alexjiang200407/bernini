@@ -133,7 +133,8 @@ disagrees, trust the header, then fix this doc.
 
   **A rig is the exception, and it throws rather than corrupting.** `DeleteRig` refuses while any geom
   added against it is still alive, so the order — geoms, then the rig they were skinned to — is
-  enforced instead of merely documented. It is the one deletion here whose misuse is an error you see.
+  enforced instead of merely documented. A grass look is the second: `DeleteGrass` refuses while a
+  live geom binds it, for the same reason.
 
 * **A material's draw bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
@@ -183,6 +184,9 @@ disagrees, trust the header, then fix this doc.
 | `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `DirectionalLightDesc` | [libs/bgl/include/bgl/types/DirectionalLightDesc.h](libs/bgl/include/bgl/types/DirectionalLightDesc.h) | The sun: the direction it **travels** (a midday sun is `(0, -1, 0)`), a colour, and an intensity in the irradiance map's units — so a sun and an environment at the same number light a facing surface equally. Casts no shadow. |
+| `BGrassFields`, `GrassField`, `GrassChunk`, `GrassClump` | [libs/assetlib_structs/include/assetlib_structs/BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h), [Grass.h](libs/assetlib_structs/include/assetlib_structs/Grass.h) | The grass a mesh source grows, cooked beside its `.bmesh`: fields (one per POINTS primitive, naming the mesh it grows on and a look slot), chunks of at most `c_GrassClumpsPerChunk` clumps with a bound each, and the clumps — a point, a height scale, a ground normal and a colour. |
+| `GrassDesc` | [libs/bgl/include/bgl/types/GrassDesc.h](libs/bgl/include/bgl/types/GrassDesc.h) | A grass look: the material its blades shade through (drawn opaque whatever its layer; `kBlend` refused), the blade's shape and segment counts, blades per clump, how the field thins between `fadeStart` and `fadeEnd`, how stiffly it answers what bends it (the wind), and the geometry lighting terms — root occlusion, normal rounding, a 0–1 blend toward the ground normal near and far, and a translucency term an engine-lit material receives. No placement: the clumps come with the geom it is bound to. |
+| `WindDesc` | [libs/bgl/include/bgl/types/WindDesc.h](libs/bgl/include/bgl/types/WindDesc.h) | A view's wind: a horizontal direction, a steady strength, and a gust field's size, speed and strength. Calm by default. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `taaSharpness` (how hard an upscaled resolved image is sharpened, in [0, 1], 1 by default, zero off), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
 | `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport, time}`. Holds a **copy** of the camera. |
@@ -191,7 +195,7 @@ disagrees, trust the header, then fix this doc.
 | `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
 | `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
 | `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`; `followsView` attaches the environment to the camera, `opacity` and `backdrop` fade the backdrop without touching the lighting. |
-| `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `RigHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [RigHandle.h](libs/bgl/include/bgl/RigHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
+| `GeomHandle`, `GrassHandle`, `MaterialHandle`, `MeshInstanceHandle`, `RigHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [GrassHandle.h](libs/bgl/include/bgl/GrassHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [RigHandle.h](libs/bgl/include/bgl/RigHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
 | `GeomType`, `LayerType`, `MaterialType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h) | Classification enums. `MaterialType` is **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
 | `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
 | `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |
@@ -393,6 +397,21 @@ flowchart TD
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
   baked-vs-loose branch that does it, so reach for it rather than rebuilding it.
+* **`AttachGrass(geom, fields, meshIndex, looks)`** — the grass a static geom's mesh grows, as a
+  step after `AddStaticMeshGeom`. `fields` is a `BGrassFields`, cooked beside the `.bmesh` from the
+  same source (one field per glTF POINTS primitive) rather than held in it, so a change to how grass
+  is stored re-cooks grass alone and a mesh with none never names it. Only the fields on mesh
+  `meshIndex` are taken, and every range is checked against the pool it names before it is read, as
+  `CookStaticMesh` checks the meshlet ranges. Each field is drawn with `looks[field.look]` by every
+  instance of the geom that is not hidden, in the opaque phase after the world
+  ([Grass](grass.md)); `looks` is parallel to `fields.looks`. A field whose slot is out of range or
+  null is not drawn, and a slot naming a deleted look throws. Attaching again replaces the geom's
+  grass and releases the looks it held; `DeleteGeom` releases them too. There is no off-thread half:
+  the fields are copied, not flattened, so there is no cost worth moving off the driving thread.
+* **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `DeleteGrass(grass)`** —
+  a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
+  the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
+  are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
 
 ### ISceneView
 
@@ -465,6 +484,11 @@ flowchart TD
   lit by its environment alone.
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
+* **`SetWind(desc)`** — @pre every field finite, strengths and gust speed non-negative, `gustScale`
+  positive, `direction` with a horizontal part. Per view, like the light, and write-only like it.
+  Every force bends a blade about its root without stretching it, so a chunk's culling bound -- its
+  clumps inflated by the tallest blade -- holds whatever bends it. **Not** an epoch change:
+  grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
 
 ---
 

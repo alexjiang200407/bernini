@@ -169,6 +169,9 @@ let ao = reader.Sample(params.occlusion, reader.Uv1()).r;
 surface.orm.r *= reader.HasUv1() ? ao : 1.0;
 ```
 
+On a grass blade `HasUv1` is false, so the same lines read the map as white there: a blade's `Uv1`
+is its own random, not an unwrap ([Grass § Lighting](grass.md#lighting)).
+
 The map binds by the slot's name, like any other. Multiplying it into `orm.r` keeps it off the sun,
 which the engine scales by no AO ([Passes](passes.md)).
 

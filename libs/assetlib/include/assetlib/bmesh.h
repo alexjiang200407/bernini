@@ -20,6 +20,7 @@ namespace assetlib
 		std::vector<std::string> materials;
 
 		std::string skeleton;  // empty for a static mesh
+		std::string grass;     // empty for a source that grows none
 	};
 
 	/**

@@ -13,6 +13,8 @@ namespace assetlib
 	struct Skeleton;
 	struct Avatar;
 	struct BlendSet;
+	struct BGrass;
+	struct BGrassFields;
 
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
@@ -109,6 +111,14 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	describe(const BlendSet& set);
+
+	/** A `.bgrass`: its material and every value, in the document's groups. */
+	[[nodiscard]] std::string
+	describe(const BGrass& grass);
+
+	/** A `.bgrassfields`: each field's name, look, and how many chunks and clumps it holds. */
+	[[nodiscard]] std::string
+	describe(const BGrassFields& grass);
 
 	/**
 	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.

@@ -4,10 +4,12 @@
 #include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -19,6 +21,7 @@
 #include <string_view>
 
 #include "mounted_io.h"
+#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -415,6 +418,9 @@ namespace assetlib
 				"  skeleton     {} (unused: no submesh carries joints)\n",
 				mesh.skeleton);
 
+		if (!mesh.grass.empty())
+			out += std::format("  grass        {}\n", mesh.grass);
+
 		// Every path is relative to the project's data root, not to this file -- worth saying, since a
 		// path that looks broken relative to the .bmesh is usually correct.
 		out += std::format(
@@ -636,6 +642,101 @@ namespace assetlib
 
 		for (const ClipPlantWeight& entry : avatar.clipWeights)
 			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
+
+		return out;
+	}
+
+	std::string
+	describe(const BGrassFields& grass)
+	{
+		std::string out;
+
+		out += "bgrassfields\n";
+		out += std::format("  source       '{}'\n", grass.source.key);
+		out += std::format(
+			"  fields       {} ({} chunks, {} clumps)\n",
+			grass.fields.size(),
+			grass.chunks.size(),
+			grass.clumps.size());
+
+		for (size_t f = 0; f < grass.fields.size(); ++f)
+		{
+			const GrassField& field = grass.fields[f];
+			const std::string look  = field.look < grass.looks.size() ?
+			                              "'" + grass.looks[field.look] + "'" :
+			                              std::string("unbound");
+
+			uint32_t clumps = 0;
+			for (uint32_t c = 0; c < field.chunkCount; ++c)
+				clumps += grass.chunks[field.firstChunk + c].clumpCount;
+
+			out += std::format(
+				"    '{}' on mesh {}: {} chunks, {} clumps, look {}\n",
+				grass.names[f],
+				field.mesh,
+				field.chunkCount,
+				clumps,
+				look);
+		}
+
+		return out;
+	}
+
+	std::string
+	describe(const BGrass& grass)
+	{
+		std::string out;
+
+		out += "bgrass\n";
+		out += std::format("  material     '{}'\n", grass.material);
+
+		const GrassBladeParams& blade = grass.blade;
+		out += std::format(
+			"  blade        height {}..{}  width {} (tip {})  curvature {}  lean {}  segments "
+			"{}..{}\n",
+			blade.minHeight,
+			blade.maxHeight,
+			blade.rootWidth,
+			blade.tipWidth,
+			blade.curvature,
+			blade.lean,
+			blade.nearSegments,
+			blade.farSegments);
+		out += std::format(
+			"  clump        {} blades  radius {}\n",
+			grass.clump.bladesPerClump,
+			grass.clump.radius);
+		out += std::format(
+			"  density      fade {}..{}  widening {}\n",
+			grass.density.fadeStart,
+			grass.density.fadeEnd,
+			grass.density.widening);
+		out += std::format(
+			"  response     stiffness {}  gusts {}\n",
+			grass.response.stiffness,
+			grass.response.gustResponse);
+
+		const GrassLightingParams& lighting = grass.lighting;
+		out += std::format(
+			"  lighting     root AO {}  rounding {}  ground normal {}..{}  translucency {} "
+			"({}, {}, {})\n",
+			lighting.rootOcclusion,
+			lighting.normalRounding,
+			lighting.groundNormalNear,
+			lighting.groundNormalFar,
+			lighting.translucency,
+			lighting.translucencyColor.x,
+			lighting.translucencyColor.y,
+			lighting.translucencyColor.z);
+		out += std::format(
+			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}\n",
+			grass.color.rootTint.x,
+			grass.color.rootTint.y,
+			grass.color.rootTint.z,
+			grass.color.tipTint.x,
+			grass.color.tipTint.y,
+			grass.color.tipTint.z,
+			grass.color.variation);
 
 		return out;
 	}

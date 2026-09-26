@@ -8,11 +8,13 @@
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <core/err/util.h>
 
 #include "material_texture_refs.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/file/file.h>
@@ -223,6 +225,7 @@ namespace assetlib
 				BMesh mesh = AssetCodec<BMesh>::Deserialize(bytes);
 				for (std::string& material : mesh.materials) material = mapTarget(plan, material);
 				mesh.skeleton = mapTarget(plan, mesh.skeleton);
+				mesh.grass    = mapTarget(plan, mesh.grass);
 				return AssetCodec<BMesh>::Serialize(mesh);
 			}
 
@@ -238,6 +241,20 @@ namespace assetlib
 				BlendSet set   = AssetCodec<BlendSet>::Deserialize(bytes);
 				set.animations = mapTarget(plan, set.animations);
 				return AssetCodec<BlendSet>::Serialize(set);
+			}
+
+			case AssetType::kGrassFields:
+			{
+				BGrassFields grass = AssetCodec<BGrassFields>::Deserialize(bytes);
+				for (std::string& look : grass.looks) look = mapTarget(plan, look);
+				return AssetCodec<BGrassFields>::Serialize(grass);
+			}
+
+			case AssetType::kGrass:
+			{
+				BGrass grass   = AssetCodec<BGrass>::Deserialize(bytes);
+				grass.material = mapTarget(plan, grass.material);
+				return AssetCodec<BGrass>::Serialize(grass);
 			}
 
 			case AssetType::kMaterial:

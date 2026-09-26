@@ -1,10 +1,12 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
@@ -14,6 +16,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GrassDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -109,6 +112,68 @@ namespace bgl
 		 */
 		virtual GeomHandle
 		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
+
+		/**
+		 * Creates a grass look: the blade shape, density, response to what bends it and
+		 * lighting terms a static geom's grass fields are drawn with. See GrassDesc.
+		 *
+		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert) or in the
+		 *         kBlend layer; a length is not finite and positive where GrassDesc says so; a share
+		 *         is outside [0, 1]; `minHeight > maxHeight`; the segment counts are not
+		 *         1 <= far <= near <= c_MaxGrassBladeSegments; `bladesPerClump` is outside
+		 *         [1, c_MaxGrassBladesPerClump]; `fadeEnd <= fadeStart`; or a colour, `widening`,
+		 *         `gustResponse` or `translucency` is negative or not finite.
+		 */
+		virtual GrassHandle
+		CreateGrass(const GrassDesc& desc) = 0;
+
+		/**
+		 * Rewrites a live look in place. Every geom bound to it draws the new look from the next
+		 * frame, with no rebinding.
+		 *
+		 * A change no motion vector describes, so it moves the temporal epoch.
+		 *
+		 * @throws SceneError if the handle is null or deleted, or for anything CreateGrass refuses.
+		 */
+		virtual void
+		UpdateGrass(GrassHandle grass, const GrassDesc& desc) = 0;
+
+		/**
+		 * Destroys a grass look.
+		 *
+		 * @pre No geom bound to it is still alive. Refused rather than permitted, like DeleteRig: a
+		 *      field left naming a freed look would draw with whatever look takes its slot next.
+		 * @throws SceneError if the handle is null, already deleted, or still bound by a live geom.
+		 */
+		virtual void
+		DeleteGrass(GrassHandle grass) = 0;
+
+		/**
+		 * Gives a static geom the grass its mesh grows: every field of `fields` on mesh `meshIndex`
+		 * is drawn with `looks[field.look]` by every instance of the geom, and moves with it. A
+		 * field whose slot is out of range or holds a null handle is not drawn. Replaces any grass
+		 * the geom carried, releasing the looks it bound; DeleteGeom releases them too. The geom
+		 * holds a use of every look it binds; see DeleteGrass.
+		 *
+		 * A step after AddStaticMeshGeom rather than a part of it: grass is cooked into a container
+		 * of its own, so a mesh with none never names it.
+		 *
+		 * @param geom       A live geom from AddStaticMeshGeom.
+		 * @param fields     The BGrassFields cooked from the same source as the geom's mesh.
+		 * @param meshIndex  The mesh of that source the geom was added from.
+		 * @param looks      Grass looks parallel to `fields.looks`, resolved by the caller.
+		 * @throws SceneError if `geom` is dead or not a static geom; a field on this mesh has no
+		 *         chunks or more than one dispatch can launch, a chunk holds no clumps or more than
+		 *         `assetlib::c_GrassClumpsPerChunk`, or a range lies outside its pool -- they come
+		 *         from a file, so each is checked before it is read; or a non-null handle in
+		 *         `looks` names a deleted look. Nothing changes unless all of it passes.
+		 */
+		virtual void
+		AttachGrass(
+			GeomHandle                    geom,
+			const assetlib::BGrassFields& fields,
+			uint32_t                      meshIndex,
+			std::span<const GrassHandle>  looks) = 0;
 
 		/**
 		 * Uploads a rig -- a skeleton and the clips cooked against it -- as a scene object of its

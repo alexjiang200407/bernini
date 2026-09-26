@@ -1,7 +1,9 @@
 import lib.forward.GameSurface;
+import lib.forward.GrassShading;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
 import lib.forward.common;
+import lib.forward.grass_vertex;
 
 // Every program surface_registry.cpp generates for a registered surface, instantiated on the null
 // surface. The generated ones exist only at runtime, so this is what puts the shapes through the
@@ -82,4 +84,17 @@ float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_
     default:
         return materialData.ShadeBlendedEngineKind(input, isFrontFace);
     }
+}
+
+// The grass programs, one per contract.
+[shader("pixel")]
+ForwardPSOut PSGrass(GrassVSOut input)
+{
+    return materialData.GameGrassProgram<NullSurface>(input);
+}
+
+[shader("pixel")]
+ForwardPSOut PSGrassLit(GrassVSOut input)
+{
+    return materialData.GameLitGrassProgram<NullLitSurface>(input);
 }

@@ -1,8 +1,10 @@
 #include <algorithm>
+#include <assetlib/RegenGrassFields.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
 #include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
@@ -17,6 +19,7 @@
 #include "regen_group.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -142,6 +145,18 @@ namespace assetlib
 				remapToItsRig(rigs, store, clips);
 				return AssetCodec<AnimationSet>::Serialize(clips);
 			}
+			case AssetType::kGrassFields:
+			{
+				RegenGrassFields current = store.LoadRegenGrassFields(key);
+				if (!current.unboundBindings.empty())
+				{
+					core::throw_runtime_error(
+						"its import document binds grass field '{}', which the source does not "
+						"have; rebind or re-export",
+						current.unboundBindings.front());
+				}
+				return AssetCodec<BGrassFields>::Serialize(current.fields);
+			}
 			case AssetType::kMaterial:
 			{
 				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
@@ -189,6 +204,8 @@ namespace assetlib
 				return AssetCodec<Avatar>::Serialize(AssetCodec<Avatar>::Deserialize(bytes));
 			case AssetType::kBlend:
 				return AssetCodec<BlendSet>::Serialize(AssetCodec<BlendSet>::Deserialize(bytes));
+			case AssetType::kGrass:
+				return AssetCodec<BGrass>::Serialize(AssetCodec<BGrass>::Deserialize(bytes));
 			// No container to re-serialize, so nothing a schema change could have staled.
 			case AssetType::kTexture:
 			case AssetType::kImportDocument:

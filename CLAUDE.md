@@ -292,6 +292,13 @@ The `core::file::IFileSystem` read seam, the `.bpak` format and what `pack` puts
 `AssetStore` — the mount and the writable data root as one object. Why the editor authors the loose
 tree and never reads an archive back, and why a mount key is a `string_view` and never a `path`.
 
+**[Grass](./docs/grass.md)**
+
+Grass the mesh stage builds from clumps rather than stores: the look and the cooked fields, how a
+blade is shaped and posed through one function every force goes through, how a field thins and
+coarsens with distance, what the pass costs and why it is geometry-bound, and what a blob shadow does
+not do to it.
+
 **[Environment Maps](./docs/envmaps.md)**
 
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the

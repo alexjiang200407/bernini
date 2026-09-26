@@ -1,4 +1,4 @@
-#include "passes/ForwardPass.h"
+#include "passes/ForwardPhases.h"
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
@@ -26,7 +26,6 @@
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
 #include <array>
-#include <bgl/GeomType.h>
 #include <bgl/ISceneView.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
@@ -156,7 +155,7 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(const PassInitContext& ctx)
+	ForwardPhases::Init(const PassInitContext& ctx)
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
@@ -165,7 +164,7 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded)
+	ForwardPhases::AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded)
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
@@ -190,7 +189,7 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::AddTransparentKernel(const PassInitContext& ctx)
+	ForwardPhases::AddTransparentKernel(const PassInitContext& ctx)
 	{
 		gassert(ctx.device != nullptr, "Device must be initialized");
 
@@ -210,14 +209,14 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::CheckBindings() const
+	ForwardPhases::CheckBindings() const
 	{
 		CheckKernelNames(m_Kernels);
 		CheckKernelNames({ &m_TransparentKernel, 1 });
 	}
 
 	void
-	ForwardPass::CheckKernelNames(std::span<const MeshletKernel> kernels) const
+	ForwardPhases::CheckKernelNames(std::span<const MeshletKernel> kernels) const
 	{
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
 		// EnsureDrawBucketPipelinesExist re-checks after every build.
@@ -226,48 +225,50 @@ namespace bgl
 			return;
 		}
 
-		BindingNameCheck("ForwardPass"sv, kernels)
-			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+		auto check = BindingNameCheck("ForwardPhases"sv, kernels);
+		check.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
 			.Check("expansionData"sv, c_ExpansionDataFields)
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
+		GrassForwardPhase::CheckBindings(check);
+	}
+
+	const IForwardPhase&
+	ForwardPhases::Phase(const ForwardPhase phase) const noexcept
+	{
+		switch (phase)
+		{
+		case ForwardPhase::kWorld:
+			return m_World;
+		case ForwardPhase::kGrass:
+			return m_Grass;
+		case ForwardPhase::kSkinned:
+			return m_Skinned;
+		case ForwardPhase::kTransparent:
+			return m_Transparent;
+		}
+		gfatal("An unknown forward phase");
 	}
 
 	void
-	ForwardPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, const ForwardPhase phase)
+	ForwardPhases::AttachToFrameGraph(
+		FrameGraph&        fg,
+		const DrawData&    draw,
+		const ForwardPhase which)
 	{
-		constexpr std::array<std::string_view, 3> c_PhaseNames = { "World"sv,
-			                                                       "Skinned"sv,
-			                                                       "Transparent"sv };
+		const IForwardPhase& phase = Phase(which);
+		if (!phase.HasWork(draw))
+		{
+			return;
+		}
 
 		auto desc = PassDesc();
-		desc.SetName("Forward {} {}", c_PhaseNames[static_cast<size_t>(phase)], draw.drawIdx)
+		desc.SetName("Forward {} {}", phase.Name(), draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)
 			.AddDepthWrite(c_DepthName);
-
-		if (phase == ForwardPhase::kTransparent)
-		{
-			desc.AddBufferReadWrite(
-					c_SortedTransparentInstancesName,
-					BarrierSyncFlag::kVertexShader)
-				.AddIndirectArgs(c_TransparentDispatchArgsName);
-		}
-		else
-		{
-			desc.AddRenderTarget(c_MotionVectorsName).AddIndirectArgs(c_CompactDispatchArgsName);
-		}
-
-		// The world tier's geometry stage reads no skinned tables; the transparent list is any tier.
-		if (phase != ForwardPhase::kWorld)
-		{
-			for (const auto& binding : c_SkinnedBuffers)
-			{
-				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
-			}
-		}
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -286,14 +287,58 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
-		desc.SetExec(
-			[this, draw, phase](const PassContext& resources) { Execute(draw, resources, phase); });
+		phase.Declare(desc);
+
+		desc.SetExec([this, draw, &phase](const PassContext& resources) {
+			Execute(phase, draw, resources);
+		});
 
 		fg.AddPass(std::move(desc));
 	}
 
+	MeshletKernel*
+	ForwardPhases::BindDrawBucketKernel(
+		const uint32_t     bucket,
+		MeshletState&      state,
+		const DrawData&    draw,
+		const PassContext& resources)
+	{
+		if (!DrawBucketInitialized(bucket))
+		{
+			return nullptr;
+		}
+
+		MeshletKernel& kernel = m_Kernels[bucket];
+		BindKernel(kernel, draw, resources);
+		state.kernel      = &kernel;
+		state.frameBuffer = FrameBuffer()
+		                        .AddColorAttachment(draw.targets.sceneColor)
+		                        .AddColorAttachment(draw.targets.motionVector)
+		                        .SetDepthAttachment(draw.targets.depth);
+		return &kernel;
+	}
+
+	MeshletKernel*
+	ForwardPhases::BindTransparentKernel(
+		MeshletState&      state,
+		const DrawData&    draw,
+		const PassContext& resources)
+	{
+		if (!TransparentInitialized())
+		{
+			return nullptr;
+		}
+
+		BindKernel(m_TransparentKernel, draw, resources);
+		state.kernel      = &m_TransparentKernel;
+		state.frameBuffer = FrameBuffer()
+		                        .AddColorAttachment(draw.targets.sceneColor)
+		                        .SetDepthAttachment(draw.targets.depth);
+		return &m_TransparentKernel;
+	}
+
 	void
-	ForwardPass::BindKernel(
+	ForwardPhases::BindKernel(
 		MeshletKernel&     kernel,
 		const DrawData&    draw,
 		const PassContext& resources)
@@ -349,112 +394,19 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Execute(
-		const DrawData&    draw,
-		const PassContext& resources,
-		const ForwardPhase phase)
+	ForwardPhases::Execute(
+		const IForwardPhase& phase,
+		const DrawData&      draw,
+		const PassContext&   resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
-
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-
 		if (draw.view->GetInstanceCount() == 0)
 		{
 			return;
 		}
 
-		if (phase == ForwardPhase::kTransparent)
-		{
-			DrawTransparent(draw, resources);
-			return;
-		}
+		auto state = MeshletState();
+		state.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 
-		// Colour + velocity, matching the two rtvFormats every non-blend PSO declares.
-		auto gfxState = MeshletState();
-		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer()
-		                           .AddColorAttachment(draw.targets.sceneColor)
-		                           .AddColorAttachment(draw.targets.motionVector)
-		                           .SetDepthAttachment(draw.targets.depth);
-
-		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
-
-		// Opaque and alpha-test of one tier: bucketed, drawn indirect over the counting-sort output,
-		// to the table's live count. The transparent buckets are depth-ordered, so their own phase.
-		const GeomType tier =
-			phase == ForwardPhase::kWorld ? GeomType::kStaticMesh : GeomType::kSkinnedMesh;
-		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
-		{
-			if (m_DrawBucketTable->Transparent(bucket) ||
-			    m_DrawBucketTable->Desc(bucket).geom != tier)
-			{
-				continue;
-			}
-
-			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
-			if (!DrawBucketInitialized(bucket))
-			{
-				continue;
-			}
-
-			MeshletKernel& kernel = m_Kernels[bucket];
-			BindKernel(kernel, draw, resources);
-			if (auto expansionData = kernel.FindUniforms("expansionData"))
-			{
-				(*expansionData)["drawBucketIndex"] = bucket;
-				(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
-				(*expansionData)["cullBackfaces"] =
-					DrawBucketMeshStageCullsBackfaces(m_DrawBucketTable->Desc(bucket));
-			}
-
-			gfxState.kernel        = &kernel;
-			gfxState.indirectArgs  = dispatchArgs;
-			gfxState.commandCounts = dispatchArgs;
-			cmd->SetMeshletState(gfxState);
-			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
-		}
+		phase.Record(*this, state, draw, resources);
 	}
-
-	void
-	ForwardPass::DrawTransparent(const DrawData& draw, const PassContext& resources)
-	{
-		ICommandList* cmd             = resources.GetCommandList();
-		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentInstancesName);
-		const auto    transparentArgs = resources.GetBuffer(c_TransparentDispatchArgsName);
-
-		// The sort leaves the whole list farthest-first and every transparent bucket shares one kernel,
-		// so the depth-sorted draw is a single dispatch whose count lives entirely on the GPU.
-		//
-		// Colour only: a blend PSO declares one rtvFormat, so the velocity buffer must not be attached
-		// here -- a blended surface has no single depth to reproject.
-		auto colorState = MeshletState();
-		colorState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		colorState.frameBuffer = FrameBuffer()
-		                             .AddColorAttachment(draw.targets.sceneColor)
-		                             .SetDepthAttachment(draw.targets.depth);
-
-		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
-		MeshletKernel& kernel = m_TransparentKernel;
-		if (!kernel.pipeline.IsInitialized())
-		{
-			return;
-		}
-
-		BindKernel(kernel, draw, resources);
-		if (auto expansionData = kernel.FindUniforms("expansionData"))
-		{
-			(*expansionData)["compactedInstances"] = sortedInstances;
-			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
-			(*expansionData)["cullBackfaces"]      = 1u;
-		}
-
-		colorState.kernel       = &kernel;
-		colorState.indirectArgs = transparentArgs;
-		cmd->SetMeshletState(colorState);
-
-		// The argument index within `transparentArgs`, which holds the single grid the whole sorted
-		// list draws with; the bucketed path indexes its own buffer by bucket id.
-		cmd->DispatchMeshIndirect(0);
-	}
-
 }

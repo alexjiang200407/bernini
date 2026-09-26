@@ -1,0 +1,433 @@
+#include "util/TestOptions.h"
+#include <algorithm>
+#include <array>
+#include <assetlib_structs/BGrassFields.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Grass.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl/glm.h>
+#include <bgl/types/GrassDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl/types/WindDesc.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <limits>
+#include <string>
+#include <vector>
+
+// The grass contract as bgl owns it: what CreateGrass and SetWind refuse, the lifetime a bound look
+// has, and the grass ranges AttachGrass checks before it reads them.
+
+namespace
+{
+	constexpr uint32_t c_GrassSlot = 1;
+
+	bgl::GraphicsOptions
+	HeadlessOptions()
+	{
+		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.enableDebugLayer = false;
+		return opts;
+	}
+
+	/** One mesh of one triangle, bound to material slot 0. */
+	assetlib::BMesh
+	MakeTriangleMesh()
+	{
+		constexpr uint16_t c_Stride = 12;
+
+		auto mesh = assetlib::BMesh();
+
+		const std::array<glm::vec3, 3> positions = { glm::vec3(-1.0f, 0.0f, -1.0f),
+			                                         glm::vec3(1.0f, 0.0f, -1.0f),
+			                                         glm::vec3(0.0f, 0.0f, 1.0f) };
+		mesh.vertexData.resize(positions.size() * c_Stride);
+		std::memcpy(mesh.vertexData.data(), positions.data(), mesh.vertexData.size());
+
+		auto meshlet           = assetlib::Meshlet();
+		meshlet.vertexCount    = 3;
+		meshlet.triangleCount  = 1;
+		meshlet.boundingRadius = 2.0f;
+		mesh.meshlets.emplace_back(meshlet);
+		for (const uint32_t v : { 0u, 1u, 2u })
+		{
+			mesh.meshletVertices.emplace_back(v);
+			mesh.meshletTriangles.emplace_back(static_cast<uint8_t>(v));
+		}
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 1;
+		submesh.layout.stride         = c_Stride;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.vertexCount           = 3;
+		submesh.meshletCount          = 1;
+		submesh.material              = 0;
+		submesh.aabbMin               = glm::vec3(-1.0f, 0.0f, -1.0f);
+		submesh.aabbMax               = glm::vec3(1.0f, 0.0f, 1.0f);
+		mesh.submeshes.emplace_back(submesh);
+
+		mesh.meshes.emplace_back(assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1 });
+		mesh.materials = { "Materials/ground.bmaterial" };
+
+		return mesh;
+	}
+
+	/**
+	 * One field of `clumps` clumps growing on mesh 0, drawn with look slot 1 and chunked the way
+	 * the cook chunks: full runs of c_GrassClumpsPerChunk and a short last one.
+	 */
+	assetlib::BGrassFields
+	MakeGrass(const uint32_t clumps = 100)
+	{
+		auto grass  = assetlib::BGrassFields();
+		grass.looks = { "Grass/other.bgrass", "Grass/verge.bgrass" };
+
+		for (uint32_t c = 0; c < clumps; ++c)
+		{
+			grass.clumps.emplace_back(
+				assetlib::GrassClump{ .position    = glm::vec3(static_cast<float>(c) * 0.1f, 0, 0),
+			                          .heightScale = 1.0f,
+			                          .normal      = glm::vec3(0.0f, 1.0f, 0.0f),
+			                          .color       = glm::u8vec4(255) });
+		}
+
+		auto field       = assetlib::GrassField();
+		field.look       = c_GrassSlot;
+		field.firstChunk = 0;
+		for (uint32_t first = 0; first < clumps; first += assetlib::c_GrassClumpsPerChunk)
+		{
+			const uint32_t count = std::min(assetlib::c_GrassClumpsPerChunk, clumps - first);
+			grass.chunks.emplace_back(
+				assetlib::GrassChunk{ .boundingCenter = glm::vec3(0.0f),
+			                          .boundingRadius = 10.0f,
+			                          .firstClump     = first,
+			                          .clumpCount     = count,
+			                          .maxHeightScale = 1.0f });
+			++field.chunkCount;
+		}
+		grass.fields.emplace_back(field);
+
+		return grass;
+	}
+
+	bgl::GrassDesc
+	ValidLook(const bgl::MaterialHandle material)
+	{
+		auto desc     = bgl::GrassDesc();
+		desc.material = material;
+		return desc;
+	}
+}
+
+TEST_CASE("a grass look takes updates until DeleteGrass", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	auto                   desc  = ValidLook(scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+	const bgl::GrassHandle grass = scene->CreateGrass(desc);
+	REQUIRE(grass.IsValid());
+
+	desc.blade.maxHeight = 0.7f;
+	CHECK_NOTHROW(scene->UpdateGrass(grass, desc));
+
+	scene->DeleteGrass(grass);
+	CHECK_THROWS_AS(scene->UpdateGrass(grass, desc), bgl::SceneError);
+	CHECK_THROWS_AS(scene->DeleteGrass(grass), bgl::SceneError);
+	CHECK_THROWS_AS(scene->DeleteGrass(bgl::GrassHandle()), bgl::SceneError);
+}
+
+TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const bgl::MaterialHandle material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const float               nan      = std::numeric_limits<float>::quiet_NaN();
+
+	using Break                                             = std::function<void(bgl::GrassDesc&)>;
+	const std::vector<std::pair<std::string, Break>> breaks = {
+		{ "no material", [](bgl::GrassDesc& d) { d.material = bgl::MaterialHandle(); } },
+		{ "a kNull material",
+		  [](bgl::GrassDesc& d) { d.material.materialType   = bgl::MaterialType::kNull; } },
+		{ "a blended material",
+		  [](bgl::GrassDesc& d) { d.material.layerType      = bgl::LayerType::kBlend; } },
+		{ "a zero height", [](bgl::GrassDesc& d) { d.blade.minHeight = 0.0f; } },
+		{ "min above max",
+		  [](bgl::GrassDesc& d) { d.blade.minHeight = 2.0f * d.blade.maxHeight; } },
+		{ "a NaN width", [nan](bgl::GrassDesc& d) { d.blade.rootWidth           = nan; } },
+		{ "a tip wider than the root", [](bgl::GrassDesc& d) { d.blade.tipWidth = 1.5f; } },
+		{ "a negative lean", [](bgl::GrassDesc& d) { d.blade.lean               = -0.1f; } },
+		{ "no far segments", [](bgl::GrassDesc& d) { d.blade.farSegments        = 0; } },
+		{ "more far segments than near",
+		  [](bgl::GrassDesc& d) { d.blade.farSegments  = d.blade.nearSegments + 1; } },
+		{ "too many segments",
+		  [](bgl::GrassDesc& d) { d.blade.nearSegments = bgl::c_MaxGrassBladeSegments + 1; } },
+		{ "no blades", [](bgl::GrassDesc& d) { d.clump.bladesPerClump = 0; } },
+		{ "too many blades",
+		  [](bgl::GrassDesc& d) { d.clump.bladesPerClump = bgl::c_MaxGrassBladesPerClump + 1; } },
+		{ "a negative clump radius", [](bgl::GrassDesc& d) { d.clump.radius = -1.0f; } },
+		{ "a fade that ends before it starts",
+		  [](bgl::GrassDesc& d) { d.density.fadeEnd = d.density.fadeStart; } },
+		{ "negative widening", [](bgl::GrassDesc& d) { d.density.widening              = -1.0f; } },
+		{ "a stiffness above one", [](bgl::GrassDesc& d) { d.response.stiffness        = 1.5f; } },
+		{ "a negative gust response", [](bgl::GrassDesc& d) { d.response.gustResponse  = -1.0f; } },
+		{ "root occlusion above one", [](bgl::GrassDesc& d) { d.lighting.rootOcclusion = 2.0f; } },
+		{ "a far ground-normal blend below zero",
+		  [](bgl::GrassDesc& d) { d.lighting.groundNormalFar                           = -0.5f; } },
+		{ "negative translucency", [](bgl::GrassDesc& d) { d.lighting.translucency     = -1.0f; } },
+		{ "a NaN translucency colour",
+		  [nan](bgl::GrassDesc& d) { d.lighting.translucencyColor.y                    = nan; } },
+		{ "a negative tint", [](bgl::GrassDesc& d) { d.color.tipTint.x                 = -1.0f; } },
+		{ "variation above one", [](bgl::GrassDesc& d) { d.color.variation             = 1.5f; } },
+	};
+
+	CHECK_NOTHROW(scene->DeleteGrass(scene->CreateGrass(ValidLook(material))));
+
+	const bgl::GrassHandle live = scene->CreateGrass(ValidLook(material));
+	for (const auto& [name, broken] : breaks)
+	{
+		INFO(name);
+		auto desc = ValidLook(material);
+		broken(desc);
+		CHECK_THROWS_AS(scene->CreateGrass(desc), bgl::SceneError);
+		CHECK_THROWS_AS(scene->UpdateGrass(live, desc), bgl::SceneError);
+	}
+}
+
+TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const bgl::GrassHandle    grass  = scene->CreateGrass(ValidLook(ground));
+
+	const std::array<bgl::MaterialHandle, 1> materials = { ground };
+	const std::array<bgl::GrassHandle, 2>    looks     = { bgl::GrassHandle(), grass };
+
+	const bgl::GeomHandle first  = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const bgl::GeomHandle second = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	scene->AttachGrass(first, MakeGrass(), 0, looks);
+	scene->AttachGrass(second, MakeGrass(), 0, looks);
+
+	CHECK_THROWS_AS(scene->DeleteGrass(grass), bgl::SceneError);
+	scene->DeleteGeom(first);
+	CHECK_THROWS_AS(scene->DeleteGrass(grass), bgl::SceneError);
+	scene->DeleteGeom(second);
+	CHECK_NOTHROW(scene->DeleteGrass(grass));
+}
+
+TEST_CASE("attaching grass again releases the looks the geom held", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const bgl::GrassHandle    before = scene->CreateGrass(ValidLook(ground));
+	const bgl::GrassHandle    after  = scene->CreateGrass(ValidLook(ground));
+
+	const std::array<bgl::MaterialHandle, 1> materials = { ground };
+	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+
+	const std::array<bgl::GrassHandle, 2> first  = { bgl::GrassHandle(), before };
+	const std::array<bgl::GrassHandle, 2> second = { bgl::GrassHandle(), after };
+	scene->AttachGrass(geom, MakeGrass(), 0, first);
+	scene->AttachGrass(geom, MakeGrass(), 0, second);
+
+	CHECK_NOTHROW(scene->DeleteGrass(before));
+	CHECK_THROWS_AS(scene->DeleteGrass(after), bgl::SceneError);
+}
+
+TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const bgl::GrassHandle    grass  = scene->CreateGrass(ValidLook(ground));
+	const std::array<bgl::MaterialHandle, 1> materials = { ground };
+	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+
+	SECTION("the looks are fewer than the field's slot")
+	{
+		const std::array<bgl::GrassHandle, 1> looks = { grass };
+		scene->AttachGrass(geom, MakeGrass(), 0, looks);
+		CHECK_NOTHROW(scene->DeleteGrass(grass));
+	}
+
+	SECTION("the slot holds a null handle")
+	{
+		const std::array<bgl::GrassHandle, 2> looks = { grass, bgl::GrassHandle() };
+		scene->AttachGrass(geom, MakeGrass(), 0, looks);
+		CHECK_NOTHROW(scene->DeleteGrass(grass));
+	}
+
+	SECTION("no looks at all")
+	{
+		scene->AttachGrass(geom, MakeGrass(), 0, {});
+		CHECK_NOTHROW(scene->DeleteGrass(grass));
+	}
+
+	SECTION("the fields grow on another mesh")
+	{
+		auto fields                                 = MakeGrass();
+		fields.fields.front().mesh                  = 1;
+		const std::array<bgl::GrassHandle, 2> looks = { bgl::GrassHandle(), grass };
+		scene->AttachGrass(geom, fields, 0, looks);
+		CHECK_NOTHROW(scene->DeleteGrass(grass));
+	}
+}
+
+TEST_CASE("AttachGrass refuses what it cannot bind, and changes nothing", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const bgl::GrassHandle    held   = scene->CreateGrass(ValidLook(ground));
+	const std::array<bgl::MaterialHandle, 1> materials = { ground };
+	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+
+	const std::array<bgl::GrassHandle, 2> heldLooks = { bgl::GrassHandle(), held };
+	scene->AttachGrass(geom, MakeGrass(), 0, heldLooks);
+
+	SECTION("a deleted look")
+	{
+		const bgl::GrassHandle gone = scene->CreateGrass(ValidLook(ground));
+		scene->DeleteGrass(gone);
+		const std::array<bgl::GrassHandle, 2> looks = { bgl::GrassHandle(), gone };
+		CHECK_THROWS_AS(scene->AttachGrass(geom, MakeGrass(), 0, looks), bgl::SceneError);
+	}
+
+	SECTION("a dead geom")
+	{
+		const bgl::GeomHandle dead = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+		scene->DeleteGeom(dead);
+		CHECK_THROWS_AS(scene->AttachGrass(dead, MakeGrass(), 0, heldLooks), bgl::SceneError);
+	}
+
+	SECTION("a range the file cannot back")
+	{
+		auto fields                      = MakeGrass();
+		fields.fields.front().chunkCount = 0;
+		CHECK_THROWS_AS(scene->AttachGrass(geom, fields, 0, heldLooks), bgl::SceneError);
+	}
+
+	// The geom still holds the look it held before the refused call.
+	CHECK_THROWS_AS(scene->DeleteGrass(held), bgl::SceneError);
+}
+
+TEST_CASE("AttachGrass refuses grass ranges the file cannot back", "[grass][contract]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	const std::array<bgl::MaterialHandle, 1> materials = { scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc()) };
+	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+
+	SECTION("a well-formed field, and one belonging to another mesh, attach")
+	{
+		auto grass = MakeGrass();
+		CHECK_NOTHROW(scene->AttachGrass(geom, grass, 0, {}));
+
+		grass.fields.front().mesh       = 1;
+		grass.fields.front().firstChunk = 1000;
+		CHECK_NOTHROW(scene->AttachGrass(geom, grass, 0, {}));
+	}
+
+	SECTION("a field with no chunks")
+	{
+		auto grass                      = MakeGrass();
+		grass.fields.front().chunkCount = 0;
+		CHECK_THROWS_AS(scene->AttachGrass(geom, grass, 0, {}), bgl::SceneError);
+	}
+
+	SECTION("chunks past the end of the pool")
+	{
+		auto grass                      = MakeGrass();
+		grass.fields.front().firstChunk = 1;
+		CHECK_THROWS_AS(scene->AttachGrass(geom, grass, 0, {}), bgl::SceneError);
+	}
+
+	SECTION("a chunk with no clumps")
+	{
+		auto grass                     = MakeGrass();
+		grass.chunks.back().clumpCount = 0;
+		CHECK_THROWS_AS(scene->AttachGrass(geom, grass, 0, {}), bgl::SceneError);
+	}
+
+	SECTION("a chunk larger than the cook's chunk size")
+	{
+		auto grass                      = MakeGrass(2 * assetlib::c_GrassClumpsPerChunk);
+		grass.chunks.front().clumpCount = assetlib::c_GrassClumpsPerChunk + 1;
+		CHECK_THROWS_AS(scene->AttachGrass(geom, grass, 0, {}), bgl::SceneError);
+	}
+
+	SECTION("clumps past the end of the pool")
+	{
+		auto grass = MakeGrass();
+		grass.clumps.pop_back();
+		CHECK_THROWS_AS(scene->AttachGrass(geom, grass, 0, {}), bgl::SceneError);
+	}
+}
+
+TEST_CASE("SetWind refuses a wind no pass could evaluate", "[grass][wind]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 1);
+
+	auto wind         = bgl::WindDesc();
+	wind.direction    = glm::vec3(0.0f, 0.0f, 2.0f);
+	wind.strength     = 0.3f;
+	wind.gustStrength = 0.2f;
+	CHECK_NOTHROW(view->SetWind(wind));
+
+	const float nan    = std::numeric_limits<float>::quiet_NaN();
+	using Break        = std::function<void(bgl::WindDesc&)>;
+	const auto refused = std::vector<std::pair<std::string, Break>>{
+		{ "a NaN direction", [nan](bgl::WindDesc& w) { w.direction.x = nan; } },
+		{ "a straight-up direction",
+		  [](bgl::WindDesc& w) { w.direction                     = glm::vec3(0.0f, 1.0f, 0.0f); } },
+		{ "negative strength", [](bgl::WindDesc& w) { w.strength = -0.1f; } },
+		{ "negative gusts", [](bgl::WindDesc& w) { w.gustStrength   = -0.1f; } },
+		{ "negative gust speed", [](bgl::WindDesc& w) { w.gustSpeed = -1.0f; } },
+		{ "a zero gust scale", [](bgl::WindDesc& w) { w.gustScale   = 0.0f; } },
+		{ "an infinite gust scale",
+		  [](bgl::WindDesc& w) { w.gustScale = std::numeric_limits<float>::infinity(); } },
+	};
+
+	for (const auto& [name, broken] : refused)
+	{
+		INFO(name);
+		auto desc = wind;
+		broken(desc);
+		CHECK_THROWS_AS(view->SetWind(desc), bgl::SceneError);
+	}
+}

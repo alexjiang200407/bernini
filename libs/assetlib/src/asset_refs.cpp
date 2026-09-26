@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
@@ -10,9 +11,12 @@
 
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
 
 #include <cctype>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
@@ -89,6 +93,7 @@ namespace assetlib
 				addEdge(edges, referrer, material, RefKind::kSubmeshMaterial);
 
 			addEdge(edges, referrer, refs.skeleton, RefKind::kMeshSkeleton);
+			addEdge(edges, referrer, refs.grass, RefKind::kMeshGrass);
 		}
 
 		/** The skeleton a `.banim`'s clips were resampled against. */
@@ -133,7 +138,11 @@ namespace assetlib
 				importedSourceKeyFor(referrer, document),
 				RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
-				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
+				addEdge(
+					edges,
+					referrer,
+					binding.material,
+					isGrassBinding(binding) ? RefKind::kFieldGrass : RefKind::kSubmeshMaterial);
 			for (const MaterialOverrideBinding& entry : document.materialOverrides)
 				addEdge(edges, referrer, entry.material, RefKind::kSubmeshMaterial);
 
@@ -248,6 +257,28 @@ namespace assetlib
 				throw std::runtime_error(
 					"assetlib::AssetRefGraph: cannot read the environment '" + referrer +
 					"', so the assets it composes cannot be known: " + e.what());
+			}
+		}
+
+		/** The material a `.bgrass`'s blades shade through, stored as a path inside it. */
+		void
+		collectGrassEdges(
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
+		{
+			try
+			{
+				const BGrass grass = load<BGrass>(files, referrer);
+				addEdge(edges, referrer, grass.material, RefKind::kGrassMaterial);
+			}
+			catch (const std::exception& e)
+			{
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the grass look '{}', so the material it "
+					"names cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -392,6 +423,28 @@ namespace assetlib
 			{
 				collectBlendEdges(edges, files, referrer);
 				++graph.blendSetsScanned;
+			}
+			else if (kind == c_GrassExtension)
+			{
+				collectGrassEdges(edges, files, referrer);
+				++graph.grassLooksScanned;
+			}
+			else if (kind == c_GrassFieldsExtension)
+			{
+				try
+				{
+					for (const std::string& look : store.LoadRegenGrassLooks(referrer))
+						addEdge(edges, referrer, look, RefKind::kFieldGrass);
+				}
+				catch (const std::exception& e)
+				{
+					core::throw_runtime_error(
+						"assetlib::AssetRefGraph: cannot read the grass fields '{}', so the looks "
+						"they name cannot be known: {}",
+						referrer,
+						e.what());
+				}
+				++graph.grassFieldsScanned;
 			}
 			else if (graph.m_Registry != nullptr)
 			{
@@ -583,6 +636,8 @@ namespace assetlib
 		{
 			if (ref.kind == RefKind::kDocumentOutput)
 				plan.producers.push_back(ref.referrer);
+			else if (ref.kind == RefKind::kMeshGrass)
+				plan.grassMeshes.push_back(ref.referrer);
 			else
 				plan.blockers.push_back(ref);
 		}
@@ -681,6 +736,24 @@ namespace assetlib
 		else
 			gone.insert(plan.target);
 		gone.insert(plan.cascade.begin(), plan.cascade.end());
+
+		for (const std::string& meshKey : plan.grassMeshes)
+		{
+			// Going too, or stale and so regenerated from the document rewritten below.
+			if (gone.contains(meshKey) || GeometryIsStale(meshKey))
+				continue;
+
+			try
+			{
+				BMesh mesh = Load<BMesh>(meshKey);
+				mesh.grass.clear();
+				Save(mesh, meshKey);
+			}
+			catch (const std::exception& error)
+			{
+				return DeletionResult{ DeletionStatus::kFailed, error.what() };
+			}
+		}
 
 		for (const std::string& documentKey : plan.producers)
 		{

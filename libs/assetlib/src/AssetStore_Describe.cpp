@@ -1,5 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
+#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -64,5 +65,17 @@ namespace assetlib
 	AssetStore::Describe(const BlendSet& set) const
 	{
 		return describe(set);
+	}
+
+	std::string
+	AssetStore::Describe(const BGrass& grass) const
+	{
+		return describe(grass);
+	}
+
+	std::string
+	AssetStore::Describe(const BGrassFields& grass) const
+	{
+		return describe(grass);
 	}
 }

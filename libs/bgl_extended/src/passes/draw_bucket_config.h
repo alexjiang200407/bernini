@@ -9,14 +9,15 @@
 namespace bgl
 {
 	/**
-	 * The colour-pass pixel program a bucket draws with.
+	 * The colour-pass pixel program a bucket draws with: `programs.forward.<kind><layer>`, or
+	 * `programs.forward.Grass_<kind>` for a grass bucket, which is always opaque.
 	 * @pre the bucket is not transparent -- the depth-sorted list draws through the one shared
 	 * blend program, which no bucket owns.
 	 */
 	[[nodiscard]] std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc);
 
-	/** The amplification/mesh module for the bucket's tier. @pre the bucket is not transparent. */
+	/** The amplification/mesh module for the bucket's stage. @pre the bucket is not transparent. */
 	[[nodiscard]] std::string_view
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc);
 

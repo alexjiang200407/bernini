@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
@@ -48,5 +49,9 @@ namespace assetlib::imp
 		// not the source's joint order.
 		Skeleton     skeleton;
 		AnimationSet animations;
+
+		// Every POINTS primitive, its clumps chunked. Unbound: each field's `look` is invalid until
+		// the `.bimport`'s bindings are applied (applyGrassBindings).
+		BGrassFields grass;
 	};
 }

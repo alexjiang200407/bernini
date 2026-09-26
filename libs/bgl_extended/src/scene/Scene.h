@@ -17,11 +17,13 @@
 #include <RangeWithCount.h>
 #include <array>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
@@ -30,6 +32,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GrassDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -40,6 +43,9 @@
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Geom.h>
+#include <bgl_common/idl/GrassChunk.h>
+#include <bgl_common/idl/GrassClump.h>
+#include <bgl_common/idl/GrassLook.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
@@ -60,6 +66,7 @@
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -68,6 +75,18 @@ namespace bgl
 {
 	class ICommandList;
 	class FrameGraph;
+
+	/**
+	 * One grass field bound to a geom: the look it draws with, and where its chunks and clumps sit in
+	 * the scene's grass buffers. `chunks.index` is the field's first chunk there.
+	 */
+	struct GrassFieldRecord
+	{
+		GrassHandle             look;
+		core::multi_slot_handle chunks;
+		core::multi_slot_handle clumps;
+		uint32_t                chunkCount = 0;
+	};
 
 	/**
 	 * One live geom. Every geom has a submesh range; a kSkinnedMesh one additionally *names* a rig it
@@ -94,6 +113,27 @@ namespace bgl
 		uint32_t boneCount = 0;  // kSkinnedMesh only
 		uint32_t nodeCount = 0;  // kSkinnedMesh only: clips plus authored spaces
 		uint32_t legCount  = 0;  // kSkinnedMesh only; zero on a rig that authored no legs
+
+		// Every bound grass field, each holding a use of its look (see GrassMeta::useCount) and the
+		// chunk and clump ranges it was uploaded into. Released by AttachGrass and DeleteGeom.
+		std::vector<GrassFieldRecord> grass;
+	};
+
+	/**
+	 * One live grass look, and the count that decides whether it may be deleted.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct GrassMeta
+	{
+		GrassDesc desc;
+
+		// The look's GrassLook record, which every field bound to it names.
+		core::slot_handle entry;
+
+		// Grass fields bound to this look across every live geom. DeleteGrass refuses while it is
+		// nonzero: a field left naming a freed slot would draw with whatever look takes it next.
+		uint32_t useCount = 0;
 	};
 
 	/**
@@ -460,6 +500,67 @@ namespace bgl
 		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
 			override;
 
+		GrassHandle
+		CreateGrass(const GrassDesc& desc) override;
+
+		void
+		UpdateGrass(GrassHandle grass, const GrassDesc& desc) override;
+
+		[[nodiscard]] bool
+		IsGrassAlive(GrassHandle grass) const noexcept
+		{
+			return grass.IsValid() && m_Grass.valid(grass.handle);
+		}
+
+		/**
+		 * The grass fields a geom draws, for a view to list. Empty for a dead geom -- an instance
+		 * may outlive its geom (see IScene::DeleteGeom), and its grass then draws nothing.
+		 */
+		[[nodiscard]] std::span<const GrassFieldRecord>
+		GetGeomGrass(GeomHandle geom) const noexcept
+		{
+			if (!IsGeomAlive(geom))
+			{
+				return {};
+			}
+			return m_Geoms[geom.handle.index].grass;
+		}
+
+		/** The GrassLook record `grass` names, and the material it draws through. */
+		struct GrassLookRef
+		{
+			uint32_t       entry = 0;
+			MaterialHandle material;
+		};
+
+		/** @pre IsGrassAlive(grass). */
+		[[nodiscard]] GrassLookRef
+		GetGrassLook(GrassHandle grass) const noexcept
+		{
+			const GrassMeta& meta = m_Grass[grass.handle.index];
+			return { meta.entry.index, meta.desc.material };
+		}
+
+		/**
+		 * Moves whenever a view's grass list could change without any of its own placements
+		 * changing: grass attached or released, a look rewritten. A SceneView polls it.
+		 */
+		[[nodiscard]] uint64_t
+		GetGrassEpoch() const noexcept
+		{
+			return m_GrassEpoch;
+		}
+
+		void
+		DeleteGrass(GrassHandle grass) override;
+
+		void
+		AttachGrass(
+			GeomHandle                    geom,
+			const assetlib::BGrassFields& fields,
+			uint32_t                      meshIndex,
+			std::span<const GrassHandle>  looks) override;
+
 		RigHandle
 		AddRig(
 			const assetlib::Skeleton&     skeleton,
@@ -569,6 +670,25 @@ namespace bgl
 			const std::optional<glm::vec4>  sphereOverride);
 
 		/**
+		 * Refuses a look no grass pass could draw; see IScene::CreateGrass for the rules. Static
+		 * for the same reason ValidateSkinnedRig is, bar the material, which it reads off the
+		 * handle alone.
+		 */
+		static void
+		ValidateGrass(const GrassDesc& desc, std::string_view caller);
+
+		/**
+		 * Gives back what each of `fields` holds -- its look's use (see GrassMeta::useCount) and its
+		 * chunk and clump ranges -- and empties it.
+		 */
+		void
+		ReleaseGrass(std::vector<GrassFieldRecord>& fields) noexcept;
+
+		/** The GrassLook record CreateGrass and UpdateGrass write for `desc`. */
+		[[nodiscard]] static idl::GrassLook
+		BuildGrassLook(const GrassDesc& desc) noexcept;
+
+		/**
 		 * Refuses a rig the pose pass could not walk or address: no bones, a `parent` that is not
 		 * lower than its own bone's index, a clip set whose
 		 * bone count disagrees with the skeleton's, an empty or zero-frame clip table, or a clip
@@ -673,6 +793,13 @@ namespace bgl
 		GroundPlaneDesc m_Ground;
 		bool            m_FootPlanting = true;
 
+		core::slot_vector<GrassMeta> m_Grass;
+		uint64_t                     m_GrassEpoch = 0;
+
+		EntryBuffer<idl::GrassLook>  m_GrassLooks;
+		RangeBuffer<idl::GrassChunk> m_GrassChunks;
+		RangeBuffer<idl::GrassClump> m_GrassClumps;
+
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
 		using SubmeshDefaults = std::vector<MaterialHandle>;
@@ -748,6 +875,9 @@ namespace bgl
 			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
 			NamedBuffer{ c_BlendNodeBufferName, &Scene::m_BlendNodes },
 			NamedBuffer{ c_BlendSampleBufferName, &Scene::m_BlendSamples },
+			NamedBuffer{ c_GrassLookBufferName, &Scene::m_GrassLooks },
+			NamedBuffer{ c_GrassChunkBufferName, &Scene::m_GrassChunks },
+			NamedBuffer{ c_GrassClumpBufferName, &Scene::m_GrassClumps },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

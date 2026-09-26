@@ -20,7 +20,8 @@ namespace assetlib::test
 	 * Imports `glb` into `dataRoot` as the group `name`, by the same writers the CLI and
 	 * the editor call: the copied source and its document in `Authored/Meshes/`, the mesh in
 	 * `Derived/Meshes/`, and -- when the source carries a skin -- the rig in `Derived/Skeletons/`
-	 * and `Derived/Animations/`. Submesh 0 is bound to `material`, recorded in the document.
+	 * and `Derived/Animations/`, and -- when it carries POINTS -- its grass beside the mesh.
+	 * Submesh 0 is bound to `material`, recorded in the document.
 	 *
 	 * `textureDir` extracts the source's textures into that folder as an import with textures
 	 * turned on does, and records it in the document; empty extracts none.
@@ -60,6 +61,11 @@ namespace assetlib::test
 			std::format("Derived/Animations/{}.banim", name),
 			true,
 			source);
+
+		const std::string grassKey =
+			std::format("Derived/Meshes/{}{}", name, c_GrassFieldsExtension);
+		for (std::string& grass : store.WriteImportedGrass(imported.grass, mesh, grassKey, source))
+			outputs.push_back(std::move(grass));
 
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));

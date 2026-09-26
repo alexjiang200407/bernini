@@ -1001,7 +1001,7 @@ disagree.
 
 * **`kPBR` or a game surface, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of
-  `ForwardPass`'s PSO table against the same skinned geometry shader. Blending is the one that needs
+  `ForwardPhases`'s PSO table against the same skinned geometry shader. Blending is the one that needs
   the depth-sorted list, which holds every tier at once and draws them through `programs.forward.AnyMesh`
   (see [Passes](docs/passes.md)), so a blended rig sorts against blended static geometry rather than
   after it. A game surface draws here on the same terms, through rows of its own that differ from

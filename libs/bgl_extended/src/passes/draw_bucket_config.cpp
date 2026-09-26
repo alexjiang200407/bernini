@@ -2,7 +2,6 @@
 #include "gfx/DrawBucketTable.h"
 #include "types/RasterState.h"
 #include "util/util.h"
-#include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl_common/gassert.h>
@@ -68,6 +67,12 @@ namespace bgl
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent draw bucket owns no pixel program");
 
+		// A blade shades from what the grass stage builds, which no mesh's program reads.
+		if (desc.geom == GeometryStage::kGrass)
+		{
+			return std::format("programs.forward.Grass_{}", ProgramStem(desc.material));
+		}
+
 		return std::format(
 			"programs.forward.{}{}",
 			ProgramStem(desc.material),
@@ -78,8 +83,16 @@ namespace bgl
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{
 		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no geometry program");
-		return desc.geom == GeomType::kSkinnedMesh ? "programs.forward.SkinnedMesh"sv :
-		                                             "programs.forward.StaticMesh"sv;
+		switch (desc.geom)
+		{
+		case GeometryStage::kStaticMesh:
+			return "programs.forward.StaticMesh"sv;
+		case GeometryStage::kSkinnedMesh:
+			return "programs.forward.SkinnedMesh"sv;
+		case GeometryStage::kGrass:
+			return "programs.forward.Grass"sv;
+		}
+		gfatal("An unknown geometry stage");
 	}
 
 	uint32_t
@@ -91,6 +104,11 @@ namespace bgl
 	RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{
+		// A blade is seen from either side, and a material's doubleSided flag is a mesh's question.
+		if (desc.geom == GeometryStage::kGrass)
+		{
+			return RasterCullMode::kNone;
+		}
 		return desc.material == MaterialType::kNull || desc.material == MaterialType::kAssert ?
 		           RasterCullMode::kBack :
 		           RasterCullMode::kNone;

@@ -15,7 +15,7 @@
 #include "passes/BloomPass.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
-#include "passes/ForwardPass.h"
+#include "passes/ForwardPhases.h"
 #include "passes/OutlineMaskPass.h"
 #include "passes/OverlayPass.h"
 #include "passes/PostProcessPass.h"
@@ -309,7 +309,7 @@ namespace bgl
 		BrdfLutGenPass       m_BrdfLut;
 		TonemapLut           m_TonemapLut;
 		PreparePresentPass   m_PreparePresentPass;
-		ForwardPass          m_Forward;
+		ForwardPhases        m_Forward;
 		BlobShadowPass       m_BlobShadows;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;

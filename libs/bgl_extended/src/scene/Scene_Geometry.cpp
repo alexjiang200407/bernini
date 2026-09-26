@@ -44,13 +44,11 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
-
 		// The static tier dispatches whole meshlet groups, so what it can launch is the largest
 		// multiple of the group size that fits. A submesh past it would round its last group up over
 		// the ceiling.
 		constexpr uint32_t c_MaxSubmeshMeshlets =
-			c_MaxDispatchMeshGroups - (c_MaxDispatchMeshGroups % idl::cMeshletsPerGroup);
+			idl::cMaxDispatchMeshGroups - (idl::cMaxDispatchMeshGroups % idl::cMeshletsPerGroup);
 
 		// One number declared twice, because bgl does not link assetlib: the cook groups by its
 		// constant and everything below reads by this one. A drift would have a submesh read bounds
@@ -929,6 +927,8 @@ namespace bgl
 				--rig->useCount;
 			}
 		}
+
+		ReleaseGrass(m_Geoms[geom.handle.index].grass);
 
 		const auto& submeshes = record.submeshes;
 

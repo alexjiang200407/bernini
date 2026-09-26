@@ -4,6 +4,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
+#include <assetlib/RegenGrassFields.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -25,6 +26,8 @@
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
+#include <assetlib_structs/BGrass.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/err/util.h>
@@ -96,6 +99,8 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
+		case assetlib::RefKind::kMeshGrass:
+			return "grows the grass of";
 		case assetlib::RefKind::kDocumentSkeleton:
 			return "binds its source's joints to";
 		case assetlib::RefKind::kDocumentOutput:
@@ -108,6 +113,10 @@ namespace
 			return "authors the legs of";
 		case assetlib::RefKind::kBlendClips:
 			return "blends clips of";
+		case assetlib::RefKind::kGrassMaterial:
+			return "shades its blades with";
+		case assetlib::RefKind::kFieldGrass:
+			return "grows grass, as a point primitive's look,";
 		case assetlib::RefKind::kPlugin:
 			return "references";
 		}
@@ -141,12 +150,12 @@ namespace
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
 			if (type == assetlib::AssetType::kMaterial ||
 			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar ||
-			    type == assetlib::AssetType::kBlend)
+			    type == assetlib::AssetType::kBlend || type == assetlib::AssetType::kGrass)
 				return *type;
 
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
-				".bmaterial, .benv, .bavatar and .bblend",
+				".bmaterial, .benv, .bavatar, .bblend and .bgrass",
 				key);
 		}
 
@@ -518,12 +527,18 @@ main(int argc, char** argv)
 			// else's on a rollback is not.
 			const bool writesRig   = !imported.skeleton.bones.empty();
 			const bool writesClips = writesRig && !imported.animations.clips.empty();
+			const bool writesGrass = !imported.grass.fields.empty();
+
+			fs::path grassPath = bmeshPath;
+			grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
 
 			auto files = std::vector<fs::path>{ bmeshPath };
 			if (writesRig)
 				files.push_back(bskelPath);
 			if (writesClips)
 				files.push_back(banimPath);
+			if (writesGrass)
+				files.push_back(grassPath);
 
 			// Import never overwrites, the same rule the editor's does: what it would replace is a
 			// mesh someone authored materials against, and none of it is recoverable.
@@ -599,6 +614,14 @@ main(int argc, char** argv)
 					importStore.KeyFor(banimPath),
 					true,
 					source);
+
+				for (std::string& grass : importStore.WriteImportedGrass(
+						 imported.grass,
+						 mesh,
+						 importStore.KeyFor(grassPath),
+						 source))
+					outputs.push_back(std::move(grass));
+
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
 				outputs.push_back(importStore.KeyFor(bmeshPath));
@@ -830,6 +853,16 @@ main(int argc, char** argv)
 			case assetlib::AssetType::kBlend:
 			{
 				std::cout << describeAsset(store.Load<assetlib::BlendSet>(key));
+				break;
+			}
+			case assetlib::AssetType::kGrass:
+			{
+				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
+				break;
+			}
+			case assetlib::AssetType::kGrassFields:
+			{
+				std::cout << describeAsset(store.LoadRegenGrassFields(key).fields);
 				break;
 			}
 			// sniff never answers either: a foreign kind has no codec, and an import document is

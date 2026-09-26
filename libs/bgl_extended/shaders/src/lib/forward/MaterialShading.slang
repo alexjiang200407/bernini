@@ -13,7 +13,7 @@ public extension MaterialData
 {
     // Base colour is passed in rather than sampled here, so the tested paths can test it without
     // sampling the texture a second time.
-    PbrSurface SurfaceOf<M : IPbrMaterial>(M material, ForwardVSOut input, float4 baseColor)
+    public PbrSurface SurfaceOf<M : IPbrMaterial>(M material, ForwardVSOut input, float4 baseColor)
     {
         PbrSurface surface;
         surface.baseColor = baseColor;
@@ -46,7 +46,7 @@ public extension MaterialData
      * A blended surface, as premultiplied colour and the coverage that goes with it.
      *
      * The returned colour is already weighted by its own coverage, which is correct only against the
-     * shared blend PSO's SrcBlend = One (ForwardPass's PsoConfig): either side changed alone is silently
+     * shared blend PSO's SrcBlend = One (ForwardPhases's PsoConfig): either side changed alone is silently
      * wrong rather than a build error. What the transmission factor selects between, and why coverage
      * rises with the reflectance, is in docs/passes.md#blended-surfaces.
      */

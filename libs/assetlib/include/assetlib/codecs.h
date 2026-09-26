@@ -32,6 +32,7 @@ namespace assetlib
 	inline constexpr std::string_view c_EnvLightingExtension = ".benvl";
 	inline constexpr std::string_view c_SkeletonExtension    = ".bskel";
 	inline constexpr std::string_view c_AnimationExtension   = ".banim";
+	inline constexpr std::string_view c_GrassFieldsExtension = ".bgrassfields";
 
 	// Text, not a container: the authored half of one imported source, beside its `.glb`.
 	inline constexpr std::string_view c_ImportDocumentExtension = ".bimport";
@@ -46,6 +47,9 @@ namespace assetlib
 	// Text: the authored half of one rig, found by convention from its `.bskel`. See avatarKeyFor.
 	inline constexpr std::string_view c_AvatarExtension = ".bavatar";
 	inline constexpr std::string_view c_BlendExtension  = ".bblend";
+
+	// Text: a grass look, which names the material its blades shade through.
+	inline constexpr std::string_view c_GrassExtension = ".bgrass";
 
 	// Not assets either: the files a `.bimport` describes, copied into the project beside it. A
 	// mesh import takes the first; an environment import takes the second or a float cube `.ktx2`.
@@ -84,6 +88,8 @@ namespace assetlib
 	struct AnimationSet;
 	struct Avatar;
 	struct BlendSet;
+	struct BGrass;
+	struct BGrassFields;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
@@ -119,7 +125,7 @@ namespace assetlib
 		static constexpr std::string_view c_Extension = c_MeshExtension;
 		static constexpr AssetType        c_Type      = AssetType::kMesh;
 		static constexpr uint32_t         c_Magic     = magic::c_BMesh;
-		static constexpr uint64_t         c_BakeToken = 0x668da118da7846a0ull;
+		static constexpr uint64_t         c_BakeToken = 0x7273be2a8d9c3a00ull;
 
 		[[nodiscard]] static std::vector<std::byte>
 		Serialize(const BMesh& value);
@@ -207,6 +213,25 @@ namespace assetlib
 		Deserialize(std::span<const std::byte> bytes);
 	};
 
+	/**
+	 * `.bgrassfields` -- a cache entry: the grass a mesh source grows, cooked beside its `.bmesh`.
+	 * Deserialize refuses a field, chunk or look slot outside the pool it addresses.
+	 */
+	template <>
+	struct AssetCodec<BGrassFields>
+	{
+		static constexpr std::string_view c_Extension = c_GrassFieldsExtension;
+		static constexpr AssetType        c_Type      = AssetType::kGrassFields;
+		static constexpr uint32_t         c_Magic     = magic::c_BGrassF;
+		static constexpr uint64_t         c_BakeToken = 0xe5302fa6f31de788ull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BGrassFields& value);
+
+		[[nodiscard]] static BGrassFields
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
 	/** `.banim` -- a cache entry. Deserialize refuses a clip whose samples fall outside the pool. */
 	template <>
 	struct AssetCodec<AnimationSet>
@@ -271,6 +296,23 @@ namespace assetlib
 		Serialize(const BlendSet& value);
 
 		[[nodiscard]] static BlendSet
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
+	/**
+	 * `.bgrass` -- an authored document: a grass look, which names its material by path. No magic
+	 * and no bake token, because nothing cooks it into anything.
+	 */
+	template <>
+	struct AssetCodec<BGrass>
+	{
+		static constexpr std::string_view c_Extension = c_GrassExtension;
+		static constexpr AssetType        c_Type      = AssetType::kGrass;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BGrass& value);
+
+		[[nodiscard]] static BGrass
 		Deserialize(std::span<const std::byte> bytes);
 	};
 }

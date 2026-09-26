@@ -1,10 +1,12 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/grass_patch.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
 #include <bgl/GeomHandle.h>
+#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
@@ -185,7 +187,13 @@ namespace game
 		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath`, or shares the geometry from a previous
 		 * call, acquiring a reference to each material its submeshes name (and thus to their textures).
 		 *
-		 * @throws std::runtime_error if the file cannot be read, or `meshIndex` is out of range.
+		 * A mesh that grows grass (`BMesh::grass`) gets it attached: each field on this mesh is drawn
+		 * with the `.bgrass` its slot names, and every look and its material is acquired and held by
+		 * the geom. A look that cannot be drawn -- no material, or one the renderer refuses -- is
+		 * warned about and its fields left bare, as an unbound submesh is left unlit.
+		 *
+		 * @throws std::runtime_error if the file or its grass file cannot be read, either is stale, or
+		 *         `meshIndex` is out of range.
 		 */
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
@@ -321,6 +329,21 @@ namespace game
 			uint32_t            ySegments,
 			float               radius,
 			bgl::MaterialHandle material = {});
+
+		/**
+		 * The `.bgrass` at `look` growing on a square of ground: a plane of `desc.size` shaded with
+		 * `ground`, with assetlib::makeGrassPatch's clumps attached. The plane lies in XY facing +Z,
+		 * as IScene::AddPlaneGeom's does, so an instance lays it flat with a rotation. It holds the
+		 * look and `ground` until released. A look that cannot be drawn leaves the ground bare, as
+		 * AcquireMesh leaves a field.
+		 *
+		 * @throws what makeGrassPatch throws, and std::runtime_error if `look` cannot be read.
+		 */
+		bgl::GeomHandle
+		CreateGrassPatch(
+			const assetlib::GrassPatchDesc& desc,
+			std::string_view                look,
+			bgl::MaterialHandle             ground = {});
 
 		/**
 		 * Places `geom` in `view` at `transform`. The instance holds a reference on the geometry, so
@@ -577,6 +600,13 @@ namespace game
 			std::string material;
 		};
 
+		struct GrassRecord
+		{
+			bgl::GrassHandle    handle;
+			bgl::MaterialHandle material;
+			uint32_t            refCount = 0;
+		};
+
 		struct GeomRecord
 		{
 			std::string     key;  // empty for procedural geometry
@@ -584,6 +614,10 @@ namespace game
 
 			// One per submesh: the material that submesh is bound to, and holds a reference to.
 			std::vector<bgl::MaterialHandle> submeshMaterials;
+
+			// The `.bgrass` looks the geom's grass is drawn with, each holding one reference; empty
+			// where a slot drew nothing.
+			std::vector<std::string> grassLooks;
 
 			// The looks the mesh registers, by geom-local submesh; loaded only when an instance
 			// wears one.
@@ -722,6 +756,24 @@ namespace game
 		[[nodiscard]] bgl::SurfaceMaterialDesc
 		SurfaceDesc(const MaterialRecord& record) const;
 
+		/**
+		 * Attaches the grass `mesh` grows to `record`'s geom, acquiring the looks the fields on mesh
+		 * `meshIndex` name. Nothing for a mesh with no grass.
+		 */
+		void
+		AttachMeshGrass(GeomRecord& record, const assetlib::BMesh& mesh, uint32_t meshIndex);
+
+		/**
+		 * The look the `.bgrass` at `key` describes, created on the first acquire and shared after;
+		 * null, with a warning, when it cannot be drawn. Takes a reference only on success.
+		 */
+		[[nodiscard]] bgl::GrassHandle
+		AcquireGrassLook(const std::string& key);
+
+		/** Drops one reference, deleting the look and releasing its material at zero. */
+		void
+		ReleaseGrassLook(const std::string& key);
+
 		// Destroys a geom and releases the materials it held. Assumes its refcount reached zero
 		void
 		DestroyGeom(GeomRecord& record);
@@ -803,9 +855,10 @@ namespace game
 		assetlib::AssetStore m_Store;
 		AssetManagerOptions  m_Options;
 
-		core::str::unordered_str_map<uint32_t> m_TextureByPath;
-		core::str::unordered_str_map<uint64_t> m_MaterialByPath;
-		core::str::unordered_str_map<uint32_t> m_GeomByPath;
+		core::str::unordered_str_map<uint32_t>    m_TextureByPath;
+		core::str::unordered_str_map<uint64_t>    m_MaterialByPath;
+		core::str::unordered_str_map<uint32_t>    m_GeomByPath;
+		core::str::unordered_str_map<GrassRecord> m_GrassByPath;
 
 		std::unordered_map<uint32_t, TextureRecord>  m_Textures;
 		std::unordered_map<uint64_t, MaterialRecord> m_Materials;
