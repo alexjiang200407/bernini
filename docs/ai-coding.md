@@ -4,7 +4,7 @@ The agent flows that work on this repo — grilling a request, implementing it, 
 opening and watching pull requests, answering review — **live in the bernini-workspace repo**, not
 here. They run a feature across several repositories at once (the engine, the test project, a
 game), which a copy inside any one of them could not. What bernini carries is
-[`.bcp/profile.md`](../.bcp/profile.md): YAML front matter the workspace's scripts read — the build,
+[`ws-profile.md`](../ws-profile.md): YAML front matter the workspace's scripts read — the build,
 test, format and tidy commands, how a release merges it, which flows it takes part in — and prose
 its skills read: the `core` table, the Guiding Constraints lens, the asset-scale lenses, what a
 review must never flag, and when a PR owes a Windows box. A plain clone still runs `just init`,

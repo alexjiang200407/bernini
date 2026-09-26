@@ -5,7 +5,7 @@ file. In Codex, read [docs/codex.md](docs/codex.md).
 
 **The agent flows live in the bernini-workspace repo.** Grilling, implementing, the pre-PR read,
 opening, watching and revising pull requests are its skills, hooks and scripts. This repo carries
-only [`.bcp/profile.md`](.bcp/profile.md): the commands those flows run here and the engine's lenses
+only [`ws-profile.md`](ws-profile.md): the commands those flows run here and the engine's lenses
 they apply. See [docs/ai-coding.md](docs/ai-coding.md).
 
 # General Notes
@@ -327,7 +327,7 @@ cause is a different one.
 **[AI Coding Bots](./docs/ai-coding.md)**
 
 Where the agent flows live (the bernini-workspace repo) and what bernini keeps of them
-(`.bcp/profile.md`). Then `morgana-coding-agent`, the GitHub App that gives AI work its own identity: it replies to reviews and co-authors commits from your machine. Covers commit attribution, registration, key custody, and revocation.
+(`ws-profile.md`). Then `morgana-coding-agent`, the GitHub App that gives AI work its own identity: it replies to reviews and co-authors commits from your machine. Covers commit attribution, registration, key custody, and revocation.
 
 **Specs** — not here, and not in `docs/`
 
@@ -337,7 +337,7 @@ claim, what a shipping engine does about it, the solutions considered with the r
 rejected or kept, and the trigger that makes it urgent, so nobody re-derives any of it. That is why
 it is not documentation and is not on master: every page above says what the tree *is*, and the rule
 that keeps them worth reading — change the code, change the doc — has nothing to say about a file
-describing code nobody has written. The workspace's `bcp-spec` skill writes one, and the first thing
+describing code nobody has written. The workspace's `spec` skill writes one, and the first thing
 it says is how a spec differs from a plan.
 
 They live on `artefacts`, an orphan branch worktree'd once per workspace and symlinked into every
@@ -416,7 +416,7 @@ suite, use `just run`, which forwards it — `just run bgl_extended_tests -- --g
 One tag is not about behaviour: **`[perf]`** pins what a cook costs as its inputs grow — a read count
 that must not scale with an input, a ratio between two problem sizes that must stay far below the
 ratio of the sizes. Never a wall-clock ceiling, so the cases hold in a debug build and under load.
-The pre-PR read runs them when a diff touches a path they cover ([`.bcp/profile.md`](.bcp/profile.md)
+The pre-PR read runs them when a diff touches a path they cover ([`ws-profile.md`](ws-profile.md)
 § Precheck): `just run assetlib_tests -- "[perf]" --no-lock`.
 
 **Only one suite runs on the machine at a time.** A suite is expensive — each one is split
