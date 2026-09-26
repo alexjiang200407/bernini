@@ -85,11 +85,25 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
 
 ## Feature
 
-- **The contract (`fast: contract: true`)** is any public interface a later task or another repo
-  builds on: between subsystems, backends, plugins, and out-of-tree consumers — a game links
-  `gamelib`, `assetlib` and `bgl`. It is compilable headers, a small compiled client against a fake
-  host, and contract tests that say what the fake cannot prove. A change to no public interface has
-  no contract commit; do not manufacture one.
+- **The contract (`fast: contract: true`)** is every declaration more than one task, or another
+  repo, codes against. Here that is three kinds:
+  - **public interfaces**, the ones between subsystems, backends and plugins, and the ones out-of-tree
+    consumers use: a game links `gamelib`, `assetlib` and `bgl`;
+  - **every shader IDL change** in `libs/bgl_common/shaders/src/idl/`, which is the CPU↔GPU
+    agreement `idlgen` compiles on both sides;
+  - **internal interfaces** that several tasks implement or call, like `IForwardPhase`.
+
+  Each one is compilable headers, a small compiled client against a fake host, and contract tests
+  that say what the fake cannot prove. For IDL, the tests check sizes and a round trip through a
+  buffer. Do not stub a class that one task writes and one task uses. `feat/gpu-grass` (#906) is the
+  example. Its contract #880 held to the end. Its IDL arrived whole in #889 and never changed, so it
+  belonged in the contract. Its internals were found while implementing them: #889 reshaped #892's
+  phases, and #901 split the shader.
+- **A change to no public interface** has a contract only when its tasks share a new internal seam.
+  With no shared seam (a restructure like #877) there is no contract commit; do not manufacture one.
+  Its first commit pins current behaviour in tests wherever coverage is thin.
+- **A seam found mid-way** lands as its own commit before its first user. It does not reopen the
+  merged contract.
 - **Dead scaffolding** is the one thing that lands unused: a `bgl_extended` interface nothing calls
   yet, provided its tests call it.
 - **The landing is where the Windows box is written**, once for the whole feature (§ Pull request).
