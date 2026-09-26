@@ -1,4 +1,15 @@
 cmake_minimum_required(VERSION 3.24)
+
+# The workspace's one unpacked vcpkg tree, which its games already read, so an engine package and
+# the game consuming it resolve the same ports. Only where no project() has run yet -- embedded,
+# vcpkg has already settled on the consumer's -- and only for a fresh build dir, since vcpkg caches
+# the choice.
+if (NOT DEFINED CMAKE_PROJECT_NAME AND NOT DEFINED VCPKG_INSTALLED_DIR
+    AND DEFINED ENV{WS_VCPKG_INSTALLED_DIR})
+    set(VCPKG_INSTALLED_DIR "$ENV{WS_VCPKG_INSTALLED_DIR}")
+    message(STATUS "Bernini: vcpkg packages shared at ${VCPKG_INSTALLED_DIR}")
+endif()
+
 project(BerniniEngine)
 
 # This checkout, whether or not it is the top of the build. CMAKE_SOURCE_DIR is the top-level
@@ -283,4 +294,29 @@ if (BERNINI_PROFILING AND BERNINI_EXECUTABLES AND TARGET Tracy::TracyClient)
             VERBATIM)
         add_dependencies(deploy_tracy_client ${BERNINI_EXECUTABLES})
     endif()
+endif()
+
+# A game built against this build rather than compiled into its own: every build directory carries
+# the package for exactly what it built, so a consumer's preset names the engine build it matches.
+# Top-level only -- embedded, the consumer already has the targets. See docs/embedding.md.
+if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
+    set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
+    set(BERNINI_PACKAGE_TARGETS
+        core_process core assetlib_structs bgl bgl_common bgl_extended_objects bgl_extended assetlib
+        gamelib)
+    # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
+    if (RENDERER_BACKEND STREQUAL "DX12")
+        list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12_agility)
+    endif()
+
+    file(MAKE_DIRECTORY "${BERNINI_PACKAGE_DIR}")
+    export(TARGETS ${BERNINI_PACKAGE_TARGETS}
+        NAMESPACE Bernini::
+        FILE "${BERNINI_PACKAGE_DIR}/BerniniTargets.cmake")
+    add_custom_target(bernini_package)
+    add_dependencies(bernini_package ${BERNINI_PACKAGE_TARGETS})
+    configure_file(
+        "${BERNINI_ROOT}/cmake/BerniniConfig.cmake.in"
+        "${BERNINI_PACKAGE_DIR}/BerniniConfig.cmake"
+        @ONLY)
 endif()
