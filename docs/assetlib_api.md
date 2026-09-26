@@ -15,6 +15,41 @@ authored kinds before a project store opens. Those kinds extend `AssetStore`, th
 rename, migrate and pack without entering the closed built-in `AssetType`; see
 [Editor plugin contracts](docs/editor_plugins.md) for loading and lifetime rules.
 
+## Imported-source contract
+
+The `derived-asset-names` contract declares source identity and lookup, cooked grass inside a mesh,
+and bindings outside its cooked data. **Production adoption is pending.** The declarations below
+are exercised by `assetlib_import_contract_tests`, whose separate executable links a fake host
+instead of assetlib. Existing importers, codecs, acquisition and packing still use the current
+behavior described in the rest of this page. In particular, codecs do not yet persist
+`ImportDocument::identity` or `BMesh::grassFields`, and production regeneration does not yet fill
+`RegenMesh::bindings`.
+
+| Contract | Declaration | Responsibility |
+|---|---|---|
+| `ImportIdentity` and naming functions | [ImportIdentity.h](../libs/assetlib/include/assetlib/ImportIdentity.h) | Nonzero random 64-bit ID and frozen source filename; category keys use the label and 16 lowercase hexadecimal digits. Zero identifies an unmigrated document. |
+| `AssetStore::ResolveImport` / `ResolvedImport` | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h), [ResolvedImport.h](../libs/assetlib/include/assetlib/ResolvedImport.h) | Resolve a source identifier through its mounted sidecar to one produced output of the requested kind, returning an owned document snapshot. |
+| `GrassGeometry` / `BMesh::grassFields` | [GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h) | Field names, field/chunk ranges and clumps, without look paths. No renderer interface changes. |
+| `MeshBindings` / `RegenMesh::bindings` | [MeshBindings.h](../libs/assetlib/include/assetlib/MeshBindings.h) | Material keys per submesh, named overrides, the bound skeleton and grass-look keys by field look slot. Empty keys mean unbound. |
+
+The source key identifies a sidecar; lookup neither opens nor stamps the source. It checks the
+document's source, identity and output entry, but leaves output existence and cache validation to
+the loader. A skeleton *bound* from another source is in `document.skeleton`, not an output of
+this source. Source rename preserves the frozen label and ID; generated names are never parsed
+to discover ownership.
+
+Bindings are owned snapshots too. Resolving a material choice per submesh permits two submeshes
+that shared a source material slot to be authored differently without changing cooked geometry.
+Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime container caches
+must observe sidecar changes when this contract is adopted; the current cache behavior below has
+not changed yet.
+
+The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
+import document from one identity and loading a mesh by source through `ResolveImport` and
+`LoadRegenMesh`. Its tests prove client wiring, snapshot ownership and error propagation. The fake
+does not prove random-ID quality, name generation, serialization, migration, production validation,
+or loose/packed parity; those require the implementation's real-store tests.
+
 ---
 
 ## Design Choices
