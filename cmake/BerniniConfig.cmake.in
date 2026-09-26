@@ -1,0 +1,88 @@
+# The engine as one build directory built it. See docs/embedding.md, "Consuming a built engine".
+include(CMakeFindDependencyMacro)
+
+if (CMAKE_VERSION VERSION_LESS 3.26)
+    message(FATAL_ERROR "The Bernini package stages its runtime with copy_directory_if_different, "
+        "which needs CMake 3.26 (this is ${CMAKE_VERSION}).")
+endif()
+
+set(BERNINI_ROOT "@BERNINI_ROOT@")
+set(BERNINI_BUILD_TYPE "@CMAKE_BUILD_TYPE@")
+set(BERNINI_RENDERER_BACKEND "@RENDERER_BACKEND@")
+set(BERNINI_SHADERS_DIR "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@/shaders")
+set(BERNINI_ASSETS_DIR "@BERNINI_ROOT@/assets")
+
+# Imported configurations do not stop a mismatch: CMake falls back to whichever one the targets
+# have, which is a C runtime clash at link on MSVC and a Debug engine in a Release game elsewhere.
+get_property(_bernini_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (BERNINI_BUILD_TYPE AND NOT _bernini_multi_config
+    AND NOT CMAKE_BUILD_TYPE STREQUAL BERNINI_BUILD_TYPE)
+    message(FATAL_ERROR
+        "The Bernini package at ${CMAKE_CURRENT_LIST_DIR} is a ${BERNINI_BUILD_TYPE} engine build "
+        "and this project is building '${CMAKE_BUILD_TYPE}'. Point Bernini_DIR at the engine build "
+        "that matches, or build the engine with that configuration.")
+endif()
+
+find_dependency(glm CONFIG)
+find_dependency(spdlog CONFIG)
+find_dependency(Tracy CONFIG)
+find_dependency(cpptrace CONFIG)
+find_dependency(nlohmann_json CONFIG)
+find_dependency(slang CONFIG)
+find_dependency(meshoptimizer CONFIG)
+find_dependency(RmlUi CONFIG)
+find_dependency(ktx CONFIG)
+
+# The engine links the optimized libktx in every configuration; a texture bake through the debug
+# encoder is an order of magnitude slower. The root CMakeLists.txt applies the same mapping.
+set_target_properties(KTX::ktx PROPERTIES
+    MAP_IMPORTED_CONFIG_DEBUG          Release
+    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+    MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
+
+# DXC and the Agility SDK are loaded by name, so nothing links them. PIX and a shared assetlib's
+# libktx are PRIVATE to a shared engine library, which drops them from the exported interface. None
+# of the four is reachable through TARGET_RUNTIME_DLLS.
+if (WIN32)
+    find_dependency(directx-dxc CONFIG)
+    find_dependency(directx12-agility CONFIG)
+    find_dependency(winpixevent CONFIG)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/BerniniTargets.cmake")
+
+# The engine resolves its shaders and assets relative to the working directory, so the executable
+# has to have them beside it. The copy is its own target, built after <target> so it lands after
+# vcpkg's applocal deployment rather than racing it, and it runs on every build so an engine rebuild
+# reaches a consumer that did not relink.
+function(bernini_stage_runtime target)
+    set(_to "$<TARGET_FILE_DIR:${target}>")
+    set(_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory_if_different "${BERNINI_SHADERS_DIR}" "${_to}/shaders"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory_if_different "${BERNINI_ASSETS_DIR}" "${_to}/assets")
+
+    if (WIN32)
+        set(_private_dlls "$<TARGET_FILE:Microsoft::WinPixEventRuntime>")
+        get_target_property(_ktx_type KTX::ktx TYPE)
+        if (_ktx_type STREQUAL "SHARED_LIBRARY")
+            list(APPEND _private_dlls "$<TARGET_FILE:KTX::ktx>")
+        endif()
+
+        list(APPEND _commands
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_RUNTIME_DLLS:${target}>"
+                ${_private_dlls}
+                "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
+                "$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
+                "$<TARGET_FILE:Microsoft::DirectX12-Core>"
+                "$<TARGET_FILE:Microsoft::DirectX12-Layers>"
+                "${_to}")
+    endif()
+
+    add_custom_target(${target}_bernini_runtime ALL
+        ${_commands}
+        COMMENT "Staging Bernini's runtime beside ${target}"
+        COMMAND_EXPAND_LISTS
+        VERBATIM)
+    add_dependencies(${target}_bernini_runtime ${target})
+endfunction()

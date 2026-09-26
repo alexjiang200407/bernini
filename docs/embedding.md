@@ -13,13 +13,14 @@ add_subdirectory(${BERNINI_DIR} ${CMAKE_BINARY_DIR}/bernini)
 ```
 
 Nothing is vendored and nothing is installed: the consumer has the checkout, compiles it into its own
-build tree, and links the targets by name. A general `find_package(Bernini)` binary engine package
-does not exist. The editor plugin SDK is narrower: a top-level renderer build exports only the
-matched-build targets plugins use into its own `editor_sdk` directory; see
-[Editor plugin contracts](editor_plugins.md).
+build tree, and links the targets by name. The other way in is an engine build's own package — the
+consumer links libraries that build already made and compiles only its own sources; see
+[Consuming a built engine](#consuming-a-built-engine). The editor plugin SDK is a narrower package
+of the same kind, exporting only what plugins use; see [Editor plugin contracts](editor_plugins.md).
 
-[tests/embed](../tests/embed) is that block with a `main()` under it, and `just embed` builds it.
-It is the only consumer in the repository; everything else here is the engine building itself.
+[tests/embed](../tests/embed) is that block with a `main()` under it, and `just embed` builds and
+runs it; `just embed --package` does the same through the package. It is the only consumer in the
+repository; everything else here is the engine building itself.
 
 ## What a consumer owes
 
@@ -120,8 +121,8 @@ to buy. `just embed` prints the rate for its own run.
 
 Making a game share with the engine or with another game means giving ccache a basedir that covers
 both trees, which is a decision about where every consumer's build directory lives rather than a
-line in this file — or building the engine once and consuming it as a binary, which is the
-`install()`/`export()` design this deliberately does not have.
+line in this file — or not compiling the engine in the game's tree at all, which is what
+[the package](#consuming-a-built-engine) is for.
 
 Two things cost hits and are worth knowing before blaming the basedir. Flags are hashed, so a
 consumer building `Release`, or with `BERNINI_PROFILING` set the other way from the engine, shares
@@ -135,6 +136,74 @@ wrapper script rather than the environment, and it is written into the *consumer
 after the basedir it carries. A consumer that calls `enable_compiler_cache()` itself therefore gets
 its own wrapper with its own basedir instead of overwriting ours, which would otherwise leave one of
 the two compiling uncached with nothing on screen to say so.
+
+## Consuming a built engine
+
+Every top-level engine build that has a renderer writes a CMake package for exactly what it built
+into `<build>/bernini_sdk/`: `BerniniTargets.cmake` from an `export(TARGETS …)` in the root
+[CMakeLists.txt](../CMakeLists.txt), and `BerniniConfig.cmake` from
+[cmake/BerniniConfig.cmake.in](../cmake/BerniniConfig.cmake.in). `just build bernini_package` builds
+what it names. A consumer then compiles only its own sources:
+
+```cmake
+set(VCPKG_MANIFEST_DIR "${BERNINI_DIR}")          # still the engine's ports
+set(VCPKG_INSTALLED_DIR "<the engine build's>")    # and the very tree it was built against
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+project(subway CXX)
+find_package(Bernini CONFIG REQUIRED)             # Bernini_DIR=<engine build>/bernini_sdk
+add_executable(subway main.cpp)
+target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl_extended)
+# D3D12 only: the Agility SDK's exports must live in the executable.
+if (TARGET Bernini::bgl_d3d12_agility)
+    target_link_libraries(subway PRIVATE Bernini::bgl_d3d12_agility)
+endif()
+target_precompile_headers(subway PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
+bernini_stage_runtime(subway)
+```
+
+**It is a build-tree package, not an install.** It points into the engine checkout and its build
+directory, so it is valid exactly as long as both are, and an engine rebuild reaches the consumer
+with no step in between. There is no `install()` rule and no relocatable copy.
+
+**One package per engine build, and the consumer's build type must match it.** Debug and Release
+are not a choice the consumer makes against one package: it names the engine build it matches, and
+`BerniniConfig.cmake` refuses a single-config consumer whose `CMAKE_BUILD_TYPE` differs — imported
+configurations would otherwise fall back to whatever the targets have, which is a C runtime clash
+at link on MSVC and a Debug engine silently inside a Release game elsewhere. `BERNINI_PROFILING`
+needs no check: `TRACY_ENABLE` rides on the link interface, so the consumer inherits the engine's.
+
+**The library shapes are the build's.** A top-level build with Qt turns
+`BERNINI_EDITOR_SDK` on, and with it `assetlib` and `gamelib` become shared; without Qt they are
+static. The package exports whichever this build made, and nothing on the consumer's side changes.
+
+**What the config gives a consumer beyond the targets:** `find_dependency` for every vcpkg port
+the exported link interfaces name, the same Release-only mapping for `KTX::ktx` the engine applies,
+and these variables:
+
+| | |
+|---|---|
+| `BERNINI_ROOT` | the engine checkout — for the precompiled header |
+| `BERNINI_BUILD_TYPE` | what the engine build was built as |
+| `BERNINI_RENDERER_BACKEND` | `DX12` or `METAL` |
+| `BERNINI_SHADERS_DIR` | the engine build's staged `shaders/` |
+| `BERNINI_ASSETS_DIR` | the checkout's `assets/` |
+
+**`bernini_stage_runtime(<target>)`** copies both directories beside the executable and, on Windows,
+its runtime DLLs. `$<TARGET_RUNTIME_DLLS>` finds most of them but not four, which it names
+itself: DXC and the Agility SDK, loaded by name so nothing links them, and PIX and — when `assetlib`
+is shared — libktx, which are `PRIVATE` to a shared engine library and so absent from the exported
+interface. It is a target of its own, `<target>_bernini_runtime`, in `ALL`
+and built after `<target>`, for two reasons: it must land after vcpkg's applocal step has copied
+the debug `ktx.dll` so the release one wins, and it must run even when an engine rebuild changed
+a shader without relinking the consumer. It needs CMake 3.26 for `copy_directory_if_different`.
+
+**One vcpkg tree.** The consumer must resolve the ports the engine was built against, so it points
+`VCPKG_INSTALLED_DIR` at the engine build's. In a workspace the engine reads
+`WS_VCPKG_INSTALLED_DIR` before its own `project()` exactly as a game does, so both land in the one
+shared tree; vcpkg caches the choice, so it applies to a build directory configured after it is set.
+
+**Not both packages in one consumer.** `Bernini` and `BerniniEditorSDK` declare the same
+`Bernini::` targets; a plugin takes the latter, a game the former.
 
 ## What a consumer cannot link
 
@@ -163,5 +232,7 @@ else runs, is this checkout either way, and nothing in the engine's CMake may na
 
 Two things hold that. `scripts/tests/test_cmake_root.py` fails if the name reappears anywhere,
 including under `apps/editor` and `examples/`, which a nested configure never reaches; and
-`just embed` compiles a real consumer, which is what proves the public include surface — the half a
-configure cannot see.
+`just embed` compiles and runs a real consumer, which is what proves the public include surface — the
+half a configure cannot see. `just embed --package` is the same consumer through the package, and CI
+runs it after each host's build, so an exported interface naming a port the config does not find,
+or a runtime DLL the staging misses, fails the pull request rather than the next game.

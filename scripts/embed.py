@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Build the engine the way a game does: as a subdirectory of somebody else's project.
+"""Build the engine the way a game does, as somebody else's project, and run the result.
 
 Usage:
-    python scripts/embed.py                  # configure and build tests/embed
+    python scripts/embed.py                  # configure, build and run tests/embed
+    python scripts/embed.py --package        # the same against the engine build's package
+    python scripts/embed.py --preset <p>     # the engine build to use (default: config.json)
     python scripts/embed.py --configure      # configure only, don't compile
     python scripts/embed.py --clean          # wipe the build dir first
     python scripts/embed.py --fresh-deps     # let vcpkg unpack its own tree (~800 MB)
@@ -12,7 +14,12 @@ tests/embed is the only consumer in the repository. Every other build here is th
 building itself, where a path built from CMAKE_SOURCE_DIR is right and stays right through
 any refactor -- so without this the property is invisible to the whole suite. A configure
 proves the build; compiling main.cpp proves the public include surface, which a configure
-cannot see. See docs/embedding.md.
+cannot see. Running it proves the renderer's library loads beside the executable and that the
+shaders and assets it resolves from its working directory were staged there. See docs/embedding.md.
+
+--package consumes the configured preset's build instead of compiling the engine into this tree:
+it builds that build's `bernini_package` target, then configures tests/embed with Bernini_DIR at
+its package and the build type it was built with, since the package refuses any other.
 
 The dependencies are the engine's, resolved from the engine's manifest, and by default the
 unpacked tree is the configured preset's rather than a second copy of it -- same manifest, same
@@ -40,6 +47,8 @@ import util.config as cfg
 
 PROJECT_DIR = os.path.join(ct.REPO_ROOT, "tests", "embed")
 DEFAULT_BUILD_DIR = os.path.join(ct.REPO_ROOT, "build", "embed")
+PACKAGE_BUILD_DIR = os.path.join(ct.REPO_ROOT, "build", "embed-package")
+EXE_NAME = "bernini_embed.exe" if sys.platform == "win32" else "bernini_embed"
 
 # The three ccache counters a build moves. A preprocessed hit is still a hit -- it skipped the
 # compiler -- so the rate below counts both.
@@ -89,28 +98,33 @@ def report_cache(before, after):
 
 # --- Configure -------------------------------------------------------------
 
-def shared_vcpkg_tree():
-    """The configured preset's unpacked vcpkg tree, when it is there.
+def shared_vcpkg_tree(engine_cache):
+    """The engine build's unpacked vcpkg tree and triplet, when there is one.
 
     Every consumer reads the engine's manifest and the same triplet, so one unpacked tree serves
-    all of them and there is no reason to unpack 800 MB again for one translation unit. Absent,
-    vcpkg does the usual thing under the embed build directory.
+    all of them and there is no reason to unpack 800 MB again for one translation unit -- and a
+    package's consumer must resolve the very ports the engine was built against. Absent, vcpkg
+    does the usual thing under the embed build directory.
     """
-    build_dir = ct.binary_dir_of(cfg.preset())
-    if not build_dir:
-        return None
-    tree = os.path.join(build_dir, "vcpkg_installed")
-    return tree if os.path.isdir(tree) else None
+    tree = engine_cache.get("VCPKG_INSTALLED_DIR")
+    if not tree or not os.path.isdir(tree):
+        return None, None
+    return tree, engine_cache.get("VCPKG_TARGET_TRIPLET")
 
 
-def configure_command(cmake, build_dir, args, env):
+def configure_command(cmake, build_dir, args, env, engine_dir):
     """Ninja, as the scaffolded game's presets use on both hosts, and nothing else assumed."""
-    preset = cfg.preset()
+    preset = cfg.preset(args.preset)
+    engine_cache = ct.read_cache(engine_dir) if engine_dir else {}
 
+    build_type = "Debug"
     cmd = [cmake, "-S", PROJECT_DIR, "-B", build_dir, "-G", "Ninja",
            f"-DBERNINI_DIR={ct.REPO_ROOT}",
-           "-DCMAKE_BUILD_TYPE=Debug",
            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+    if args.package:
+        cmd.append(f"-DBernini_DIR={os.path.join(engine_dir, 'bernini_sdk')}")
+        build_type = engine_cache.get("CMAKE_BUILD_TYPE") or cfg.build_config() or "Debug"
+    cmd.append(f"-DCMAKE_BUILD_TYPE={build_type}")
 
     vcpkg_root = cfg.find_vcpkg()
     if vcpkg_root:
@@ -130,12 +144,11 @@ def configure_command(cmake, build_dir, args, env):
             cmd += [f"-DCMAKE_C_COMPILER={clang['c']}", f"-DCMAKE_CXX_COMPILER={clang['cxx']}"]
 
     if not args.fresh_deps:
-        shared = shared_vcpkg_tree()
+        shared, triplet = shared_vcpkg_tree(engine_cache)
         if shared:
             cmd.append(f"-DVCPKG_INSTALLED_DIR={shared}")
             # The tree is one directory per triplet; without this vcpkg looks under the host
             # default and installs a second copy beside the one we came here to share.
-            triplet = ct.cache_var_of(preset, "VCPKG_TARGET_TRIPLET")
             if triplet:
                 cmd.append(f"-DVCPKG_TARGET_TRIPLET={triplet}")
 
@@ -147,7 +160,14 @@ def configure_command(cmake, build_dir, args, env):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR)
+    parser.add_argument("--build-dir",
+                        help=f"default: {cfg.rel(DEFAULT_BUILD_DIR)}, "
+                             f"or {cfg.rel(PACKAGE_BUILD_DIR)} with --package")
+    parser.add_argument("--package", action="store_true",
+                        help="consume the preset's engine build as a package")
+    parser.add_argument("--preset",
+                        help="the engine build to share vcpkg with, and to consume with --package "
+                             "(default: config.json)")
     parser.add_argument("--configure", action="store_true",
                         help="configure only; do not compile")
     parser.add_argument("--clean", action="store_true",
@@ -157,8 +177,16 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    build_dir = args.build_dir if os.path.isabs(args.build_dir) \
-        else os.path.join(ct.REPO_ROOT, args.build_dir)
+    build_dir = args.build_dir or (PACKAGE_BUILD_DIR if args.package else DEFAULT_BUILD_DIR)
+    if not os.path.isabs(build_dir):
+        build_dir = os.path.join(ct.REPO_ROOT, build_dir)
+
+    preset = cfg.preset(args.preset)
+    engine_dir = ct.binary_dir_of(preset)
+    if args.package and not engine_dir:
+        print(f"error: preset {preset} names no binaryDir, so there is no engine build "
+              "to take a package from.", file=sys.stderr)
+        return 1
 
     env, env_description = cfg.build_env("Ninja")
 
@@ -167,23 +195,37 @@ def main():
         print("error: cmake not found. Run `just init`, or put it on PATH.", file=sys.stderr)
         return 1
 
-    configure = configure_command(cmake, build_dir, args, env)
-    build = [cmake, "--build", build_dir, "--target", "bernini_embed"]
+    engine_build = [sys.executable, os.path.join(ct.REPO_ROOT, "scripts", "build.py"),
+                    "bernini_package", "--preset", preset]
+    # The staging target depends on the executable and runs after it, so it is the one to ask for.
+    target = "bernini_embed_bernini_runtime" if args.package else "bernini_embed"
+    build = [cmake, "--build", build_dir, "--target", target]
+    bin_dir = os.path.join(build_dir, "bin")
 
     if args.dry_run:
         print(f"environment: {env_description}")
-        print(" ".join(configure))
+        if args.package:
+            print(" ".join(engine_build))
+        print(" ".join(configure_command(cmake, build_dir, args, env, engine_dir)))
         if not args.configure:
             print(" ".join(build))
+            print(os.path.join(bin_dir, EXE_NAME))
         return 0
+
+    if args.package:
+        rc = subprocess.run(engine_build, cwd=ct.REPO_ROOT).returncode
+        if rc != 0:
+            return rc
 
     if args.clean and os.path.isdir(build_dir):
         shutil.rmtree(build_dir)
 
+    configure = configure_command(cmake, build_dir, args, env, engine_dir)
     rc = subprocess.run(configure, env=env, cwd=ct.REPO_ROOT).returncode
     if rc != 0:
-        print("\nThe engine did not configure as a subdirectory. This is the property "
-              "tests/embed exists to catch -- see docs/embedding.md.", file=sys.stderr)
+        how = "from its package" if args.package else "as a subdirectory"
+        print(f"\nThe engine did not configure {how}. This is the property tests/embed exists "
+              "to catch -- see docs/embedding.md.", file=sys.stderr)
         return rc
 
     if args.configure:
@@ -198,9 +240,19 @@ def main():
     if rc != 0:
         return rc
 
-    print()
-    report_cache(before, ccache_stats(ccache))
-    print(f"tests/embed built against {ct.REPO_ROOT}.")
+    # A package consumer compiles one file outside the engine's ccache launcher: nothing to report.
+    if not args.package:
+        print()
+        report_cache(before, ccache_stats(ccache))
+
+    rc = subprocess.run([os.path.join(bin_dir, EXE_NAME)], cwd=bin_dir).returncode
+    if rc != 0:
+        print(f"\n{EXE_NAME} exited {rc}: it links but does not run from {bin_dir}.",
+              file=sys.stderr)
+        return rc
+
+    source = f"the package in {engine_dir}" if args.package else ct.REPO_ROOT
+    print(f"tests/embed built against {source}, and ran.")
     return 0
 
 

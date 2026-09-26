@@ -25,7 +25,7 @@ def cmake_files():
     for dirpath, dirnames, filenames in os.walk(ct.REPO_ROOT):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for name in filenames:
-            if name.lower() == "cmakelists.txt" or name.endswith(".cmake"):
+            if name.lower() == "cmakelists.txt" or name.endswith((".cmake", ".cmake.in")):
                 yield os.path.join(dirpath, name)
 
 

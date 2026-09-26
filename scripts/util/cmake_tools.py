@@ -57,6 +57,21 @@ def find_build_dirs(explicit=None):
     return sorted(dirs)
 
 
+def read_cache(build_dir):
+    """{name: value} from a configured build dir's CMakeCache.txt, or {} when there is none."""
+    entries = {}
+    try:
+        with open(os.path.join(build_dir, "CMakeCache.txt"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith(("#", "//")) or "=" not in line or ":" not in line.split("=", 1)[0]:
+                    continue
+                key, value = line.rstrip("\n").split("=", 1)
+                entries[key.split(":", 1)[0]] = value
+    except OSError:
+        pass
+    return entries
+
+
 def is_multi_config(generator):
     """True for generators that pick Debug/Release at build time, not configure time."""
     if not generator:
