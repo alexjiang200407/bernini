@@ -173,6 +173,17 @@ namespace
 			red(assets.AcquireMaterial(c_OtherMaterialKey))
 		{}
 
+		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
+		// the tests build with /Wall /WX.
+		Held(const Held&) = delete;
+		Held(Held&&)      = delete;
+
+		Held&
+		operator=(const Held&) = delete;
+
+		Held&
+		operator=(Held&&) = delete;
+
 		bgl::GraphicsRef    gfx;
 		bgl::SceneRef       scene;
 		game::AssetManager  assets;
