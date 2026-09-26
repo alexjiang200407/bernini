@@ -7,6 +7,7 @@
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
+#include "Windows/GrassEditor/GrassEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -73,6 +74,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <QtTest/qtestmouse.h>
+#include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -1719,4 +1721,139 @@ TEST_CASE(
 	QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
 	CHECK(editor::test::WaitFor([&marked] { return !marked(); }));
 	CHECK(panel->GetHeldAssets() == std::vector<std::string>{ key });
+}
+
+namespace
+{
+	constexpr std::string_view c_GrassMaterialKey = "Authored/Materials/green.bmaterial";
+
+	/** A look saved at `key` naming `material`, with a key no reader knows to carry through a save. */
+	assetlib::BGrass
+	SaveGrassLook(const HeadlessEditor& editor, const std::string& key, std::string_view material)
+	{
+		const assetlib::AssetStore store(editor.DataRoot());
+
+		auto green = assetlib::BMaterial();
+		green.name = "Green";
+		store.Save(green, std::string(c_GrassMaterialKey));
+
+		auto look      = assetlib::BGrass();
+		look.material  = std::string(material);
+		look.extraJson = R"({"future":{"kept":true}})";
+		store.Save(look, key);
+		return store.Load<assetlib::BGrass>(key);
+	}
+
+	GrassEditorWindow*
+	OpenGrassLook(MainWindow& window, const std::string& key)
+	{
+		auto* explorer = window.findChild<ContentExplorerWindow*>();
+		REQUIRE(explorer != nullptr);
+		Q_EMIT explorer->AssetOpenRequested(QString::fromStdString(key));
+		QCoreApplication::processEvents();
+
+		auto* dock = window.findChild<QDockWidget*>("bernini.grass");
+		REQUIRE(dock != nullptr);
+		auto* panel = dynamic_cast<GrassEditorWindow*>(dock->widget());
+		REQUIRE(panel != nullptr);
+		REQUIRE(panel->GetKey() == key);
+		return panel;
+	}
+}
+
+TEST_CASE(
+	"A grass look is redrawn as it is edited, and written only when saved",
+	"[mainwindow][render][grassplugin]")
+{
+	const HeadlessEditor       editor;
+	const std::string          key   = "Authored/Grass/verge.bgrass";
+	const assetlib::BGrass     saved = SaveGrassLook(editor, key, c_GrassMaterialKey);
+	const assetlib::AssetStore store(editor.DataRoot());
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	GrassEditorWindow* panel = OpenGrassLook(window, key);
+	REQUIRE(panel->GetDrawnLook() == saved);
+	CHECK(
+		panel->GetHeldAssets() == std::vector<std::string>{ key, std::string(c_GrassMaterialKey) });
+
+	auto* maxHeight = panel->findChild<QDoubleSpinBox*>("Grass_max_height");
+	REQUIRE(maxHeight != nullptr);
+	maxHeight->setValue(0.9);
+	CHECK(panel->GetLook().blade.maxHeight == Catch::Approx(0.9f));
+	REQUIRE(panel->GetDrawnLook().has_value());
+	CHECK(panel->GetDrawnLook()->blade.maxHeight == Catch::Approx(0.9f));
+	CHECK(panel->IsDirty());
+	CHECK(store.Load<assetlib::BGrass>(key) == saved);
+
+	SECTION("A value the renderer refuses stays in the document and off the screen")
+	{
+		auto* fadeStart = panel->findChild<QDoubleSpinBox*>("Grass_fade_start");
+		auto* status    = panel->findChild<QLabel*>("GrassStatus");
+		REQUIRE(fadeStart != nullptr);
+		REQUIRE(status != nullptr);
+
+		// Past the fade end: CreateGrass refuses a fade that ends before it starts.
+		fadeStart->setValue(saved.density.fadeEnd + 10.0);
+		CHECK(panel->GetLook().density.fadeStart == Catch::Approx(saved.density.fadeEnd + 10.0f));
+		CHECK(panel->GetDrawnLook()->density.fadeStart == saved.density.fadeStart);
+		CHECK(status->isVisibleTo(panel));
+
+		fadeStart->setValue(saved.density.fadeStart);
+		CHECK(panel->GetDrawnLook() == panel->GetLook());
+		CHECK_FALSE(status->isVisibleTo(panel));
+	}
+
+	SECTION("Save writes the edit, and keeps what it did not understand")
+	{
+		auto* save = panel->findChild<QPushButton*>("GrassSave");
+		REQUIRE(save != nullptr);
+		REQUIRE(save->isEnabled());
+		save->click();
+
+		const auto written = store.Load<assetlib::BGrass>(key);
+		CHECK(written == panel->GetLook());
+		CHECK(written.blade.maxHeight == Catch::Approx(0.9f));
+		CHECK(nlohmann::json::parse(written.extraJson).contains("future"));
+		CHECK_FALSE(panel->IsDirty());
+		CHECK_FALSE(save->isEnabled());
+	}
+
+	SECTION("Revert puts back what the file says")
+	{
+		auto* revert = panel->findChild<QPushButton*>("GrassRevert");
+		REQUIRE(revert != nullptr);
+		revert->click();
+		CHECK(panel->GetLook() == saved);
+		CHECK(panel->GetDrawnLook() == saved);
+		CHECK(maxHeight->value() == Catch::Approx(saved.blade.maxHeight));
+	}
+
+	SECTION("Closing with an edit pending writes it")
+	{
+		CHECK(panel->CanClose());
+		CHECK(store.Load<assetlib::BGrass>(key).blade.maxHeight == Catch::Approx(0.9f));
+	}
+}
+
+TEST_CASE(
+	"A grass look with no material grows once one is named",
+	"[mainwindow][render][grassplugin]")
+{
+	const HeadlessEditor editor;
+	const std::string    key = "Authored/Grass/bare.bgrass";
+	SaveGrassLook(editor, key, "");
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	GrassEditorWindow* panel = OpenGrassLook(window, key);
+	CHECK_FALSE(panel->GetDrawnLook().has_value());
+
+	auto* material = panel->findChild<QLineEdit*>("GrassMaterial");
+	REQUIRE(material != nullptr);
+	material->setText(QString::fromUtf8(c_GrassMaterialKey.data(), c_GrassMaterialKey.size()));
+	Q_EMIT material->editingFinished();
+
+	REQUIRE(panel->GetDrawnLook().has_value());
+	CHECK(panel->GetDrawnLook()->material == c_GrassMaterialKey);
 }

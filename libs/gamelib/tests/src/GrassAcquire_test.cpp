@@ -157,3 +157,147 @@ TEST_CASE("A grass patch holds its look until released", "[grass][acquire]")
 	assets.ReleaseGeom(patch);
 	CHECK(assets.MaterialRefCount(material) == 1);
 }
+
+// An editor redraws a look as its author changes it, without saving it and without releasing what
+// draws it. What reaches the screen is the renderer's to pin; these pin what the manager holds.
+namespace
+{
+	constexpr std::string_view c_OtherMaterialKey = "Authored/Materials/red.bmaterial";
+
+	/** A manager over `dataRoot` holding a reference on both materials, so their counts can be asked. */
+	struct Held
+	{
+		explicit Held(const fs::path& dataRoot) :
+			gfx(bgl::CreateGraphics(HeadlessOptions())), scene(gfx->CreateScene(bgl::SceneDesc())),
+			assets(scene, dataRoot), green(assets.AcquireMaterial(c_MaterialKey)),
+			red(assets.AcquireMaterial(c_OtherMaterialKey))
+		{}
+
+		// The manager is non-copyable, so these would be implicitly deleted anyway; say so, because
+		// the tests build with /Wall /WX.
+		Held(const Held&) = delete;
+		Held(Held&&)      = delete;
+
+		Held&
+		operator=(const Held&) = delete;
+
+		Held&
+		operator=(Held&&) = delete;
+
+		bgl::GraphicsRef    gfx;
+		bgl::SceneRef       scene;
+		game::AssetManager  assets;
+		bgl::MaterialHandle green;
+		bgl::MaterialHandle red;
+	};
+
+	assetlib::BGrass
+	LookWith(std::string_view material)
+	{
+		auto look            = assetlib::BGrass();
+		look.material        = std::string(material);
+		look.blade.maxHeight = 0.9f;
+		return look;
+	}
+}
+
+TEST_CASE("A look set while a patch holds it keeps its material", "[grass][set_look]")
+{
+	const game::test::DataRoot root("bernini_grass_set_look");
+	ImportStreet(root.path, c_MaterialKey);
+	game::test::WriteMaterial(root.path / c_OtherMaterialKey, false);
+	Held held(root.path);
+
+	const bgl::GeomHandle patch =
+		held.assets.CreateGrassPatch({ .size = 4.0f, .spacing = 0.5f }, c_LookKey);
+	REQUIRE(held.assets.MaterialRefCount(held.green) == 2);
+
+	CHECK(held.assets.SetGrassLook(c_LookKey, LookWith(c_MaterialKey)));
+	CHECK(held.assets.MaterialRefCount(held.green) == 2);
+
+	// Not written: the store still holds the look as imported.
+	const assetlib::AssetStore store(root.path);
+	CHECK(store.Load<assetlib::BGrass>(std::string(c_LookKey)).blade.maxHeight != 0.9f);
+
+	held.assets.ReleaseGeom(patch);
+	CHECK(held.assets.MaterialRefCount(held.green) == 1);
+}
+
+TEST_CASE("A look set to another material moves its reference there", "[grass][set_look]")
+{
+	const game::test::DataRoot root("bernini_grass_set_material");
+	ImportStreet(root.path, c_MaterialKey);
+	game::test::WriteMaterial(root.path / c_OtherMaterialKey, false);
+	Held held(root.path);
+
+	const bgl::GeomHandle patch =
+		held.assets.CreateGrassPatch({ .size = 4.0f, .spacing = 0.5f }, c_LookKey);
+
+	REQUIRE(held.assets.SetGrassLook(c_LookKey, LookWith(c_OtherMaterialKey)));
+	CHECK(held.assets.MaterialRefCount(held.green) == 1);
+	CHECK(held.assets.MaterialRefCount(held.red) == 2);
+
+	held.assets.ReleaseGeom(patch);
+	CHECK(held.assets.MaterialRefCount(held.red) == 1);
+}
+
+TEST_CASE("A look nothing holds is not set", "[grass][set_look]")
+{
+	const game::test::DataRoot root("bernini_grass_set_unheld");
+	ImportStreet(root.path, "");
+	game::test::WriteMaterial(root.path / c_OtherMaterialKey, false);
+	Held held(root.path);
+
+	CHECK_FALSE(held.assets.SetGrassLook("Authored/Grass/nowhere.bgrass", LookWith(c_MaterialKey)));
+
+	// Acquired bare, since the stored look names no material: there is nothing drawn to set.
+	const bgl::GeomHandle patch =
+		held.assets.CreateGrassPatch({ .size = 4.0f, .spacing = 0.5f }, c_LookKey);
+	CHECK_FALSE(held.assets.SetGrassLook(c_LookKey, LookWith(c_MaterialKey)));
+	CHECK(held.assets.MaterialRefCount(held.green) == 1);
+	held.assets.ReleaseGeom(patch);
+}
+
+TEST_CASE("A look that cannot be drawn is refused and the old one stays", "[grass][set_look]")
+{
+	const game::test::DataRoot root("bernini_grass_set_refused");
+	ImportStreet(root.path, c_MaterialKey);
+	game::test::WriteMaterial(root.path / c_OtherMaterialKey, false);
+	Held held(root.path);
+
+	const bgl::GeomHandle patch =
+		held.assets.CreateGrassPatch({ .size = 4.0f, .spacing = 0.5f }, c_LookKey);
+
+	auto refused                 = LookWith(c_OtherMaterialKey);
+	refused.clump.bladesPerClump = 0;
+	CHECK_THROWS_AS(held.assets.SetGrassLook(c_LookKey, refused), bgl::SceneError);
+	CHECK_THROWS(held.assets.SetGrassLook(c_LookKey, LookWith("")));
+	CHECK_THROWS(
+		held.assets.SetGrassLook(c_LookKey, LookWith("Authored/Materials/none.bmaterial")));
+
+	CHECK(held.assets.MaterialRefCount(held.green) == 2);
+	CHECK(held.assets.MaterialRefCount(held.red) == 1);
+
+	// Still held and still settable.
+	CHECK(held.assets.SetGrassLook(c_LookKey, LookWith(c_OtherMaterialKey)));
+	held.assets.ReleaseGeom(patch);
+}
+
+TEST_CASE("A patch grows the look it is handed over the one the store holds", "[grass][set_look]")
+{
+	const game::test::DataRoot root("bernini_grass_patch_authored");
+	ImportStreet(root.path, "");
+	game::test::WriteMaterial(root.path / c_OtherMaterialKey, false);
+	Held held(root.path);
+
+	const bgl::GeomHandle patch = held.assets.CreateGrassPatch(
+		{ .size = 4.0f, .spacing = 0.5f },
+		c_LookKey,
+		LookWith(c_MaterialKey));
+	CHECK(held.assets.MaterialRefCount(held.green) == 2);
+	CHECK(held.assets.SetGrassLook(c_LookKey, LookWith(c_OtherMaterialKey)));
+
+	held.assets.ReleaseGeom(patch);
+	CHECK(held.assets.MaterialRefCount(held.green) == 1);
+	CHECK(held.assets.MaterialRefCount(held.red) == 1);
+}

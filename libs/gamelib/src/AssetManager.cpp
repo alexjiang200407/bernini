@@ -1220,6 +1220,26 @@ namespace game
 		std::string_view                look,
 		bgl::MaterialHandle             ground)
 	{
+		return BuildGrassPatch(desc, look, nullptr, ground);
+	}
+
+	bgl::GeomHandle
+	AssetManager::CreateGrassPatch(
+		const assetlib::GrassPatchDesc& desc,
+		std::string_view                look,
+		const assetlib::BGrass&         authored,
+		bgl::MaterialHandle             ground)
+	{
+		return BuildGrassPatch(desc, look, &authored, ground);
+	}
+
+	bgl::GeomHandle
+	AssetManager::BuildGrassPatch(
+		const assetlib::GrassPatchDesc& desc,
+		std::string_view                look,
+		const assetlib::BGrass*         authored,
+		bgl::MaterialHandle             ground)
+	{
 		const assetlib::BGrassFields grass = assetlib::makeGrassPatch(desc, std::string(look));
 
 		AddMaterialRef(ground);
@@ -1231,7 +1251,9 @@ namespace game
 
 		try
 		{
-			const bgl::GrassHandle handle = AcquireGrassLook(grass.looks[0]);
+			const bgl::GrassHandle handle = authored != nullptr ?
+			                                    AcquireGrassLook(grass.looks[0], *authored) :
+			                                    AcquireGrassLook(grass.looks[0]);
 			if (handle.IsValid())
 				record.grassLooks = { grass.looks[0] };
 
@@ -1490,7 +1512,18 @@ namespace game
 			return it->second.handle;
 		}
 
-		const auto look = m_Store.Load<assetlib::BGrass>(key);
+		return AcquireGrassLook(key, m_Store.Load<assetlib::BGrass>(key));
+	}
+
+	bgl::GrassHandle
+	AssetManager::AcquireGrassLook(const std::string& key, const assetlib::BGrass& look)
+	{
+		if (const auto it = m_GrassByPath.find(key); it != m_GrassByPath.end())
+		{
+			++it->second.refCount;
+			return it->second.handle;
+		}
+
 		if (look.material.empty())
 		{
 			logger::warn(
@@ -1520,6 +1553,39 @@ namespace game
 
 		m_GrassByPath.emplace(key, GrassRecord{ handle, material, 1 });
 		return handle;
+	}
+
+	bool
+	AssetManager::SetGrassLook(std::string_view look, const assetlib::BGrass& authored)
+	{
+		const auto it = m_GrassByPath.find(look);
+		if (it == m_GrassByPath.end())
+			return false;
+
+		if (authored.material.empty())
+		{
+			core::throw_runtime_error(
+				"AssetManager: grass look '{}' names no material, so it cannot be drawn",
+				look);
+		}
+
+		GrassRecord&              record   = it->second;
+		const bgl::MaterialHandle material = AcquireMaterial(authored.material);
+		try
+		{
+			m_Scene->UpdateGrass(record.handle, GrassDescOf(authored, material));
+		}
+		catch (...)
+		{
+			ReleaseMaterial(material);
+			throw;
+		}
+
+		// Released after the update rather than instead of the acquire, so a look that keeps its
+		// material never drops it to zero on the way.
+		ReleaseMaterial(record.material);
+		record.material = material;
+		return true;
 	}
 
 	void

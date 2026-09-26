@@ -29,6 +29,12 @@ square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That i
 opens the same patch in a window with a fly camera, and changes the wind as it runs: `[` `]` its
 strength, `,` `.` its heading, `G` the gusts.
 
+In the editor a `.bgrass` opens in the **Grass Editor**: every value of the look beside a patch of it
+in a wind the panel sets and never saves. An edit is drawn at once and written on Save, or when the
+panel closes with it pending: `AssetManager::SetGrassLook` puts the unsaved document on the look in
+place, and a patch whose look could not be drawn as stored is grown from the document instead. Where
+the clumps go is the mesh source's, and is not edited there.
+
 ## A blade
 
 A blade is a quadratic Bézier strip, built from its clump and a hash of its index
@@ -182,8 +188,8 @@ coarsens rather than popping, and no grass geometry in the file.
 - Grass does not follow deforming ground: clumps are in their mesh's space, and only a static geom
   takes grass.
 - Blades are not in a shadow map, and do not collide.
-- There is no grass editor: a `.bgrass` is edited as text and looked at with
-  `bgl_ai_viewer --grass`.
+- Clumps are not placed in the editor: a field is its mesh source's `POINTS`, authored where the
+  mesh is.
 
 ## Kept open
 
