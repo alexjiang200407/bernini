@@ -327,7 +327,7 @@ cause is a different one.
 **[AI Coding Bots](./docs/ai-coding.md)**
 
 Where the agent flows live (the bernini-workspace repo) and what bernini keeps of them
-(`.bcp/profile.md`). Then the two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which replies to reviews and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers commit attribution, registration, key custody, secrets, and revocation for both.
+(`.bcp/profile.md`). Then `morgana-coding-agent`, the GitHub App that gives AI work its own identity: it replies to reviews and co-authors commits from your machine. Covers commit attribution, registration, key custody, and revocation.
 
 **Specs** — not here, and not in `docs/`
 
