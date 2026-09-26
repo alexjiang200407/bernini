@@ -27,10 +27,6 @@ pointer text and the tests fail on them as though they were corrupt. Fetching th
 credentials -- the store serves reads publicly -- so the key it asks about is only for
 adding assets, and skipping it leaves a working clone. See docs/lfs.md.
 
-Finally, offers to set up this developer's morgana-coding-agent key, which bcp-revise
-posts PR review replies with. Optional, and skipped by a blank answer. See
-docs/ai-coding.md.
-
 Bootstrap this with `python scripts/init.py`; afterwards it is `just init`.
 
 Usage:
@@ -44,7 +40,6 @@ Usage:
     just init --no-lfs                              # skip the Git LFS setup
     just init --lfs-key                             # replace the stored LFS credentials
     just init --no-vcpkg                            # skip the vcpkg check
-    just init --no-bot                              # skip the morgana-coding-agent key setup
 """
 
 import argparse
@@ -64,15 +59,6 @@ import util.vcpkg as vcpkg
 import util.agent_setup as agent_setup
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
-
-# The shared morgana-coding-agent GitHub App that bcp-revise posts PR replies as. The
-# App ID is not a secret -- it identifies the App, the same one for everyone -- so it
-# lives here. Each developer supplies their own private key; see docs/ai-coding.md.
-BOT_APP_ID = "4304152"
-BOT_KEYS_URL = "https://github.com/settings/apps/morgana-coding-agent/keys"
-BOT_DIR = os.path.join(os.path.expanduser("~"), ".claude")
-BOT_KEY = os.path.join(BOT_DIR, "morgana-coding-agent.private-key.pem")
-BOT_ENV = os.path.join(BOT_DIR, "morgana-coding-agent.env")
 
 # Tools that come from a pinned wheel in requirements.txt when the machine has none. The
 # wheel is named after the executable it installs in every case.
@@ -609,9 +595,9 @@ def find_gh():
 def ensure_gh():
     """Report on the GitHub CLI, and offer to install it through the package manager.
 
-    bcp-revise uses it to read PR reviews and post replies. It is not a Python package --
-    the `gh` on PyPI is an unrelated project -- so it cannot come from a pinned wheel like
-    the rest; winget and brew are the way, and only the review workflow needs it at all.
+    Nothing in this repo's scripts calls it; it is how a developer reaches the repo's pull
+    requests. It is not a Python package -- the `gh` on PyPI is an unrelated project -- so
+    it cannot come from a pinned wheel like the rest; winget and brew are the way.
     """
     found = find_gh()
     if found:
@@ -622,7 +608,7 @@ def ensure_gh():
 
     offer_package(
         "gh",
-        "bcp-revise uses the GitHub CLI to read PR reviews and post replies.",
+        "The GitHub CLI reaches this repo's pull requests from the shell.",
         "Install it from https://cli.github.com/ and add it to PATH; it is not a pip package.",
     )
 
@@ -732,48 +718,6 @@ def ensure_vcpkg(install=True):
     if error:
         print(f"warning: cloned, but {error}", file=sys.stderr)
     return default
-
-
-def ensure_bot_key():
-    """Set up this developer's key for the morgana-coding-agent App bcp-revise posts with.
-
-    Optional: only devs who run the review-reply skill need it. Each dev uses their
-    own private key for the shared App, so a leaked key is revoked per person without
-    disturbing anyone else. The key is copied into ~/.claude (outside the repo, never
-    committed); the App ID is written beside it. See docs/ai-coding.md.
-    """
-    if os.path.isfile(BOT_KEY) and os.path.isfile(BOT_ENV):
-        print(f"bot key is configured: {BOT_KEY}")
-        return
-    if not interactive():
-        return
-
-    print("\nThe morgana-coding-agent GitHub App lets bcp-revise post PR review replies under a\n"
-          "bot identity instead of your own account. It is optional -- set it up only if you\n"
-          "run that skill. Generate your own private key (Generate a private key) at:\n"
-          f"    {BOT_KEYS_URL}\n"
-          "then give the path to the downloaded .pem. See docs/ai-coding.md.")
-    raw = ask("path to the bot private key .pem (blank to skip): ").strip('"')
-    if not raw:
-        print("skipped; bcp-revise posts as your own account until you run this again.")
-        return
-
-    src = os.path.expanduser(os.path.expandvars(raw))
-    if not os.path.isfile(src):
-        print(f"  '{raw}' does not exist; skipped.", file=sys.stderr)
-        return
-
-    os.makedirs(BOT_DIR, exist_ok=True)
-    shutil.copyfile(src, BOT_KEY)
-    with open(BOT_ENV, "w", encoding="utf-8") as fh:
-        fh.write(f"MORGANA_APP_ID={BOT_APP_ID}\n")
-        fh.write("MORGANA_KEY=~/.claude/morgana-coding-agent.private-key.pem\n")
-    for path in (BOT_KEY, BOT_ENV):
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass  # NTFS via Git Bash ignores mode bits; the files are in the user profile.
-    print(f"wrote {BOT_KEY}\nwrote {BOT_ENV}")
 
 
 def obtain(label, finder, purpose, hint, install=True):
@@ -891,7 +835,7 @@ def main():
     parser.add_argument("--preset", help="CMake preset to record (default: ask).")
     parser.add_argument("--arch", help=f"vcvars architecture (default: {cfg.DEFAULT_ARCH}).")
     parser.add_argument("--agents-only", action="store_true",
-                        help="Repair agent links and Codex config without changing build config or installing tools.")
+                        help="Repair the AGENTS.md link without changing build config or installing tools.")
     parser.add_argument("--force", action="store_true", help="Overwrite an existing config.json without asking.")
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
@@ -901,12 +845,10 @@ def main():
     parser.add_argument("--lfs-key", action="store_true",
                         help="Ask for the key that uploads assets, replacing what is stored.")
     parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
-    parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
     if not args.show:
         agent_setup.instructions(ct.REPO_ROOT)
-        agent_setup.codex(ct.REPO_ROOT)
     if args.agents_only:
         return 0
 
@@ -951,8 +893,6 @@ def main():
     ensure_hooks()
     if not args.no_lfs:
         ensure_lfs(args.lfs_key)
-    if not args.no_bot:
-        ensure_bot_key()
     return 0
 
 
