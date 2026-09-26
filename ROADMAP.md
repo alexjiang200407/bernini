@@ -357,8 +357,8 @@ and portability.
 - [ ] Scene Representation
 - [ ] Foliage
   - [x] Grass -- mesh-stage blades from a mesh source's POINTS clumps, wind, screen-size thinning,
-    lit through the material ([Grass](docs/grass.md)). Kept open: collision and trampling, terrain
-    grass, a grass editor.
+    lit through the material ([Grass](docs/grass.md)), and a look editor with a live preview in the
+    editor. Kept open: collision and trampling, terrain grass, placing clumps in the editor.
   - [ ] Trees
 - [ ] Water
 - [ ] Screen-space / Volume Decal Pipeline
