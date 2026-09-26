@@ -18,7 +18,7 @@
 
 namespace assetlib
 {
-	using core::throw_runtime_error_if;
+	using core::throw_runtime_error;
 
 	namespace
 	{
@@ -40,46 +40,55 @@ namespace assetlib
 		void
 		validateGrassFields(const BGrassFields& grass)
 		{
-			throw_runtime_error_if(
-				grass.names.size() != grass.fields.size(),
-				"bgrassfields: {} fields but {} names",
-				grass.fields.size(),
-				grass.names.size());
+			if (grass.names.size() != grass.fields.size())
+			{
+				throw_runtime_error(
+					"bgrassfields: {} fields but {} names",
+					grass.fields.size(),
+					grass.names.size());
+			}
 
 			for (size_t f = 0; f < grass.fields.size(); ++f)
 			{
 				const GrassField& field = grass.fields[f];
-				throw_runtime_error_if(
-					field.look != c_InvalidIndex && field.look >= grass.looks.size(),
-					"bgrassfields: field {} draws with look slot {}, past the {} it holds",
-					f,
-					field.look,
-					grass.looks.size());
-				throw_runtime_error_if(
-					field.chunkCount == 0 ||
-						static_cast<uint64_t>(field.firstChunk) + field.chunkCount >
-							grass.chunks.size(),
-					"bgrassfields: field {} addresses chunks {}+{}, outside the {} there are",
-					f,
-					field.firstChunk,
-					field.chunkCount,
-					grass.chunks.size());
+				if (field.look != c_InvalidIndex && field.look >= grass.looks.size())
+				{
+					throw_runtime_error(
+						"bgrassfields: field {} draws with look slot {}, past the {} it holds",
+						f,
+						field.look,
+						grass.looks.size());
+				}
+				if (field.chunkCount == 0 ||
+				    static_cast<uint64_t>(field.firstChunk) + field.chunkCount >
+				        grass.chunks.size())
+				{
+					throw_runtime_error(
+						"bgrassfields: field {} addresses chunks {}+{}, outside the {} there are",
+						f,
+						field.firstChunk,
+						field.chunkCount,
+						grass.chunks.size());
+				}
 			}
 
 			for (size_t c = 0; c < grass.chunks.size(); ++c)
 			{
 				const GrassChunk& chunk = grass.chunks[c];
-				throw_runtime_error_if(
-					chunk.clumpCount == 0 || chunk.clumpCount > c_GrassClumpsPerChunk ||
-						static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
-							grass.clumps.size(),
-					"bgrassfields: chunk {} addresses clumps {}+{}, outside the {} there are or "
-					"more than {}",
-					c,
-					chunk.firstClump,
-					chunk.clumpCount,
-					grass.clumps.size(),
-					c_GrassClumpsPerChunk);
+				if (chunk.clumpCount == 0 || chunk.clumpCount > c_GrassClumpsPerChunk ||
+				    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
+				        grass.clumps.size())
+				{
+					throw_runtime_error(
+						"bgrassfields: chunk {} addresses clumps {}+{}, outside the {} there are "
+						"or "
+						"more than {}",
+						c,
+						chunk.firstClump,
+						chunk.clumpCount,
+						grass.clumps.size(),
+						c_GrassClumpsPerChunk);
+				}
 			}
 		}
 	}

@@ -169,17 +169,20 @@ namespace assetlib
 		importedParameters(const AssetStore& store, const std::string& sourceKey)
 		{
 			const std::string documentKey = importDocumentKeyFor(sourceKey);
-			core::throw_runtime_error_if(
-				!store.Exists(documentKey),
-				"'{}' has no import document beside it, so what it was imported at is unknowable; "
-				"re-import it",
-				sourceKey);
+			if (!store.Exists(documentKey))
+			{
+				core::throw_runtime_error(
+					"'{}' has no import document beside it, so what it was imported at is "
+					"unknowable; "
+					"re-import it",
+					sourceKey);
+			}
 
 			const ImportDocument document = loadImportDocument(store.GetFiles(), documentKey);
-			core::throw_runtime_error_if(
-				!document.environment,
-				"'{}' records no environment parameters",
-				documentKey);
+			if (!document.environment)
+			{
+				core::throw_runtime_error("'{}' records no environment parameters", documentKey);
+			}
 			return *document.environment;
 		}
 	}
@@ -262,9 +265,10 @@ namespace assetlib
 	void
 	AssetStore::BakeSky(BSky& sky, const CancelToken& cancel) const
 	{
-		core::throw_runtime_error_if(
-			sky.sky.source.empty(),
-			"assetlib::bakeSky: nothing is routed");
+		if (sky.sky.source.empty())
+		{
+			core::throw_runtime_error("assetlib::bakeSky: nothing is routed");
+		}
 
 		const EnvironmentImportParameters parameters = importedParameters(*this, sky.sky.source);
 		const SourceStamp                 stamp      = StampOf(sky.sky.source);
@@ -285,11 +289,14 @@ namespace assetlib
 	void
 	AssetStore::BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel) const
 	{
-		core::throw_runtime_error_if(
-			lighting.prefilter.source.empty() ||
-				lighting.prefilter.source != lighting.irradiance.source,
-			"assetlib::bakeEnvLighting: both maps must route one source; they are convolutions of "
-			"one radiance and cannot be baked apart");
+		if (lighting.prefilter.source.empty() ||
+		    lighting.prefilter.source != lighting.irradiance.source)
+		{
+			core::throw_runtime_error(
+				"assetlib::bakeEnvLighting: both maps must route one source; they are convolutions "
+				"of "
+				"one radiance and cannot be baked apart");
+		}
 
 		const std::string&                source     = lighting.prefilter.source;
 		const EnvironmentImportParameters parameters = importedParameters(*this, source);

@@ -51,10 +51,12 @@ namespace assetlib
 	void
 	requireSelfContainedSource(const std::filesystem::path& source)
 	{
-		core::throw_runtime_error_if(
-			extensionOf(source.generic_string()) != c_ImportedSourceExtension,
-			"'{}': import needs a self-contained source; export as .glb",
-			source.string());
+		if (extensionOf(source.generic_string()) != c_ImportedSourceExtension)
+		{
+			core::throw_runtime_error(
+				"'{}': import needs a self-contained source; export as .glb",
+				source.string());
+		}
 	}
 
 	void
@@ -64,11 +66,14 @@ namespace assetlib
 		for (const Submesh& submesh : mesh.submeshes)
 		{
 			const std::string_view name = mesh.stringPool.at(submesh.nameOffset);
-			core::throw_runtime_error_if(
-				!seen.insert(name).second,
-				"'{}' names two submeshes; the name is what a material binding addresses, so name "
-				"the meshes in the DCC",
-				name);
+			if (!seen.insert(name).second)
+			{
+				core::throw_runtime_error(
+					"'{}' names two submeshes; the name is what a material binding addresses, so "
+					"name "
+					"the meshes in the DCC",
+					name);
+			}
 		}
 	}
 
@@ -92,18 +97,23 @@ namespace assetlib
 		{
 			const std::string normalized = normalizeRef(key);
 
-			core::throw_runtime_error_if(
-				!isUnder(normalized, c_MeshSourcesDirectoryName),
-				"'{}': an imported source lives under '{}', which is where a re-import looks for "
-				"it",
-				key,
-				c_MeshSourcesDirectoryName);
+			if (!isUnder(normalized, c_MeshSourcesDirectoryName))
+			{
+				core::throw_runtime_error(
+					"'{}': an imported source lives under '{}', which is where a re-import looks "
+					"for "
+					"it",
+					key,
+					c_MeshSourcesDirectoryName);
+			}
 
-			core::throw_runtime_error_if(
-				extensionOf(normalized) != c_ImportedSourceExtension,
-				"'{}': an imported source is a '{}'",
-				key,
-				c_ImportedSourceExtension);
+			if (extensionOf(normalized) != c_ImportedSourceExtension)
+			{
+				core::throw_runtime_error(
+					"'{}': an imported source is a '{}'",
+					key,
+					c_ImportedSourceExtension);
+			}
 		}
 
 		/**
@@ -196,10 +206,12 @@ namespace assetlib
 	SourceRef
 	AssetStore::CopyImportedSource(const std::filesystem::path& source, std::string_view key) const
 	{
-		core::throw_runtime_error_if(
-			!isImportedSourceKey(key),
-			"'{}' is not where an imported source lives, so a re-import would never find it",
-			key);
+		if (!isImportedSourceKey(key))
+		{
+			core::throw_runtime_error(
+				"'{}' is not where an imported source lives, so a re-import would never find it",
+				key);
+		}
 
 		const std::filesystem::path copied = ResolveWritePath(key);
 
@@ -213,22 +225,24 @@ namespace assetlib
 				copied,
 				std::filesystem::copy_options::overwrite_existing,
 				ec);
-			core::throw_runtime_error_if(
-				static_cast<bool>(ec),
-				"cannot copy '{}' to '{}': {}",
-				source.string(),
-				copied.string(),
-				ec.message());
+			if (static_cast<bool>(ec))
+			{
+				core::throw_runtime_error(
+					"cannot copy '{}' to '{}': {}",
+					source.string(),
+					copied.string(),
+					ec.message());
+			}
 		}
 
 		SourceRef ref;
 		ref.key                            = normalizeRef(key);
 		ref.stamp.size                     = std::filesystem::file_size(copied);
 		const std::optional<uint64_t> hash = core::file::hash_file(copied);
-		core::throw_runtime_error_if(
-			!hash.has_value(),
-			"cannot hash '{}' after copying it",
-			copied.string());
+		if (!hash.has_value())
+		{
+			core::throw_runtime_error("cannot hash '{}' after copying it", copied.string());
+		}
 		ref.stamp.hash = *hash;
 		return ref;
 	}
@@ -387,11 +401,14 @@ namespace assetlib
 
 		auto seen = std::unordered_set<std::string_view>();
 		for (const std::string& name : grass.names)
-			core::throw_runtime_error_if(
-				!seen.insert(name).second,
-				"'{}' names two grass fields; the name is what a grass binding addresses, so name "
-				"the meshes in the DCC",
-				name);
+			if (!seen.insert(name).second)
+			{
+				core::throw_runtime_error(
+					"'{}' names two grass fields; the name is what a grass binding addresses, so "
+					"name "
+					"the meshes in the DCC",
+					name);
+			}
 
 		grass.looks.clear();
 		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
@@ -423,16 +440,20 @@ namespace assetlib
 	ImportDocument
 	AssetStore::LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const
 	{
-		core::throw_runtime_error_if(
-			sourceKey.empty(),
-			"'{}': no source was ever recorded, so there is no import document to rebind in",
-			submesh);
+		if (sourceKey.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': no source was ever recorded, so there is no import document to rebind in",
+				submesh);
+		}
 
 		const std::filesystem::path documentPath = ImportDocumentPath(sourceKey);
-		core::throw_runtime_error_if(
-			!std::filesystem::exists(documentPath),
-			"'{}': no import document to rebind in -- re-import the source",
-			documentPath.string());
+		if (!std::filesystem::exists(documentPath))
+		{
+			core::throw_runtime_error(
+				"'{}': no import document to rebind in -- re-import the source",
+				documentPath.string());
+		}
 		return loadImportDocument(documentPath);
 	}
 
@@ -462,7 +483,10 @@ namespace assetlib
 		std::string_view name,
 		std::string_view material) const
 	{
-		core::throw_runtime_error_if(name.empty(), "'{}': an override needs a name", submesh);
+		if (name.empty())
+		{
+			core::throw_runtime_error("'{}': an override needs a name", submesh);
+		}
 		ImportDocument document = LoadDocumentToRebind(sourceKey, submesh);
 
 		const auto found = std::ranges::find_if(
@@ -495,11 +519,10 @@ namespace assetlib
 			std::erase_if(document.materialOverrides, [&](const MaterialOverrideBinding& entry) {
 				return entry.submesh == submesh && entry.name == name;
 			});
-		core::throw_runtime_error_if(
-			removed == 0,
-			"'{}': no override named '{}' to remove",
-			submesh,
-			name);
+		if (removed == 0)
+		{
+			core::throw_runtime_error("'{}': no override named '{}' to remove", submesh, name);
+		}
 
 		core::file::write_atomic(
 			ImportDocumentPath(sourceKey),
@@ -511,10 +534,10 @@ namespace assetlib
 	{
 		namespace fs = std::filesystem;
 
-		core::throw_runtime_error_if(
-			!fs::is_directory(GetDataRoot()),
-			"'{}' is not a directory",
-			GetDataRoot().string());
+		if (!fs::is_directory(GetDataRoot()))
+		{
+			core::throw_runtime_error("'{}' is not a directory", GetDataRoot().string());
+		}
 
 		// Which mesh claims which source, by the frozen header alone -- readable whatever the
 		// file's bake revision, which is what lets a stale mesh still name its document.
@@ -563,12 +586,14 @@ namespace assetlib
 
 				const auto   claimed   = claims.find(sourceKey);
 				const size_t claimants = claimed == claims.end() ? 0 : claimed->second.size();
-				core::throw_runtime_error_if(
-					claimants > 1,
-					"{} meshes derive from '{}', so which one's bindings this document should "
-					"record is ambiguous",
-					claimants,
-					sourceKey);
+				if (claimants > 1)
+				{
+					core::throw_runtime_error(
+						"{} meshes derive from '{}', so which one's bindings this document should "
+						"record is ambiguous",
+						claimants,
+						sourceKey);
+				}
 
 				// A claimless document is a clips-only group, which binds nothing -- unless a
 				// mesh header would not read, in which case that mesh may be the claimant and
@@ -857,10 +882,12 @@ namespace assetlib
 		// the alternative to reporting it is saving a `.banim` whose signature names one rig while
 		// its `skeleton` names another -- which nothing downstream can tell from a cooked one.
 		if (clips.skeletonSignature != skeletonSignature(bound))
-			core::throw_runtime_error_if(
-				!remapAnimations(clips, bound),
-				"'{}' matched this file's rig but its clips cannot be re-addressed to it",
-				clips.skeleton);
+			if (!remapAnimations(clips, bound))
+			{
+				core::throw_runtime_error(
+					"'{}' matched this file's rig but its clips cannot be re-addressed to it",
+					clips.skeleton);
+			}
 
 		bakeBoundsForRig(
 			*this,

@@ -242,11 +242,13 @@ namespace assetlib
 
 		const auto pairs = reader.Read<PackedOverride>(ChunkId::kMaterialOverrides);
 		const auto names = cache::unpackStrings(reader.Read<char>(ChunkId::kMaterialOverrideNames));
-		core::throw_runtime_error_if(
-			pairs.size() != names.size(),
-			"bmesh: {} material overrides but {} override names",
-			pairs.size(),
-			names.size());
+		if (pairs.size() != names.size())
+		{
+			core::throw_runtime_error(
+				"bmesh: {} material overrides but {} override names",
+				pairs.size(),
+				names.size());
+		}
 		mesh.materialOverrides.reserve(pairs.size());
 		for (size_t i = 0; i < pairs.size(); ++i)
 			mesh.materialOverrides.emplace_back(pairs[i].submesh, names[i], pairs[i].material);

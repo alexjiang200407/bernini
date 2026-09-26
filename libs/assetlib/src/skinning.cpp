@@ -603,10 +603,10 @@ namespace assetlib
 		const Skeleton&     skeleton,
 		const AnimationSet& animations)
 	{
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"posedBounds: mesh index {} out of range",
-			meshIndex);
+		if (meshIndex >= mesh.meshes.size())
+		{
+			core::throw_runtime_error("posedBounds: mesh index {} out of range", meshIndex);
+		}
 
 		auto out = unboundedBox();
 
@@ -621,10 +621,10 @@ namespace assetlib
 		if (isEmpty(out))
 			out = bindPoseBounds(mesh, mesh.meshes[meshIndex]);
 
-		core::throw_runtime_error_if(
-			isEmpty(out),
-			"posedBounds: mesh {} has no submesh to bound",
-			meshIndex);
+		if (isEmpty(out))
+		{
+			core::throw_runtime_error("posedBounds: mesh {} has no submesh to bound", meshIndex);
+		}
 
 		return out;
 	}
@@ -636,10 +636,10 @@ namespace assetlib
 		const Skeleton&     skeleton,
 		const AnimationSet& animations)
 	{
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"exactPosedBounds: mesh index {} out of range",
-			meshIndex);
+		if (meshIndex >= mesh.meshes.size())
+		{
+			core::throw_runtime_error("exactPosedBounds: mesh index {} out of range", meshIndex);
+		}
 
 		const Mesh& entry = mesh.meshes[meshIndex];
 
@@ -679,10 +679,12 @@ namespace assetlib
 		if (isEmpty(out))
 			out = bindPoseBounds(mesh, entry);
 
-		core::throw_runtime_error_if(
-			isEmpty(out),
-			"exactPosedBounds: mesh {} has no submesh to bound",
-			meshIndex);
+		if (isEmpty(out))
+		{
+			core::throw_runtime_error(
+				"exactPosedBounds: mesh {} has no submesh to bound",
+				meshIndex);
+		}
 
 		return out;
 	}
@@ -1208,11 +1210,13 @@ namespace assetlib
 
 		for (const AvatarLegChain& chain : chains)
 		{
-			core::throw_runtime_error_if(
-				chain.ankleBoneIndex >= skeleton.bones.size() ||
-					chain.toeBoneIndex >= skeleton.bones.size(),
-				"skinning: a leg names a bone outside the {}-bone skeleton",
-				skeleton.bones.size());
+			if (chain.ankleBoneIndex >= skeleton.bones.size() ||
+			    chain.toeBoneIndex >= skeleton.bones.size())
+			{
+				core::throw_runtime_error(
+					"skinning: a leg names a bone outside the {}-bone skeleton",
+					skeleton.bones.size());
+			}
 
 			const glm::mat4 toAnkle = skeleton.bones[chain.ankleBoneIndex].inverseBind;
 
@@ -1357,21 +1361,25 @@ namespace assetlib
 
 		const std::span<const AvatarLegChain> chains = avatar.legs;
 
-		core::throw_runtime_error_if(
-			soles.size() != chains.size(),
-			"skinning: {} sole planes for {} legs",
-			soles.size(),
-			chains.size());
+		if (soles.size() != chains.size())
+		{
+			core::throw_runtime_error(
+				"skinning: {} sole planes for {} legs",
+				soles.size(),
+				chains.size());
+		}
 
 		// Checked here and not left to the pose walk: this reads `model[chain.ankleBoneIndex]` directly, and
 		// a public function that indexes a caller's number has to judge it rather than trust that
 		// solePlanes was asked first.
 		for (const AvatarLegChain& chain : chains)
-			core::throw_runtime_error_if(
-				chain.ankleBoneIndex >= skeleton.bones.size(),
-				"skinning: a leg names bone {}, which is outside the {}-bone skeleton",
-				chain.ankleBoneIndex,
-				skeleton.bones.size());
+			if (chain.ankleBoneIndex >= skeleton.bones.size())
+			{
+				core::throw_runtime_error(
+					"skinning: a leg names bone {}, which is outside the {}-bone skeleton",
+					chain.ankleBoneIndex,
+					skeleton.bones.size());
+			}
 
 		const size_t legs = chains.size();
 		const size_t frames =

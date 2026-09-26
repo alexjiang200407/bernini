@@ -36,12 +36,14 @@ namespace assetlib
 	void
 	requireOrigin(const std::string_view key, const AssetOrigin origin, const std::string_view what)
 	{
-		core::throw_runtime_error_if(
-			originOf(key) != origin,
-			"{}: {} belongs under {}/, so '{}' is not a place it can be written",
-			what,
-			origin == AssetOrigin::kDerived ? "a derived container" : "an authored document",
-			nameOf(origin),
-			key);
+		if (originOf(key) != origin)
+		{
+			core::throw_runtime_error(
+				"{}: {} belongs under {}/, so '{}' is not a place it can be written",
+				what,
+				origin == AssetOrigin::kDerived ? "a derived container" : "an authored document",
+				nameOf(origin),
+				key);
+		}
 	}
 }

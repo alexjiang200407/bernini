@@ -67,11 +67,13 @@ namespace bgl
 			m_Offsets.grow(grown);
 
 			handle = tryAllocate(float4Count);
-			core::throw_runtime_error_if(
-				handle.is_null(),
-				"BonePaletteBuffer: {} float4s do not fit even after growing to {}",
-				float4Count,
-				Capacity());
+			if (handle.is_null())
+			{
+				core::throw_runtime_error(
+					"BonePaletteBuffer: {} float4s do not fit even after growing to {}",
+					float4Count,
+					Capacity());
+			}
 		}
 
 		return handle;

@@ -64,10 +64,12 @@ namespace assetlib
 	BEnv
 	AssetCodec<BEnv>::Deserialize(std::span<const std::byte> bytes)
 	{
-		core::throw_runtime_error_if(
-			!isTextAssetDocument(bytes),
-			"benv: not a text document; a chunk-era file is no longer convertible -- "
-			"re-import the environment");
+		if (!isTextAssetDocument(bytes))
+		{
+			core::throw_runtime_error(
+				"benv: not a text document; a chunk-era file is no longer convertible -- "
+				"re-import the environment");
+		}
 		return envFromDocument(
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}

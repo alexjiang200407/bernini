@@ -52,11 +52,13 @@ namespace assetlib
 	{
 		std::error_code             ec;
 		const std::filesystem::path relative = std::filesystem::relative(path, m_DataRoot, ec);
-		core::throw_runtime_error_if(
-			ec || relative.empty() || *relative.begin() == "..",
-			"assetlib::AssetStore::KeyFor: '{}' is not inside the data root '{}'",
-			path.string(),
-			m_DataRoot.string());
+		if (ec || relative.empty() || *relative.begin() == "..")
+		{
+			core::throw_runtime_error(
+				"assetlib::AssetStore::KeyFor: '{}' is not inside the data root '{}'",
+				path.string(),
+				m_DataRoot.string());
+		}
 
 		// generic_string, not string: a key is `/`-separated, and on Windows the native spelling
 		// is not -- a `\`-separated key resolves loose and misses packed. See STYLE.md's Paths.

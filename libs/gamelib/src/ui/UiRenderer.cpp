@@ -92,9 +92,11 @@ namespace game
 		Impl(bgl::IGraphics& graphics, const assetlib::AssetStore& store) :
 			m_Store(store), m_Overlay(graphics.CreateOverlay())
 		{
-			core::throw_runtime_error_if(
-				m_Overlay == nullptr,
-				"game::UiRenderer: the graphics did not create an overlay");
+			if (m_Overlay == nullptr)
+			{
+				core::throw_runtime_error(
+					"game::UiRenderer: the graphics did not create an overlay");
+			}
 		}
 
 		~Impl() noexcept override = default;
@@ -203,11 +205,13 @@ namespace game
 					return LoadTargetTexture(dimensions, source);
 				}
 
-				core::throw_runtime_error_if(
-					IsSchemeSource(source),
-					"'{}' carries a scheme this runtime does not resolve; only '{}' is",
-					source,
-					c_TargetScheme);
+				if (IsSchemeSource(source))
+				{
+					core::throw_runtime_error(
+						"'{}' carries a scheme this runtime does not resolve; only '{}' is",
+						source,
+						c_TargetScheme);
+				}
 
 				assetlib::ImageData img = m_Store.LoadTexture(source);
 				dimensions =
@@ -378,10 +382,10 @@ namespace game
 			const std::string name = source.substr(c_TargetScheme.size());
 
 			const auto it = m_Targets.find(name);
-			core::throw_runtime_error_if(
-				it == m_Targets.end(),
-				"no render target is registered as '{}'",
-				name);
+			if (it == m_Targets.end())
+			{
+				core::throw_runtime_error("no render target is registered as '{}'", name);
+			}
 
 			dimensions = Rml::Vector2i(
 				static_cast<int>(it->second->GetWidth()),
@@ -431,14 +435,17 @@ namespace game
 	void
 	UiRenderer::RegisterTarget(std::string name, bgl::RenderTargetRef target)
 	{
-		core::throw_runtime_error_if(
-			name.empty(),
-			"game::UiRenderer::RegisterTarget: a target needs a name");
+		if (name.empty())
+		{
+			core::throw_runtime_error("game::UiRenderer::RegisterTarget: a target needs a name");
+		}
 
-		core::throw_runtime_error_if(
-			target == nullptr,
-			"game::UiRenderer::RegisterTarget: '{}' needs a target",
-			name);
+		if (target == nullptr)
+		{
+			core::throw_runtime_error(
+				"game::UiRenderer::RegisterTarget: '{}' needs a target",
+				name);
+		}
 
 		m_Impl->RegisterTarget(std::move(name), std::move(target));
 	}

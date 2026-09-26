@@ -15,10 +15,10 @@ namespace assetlib::doc
 	parseObject(std::string_view text, std::string_view what)
 	{
 		auto json = nlohmann::json::parse(text, nullptr, false);
-		core::throw_runtime_error_if(
-			json.is_discarded() || !json.is_object(),
-			"{} is not a JSON object",
-			what);
+		if (json.is_discarded() || !json.is_object())
+		{
+			core::throw_runtime_error("{} is not a JSON object", what);
+		}
 		return json;
 	}
 

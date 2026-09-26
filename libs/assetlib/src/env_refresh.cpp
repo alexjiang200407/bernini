@@ -178,22 +178,28 @@ namespace assetlib
 		ZoneScopedN("assetlib refresh environment");
 		ZoneTextF("%.*s", static_cast<int>(sourceKey.size()), sourceKey.data());
 
-		core::throw_runtime_error_if(
-			IsReadOnly(),
-			"'{}': this project has nowhere to write, so its environment cannot be re-cooked",
-			sourceKey);
+		if (IsReadOnly())
+		{
+			core::throw_runtime_error(
+				"'{}': this project has nowhere to write, so its environment cannot be re-cooked",
+				sourceKey);
+		}
 
-		core::throw_runtime_error_if(
-			!Exists(sourceKey),
-			"'{}' is not in this project, so there is nothing to re-cook from",
-			sourceKey);
+		if (!Exists(sourceKey))
+		{
+			core::throw_runtime_error(
+				"'{}' is not in this project, so there is nothing to re-cook from",
+				sourceKey);
+		}
 
 		const std::string documentKey = importDocumentKeyFor(sourceKey);
-		core::throw_runtime_error_if(
-			!Exists(documentKey),
-			"'{}': the import document beside it is gone, so how its environment was made is "
-			"unknowable; re-import the source",
-			sourceKey);
+		if (!Exists(documentKey))
+		{
+			core::throw_runtime_error(
+				"'{}': the import document beside it is gone, so how its environment was made is "
+				"unknowable; re-import the source",
+				sourceKey);
+		}
 
 		// Taken once, before the cook: a source rewritten while a part convolves must read as stale
 		// again afterwards, never as the file those pixels were made from.

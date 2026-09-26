@@ -209,29 +209,37 @@ namespace assetlib
 		ZoneScopedN("assetlib refresh textures");
 		ZoneTextF("%.*s", static_cast<int>(sourceKey.size()), sourceKey.data());
 
-		core::throw_runtime_error_if(
-			IsReadOnly(),
-			"'{}': this project has nowhere to write, so its textures cannot be re-extracted",
-			sourceKey);
+		if (IsReadOnly())
+		{
+			core::throw_runtime_error(
+				"'{}': this project has nowhere to write, so its textures cannot be re-extracted",
+				sourceKey);
+		}
 
-		core::throw_runtime_error_if(
-			!Exists(sourceKey),
-			"'{}' is not in this project, so there is nothing to re-extract from",
-			sourceKey);
+		if (!Exists(sourceKey))
+		{
+			core::throw_runtime_error(
+				"'{}' is not in this project, so there is nothing to re-extract from",
+				sourceKey);
+		}
 
 		const std::string documentKey = importDocumentKeyFor(sourceKey);
-		core::throw_runtime_error_if(
-			!Exists(documentKey),
-			"'{}': the import document beside it is gone, so where its textures went is "
-			"unknowable; re-import the source",
-			sourceKey);
+		if (!Exists(documentKey))
+		{
+			core::throw_runtime_error(
+				"'{}': the import document beside it is gone, so where its textures went is "
+				"unknowable; re-import the source",
+				sourceKey);
+		}
 
 		const ImportDocument document = loadImportDocument(GetFiles(), documentKey);
-		core::throw_runtime_error_if(
-			document.textureDir.empty(),
-			"'{}': its import document records no texture folder, so there is nowhere to "
-			"re-extract into; re-import the source",
-			sourceKey);
+		if (document.textureDir.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its import document records no texture folder, so there is nowhere to "
+				"re-extract into; re-import the source",
+				sourceKey);
+		}
 
 		TextureRefresh refresh{ document.textureDir, {}, {}, {} };
 

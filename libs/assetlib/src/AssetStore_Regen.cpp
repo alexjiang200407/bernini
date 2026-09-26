@@ -83,25 +83,31 @@ namespace assetlib
 		regenerate(const AssetStore& store, CheckedKey&& checked, std::string_view what)
 		{
 			const SourceRef& source = checked.key.source;
-			core::throw_runtime_error_if(
-				source.key.empty(),
-				"{}: written at another bake revision and no source was ever recorded, so it "
-				"cannot be regenerated; re-import it",
-				what);
-			core::throw_runtime_error_if(
-				!store.Exists(source.key),
-				"{}: stale, and its source '{}' is not in the project to regenerate from",
-				what,
-				source.key);
+			if (source.key.empty())
+			{
+				core::throw_runtime_error(
+					"{}: written at another bake revision and no source was ever recorded, so it "
+					"cannot be regenerated; re-import it",
+					what);
+			}
+			if (!store.Exists(source.key))
+			{
+				core::throw_runtime_error(
+					"{}: stale, and its source '{}' is not in the project to regenerate from",
+					what,
+					source.key);
+			}
 
 			// Regenerating at default parameters where the lost document said otherwise is
 			// #413's exact shape, so a missing document refuses rather than guesses.
-			core::throw_runtime_error_if(
-				!checked.document.has_value(),
-				"{}: stale, and the import document beside '{}' is gone, so the parameters it "
-				"should regenerate at are unknowable; re-import the source",
-				what,
-				source.key);
+			if (!checked.document.has_value())
+			{
+				core::throw_runtime_error(
+					"{}: stale, and the import document beside '{}' is gone, so the parameters it "
+					"should regenerate at are unknowable; re-import the source",
+					what,
+					source.key);
+			}
 
 			return importGroup(store, source.key, std::move(*checked.document));
 		}
@@ -214,19 +220,23 @@ namespace assetlib
 				// From the frozen headers and the document alone -- what the refs would be after
 				// a regeneration, without paying one: a scan runs this over every mesh in the
 				// project after a token bump. The document is authoritative for both halves.
-				core::throw_runtime_error_if(
-					key.source.key.empty(),
-					"bmesh '{}': written at another bake revision and no source was ever "
-					"recorded, so what it references cannot be known; re-import it",
-					path);
+				if (key.source.key.empty())
+				{
+					core::throw_runtime_error(
+						"bmesh '{}': written at another bake revision and no source was ever "
+						"recorded, so what it references cannot be known; re-import it",
+						path);
+				}
 
 				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				core::throw_runtime_error_if(
-					!GetFiles().Exists(documentKey),
-					"bmesh '{}': written at another bake revision and the import document "
-					"beside '{}' is gone, so what it references cannot be known",
-					path,
-					key.source.key);
+				if (!GetFiles().Exists(documentKey))
+				{
+					core::throw_runtime_error(
+						"bmesh '{}': written at another bake revision and the import document "
+						"beside '{}' is gone, so what it references cannot be known",
+						path,
+						key.source.key);
+				}
 
 				const ImportDocument document = loadImportDocument(GetFiles(), documentKey);
 
@@ -253,19 +263,24 @@ namespace assetlib
 			if (key.bakeToken != AssetCodec<AnimationSet>::c_BakeToken)
 			{
 				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				core::throw_runtime_error_if(
-					!GetFiles().Exists(documentKey),
-					"'{}': written at another bake revision and the import document beside '{}' "
-					"is gone, so the rig it names cannot be known",
-					path,
-					key.source.key);
+				if (!GetFiles().Exists(documentKey))
+				{
+					core::throw_runtime_error(
+						"'{}': written at another bake revision and the import document beside "
+						"'{}' "
+						"is gone, so the rig it names cannot be known",
+						path,
+						key.source.key);
+				}
 
 				const std::string rig = loadImportDocument(GetFiles(), documentKey).skeleton;
-				core::throw_runtime_error_if(
-					rig.empty(),
-					"'{}': written at another bake revision and its import document names no "
-					"skeleton; run `assetlib_cli migrate` to record the one it already uses",
-					path);
+				if (rig.empty())
+				{
+					core::throw_runtime_error(
+						"'{}': written at another bake revision and its import document names no "
+						"skeleton; run `assetlib_cli migrate` to record the one it already uses",
+						path);
+				}
 				return rig;
 			}
 		}
@@ -295,11 +310,13 @@ namespace assetlib
 		}
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "bmesh");
-		core::throw_runtime_error_if(
-			group.import.meshes.empty(),
-			"'{}': its re-exported source no longer carries a mesh; restore it in the DCC, or "
-			"delete this file",
-			path);
+		if (group.import.meshes.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its re-exported source no longer carries a mesh; restore it in the DCC, or "
+				"delete this file",
+				path);
+		}
 
 		RegenMesh current{ toBMesh(group.import), {} };
 		generateTangents(current.mesh);
@@ -311,11 +328,13 @@ namespace assetlib
 			current.mesh.skeleton          = group.document->skeleton;
 			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 			current.mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
-			core::throw_runtime_error_if(
-				current.mesh.skeleton.empty(),
-				"'{}': its source carries a rig but the import document beside it names no "
-				"skeleton; run `assetlib_cli migrate` to record the one it already uses",
-				path);
+			if (current.mesh.skeleton.empty())
+			{
+				core::throw_runtime_error(
+					"'{}': its source carries a rig but the import document beside it names no "
+					"skeleton; run `assetlib_cli migrate` to record the one it already uses",
+					path);
+			}
 		}
 		current.unboundBindings = rebuildMaterialSlots(
 			current.mesh,
@@ -349,11 +368,14 @@ namespace assetlib
 		}
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "bgrassfields");
-		core::throw_runtime_error_if(
-			group.import.grass.fields.empty(),
-			"'{}': its re-exported source no longer carries a POINTS primitive; restore it in the "
-			"DCC, or delete this file",
-			path);
+		if (group.import.grass.fields.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its re-exported source no longer carries a POINTS primitive; restore it in "
+				"the "
+				"DCC, or delete this file",
+				path);
+		}
 
 		RegenGrassFields current{ std::move(group.import.grass), {} };
 		current.fields.source   = group.ref;
@@ -370,19 +392,25 @@ namespace assetlib
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BGrassF, "bgrassfields");
 			if (key.bakeToken != AssetCodec<BGrassFields>::c_BakeToken)
 			{
-				core::throw_runtime_error_if(
-					key.source.key.empty(),
-					"bgrassfields '{}': written at another bake revision and no source was ever "
-					"recorded, so what it references cannot be known; re-import it",
-					path);
+				if (key.source.key.empty())
+				{
+					core::throw_runtime_error(
+						"bgrassfields '{}': written at another bake revision and no source was "
+						"ever "
+						"recorded, so what it references cannot be known; re-import it",
+						path);
+				}
 
 				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				core::throw_runtime_error_if(
-					!GetFiles().Exists(documentKey),
-					"bgrassfields '{}': written at another bake revision and the import document "
-					"beside '{}' is gone, so what it references cannot be known",
-					path,
-					key.source.key);
+				if (!GetFiles().Exists(documentKey))
+				{
+					core::throw_runtime_error(
+						"bgrassfields '{}': written at another bake revision and the import "
+						"document "
+						"beside '{}' is gone, so what it references cannot be known",
+						path,
+						key.source.key);
+				}
 
 				auto looks = std::vector<std::string>();
 				for (const MaterialBinding& binding :
@@ -410,11 +438,13 @@ namespace assetlib
 			return load<Skeleton>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "bskel");
-		core::throw_runtime_error_if(
-			group.import.skeleton.bones.empty(),
-			"'{}': its re-exported source no longer carries a rig; restore the skeleton in the "
-			"DCC, or delete this file and its dependents",
-			path);
+		if (group.import.skeleton.bones.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its re-exported source no longer carries a rig; restore the skeleton in the "
+				"DCC, or delete this file and its dependents",
+				path);
+		}
 
 		Skeleton skeleton = group.import.skeleton;
 		skeleton.source   = group.ref;
@@ -436,25 +466,33 @@ namespace assetlib
 			return load<AnimationSet>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "banim");
-		core::throw_runtime_error_if(
-			group.import.animations.clips.empty(),
-			"'{}': its re-exported source no longer carries clips; restore them in the DCC, or "
-			"delete this file",
-			path);
-		core::throw_runtime_error_if(
-			group.import.skeleton.bones.empty(),
-			"'{}': its re-exported source no longer carries a rig, so its clips address nothing",
-			path);
+		if (group.import.animations.clips.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its re-exported source no longer carries clips; restore them in the DCC, or "
+				"delete this file",
+				path);
+		}
+		if (group.import.skeleton.bones.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its re-exported source no longer carries a rig, so its clips address "
+				"nothing",
+				path);
+		}
 
 		AnimationSet clips = group.import.animations;
 		clips.source       = group.ref;
 
 		const std::string rigKey = group.document->skeleton;
-		core::throw_runtime_error_if(
-			rigKey.empty(),
-			"'{}': its import document names no skeleton, so which rig its clips address cannot "
-			"be known; run `assetlib_cli migrate` to record the one it already uses",
-			path);
+		if (rigKey.empty())
+		{
+			core::throw_runtime_error(
+				"'{}': its import document names no skeleton, so which rig its clips address "
+				"cannot "
+				"be known; run `assetlib_cli migrate` to record the one it already uses",
+				path);
+		}
 		clips.skeleton = rigKey;
 
 		const Skeleton skeleton = LoadRegenSkeleton(rigKey);

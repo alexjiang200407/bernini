@@ -233,13 +233,15 @@ namespace assetlib
 			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
 		const std::string extension = extensionOf(desc.source.generic_string());
-		core::throw_runtime_error_if(
-			extension != c_EnvSourceHdrExtension && extension != c_TextureExtension,
-			"AssetStore::ImportEnvironment: '{}' is neither an equirectangular '{}' nor a cube "
-			"'{}'",
-			desc.source.string(),
-			c_EnvSourceHdrExtension,
-			c_TextureExtension);
+		if (extension != c_EnvSourceHdrExtension && extension != c_TextureExtension)
+		{
+			core::throw_runtime_error(
+				"AssetStore::ImportEnvironment: '{}' is neither an equirectangular '{}' nor a cube "
+				"'{}'",
+				desc.source.string(),
+				c_EnvSourceHdrExtension,
+				c_TextureExtension);
+		}
 
 		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
 		// `.benvl` until they were spent.
@@ -252,12 +254,14 @@ namespace assetlib
 
 		const std::string sourceKey   = importedSourceKey(desc);
 		const std::string documentKey = importDocumentKeyFor(sourceKey);
-		core::throw_runtime_error_if(
-			!isUnder(normalizeRef(sourceKey), c_EnvSourcesDirectoryName),
-			"AssetStore::ImportEnvironment: '{}': an imported environment source lives under "
-			"'{}', which is where a re-import looks for it",
-			sourceKey,
-			c_EnvSourcesDirectoryName);
+		if (!isUnder(normalizeRef(sourceKey), c_EnvSourcesDirectoryName))
+		{
+			core::throw_runtime_error(
+				"AssetStore::ImportEnvironment: '{}': an imported environment source lives under "
+				"'{}', which is where a re-import looks for it",
+				sourceKey,
+				c_EnvSourcesDirectoryName);
+		}
 
 		// One that will not parse claims nothing; the import writes a fresh document rather than
 		// refusing over a file it is about to replace.
@@ -272,14 +276,17 @@ namespace assetlib
 
 		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
 		{
-			core::throw_runtime_error_if(
-				!writes(desc, part) && existing && claims(*existing, part) &&
-					stampOf(desc.source) != existing->envSourceStamp,
-				"AssetStore::ImportEnvironment: '{}' is not the file '{}' was imported from, so "
-				"keeping its {} would describe a different image; import both parts",
-				desc.source.string(),
-				sourceKey,
-				part == EnvironmentPart::kSky ? "sky" : "lighting");
+			if (!writes(desc, part) && existing && claims(*existing, part) &&
+			    stampOf(desc.source) != existing->envSourceStamp)
+			{
+				core::throw_runtime_error(
+					"AssetStore::ImportEnvironment: '{}' is not the file '{}' was imported from, "
+					"so "
+					"keeping its {} would describe a different image; import both parts",
+					desc.source.string(),
+					sourceKey,
+					part == EnvironmentPart::kSky ? "sky" : "lighting");
+			}
 		}
 
 		auto created = CreatedFiles(GetDataRoot());

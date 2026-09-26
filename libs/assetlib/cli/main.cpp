@@ -133,11 +133,14 @@ namespace
 	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
 		const auto stamp = store.GetFiles().Stat(key);
-		core::throw_runtime_error_if(!stamp.has_value(), "{} does not exist", key);
-		core::throw_runtime_error_if(
-			stamp->size < sizeof(uint32_t),
-			"{} is too short to be a container",
-			key);
+		if (!stamp.has_value())
+		{
+			core::throw_runtime_error("{} does not exist", key);
+		}
+		if (stamp->size < sizeof(uint32_t))
+		{
+			core::throw_runtime_error("{} is too short to be a container", key);
+		}
 
 		// 16 bytes rather than the magic's four: a text document may open with whitespace, and
 		// the dispatch must agree with what the loaders will read.
@@ -163,11 +166,13 @@ namespace
 		std::memcpy(&magic, header.data(), sizeof(magic));
 
 		const auto kind = assetlib::containerKindForMagic(magic);
-		core::throw_runtime_error_if(
-			!kind.has_value(),
-			"{} is not a container this tool knows (expected one of: {})",
-			key,
-			knownContainers());
+		if (!kind.has_value())
+		{
+			core::throw_runtime_error(
+				"{} is not a container this tool knows (expected one of: {})",
+				key,
+				knownContainers());
+		}
 
 		return kind->type;
 	}

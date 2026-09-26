@@ -155,14 +155,16 @@ namespace assetlib::cache
 		[[nodiscard]] std::vector<T>
 		ReadEntry(const Entry& entry) const
 		{
-			core::throw_runtime_error_if(
-				entry.elementSize != sizeof(T),
-				"{}: chunk {} stores {}-byte elements where {} are expected -- the file is "
-				"malformed for this build; regenerate it from its source",
-				m_What,
-				entry.id,
-				entry.elementSize,
-				sizeof(T));
+			if (entry.elementSize != sizeof(T))
+			{
+				core::throw_runtime_error(
+					"{}: chunk {} stores {}-byte elements where {} are expected -- the file is "
+					"malformed for this build; regenerate it from its source",
+					m_What,
+					entry.id,
+					entry.elementSize,
+					sizeof(T));
+			}
 			std::vector<T> values(entry.byteSize / sizeof(T));
 			std::copy_n(
 				m_Bytes.data() + entry.offset,
@@ -234,13 +236,15 @@ namespace assetlib::cache
 			{
 				if (slot.id != static_cast<uint32_t>(id))
 					continue;
-				core::throw_runtime_error_if(
-					slot.elementSize != sizeof(T),
-					"{}: chunk {} stores {}-byte elements where {} are expected",
-					what,
-					slot.id,
-					slot.elementSize,
-					sizeof(T));
+				if (slot.elementSize != sizeof(T))
+				{
+					core::throw_runtime_error(
+						"{}: chunk {} stores {}-byte elements where {} are expected",
+						what,
+						slot.id,
+						slot.elementSize,
+						sizeof(T));
+				}
 				std::vector<T> values(slot.bytes.size() / sizeof(T));
 				std::copy_n(
 					slot.bytes.data(),

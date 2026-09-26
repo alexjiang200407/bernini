@@ -52,13 +52,11 @@ namespace assetlib::doc
 	{
 		constexpr size_t c_N = sizeof(Vec) / sizeof(float);
 
-		core::throw_runtime_error_if(
-			!json.is_array() || json.size() != c_N ||
-				!std::ranges::all_of(json, [](const auto& v) { return v.is_number(); }),
-			"{}: '{}' is not an array of {} numbers",
-			what,
-			key,
-			c_N);
+		if (!json.is_array() || json.size() != c_N ||
+		    !std::ranges::all_of(json, [](const auto& v) { return v.is_number(); }))
+		{
+			core::throw_runtime_error("{}: '{}' is not an array of {} numbers", what, key, c_N);
+		}
 		for (size_t i = 0; i < c_N; ++i)
 			out[static_cast<glm::length_t>(i)] = json[i].template get<float>();
 	}
@@ -114,26 +112,34 @@ namespace assetlib::doc
 			vecFromJson(*it, key, out, what);
 		else if constexpr (std::is_same_v<T, float>)
 		{
-			core::throw_runtime_error_if(!it->is_number(), "{}: '{}' is not a number", what, key);
+			if (!it->is_number())
+			{
+				core::throw_runtime_error("{}: '{}' is not a number", what, key);
+			}
 			out = it->get<float>();
 		}
 		else if constexpr (std::is_same_v<T, uint32_t>)
 		{
-			core::throw_runtime_error_if(
-				!it->is_number_unsigned() || it->get<uint64_t>() > UINT32_MAX,
-				"{}: '{}' is not a 32-bit unsigned number",
-				what,
-				key);
+			if (!it->is_number_unsigned() || it->get<uint64_t>() > UINT32_MAX)
+			{
+				core::throw_runtime_error("{}: '{}' is not a 32-bit unsigned number", what, key);
+			}
 			out = it->get<uint32_t>();
 		}
 		else if constexpr (std::is_same_v<T, bool>)
 		{
-			core::throw_runtime_error_if(!it->is_boolean(), "{}: '{}' is not a boolean", what, key);
+			if (!it->is_boolean())
+			{
+				core::throw_runtime_error("{}: '{}' is not a boolean", what, key);
+			}
 			out = it->get<bool>();
 		}
 		else
 		{
-			core::throw_runtime_error_if(!it->is_string(), "{}: '{}' is not a string", what, key);
+			if (!it->is_string())
+			{
+				core::throw_runtime_error("{}: '{}' is not a string", what, key);
+			}
 			out = it->get<std::string>();
 		}
 		json.erase(it);
