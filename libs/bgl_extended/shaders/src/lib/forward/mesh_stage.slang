@@ -109,6 +109,11 @@ public bool LocalSphereInCullFrustum(MeshInstance mesh, float4 sphere)
 public groupshared CulledPayload gCulledPayload;
 groupshared uint gSurvivors;
 
+// The mask is built here and copied into the payload, never built in it. An amplification payload is
+// its own address space on D3D12 and an atomic addressed into one does not land: an InterlockedOr on
+// gCulledPayload.survivorMask leaves every bit clear, so the draw culls every group it tests.
+groupshared uint gSurvivorMask[cMaxCompactedGroups / 32];
+
 // The instance this amplification group covers, and how many meshlets it dispatches: every meshlet
 // of every group whose cooked sphere LocalSphereInCullFrustum keeps, marked in gCulledPayload so the
 // mesh stage draws them in meshlet order, the order an unculled draw has. A kept group dispatches
@@ -135,7 +140,7 @@ public uint CullMeshlets(uint gid, uint lane)
 
     for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
     {
-        gCulledPayload.survivorMask[w] = 0u;
+        gSurvivorMask[w] = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -144,10 +149,15 @@ public uint CullMeshlets(uint gid, uint lane)
         let bound = forwardData.meshletGroupBuffer.Get(submesh.meshletGroups, groupIdx);
         if (LocalSphereInCullFrustum(mesh, bound.boundingSphere))
         {
-            InterlockedOr(gCulledPayload.survivorMask[groupIdx / 32u], 1u << (groupIdx % 32u));
+            InterlockedOr(gSurvivorMask[groupIdx / 32u], 1u << (groupIdx % 32u));
         }
     }
     GroupMemoryBarrierWithGroupSync();
+
+    for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
+    {
+        gCulledPayload.survivorMask[w] = gSurvivorMask[w];
+    }
 
     // A running count over at most 256 words, two to a packed word. One lane: the scan is serial and
     // shorter than the barriers a parallel one would need.
@@ -156,9 +166,9 @@ public uint CullMeshlets(uint gid, uint lane)
         uint survivors = 0u;
         for (uint w = 0u; w < maskWords; w += 2u)
         {
-            let second = survivors + countbits(gCulledPayload.survivorMask[w]);
+            let second = survivors + countbits(gSurvivorMask[w]);
             gCulledPayload.survivorsBefore[w / 2u] = survivors | (second << 16u);
-            survivors = second + (w + 1u < maskWords ? countbits(gCulledPayload.survivorMask[w + 1u]) : 0u);
+            survivors = second + (w + 1u < maskWords ? countbits(gSurvivorMask[w + 1u]) : 0u);
         }
         gSurvivors = survivors;
     }

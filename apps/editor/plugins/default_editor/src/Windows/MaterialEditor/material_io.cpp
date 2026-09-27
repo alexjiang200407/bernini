@@ -10,6 +10,7 @@
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/mesh_load.h>
 
+#include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QPushButton>
@@ -125,7 +126,11 @@ namespace editor
 		if (!std::filesystem::is_directory(dir, ec))
 			dir = dataRoot;
 
-		return QString::fromStdWString((dir / name.toStdWString()).wstring());
+		// Spelled the way every other path Qt hands this editor is. Composing a `/`-separated
+		// directory name with operator/ leaves the two spellings in one string, which is what the
+		// user is then shown.
+		return QDir::fromNativeSeparators(
+			QString::fromStdWString((dir / name.toStdWString()).wstring()));
 	}
 
 	QString

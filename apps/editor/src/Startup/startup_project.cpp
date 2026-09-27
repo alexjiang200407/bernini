@@ -26,6 +26,10 @@ namespace editor
 		{
 			const core::Settings settings(configPath);
 			projectFile = core::expand_home(settings["startupProject"].GetOrDefault(std::string()));
+
+			// The config spells it `/`-separated, because JSON has no raw backslash. Nothing else
+			// converts that to the host's separator, and the failure below is read by a person.
+			projectFile.make_preferred();
 		}
 
 		auto startup = StartupProject();

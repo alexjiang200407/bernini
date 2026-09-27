@@ -39,7 +39,7 @@ TEST_CASE("Cooked meshes own named grass geometry with stable look slots", "[gra
 {
 	Buffer     buffer;
 	const auto points = ShuffledGrid(15);
-	const Glb  glb("bernini_embedded_grass.glb", StreetDocument(buffer, points), buffer.bytes);
+	const Glb  glb("bernini_embedded_grass.glb", StreetDocument(buffer, points), buffer);
 	const auto mesh  = toBMesh(Load(glb));
 	const auto bytes = AssetCodec<BMesh>::Serialize(mesh);
 	const auto read  = AssetCodec<BMesh>::Deserialize(bytes);
@@ -75,7 +75,7 @@ TEST_CASE(
 {
 	Buffer     buffer;
 	const auto points = ShuffledGrid(15);  // 225 clumps: three full chunks and a short one
-	const Glb  glb("bernini_grass_points.glb", StreetDocument(buffer, points), buffer.bytes);
+	const Glb  glb("bernini_grass_points.glb", StreetDocument(buffer, points), buffer);
 
 	const imp::BMeshImport mesh = Load(glb);
 	CHECK(mesh.submeshes.size() == 1);
@@ -114,10 +114,7 @@ TEST_CASE(
 	"[grass][import]")
 {
 	Buffer    buffer;
-	const Glb glb(
-		"bernini_grass_coherent.glb",
-		StreetDocument(buffer, ShuffledGrid(64)),
-		buffer.bytes);
+	const Glb glb("bernini_grass_coherent.glb", StreetDocument(buffer, ShuffledGrid(64)), buffer);
 
 	const BGrassFields grass = Load(glb).grass;
 
@@ -156,7 +153,7 @@ TEST_CASE("A grass point keeps its normal, colour and height scale", "[grass][im
 	const Glb                    glb(
 		"bernini_grass_attributes.glb",
 		StreetDocument(buffer, points, attributes),
-		buffer.bytes);
+		buffer);
 
 	const BGrassFields grass = Load(glb).grass;
 	REQUIRE(grass.clumps.size() == 2);
@@ -183,7 +180,7 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 		const Glb glb(
 			"bernini_grass_nan.glb",
 			StreetDocument(buffer, { glm::vec3(nan, 0, 0) }),
-			buffer.bytes);
+			buffer);
 		CHECK_THROWS(Load(glb));
 	}
 
@@ -195,7 +192,7 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 		const Glb glb(
 			"bernini_grass_flat.glb",
 			StreetDocument(buffer, { glm::vec3(0) }, attributes),
-			buffer.bytes);
+			buffer);
 		CHECK_THROWS(Load(glb));
 	}
 
@@ -207,7 +204,7 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 		const Glb glb(
 			"bernini_grass_vec2.glb",
 			StreetDocument(buffer, { glm::vec3(0) }, attributes),
-			buffer.bytes);
+			buffer);
 		CHECK_THROWS(Load(glb));
 	}
 
@@ -219,7 +216,7 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 		const Glb glb(
 			"bernini_grass_nonormal.glb",
 			StreetDocument(buffer, { glm::vec3(0) }, attributes),
-			buffer.bytes);
+			buffer);
 		CHECK_THROWS(Load(glb));
 	}
 }
@@ -229,6 +226,6 @@ TEST_CASE("A primitive that is neither triangles nor points is still refused", "
 	Buffer buffer;
 	auto   document = StreetDocument(buffer, { glm::vec3(0), glm::vec3(1) });
 	document["meshes"][0]["primitives"][1]["mode"] = 1;  // LINES
-	const Glb glb("bernini_grass_lines.glb", document, buffer.bytes);
+	const Glb glb("bernini_grass_lines.glb", document, buffer);
 	CHECK_THROWS(Load(glb));
 }

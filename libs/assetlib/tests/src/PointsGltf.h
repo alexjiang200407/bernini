@@ -24,13 +24,57 @@ namespace assetlib::test
 	inline constexpr uint32_t c_Float        = 5126;
 	inline constexpr uint32_t c_UnsignedByte = 5121;
 
+	/** Accessors appended to one buffer, each 4-byte aligned. */
+	class Buffer
+	{
+	public:
+		template <typename T>
+		uint32_t
+		Add(const std::vector<T>& values,
+		    const char*           type,
+		    const uint32_t        componentType,
+		    const bool            normalized = false)
+		{
+			const size_t offset = bytes.size();
+			bytes.resize(offset + values.size() * sizeof(T));
+			std::memcpy(bytes.data() + offset, values.data(), values.size() * sizeof(T));
+			bytes.resize(core::align(bytes.size(), 4), std::byte{ 0 });
+
+			const auto view = static_cast<uint32_t>(views.size());
+			views.push_back(
+				{ { "buffer", 0 },
+			      { "byteOffset", offset },
+			      { "byteLength", values.size() * sizeof(T) },
+			      { "target", c_ArrayBuffer } });
+
+			auto accessor = nlohmann::json{ { "bufferView", view },
+				                            { "componentType", componentType },
+				                            { "count", values.size() },
+				                            { "type", type } };
+			if (normalized)
+				accessor["normalized"] = true;
+			accessors.push_back(accessor);
+			return static_cast<uint32_t>(accessors.size() - 1);
+		}
+
+		std::vector<std::byte> bytes;
+		nlohmann::json         views     = nlohmann::json::array();
+		nlohmann::json         accessors = nlohmann::json::array();
+	};
+
 	/** A `.glb` built from a document and one binary buffer, removed when it goes out of scope. */
 	class Glb
 	{
 	public:
-		Glb(const char* name, nlohmann::json document, std::vector<std::byte> bin) :
+		/**
+		 * @param buffer Taken whole rather than as its bytes: the document is built by a call that
+		 * fills it, and as a sibling argument of this one the order the two are evaluated in is the
+		 * compiler's to choose. A reference reads it in the body, after both are done.
+		 */
+		Glb(const char* name, nlohmann::json document, const Buffer& buffer) :
 			m_Path(std::filesystem::temp_directory_path() / name)
 		{
+			std::vector<std::byte> bin = buffer.bytes;
 			bin.resize(core::align(bin.size(), 4), std::byte{ 0 });
 			document["buffers"] = nlohmann::json::array({ { { "byteLength", bin.size() } } });
 			document["asset"]   = { { "version", "2.0" } };
@@ -75,44 +119,6 @@ namespace assetlib::test
 
 	private:
 		std::filesystem::path m_Path;
-	};
-
-	/** Accessors appended to one buffer, each 4-byte aligned. */
-	class Buffer
-	{
-	public:
-		template <typename T>
-		uint32_t
-		Add(const std::vector<T>& values,
-		    const char*           type,
-		    const uint32_t        componentType,
-		    const bool            normalized = false)
-		{
-			const size_t offset = bytes.size();
-			bytes.resize(offset + values.size() * sizeof(T));
-			std::memcpy(bytes.data() + offset, values.data(), values.size() * sizeof(T));
-			bytes.resize(core::align(bytes.size(), 4), std::byte{ 0 });
-
-			const auto view = static_cast<uint32_t>(views.size());
-			views.push_back(
-				{ { "buffer", 0 },
-			      { "byteOffset", offset },
-			      { "byteLength", values.size() * sizeof(T) },
-			      { "target", c_ArrayBuffer } });
-
-			auto accessor = nlohmann::json{ { "bufferView", view },
-				                            { "componentType", componentType },
-				                            { "count", values.size() },
-				                            { "type", type } };
-			if (normalized)
-				accessor["normalized"] = true;
-			accessors.push_back(accessor);
-			return static_cast<uint32_t>(accessors.size() - 1);
-		}
-
-		std::vector<std::byte> bytes;
-		nlohmann::json         views     = nlohmann::json::array();
-		nlohmann::json         accessors = nlohmann::json::array();
 	};
 
 	/** A mesh named `Street` of one triangle and one POINTS primitive over `points`. */

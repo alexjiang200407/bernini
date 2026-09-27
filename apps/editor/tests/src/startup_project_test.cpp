@@ -36,10 +36,15 @@ namespace
 			editor::plugins::CurrentBuildIdentity(),
 			fs::path(temp.path().toStdWString()) / "plugin-copies");
 
+		// Qt hands back a `/`-separated path on every platform, and appending to it would leave a
+		// path spelled both ways at once -- which matches neither what the editor prints nor what
+		// the config stores.
 		[[nodiscard]] fs::path
 		Root() const
 		{
-			return fs::path(temp.path().toStdWString());
+			fs::path root(temp.path().toStdWString());
+			root.make_preferred();
+			return root;
 		}
 
 		[[nodiscard]] fs::path
