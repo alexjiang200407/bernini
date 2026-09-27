@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/MeshBindings.h>
 #include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/bmesh.h>
@@ -28,11 +29,15 @@
 #include "ref_paths.h"
 #include "regen_group.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
+#include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -47,6 +52,39 @@ namespace assetlib
 			std::optional<ImportDocument> document;
 			bool                          stale = false;
 		};
+
+		MeshBindings
+		bindingSnapshot(const BMesh& mesh, const ImportDocument& document)
+		{
+			auto result     = MeshBindings();
+			result.skeleton = document.skeleton;
+			result.submeshMaterials.resize(mesh.submeshes.size());
+			result.grassLooks.resize(mesh.grassFields.fields.size());
+			auto submeshes = std::unordered_map<std::string_view, uint32_t>();
+			for (uint32_t i = 0; i < mesh.submeshes.size(); ++i)
+				submeshes.emplace(mesh.stringPool.at(mesh.submeshes[i].nameOffset), i);
+			auto fields = std::unordered_map<std::string_view, uint32_t>();
+			for (uint32_t i = 0; i < mesh.grassFields.fields.size(); ++i)
+				fields.emplace(mesh.grassFields.fields[i].name, i);
+			for (const auto& binding : document.bindings)
+			{
+				const bool  grass = isGrassBinding(binding);
+				const auto& names = grass ? fields : submeshes;
+				if (const auto found = names.find(binding.submesh); found != names.end())
+				{
+					auto& materials          = grass ? result.grassLooks : result.submeshMaterials;
+					materials[found->second] = binding.material;
+				}
+			}
+			for (const auto& entry : document.materialOverrides)
+				if (const auto found = submeshes.find(entry.submesh); found != submeshes.end())
+					result.materialOverrides.push_back(
+						{ found->second, entry.name, entry.material });
+			std::ranges::sort(result.materialOverrides, [](const auto& a, const auto& b) {
+				return std::tie(a.submesh, a.name) < std::tie(b.submesh, b.name);
+			});
+			return result;
+		}
 
 		CheckedKey
 		checkKey(
@@ -294,7 +332,16 @@ namespace assetlib
 		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
 
 		if (IsReadOnly())
-			return { load<BMesh>(*m_Files, path), {} };
+		{
+			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
+			if (!current.mesh.source.key.empty())
+			{
+				const auto key = importDocumentKeyFor(current.mesh.source.key);
+				if (Exists(key))
+					current.bindings = bindingSnapshot(current.mesh, Load<ImportDocument>(key));
+			}
+			return current;
+		}
 
 		CheckedKey checked =
 			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
@@ -302,10 +349,13 @@ namespace assetlib
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (checked.document)
+			{
+				current.bindings        = bindingSnapshot(current.mesh, *checked.document);
 				current.unboundBindings = rebuildMaterialSlots(
 					current.mesh,
 					checked.document->bindings,
 					checked.document->materialOverrides);
+			}
 			return current;
 		}
 
@@ -336,6 +386,7 @@ namespace assetlib
 					path);
 			}
 		}
+		current.bindings        = bindingSnapshot(current.mesh, *group.document);
 		current.unboundBindings = rebuildMaterialSlots(
 			current.mesh,
 			group.document->bindings,

@@ -56,6 +56,10 @@ skips leading whitespace and asks whether the bytes open a JSON object, exactly 
 
 ## Cache entries
 
+The mesh cache also stores its source's named grass fields, chunks and clumps. A field's look slot
+is its field index; look paths belong to the source's import bindings. The legacy standalone grass
+cache is still produced until importer and runtime adoption of the embedded data is complete.
+
 One format, in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen 64-byte
 header, the source's mount key, 16-byte-aligned schema-less chunks, and a chunk table at the end.
 The header is versioned (`headerVersion`, currently 1) and **frozen forever** — tools address its

@@ -8,6 +8,8 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Grass.h>
+#include <assetlib_structs/GrassGeometry.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <assetlib/mesh_tangents.h>
@@ -43,6 +45,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -122,6 +125,10 @@ namespace assetlib
 			kMaterialOverrideNames,
 			kGrassPath,  // the .bgrassfields cooked from the same source; absent when none
 			kLods,       // each mesh's levels of detail, see Mesh::firstLod
+			kGrassFields,
+			kGrassNames,
+			kGrassChunks,
+			kGrassClumps,
 		};
 
 		struct PackedOverride
@@ -140,15 +147,30 @@ namespace assetlib
 				});
 		}
 
-		/**
-		 * Joint indices address a bone array, so a mesh carrying them and naming no skeleton is a mesh
-		 * whose vertices point at nothing -- and nothing downstream can tell, because a joint index is
-		 * a bare number. Checked at both ends: at write, so the file is never produced, and at read,
-		 * because a file may not have come from here.
-		 *
-		 * Only one direction. Naming a skeleton without carrying joints is how a static attachment --
-		 * a scabbard, a saddle -- hangs off a bone.
-		 */
+		void
+		validateGrassGeometry(const BMesh& mesh)
+		{
+			const auto& grass = mesh.grassFields;
+			auto        names = std::unordered_set<std::string_view>();
+			for (size_t i = 0; i < grass.fields.size(); ++i)
+			{
+				const auto& named = grass.fields[i];
+				const auto& field = named.field;
+				if (named.name.empty() || !names.insert(named.name).second)
+					core::throw_runtime_error("bmesh: grass fields need unique nonempty names");
+				if (field.mesh >= mesh.meshes.size() || field.look != i || field.chunkCount == 0 ||
+				    static_cast<uint64_t>(field.firstChunk) + field.chunkCount >
+				        grass.chunks.size())
+					core::throw_runtime_error("bmesh: invalid grass field {}", i);
+			}
+			for (const auto& chunk : grass.chunks)
+				if (chunk.clumpCount == 0 || chunk.clumpCount > c_GrassClumpsPerChunk ||
+				    static_cast<uint64_t>(chunk.firstClump) + chunk.clumpCount >
+				        grass.clumps.size())
+					core::throw_runtime_error("bmesh: invalid grass chunk range");
+		}
+
+		/** A static attachment may name a rig without carrying joints; the inverse is invalid. */
 		void
 		requireSkeletonIfSkinned(const BMesh& mesh)
 		{
@@ -163,6 +185,7 @@ namespace assetlib
 	AssetCodec<BMesh>::Serialize(const BMesh& mesh)
 	{
 		requireSkeletonIfSkinned(mesh);
+		validateGrassGeometry(mesh);
 
 		cache::Writer writer;
 		writer.Add(ChunkId::kNodes, mesh.nodes);
@@ -184,6 +207,19 @@ namespace assetlib
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
 		writer.Add(ChunkId::kGrassPath, std::span<const char>(mesh.grass));
+		auto fields     = std::vector<GrassField>();
+		auto fieldNames = std::vector<std::string>();
+		fields.reserve(mesh.grassFields.fields.size());
+		fieldNames.reserve(mesh.grassFields.fields.size());
+		for (const auto& named : mesh.grassFields.fields)
+		{
+			fields.push_back(named.field);
+			fieldNames.push_back(named.name);
+		}
+		writer.Add(ChunkId::kGrassFields, fields);
+		writer.Add(ChunkId::kGrassNames, cache::packStrings(fieldNames));
+		writer.Add(ChunkId::kGrassChunks, mesh.grassFields.chunks);
+		writer.Add(ChunkId::kGrassClumps, mesh.grassFields.clumps);
 
 		// Written only when present, so a mesh with none stays byte-identical to one from before.
 		if (!mesh.materialOverrides.empty())
@@ -239,6 +275,16 @@ namespace assetlib
 
 		const auto grass = reader.Read<char>(ChunkId::kGrassPath);
 		mesh.grass.assign(grass.begin(), grass.end());
+		const auto fields     = reader.Read<GrassField>(ChunkId::kGrassFields);
+		const auto fieldNames = cache::unpackStrings(reader.Read<char>(ChunkId::kGrassNames));
+		if (fields.size() != fieldNames.size())
+			core::throw_runtime_error("bmesh: grass field and name counts disagree");
+		mesh.grassFields.fields.reserve(fields.size());
+		for (size_t i = 0; i < fields.size(); ++i)
+			mesh.grassFields.fields.push_back({ fieldNames[i], fields[i] });
+		mesh.grassFields.chunks = reader.Read<GrassChunk>(ChunkId::kGrassChunks);
+		mesh.grassFields.clumps = reader.Read<GrassClump>(ChunkId::kGrassClumps);
+		validateGrassGeometry(mesh);
 
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
 		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
@@ -329,6 +375,17 @@ namespace assetlib
 		out.vertexData       = mesh.vertexData;
 		out.indexData        = mesh.indexData;
 		out.stringPool       = mesh.stringPool;
+		if (mesh.grass.names.size() != mesh.grass.fields.size())
+			core::throw_runtime_error("mesh import: grass field and name counts disagree");
+		out.grassFields.fields.reserve(mesh.grass.fields.size());
+		for (size_t i = 0; i < mesh.grass.fields.size(); ++i)
+		{
+			auto field = mesh.grass.fields[i];
+			field.look = static_cast<uint32_t>(i);
+			out.grassFields.fields.push_back({ mesh.grass.names[i], field });
+		}
+		out.grassFields.chunks = mesh.grass.chunks;
+		out.grassFields.clumps = mesh.grass.clumps;
 
 		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 

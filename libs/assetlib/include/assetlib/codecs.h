@@ -125,7 +125,7 @@ namespace assetlib
 		static constexpr std::string_view c_Extension = c_MeshExtension;
 		static constexpr AssetType        c_Type      = AssetType::kMesh;
 		static constexpr uint32_t         c_Magic     = magic::c_BMesh;
-		static constexpr uint64_t         c_BakeToken = 0x4757e5f12b30883full;
+		static constexpr uint64_t         c_BakeToken = 0x6838e9a702ee6dc1ull;
 
 		[[nodiscard]] static std::vector<std::byte>
 		Serialize(const BMesh& value);

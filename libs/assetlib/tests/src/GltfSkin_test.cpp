@@ -21,6 +21,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
+#include "RefsSandbox.h"
 #include "SkinnedGltf.h"
 #include <assetlib/AssetStore.h>
 #include <cstddef>
@@ -507,10 +508,8 @@ TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
 {
 	// Chunks are addressed by id and an absent or empty one is not an error, so a mesh with nothing
 	// in its skeleton chunk reads as what it is, a static mesh.
-	const fs::path bmesh = "assets/Data/Derived/Meshes/apples.bmesh";
-	REQUIRE(fs::exists(bmesh));
-
-	const auto mesh = LoadAt<BMesh>(bmesh);
+	const auto original = assetlib::test::MakeMesh({ "Authored/Materials/static.bmaterial" });
+	const auto mesh     = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(original));
 	CHECK_FALSE(mesh.materials.empty());
 	CHECK(mesh.skeleton.empty());
 	CHECK_FALSE(isSkinned(mesh));

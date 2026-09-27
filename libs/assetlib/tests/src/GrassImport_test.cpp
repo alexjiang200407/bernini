@@ -1,6 +1,8 @@
 #include "PointsGltf.h"
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
@@ -30,6 +32,40 @@ namespace
 	Load(const Glb& glb)
 	{
 		return loadFromGltf(glb.Path(), { .textures = GltfTextures::kSkip });
+	}
+}
+
+TEST_CASE("Cooked meshes own named grass geometry with stable look slots", "[grass][import][io]")
+{
+	Buffer     buffer;
+	const auto points = ShuffledGrid(15);
+	const Glb  glb("bernini_embedded_grass.glb", StreetDocument(buffer, points), buffer.bytes);
+	const auto mesh  = toBMesh(Load(glb));
+	const auto bytes = AssetCodec<BMesh>::Serialize(mesh);
+	const auto read  = AssetCodec<BMesh>::Deserialize(bytes);
+	REQUIRE(read.grassFields.fields.size() == 1);
+	CHECK(read.grassFields.fields[0].name == "Street[1]");
+	CHECK(read.grassFields.fields[0].field.look == 0);
+	CHECK(read.grassFields.fields[0].field.mesh == 0);
+	CHECK(read.grassFields.chunks.size() == 4);
+	REQUIRE(read.grassFields.clumps.size() == points.size());
+	CHECK(
+		std::memcmp(
+			read.grassFields.clumps.data(),
+			mesh.grassFields.clumps.data(),
+			points.size() * sizeof(GrassClump)) == 0);
+	CHECK(AssetCodec<BMesh>::Serialize(read) == bytes);
+	SECTION("a field cannot address another mesh")
+	{
+		auto invalid                             = mesh;
+		invalid.grassFields.fields[0].field.mesh = static_cast<uint32_t>(mesh.meshes.size());
+		CHECK_THROWS(AssetCodec<BMesh>::Serialize(invalid));
+	}
+	SECTION("a chunk cannot escape the clump pool")
+	{
+		auto invalid                             = mesh;
+		invalid.grassFields.chunks[0].firstClump = std::numeric_limits<uint32_t>::max();
+		CHECK_THROWS(AssetCodec<BMesh>::Serialize(invalid));
 	}
 }
 

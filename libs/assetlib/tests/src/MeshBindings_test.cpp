@@ -1,0 +1,83 @@
+#include "RefsSandbox.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/RegenMesh.h>
+#include <assetlib/asset_refs.h>
+#include <assetlib/codecs.h>
+#include <assetlib/import_document.h>
+#include <assetlib/pak.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Grass.h>
+#include <assetlib_structs/GrassGeometry.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <memory>
+#include <string>
+#include <vector>
+
+using namespace assetlib;
+using namespace assetlib::test;
+
+TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot", "[mesh-bindings]")
+{
+	const DataRoot root("bernini-mesh-bindings");
+	const auto     store       = root.Source();
+	auto           document    = ImportDocument();
+	document.source            = "Authored/Meshes/street.glb";
+	document.identity          = { 1, "street.glb" };
+	const auto output          = importOutputKey(document.identity, AssetType::kMesh);
+	document.outputs           = { output };
+	document.bindings          = { { "Road", "Authored/Materials/road.bmaterial" },
+		                           { "Pavement", "Authored/Materials/pavement.bmaterial" },
+		                           { "Verge", "Authored/Grass/verge.bgrass" } };
+	document.materialOverrides = { { "Road", "wet", "Authored/Materials/wet.bmaterial" } };
+	document.skeleton          = "Derived/Skeletons/shared.bskel";
+	auto mesh =
+		MakeMesh({ "Authored/Materials/old.bmaterial", "Authored/Materials/old.bmaterial" });
+	mesh.submeshes[0].nameOffset = mesh.stringPool.add("Road");
+	mesh.submeshes[1].nameOffset = mesh.stringPool.add("Pavement");
+	mesh.submeshes[1].material   = mesh.submeshes[0].material;
+	mesh.grassFields.fields      = { NamedGrassField{ "Verge", GrassField{ 0, 0, 0, 1 } } };
+	mesh.grassFields.chunks      = { GrassChunk{ .clumpCount = 1 } };
+	mesh.grassFields.clumps.resize(1);
+	mesh.source.key            = document.source;
+	mesh.source.parametersHash = parametersHashOf(document);
+	const auto key             = importDocumentKeyFor(document.source);
+	store.Save(document, key);
+	store.Save(mesh, output);
+	RegenMesh loaded;
+	if (GENERATE(false, true))
+	{
+		const auto archive = root.path / "Data.bpak";
+		PakWriter  writer(archive);
+		writer.Add(key, AssetCodec<ImportDocument>::Serialize(document), {});
+		writer.Add(output, AssetCodec<BMesh>::Serialize(mesh), {});
+		writer.Finish();
+		const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
+		loaded = packed.LoadRegenMesh(output);
+	}
+	else
+	{
+		loaded = store.LoadRegenMesh(output);
+	}
+	CHECK(
+		loaded.bindings.submeshMaterials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial",
+	                              "Authored/Materials/pavement.bmaterial" });
+	REQUIRE(loaded.bindings.materialOverrides.size() == 1);
+	CHECK(loaded.bindings.materialOverrides[0].submesh == 0);
+	CHECK(loaded.bindings.materialOverrides[0].name == "wet");
+	CHECK(loaded.bindings.materialOverrides[0].material == "Authored/Materials/wet.bmaterial");
+	CHECK(loaded.bindings.skeleton == document.skeleton);
+	CHECK(loaded.bindings.grassLooks == std::vector<std::string>{ "Authored/Grass/verge.bgrass" });
+	const auto before = store.GetFiles().Read(output);
+	document.bindings.clear();
+	document.materialOverrides.clear();
+	store.Save(document, key);
+	const auto rebound = store.LoadRegenMesh(output);
+	CHECK(rebound.bindings.submeshMaterials == std::vector<std::string>(2));
+	CHECK(rebound.bindings.grassLooks == std::vector<std::string>(1));
+	CHECK(rebound.bindings.materialOverrides.empty());
+	CHECK(loaded.bindings.submeshMaterials[0] == "Authored/Materials/road.bmaterial");
+	CHECK(store.GetFiles().Read(output) == before);
+}

@@ -62,6 +62,8 @@ namespace assetlib
 	uint64_t
 	residentBytes(const BMesh& mesh) noexcept
 	{
+		uint64_t grassNames = 0;
+		for (const auto& field : mesh.grassFields.fields) grassNames += field.name.size();
 		// Every vector it holds, named rather than summarised, so a field added later is not
 		// silently free. The lone strings beside them -- `skeleton`, and the source's mount key --
 		// are paths, and no budget turns on a handful of them.
@@ -70,7 +72,9 @@ namespace assetlib
 		       vectorBytes(mesh.meshletGroups) + vectorBytes(mesh.meshletVertices) +
 		       vectorBytes(mesh.meshletTriangles) + vectorBytes(mesh.vertexData) +
 		       vectorBytes(mesh.indexData) + vectorBytes(mesh.stringPool.bytes()) +
-		       stringVectorBytes(mesh.materials) + stringVectorBytes(mesh.skeletonBoneNames);
+		       stringVectorBytes(mesh.materials) + stringVectorBytes(mesh.skeletonBoneNames) +
+		       vectorBytes(mesh.grassFields.fields) + vectorBytes(mesh.grassFields.chunks) +
+		       vectorBytes(mesh.grassFields.clumps) + grassNames;
 	}
 
 	uint64_t
