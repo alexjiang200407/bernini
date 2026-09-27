@@ -41,12 +41,8 @@ namespace
 	namespace fs = std::filesystem;
 }
 
-TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[assetrefs]")
+TEST_CASE("Mesh reference queries read current sidecar bindings", "[assetrefs]")
 {
-	// The scan surveys every mesh in the project, and a .bmesh is mostly vertex data -- so it seeks to
-	// the reference chunks instead of deserializing. This pins the cheap reader against the real one; a
-	// change to the container that broke it would otherwise surface as an asset silently losing its
-	// references.
 	const DataRoot root("bernini_refs_matpaths");
 
 	const std::vector<std::string> materials = { "Authored/Materials/a.bmaterial",
@@ -54,17 +50,16 @@ TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[a
 		                                         "Authored/Materials/a.bmaterial" };
 	SaveMesh(root, "mesh.bmesh", materials, "Derived/Meshes/rig.bskel");
 
-	const fs::path file = root.path / "Derived/Meshes" / "mesh.bmesh";
-
-	CHECK(loadMeshRefs(file).materials == LoadAt<BMesh>(file).materials);
-	CHECK(loadMeshRefs(file).materials == materials);
-	CHECK(loadMeshRefs(file).skeleton == "Derived/Meshes/rig.bskel");
+	CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/mesh.bmesh").materials == materials);
+	CHECK(
+		root.Source().LoadRegenMeshRefs("Derived/Meshes/mesh.bmesh").skeleton ==
+		"Derived/Meshes/rig.bskel");
 
 	SECTION("a mesh that names neither yields none, and is not an error")
 	{
 		SaveMesh(root, "bare.bmesh", {});
-		CHECK(loadMeshRefs(root.path / "Derived/Meshes" / "bare.bmesh").materials.empty());
-		CHECK(loadMeshRefs(root.path / "Derived/Meshes" / "bare.bmesh").skeleton.empty());
+		CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/bare.bmesh").materials.empty());
+		CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/bare.bmesh").skeleton.empty());
 	}
 
 	SECTION("a file that is not a mesh is an error, not an empty list")
@@ -72,7 +67,7 @@ TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[a
 		std::ofstream(root.path / "Derived/Meshes" / "junk.bmesh", std::ios::binary)
 			<< "not a mesh";
 		CHECK_THROWS_AS(
-			loadMeshRefs(root.path / "Derived/Meshes" / "junk.bmesh"),
+			root.Source().LoadRegenMeshRefs("Derived/Meshes/junk.bmesh"),
 			std::runtime_error);
 	}
 }
@@ -199,8 +194,8 @@ TEST_CASE("A material a mesh names cannot be deleted", "[assetrefs]")
 	{
 		const auto referrers = graph.ReferrersOf("Authored/Materials/used.bmaterial");
 
-		REQUIRE(referrers.size() == 1);
-		CHECK(referrers[0].referrer == "Derived/Meshes/mesh.bmesh");
+		REQUIRE(referrers.size() == 2);
+		CHECK(referrers[0].referrer == "Authored/Meshes/mesh.bimport");
 		CHECK(referrers[0].kind == RefKind::kSubmeshMaterial);
 
 		CHECK_FALSE(planDeletion(graph, "Authored/Materials/used.bmaterial").Allowed());
@@ -248,7 +243,9 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	REQUIRE(plan.assetType == AssetType::kSkeleton);
 	CHECK(
 		ReferrerPaths(graph, "Derived/Animations/rig.bskel") ==
-		std::vector<std::string>{ "Derived/Animations/walk.banim", "Derived/Meshes/mesh.bmesh" });
+		std::vector<std::string>{ "Authored/Meshes/mesh.bimport",
+	                              "Derived/Animations/walk.banim",
+	                              "Derived/Meshes/mesh.bmesh" });
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 
 	SECTION("and a clip set is deletable, because nothing references one")
@@ -290,20 +287,17 @@ TEST_CASE("A mesh is always deletable, and its materials outlive it", "[assetref
 	CHECK(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
 	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 
-	SECTION("and the material it freed can then be deleted in its own right")
+	SECTION("the import document still prevents deleting its material")
 	{
 		const AssetRefGraph after = root.Scan();
 
-		CHECK(after.ReferrersOf("Authored/Materials/mat.bmaterial").empty());
-		CHECK(planDeletion(after, "Authored/Materials/mat.bmaterial").Allowed());
+		CHECK_FALSE(after.ReferrersOf("Authored/Materials/mat.bmaterial").empty());
+		CHECK_FALSE(planDeletion(after, "Authored/Materials/mat.bmaterial").Allowed());
 	}
 }
 
-TEST_CASE("A mesh naming one material twice is one blocker, not two", "[assetrefs]")
+TEST_CASE("Repeated submesh bindings produce one edge per referrer", "[assetrefs]")
 {
-	// attachMaterial splits a shared slot rather than repointing its siblings, so a .bmesh legitimately
-	// names one material from two slots -- Test Project's tree_alpha_test.bmesh does. Reporting the same
-	// mesh twice would be a lie about how much is holding the material.
 	const DataRoot root("bernini_refs_dedup");
 
 	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
@@ -320,8 +314,8 @@ TEST_CASE("A mesh naming one material twice is one blocker, not two", "[assetref
 
 	CHECK(
 		ReferrerPaths(graph, "Authored/Materials/leaf.bmaterial") ==
-		std::vector<std::string>{ "Derived/Meshes/tree.bmesh" });
-	CHECK(planDeletion(graph, "Authored/Materials/leaf.bmaterial").blockers.size() == 1);
+		std::vector<std::string>{ "Authored/Meshes/tree.bimport", "Derived/Meshes/tree.bmesh" });
+	CHECK(planDeletion(graph, "Authored/Materials/leaf.bmaterial").blockers.size() == 2);
 }
 
 TEST_CASE("A material routing one texture into two channels is one blocker", "[assetrefs]")
@@ -509,7 +503,7 @@ TEST_CASE("An asset deleted behind the editor's back is not fatal", "[assetrefs]
 	}
 }
 
-TEST_CASE("A mesh deleted behind the editor's back stops blocking its materials", "[assetrefs]")
+TEST_CASE("Deleting a cooked mesh leaves its sidecar holding the materials", "[assetrefs]")
 {
 	// The behaviour a cached graph would get wrong: it would refuse the deletion, naming a mesh that is
 	// no longer there. Rebuilding from disk is what makes the answer true rather than merely fresh.
@@ -523,7 +517,7 @@ TEST_CASE("A mesh deleted behind the editor's back stops blocking its materials"
 
 	fs::remove(root.path / "Derived/Meshes" / "mesh.bmesh");
 
-	CHECK(planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial").Allowed());
+	CHECK_FALSE(planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial").Allowed());
 }
 
 TEST_CASE("An asset already gone counts as deleted", "[assetrefs]")

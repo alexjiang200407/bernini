@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
@@ -114,13 +115,13 @@ namespace
 		const std::filesystem::path&                       path,
 		std::span<const std::string>                       materials,
 		std::span<const uint32_t>                          materialIndices,
-		std::span<const assetlib::SubmeshMaterialOverride> overrides = {})
+		std::span<const assetlib::MaterialOverrideBinding> overrides = {})
 	{
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
-		auto mesh = assetlib::BMesh();
-		mesh.materials.assign(materials.begin(), materials.end());
-		mesh.materialOverrides.assign(overrides.begin(), overrides.end());
+		auto mesh     = assetlib::BMesh();
+		auto document = assetlib::ImportDocument();
+		document.materialOverrides.assign(overrides.begin(), overrides.end());
 
 		mesh.vertexData.resize(materialIndices.size() * 3 * c_Stride);
 
@@ -154,7 +155,10 @@ namespace
 			submesh.material              = materialIndex;
 			submesh.aabbMin               = glm::vec3(-1.0f);
 			submesh.aabbMax               = glm::vec3(1.0f);
-			submesh.nameOffset            = 0;
+			submesh.nameOffset = mesh.stringPool.add(std::to_string(mesh.submeshes.size()));
+			if (materialIndex < materials.size())
+				document.bindings.push_back(
+					{ std::to_string(mesh.submeshes.size()), materials[materialIndex] });
 			mesh.submeshes.push_back(submesh);
 
 			vertexCursor += 3;
@@ -173,6 +177,14 @@ namespace
 		mesh.roots.push_back(0);
 
 		std::filesystem::create_directories(path.parent_path());
+		const auto dataRoot        = path.parent_path().parent_path().parent_path();
+		document.source            = "Authored/Meshes/" + path.stem().string() + ".glb";
+		document.outputs           = { path.lexically_relative(dataRoot).generic_string() };
+		mesh.source.key            = document.source;
+		mesh.source.parametersHash = assetlib::parametersHashOf(document);
+		assetlib::AssetStore(dataRoot).Save(
+			document,
+			assetlib::importDocumentKeyFor(document.source));
 		SaveAt(mesh, path);
 	}
 
@@ -670,7 +682,9 @@ TEST_CASE(
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial",
 		                                                   "Authored/Materials/rust.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0, 0 };
-	const auto overrides = std::vector<assetlib::SubmeshMaterialOverride>{ { 1, "Rusty", 1 } };
+	const auto overrides       = std::vector<assetlib::MaterialOverrideBinding>{
+		{ "1", "Rusty", "Authored/Materials/rust.bmaterial" }
+	};
 	WriteMesh(fx.root.path / "Derived/Meshes" / "two.bmesh", materials, materialIndices, overrides);
 
 	const bgl::GeomHandle         geom = (*fx).AcquireMesh("Derived/Meshes/two.bmesh");

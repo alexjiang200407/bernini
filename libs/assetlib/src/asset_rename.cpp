@@ -171,12 +171,7 @@ namespace assetlib
 			switch (type)
 			{
 			case AssetType::kMesh:
-			{
-				BMesh mesh = AssetCodec<BMesh>::Deserialize(bytes);
-				for (std::string& material : mesh.materials) material = mapTarget(plan, material);
-				mesh.skeleton = mapTarget(plan, mesh.skeleton);
-				return AssetCodec<BMesh>::Serialize(mesh);
-			}
+				return std::vector<std::byte>(bytes.begin(), bytes.end());
 
 			case AssetType::kAnimation:
 			{

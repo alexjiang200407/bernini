@@ -164,7 +164,7 @@ namespace assetlib
 				// A shipped mount is read-only and cannot re-cook, so a pairing left mismatched
 				// here re-addresses on every load of the game for as long as it ships -- there is
 				// no later migrate to bake it down.
-				remapToItsRig(rigs, store, current.mesh);
+				remapToItsRig(rigs, store, current);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:

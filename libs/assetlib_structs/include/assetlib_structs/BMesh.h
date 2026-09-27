@@ -12,25 +12,7 @@
 
 namespace assetlib
 {
-	/** A named alternative material registered for one submesh; see ImportDocument::materialOverrides. */
-	struct SubmeshMaterialOverride
-	{
-		uint32_t    submesh;   // index into BMesh::submeshes
-		std::string name;      // unique per submesh
-		uint32_t    material;  // index into BMesh::materials
-
-		bool
-		operator==(const SubmeshMaterialOverride&) const = default;
-	};
-
-	/**
-	 * A mesh loaded from a `.bmesh` file: the modular, path-referencing counterpart of
-	 * imp::BMeshImport. The geometry (nodes, meshes, submeshes, meshlets and the vertex/index/string
-	 * pools) is identical to the import form, but materials are not embedded -- they are referenced by
-	 * file path so textures and materials live as standalone, shareable assets. Baking an
-	 * imp::BMeshImport emits one `.bmesh` (this struct) plus the referenced texture / material /
-	 * animation files.
-	 */
+	/** Cooked geometry and the rig layout its joint indices address. Bindings belong to the sidecar. */
 	struct BMesh
 	{
 		std::vector<Node>     nodes;
@@ -47,14 +29,6 @@ namespace assetlib
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
 		std::vector<std::byte> indexData;   // all index buffers; unread by bgl, see Submesh
 		core::string_pool      stringPool;
-
-		std::vector<std::string> materials;
-
-		// Sorted by submesh, then name. A material only an override names still has a slot in
-		// `materials`, so it is a reference like any other.
-		std::vector<SubmeshMaterialOverride> materialOverrides;
-
-		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 
 		/** The rig the joint indices were cooked against -- see assetlib::skeletonSignature. */
 		uint64_t skeletonSignature = 0;

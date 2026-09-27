@@ -179,22 +179,6 @@ namespace assetlib
 			}
 		}
 
-		/** The bindings `mesh` carries, in first-appearance order -- what a document records. */
-		std::vector<MaterialBinding>
-		bindingsOf(const BMesh& mesh)
-		{
-			auto bindings = std::vector<MaterialBinding>();
-			for (const Submesh& submesh : mesh.submeshes)
-			{
-				// >= size subsumes the c_InvalidIndex sentinel (0xFFFFFFFF).
-				if (submesh.material >= mesh.materials.size())
-					continue;
-				bindings.emplace_back(
-					std::string(mesh.stringPool.at(submesh.nameOffset)),
-					mesh.materials[submesh.material]);
-			}
-			return bindings;
-		}
 	}
 
 	SourceRef
@@ -258,6 +242,8 @@ namespace assetlib
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
 		requireImportedSourceKey(target.source);
+		if (mesh != nullptr)
+			requireUniqueSubmeshNames(*mesh);
 
 		ImportDocument document =
 			importParameters(ImportDocumentPath(target.source), target.sampleRate);
@@ -280,10 +266,10 @@ namespace assetlib
 			document.textureStamp     = stampOf(ResolveWritePath(target.source));
 			document.textureBakeToken = c_TextureBakeToken;
 		}
-		if (target.bindings || mesh != nullptr)
+		if (target.bindings)
 		{
 			std::vector<MaterialBinding> grass = std::move(document.bindings);
-			document.bindings = target.bindings ? *target.bindings : bindingsOf(*mesh);
+			document.bindings                  = *target.bindings;
 			document.bindings.insert(document.bindings.end(), grass.begin(), grass.end());
 		}
 
@@ -303,68 +289,6 @@ namespace assetlib
 			return extension == c_EnvSourceHdrExtension || extension == c_TextureExtension;
 
 		return false;
-	}
-
-	std::vector<std::string>
-	rebuildMaterialSlots(
-		BMesh&                                   mesh,
-		std::span<const MaterialBinding>         bindings,
-		std::span<const MaterialOverrideBinding> overrides)
-	{
-		auto bySubmesh = std::unordered_map<std::string_view, std::string_view>();
-		for (const MaterialBinding& binding : bindings)
-			if (!isGrassBinding(binding))
-				bySubmesh.emplace(binding.submesh, binding.material);
-
-		auto submeshByName = std::unordered_map<std::string_view, uint32_t>();
-		for (uint32_t i = 0; i < mesh.submeshes.size(); ++i)
-			submeshByName.emplace(mesh.stringPool.at(mesh.submeshes[i].nameOffset), i);
-
-		mesh.materials.clear();
-		mesh.materialOverrides.clear();
-		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
-		auto slotFor = [&](const std::string_view material) {
-			const auto [slot, added] =
-				indexOf.emplace(material, static_cast<uint32_t>(mesh.materials.size()));
-			if (added)
-				mesh.materials.emplace_back(material);
-			return slot->second;
-		};
-
-		auto matched = std::unordered_set<std::string_view>();
-		for (Submesh& submesh : mesh.submeshes)
-		{
-			const auto found = bySubmesh.find(mesh.stringPool.at(submesh.nameOffset));
-			if (found == bySubmesh.end())
-			{
-				submesh.material = c_InvalidIndex;
-				continue;
-			}
-			submesh.material = slotFor(found->second);
-			matched.insert(found->first);
-		}
-
-		for (const MaterialOverrideBinding& entry : overrides)
-		{
-			const auto found = submeshByName.find(entry.submesh);
-			if (found == submeshByName.end())
-				continue;
-			mesh.materialOverrides.emplace_back(found->second, entry.name, slotFor(entry.material));
-			matched.insert(found->first);
-		}
-		std::ranges::sort(mesh.materialOverrides, [](const auto& a, const auto& b) {
-			return std::tie(a.submesh, a.name) < std::tie(b.submesh, b.name);
-		});
-
-		auto unbound = std::vector<std::string>();
-		for (const MaterialBinding& binding : bindings)
-			if (!isGrassBinding(binding) && !matched.contains(binding.submesh))
-				unbound.emplace_back(binding.submesh);
-		for (const MaterialOverrideBinding& entry : overrides)
-			if (!matched.contains(entry.submesh) &&
-			    std::ranges::find(unbound, entry.submesh) == unbound.end())
-				unbound.emplace_back(entry.submesh);
-		return unbound;
 	}
 
 	bool
@@ -465,126 +389,7 @@ namespace assetlib
 			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
-	std::vector<ReauthoredDocument>
-	AssetStore::ReauthorImportDocuments() const
-	{
-		namespace fs = std::filesystem;
-
-		if (!fs::is_directory(GetDataRoot()))
-		{
-			core::throw_runtime_error("'{}' is not a directory", GetDataRoot().string());
-		}
-
-		// Which mesh claims which source, by the frozen header alone -- readable whatever the
-		// file's bake revision, which is what lets a stale mesh still name its document.
-		auto claims     = std::unordered_map<std::string, std::vector<fs::path>>();
-		auto unreadable = std::vector<std::string>();
-
-		std::error_code ec;
-		const auto      walk = fs::directory_options::skip_permission_denied;
-		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
-		{
-			if (!entry.is_regular_file(ec) || entry.path().extension() != c_MeshExtension)
-				continue;
-			try
-			{
-				CheckedFileReader      reader(entry.path(), "bmesh");
-				const cache::PeekedKey key = cache::peekKey(reader, magic::c_BMesh, "bmesh");
-				if (!key.source.key.empty())
-					claims[key.source.key].push_back(entry.path());
-			}
-			catch (const std::exception&)
-			{
-				// Which source it claims is unknowable, so every claimless document below has to
-				// treat this mesh as possibly its own.
-				unreadable.push_back(mountKeyFor(GetDataRoot(), entry.path()));
-			}
-		}
-
-		auto report = std::vector<ReauthoredDocument>();
-		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
-		{
-			if (!entry.is_regular_file(ec) || entry.path().extension() != c_ImportDocumentExtension)
-				continue;
-
-			const std::string key = mountKeyFor(GetDataRoot(), entry.path());
-
-			ReauthoredDocument result{ key, ReauthoredDocument::Outcome::kUnchanged, {} };
-			try
-			{
-				const std::vector<std::byte> bytes =
-					core::file::read_file_bytes(entry.path().string());
-				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
-
-				const std::string sourceKey = importedSourceKeyFor(key, document);
-
-				const auto   claimed   = claims.find(sourceKey);
-				const size_t claimants = claimed == claims.end() ? 0 : claimed->second.size();
-				if (claimants > 1)
-				{
-					core::throw_runtime_error(
-						"{} meshes derive from '{}', so which one's bindings this document should "
-						"record is ambiguous",
-						claimants,
-						sourceKey);
-				}
-
-				// A claimless document is a clips-only group, which binds nothing -- unless a
-				// mesh header would not read, in which case that mesh may be the claimant and
-				// clearing the bindings would silently destroy them.
-				if (claimants == 0 && !unreadable.empty())
-				{
-					core::throw_runtime_error(
-						"no mesh claims '{}', but '{}' has an unreadable header and may be its "
-						"claimant; fix that mesh and re-run",
-						sourceKey,
-						unreadable.front());
-				}
-
-				document.bindings =
-					claimants == 0 ?
-						std::vector<MaterialBinding>() :
-						bindingsOf(
-							AssetCodec<BMesh>::Deserialize(
-								core::file::read_file_bytes(claimed->second.front().string())));
-
-				const std::vector<std::byte> serialized =
-					AssetCodec<ImportDocument>::Serialize(document);
-				if (bytes != serialized)
-				{
-					core::file::write_atomic(entry.path(), serialized);
-					result.outcome = ReauthoredDocument::Outcome::kRewritten;
-				}
-			}
-			catch (const std::exception& e)
-			{
-				result.outcome = ReauthoredDocument::Outcome::kFailed;
-				result.message = e.what();
-			}
-			report.push_back(std::move(result));
-		}
-
-		for (const auto& [sourceKey, meshes] : claims)
-		{
-			const std::string documentKey = importDocumentKeyFor(sourceKey);
-			if (fs::exists(GetDataRoot() / documentKey))
-				continue;
-			report.push_back(
-				{ documentKey,
-			      ReauthoredDocument::Outcome::kFailed,
-			      std::format(
-					  "'{}' records '{}' as its source but no document stands beside it; "
-					  "re-import the source",
-					  mountKeyFor(GetDataRoot(), meshes.front()),
-					  sourceKey) });
-		}
-
-		return report;
-	}
-
-	std::vector<std::string>
+	ImportedRig
 	AssetStore::WriteImportedRig(
 		const Skeleton&     skeleton,
 		const AnimationSet& animations,
@@ -597,7 +402,7 @@ namespace assetlib
 		if (skeleton.bones.empty())
 			return {};
 
-		auto outputs = std::vector<std::string>();
+		auto result = ImportedRig();
 
 		// A rig this project already holds is bound, not copied. Two `.bskel` of one signature make
 		// every later clips-only import ambiguous, and a joint index means the same bone in both --
@@ -609,30 +414,30 @@ namespace assetlib
 			Skeleton rig = skeleton;
 			rig.source   = source;
 			Save(rig, bskelKey);
-			mesh.skeleton = std::string(bskelKey);
-			outputs.push_back(mesh.skeleton);
+			result.skeleton = std::string(bskelKey);
+			result.outputs.push_back(result.skeleton);
 		}
 		else
 		{
-			mesh.skeleton = KeyFor(existing);
+			result.skeleton = KeyFor(existing);
 		}
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 
 		if (!writeClips || animations.clips.empty())
-			return outputs;
+			return result;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
 		AnimationSet clips = animations;
-		clips.skeleton     = mesh.skeleton;
+		clips.skeleton     = result.skeleton;
 		clips.source       = source;
 
 		// Read back rather than swept from the copy in hand, and the same rule WriteImportedClips
 		// follows: a floor or a box measured against a bind pose the loader will not see is one the
 		// loader cannot match. A reused rig makes that visible -- its pose is its own, not this
 		// source's.
-		const Skeleton bound = Load<Skeleton>(mesh.skeleton);
+		const Skeleton bound = Load<Skeleton>(result.skeleton);
 
 		// Ahead of the boxes: a box measured before the clips are grounded describes a rig standing
 		// somewhere the runtime will never draw it.
@@ -646,8 +451,8 @@ namespace assetlib
 		bakePlantWeightsForRig(GetFiles(), clips, std::span<const BMesh>(&mesh, 1), bound);
 		Save(clips, banimKey);
 
-		outputs.emplace_back(banimKey);
-		return outputs;
+		result.outputs.emplace_back(banimKey);
+		return result;
 	}
 
 	std::filesystem::path
@@ -752,7 +557,8 @@ namespace assetlib
 
 			try
 			{
-				if (normalizePath(loadMeshRefs(entry.path()).skeleton) != rigRel)
+				if (normalizePath(store.LoadRegenMeshRefs(store.KeyFor(entry.path())).skeleton) !=
+				    rigRel)
 					continue;
 
 				// Through the regeneration seam rather than the bytes on disk: the re-export

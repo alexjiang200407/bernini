@@ -421,7 +421,6 @@ namespace
 		const std::vector<std::string>&                      materials)
 	{
 		BMesh mesh;
-		mesh.materials = materials;
 		for (const auto& [name, material] : submeshes)
 		{
 			Submesh submesh{};
@@ -442,9 +441,12 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
 		{ "Authored/Materials/skin.bmaterial", "Authored/Materials/teeth.bmaterial" });
 
-	const ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
-	const AssetStore   store(root.path);
-	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
+	ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
+	target.bindings =
+		std::vector<MaterialBinding>{ { "kirk[0]", "Authored/Materials/skin.bmaterial" },
+		                              { "kirk[1]", "Authored/Materials/teeth.bmaterial" } };
+	const AssetStore store(root.path);
+	const SourceRef  ref = store.CopyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "Authored/Meshes/kirk.glb");
 	CHECK(ref.stamp.size > 0);
 	store.WriteImportedDocument(target, &mesh);
@@ -467,9 +469,11 @@ TEST_CASE(
 	const DataRoot root("bernini_importdoc_overrides");
 	WriteText(root.path / "crate.glb", "the source");
 
-	const BMesh mesh = NamedMesh({ { "crate[0]", 0 } }, { "Authored/Materials/wood.bmaterial" });
-	const ImportTarget target{ "Authored/Meshes/crate.glb", 24.0f, {} };
-	const AssetStore   store(root.path);
+	const BMesh  mesh = NamedMesh({ { "crate[0]", 0 } }, { "Authored/Materials/wood.bmaterial" });
+	ImportTarget target{ "Authored/Meshes/crate.glb", 24.0f, {} };
+	target.bindings =
+		std::vector<MaterialBinding>{ { "crate[0]", "Authored/Materials/wood.bmaterial" } };
+	const AssetStore store(root.path);
 	static_cast<void>(store.CopyImportedSource(root.path / "crate.glb", target));
 	store.WriteImportedDocument(target, &mesh);
 

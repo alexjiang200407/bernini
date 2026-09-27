@@ -207,7 +207,7 @@ namespace editor
 
 		// Filled in on the worker, read on the GUI thread below where the document is written: only
 		// the writer knows whether it produced the rig or bound one already here.
-		auto rigOutputs = std::vector<std::string>();
+		auto rig = assetlib::ImportedRig();
 
 		ZoneScopedN("editor import");
 		ZoneTextF("%s", qPrintable(name));
@@ -278,7 +278,7 @@ namespace editor
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
-					rigOutputs = store.WriteImportedRig(
+					rig = store.WriteImportedRig(
 						imported->skeleton,
 						imported->animations,
 						*mesh,
@@ -359,9 +359,9 @@ namespace editor
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
 					target.identity = options.outputs.identity;
-					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
-					target.skeleton = mesh->skeleton;
-					target.outputs  = std::move(rigOutputs);
+					rig.outputs.push_back(meshStore.KeyFor(bmeshPath));
+					target.skeleton = std::move(rig.skeleton);
+					target.outputs  = std::move(rig.outputs);
 
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}

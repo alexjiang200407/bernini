@@ -82,8 +82,6 @@ namespace
 		mesh.vertexData.resize(256u * 1024u, std::byte{ 0x7 });
 		mesh.indexData.resize(64u * 1024u, std::byte{ 0x3 });
 
-		mesh.materials = { "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" };
-		mesh.skeleton  = "Derived/Skeletons/rig.bskel";
 		return mesh;
 	}
 
@@ -156,23 +154,12 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 			CHECK(mounted.indexData == direct.indexData);
 			CHECK(mounted.meshletVertices == direct.meshletVertices);
 			CHECK(mounted.meshletTriangles == direct.meshletTriangles);
-			CHECK(mounted.materials == direct.materials);
-			CHECK(mounted.skeleton == direct.skeleton);
 			CHECK(mounted.nodes.size() == direct.nodes.size());
 			CHECK(mounted.submeshes.size() == direct.submeshes.size());
 
 			// The strongest form of "identical": re-serializing both gives the same bytes.
 			CHECK(AssetCodec<BMesh>::Serialize(mounted) == AssetCodec<BMesh>::Serialize(direct));
 		}
-	}
-
-	SECTION(".bmesh references, without its geometry")
-	{
-		const MeshRefs direct = loadMeshRefs(scratch.path / "Derived/Meshes/kirk.bmesh");
-
-		CHECK(loadMeshRefs(loose, "Derived/Meshes/kirk.bmesh").materials == direct.materials);
-		CHECK(loadMeshRefs(pak, "Derived/Meshes/kirk.bmesh").materials == direct.materials);
-		CHECK(loadMeshRefs(pak, "Derived/Meshes/kirk.bmesh").skeleton == direct.skeleton);
 	}
 
 	SECTION(".bskel")
@@ -218,22 +205,6 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 
 	// The container has to be big enough for the distinction to exist at all.
 	REQUIRE(meshSize > 256u * 1024u);
-
-	SECTION("loadMeshRefs reads a few hundred bytes of a 300 KB mesh")
-	{
-		for (const core::file::IFileSystem* mount :
-		     { static_cast<const core::file::IFileSystem*>(&loose),
-		       static_cast<const core::file::IFileSystem*>(&pak) })
-		{
-			CountingFileSystem counting(*mount);
-			(void)loadMeshRefs(counting, "Derived/Meshes/kirk.bmesh");
-
-			// Header + chunk table + the two reference chunks. The bound is generous on purpose:
-			// what it rules out is a whole-file read, which is the regression that matters.
-			CHECK(counting.bytesRead < 4096u);
-			CHECK(counting.bytesRead < meshSize / 16u);
-		}
-	}
 
 	SECTION("loadAnimationSkeletonPath is ranged too")
 	{

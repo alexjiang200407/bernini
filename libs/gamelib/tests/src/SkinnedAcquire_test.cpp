@@ -127,8 +127,10 @@ namespace
 		const auto store = assetlib::AssetStore(dataRoot);
 		store.Save(other, "Derived/Skeletons/other.bskel");
 
-		auto mesh              = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		mesh.skeleton          = "Derived/Skeletons/other.bskel";
+		auto mesh         = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		auto document     = store.Load<assetlib::ImportDocument>("Authored/Meshes/rig.bimport");
+		document.skeleton = "Derived/Skeletons/other.bskel";
+		store.Save(document, "Authored/Meshes/rig.bimport");
 		mesh.skeletonSignature = assetlib::skeletonSignature(other);
 		store.Save(mesh, "Derived/Meshes/rig.bmesh");
 	}

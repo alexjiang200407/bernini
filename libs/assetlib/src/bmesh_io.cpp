@@ -115,25 +115,15 @@ namespace assetlib
 			kVertexData,
 			kIndexData,
 			kStringPool,
-			kMaterialPaths,
-			kSkeletonPath,
 			kSkeletonSignature,
 			kSkeletonBoneNames,  // the cooked rig's bone names, in bone order
 			kGeometrySignature,  // the vertex blob and the tables addressing it, hashed at cook
 			kMeshletGroups,      // one bound per run of c_MeshletsPerGroup meshlets
-			kMaterialOverrides,  // (submesh, material) pairs; absent when there are none
-			kMaterialOverrideNames,
 			kLods,       // each mesh's levels of detail, see Mesh::firstLod
 			kGrassFields,
 			kGrassNames,
 			kGrassChunks,
 			kGrassClumps,
-		};
-
-		struct PackedOverride
-		{
-			uint32_t submesh;
-			uint32_t material;
 		};
 
 		bool
@@ -169,21 +159,11 @@ namespace assetlib
 					core::throw_runtime_error("bmesh: invalid grass chunk range");
 		}
 
-		/** A static attachment may name a rig without carrying joints; the inverse is invalid. */
-		void
-		requireSkeletonIfSkinned(const BMesh& mesh)
-		{
-			if (isSkinned(mesh) && mesh.skeleton.empty())
-				throw std::runtime_error(
-					"bmesh: carries joint indices but names no skeleton, so they resolve to nothing"
-					" (bake it with assetlib_cli, which writes the rig alongside the mesh)");
-		}
 	}
 
 	std::vector<std::byte>
 	AssetCodec<BMesh>::Serialize(const BMesh& mesh)
 	{
-		requireSkeletonIfSkinned(mesh);
 		validateGrassGeometry(mesh);
 
 		cache::Writer writer;
@@ -199,8 +179,6 @@ namespace assetlib
 		writer.Add(ChunkId::kVertexData, mesh.vertexData);
 		writer.Add(ChunkId::kIndexData, mesh.indexData);
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
-		writer.Add(ChunkId::kMaterialPaths, cache::packStrings(mesh.materials));
-		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
 		writer.Add(
 			ChunkId::kSkeletonSignature,
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
@@ -218,22 +196,6 @@ namespace assetlib
 		writer.Add(ChunkId::kGrassNames, cache::packStrings(fieldNames));
 		writer.Add(ChunkId::kGrassChunks, mesh.grassFields.chunks);
 		writer.Add(ChunkId::kGrassClumps, mesh.grassFields.clumps);
-
-		// Written only when present, so a mesh with none stays byte-identical to one from before.
-		if (!mesh.materialOverrides.empty())
-		{
-			auto pairs = std::vector<PackedOverride>();
-			auto names = std::vector<std::string>();
-			pairs.reserve(mesh.materialOverrides.size());
-			names.reserve(mesh.materialOverrides.size());
-			for (const SubmeshMaterialOverride& entry : mesh.materialOverrides)
-			{
-				pairs.emplace_back(entry.submesh, entry.material);
-				names.emplace_back(entry.name);
-			}
-			writer.Add(ChunkId::kMaterialOverrides, pairs);
-			writer.Add(ChunkId::kMaterialOverrideNames, cache::packStrings(names));
-		}
 
 		// Computed here rather than taken from the struct, so a producer that rewrote the blob and
 		// forgot the field cannot write a file that disagrees with its own geometry.
@@ -261,10 +223,6 @@ namespace assetlib
 		mesh.vertexData       = reader.Read<std::byte>(ChunkId::kVertexData);
 		mesh.indexData        = reader.Read<std::byte>(ChunkId::kIndexData);
 		mesh.stringPool       = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
-		mesh.materials        = cache::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
-
-		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
-		mesh.skeleton.assign(skeleton.begin(), skeleton.end());
 
 		const auto signature   = reader.Read<uint64_t>(ChunkId::kSkeletonSignature);
 		mesh.skeletonSignature = signature.empty() ? 0 : signature.front();
@@ -285,70 +243,7 @@ namespace assetlib
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
 		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
 
-		const auto pairs = reader.Read<PackedOverride>(ChunkId::kMaterialOverrides);
-		const auto names = cache::unpackStrings(reader.Read<char>(ChunkId::kMaterialOverrideNames));
-		if (pairs.size() != names.size())
-		{
-			core::throw_runtime_error(
-				"bmesh: {} material overrides but {} override names",
-				pairs.size(),
-				names.size());
-		}
-		mesh.materialOverrides.reserve(pairs.size());
-		for (size_t i = 0; i < pairs.size(); ++i)
-			mesh.materialOverrides.emplace_back(pairs[i].submesh, names[i], pairs[i].material);
-
-		requireSkeletonIfSkinned(mesh);
 		return mesh;
-	}
-
-	namespace
-	{
-		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
-			{ static_cast<uint32_t>(ChunkId::kMaterialPaths),
-			  static_cast<uint32_t>(ChunkId::kSkeletonPath) }
-		};
-
-		MeshRefs
-		refsFromChunks(const cache::CacheData& chunks)
-		{
-			// Absent, not malformed: every chunk here is optional, and a mesh that names none is
-			// exactly what a static import produces.
-			MeshRefs   refs;
-			const auto paths = chunks.Read<char>(ChunkId::kMaterialPaths, c_What);
-			if (!paths.empty())
-				refs.materials = cache::unpackStrings(paths);
-
-			const auto skeleton = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
-			refs.skeleton.assign(skeleton.begin(), skeleton.end());
-
-			return refs;
-		}
-	}
-
-	MeshRefs
-	loadMeshRefs(const std::filesystem::path& path)
-	{
-		return refsFromChunks(
-			cache::readCacheChunksFromFile(
-				path,
-				magic::c_BMesh,
-				AssetCodec<BMesh>::c_BakeToken,
-				c_WantedRefChunks,
-				c_What));
-	}
-
-	MeshRefs
-	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return refsFromChunks(
-			cache::readCacheChunksFrom(
-				fileSystem,
-				path,
-				magic::c_BMesh,
-				AssetCodec<BMesh>::c_BakeToken,
-				c_WantedRefChunks,
-				c_What));
 	}
 
 	BMesh
@@ -378,8 +273,6 @@ namespace assetlib
 		}
 		out.grassFields.chunks = mesh.grass.chunks;
 		out.grassFields.clumps = mesh.grass.clumps;
-
-		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 
 		return out;
 	}
@@ -437,46 +330,6 @@ namespace assetlib
 		return std::ranges::any_of(
 			std::span(mesh.submeshes).subspan(entry.firstSubmesh, entry.submeshCount),
 			carriesJoints);
-	}
-
-	bool
-	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath)
-	{
-		if (submeshIndex >= mesh.submeshes.size())
-			throw std::runtime_error("attachMaterial: submeshIndex out of range");
-
-		Submesh&          submesh  = mesh.submeshes[submeshIndex];
-		const std::string material = std::string(relativePath);
-
-		// Rewriting the slot in place is only safe when this submesh is its sole user; otherwise every
-		// sibling sharing the slot would silently change material too.
-		const bool hasSlot = submesh.material < mesh.materials.size();
-		const bool shared =
-			hasSlot && std::ranges::count_if(mesh.submeshes, [&](const Submesh& other) {
-						   return other.material == submesh.material;
-					   }) > 1;
-
-		if (hasSlot && !shared)
-		{
-			if (mesh.materials[submesh.material] == material)
-				return false;
-			mesh.materials[submesh.material] = material;
-			return true;
-		}
-
-		// Move to a slot of its own, reusing one that already names this material.
-		if (const auto it = std::ranges::find(mesh.materials, material); it != mesh.materials.end())
-		{
-			const auto index = static_cast<uint32_t>(std::distance(mesh.materials.begin(), it));
-			if (submesh.material == index)
-				return false;
-			submesh.material = index;
-			return true;
-		}
-
-		mesh.materials.push_back(material);
-		submesh.material = static_cast<uint32_t>(mesh.materials.size() - 1);
-		return true;
 	}
 
 	namespace

@@ -62,7 +62,6 @@ namespace
 		submesh.layout.attributes[0]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 0 };
 		mesh.submeshes                = { submesh };
 
-		mesh.skeleton          = "Derived/Skeletons/chain.bskel";
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 		return mesh;

@@ -3,6 +3,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
+#include <assetlib/import_document.h>
 #include <assetlib/rebake_bounds.h>  // IWYU pragma: keep
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -138,8 +139,8 @@ namespace
 	{
 		const auto bones = static_cast<uint32_t>(skeleton.bones.size());
 
-		auto mesh              = BMesh();
-		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+		auto mesh = BMesh();
+
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		for (uint32_t entry = 0; entry < entries; ++entry)
@@ -287,8 +288,8 @@ namespace
 	BMesh
 	MakeFloorMesh(const Skeleton& skeleton, const uint32_t pad, const float padHeight)
 	{
-		auto mesh              = BMesh();
-		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+		auto mesh = BMesh();
+
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		AppendRing(mesh, 1, 64, 0.0f);
@@ -313,7 +314,15 @@ namespace
 
 			const Skeleton skeleton = MakeRig(8);
 			StoreAt(path).Save(skeleton, "Derived/Skeletons/rig.bskel");
-			StoreAt(path).Save(MakeMesh(2, skeleton), "Derived/Meshes/rig.bmesh");
+			auto document     = ImportDocument();
+			document.source   = "Authored/Meshes/rig.glb";
+			document.skeleton = "Derived/Skeletons/rig.bskel";
+			document.outputs  = { "Derived/Meshes/rig.bmesh" };
+			StoreAt(path).Save(document, "Authored/Meshes/rig.bimport");
+			auto mesh                  = MakeMesh(2, skeleton);
+			mesh.source.key            = document.source;
+			mesh.source.parametersHash = parametersHashOf(document);
+			StoreAt(path).Save(mesh, "Derived/Meshes/rig.bmesh");
 
 			for (uint32_t i = 0; i < clipSets; ++i)
 				SaveAt(

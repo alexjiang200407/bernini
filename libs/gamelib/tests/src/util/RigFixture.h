@@ -1,5 +1,6 @@
 #pragma once
 #include "StoreAt.h"
+#include <assetlib/import_document.h>
 
 #include <array>
 #include <assetlib/AssetStore.h>
@@ -189,12 +190,19 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
-		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
-		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
-		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
+		auto document                = assetlib::ImportDocument();
+		document.source              = "Authored/Meshes/rig.glb";
+		document.skeleton            = "Derived/Skeletons/rig.bskel";
+		document.outputs             = { "Derived/Meshes/rig.bmesh" };
+		document.bindings            = { { "body", "Authored/Materials/skin.bmaterial" } };
+		mesh.submeshes[0].nameOffset = mesh.stringPool.add("body");
+		mesh.source.key              = document.source;
+		mesh.source.parametersHash   = assetlib::parametersHashOf(document);
+		mesh.skeletonSignature       = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames       = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
+		store.Save(document, assetlib::importDocumentKeyFor(document.source));
 		store.Save(mesh, "Derived/Meshes/rig.bmesh");
 		store.Save(skeleton, "Derived/Skeletons/rig.bskel");
 		store.Save(animations, "Derived/Animations/rig.banim");
@@ -422,12 +430,19 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
-		mesh.skeleton          = "Derived/Skeletons/leg.bskel";
-		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
-		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
+		auto document                = assetlib::ImportDocument();
+		document.source              = "Authored/Meshes/leg.glb";
+		document.skeleton            = "Derived/Skeletons/leg.bskel";
+		document.outputs             = { "Derived/Meshes/leg.bmesh" };
+		document.bindings            = { { "body", "Authored/Materials/skin.bmaterial" } };
+		mesh.submeshes[0].nameOffset = mesh.stringPool.add("body");
+		mesh.source.key              = document.source;
+		mesh.source.parametersHash   = assetlib::parametersHashOf(document);
+		mesh.skeletonSignature       = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames       = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
+		store.Save(document, assetlib::importDocumentKeyFor(document.source));
 		store.Save(mesh, "Derived/Meshes/leg.bmesh");
 		store.Save(skeleton, "Derived/Skeletons/leg.bskel");
 		store.Save(animations, "Derived/Animations/leg.banim");

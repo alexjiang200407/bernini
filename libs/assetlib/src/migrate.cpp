@@ -133,7 +133,7 @@ namespace assetlib
 						"rebind or re-export",
 						current.unboundBindings.front());
 				}
-				remapToItsRig(rigs, store, current.mesh);
+				remapToItsRig(rigs, store, current);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
@@ -269,7 +269,7 @@ namespace assetlib
 					entry.outputs.push_back(key);
 
 					if (type == AssetType::kMesh)
-						entry.skeleton = loadMeshRefs(path).skeleton;
+						entry.skeleton = store.LoadRegenMeshRefs(key).skeleton;
 					else if (type == AssetType::kAnimation)
 						entry.skeleton = loadAnimationSkeletonPath(path);
 				}

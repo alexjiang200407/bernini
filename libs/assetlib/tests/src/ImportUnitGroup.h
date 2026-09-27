@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace assetlib::test
 {
@@ -53,7 +54,7 @@ namespace assetlib::test
 		if (!textureDir.empty())
 			store.WriteTextures(imported, textureDir);
 
-		auto outputs = store.WriteImportedRig(
+		auto rig = store.WriteImportedRig(
 			imported.skeleton,
 			imported.animations,
 			mesh,
@@ -63,14 +64,17 @@ namespace assetlib::test
 			source);
 
 		if (!mesh.submeshes.empty())
-			static_cast<void>(attachMaterial(mesh, 0, material));
+			target.bindings = std::vector<MaterialBinding>{
+				{ std::string(mesh.stringPool.at(mesh.submeshes[0].nameOffset)),
+				  std::string(material) }
+			};
 
 		const std::string meshKey = std::format("Derived/Meshes/{}.bmesh", name);
 		store.Save(mesh, meshKey);
 
-		outputs.emplace_back(meshKey);
-		target.skeleton = mesh.skeleton;
-		target.outputs  = std::move(outputs);
+		rig.outputs.emplace_back(meshKey);
+		target.skeleton = std::move(rig.skeleton);
+		target.outputs  = std::move(rig.outputs);
 
 		store.WriteImportedDocument(target, &mesh);
 	}

@@ -107,13 +107,10 @@ namespace assetlib
 							"uses",
 							key);
 					}
-					mesh.skeleton          = document.skeleton;
 					mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 					mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
 				}
 
-				static_cast<void>(
-					rebuildMaterialSlots(mesh, document.bindings, document.materialOverrides));
 				store.Save(mesh, key);
 				return;
 			}
@@ -156,7 +153,6 @@ namespace assetlib
 				{
 					BMesh swept = toBMesh(group.import);
 					generateTangents(swept);
-					swept.skeleton = document.skeleton;
 					groundClipsForRig(
 						store.GetFiles(),
 						clips,

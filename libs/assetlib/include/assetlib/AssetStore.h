@@ -31,7 +31,7 @@ namespace assetlib
 	struct ReimportReport;
 	struct PackDesc;
 	struct PackReport;
-	struct ReauthoredDocument;
+	struct ImportedRig;
 	struct RebakeBoundsReport;
 	struct RenamePlan;
 	struct RenameResult;
@@ -307,21 +307,10 @@ namespace assetlib
 
 		// --- Import writes -----------------------------------------------------------------------
 
-		/**
-		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.
-		 *
-		 * A joint index is a bare number into a bone array, so a mesh carrying joints while naming
-		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
-		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
-		 *
-		 * @return The containers it put on disk -- the `.bskel` only when this import is what wrote
-		 *         it, and the `.banim` when it wrote clips. A rig it bound rather than produced is
-		 *         named by `mesh.skeleton` and is deliberately not here: deleting this source must
-		 *         not take another source's rig with it.
-		 *
-		 * @throws std::runtime_error if either container cannot be written.
+		/** Writes rig outputs, records the joint layout in `mesh`, and returns the sidecar binding.
+		 * A reused rig is returned as the binding but excluded from the owned outputs.
 		 */
-		std::vector<std::string>
+		ImportedRig
 		WriteImportedRig(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,
@@ -350,10 +339,6 @@ namespace assetlib
 			const SourceRef&    source) const;
 
 		// --- Containers ------------------------------------------------------------------------
-
-		/** The materials and skeleton a `.bmesh` names, read seek-only. See loadMeshRefs. */
-		[[nodiscard]] MeshRefs
-		LoadMeshRefs(std::string_view path) const;
 
 		// --- The regeneration seam -------------------------------------------------------------
 		//
@@ -841,19 +826,6 @@ namespace assetlib
 			std::string_view sourceKey,
 			std::string_view submesh,
 			std::string_view name) const;
-
-		/**
-		 * Rewrites every import document's bindings from its mesh's current state, parameters and
-		 * unknown keys preserved -- the one-time adoption pass that makes the documents
-		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
-		 * recorded nowhere else; after it, the document is what a load applies, so running this
-		 * again later would overwrite document-only rebinds with stale mesh state.
-		 *
-		 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
-		 * document is missing is reported per document and never guessed at.
-		 */
-		[[nodiscard]] std::vector<ReauthoredDocument>
-		ReauthorImportDocuments() const;
 
 		/**
 		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing

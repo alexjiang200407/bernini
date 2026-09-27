@@ -29,7 +29,6 @@ namespace
 		constexpr uint16_t c_Stride = sizeof(glm::vec3);
 
 		auto mesh = assetlib::BMesh();
-		mesh.materials.emplace_back();
 
 		for (const TestSubmesh& src : submeshes)
 		{

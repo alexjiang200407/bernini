@@ -143,7 +143,7 @@ namespace assetlib
 		{
 			try
 			{
-				const MeshRefs refs = LoadMeshRefs(meshPath);
+				const MeshRefs refs = LoadRegenMeshRefs(meshPath);
 				if (refs.skeleton.empty())
 					continue;
 

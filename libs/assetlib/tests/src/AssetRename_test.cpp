@@ -302,12 +302,12 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 	CHECK(fs::exists(root.path / "Authored/Materials" / "new.bmaterial"));
 
 	CHECK(
-		loadMeshRefs(root.path / "Derived/Meshes" / "one.bmesh").materials ==
+		root.Source().LoadRegenMeshRefs("Derived/Meshes/one.bmesh").materials ==
 		std::vector<std::string>{ "Authored/Materials/new.bmaterial" });
 
 	// Only the slot that named it moves; the sibling is untouched.
 	CHECK(
-		loadMeshRefs(root.path / "Derived/Meshes" / "two.bmesh").materials ==
+		root.Source().LoadRegenMeshRefs("Derived/Meshes/two.bmesh").materials ==
 		std::vector<std::string>{ "Authored/Materials/other.bmaterial",
 	                              "Authored/Materials/new.bmaterial" });
 
@@ -316,7 +316,7 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 		const AssetRefGraph after = root.Scan();
 
 		CHECK_FALSE(after.IsReferenced("Authored/Materials/old.bmaterial"));
-		CHECK(ReferrerPaths(after, "Authored/Materials/new.bmaterial").size() == 2);
+		CHECK(ReferrerPaths(after, "Authored/Materials/new.bmaterial").size() == 4);
 	}
 }
 
@@ -342,8 +342,9 @@ TEST_CASE("A rewritten mesh still carries its geometry", "[assetrename]")
 	const BMesh after = StoreAt(root.path).Load<BMesh>("Derived/Meshes/mesh.bmesh");
 
 	CHECK(
-		after.materials == std::vector<std::string>{ "Authored/Materials/new.bmaterial",
-	                                                 "Authored/Materials/keep.bmaterial" });
+		root.Source().LoadRegenMeshRefs("Derived/Meshes/mesh.bmesh").materials ==
+		std::vector<std::string>{ "Authored/Materials/new.bmaterial",
+	                              "Authored/Materials/keep.bmaterial" });
 	CHECK(after.nodes.size() == before.nodes.size());
 	CHECK(after.submeshes.size() == before.submeshes.size());
 	CHECK(after.stringPool == before.stringPool);
@@ -756,7 +757,7 @@ TEST_CASE("A shared rig stays fixed when its source moves", "[assetrename]")
 
 	// The document is only half of what the second import says about the rig: its `.bmesh` stores
 	// the same path as its own edge, and a mesh left naming the old file is skinned to nothing.
-	CHECK(loadMeshRefs(root.path / "Derived/Meshes/spock.bmesh").skeleton == kirk.skeleton);
+	CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/spock.bmesh").skeleton == kirk.skeleton);
 
 	// The second source's own outputs are none of this rename's business.
 	CHECK(after.outputs == std::vector<std::string>{ "Derived/Meshes/spock.bmesh" });

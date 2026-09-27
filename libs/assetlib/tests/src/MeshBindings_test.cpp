@@ -177,6 +177,8 @@ TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot",
 	CHECK(loaded.bindings.materialOverrides[0].name == "wet");
 	CHECK(loaded.bindings.materialOverrides[0].material == "Authored/Materials/wet.bmaterial");
 	CHECK(loaded.bindings.skeleton == document.skeleton);
+	CHECK(loaded.mesh.submeshes[0].material == 0);
+	CHECK(loaded.mesh.submeshes[1].material == 0);
 	CHECK(loaded.bindings.grassLooks == std::vector<std::string>{ "Authored/Grass/verge.bgrass" });
 	CHECK(loaded.unboundBindings == std::vector<std::string>{ "MissingField", "MissingMesh" });
 	const auto before = store.GetFiles().Read(output);

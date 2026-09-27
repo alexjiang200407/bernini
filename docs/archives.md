@@ -72,8 +72,8 @@ assetlib::AssetStore store(dataRoot, std::move(mount));     // reads through mou
 
 A container is loaded by its type — `store.Load<BMesh>(key)`, `store.Save(value, key)` — because
 the type is what names the codec; there is no method per container. The reads that are *not* a whole
-container keep their own names, since a type cannot say "the references only": `LoadMeshRefs`,
-`LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
+container keep their own names, since a type cannot say "the references only": `LoadRegenMeshRefs`, which resolves sidecar bindings,
+`LoadAnimationSkeletonPath`, the other `LoadRegen*` methods, and
 `LoadTexture`, which decodes an image rather than deserializing a struct. The staleness predicates
 (`BakeIsStale`, `DrawsLoose`) and `Describe` are methods too. The mount-taking free
 functions they forward to are internal to `assetlib/src`; a caller outside the library reaches them

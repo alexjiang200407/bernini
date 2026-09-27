@@ -447,17 +447,6 @@ main(int argc, char** argv)
 		"Report what would be rewritten; write nothing");
 	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
 
-	bool reauthorYes = false;
-
-	auto* reauthor = app.add_subcommand(
-		"reauthor",
-		"Rewrite every import document's bindings from its mesh's current state -- the one-time "
-		"adoption step that makes the documents authoritative. Run it once when a project first "
-		"picks up documents; run later it would overwrite any rebind saved only to a document "
-		"with the mesh's older state");
-	addProject(reauthor);
-	reauthor->add_flag("-y,--yes", reauthorYes, "Rewrite without asking for confirmation");
-
 	bool boundsDryRun = false;
 	bool boundsYes    = false;
 
@@ -602,7 +591,7 @@ main(int argc, char** argv)
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				auto outputs = importStore.WriteImportedRig(
+				auto rig = importStore.WriteImportedRig(
 					imported.skeleton,
 					imported.animations,
 					mesh,
@@ -613,9 +602,9 @@ main(int argc, char** argv)
 
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
-				outputs.push_back(importStore.KeyFor(bmeshPath));
-				target.skeleton = mesh.skeleton;
-				target.outputs  = std::move(outputs);
+				rig.outputs.push_back(importStore.KeyFor(bmeshPath));
+				target.skeleton = std::move(rig.skeleton);
+				target.outputs  = std::move(rig.outputs);
 				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
@@ -985,56 +974,6 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("migrate failed: {}", e.what());
-			return 1;
-		}
-	}
-
-	if (*reauthor)
-	{
-		try
-		{
-			const assetlib::Project     project = assetlib::Project::Open(projectFile);
-			const std::filesystem::path root    = project.GetDataDirectory();
-
-			if (!reauthorYes &&
-			    !confirm("Rewrite the import documents' bindings from the meshes in place?"))
-			{
-				spdlog::info("Left '{}' alone.", root.string());
-				return 0;
-			}
-
-			const std::vector<assetlib::ReauthoredDocument> report =
-				assetlib::AssetStore(root).ReauthorImportDocuments();
-
-			size_t rewritten = 0;
-			size_t failed    = 0;
-			for (const assetlib::ReauthoredDocument& document : report)
-			{
-				switch (document.outcome)
-				{
-				case assetlib::ReauthoredDocument::Outcome::kUnchanged:
-					break;
-				case assetlib::ReauthoredDocument::Outcome::kRewritten:
-					++rewritten;
-					std::cout << "reauthored      " << document.key << '\n';
-					break;
-				case assetlib::ReauthoredDocument::Outcome::kFailed:
-					++failed;
-					std::cout << "cannot reauthor " << document.key << ": " << document.message
-							  << '\n';
-					break;
-				}
-			}
-			std::cout << std::format(
-				"{} unchanged, {} reauthored, {} failed\n",
-				report.size() - rewritten - failed,
-				rewritten,
-				failed);
-			return failed == 0 ? 0 : 1;
-		}
-		catch (const std::exception& e)
-		{
-			spdlog::error("reauthor failed: {}", e.what());
 			return 1;
 		}
 	}

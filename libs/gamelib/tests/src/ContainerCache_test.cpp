@@ -159,9 +159,8 @@ TEST_CASE("The static door reads its mesh once too", "[static][acquire][cache]")
 	const bgl::GeomHandle second = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
 	REQUIRE(second.IsValid());
 
-	// Two, not three: both staleness questions are asked again and the deserialize is what is
-	// skipped, exactly as it is for the skinned door below.
-	CHECK(files->ReadsOf("Derived/Meshes/rig.bmesh") == before + 2);
+	// The source key requires a separate ranged read; deserialization stays cached.
+	CHECK(files->ReadsOf("Derived/Meshes/rig.bmesh") == before + 3);
 }
 
 TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire][cache]")
@@ -182,9 +181,8 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 	REQUIRE(first.geom.IsValid());
 
-	// Four apiece: the stamp, the key the load's staleness refusal peeks at, the key the seam
-	// peeks at behind it, and the deserialize.
-	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 4);
+	for (const std::string& path : c_Containers)
+		REQUIRE(files->ReadsOf(path) == (path.ends_with(".bmesh") ? 6 : 4));
 
 	SECTION("a re-acquire after a full release reads nothing back off the disk")
 	{
@@ -212,7 +210,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		for (const std::string& path : c_Containers)
 		{
 			INFO(path);
-			CHECK(files->ReadsOf(path) == readsBefore[path] + 2);
+			CHECK(files->ReadsOf(path) == readsBefore[path] + (path.ends_with(".bmesh") ? 3 : 2));
 
 			// Still asked: a cache that stopped asking would serve a stale rig.
 			CHECK(files->StatsOf(path) > statsBefore[path]);

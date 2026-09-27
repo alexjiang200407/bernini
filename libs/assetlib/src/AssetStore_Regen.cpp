@@ -320,7 +320,7 @@ namespace assetlib
 			core::throw_runtime_error(
 				"bmesh '{}': stale cache has no import document, so its references cannot be known",
 				path);
-		return loadMeshRefs(*m_Files, path);
+		return {};
 	}
 
 	std::string
@@ -373,16 +373,10 @@ namespace assetlib
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			current.sourceKey = checked.key.source.key;
-			if (checked.document)
-			{
-				current.bindings =
-					bindingSnapshot(current.mesh, *checked.document, current.unboundBindings);
-				if (!IsReadOnly())
-					(void)rebuildMaterialSlots(
-						current.mesh,
-						checked.document->bindings,
-						checked.document->materialOverrides);
-			}
+			current.bindings  = bindingSnapshot(
+				current.mesh,
+				checked.document.value_or(ImportDocument{}),
+				current.unboundBindings);
 			return current;
 		}
 
@@ -402,10 +396,9 @@ namespace assetlib
 		current.mesh.source = group.ref;
 		if (isSkinned(current.mesh))
 		{
-			current.mesh.skeleton          = group.document->skeleton;
 			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 			current.mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
-			if (current.mesh.skeleton.empty())
+			if (group.document->skeleton.empty())
 			{
 				core::throw_runtime_error(
 					"'{}': its source carries a rig but the import document beside it names no "
@@ -414,10 +407,6 @@ namespace assetlib
 			}
 		}
 		current.bindings = bindingSnapshot(current.mesh, *group.document, current.unboundBindings);
-		(void)rebuildMaterialSlots(
-			current.mesh,
-			group.document->bindings,
-			group.document->materialOverrides);
 		return current;
 	}
 
@@ -552,12 +541,17 @@ namespace assetlib
 	{
 		template <typename T, std::invocable<T&, const Skeleton&> Remap>
 		void
-		remapIfGrown(RigResolver& rigs, const AssetStore& store, T& container, Remap&& remap)
+		remapIfGrown(
+			RigResolver&      rigs,
+			const AssetStore& store,
+			T&                container,
+			std::string_view  skeletonKey,
+			Remap&&           remap)
 		{
-			if (container.skeleton.empty())
+			if (skeletonKey.empty())
 				return;
 
-			const Skeleton rig = rigs.Resolve(store, container.skeleton);
+			const Skeleton rig = rigs.Resolve(store, skeletonKey);
 			if (container.skeletonSignature == skeletonSignature(rig))
 				return;
 
@@ -568,12 +562,12 @@ namespace assetlib
 	void
 	remapToItsRig(RigResolver& rigs, const AssetStore& store, AnimationSet& clips)
 	{
-		remapIfGrown(rigs, store, clips, remapAnimations);
+		remapIfGrown(rigs, store, clips, clips.skeleton, remapAnimations);
 	}
 
 	void
-	remapToItsRig(RigResolver& rigs, const AssetStore& store, BMesh& mesh)
+	remapToItsRig(RigResolver& rigs, const AssetStore& store, RegenMesh& mesh)
 	{
-		remapIfGrown(rigs, store, mesh, remapMesh);
+		remapIfGrown(rigs, store, mesh.mesh, mesh.bindings.skeleton, remapMesh);
 	}
 }

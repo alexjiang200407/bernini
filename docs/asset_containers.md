@@ -148,11 +148,10 @@ last bits differ by platform — so its bump is the author's to remember.
 
 `bindings` names each submesh's default material; `materialOverrides` registers named alternatives
 per submesh (`"materialOverrides": {"crate[0]": {"Rusty": "Authored/Materials/rust.bmaterial"}}`),
-omitted when there are none. `rebuildMaterialSlots` rebuilds every regenerated mesh's material
-slots from both, and the `.bmesh` carries the result, since `pack` leaves the document behind. An
-override-only material still takes a slot in the mesh's `materials`, so it is a reference the scan,
-a rename and a deletion see. A re-import keeps the overrides — nothing in the source can put them
-back.
+omitted when there are none. `LoadRegenMesh` resolves these into an owned `MeshBindings`
+snapshot without editing geometry or its original material slot indices. Named bindings that no
+longer match geometry are reported in `unboundBindings`. The sidecar travels in a pack, and the
+same resolution applies to loose and packed loads. Re-import preserves authored overrides.
 `outputs` is what makes the derived set answerable from the authored side, which is the only way to
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.

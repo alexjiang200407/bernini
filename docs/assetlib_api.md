@@ -173,8 +173,8 @@ or loose/packed parity; those require the implementation's real-store tests.
   materials on the floor: they are that format's model, not necessarily the engine's, and
   deriving `.bmaterial` files inside assetlib would stamp glTF's model into the engine's own
   container for every caller — including `assetlib_cli bake`, which has no user to ask. Textures
-  *are* extracted; binding a material is `attachMaterial`, and the editor's import is what calls
-  it, behind a checkbox.
+  *are* extracted. The editor authors materials behind a checkbox and passes named bindings
+  to `WriteImportedDocument`.
 
 * **Reference queries are snapshots, never caches.** The data root is shared with the user's file
   manager. A cached graph would not merely go stale — it would refuse a deletion while naming a
@@ -204,7 +204,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 
 | Container | Holds |
 |---|---|
-| `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path, and embedded named grass geometry. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
+| `.bmesh` | Geometry, meshlets, node hierarchy, original material slots, rig layout signature/bone names, and embedded named grass geometry. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
 | `.bmaterial` | Factors, the baked triplet, the per-channel routing table -- or, under `shadingModel: "pbrSurface"`, the surface it names and the parameters and textures it sets on it ([Game-Defined Surfaces](game_defined_surfaces.md)) |
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. The `.banim` also carries what the cook derived off the walk: a posed box per mesh entry, and a plant weight per leg per frame, each self-keyed so a pairing that has changed is measured instead. |
 | `.rml` / `.rcss` / `.ttf` | Not containers — foreign kinds the UI runtime parses. Listed here only because the project stores and packs them. |
@@ -290,9 +290,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`StampOf`** — an absent path yields a **zeroed** stamp, which never compares equal to a real
   one. A missing source therefore reads as *stale*, not as unchanged.
 ### Containers
-* **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
-  at write time because nothing reading the file afterwards can tell a joint index that resolves
-  to nothing from one that does not.
+* **`LoadRegenMesh`** returns geometry and an owned binding snapshot from the current sidecar.
+  A binding edit changes the snapshot without rewriting the mesh; unmatched names are reported.
+* **`WriteImportedRig`** returns the bound skeleton and owned outputs. A reused rig is a binding,
+  never an output this source may delete. The mesh records only the joint layout.
 * **`Save` creates the directories its key names.** A key is a location in the data root, not one
   that already exists, so an import aimed at a subfolder needs nothing from its caller. The *data
   root* itself must exist — `AssetStore`'s constructor refuses one that does not, since a write

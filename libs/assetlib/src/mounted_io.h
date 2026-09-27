@@ -16,7 +16,6 @@ namespace assetlib
 	struct BSky;
 	struct EnvMapRoute;
 	struct ImageData;
-	struct MeshRefs;
 	struct PbrParams;
 	struct ResolvedEnvironment;
 	struct SourceStamp;
@@ -57,9 +56,6 @@ namespace assetlib
 
 		return AssetCodec<T>::Deserialize(fileSystem.Read(path));
 	}
-
-	[[nodiscard]] MeshRefs
-	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	[[nodiscard]] std::string
 	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path);

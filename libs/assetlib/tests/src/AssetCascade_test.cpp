@@ -19,10 +19,8 @@ namespace
 	namespace fs = std::filesystem;
 }
 
-TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[assetcascade]")
+TEST_CASE("Deleting cooked geometry preserves its authored material bindings", "[assetcascade]")
 {
-	// The transitive rule, end to end: the mesh frees its material, and the material -- once in the
-	// deleted set -- frees the baked map and the source it alone named.
 	const DataRoot root("bernini_cascade_mesh");
 
 	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
@@ -33,18 +31,14 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 
 	REQUIRE(plan.Allowed());
 
-	auto expected = std::vector<std::string>{ "Authored/Materials/mat.bmaterial",
-		                                      bakedTextureKey(material.pbr.baseColorTexture),
-		                                      "Derived/SourceTextures/a.ktx2" };
-	std::ranges::sort(expected);
-	CHECK(plan.cascade == expected);
+	CHECK(plan.cascade.empty());
 
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Derived/Meshes" / "mesh.bmesh"));
-	CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "mat.bmaterial"));
-	CHECK_FALSE(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
-	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
+	CHECK(fs::exists(root.path / "Authored/Materials" / "mat.bmaterial"));
+	CHECK(fs::exists(root.path / bakedTextureKey(material.pbr.baseColorTexture)));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 }
 
 TEST_CASE("What something outside the deletion still references survives it", "[assetcascade]")
@@ -75,11 +69,11 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 		BakeAndSave(root, "gone.bmaterial", "Derived/SourceTextures/shared.ktx2");
 		const BMaterial stays =
 			BakeAndSave(root, "stays.bmaterial", "Derived/SourceTextures/shared.ktx2");
-		SaveMesh(root, "mesh.bmesh", { "Authored/Materials/gone.bmaterial" });
 
-		const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Derived/Meshes/mesh.bmesh");
+		const DeletionPlan plan =
+			planCascadeDeletion(root.Scan(), "Authored/Materials/gone.bmaterial");
 
-		CHECK(plan.cascade == std::vector<std::string>{ "Authored/Materials/gone.bmaterial" });
+		CHECK(plan.cascade.empty());
 
 		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "shared.ktx2"));
@@ -96,12 +90,7 @@ TEST_CASE("An asset two cascading referrers share goes when both do", "[assetcas
 	WriteSource(root.path / "Derived/SourceTextures" / "shared.ktx2", { { 200, 0, 0, 255 } });
 	BakeAndSave(root, "a.bmaterial", "Derived/SourceTextures/shared.ktx2");
 	BakeAndSave(root, "b.bmaterial", "Derived/SourceTextures/shared.ktx2");
-	SaveMesh(
-		root,
-		"mesh.bmesh",
-		{ "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" });
-
-	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Derived/Meshes/mesh.bmesh");
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Authored/Materials");
 
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
@@ -144,37 +133,21 @@ TEST_CASE("A blocked deletion plans no cascade", "[assetcascade]")
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 }
 
-TEST_CASE("A directory cascade counts every referrer under it as deleted", "[assetcascade]")
+TEST_CASE("A directory cascade preserves a texture held outside it", "[assetcascade]")
 {
-	// Two meshes in the folder both name the material: no single file frees it, but the whole folder
-	// does. A material a mesh outside the folder also names stays exactly where it was.
 	const DataRoot root("bernini_cascade_dir");
-
-	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
-	WriteSource(root.path / "Derived/SourceTextures" / "b.ktx2", { { 0, 200, 0, 255 } });
-	BakeAndSave(root, "freed.bmaterial", "Derived/SourceTextures/a.ktx2");
-	BakeAndSave(root, "held.bmaterial", "Derived/SourceTextures/b.ktx2");
-
-	fs::create_directories(root.path / "Derived/Meshes" / "props");
-	StoreAt(root.path).Save(
-		MakeMesh({ "Authored/Materials/freed.bmaterial" }),
-		"Derived/Meshes/props/a.bmesh");
-	StoreAt(root.path).Save(
-		MakeMesh({ "Authored/Materials/freed.bmaterial", "Authored/Materials/held.bmaterial" }),
-		"Derived/Meshes/props/b.bmesh");
-	SaveMesh(root, "outside.bmesh", { "Authored/Materials/held.bmaterial" });
-
-	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Derived/Meshes/props");
-
+	WriteSource(root.path / "Derived/SourceTextures/a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/b.ktx2", { { 0, 200, 0, 255 } });
+	BakeAndSave(root, "props/freed.bmaterial", "Derived/SourceTextures/a.ktx2");
+	BakeAndSave(root, "props/held.bmaterial", "Derived/SourceTextures/b.ktx2");
+	BakeAndSave(root, "outside.bmaterial", "Derived/SourceTextures/b.ktx2");
+	const auto plan = planCascadeDeletion(root.Scan(), "Authored/Materials/props");
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.IsDirectory());
-
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
-
-	CHECK_FALSE(fs::exists(root.path / "Derived/Meshes" / "props"));
-	CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "freed.bmaterial"));
-	CHECK(fs::exists(root.path / "Authored/Materials" / "held.bmaterial"));
-	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "b.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Authored/Materials/props"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures/a.ktx2"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures/b.ktx2"));
 }
 
 TEST_CASE("A cascade file already gone counts as deleted", "[assetcascade]")
@@ -185,12 +158,11 @@ TEST_CASE("A cascade file already gone counts as deleted", "[assetcascade]")
 
 	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
 	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
-	SaveMesh(root, "mesh.bmesh", { "Authored/Materials/mat.bmaterial" });
 
-	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Derived/Meshes/mesh.bmesh");
+	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Authored/Materials/mat.bmaterial");
 
 	REQUIRE_FALSE(plan.cascade.empty());
-	fs::remove(root.path / "Authored/Materials" / "mat.bmaterial");
+	fs::remove(root.path / plan.cascade.front());
 
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 }

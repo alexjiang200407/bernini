@@ -224,27 +224,6 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 	}
 }
 
-TEST_CASE("A mesh's bindings neither apply nor report a grass binding", "[grass][import]")
-{
-	Buffer    buffer;
-	const Glb glb(
-		"bernini_grass_meshbind.glb",
-		StreetDocument(buffer, ShuffledGrid(4)),
-		buffer.bytes);
-	const imp::BMeshImport import = Load(glb);
-
-	BMesh mesh;
-	mesh.submeshes  = import.submeshes;
-	mesh.stringPool = import.stringPool;
-
-	const std::vector<MaterialBinding> bindings = {
-		{ .submesh = "Street[0]", .material = "Authored/Materials/road.bmaterial" },
-		{ .submesh = "Street[1]", .material = "Authored/Grass/verge.bgrass" },
-	};
-	CHECK(rebuildMaterialSlots(mesh, bindings, {}).empty());
-	CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
-}
-
 TEST_CASE("A primitive that is neither triangles nor points is still refused", "[grass][import]")
 {
 	Buffer buffer;

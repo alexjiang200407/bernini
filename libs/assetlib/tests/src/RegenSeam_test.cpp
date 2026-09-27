@@ -161,7 +161,7 @@ TEST_CASE("a fresh entry loads untouched, its document applied", "[regen]")
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(current.unboundBindings.empty());
-	CHECK(current.mesh.materials == std::vector<std::string>{ "Authored/Materials/red.bmaterial" });
+	CHECK(current.bindings.submeshMaterials.at(0) == "Authored/Materials/red.bmaterial");
 
 	CHECK(BytesOf(sandbox.meshPath) == before);
 }
@@ -178,9 +178,7 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 			"Authored/Materials/blue.bmaterial");
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
-	CHECK(
-		current.mesh.materials.at(current.mesh.submeshes.at(0).material) ==
-		"Authored/Materials/blue.bmaterial");
+	CHECK(current.bindings.submeshMaterials.at(0) == "Authored/Materials/blue.bmaterial");
 	CHECK(BytesOf(sandbox.meshPath) == before);
 
 	SECTION("and rebinds a group whose source file is gone, which regeneration could not serve")
@@ -193,9 +191,7 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 				"Authored/Materials/green.bmaterial");
 
 		const RegenMesh again = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
-		CHECK(
-			again.mesh.materials.at(again.mesh.submeshes.at(0).material) ==
-			"Authored/Materials/green.bmaterial");
+		CHECK(again.bindings.submeshMaterials.at(0) == "Authored/Materials/green.bmaterial");
 		CHECK(BytesOf(sandbox.meshPath) == before);
 	}
 }
@@ -216,7 +212,9 @@ TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(current.mesh.submeshes.size() == fresh.submeshes.size());
 	CHECK(current.mesh.vertexData == fresh.vertexData);
-	CHECK(current.mesh.materials == fresh.materials);  // the document's bindings, applied
+	CHECK(
+		current.bindings.submeshMaterials.at(0) ==
+		"Authored/Materials/red.bmaterial");  // the document's bindings, applied
 	CHECK(current.mesh.source.stamp == fresh.source.stamp);
 
 	// In memory only: the stale file is migrate's to rewrite, never a load's.
@@ -384,69 +382,6 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 		CHECK_THROWS_WITH(
 			sandbox.Store().LoadRegenSkeleton("Derived/Skeletons/unit.bskel"),
 			Catch::Matchers::ContainsSubstring("no longer carries a rig"));
-	}
-}
-
-TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc]")
-{
-	const ImportedProject sandbox("bernini_regen_reauthor", test::TexturedGltfPath());
-
-	// A rebind saved straight into the mesh, the way every save worked before documents: the
-	// document still records red, the mesh now says blue.
-	BMesh mesh = LoadAt<BMesh>(sandbox.meshPath);
-	REQUIRE(attachMaterial(mesh, 0, "Authored/Materials/blue.bmaterial"));
-	SaveAt(mesh, sandbox.meshPath);
-
-	const auto report = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
-	REQUIRE(report.size() == 1);
-	CHECK(report[0].key == "Authored/Meshes/unit.bimport");
-	CHECK(report[0].outcome == ReauthoredDocument::Outcome::kRewritten);
-
-	const ImportDocument document = loadImportDocument(
-		core::file::LooseFileSystem(sandbox.dataRoot),
-		"Authored/Meshes/unit.bimport");
-	CHECK(document.sampleRate == 30.0f);
-	REQUIRE_FALSE(document.bindings.empty());
-	CHECK(document.bindings[0].material == "Authored/Materials/blue.bmaterial");
-
-	SECTION("a second run rewrites nothing")
-	{
-		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
-		REQUIRE(again.size() == 1);
-		CHECK(again[0].outcome == ReauthoredDocument::Outcome::kUnchanged);
-	}
-
-	SECTION("a clips-only document keeps its empty bindings")
-	{
-		AssetStore(sandbox.dataRoot)
-			.WriteImportedDocument(
-				ImportTarget{ "Authored/Meshes/clipsonly.glb", 30.0f, {} },
-				nullptr);
-
-		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
-		REQUIRE(again.size() == 2);
-		for (const ReauthoredDocument& entry : again)
-			CHECK(entry.outcome == ReauthoredDocument::Outcome::kUnchanged);
-	}
-
-	SECTION("an unreadable mesh header fails a claimless document rather than clearing it")
-	{
-		AssetStore(sandbox.dataRoot)
-			.WriteImportedDocument(
-				ImportTarget{ "Authored/Meshes/clipsonly.glb", 30.0f, {} },
-				nullptr);
-		core::file::write_atomic(sandbox.meshPath, std::string_view("not a mesh"));
-
-		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
-		REQUIRE(again.size() == 2);
-		for (const ReauthoredDocument& entry : again)
-		{
-			CHECK(entry.outcome == ReauthoredDocument::Outcome::kFailed);
-			CHECK_THAT(entry.message, Catch::Matchers::ContainsSubstring("unreadable"));
-		}
-
-		// The bindings the pass could not attribute stand exactly as they were.
-		CHECK_FALSE(loadImportDocument(sandbox.documentPath).bindings.empty());
 	}
 }
 

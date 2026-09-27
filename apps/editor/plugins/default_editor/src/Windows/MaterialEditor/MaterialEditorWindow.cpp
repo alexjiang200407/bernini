@@ -5,6 +5,7 @@
 #include <assetlib/codecs.h>
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
+#include <stdexcept>
 
 #include <QAction>
 #include <QCheckBox>
@@ -1698,26 +1699,13 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
-		if (assetlib::attachMaterial(mesh, source, relative))
-		{
-			// A mesh with a recorded source persists a rebind as a document edit: the binding is
-			// outside the cache key, so the mesh file is neither rewritten nor staled, and the
-			// next load applies the document. Only a sourceless mesh still saves its own file.
-			if (loaded.sourceKey.empty())
-			{
-				const assetlib::AssetStore& meshStore = m_Host.GetStore();
-				meshStore.Save(mesh, meshStore.KeyFor(meshPath));
-				m_Host.AssetChanged(meshStore.KeyFor(meshPath));
-			}
-			else
-				m_Host.GetStore().RebindSubmeshInDocument(
-					loaded.sourceKey,
-					mesh.stringPool.at(mesh.submeshes[source].nameOffset),
-					relative);
-		}
+		if (loaded.sourceKey.empty())
+			throw std::runtime_error("The mesh has no import document for material bindings");
+		m_Host.GetStore().RebindSubmeshInDocument(
+			loaded.sourceKey,
+			mesh.stringPool.at(mesh.submeshes.at(source).nameOffset),
+			relative);
 
-		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the
-		// next Save would still see this submesh as unbound and rewrite the `.bmesh` again.
 		m_Preview->SetSubmeshMaterialPath(static_cast<uint32_t>(submeshIndex), materialPath);
 	}
 	catch (const std::exception& e)

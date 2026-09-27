@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <assetlib/ImportIdentity.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
@@ -256,7 +257,7 @@ TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migr
 	}
 }
 
-TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migrate][regen]")
+TEST_CASE("a rebind is visible without rewriting cooked geometry", "[migrate][regen]")
 {
 	const Project           project;
 	const test::SkinnedGltf source("bernini_migrate_rebind_gltf");
@@ -275,13 +276,12 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 			"Authored/Materials/blue.bmaterial");
 
 	const auto report = AssetStore(project.root).Migrate(false);
-	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
+	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 
-	const BMesh mesh =
-		StoreAt(project.root).Load<BMesh>(importOutputKey(identity, AssetType::kMesh));
-	REQUIRE(mesh.materials.size() == 1);
-	CHECK(mesh.materials[0] == "Authored/Materials/blue.bmaterial");
+	const auto loaded =
+		AssetStore(project.root).LoadRegenMesh(importOutputKey(identity, AssetType::kMesh));
+	CHECK(loaded.bindings.submeshMaterials.at(0) == "Authored/Materials/blue.bmaterial");
 }
 
 TEST_CASE("migrate brings a material's bake current", "[migrate][bake]")

@@ -404,27 +404,9 @@ namespace assetlib
 		out += std::format("  vertexData   {}\n", byteSize(mesh.vertexData.size()));
 		out += std::format("  indexData    {}\n", byteSize(mesh.indexData.size()));
 
-		// A mesh whose layout carries joints but names no skeleton has joint indices nothing can
-		// resolve, which is invisible until it renders as a heap.
-		if (isSkinned(mesh))
-		{
-			out += std::format(
-				"  skeleton     {}\n",
-				mesh.skeleton.empty() ? "(SKINNED, but names none)" : mesh.skeleton);
-			out += std::format("  signature    {:016x}\n", mesh.skeletonSignature);
-		}
-		else if (!mesh.skeleton.empty())
-			out += std::format(
-				"  skeleton     {} (unused: no submesh carries joints)\n",
-				mesh.skeleton);
-
-		// Every path is relative to the project's data root, not to this file -- worth saying, since a
-		// path that looks broken relative to the .bmesh is usually correct.
-		out += std::format(
-			"  materials    {} (paths relative to the data root)\n",
-			mesh.materials.size());
-		for (size_t i = 0; i < mesh.materials.size(); ++i)
-			out += std::format("    [{}] {}\n", i, pathOr(mesh.materials[i]));
+		out += std::format("  signature    {:016x}\n", mesh.skeletonSignature);
+		out += std::format("  rig bones    {}\n", mesh.skeletonBoneNames.size());
+		out += std::format("  grass fields {}\n", mesh.grassFields.fields.size());
 
 		if (!verbose)
 			return out;
@@ -444,13 +426,6 @@ namespace assetlib
 				const uint32_t index   = entry.firstSubmesh + s;
 				const Submesh& submesh = mesh.submeshes[index];
 
-				// A submesh whose material index is out of range draws with the renderer's default
-				// material, so call it out rather than printing a bare number.
-				const std::string material =
-					submesh.material < mesh.materials.size() ?
-						std::format("[{}] {}", submesh.material, mesh.materials[submesh.material]) :
-						std::format("[{}] (out of range -- no material)", submesh.material);
-
 				out += std::format(
 					"    submesh [{}] '{}'\n",
 					index,
@@ -461,7 +436,7 @@ namespace assetlib
 					submesh.indexCount,
 					indexTypeName(submesh.indexType),
 					submesh.meshletCount);
-				out += std::format("      material {}\n", material);
+				out += std::format("      material slot {}\n", submesh.material);
 				describeLayout(out, submesh.layout);
 				out += std::format(
 					"      aabb     {} .. {}\n",

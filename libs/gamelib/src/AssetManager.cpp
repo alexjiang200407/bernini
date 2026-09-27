@@ -180,19 +180,7 @@ namespace game
 					"no longer has; rebind or re-export",
 					relPath,
 					submesh);
-			if (current.bindings.submeshMaterials.empty())
-			{
-				for (const auto& submesh : current.mesh.submeshes)
-					current.bindings.submeshMaterials.push_back(
-						submesh.material < current.mesh.materials.size() ?
-							current.mesh.materials[submesh.material] :
-							std::string());
-				for (const auto& entry : current.mesh.materialOverrides)
-					if (entry.material < current.mesh.materials.size())
-						current.bindings.materialOverrides.push_back(
-							{ entry.submesh, entry.name, current.mesh.materials[entry.material] });
-				current.bindings.skeleton = current.mesh.skeleton;
-			}
+
 			return current;
 		}
 		// The asset says what the material *is* (its glTF-shaped alpha mode); the renderer says which

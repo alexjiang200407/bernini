@@ -3,6 +3,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
+#include <assetlib/import_document.h>
 
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
@@ -107,14 +108,13 @@ namespace assetlib::test
 		for (uint32_t i = 0; i < materials.size(); ++i)
 		{
 			Submesh submesh{};
-			submesh.indexType = IndexType::kUint16;
-			submesh.material  = i;
+			submesh.indexType  = IndexType::kUint16;
+			submesh.material   = i;
+			submesh.nameOffset = mesh.stringPool.add(std::to_string(i));
 			mesh.submeshes.push_back(submesh);
 		}
 
-		mesh.meshes    = { Mesh{ 0, static_cast<uint32_t>(materials.size()), 0 } };
-		mesh.materials = materials;
-		mesh.skeleton  = skeleton;
+		mesh.meshes = { Mesh{ 0, static_cast<uint32_t>(materials.size()), 0 } };
 		return mesh;
 	}
 
@@ -126,8 +126,18 @@ namespace assetlib::test
 		const std::vector<std::string>& materials,
 		const std::string&              skeleton = {})
 	{
-		const std::string key = KeyIn(c_MeshesDirectoryName, name);
-		SaveAt(MakeMesh(materials, skeleton), root.path / key);
+		const std::string key      = KeyIn(c_MeshesDirectoryName, name);
+		auto              mesh     = MakeMesh(materials);
+		auto              document = ImportDocument();
+		document.source            = "Authored/Meshes/" + fs::path(name).stem().string() + ".glb";
+		document.outputs           = { key };
+		document.skeleton          = skeleton;
+		for (size_t i = 0; i < materials.size(); ++i)
+			document.bindings.push_back({ std::to_string(i), materials[i] });
+		mesh.source.key            = document.source;
+		mesh.source.parametersHash = parametersHashOf(document);
+		root.Source().Save(document, importDocumentKeyFor(document.source));
+		SaveAt(mesh, root.path / key);
 		return key;
 	}
 

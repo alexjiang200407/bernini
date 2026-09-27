@@ -12,7 +12,7 @@ namespace assetlib
 {
 	class AssetStore;
 	struct AnimationSet;
-	struct BMesh;
+	struct RegenMesh;
 
 	/** A source re-imported in memory, with the reference that keys everything derived from it. */
 	struct RegeneratedGroup
@@ -78,5 +78,5 @@ namespace assetlib
 	remapToItsRig(RigResolver& rigs, const AssetStore& store, AnimationSet& clips);
 
 	void
-	remapToItsRig(RigResolver& rigs, const AssetStore& store, BMesh& mesh);
+	remapToItsRig(RigResolver& rigs, const AssetStore& store, RegenMesh& mesh);
 }
