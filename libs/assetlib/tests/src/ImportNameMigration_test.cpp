@@ -1,6 +1,7 @@
 #include "ImportUnitGroup.h"
 #include "RefsSandbox.h"
 #include "TexturedGltf.h"
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_refs.h>
@@ -15,6 +16,26 @@
 
 using namespace assetlib;
 using namespace assetlib::test;
+
+TEST_CASE("naming migration refuses outputs claimed by two sources", "[migrate][import-identity]")
+{
+	const DataRoot root("bernini-import-shared-output");
+	const auto     store = root.Source();
+	ImportUnitGroup(root.path, TexturedGltfPath());
+	const auto key       = "Authored/Meshes/unit.bimport";
+	auto       duplicate = store.Load<ImportDocument>(key);
+	duplicate.source     = "Authored/Meshes/other.glb";
+	store.Save(duplicate, "Authored/Meshes/other.bimport");
+	const auto before = store.GetFiles().Read(duplicate.GetMeshOutput());
+	const auto result = store.Migrate(false);
+	CHECK(std::ranges::any_of(result.files, [](const auto& file) {
+		return file.outcome == MigratedFile::Outcome::kFailed &&
+		       file.message.find("shared by multiple sources") != std::string::npos;
+	}));
+	CHECK(store.Load<ImportDocument>(key).identity.id == 0);
+	CHECK(store.Load<ImportDocument>("Authored/Meshes/other.bimport").identity.id == 0);
+	CHECK(store.GetFiles().Read(duplicate.GetMeshOutput()) == before);
+}
 
 TEST_CASE(
 	"legacy import naming migration rewrites texture references and settles",

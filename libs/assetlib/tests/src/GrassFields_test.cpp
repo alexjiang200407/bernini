@@ -7,6 +7,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/RegenGrassFields.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
@@ -443,13 +444,23 @@ TEST_CASE("A stale grass file regenerates from its source", "[grass][container][
 
 	SECTION("migrate writes it back, once")
 	{
+		auto mesh        = project.Store().Load<BMesh>(c_MeshKey);
+		mesh.grassFields = {};
+		project.Store().Save(mesh, std::string(c_MeshKey));
+		const auto before = project.Store().GetFiles().Read(c_MeshKey);
+		CHECK(project.Store().Migrate(true).Count(MigratedFile::Outcome::kRewritten) >= 1);
+		CHECK(project.Store().Exists(c_GrassKey));
+		CHECK(project.Store().GetFiles().Read(c_MeshKey) == before);
 		const MigrateReport first = project.Store().Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) >= 1);
-		CHECK_FALSE(project.Store().GeometryIsStale(
-			project.Store()
-				.Load<ImportDocument>("Authored/Meshes/street.bimport")
-				.GetGrassOutput()));
+		const auto document =
+			project.Store().Load<ImportDocument>("Authored/Meshes/street.bimport");
+		CHECK(document.GetGrassOutput().empty());
+		CHECK_FALSE(project.Store().Exists(c_GrassKey));
+		const auto embedded = project.Store().LoadRegenMesh(document.GetMeshOutput());
+		CHECK(embedded.mesh.grassFields.clumps.size() == 144);
+		CHECK(embedded.bindings.grassLooks == std::vector<std::string>{ std::string(c_LookKey) });
 		CHECK(project.Store().Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);
 	}
 

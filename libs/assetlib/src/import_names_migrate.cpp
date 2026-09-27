@@ -1,17 +1,22 @@
 #include "ref_paths.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
+#include <assetlib/RegenGrassFields.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
 #include <core/err/util.h>
 #include <core/str/str.h>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,6 +35,7 @@ namespace assetlib
 		auto documents      = std::unordered_set<std::string>();
 		auto textureOwners  = core::str::unordered_str_map<std::string>();
 		auto identityOwners = std::unordered_map<uint64_t, std::string>();
+		auto outputOwners   = core::str::unordered_str_map<std::string>();
 		auto blocked        = std::unordered_set<std::string>();
 		for (const auto category : { c_MeshSourcesDirectoryName, c_EnvSourcesDirectoryName })
 			for (const auto& key : GetFiles().Enumerate(category))
@@ -39,6 +45,15 @@ namespace assetlib
 				try
 				{
 					auto document = Load<ImportDocument>(key);
+					for (const auto& output : document.outputs)
+					{
+						const auto [owner, inserted] = outputOwners.emplace(output, key);
+						if (!inserted && owner->second != key)
+						{
+							blocked.insert(owner->second);
+							blocked.insert(key);
+						}
+					}
 					if (document.identity.id != 0)
 					{
 						const auto [owner, inserted] =
@@ -73,11 +88,68 @@ namespace assetlib
 			report.files.push_back(
 				{ GetDataRoot() / key,
 			      MigratedFile::Outcome::kFailed,
-			      "import identity or extracted-texture directory is shared by multiple sources" });
+			      "import identity, output or extracted-texture directory is shared by multiple "
+			      "sources" });
 		}
 		ZoneTextF("%zu sources", documents.size());
 		if (documents.empty())
 			return;
+
+		auto failedGrass = std::vector<std::string>();
+		for (const auto& key : documents)
+		{
+			try
+			{
+				auto       document = Load<ImportDocument>(key);
+				const auto grassKey = document.GetGrassOutput();
+				if (grassKey.empty())
+					continue;
+				const auto meshKey = document.GetMeshOutput();
+				if (meshKey.empty())
+					core::throw_runtime_error("{}: grass has no mesh output to contain it", key);
+				if (!dryRun)
+				{
+					auto current = LoadRegenMesh(meshKey);
+					auto legacy  = LoadRegenGrassFields(grassKey);
+					if (!current.unboundBindings.empty() || !legacy.unboundBindings.empty())
+						core::throw_runtime_error(
+							"{}: unresolved bindings prevent grass migration",
+							key);
+					if (current.mesh.grassFields.fields.empty())
+					{
+						auto& grass = legacy.fields;
+						if (grass.names.size() != grass.fields.size())
+							core::throw_runtime_error(
+								"{}: grass field names do not match its geometry",
+								grassKey);
+						for (uint32_t i = 0; i < grass.fields.size(); ++i)
+						{
+							grass.fields[i].look = i;
+							current.mesh.grassFields.fields.push_back(
+								{ grass.names[i], grass.fields[i] });
+						}
+						current.mesh.grassFields.chunks = std::move(grass.chunks);
+						current.mesh.grassFields.clumps = std::move(grass.clumps);
+					}
+					current.mesh.grass.clear();
+					Save(current.mesh, meshKey);
+					std::erase(document.outputs, grassKey);
+					Save(document, key);
+					std::filesystem::remove(ResolveWritePath(grassKey));
+				}
+				report.files.push_back(
+					{ GetDataRoot() / grassKey,
+				      MigratedFile::Outcome::kRewritten,
+				      "embedded grass in mesh output" });
+			}
+			catch (const std::exception& error)
+			{
+				failedGrass.push_back(key);
+				report.files.push_back(
+					{ GetDataRoot() / key, MigratedFile::Outcome::kFailed, error.what() });
+			}
+		}
+		for (const auto& key : failedGrass) documents.erase(key);
 
 		const auto graph            = AssetRefGraph::Scan(*this);
 		auto       textureReferrers = core::str::unordered_str_map<std::vector<AssetRef>>();

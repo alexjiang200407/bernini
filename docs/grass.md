@@ -24,6 +24,9 @@ creates each named `.bgrass` look and attaches them, and the geom's release give
 (`libs/gamelib/CLAUDE.md`).
 The renderer still receives `BGrassFields` as its decoded input. New CLI and editor imports emit
 no standalone grass container; the legacy `.bgrassfields` codec remains for migration.
+`migrate` folds a legacy grass output into its mesh before renaming the import's outputs, retains
+the sidecar's look bindings, and removes the standalone cache. Unresolved bindings or shared output
+ownership refuse that conversion. A dry run leaves both containers untouched.
 
 A look with no mesh under it grows on a patch: `assetlib::makeGrassPatch` jitters clumps over a
 square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That is what
