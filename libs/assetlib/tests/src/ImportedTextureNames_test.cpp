@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 
 using namespace assetlib;
 using namespace assetlib::imp;

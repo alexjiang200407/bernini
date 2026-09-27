@@ -14,7 +14,7 @@
 #include <stdexcept>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib_structs/VkFormat.h>
 #include <core/containers/fixed_buffer.h>
 

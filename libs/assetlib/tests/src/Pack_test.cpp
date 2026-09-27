@@ -25,7 +25,7 @@
 #include "MountAt.h"
 #include "RefsSandbox.h"
 #include "SkinnedGltf.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib_structs/Node.h>
 
 using namespace assetlib;

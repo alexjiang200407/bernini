@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "MountAt.h"
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>

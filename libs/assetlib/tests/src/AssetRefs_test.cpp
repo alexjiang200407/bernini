@@ -12,7 +12,7 @@
 
 #include "MountAt.h"
 #include "RefsSandbox.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>

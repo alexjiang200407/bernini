@@ -22,7 +22,7 @@
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Node.h>

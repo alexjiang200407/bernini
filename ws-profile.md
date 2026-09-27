@@ -161,7 +161,7 @@ operation, give the shape without a number.
 |---|---|---|---|
 | Skinned character | 663 bones, 27 mesh entries, 170k vertices, 2254 frames | posed-bounds bake 3.5 s, 2.4 s of it the pose walk; the per-vertex `exactPosedBounds` reference ~6 min (debug) | `docs/skinning.md` |
 | Grounding that character's clips | the same rig, 5 clips | 14 s debug — the cook's largest stage; mostly the pose walk | `docs/skinning.md` |
-| Re-importing it from source | a 97 MB `.glb` | parsed once per output kind, three times per rebuild: ~14 s debug, overlapped across `Reimport`'s stages | `libs/assetlib/src/reimport.cpp` |
+| Re-importing it from source | a 97 MB `.glb` | parsed once per output kind, three times per rebuild: ~14 s debug, overlapped across `Reimport`'s stages | `libs/assetlib/src/AssetStore/reimport.cpp` |
 | Clip set (`.banim`) | `boneCount * frameCount` 40-byte `Transform`s | 59.7 MB, ~780 ms to deserialize (debug) | `docs/skinning.md` |
 | Posed-bounds read-back | one signature over the whole mesh | 29 ms; asked once per entry instead, 740 ms | `docs/skinning.md` |
 | Mesh container (`.bmesh`) | vertex data is nearly all of it | 16.8 MB, of which a reference scan reads ~3 KB | `docs/asset_standards.md` |

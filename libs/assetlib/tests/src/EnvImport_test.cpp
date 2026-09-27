@@ -37,7 +37,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
 #include <assetlib_structs/VkFormat.h>

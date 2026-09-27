@@ -11,7 +11,7 @@
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include "mounted_io.h"
+#include "io/mounted_io.h"  // IWYU pragma: keep
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>

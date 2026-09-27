@@ -21,7 +21,7 @@
 #include "ImportUnitGroup.h"
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 #include <assetlib/progress.h>
 
 #include <catch2/catch_message.hpp>

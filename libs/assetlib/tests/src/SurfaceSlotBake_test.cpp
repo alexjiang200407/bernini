@@ -5,7 +5,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
 
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 #include <assetlib_structs/VkFormat.h>
 
 #include <array>
@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 
 using namespace assetlib;
 

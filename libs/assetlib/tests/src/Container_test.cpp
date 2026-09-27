@@ -3,7 +3,7 @@
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMesh.h>
 
-#include "cache_io.h"
+#include "io/cache_io.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 

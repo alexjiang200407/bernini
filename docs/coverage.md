@@ -84,7 +84,7 @@ pull request that makes the feature permanent is.
   reaches the dylib's link line through `target_link_libraries(bgl_extended PUBLIC bgl_extended_objects)` — the
   `$<TARGET_OBJECTS:>` absorption carries no usage requirements, but that link edge does.
 * **Counts are indicative, not exact.** `-fprofile-update=atomic` is deliberately off. Counter
-  increments race under real thread pools (`libs/assetlib/src/envmap_bake.cpp`), which can lose
+  increments race under real thread pools (`libs/assetlib/src/environment/envmap_bake.cpp`), which can lose
   counts — but a raced non-atomic counter can never write zero for an executed region, so the
   covered/uncovered verdict is sound. Treat execution counts under threaded code as a floor.
 

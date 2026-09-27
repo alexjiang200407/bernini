@@ -13,7 +13,7 @@
 #include <catch2/catch_message.hpp>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>

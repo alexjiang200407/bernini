@@ -83,7 +83,7 @@ must feed data that matches.
 There are **two producers of textures**, and they compress differently:
 
 * **Mesh import** (`AssetStore::WriteTextures` in
-  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
+  [libs/assetlib/src/bmesh/bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
   per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
   on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
@@ -96,7 +96,7 @@ There are **two producers of textures**, and they compress differently:
   that did not touch it but says nothing about which map an artist meant. See
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
-  [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
+  [libs/assetlib/src/material/material_bake.cpp](libs/assetlib/src/material/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet — or, for a surface material, into one packed map
   per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
@@ -104,7 +104,7 @@ There are **two producers of textures**, and they compress differently:
   `ktxTexture2_TranscodeBasis`es to the target.
 
   **Which target a map takes is one table.** `textureEncoding`
-  ([libs/assetlib/src/texture_encoding.cpp](libs/assetlib/src/texture_encoding.cpp)) maps each role —
+  ([libs/assetlib/src/texture/texture_encoding.cpp](libs/assetlib/src/texture/texture_encoding.cpp)) maps each role —
   base colour opaque or carrying alpha, ORM, normal, geometry occlusion, surface slot, environment LDR
   and HDR, and the transcode a Basis file gets at load — to a `Ktx2Compression` and a stable string
   tag. The material bake, the environment bake and `loadKTX2` all read it, so the formats in the
@@ -260,12 +260,12 @@ One more consequence of the baked formats: the compositor copies channel *bytes*
 base colour is written into an sRGB map regardless of its own source's tag — keep one decode role per
 source texture.
 
-* **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
+* **What the bake emits**: [libs/assetlib/src/bmesh/bmesh_texture.cpp](libs/assetlib/src/bmesh/bmesh_texture.cpp)
   (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`, in linear light for an image the
   glTF extract tagged sRGB (one a material reads as its base colour); `AssetStore::WriteTextures`
-  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes **that tag**, so a
+  ([libs/assetlib/src/bmesh/bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp)) writes **that tag**, so a
   base-color map lands sRGB and everything else `_UNORM`, then `writeKTX2`
-  ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
+  ([libs/assetlib/src/texture/image_io.cpp](libs/assetlib/src/texture/image_io.cpp)) **Basis-UASTC-compresses** LDR
   maps (multi-threaded, `LEVEL_FASTER`) and writes one `.ktx2` per image. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
   back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
@@ -386,7 +386,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
 ### Meshlets
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
+  ([libs/assetlib/src/bmesh/bmesh_gltf.cpp](libs/assetlib/src/bmesh/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
 * **One bounding sphere per run of `c_MeshletsPerGroup` (8) meshlets**, fitted to the vertices of
   the whole run and stored in `BMesh::meshletGroups`, which each submesh names by
@@ -412,9 +412,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   **No renderer reads it** — `bgl_extended` uploads `meshletVertices`/`meshletTriangles` instead — so it
   profiles as pure cook-size overhead and is the obvious thing to drop. Three shipped paths read it
   today: cook-time tangent generation
-  ([mesh_tangents.cpp](libs/assetlib/src/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
-  ([asset_describe.cpp](libs/assetlib/src/asset_describe.cpp)), and the CLI's raw-OBJ export
-  ([bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp), `rawIndexAt`, the `--obj-raw` branch). It is also
+  ([mesh_tangents.cpp](libs/assetlib/src/bmesh/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
+  ([asset_describe.cpp](libs/assetlib/src/describe/asset_describe.cpp)), and the CLI's raw-OBJ export
+  ([bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp), `rawIndexAt`, the `--obj-raw` branch). It is also
   what a renderer with no mesh-shader stage would draw. Removing it breaks those three *and* costs
   an `AssetCodec<BMesh>::c_BakeToken` bump plus a re-cook of every asset in every project.
 * **`vertexByteOffset`/`vertexCount` is not the duplicated half, and is not a candidate.** There is
@@ -661,7 +661,7 @@ A re-import preserves authored grass bindings. No standalone grass container is 
     map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
 **`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
-in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
+in [libs/assetlib/src/io/cache_io.h](libs/assetlib/src/io/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an
 error**. There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
@@ -813,7 +813,7 @@ LDR material maps are **Basis Universal (UASTC)** supercompressed at bake and **
 at load — cross-platform, DirectXTex-free, and roughly **4:1** smaller than uncompressed RGBA8 in
 both file and VRAM.
 
-* **Encode (bake).** `writeKTX2` ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp))
+* **Encode (bake).** `writeKTX2` ([libs/assetlib/src/texture/image_io.cpp](libs/assetlib/src/texture/image_io.cpp))
   builds the uncompressed RGBA8 mip chain into a `ktxTexture2`, then, for 8-bit LDR formats only,
   calls `ktxTexture2_CompressBasisEx` with **UASTC** (`LEVEL_FASTER`, `threadCount =
   hardware_concurrency` — UASTC output is deterministic regardless of thread count, and
@@ -937,7 +937,7 @@ Ten rules, each of which is a way to get this wrong:
   baked AO is commonly unwrapped onto a second UV set, so folding it in would be confident garbage.
   The import keeps it beside the ORM as `geometryOcclusionTexture` instead, and the board wires it into
   the sink's *Geometry Occlusion (UV1)* port — see [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)). `occlusionTexture.strength`
+  ([libs/assetlib/src/bmesh/bmesh_gltf.cpp](libs/assetlib/src/bmesh/bmesh_gltf.cpp)). `occlusionTexture.strength`
   has no home in `PbrParams` and is ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*

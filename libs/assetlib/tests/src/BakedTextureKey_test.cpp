@@ -14,9 +14,9 @@
 
 #include "MountAt.h"
 #include "RefsSandbox.h"
-#include "baked_name.h"
-#include "mounted_io.h"
-#include "texture_encoding.h"
+#include "io/mounted_io.h"
+#include "texture/baked_name.h"
+#include "texture/texture_encoding.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

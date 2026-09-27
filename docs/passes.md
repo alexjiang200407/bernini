@@ -217,7 +217,7 @@ In `BERNINI_GPU_DEBUG` builds the amplification stage adds to `cull.stats`' `mes
 `meshletGroupsCulled`; the mesh stage's own test counts nothing.
 
 The group bounds come from the cook (`buildMeshlets` in
-[assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), fitted to the vertices themselves
+[assetlib/src/bmesh/bmesh_gltf.cpp](libs/assetlib/src/bmesh/bmesh_gltf.cpp)), fitted to the vertices themselves
 and stored in the `.bmesh` beside the meshlets. Geometry that never passed through a cook -- a
 procedural primitive, a `BMesh` built in memory -- has `Scene` fold a bound out of the meshlet
 spheres instead, which encloses the same geometry a little less tightly.

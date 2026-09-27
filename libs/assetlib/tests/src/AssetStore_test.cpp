@@ -11,7 +11,7 @@
 #include <stdexcept>
 
 #include "RefsSandbox.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

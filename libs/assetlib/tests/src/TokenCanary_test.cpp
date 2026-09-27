@@ -24,8 +24,8 @@
 #include <string_view>
 #include <vector>
 
-#include "bmesh_texture.h"
-#include "texture_encoding.h"
+#include "bmesh/bmesh_texture.h"
+#include "texture/texture_encoding.h"
 
 using namespace assetlib;
 

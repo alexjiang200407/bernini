@@ -10,7 +10,7 @@
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
-#include "asset_describe.h"
+#include "describe/asset_describe.h"
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/mesh_tangents.h>

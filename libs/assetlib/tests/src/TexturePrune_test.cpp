@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "MountAt.h"
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 
 using namespace assetlib;
 

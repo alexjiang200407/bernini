@@ -19,7 +19,7 @@
 #include "CountingFileSystem.h"
 #include "MountAt.h"
 #include "RefsSandbox.h"
-#include "ref_paths.h"
+#include "references/ref_paths.h"
 
 using namespace assetlib;
 using namespace assetlib::test;

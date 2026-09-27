@@ -14,7 +14,7 @@ or in memory: a field costs its clumps.
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 
 A clump is a point, a height scale, a ground normal and a colour. The cook sorts a field's clumps
-along a Morton curve before cutting chunks (`assetlib/src/grass_chunks.cpp`), so a chunk is a
+along a Morton curve before cutting chunks (`assetlib/src/grass/grass_chunks.cpp`), so a chunk is a
 compact patch and its sphere is tight.
 
 `IScene::AttachGrass` binds fields to a static geom and looks to its slots; every instance of the geom

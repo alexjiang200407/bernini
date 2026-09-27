@@ -12,8 +12,8 @@
 #include <thread>
 #include <vector>
 
-#include "bmesh_texture.h"
-#include "mounted_io.h"
+#include "bmesh/bmesh_texture.h"
+#include "io/mounted_io.h"
 #include <assetlib_structs/VkFormat.h>
 
 using namespace assetlib;

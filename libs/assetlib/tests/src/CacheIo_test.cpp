@@ -1,8 +1,8 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 
-#include "CheckedFileReader.h"
-#include "cache_io.h"
+#include "io/CheckedFileReader.h"
+#include "io/cache_io.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>

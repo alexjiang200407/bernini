@@ -37,7 +37,7 @@ when this page disagrees, trust the header, then fix this page.
 
 ## Text documents
 
-One shape, shared by every authored container ([libs/assetlib/src/json_doc.h](libs/assetlib/src/json_doc.h)):
+One shape, shared by every authored container ([libs/assetlib/src/io/json_doc.h](libs/assetlib/src/io/json_doc.h)):
 
 * **Canonical on every write**: sorted keys, tab indent, one trailing newline, floats at the
   float's shortest decimal (`doc::plainFloat`). One content is one byte sequence, so `migrate`'s
@@ -60,7 +60,7 @@ The mesh cache also stores its source's named grass fields, chunks and clumps. A
 is its field index; look paths belong to the source's import bindings. The legacy standalone grass
 cache is still produced until importer and runtime adoption of the embedded data is complete.
 
-One format, in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen 64-byte
+One format, in [libs/assetlib/src/io/cache_io.h](libs/assetlib/src/io/cache_io.h): a frozen 64-byte
 header, the source's mount key, 16-byte-aligned schema-less chunks, and a chunk table at the end.
 The header is versioned (`headerVersion`, currently 1) and **frozen forever** — tools address its
 fields by offset (see `tests/src/CacheTamper.h`).

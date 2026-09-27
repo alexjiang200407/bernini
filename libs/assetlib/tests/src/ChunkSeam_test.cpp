@@ -13,7 +13,7 @@
 
 #include "CountingFileSystem.h"
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <core/file/IFileSystem.h>

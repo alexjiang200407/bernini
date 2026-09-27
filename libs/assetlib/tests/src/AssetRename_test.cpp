@@ -30,7 +30,7 @@
 #include "RefsSandbox.h"
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
