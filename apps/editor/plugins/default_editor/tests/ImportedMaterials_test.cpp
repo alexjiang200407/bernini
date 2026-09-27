@@ -15,6 +15,7 @@
 
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Mesh.h>
 
 #include <catch2/catch_approx.hpp>
 
@@ -425,6 +426,30 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 	CHECK(bindings[0].submesh == "part0");
 	CHECK(bindings[1].submesh == "part1");
 	CHECK(bindings[0].material == bindings[1].material);
+}
+
+TEST_CASE("A mesh with levels of detail binds each submesh once", "[importedmaterials][lod]")
+{
+	const TempProject project;
+
+	// Level 1 of part0, as the cook folds a `_LOD1` mesh: after level 0, with its name and material.
+	auto imported = ImportWith({ PbrMaterial() }, { "Bark" });
+	imported.submeshes.push_back(imported.submeshes[0]);
+
+	auto mesh = assetlib::toBMesh(imported);
+	mesh.meshes.push_back(
+		assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0, .lodCount = 2 });
+
+	const auto bindings = editor::WriteImportedMaterials(
+		imported,
+		mesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		StemsFor(imported));
+
+	REQUIRE(bindings.size() == 1);
+	CHECK(bindings[0].submesh == "part0");
 }
 
 TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials]")
