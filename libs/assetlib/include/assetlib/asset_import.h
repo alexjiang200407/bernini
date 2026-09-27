@@ -78,7 +78,7 @@ namespace assetlib
 		/** Minted before destinations are chosen; an existing document's identity cannot change. */
 		ImportIdentity identity{};
 
-		/** Authored material choices; an empty vector explicitly leaves every submesh unbound. */
+		/** Unset preserves material defaults; an empty vector clears them. Grass choices remain. */
 		std::optional<std::vector<MaterialBinding>> bindings{};
 	};
 
