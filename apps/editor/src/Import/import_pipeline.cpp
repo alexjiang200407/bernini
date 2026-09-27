@@ -146,18 +146,12 @@ namespace editor
 		const fs::path bskelPath = under(options.outputs.skeleton);
 		const fs::path banimPath = under(options.outputs.animations);
 
-		// Beside the mesh, and sampled unconditionally for the rig's reason: whether the source has
-		// grass is not known until it is parsed.
-		fs::path grassPath = bmeshPath;
-		grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
-
 		// Only what this import may actually write.
 		auto files = std::vector<assetlib::ImportedFile>();
 		if (options.mesh)
 		{
 			files.push_back({ bmeshPath, fs::exists(bmeshPath, ec) });
 			files.push_back({ bskelPath, fs::exists(bskelPath, ec) });
-			files.push_back({ grassPath, fs::exists(grassPath, ec) });
 		}
 		if (options.animations)
 			files.push_back({ banimPath, fs::exists(banimPath, ec) });
@@ -292,11 +286,6 @@ namespace editor
 						store.KeyFor(banimPath),
 						options.animations,
 						sourceRef);
-
-					const std::string grassKey = store.KeyFor(grassPath);
-					for (std::string& grass :
-				         store.WriteImportedGrass(imported->grass, *mesh, grassKey, sourceRef))
-						rigOutputs.push_back(std::move(grass));
 				}
 				else if (options.animations)
 				{

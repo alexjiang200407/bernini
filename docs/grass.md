@@ -11,7 +11,7 @@ or in memory: a field costs its clumps.
 | | where | what |
 |---|---|---|
 | a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade, the response to wind, the lighting terms |
-| the fields | `assetlib::BGrassFields` ([BGrassFields.h](../libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)), cooked as a `.bgrassfields` beside the `.bmesh`, which names it (`BMesh::grass`) | per field the mesh it grows on and a look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
+| the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 
 A clump is a point, a height scale, a ground normal and a colour. The cook sorts a field's clumps
 along a Morton curve before cutting chunks (`assetlib/src/grass_chunks.cpp`), so a chunk is a
@@ -19,9 +19,11 @@ compact patch and its sphere is tight.
 
 `IScene::AttachGrass` binds fields to a static geom and looks to its slots; every instance of the geom
 then draws them, placed by its transform. `docs/bgl_api.md` has the call's rules. A game never calls
-it: `game::AssetManager::AcquireMesh` follows the mesh's `grass` reference, creates each look its
-fields name from the `.bgrass` and attaches them, and the geom's release gives them back
+it: `game::AssetManager::AcquireMesh` reads embedded fields and the sidecar's grass bindings,
+creates each named `.bgrass` look and attaches them, and the geom's release gives them back
 (`libs/gamelib/CLAUDE.md`).
+The renderer still receives `BGrassFields` as its decoded input. New CLI and editor imports emit
+no standalone grass container; the legacy `.bgrassfields` codec remains for migration.
 
 A look with no mesh under it grows on a patch: `assetlib::makeGrassPatch` jitters clumps over a
 square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That is what

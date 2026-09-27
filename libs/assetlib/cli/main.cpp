@@ -539,18 +539,12 @@ main(int argc, char** argv)
 			// else's on a rollback is not.
 			const bool writesRig   = !imported.skeleton.bones.empty();
 			const bool writesClips = writesRig && !imported.animations.clips.empty();
-			const bool writesGrass = !imported.grass.fields.empty();
-
-			fs::path grassPath = bmeshPath;
-			grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
 
 			auto files = std::vector<fs::path>{ bmeshPath };
 			if (writesRig)
 				files.push_back(bskelPath);
 			if (writesClips)
 				files.push_back(banimPath);
-			if (writesGrass)
-				files.push_back(grassPath);
 
 			// Import never overwrites, the same rule the editor's does: what it would replace is a
 			// mesh someone authored materials against, and none of it is recoverable.
@@ -620,13 +614,6 @@ main(int argc, char** argv)
 					importStore.KeyFor(banimPath),
 					true,
 					source);
-
-				for (std::string& grass : importStore.WriteImportedGrass(
-						 imported.grass,
-						 mesh,
-						 importStore.KeyFor(grassPath),
-						 source))
-					outputs.push_back(std::move(grass));
 
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
