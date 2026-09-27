@@ -7,7 +7,10 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/LodSelectionDesc.h>
+#include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <cstdint>
@@ -102,4 +105,28 @@ namespace bgl
 	/** What the Slang accessors read out of `word`. */
 	[[nodiscard]] InstanceLodState
 	UnpackInstanceLod(idl::InstanceLod word) noexcept;
+
+	/**
+	 * What one world unit spans on the render grid, in pixels, at a distance of one: half the
+	 * viewport's height times the projection's y scale, which is the length of the view-projection's
+	 * y row since the view is a rotation. Take the unjittered matrix -- the jitter is a sub-pixel
+	 * translation and has no size.
+	 */
+	[[nodiscard]] float
+	PixelsPerUnit(const Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept;
+
+	/**
+	 * Resolves a view's LodSelectionDesc into the cull view one draw uploads: the camera and the
+	 * pixels a world unit spans, the threshold scale, the forced level (cLodForceNone when none),
+	 * and how far a dissolve advances this frame. `frameSeconds` is the draw's clock step; a clock
+	 * that did not advance -- a first frame, a paused one -- completes a dissolve at once rather
+	 * than holding two levels on screen with no motion to hide them.
+	 */
+	void
+	ResolveLodSelection(
+		idl::CullView&          cullView,
+		const LodSelectionDesc& selection,
+		const glm::vec3&        cameraPos,
+		float                   pixelsPerUnit,
+		float                   frameSeconds) noexcept;
 }

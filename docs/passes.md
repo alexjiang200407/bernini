@@ -413,8 +413,9 @@ and blade by [Forward Grass](#forward-grass) -- and read by nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
-to) and `cull.view` (one `CullView`: view-proj + frustum
-planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
+to) and `cull.view` (one `CullView`: view-proj, frustum
+planes, the camera and the pixels a world unit spans, and the view's level-of-detail selection
+resolved by `bgl::ResolveLodSelection` -- rewritten each draw) live in the `CullState` for the frustum being culled and are imported
 under that frustum's scope. The pass reaches them through `DrawData::cullState` and names them by
 the same graph names as before, so N frustums of one view carry identical names without aliasing.
 Its four sub-pass names are keyed on `(drawIdx, cullIdx)`, since pass names are unique graph-wide

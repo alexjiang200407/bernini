@@ -8,7 +8,12 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/Viewport.h>
+#include <bgl/glm.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl_common/gassert.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
@@ -213,5 +218,34 @@ namespace bgl
 			                 idl::cInstanceLodFadeScale;
 		}
 		return state;
+	}
+
+	float
+	PixelsPerUnit(const Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept
+	{
+		const float yScale = glm::length(
+			glm::vec3(
+				unjitteredViewProj[0][1],
+				unjitteredViewProj[1][1],
+				unjitteredViewProj[2][1]));
+		return 0.5f * (viewport.maxY - viewport.minY) * yScale;
+	}
+
+	void
+	ResolveLodSelection(
+		idl::CullView&          cullView,
+		const LodSelectionDesc& selection,
+		const glm::vec3&        cameraPos,
+		const float             pixelsPerUnit,
+		const float             frameSeconds) noexcept
+	{
+		cullView.cameraPosAndPixelsPerUnit = glm::vec4(cameraPos, pixelsPerUnit);
+		cullView.lodPixelScale             = selection.pixelScale;
+		cullView.lodForcedLevel            = selection.forceLevel.has_value() ?
+		                                         static_cast<uint32_t>(*selection.forceLevel) :
+		                                         idl::cLodForceNone;
+		cullView.lodFadeStep               = selection.fadeSeconds > 0.0f && frameSeconds > 0.0f ?
+		                                         frameSeconds / selection.fadeSeconds :
+		                                         1.0f;
 	}
 }

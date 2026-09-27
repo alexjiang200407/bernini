@@ -851,7 +851,14 @@ namespace bgl
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.viewState.cameraPos = glm::vec3(invView[3]);
+		draw.viewState.cameraPos     = glm::vec3(invView[3]);
+		draw.viewState.pixelsPerUnit = PixelsPerUnit(viewport, camera.unjitteredViewProj);
+		ResolveLodSelection(
+			draw.viewState.cullView,
+			view->GetLodSelection(),
+			draw.viewState.cameraPos,
+			draw.viewState.pixelsPerUnit,
+			job.time - prevCamera.time);
 
 		draw.lighting.env         = view->GetEnvironmentMap();
 		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();

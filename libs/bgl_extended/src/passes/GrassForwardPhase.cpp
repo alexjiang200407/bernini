@@ -60,20 +60,6 @@ namespace bgl
 			"windGustSpeed"sv, "windGustStrength"sv,
 		};
 
-		/**
-		 * What one world unit spans on the render grid, in pixels, at a distance of one: half the
-		 * grid's height times the projection's y scale, which is the length of the view-projection's
-		 * y row since the view is a rotation.
-		 */
-		[[nodiscard]] float
-		PixelsPerUnit(const DrawData& draw)
-		{
-			const glm::mat4& viewProj = draw.viewState.unjitteredViewProj;
-			const float      yScale =
-				glm::length(glm::vec3(viewProj[0][1], viewProj[1][1], viewProj[2][1]));
-			return 0.5f * (draw.viewState.viewport.maxY - draw.viewState.viewport.minY) * yScale;
-		}
-
 		/** The wind's horizontal direction, unit; SetWind refused a direction without one. */
 		[[nodiscard]] glm::vec2
 		WindDirection(const WindDesc& wind)
@@ -144,7 +130,7 @@ namespace bgl
 			auto& uniforms = *found;
 			BindSceneBuffers(uniforms, c_GrassBuffers, resources);
 			uniforms["cameraPos"]     = draw.viewState.cameraPos;
-			uniforms["pixelsPerUnit"] = PixelsPerUnit(draw);
+			uniforms["pixelsPerUnit"] = draw.viewState.pixelsPerUnit;
 			uniforms["firstRef"]      = batch.firstRef;
 			uniforms["refCount"]      = batch.refCount;
 			uniforms["dispatchWidth"] = width;
