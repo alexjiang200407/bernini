@@ -209,6 +209,30 @@ namespace editor::plugins
 #endif
 		}
 
+		/**
+		 * Whether `copy` is already this `source`: one size, and no older than it.
+		 *
+		 * Not an equal timestamp, because copy_file is not required to carry the source's over --
+		 * Windows does and POSIX does not, and either satisfies "no older". A rebuilt source is
+		 * newer than the copy beside it, which is the case that must not be skipped.
+		 */
+		bool
+		AlreadyCopied(const std::filesystem::path& source, const std::filesystem::path& copy)
+		{
+			std::error_code sourceSize;
+			std::error_code copySize;
+			if (std::filesystem::file_size(source, sourceSize) !=
+			        std::filesystem::file_size(copy, copySize) ||
+			    sourceSize || copySize)
+				return false;
+
+			std::error_code sourceWhen;
+			std::error_code copyWhen;
+			const auto      written = std::filesystem::last_write_time(source, sourceWhen);
+			return std::filesystem::last_write_time(copy, copyWhen) >= written && !sourceWhen &&
+			       !copyWhen;
+		}
+
 		Descriptor
 		PreparePluginBinaries(
 			const Descriptor&            descriptor,
@@ -231,10 +255,19 @@ namespace editor::plugins
 
 			for (const std::filesystem::path& relative : FilesOf(descriptor))
 			{
+				const std::filesystem::path source      = descriptor.directory / relative;
 				const std::filesystem::path destination = prepared.directory / relative;
 				std::filesystem::create_directories(destination.parent_path(), ec);
+
+				// A module is loaded with PreventUnloadHint, so a copy an earlier session in this
+				// process loaded is held by the OS until the process ends and cannot be written
+				// again. One that already matches its source does not need to be -- which is every
+				// reopen of a project, and every second editor sharing this root.
+				if (AlreadyCopied(source, destination))
+					continue;
+
 				std::filesystem::copy_file(
-					descriptor.directory / relative,
+					source,
 					destination,
 					std::filesystem::copy_options::overwrite_existing,
 					ec);
