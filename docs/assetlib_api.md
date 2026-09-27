@@ -58,7 +58,9 @@ write so it cannot silently discard that identity or authored parameters.
 predates a move. It indexes sidecar output claims lazily, rejects duplicate owners, and reads the
 owner afresh for each returned snapshot. Sidecar writes through the store invalidate the index;
 an absent or moved owner triggers a rescan. Repeated reads of an owned output do not rescan other
-documents. Loaders have not adopted this inverse lookup yet.
+documents. Geometry loads use it when the recorded source path no longer identifies the owning
+sidecar. Moving an identified mesh source keeps its output keys and cache bytes; a direct rename
+of a claimed generated output refuses. Legacy imports retain their old move behavior until migrated.
 
 The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
 import document from one identity and loading a mesh by source through `ResolveImport` and

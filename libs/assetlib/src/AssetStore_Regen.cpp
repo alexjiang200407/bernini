@@ -2,6 +2,7 @@
 #include <assetlib/MeshBindings.h>
 #include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
@@ -100,10 +101,28 @@ namespace assetlib
 			if (checked.key.source.key.empty())
 				return checked;
 
-			const std::string documentKey = importDocumentKeyFor(checked.key.source.key);
+			std::string documentKey = importDocumentKeyFor(checked.key.source.key);
 			if (store.GetFiles().Exists(documentKey))
 			{
 				checked.document = loadImportDocument(store.GetFiles(), documentKey);
+				if (checked.document->identity.id != 0 &&
+				    std::ranges::find(checked.document->outputs, path) ==
+				        checked.document->outputs.end())
+					checked.document.reset();
+			}
+			if (!checked.document)
+				if (auto owner = store.FindImportForOutput(path))
+				{
+					documentKey      = std::move(owner->documentKey);
+					checked.document = std::move(owner->document);
+				}
+			if (checked.document)
+			{
+				checked.key.source.key = importedSourceKeyFor(documentKey, *checked.document);
+				if (importDocumentKeyFor(checked.key.source.key) != documentKey)
+					core::throw_runtime_error(
+						"{}: import document is not beside its recorded source",
+						documentKey);
 				if (parametersHashOf(*checked.document) != checked.key.source.parametersHash)
 					checked.stale = true;
 			}
@@ -351,31 +370,24 @@ namespace assetlib
 		ZoneScopedN("assetlib load bmesh");
 		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
 
-		if (IsReadOnly())
-		{
-			requirePackedKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
-			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
-			if (!current.mesh.source.key.empty())
-			{
-				const auto key = importDocumentKeyFor(current.mesh.source.key);
-				if (Exists(key))
-					current.bindings = bindingSnapshot(current.mesh, Load<ImportDocument>(key));
-			}
-			return current;
-		}
-
 		CheckedKey checked =
 			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
+		if (IsReadOnly() && checked.stale)
+			core::throw_runtime_error(
+				"{}: stale packed cache does not match its import document",
+				path);
 		if (!checked.stale)
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
+			current.mesh.source.key = checked.key.source.key;
 			if (checked.document)
 			{
-				current.bindings        = bindingSnapshot(current.mesh, *checked.document);
-				current.unboundBindings = rebuildMaterialSlots(
-					current.mesh,
-					checked.document->bindings,
-					checked.document->materialOverrides);
+				current.bindings = bindingSnapshot(current.mesh, *checked.document);
+				if (!IsReadOnly())
+					current.unboundBindings = rebuildMaterialSlots(
+						current.mesh,
+						checked.document->bindings,
+						checked.document->materialOverrides);
 			}
 			return current;
 		}

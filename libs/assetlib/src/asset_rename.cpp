@@ -189,6 +189,8 @@ namespace assetlib
 			}
 
 			plan.source = source;
+			if (document.identity.id != 0)
+				return;
 
 			const std::string_view was = stemOf(plan.subject.from);
 			const std::string_view now = stemOf(plan.subject.to);
@@ -383,6 +385,12 @@ namespace assetlib
 
 		requireInsideDataRoot("assetlib::planRename", plan.subject.from);
 		requireInsideDataRoot("assetlib::planRename", plan.subject.to);
+		for (const auto& ref : graph.ReferrersOf(plan.subject.from))
+			if (ref.kind == RefKind::kDocumentOutput &&
+			    loadImportDocument(graph.DataRoot() / ref.referrer).identity.id != 0)
+				core::throw_runtime_error(
+					"'{}' is a generated output; move its source instead",
+					plan.subject.from);
 
 		if (plan.subject.from == plan.subject.to)
 			throw std::runtime_error(

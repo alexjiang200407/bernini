@@ -4,6 +4,7 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BMesh.h>
@@ -11,12 +12,65 @@
 #include <assetlib_structs/GrassGeometry.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <core/file/file.h>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
 using namespace assetlib;
 using namespace assetlib::test;
+
+TEST_CASE(
+	"moving an identified source leaves mesh bytes intact and bindings loadable",
+	"[mesh-bindings][assetrename]")
+{
+	const DataRoot root("bernini-generated-source-move");
+	const auto     store    = root.Source();
+	auto           document = ImportDocument();
+	document.source         = "Authored/Meshes/street.glb";
+	document.identity       = { 1, "street.glb" };
+	const auto output       = importOutputKey(document.identity, AssetType::kMesh);
+	document.outputs        = { output };
+	document.bindings       = { { "Road", "Authored/Materials/road.bmaterial" } };
+	store.Save(document, importDocumentKeyFor(document.source));
+	core::file::write_atomic(root.path / document.source, "fixture source");
+	auto mesh                         = MakeMesh({ "Authored/Materials/old.bmaterial" });
+	mesh.submeshes.front().nameOffset = mesh.stringPool.add("Road");
+	mesh.source.key                   = document.source;
+	mesh.source.stamp                 = stampOf(root.path / document.source);
+	mesh.source.parametersHash        = parametersHashOf(document);
+	store.Save(mesh, output);
+	const auto before = store.GetFiles().Read(output);
+	const auto graph  = root.Scan();
+	CHECK_THROWS(planRename(graph, output, "Derived/Meshes/renamed.bmesh"));
+	std::filesystem::create_directories(root.path / "Authored/Meshes/town");
+	const auto plan = planRename(graph, document.source, "Authored/Meshes/town/avenue.glb");
+	CHECK(plan.outputs.empty());
+	REQUIRE(store.RenameAsset(plan).status == RenameStatus::kRenamed);
+	const auto movedKey = "Authored/Meshes/town/avenue.bimport";
+	const auto moved    = store.Load<ImportDocument>(movedKey);
+	CHECK(moved.identity == document.identity);
+	CHECK(moved.outputs == document.outputs);
+	CHECK_FALSE(store.Exists(document.source));
+	CHECK(store.GetFiles().Read(output) == before);
+	CHECK_FALSE(store.GeometryIsStale(output));
+	CHECK(
+		store.LoadRegenMesh(output).bindings.submeshMaterials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
+	const auto archive = root.path / "Data.bpak";
+	PakWriter  writer(archive);
+	writer.Add(movedKey, AssetCodec<ImportDocument>::Serialize(moved), {});
+	writer.Add(output, before, { before.size(), 0 });
+	writer.Finish();
+	const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
+	CHECK_FALSE(packed.Exists(moved.source));
+	CHECK_FALSE(packed.GeometryIsStale(output));
+	CHECK(
+		packed.LoadRegenMesh(output).bindings.submeshMaterials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
+	CHECK(store.GetFiles().Read(output) == before);
+}
 
 TEST_CASE("packed mesh loads refuse mismatched sidecar parameters", "[mesh-bindings]")
 {
