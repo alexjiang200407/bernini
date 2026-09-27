@@ -119,7 +119,7 @@ namespace assetlib
 			kSkeletonBoneNames,  // the cooked rig's bone names, in bone order
 			kGeometrySignature,  // the vertex blob and the tables addressing it, hashed at cook
 			kMeshletGroups,      // one bound per run of c_MeshletsPerGroup meshlets
-			kLods,       // each mesh's levels of detail, see Mesh::firstLod
+			kLods,               // each mesh's levels of detail, see Mesh::firstLod
 			kGrassFields,
 			kGrassNames,
 			kGrassChunks,
