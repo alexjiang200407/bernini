@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "fs_util.h"
+#include "import_index.h"  // IWYU pragma: keep -- completes AssetStore's private ImportIndex
+#include <mutex>
 
 namespace assetlib
 {
@@ -28,5 +30,10 @@ namespace assetlib
 		// where no directory is yet.
 		createDirectories(resolved.parent_path());
 		writeFileBytes(resolved, bytes, what);
+		if (path.ends_with(".bimport"))
+		{
+			const std::lock_guard lock(m_ImportIndex->mutex);
+			m_ImportIndex->initialized = false;
+		}
 	}
 }

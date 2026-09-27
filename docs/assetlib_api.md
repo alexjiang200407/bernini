@@ -54,6 +54,12 @@ and returns an owned snapshot without opening the source or derived output.
 on a subsequent write preserves the stored identity. An unreadable existing sidecar refuses the
 write so it cannot silently discard that identity or authored parameters.
 
+`FindImportForOutput` supplies the inverse lookup for cooked containers whose recorded source path
+predates a move. It indexes sidecar output claims lazily, rejects duplicate owners, and reads the
+owner afresh for each returned snapshot. Sidecar writes through the store invalidate the index;
+an absent or moved owner triggers a rescan. Repeated reads of an owned output do not rescan other
+documents. Loaders have not adopted this inverse lookup yet.
+
 The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
 import document from one identity and loading a mesh by source through `ResolveImport` and
 `LoadRegenMesh`. Its tests prove client wiring, snapshot ownership and error propagation. The fake

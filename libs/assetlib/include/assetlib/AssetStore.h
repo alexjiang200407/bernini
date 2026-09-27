@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -179,6 +180,15 @@ namespace assetlib
 		 */
 		[[nodiscard]] ResolvedImport
 		ResolveImport(std::string_view sourceKey, AssetType kind) const;
+
+		/**
+		 * Finds the sidecar whose outputs contain this key, including after its source moved.
+		 * Indexes sidecar ownership lazily; re-reads the owner to return a fresh snapshot. Store
+		 * writes invalidate the index, and a missing/moved owner triggers a rebuild.
+		 * @throws std::runtime_error if multiple sidecars claim the same output.
+		 */
+		[[nodiscard]] std::optional<ResolvedImport>
+		FindImportForOutput(std::string_view outputKey) const;
 
 		// --- Containers, by codec ----------------------------------------------------------------
 
@@ -1027,6 +1037,7 @@ namespace assetlib
 		Describe(const BGrassFields& grass) const;
 
 	private:
+		struct ImportIndex;
 		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */
 		[[nodiscard]] ImportDocument
 		LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const;
@@ -1048,5 +1059,6 @@ namespace assetlib
 		std::filesystem::path                          m_DataRoot;
 		std::shared_ptr<const AssetKindRegistry>       m_Registry;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;
+		std::shared_ptr<ImportIndex>                   m_ImportIndex;
 	};
 }

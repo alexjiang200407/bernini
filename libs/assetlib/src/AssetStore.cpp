@@ -11,6 +11,7 @@
 #include <system_error>
 #include <utility>
 
+#include "import_index.h"
 #include "ref_paths.h"
 #include <core/file/IFileSystem.h>
 
@@ -18,7 +19,8 @@ namespace assetlib
 {
 	AssetStore::AssetStore(std::filesystem::path dataRoot) :
 		m_DataRoot(std::move(dataRoot)),
-		m_Files(std::make_shared<const core::file::LooseFileSystem>(m_DataRoot))
+		m_Files(std::make_shared<const core::file::LooseFileSystem>(m_DataRoot)),
+		m_ImportIndex(std::make_shared<ImportIndex>())
 	{
 		// Here and not at each use: a mount over a directory that is not there enumerates empty
 		// rather than failing, so a mistyped root would otherwise read as a project with nothing in
@@ -33,7 +35,8 @@ namespace assetlib
 		std::filesystem::path                          dataRoot,
 		std::shared_ptr<const core::file::IFileSystem> files,
 		std::shared_ptr<const AssetKindRegistry>       registry) :
-		m_DataRoot(std::move(dataRoot)), m_Registry(registry), m_Files(std::move(files))
+		m_DataRoot(std::move(dataRoot)), m_Registry(registry), m_Files(std::move(files)),
+		m_ImportIndex(std::make_shared<ImportIndex>())
 	{
 		if (!m_Files)
 			core::throw_runtime_error("assetlib::AssetStore: a source must have somewhere to read");

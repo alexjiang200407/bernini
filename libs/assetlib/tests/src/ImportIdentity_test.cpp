@@ -1,3 +1,4 @@
+#include "CountingFileSystem.h"
 #include "RefsSandbox.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
@@ -11,6 +12,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
@@ -179,4 +181,40 @@ TEST_CASE("source lookup refuses mismatched or ambiguous ownership", "[import-id
 	SECTION("no produced output") { document.outputs.clear(); }
 	store.Save(document, importDocumentKeyFor(source));
 	CHECK_THROWS(store.ResolveImport(source, AssetType::kMesh));
+}
+
+TEST_CASE(
+	"Output ownership follows a moved sidecar without scanning for every load",
+	"[import-identity][perf]")
+{
+	const DataRoot   root("bernini-output-ownership");
+	const auto       loose = root.Source();
+	auto             files = std::make_shared<CountingFileSystem>(loose.GetFiles());
+	const AssetStore store(root.path, files);
+	auto             document = ImportDocument();
+	document.source           = "Authored/Meshes/street.glb";
+	document.identity         = { 1, "street.glb" };
+	const auto output         = importOutputKey(document.identity, AssetType::kMesh);
+	document.outputs          = { output };
+	const auto key            = importDocumentKeyFor(document.source);
+	store.Save(document, key);
+	store.Save(ImportDocument{}, "Authored/Meshes/unrelated.bimport");
+	const auto first = store.FindImportForOutput(output);
+	REQUIRE(first.has_value());
+	CHECK(first->documentKey == key);
+	const auto unrelatedReads = files->ReadsOf("Authored/Meshes/unrelated.bimport");
+	for (int i = 0; i < 32; ++i) REQUIRE(store.FindImportForOutput(output).has_value());
+	CHECK(files->ReadsOf("Authored/Meshes/unrelated.bimport") == unrelatedReads);
+	const auto moved = "Authored/Meshes/avenue.bimport";
+	std::filesystem::rename(root.path / key, root.path / moved);
+	const auto found = store.FindImportForOutput(output);
+	REQUIRE(found.has_value());
+	CHECK(found->documentKey == moved);
+	CHECK(found->document.identity == document.identity);
+	document.bindings = { { "road", "Authored/Materials/road.bmaterial" } };
+	store.Save(document, moved);
+	CHECK(store.FindImportForOutput(output)->document.bindings == document.bindings);
+	CHECK(first->document.bindings.empty());
+	store.Save(document, "Authored/Meshes/duplicate.bimport");
+	CHECK_THROWS(store.FindImportForOutput(output));
 }
