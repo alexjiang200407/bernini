@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
@@ -307,9 +308,29 @@ TEST_CASE(
 	const BMesh      mesh = packed.Load<BMesh>("Derived/Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Authored/Materials/blue.bmaterial");
+	const auto document = packed.Load<ImportDocument>("Authored/Meshes/unit.bimport");
+	CHECK(document.packedSourceStamp == mesh.source.stamp);
+	CHECK(
+		packed.LoadRegenMesh("Derived/Meshes/unit.bmesh").bindings.submeshMaterials ==
+		std::vector<std::string>{ "Authored/Materials/blue.bmaterial" });
+	CHECK_FALSE(packed.Exists("Authored/Meshes/unit.glb"));
 
 	// In the archive only: the stale file on disk is migrate's to rewrite, never pack's.
 	CHECK(core::file::read_file_bytes(meshPath.string()) == stale);
+}
+
+TEST_CASE("packing refuses mixed source revisions when no source can repair them", "[pack][regen]")
+{
+	const test::DataRoot    root("bernini_pack_mixed_revision");
+	const test::SkinnedGltf source("bernini_pack_mixed_revision_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+	const AssetStore store(root.path);
+	const auto       document = store.Load<ImportDocument>("Authored/Meshes/unit.bimport");
+	auto             rig      = store.Load<Skeleton>(document.skeleton);
+	++rig.source.stamp.hash;
+	store.Save(rig, document.skeleton);
+	std::filesystem::remove(root.path / "Authored/Meshes/unit.glb");
+	CHECK_THROWS(store.Pack(PackDesc{ root.path / "Data.bpak" }));
 }
 
 TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")

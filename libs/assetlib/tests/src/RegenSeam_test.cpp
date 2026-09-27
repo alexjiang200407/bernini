@@ -279,11 +279,14 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 	}
 }
 
-TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
+TEST_CASE("a read-only store refuses a mismatched source revision after a rebind", "[regen]")
 {
 	const ImportedProject sandbox("bernini_regen_readonly", test::TexturedGltfPath());
 
-	// Stale by stamp, and rebound in the document: a writable store would act on both.
+	auto document = sandbox.Store().Load<ImportDocument>("Authored/Meshes/unit.bimport");
+	document.packedSourceStamp =
+		sandbox.Store().Load<BMesh>("Derived/Meshes/unit.bmesh").source.stamp;
+	sandbox.Store().Save(document, "Authored/Meshes/unit.bimport");
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
 	AssetStore(sandbox.dataRoot)
 		.RebindSubmeshInDocument(
@@ -294,9 +297,9 @@ TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 	const AssetStore readOnly(
 		sandbox.dataRoot,
 		std::make_shared<ReadOnlyFileSystem>(sandbox.dataRoot));
-	const RegenMesh current = readOnly.LoadRegenMesh("Derived/Meshes/unit.bmesh");
-	CHECK(current.mesh.materials == std::vector<std::string>{ "Authored/Materials/red.bmaterial" });
-	CHECK(current.unboundBindings.empty());
+	CHECK_THROWS_WITH(
+		readOnly.LoadRegenMesh("Derived/Meshes/unit.bmesh"),
+		Catch::Matchers::ContainsSubstring("stale packed cache"));
 }
 
 TEST_CASE("a stale rig regenerates, and its clips follow the document's sample rate", "[regen]")

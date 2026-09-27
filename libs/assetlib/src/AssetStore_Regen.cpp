@@ -134,6 +134,8 @@ namespace assetlib
 					core::throw_runtime_error(
 						"{}: packed cache has no matching import document",
 						path);
+				if (checked.document->packedSourceStamp != checked.key.source.stamp)
+					checked.stale = true;
 				return checked;
 			}
 

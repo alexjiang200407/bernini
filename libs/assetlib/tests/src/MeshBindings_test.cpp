@@ -59,7 +59,7 @@ TEST_CASE(
 	CHECK(plan.outputs.empty());
 	REQUIRE(store.RenameAsset(plan).status == RenameStatus::kRenamed);
 	const auto movedKey = "Authored/Meshes/town/avenue.bimport";
-	const auto moved    = store.Load<ImportDocument>(movedKey);
+	auto       moved    = store.Load<ImportDocument>(movedKey);
 	CHECK(moved.identity == document.identity);
 	CHECK(moved.outputs == document.outputs);
 	CHECK_FALSE(store.Exists(document.source));
@@ -71,8 +71,9 @@ TEST_CASE(
 	CHECK(
 		store.LoadRegenMesh(output).bindings.submeshMaterials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
-	const auto archive = root.path / "Data.bpak";
-	PakWriter  writer(archive);
+	const auto archive      = root.path / "Data.bpak";
+	moved.packedSourceStamp = mesh.source.stamp;
+	PakWriter writer(archive);
 	writer.Add(movedKey, AssetCodec<ImportDocument>::Serialize(moved), {});
 	writer.Add(output, before, { before.size(), 0 });
 	writer.Finish();
@@ -96,8 +97,9 @@ TEST_CASE("packed mesh loads refuse mismatched sidecar parameters", "[mesh-bindi
 	auto mesh                  = MakeMesh({});
 	mesh.source.key            = document.source;
 	mesh.source.parametersHash = parametersHashOf(document);
-	document.sampleRate        = 60;
-	const auto archive         = root.path / "Data.bpak";
+	SECTION("parameters") { document.sampleRate = 60; }
+	SECTION("source revision") { document.packedSourceStamp = { 12, 34 }; }
+	const auto archive = root.path / "Data.bpak";
 	PakWriter  writer(archive);
 	writer.Add(
 		importDocumentKeyFor(document.source),

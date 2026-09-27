@@ -176,6 +176,10 @@ from a list kept beside it, so a new container type joins the archive by being r
 top of that sit the source exclusions: keys under `Authored/Meshes/`, `Authored/EnvSources/` or
 `Derived/SourceTextures/`, except `.bimport` sidecars. Those sidecars ship as the runtime's source
 index and binding authority; the copied source bytes stay out.
+For geometry groups, packing checks that the serialized outputs share one source revision and
+match the sidecar's cook parameters. It records that revision as `packedSourceSize` and
+`packedSourceHash` in the archived sidecar. Read-only loads compare it with each container's
+header and refuse mismatches without reading a source. The loose sidecar is not rewritten.
 
 | | |
 |---|---|

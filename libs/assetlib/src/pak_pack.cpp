@@ -2,6 +2,8 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenGrassFields.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
+#include <assetlib/import_document.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BGrassFields.h>
 
@@ -231,6 +233,30 @@ namespace assetlib
 				};
 			}
 
+			[[nodiscard]] ImportDocument
+			DocumentFor(ImportDocument document)
+			{
+				auto revision = std::optional<SourceStamp>();
+				for (const auto& output : document.outputs)
+				{
+					const auto type = assetTypeFromExtension(output);
+					if (!type || !isGeometryContainer(*type))
+						continue;
+					const auto info = inspectCacheEntry(BytesFor(*type, output));
+					if (!info || info->source.parametersHash != parametersHashOf(document))
+						core::throw_runtime_error(
+							"AssetStore::Pack: '{}' does not match its import parameters",
+							output);
+					if (revision && *revision != info->source.stamp)
+						core::throw_runtime_error(
+							"AssetStore::Pack: '{}' belongs to a different source revision",
+							output);
+					revision = info->source.stamp;
+				}
+				document.packedSourceStamp = revision.value_or(SourceStamp{});
+				return document;
+			}
+
 		private:
 			const AssetStore&                                       m_Store;
 			RigResolver                                             m_Rigs;
@@ -304,6 +330,10 @@ namespace assetlib
 				case AssetType::kGrassFields:
 					regenerated = archived.BytesFor(*type, key);
 					break;
+				case AssetType::kImportDocument:
+					regenerated = AssetCodec<ImportDocument>::Serialize(
+						archived.DocumentFor(AssetCodec<ImportDocument>::Deserialize(diskBytes)));
+					break;
 
 				// Packed verbatim: a bake produces none of them, so the disk bytes are the answer.
 				case AssetType::kMaterial:
@@ -311,7 +341,6 @@ namespace assetlib
 				case AssetType::kSky:
 				case AssetType::kEnvLighting:
 				case AssetType::kEnvironment:
-				case AssetType::kImportDocument:
 				case AssetType::kUiDocument:
 				case AssetType::kUiStyle:
 				case AssetType::kFont:
