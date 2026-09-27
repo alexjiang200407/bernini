@@ -70,6 +70,9 @@ namespace assetlib
 
 		ImportIdentity identity;
 
+		/** Source revision shared by the packed outputs; recorded by pack without shipping the source. */
+		SourceStamp packedSourceStamp;
+
 		float sampleRate = c_DefaultSampleRate;
 
 		// The extracted textures' whole cache key, since a `.ktx2` carries none of its own: where

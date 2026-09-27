@@ -43,6 +43,8 @@ namespace assetlib
 		constexpr std::string_view c_TextureDirKey        = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey  = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey  = "textureStampHash";
+		constexpr std::string_view c_PackedSourceSizeKey  = "packedSourceSize";
+		constexpr std::string_view c_PackedSourceHashKey  = "packedSourceHash";
 		constexpr std::string_view c_TextureBakeTokenKey  = "textureBakeToken";
 		constexpr std::string_view c_SkeletonKey          = "skeleton";
 		constexpr std::string_view c_OutputsKey           = "outputs";
@@ -323,6 +325,8 @@ namespace assetlib
 		     { std::pair<std::string_view, uint64_t*>{ c_TextureStampSizeKey,
 		                                               &document.textureStamp.size },
 		       { c_TextureStampHashKey, &document.textureStamp.hash },
+		       { c_PackedSourceSizeKey, &document.packedSourceStamp.size },
+		       { c_PackedSourceHashKey, &document.packedSourceStamp.hash },
 		       { c_TextureBakeTokenKey, &document.textureBakeToken },
 		       { c_EnvStampSizeKey, &document.envSourceStamp.size },
 		       { c_EnvStampHashKey, &document.envSourceStamp.hash },
@@ -469,6 +473,11 @@ namespace assetlib
 		{
 			json[c_TextureStampSizeKey] = document.textureStamp.size;
 			json[c_TextureStampHashKey] = document.textureStamp.hash;
+		}
+		if (document.packedSourceStamp != SourceStamp())
+		{
+			json[c_PackedSourceSizeKey] = document.packedSourceStamp.size;
+			json[c_PackedSourceHashKey] = document.packedSourceStamp.hash;
 		}
 		if (document.textureBakeToken != 0)
 			json[c_TextureBakeTokenKey] = document.textureBakeToken;

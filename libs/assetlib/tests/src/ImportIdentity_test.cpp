@@ -37,6 +37,23 @@ TEST_CASE("import identities distinguish sources sharing a filename", "[import-i
 	}
 }
 
+TEST_CASE(
+	"packed source revisions round trip without changing cook parameters",
+	"[import-identity]")
+{
+	auto       document        = ImportDocument();
+	const auto parameters      = parametersHashOf(document);
+	document.packedSourceStamp = { 97, 0xfedcba9876543210ull };
+	const auto bytes           = AssetCodec<ImportDocument>::Serialize(document);
+	const auto loaded          = AssetCodec<ImportDocument>::Deserialize(bytes);
+	CHECK(loaded.packedSourceStamp == document.packedSourceStamp);
+	CHECK(parametersHashOf(loaded) == parameters);
+	document.packedSourceStamp = {};
+	CHECK(
+		AssetCodec<ImportDocument>::Deserialize(AssetCodec<ImportDocument>::Serialize(document))
+			.packedSourceStamp == document.packedSourceStamp);
+}
+
 TEST_CASE("derived keys use a frozen label and all 64 identity bits", "[import-identity]")
 {
 	const ImportIdentity identity{ 0xfedcba9876543210ull, "street.glb" };

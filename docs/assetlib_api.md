@@ -56,6 +56,8 @@ write so it cannot silently discard that identity or authored parameters.
 `ImportTarget::bindings` writes named material choices directly into the sidecar, without requiring
 cooked geometry. An explicitly empty list clears mesh defaults while retaining authored overrides
 and grass choices; an omitted list uses the supplied mesh's legacy bindings during migration.
+`ImportDocument::packedSourceStamp` records the source revision shared by a packed group's
+outputs. It is export metadata outside the cook parameter hash; it contains no source bytes.
 
 `FindImportForOutput` supplies the inverse lookup for cooked containers whose recorded source path
 predates a move. It indexes sidecar output claims lazily, rejects duplicate owners, and reads the
