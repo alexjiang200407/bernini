@@ -215,9 +215,10 @@ flowchart TD
 
 ### Renaming and deleting an imported environment
 
-* **The source, its `.bimport`, the `.bsky` and the `.benvl` move as one.** Name either the source
-  or the document; the `.benv` and the containers' routes are rewritten to follow. The `.benv`
-  itself is authored, not an output, and stays where it is.
+* **Only the source and its `.bimport` move.** Generated output keys and bytes stay fixed.
+  Reference scans, migration and packing find the current source through the owning sidecar;
+  cooked routes retain the source path recorded at bake time. Missing maps regenerate from
+  the current source. The authored `.benv` keeps its existing output references.
 * **Deleting the `.bimport` leaves the source and the derived files.** The containers route the
   source — it is what their next bake cooks — so it is held, unlike a mesh's. Deleting the `.benv`
   frees the `.bsky`, `.benvl` and baked maps only it named, and drops their claims from the

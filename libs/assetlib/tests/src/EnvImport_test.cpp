@@ -10,6 +10,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
+#include <assetlib/pak.h>
 #include <assetlib/progress.h>
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BEnv.h>
@@ -1191,11 +1192,11 @@ namespace
 		CHECK(
 			StoreAt(sandbox.DataRoot())
 				.Load<BSky>(importOutputKey(document.identity, AssetType::kSky))
-				.sky.source == document.source);
+				.sky.source == "Authored/EnvSources/" + document.identity.label);
 		CHECK(
 			StoreAt(sandbox.DataRoot())
 				.Load<BEnvLighting>(importOutputKey(document.identity, AssetType::kEnvLighting))
-				.prefilter.source == document.source);
+				.prefilter.source == "Authored/EnvSources/" + document.identity.label);
 
 		const AssetStore store = sandbox.Store();
 		CHECK(AssetRefGraph::Scan(store).broken.empty());
@@ -1203,10 +1204,15 @@ namespace
 	}
 }
 
-TEST_CASE("Renaming an environment source moves the whole environment", "[envimport][assetrename]")
+TEST_CASE("Renaming an environment source preserves derived bytes", "[envimport][assetrename]")
 {
 	const Sandbox sandbox("bernini_envrename_source");
 	static_cast<void>(ImportGradient(sandbox));
+	const auto store         = sandbox.Store();
+	const auto skyKey        = SkyOutput(sandbox);
+	const auto lightingKey   = LightingOutput(sandbox);
+	const auto skyBytes      = store.GetFiles().Read(skyKey);
+	const auto lightingBytes = store.GetFiles().Read(lightingKey);
 
 	REQUIRE(
 		RenameIn(sandbox, "Authored/EnvSources/forest.hdr", "Authored/EnvSources/dusk.hdr")
@@ -1216,6 +1222,21 @@ TEST_CASE("Renaming an environment source moves the whole environment", "[envimp
 		loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport").source ==
 		"Authored/EnvSources/dusk.hdr");
 	CheckRenamedToDusk(sandbox);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+	CHECK(store.Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+	CHECK(store.Pack(PackDesc{ sandbox.DataRoot() / "moved.bpak" }).envsRebaked == 0);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+
+	SECTION("missing maps regenerate through the moved sidecar")
+	{
+		fs::remove(sandbox.DataRoot() / store.Load<BSky>(skyKey).sky.baked);
+		CHECK(store.Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+		CHECK(store.Exists(store.Load<BSky>(skyKey).sky.baked));
+	}
 
 	SECTION("and the renamed document still produces what it claims")
 	{

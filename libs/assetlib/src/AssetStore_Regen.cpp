@@ -282,6 +282,14 @@ namespace assetlib
 		current.key = cache::peekKey(reader, magic, what).source.key;
 		if (current.key.empty())
 			return current;
+		if (const auto owner = FindImportForOutput(path))
+		{
+			current.key            = importedSourceKeyFor(owner->documentKey, owner->document);
+			current.parametersHash = parametersHashOf(owner->document);
+			current.stamp =
+				IsReadOnly() ? owner->document.packedSourceStamp : stampOf(*m_Files, current.key);
+			return current;
+		}
 
 		current.stamp = stampOf(*m_Files, current.key);
 
@@ -363,8 +371,7 @@ namespace assetlib
 		if (!checked.stale)
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
-			current.sourceKey       = checked.key.source.key;
-			current.mesh.source.key = checked.key.source.key;
+			current.sourceKey = checked.key.source.key;
 			if (checked.document)
 			{
 				current.bindings = bindingSnapshot(current.mesh, *checked.document);

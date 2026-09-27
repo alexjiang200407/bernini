@@ -491,6 +491,11 @@ namespace assetlib
 			for (const RenameMove& move : plan.outputs) follow(move.from);
 		}
 
+		if (plan.source || isUnder(plan.subject.from, c_EnvSourcesDirectoryName))
+			std::erase_if(plan.referrers, [](const auto& ref) {
+				return ref.kind == RefKind::kEnvSource;
+			});
+
 		// equivalent() is what tells a real collision from a case-only rename on a case-insensitive
 		// filesystem, where the destination "exists" because it is the file being renamed.
 		std::error_code ec;

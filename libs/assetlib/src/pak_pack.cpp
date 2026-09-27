@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenGrassFields.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
@@ -85,11 +86,26 @@ namespace assetlib
 			const core::file::LooseFileSystem loose(store.GetDataRoot());
 
 			uint32_t rebaked = 0;
+			for (const auto& source : store.GetStaleEnvironmentSources())
+				rebaked += static_cast<uint32_t>(store.RefreshEnvironmentSource(source).size());
 			for (const std::filesystem::path& file : files)
 			{
 				const auto type = assetTypeFromExtension(file);
 				if (type != AssetType::kSky && type != AssetType::kEnvLighting)
 					continue;
+				if (const std::optional<ResolvedImport> owner =
+				        store.FindImportForOutput(store.KeyFor(file)))
+				{
+					if (type == AssetType::kSky)
+						(void)store.EnvMapToDraw(store.Load<BSky>(store.KeyFor(file)).sky);
+					else
+					{
+						const auto lighting = store.Load<BEnvLighting>(store.KeyFor(file));
+						(void)store.EnvMapToDraw(lighting.prefilter);
+						(void)store.EnvMapToDraw(lighting.irradiance);
+					}
+					continue;
+				}
 
 				try
 				{

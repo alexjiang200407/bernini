@@ -8,6 +8,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
@@ -178,6 +179,18 @@ namespace assetlib
 			// and its maps are what it ships.
 			case AssetType::kSky:
 			{
+				if (const auto owner = store.FindImportForOutput(key))
+				{
+					if (dryRun)
+					{
+						auto preview = AssetCodec<BSky>::Deserialize(bytes);
+						preview.sky.source =
+							importedSourceKeyFor(owner->documentKey, owner->document);
+						if (hasSource(store, preview.sky) && store.IsSkyBakeStale(preview))
+							return std::vector<std::byte>();
+					}
+					return std::vector<std::byte>(bytes.begin(), bytes.end());
+				}
 				BSky sky = AssetCodec<BSky>::Deserialize(bytes);
 				if (hasSource(store, sky.sky) && store.IsSkyBakeStale(sky))
 				{
@@ -189,6 +202,19 @@ namespace assetlib
 			}
 			case AssetType::kEnvLighting:
 			{
+				if (const auto owner = store.FindImportForOutput(key))
+				{
+					if (dryRun)
+					{
+						auto preview             = AssetCodec<BEnvLighting>::Deserialize(bytes);
+						preview.prefilter.source = preview.irradiance.source =
+							importedSourceKeyFor(owner->documentKey, owner->document);
+						if (hasSource(store, preview.prefilter) &&
+						    store.IsEnvLightingBakeStale(preview))
+							return std::vector<std::byte>();
+					}
+					return std::vector<std::byte>(bytes.begin(), bytes.end());
+				}
 				BEnvLighting lighting = AssetCodec<BEnvLighting>::Deserialize(bytes);
 				if (hasSource(store, lighting.prefilter) && store.IsEnvLightingBakeStale(lighting))
 				{

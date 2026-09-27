@@ -1194,11 +1194,12 @@ MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 		try
 		{
 			const assetlib::AssetStore& store = m_Host.GetStore();
-			const auto     mesh   = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
+			auto           loaded = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+			const auto&    mesh   = loaded.mesh;
 			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
 
 			store.SetSubmeshMaterialOverrideInDocument(
-				mesh.source.key,
+				loaded.sourceKey,
 				mesh.stringPool.at(mesh.submeshes[source].nameOffset),
 				outgoing.toStdString(),
 				Rebase(m_Preview->SubmeshMaterialPaths().value(submeshIndex), m_DataRoot, true)
@@ -1291,8 +1292,9 @@ MaterialEditorWindow::AddMaterialOverride()
 
 		// Read before anything is written: a mesh with no source has no document to register in,
 		// and a copy saved first would be a `.bmaterial` nothing names.
-		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
-		if (mesh.source.key.empty())
+		auto        loaded = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const auto& mesh   = loaded.mesh;
+		if (loaded.sourceKey.empty())
 		{
 			core::throw_runtime_error(
 				"'{}': it was not imported from a source, so it has no import document to register "
@@ -1307,7 +1309,7 @@ MaterialEditorWindow::AddMaterialOverride()
 		store.Save(editor::BuildMaterial(*entry.model, path, store), key);
 
 		store.SetSubmeshMaterialOverrideInDocument(
-			mesh.source.key,
+			loaded.sourceKey,
 			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
 			name.trimmed().toStdString(),
 			key);
@@ -1348,9 +1350,10 @@ MaterialEditorWindow::RemoveShownMaterialOverride()
 	try
 	{
 		const assetlib::AssetStore& store = m_Host.GetStore();
-		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
+		auto  loaded = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		auto& mesh   = loaded.mesh;
 		store.RemoveSubmeshMaterialOverrideInDocument(
-			mesh.source.key,
+			loaded.sourceKey,
 			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
 			shown.toStdString());
 	}
@@ -1441,19 +1444,20 @@ MaterialEditorWindow::RenameShownMaterialOverride()
 	try
 	{
 		const assetlib::AssetStore& store = m_Host.GetStore();
-		const auto        mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
+		auto              loaded = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const auto&       mesh   = loaded.mesh;
 		const std::string submeshName =
 			std::string(mesh.stringPool.at(mesh.submeshes[source].nameOffset));
 
 		// Registered under the new name before the old one goes, so a failure between the two
 		// leaves the look reachable rather than unregistered.
 		store.SetSubmeshMaterialOverrideInDocument(
-			mesh.source.key,
+			loaded.sourceKey,
 			submeshName,
 			name.trimmed().toStdString(),
 			found->material.toStdString());
 		store.RemoveSubmeshMaterialOverrideInDocument(
-			mesh.source.key,
+			loaded.sourceKey,
 			submeshName,
 			shown.toStdString());
 	}
@@ -1521,7 +1525,7 @@ MaterialEditorWindow::ReloadRegisteredMaterials()
 	try
 	{
 		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
-		m_MeshSourceKey = mesh.mesh.source.key;
+		m_MeshSourceKey = mesh.sourceKey;
 
 		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
 		{
@@ -1688,7 +1692,8 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 
 	try
 	{
-		auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), meshPath).mesh;
+		auto  loaded = editor::LoadMeshThroughSeam(m_Host.GetStore(), meshPath);
+		auto& mesh   = loaded.mesh;
 
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
@@ -1698,7 +1703,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			// A mesh with a recorded source persists a rebind as a document edit: the binding is
 			// outside the cache key, so the mesh file is neither rewritten nor staled, and the
 			// next load applies the document. Only a sourceless mesh still saves its own file.
-			if (mesh.source.key.empty())
+			if (loaded.sourceKey.empty())
 			{
 				const assetlib::AssetStore& meshStore = m_Host.GetStore();
 				meshStore.Save(mesh, meshStore.KeyFor(meshPath));
@@ -1706,7 +1711,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			}
 			else
 				m_Host.GetStore().RebindSubmeshInDocument(
-					mesh.source.key,
+					loaded.sourceKey,
 					mesh.stringPool.at(mesh.submeshes[source].nameOffset),
 					relative);
 		}

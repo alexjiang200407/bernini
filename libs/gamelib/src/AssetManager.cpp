@@ -259,9 +259,9 @@ namespace game
 		assetlib::SourceStamp
 		DocumentStamp(const assetlib::AssetStore& store, const assetlib::RegenMesh& value)
 		{
-			return value.mesh.source.key.empty() ?
+			return value.sourceKey.empty() ?
 			           assetlib::SourceStamp{} :
-			           store.StampOf(assetlib::importDocumentKeyFor(value.mesh.source.key));
+			           store.StampOf(assetlib::importDocumentKeyFor(value.sourceKey));
 		}
 
 		template <std::movable T>

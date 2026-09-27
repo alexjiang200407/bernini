@@ -56,21 +56,12 @@ namespace assetlib
 			                                       document.envLightingParametersHash;
 		}
 
-		/**
-		 * Whether `output`, `part`'s container, is on disk as one this build cannot read: written at
-		 * another codec revision, or not a container at all. The document is committed and the
-		 * container is not, so a checkout that pulls a document another machine re-cooked holds
-		 * exactly this -- and only a re-cook puts it right, since Reimport produces what is absent
-		 * and the re-save walk cannot read what it would re-save.
-		 *
-		 * A header that will not read is stale rather than an error: a re-cook is what repairs one,
-		 * and what it costs is time, never work.
-		 */
 		bool
-		writtenAtAnotherRevision(
+		outputNeedsRefresh(
 			const AssetStore&  store,
 			const std::string& output,
-			EnvironmentPart    part)
+			EnvironmentPart    part,
+			std::string_view   sourceKey)
 		{
 			if (!store.Exists(output))
 				return false;
@@ -84,7 +75,19 @@ namespace assetlib
 			try
 			{
 				MountedFileReader reader(store.GetFiles(), output, what);
-				return cache::peekKey(reader, magic, what).bakeToken != token;
+				if (cache::peekKey(reader, magic, what).bakeToken != token)
+					return true;
+				if (sky)
+				{
+					auto value = store.Load<BSky>(output);
+					if (!sourceKey.empty())
+						value.sky.source = sourceKey;
+					return store.IsSkyBakeStale(value);
+				}
+				auto value = store.Load<BEnvLighting>(output);
+				if (!sourceKey.empty())
+					value.prefilter.source = value.irradiance.source = sourceKey;
+				return store.IsEnvLightingBakeStale(value);
 			}
 			catch (const std::exception&)
 			{
@@ -121,7 +124,7 @@ namespace assetlib
 					if (!isPartOutput(output, part))
 						continue;
 					claimed  = true;
-					unusable = unusable || writtenAtAnotherRevision(store, output, part);
+					unusable = unusable || outputNeedsRefresh(store, output, part, document.source);
 				}
 				return claimed && (sourceMoved || unusable ||
 				                   partParametersHashOf(*document.environment, part) !=

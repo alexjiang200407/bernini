@@ -79,7 +79,7 @@ and fix the map.
 | Mesh placement | [BMeshUtil.h](../libs/editor_sdk/include/editor_sdk/BMeshUtil.h) | Node transforms and bounds, without renderer state |
 | Preview interaction | [OrbitCamera.h](../libs/editor_sdk/include/editor_sdk/OrbitCamera.h) | Orbit, pan and dolly camera policy |
 | Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
-| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Returns `RegenMesh`: geometry plus an owned binding snapshot from the supplied store; external meshes use the codec directly and have no project bindings |
+| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Returns `RegenMesh`: geometry, owned bindings and the current `sourceKey` used for authoring after a move; external meshes use the codec directly and have no project bindings |
 | Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
 
 Material and animation panels read material choices, registered looks and skeleton keys from the

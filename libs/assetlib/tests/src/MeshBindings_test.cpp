@@ -3,11 +3,13 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
+#include <assetlib/migrate.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Grass.h>
@@ -38,7 +40,7 @@ TEST_CASE(
 	document.bindings       = { { "Road", "Authored/Materials/road.bmaterial" } };
 	store.Save(document, importDocumentKeyFor(document.source));
 	core::file::write_atomic(root.path / document.source, "fixture source");
-	auto mesh                         = MakeMesh({ "Authored/Materials/old.bmaterial" });
+	auto mesh                         = MakeMesh({ "Authored/Materials/road.bmaterial" });
 	mesh.submeshes.front().nameOffset = mesh.stringPool.add("Road");
 	mesh.source.key                   = document.source;
 	mesh.source.stamp                 = stampOf(root.path / document.source);
@@ -66,6 +68,10 @@ TEST_CASE(
 	CHECK(store.GetFiles().Read(output) == before);
 	CHECK_FALSE(store.GeometryIsStale(output));
 	CHECK(store.LoadRegenMesh(output).sourceKey == moved.source);
+	CHECK(store.LoadRegenMesh(output).mesh.source.key == document.source);
+	CHECK(store.GeometryGroupSource(output).key == moved.source);
+	CHECK(store.Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(store.GetFiles().Read(output) == before);
 	CHECK(
 		store.LoadRegenMeshRefs(output).materials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });

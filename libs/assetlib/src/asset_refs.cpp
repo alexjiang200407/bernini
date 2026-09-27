@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
@@ -192,23 +193,29 @@ namespace assetlib
 		void
 		addRouteEdges(
 			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
 			const std::string&     referrer,
 			const EnvMapRoute&     route)
 		{
 			addEdge(edges, referrer, route.baked, RefKind::kBakedMap);
-			addEdge(edges, referrer, route.source, RefKind::kEnvSource);
+			const auto owner = store.FindImportForOutput(referrer);
+			addEdge(
+				edges,
+				referrer,
+				owner ? importedSourceKeyFor(owner->documentKey, owner->document) : route.source,
+				RefKind::kEnvSource);
 		}
 
 		/** The radiance a `.bsky` routes, and the map its bake wrote. */
 		void
 		collectSkyEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			try
 			{
-				addRouteEdges(edges, referrer, load<BSky>(files, referrer).sky);
+				addRouteEdges(edges, store, referrer, load<BSky>(store.GetFiles(), referrer).sky);
 			}
 			catch (const std::exception& e)
 			{
@@ -221,15 +228,15 @@ namespace assetlib
 		/** Both halves of a `.benvl`: each names a source and the map convolved from it. */
 		void
 		collectEnvLightingEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			try
 			{
-				const BEnvLighting lighting = load<BEnvLighting>(files, referrer);
-				addRouteEdges(edges, referrer, lighting.prefilter);
-				addRouteEdges(edges, referrer, lighting.irradiance);
+				const BEnvLighting lighting = load<BEnvLighting>(store.GetFiles(), referrer);
+				addRouteEdges(edges, store, referrer, lighting.prefilter);
+				addRouteEdges(edges, store, referrer, lighting.irradiance);
 			}
 			catch (const std::exception& e)
 			{
@@ -387,12 +394,12 @@ namespace assetlib
 			}
 			else if (kind == c_SkyExtension)
 			{
-				collectSkyEdges(edges, files, referrer);
+				collectSkyEdges(edges, store, referrer);
 				++graph.environmentsScanned;
 			}
 			else if (kind == c_EnvLightingExtension)
 			{
-				collectEnvLightingEdges(edges, files, referrer);
+				collectEnvLightingEdges(edges, store, referrer);
 				++graph.environmentsScanned;
 			}
 			else if (kind == c_EnvironmentExtension)
