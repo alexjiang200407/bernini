@@ -31,6 +31,7 @@
 namespace assetlib
 {
 	struct BMesh;
+	struct MeshBindings;
 }
 
 namespace game
@@ -402,12 +403,13 @@ private:
 	 */
 	void
 	OfferBakeForRefusal(
-		const assetlib::BMesh&       mesh,
-		const std::filesystem::path& absolutePath,
-		const std::string&           animations,
-		const QString&               name,
-		const QString&               refusal,
-		std::span<const uint32_t>    refusedEntries);
+		const assetlib::BMesh&        mesh,
+		const assetlib::MeshBindings& bindings,
+		const std::filesystem::path&  absolutePath,
+		const std::string&            animations,
+		const QString&                name,
+		const QString&                refusal,
+		std::span<const uint32_t>     refusedEntries);
 
 	void
 	UpdateCamera();

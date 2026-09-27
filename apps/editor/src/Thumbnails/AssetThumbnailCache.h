@@ -6,6 +6,7 @@
 #include "Render/Renderer.h"
 #include "util/held_open_assets.h"
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -136,7 +137,7 @@ private:
 	{
 		QString                                path;
 		ThumbnailType                          type = ThumbnailType::kMesh;
-		std::shared_ptr<assetlib::BMesh>       mesh;
+		std::shared_ptr<assetlib::RegenMesh>   mesh;
 		std::shared_ptr<CookedMeshes>          cooked;
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;

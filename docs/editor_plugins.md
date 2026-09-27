@@ -81,6 +81,10 @@ and fix the map.
 | Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
 | Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Returns `RegenMesh`: geometry plus an owned binding snapshot from the supplied store; external meshes use the codec directly and have no project bindings |
 | Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
+
+Material and animation panels read material choices, registered looks and skeleton keys from the
+binding snapshot. Mesh thumbnails retain that snapshot alongside their cooked geometry and apply
+materials per submesh, so shared cooked material slots do not couple authored choices.
 | Default plugin | [plugin.h](../apps/editor/plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and

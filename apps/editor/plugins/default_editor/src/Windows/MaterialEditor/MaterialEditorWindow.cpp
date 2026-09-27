@@ -1520,9 +1520,8 @@ MaterialEditorWindow::ReloadRegisteredMaterials()
 
 	try
 	{
-		const auto mesh =
-			editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath()).mesh;
-		m_MeshSourceKey = mesh.source.key;
+		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		m_MeshSourceKey = mesh.mesh.source.key;
 
 		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
 		{
@@ -1530,7 +1529,7 @@ MaterialEditorWindow::ReloadRegisteredMaterials()
 			if (source == assetlib::c_InvalidIndex)
 				continue;
 
-			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh, source);
+			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh.bindings, source);
 		}
 	}
 	catch (const std::exception& e)

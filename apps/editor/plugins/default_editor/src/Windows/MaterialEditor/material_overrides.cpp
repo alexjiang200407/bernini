@@ -8,7 +8,7 @@
 #include <QString>
 
 #include <algorithm>
-#include <assetlib_structs/BMesh.h>
+#include <assetlib/MeshBindings.h>
 #include <cstdint>
 #include <filesystem>
 #include <qnamespace.h>
@@ -18,17 +18,17 @@
 namespace editor
 {
 	std::vector<RegisteredMaterial>
-	RegisteredMaterialsFor(const assetlib::BMesh& mesh, const uint32_t sourceSubmesh)
+	RegisteredMaterialsFor(const assetlib::MeshBindings& bindings, const uint32_t sourceSubmesh)
 	{
 		auto registered = std::vector<RegisteredMaterial>();
-		for (const assetlib::SubmeshMaterialOverride& entry : mesh.materialOverrides)
+		for (const assetlib::ResolvedMaterialOverride& entry : bindings.materialOverrides)
 		{
-			if (entry.submesh != sourceSubmesh || entry.material >= mesh.materials.size())
+			if (entry.submesh != sourceSubmesh || entry.material.empty())
 				continue;
 
 			registered.emplace_back(
 				QString::fromStdString(entry.name),
-				QString::fromStdString(mesh.materials[entry.material]));
+				QString::fromStdString(entry.material));
 		}
 		return registered;
 	}
