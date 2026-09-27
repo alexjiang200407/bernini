@@ -3,6 +3,7 @@
 #include <assetlib/ImportIdentity.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
@@ -56,6 +57,9 @@ TEST_CASE(
 	CHECK(store.GetFiles().Read(output) == before);
 	CHECK_FALSE(store.GeometryIsStale(output));
 	CHECK(
+		store.LoadRegenMeshRefs(output).materials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
+	CHECK(
 		store.LoadRegenMesh(output).bindings.submeshMaterials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
 	const auto archive = root.path / "Data.bpak";
@@ -66,6 +70,9 @@ TEST_CASE(
 	const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
 	CHECK_FALSE(packed.Exists(moved.source));
 	CHECK_FALSE(packed.GeometryIsStale(output));
+	CHECK(
+		packed.LoadRegenMeshRefs(output).materials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
 	CHECK(
 		packed.LoadRegenMesh(output).bindings.submeshMaterials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });

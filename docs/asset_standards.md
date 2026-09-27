@@ -817,8 +817,9 @@ that fixed that order the samples are unreadable — not wrong, but meaningless,
 Naming the skeleton is what makes the pairing checkable at all, and `skeletonSignature` is what
 checks it. It is not retargeting: a clip set belongs to one rig.
 
-Both are read without the container's bulk — `loadMeshRefs` and `loadAnimationSkeletonPath` seek to the
-reference chunks, for the reason the material scan does. Nothing produces an edge *into* a `.banim`, so
+Both are read without the container's bulk. `LoadRegenMeshRefs` uses the frozen header and current
+sidecar bindings, resolving a moved source through the output-owner index. Legacy source-less
+meshes and `loadAnimationSkeletonPath` use their reference chunks. Nothing produces an edge *into* a `.banim`, so
 a clip set always deletes and leaves its skeleton behind, exactly as a mesh leaves its materials.
 
 ---
@@ -1129,10 +1130,10 @@ category, like `Derived/SourceTextures/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
 
-* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data, and only its reference chunks
-  are wanted. `loadMeshRefs` seeks to `kMaterialPaths` and `kSkeletonPath` instead: in Test Project those
-  are 0.0015%–0.017% of the file, so surveying its meshes reads ~3 KB rather than 16.8 MB. That is what
-  lets the graph be rebuilt on demand rather than cached. `loadAnimationSkeletonPath` does the same for a
+* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data; `LoadRegenMeshRefs` reads
+  its frozen header and current sidecar instead. The legacy reference-chunk reader measured
+  ~3 KB rather than 16.8 MB across Test Project's meshes; sidecar lookup likewise excludes geometry.
+  `loadAnimationSkeletonPath` reads only reference chunks for a
   `.banim`, whose samples are the bulk.
 * **The graph is never cached.** The data root is shared with the user's file manager. A cached graph
   would not merely go stale, it would be *wrong* — refusing a deletion while naming a blocker that had

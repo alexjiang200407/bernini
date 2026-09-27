@@ -456,11 +456,9 @@ namespace assetlib
 		LoadRegenGrassLooks(std::string_view path) const;
 
 		/**
-		 * LoadMeshRefs surviving a foreign bake token: chunks that cannot be parsed answer from
-		 * the frozen header and the import document instead -- the document's bindings are the
-		 * materials, the group's rig resolves by source key -- so nothing regenerates and a scan
-		 * of a whole project stays a header read per file. A matched token's refs read as stored,
-		 * stamps unchecked.
+		 * Reads current bindings from the import document, including after a source move or a
+		 * foreign bake token. Reads only the frozen header and sidecar; never regenerates geometry.
+		 * Source-less legacy containers fall back to their stored reference chunks.
 		 *
 		 * @throws std::runtime_error on a foreign-token mesh with no recorded source or whose
 		 *         import document is gone -- what it references cannot be known, and the

@@ -288,45 +288,23 @@ namespace assetlib
 	MeshRefs
 	AssetStore::LoadRegenMeshRefs(std::string_view path) const
 	{
-		if (!IsReadOnly())
+		const CheckedKey checked =
+			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
+		if (checked.document)
 		{
-			MountedFileReader      reader(GetFiles(), path, "bmesh");
-			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BMesh, "bmesh");
-			if (key.bakeToken != AssetCodec<BMesh>::c_BakeToken)
-			{
-				// From the frozen headers and the document alone -- what the refs would be after
-				// a regeneration, without paying one: a scan runs this over every mesh in the
-				// project after a token bump. The document is authoritative for both halves.
-				if (key.source.key.empty())
-				{
-					core::throw_runtime_error(
-						"bmesh '{}': written at another bake revision and no source was ever "
-						"recorded, so what it references cannot be known; re-import it",
-						path);
-				}
-
-				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				if (!GetFiles().Exists(documentKey))
-				{
-					core::throw_runtime_error(
-						"bmesh '{}': written at another bake revision and the import document "
-						"beside '{}' is gone, so what it references cannot be known",
-						path,
-						key.source.key);
-				}
-
-				const ImportDocument document = loadImportDocument(GetFiles(), documentKey);
-
-				MeshRefs refs;
-				refs.skeleton = document.skeleton;
-				refs.grass    = document.GetGrassOutput();
-				for (const MaterialBinding& binding : document.bindings)
-					refs.materials.push_back(binding.material);
-				for (const MaterialOverrideBinding& entry : document.materialOverrides)
-					refs.materials.push_back(entry.material);
-				return refs;
-			}
+			MeshRefs refs;
+			refs.skeleton = checked.document->skeleton;
+			refs.grass    = checked.document->GetGrassOutput();
+			for (const MaterialBinding& binding : checked.document->bindings)
+				refs.materials.push_back(binding.material);
+			for (const MaterialOverrideBinding& entry : checked.document->materialOverrides)
+				refs.materials.push_back(entry.material);
+			return refs;
 		}
+		if (checked.stale)
+			core::throw_runtime_error(
+				"bmesh '{}': stale cache has no import document, so its references cannot be known",
+				path);
 		return loadMeshRefs(*m_Files, path);
 	}
 
