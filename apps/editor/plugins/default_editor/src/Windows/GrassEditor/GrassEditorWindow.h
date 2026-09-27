@@ -30,7 +30,10 @@ class QDoubleSpinBox;
 class QEvent;
 class QFormLayout;
 class QLabel;
-class QLineEdit;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
+class QMimeData;
 class QPushButton;
 class QSpinBox;
 class QStackedWidget;
@@ -119,6 +122,20 @@ public:
 		return m_Look != m_Saved;
 	}
 
+	/** Whether a drag carries something this panel takes: a look, a material or an environment. */
+	[[nodiscard]] static bool
+	AcceptsDrop(const QMimeData* mime);
+
+	/**
+	 * A dropped `.bgrass` opens, a `.bmaterial` becomes the open look's material, and a `.benv`
+	 * lights the preview. Public because a drop cannot be synthesized, so what one means is tested
+	 * here rather than through the event.
+	 *
+	 * @return whether the drag was taken.
+	 */
+	bool
+	TakeDrop(const QMimeData* mime);
+
 	std::vector<std::string>
 	GetHeldAssets() const override;
 	bool
@@ -131,6 +148,12 @@ public:
 protected:
 	bool
 	eventFilter(QObject* watched, QEvent* event) override;
+	void
+	dragEnterEvent(QDragEnterEvent* event) override;
+	void
+	dragMoveEvent(QDragMoveEvent* event) override;
+	void
+	dropEvent(QDropEvent* event) override;
 
 private:
 	[[nodiscard]] QWidget*
@@ -206,11 +229,10 @@ private:
 	// The prompt with nothing open, or the column beside the viewport.
 	QStackedWidget* m_Stage = nullptr;
 
-	QLabel*      m_Title    = nullptr;
-	QLabel*      m_Status   = nullptr;
-	QLineEdit*   m_Material = nullptr;
-	QPushButton* m_Save     = nullptr;
-	QPushButton* m_Revert   = nullptr;
+	QLabel*      m_Title  = nullptr;
+	QLabel*      m_Status = nullptr;
+	QPushButton* m_Save   = nullptr;
+	QPushButton* m_Revert = nullptr;
 
 	// Each puts one value of the look back on its widget.
 	std::vector<std::function<void()>> m_Syncs;

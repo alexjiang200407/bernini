@@ -1606,6 +1606,9 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		panel->SetActive(editor::IsPanelShown(visible, this));
 	});
 	m_PluginDocks.emplace(std::string(id), PluginDock{ dock, panel });
+	// A dock built after the readout was set up -- an asset editor opened later -- reports too.
+	if (m_FrameStats != nullptr)
+		WatchFrameStats(dock);
 	static_cast<void>(dockOwner.release());
 	dock->show();
 	dock->raise();
@@ -1753,69 +1756,69 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock : findChildren<QDockWidget*>())
+	for (QDockWidget* dock : findChildren<QDockWidget*>()) WatchFrameStats(dock);
+}
+
+void
+MainWindow::WatchFrameStats(QDockWidget* dock)
+{
+	for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 	{
-		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
-		{
-			const QString name = dock->windowTitle();
+		const QString name = dock->windowTitle();
 
-			// Context is `view`: the connection dies with the viewport it
-			// names rather than outliving it holding its pointer.
-			m_TabVisibility.push_back(connect(
-				dock,
-				&QDockWidget::visibilityChanged,
-				view,
-				[this, view, name](bool visible) {
-					if (visible)
-					{
-						m_FrameStatsSource = view;
-						m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
-						m_GpuTiming->SetSource(name);
-					}
-					else if (m_FrameStatsSource == view)
-					{
-						m_FrameStatsSource = nullptr;
-						m_FrameStats->clear();
-						m_GpuTiming->SetSource(QString());
-					}
-				}));
+		// Context is `view`: the connection dies with the viewport it
+		// names rather than outliving it holding its pointer.
+		m_TabVisibility.push_back(
+			connect(dock, &QDockWidget::visibilityChanged, view, [this, view, name](bool visible) {
+				if (visible)
+				{
+					m_FrameStatsSource = view;
+					m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
+					m_GpuTiming->SetSource(name);
+				}
+				else if (m_FrameStatsSource == view)
+				{
+					m_FrameStatsSource = nullptr;
+					m_FrameStats->clear();
+					m_GpuTiming->SetSource(QString());
+				}
+			}));
 
-			// Queued: FrameStatsUpdated is emitted on the render thread and this touches a widget.
-			// Which means a sample can outlive the tab switch that made it stale, hence the source
-			// check rather than trusting the emission.
-			connect(
-				view,
-				&RenderTargetWindow::FrameStatsUpdated,
-				m_FrameStats,
-				[this, view, name](
-					double                               meanMs,
-					double                               maxMs,
-					int                                  slowFrames,
-					const std::vector<bgl::PassTimings>& gpuFrames) {
-					if (m_FrameStatsSource != view)
-						return;
+		// Queued: FrameStatsUpdated is emitted on the render thread and this touches a widget.
+		// Which means a sample can outlive the tab switch that made it stale, hence the source
+		// check rather than trusting the emission.
+		connect(
+			view,
+			&RenderTargetWindow::FrameStatsUpdated,
+			m_FrameStats,
+			[this, view, name](
+				double                               meanMs,
+				double                               maxMs,
+				int                                  slowFrames,
+				const std::vector<bgl::PassTimings>& gpuFrames) {
+				if (m_FrameStatsSource != view)
+					return;
 
-					m_FrameStats->setText(
-						editor::FrameStatsText(
-							name,
-							editor::FrameStats{ .meanMs     = meanMs,
-				                                .maxMs      = maxMs,
-				                                .slowFrames = slowFrames }));
+				m_FrameStats->setText(
+					editor::FrameStatsText(
+						name,
+						editor::FrameStats{ .meanMs     = meanMs,
+			                                .maxMs      = maxMs,
+			                                .slowFrames = slowFrames }));
 
-					m_GpuTiming->AddFrames(gpuFrames);
+				m_GpuTiming->AddFrames(gpuFrames);
 
-					// The latest frame, formatted here rather than on the render thread: the log
-					// wants one frame as a table and the graph wants every frame as numbers, and
-					// formatting at the source would make them two copies of the same rows.
-					if (m_LogNextPassTimings && !gpuFrames.empty())
-					{
-						m_LogNextPassTimings = false;
-						qInfo().noquote() << "GPU pass timings," << name << "\n"
-										  << editor::PassTimingsText(gpuFrames.back().passes);
-					}
-				},
-				Qt::QueuedConnection);
-		}
+				// The latest frame, formatted here rather than on the render thread: the log
+				// wants one frame as a table and the graph wants every frame as numbers, and
+				// formatting at the source would make them two copies of the same rows.
+				if (m_LogNextPassTimings && !gpuFrames.empty())
+				{
+					m_LogNextPassTimings = false;
+					qInfo().noquote() << "GPU pass timings," << name << "\n"
+									  << editor::PassTimingsText(gpuFrames.back().passes);
+				}
+			},
+			Qt::QueuedConnection);
 	}
 }
 

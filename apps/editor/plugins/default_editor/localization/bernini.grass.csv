@@ -6,6 +6,7 @@ clump_group,Clump
 color_group,Colour
 curvature,Curvature
 density_group,Distance
+drop_outside,'{0}' is not in this project: {1}
 empty_prompt,Open a .bgrass from the Content Explorer to edit the look and watch it grow.
 fade_end,Fade end
 fade_start,Fade start
@@ -15,13 +16,10 @@ ground_normal_near,Ground normal near
 gust_response,Gust response
 lean,Lean
 lighting_group,Lighting
-material_label,Material
-material_placeholder,Authored/Materials/….bmaterial
-material_tooltip,"The .bmaterial every blade shades through, as a key under the data root. Its alpha is never tested: a blade is solid geometry."
 max_height,Max height
 min_height,Min height
 near_segments,Segments near
-no_material,"The look names no material, so there is nothing to draw yet."
+no_material,The look has no material yet: drop a .bmaterial here to give it one.
 normal_rounding,Normal rounding
 not_drawn,The look cannot be drawn; editor.log says why.
 radius,Radius
@@ -36,7 +34,6 @@ root_width,Root width
 save_button,Save
 save_failed,'{0}' could not be saved: {1}
 stiffness,Stiffness
-surface_group,Surface
 tip_tint,Tip tint
 tip_width,Tip width
 title,Grass Editor

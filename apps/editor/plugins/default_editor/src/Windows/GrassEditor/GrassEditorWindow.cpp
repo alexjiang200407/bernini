@@ -2,20 +2,24 @@
 #include <bgl/Camera.h>
 #include <editor_plugin_api/EditorPanel.h>
 
+#include <assetlib/codecs.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/localize.h>
 #include <editor_sdk/environment.h>
+#include <editor_sdk/mime_files.h>
 
 #include <QColor>
 #include <QColorDialog>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QEvent>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -166,6 +170,8 @@ GrassEditorWindow::GrassEditorWindow(
 	viewLayout->setContentsMargins(0, 0, 0, 0);
 	m_Viewport = m_Host.CreateViewport(view, rt);
 	m_Viewport->installEventFilter(this);
+	m_Viewport->setAcceptDrops(true);
+	setAcceptDrops(true);
 	viewLayout->addWidget(m_Viewport, /*stretch*/ 1);
 	viewLayout->addWidget(BuildWindStrip());
 	split->addWidget(view);
@@ -302,32 +308,6 @@ GrassEditorWindow::BuildColumn()
 		layout->addWidget(box);
 		return form;
 	};
-
-	QFormLayout* surface = group(
-		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.surface_group", "Surface"));
-	m_Material = new QLineEdit(column);
-	m_Material->setObjectName(QStringLiteral("GrassMaterial"));
-	m_Material->setPlaceholderText(
-		editor::Localize(
-			m_Host.GetLanguageResolver(),
-			"bernini.grass.material_placeholder",
-			"Authored/Materials/….bmaterial"));
-	m_Material->setToolTip(
-		editor::Localize(
-			m_Host.GetLanguageResolver(),
-			"bernini.grass.material_tooltip",
-			"The .bmaterial every blade shades through, as a key under the data root. Its alpha is "
-			"never tested: a blade is solid geometry."));
-	connect(m_Material, &QLineEdit::editingFinished, this, [this] {
-		const std::string material = m_Material->text().trimmed().toStdString();
-		if (m_Syncing || material == m_Look.material)
-			return;
-		m_Look.material = material;
-		Edited(false);
-	});
-	surface->addRow(
-		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.material_label", "Material"),
-		m_Material);
 
 	using Look = assetlib::BGrass;
 
@@ -720,7 +700,6 @@ void
 GrassEditorWindow::SyncFields()
 {
 	m_Syncing = true;
-	m_Material->setText(QString::fromStdString(m_Look.material));
 	for (const std::function<void()>& sync : m_Syncs) sync();
 	m_Syncing = false;
 }
@@ -886,7 +865,7 @@ GrassEditorWindow::BuildPreview()
 			editor::Localize(
 				m_Host.GetLanguageResolver(),
 				"bernini.grass.no_material",
-				"The look names no material, so there is nothing to draw yet."));
+				"The look has no material yet: drop a .bmaterial here to give it one."));
 		return;
 	}
 
@@ -1133,6 +1112,15 @@ GrassEditorWindow::eventFilter(QObject* watched, QEvent* event)
 			static_cast<float>(static_cast<QWheelEvent*>(event)->angleDelta().y()) / 120.0f);
 		UpdateCamera();
 		return true;
+	case QEvent::DragEnter:
+		dragEnterEvent(static_cast<QDragEnterEvent*>(event));
+		return true;
+	case QEvent::DragMove:
+		dragMoveEvent(static_cast<QDragMoveEvent*>(event));
+		return true;
+	case QEvent::Drop:
+		dropEvent(static_cast<QDropEvent*>(event));
+		return true;
 	case QEvent::Resize:
 		UpdateCamera();
 		break;
@@ -1140,4 +1128,97 @@ GrassEditorWindow::eventFilter(QObject* watched, QEvent* event)
 		break;
 	}
 	return editor::AssetEditorPanel::eventFilter(watched, event);
+}
+
+bool
+GrassEditorWindow::AcceptsDrop(const QMimeData* mime)
+{
+	return !editor::FirstLocalFileWithSuffix(mime, assetlib::c_GrassExtension).isEmpty() ||
+	       !editor::FirstLocalFileWithSuffix(mime, assetlib::c_MaterialExtension).isEmpty() ||
+	       !editor::FirstLocalFileWithSuffix(mime, u".benv").isEmpty();
+}
+
+bool
+GrassEditorWindow::TakeDrop(const QMimeData* mime)
+{
+	const auto keyOf = [this](const QString& file) -> std::optional<std::string> {
+		try
+		{
+			return m_Host.GetStore().KeyFor(std::filesystem::path(file.toStdWString()));
+		}
+		catch (const std::exception& error)
+		{
+			SetStatus(
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.grass.drop_outside",
+					{ file, error.what() },
+					"'{0}' is not in this project: {1}"));
+			return std::nullopt;
+		}
+	};
+
+	if (const QString look = editor::FirstLocalFileWithSuffix(mime, assetlib::c_GrassExtension);
+	    !look.isEmpty())
+	{
+		const auto key = keyOf(look);
+		if (key)
+			OpenAsset(*key);
+		return key.has_value();
+	}
+
+	if (const QString material =
+	        editor::FirstLocalFileWithSuffix(mime, assetlib::c_MaterialExtension);
+	    !material.isEmpty())
+	{
+		if (m_Key.empty())
+			return false;
+		const auto key = keyOf(material);
+		if (!key || *key == m_Look.material)
+			return key.has_value();
+		m_Look.material = *key;
+		Edited(false);
+		return true;
+	}
+
+	if (const QString environment = editor::FirstLocalFileWithSuffix(mime, u".benv");
+	    !environment.isEmpty())
+	{
+		const auto key = keyOf(environment);
+		if (!key)
+			return false;
+		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+			editor::BindEnvironment(
+				&context.scene,
+				view.Get(),
+				m_Environment,
+				*key,
+				m_Host.GetStore(),
+				"GrassEditor");
+		});
+		return true;
+	}
+
+	return false;
+}
+
+void
+GrassEditorWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+	if (AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+GrassEditorWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+	if (AcceptsDrop(event->mimeData()))
+		event->acceptProposedAction();
+}
+
+void
+GrassEditorWindow::dropEvent(QDropEvent* event)
+{
+	if (TakeDrop(event->mimeData()))
+		event->acceptProposedAction();
 }

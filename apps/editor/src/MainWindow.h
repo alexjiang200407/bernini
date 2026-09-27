@@ -161,6 +161,10 @@ private:
 	void
 	SetUpFrameStats();
 
+	// Puts `dock`'s viewports on the frame-time readout while the dock is the one shown.
+	void
+	WatchFrameStats(QDockWidget* dock);
+
 	void
 	ClearFrameStats() noexcept;
 

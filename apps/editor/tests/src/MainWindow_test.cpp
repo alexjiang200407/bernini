@@ -1849,10 +1849,13 @@ TEST_CASE(
 	GrassEditorWindow* panel = OpenGrassLook(window, key);
 	CHECK_FALSE(panel->GetDrawnLook().has_value());
 
-	auto* material = panel->findChild<QLineEdit*>("GrassMaterial");
-	REQUIRE(material != nullptr);
-	material->setText(QString::fromUtf8(c_GrassMaterialKey.data(), c_GrassMaterialKey.size()));
-	Q_EMIT material->editingFinished();
+	// A material dropped on the panel becomes the look's.
+	QMimeData drop;
+	drop.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString((editor.DataRoot() / c_GrassMaterialKey).string())) });
+	REQUIRE(GrassEditorWindow::AcceptsDrop(&drop));
+	REQUIRE(panel->TakeDrop(&drop));
 
 	REQUIRE(panel->GetDrawnLook().has_value());
 	CHECK(panel->GetDrawnLook()->material == c_GrassMaterialKey);
@@ -1887,4 +1890,35 @@ TEST_CASE(
 	CHECK(dynamic_cast<GrassEditorWindow*>(dock->widget()) != nullptr);
 	// The dock's own toggle took the entry's place.
 	CHECK(named("Grass Editor") == 1);
+}
+
+TEST_CASE(
+	"A look dropped on the Grass Editor opens, and its viewport reports frame times",
+	"[mainwindow][render][grassplugin]")
+{
+	const HeadlessEditor editor;
+	const std::string    first  = "Authored/Grass/first.bgrass";
+	const std::string    second = "Authored/Grass/second.bgrass";
+	SaveGrassLook(editor, first, c_GrassMaterialKey);
+	SaveGrassLook(editor, second, c_GrassMaterialKey);
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	GrassEditorWindow* panel = OpenGrassLook(window, first);
+
+	// Built after the project opened, the dock's viewport still drives the status bar's readout.
+	auto* stats = window.findChild<QLabel*>("FrameStats");
+	REQUIRE(stats != nullptr);
+	CHECK(stats->text().contains(QStringLiteral("Grass Editor")));
+
+	QMimeData drop;
+	drop.setUrls(
+		{ QUrl::fromLocalFile(QString::fromStdString((editor.DataRoot() / second).string())) });
+	REQUIRE(GrassEditorWindow::AcceptsDrop(&drop));
+	REQUIRE(panel->TakeDrop(&drop));
+	CHECK(panel->GetKey() == second);
+
+	QMimeData other;
+	other.setUrls({ QUrl::fromLocalFile(QStringLiteral("/nowhere/rock.bmesh")) });
+	CHECK_FALSE(GrassEditorWindow::AcceptsDrop(&other));
 }
