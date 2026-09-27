@@ -66,6 +66,7 @@ set(IDL_CPP_SOURCES
     DrawBucket.slang
     DispatchArgs.slang
     BaseTable.slang
+    LodDrawMode.slang
     BoneSample.slang
     SkinnedBone.slang
     SkinnedLegChain.slang

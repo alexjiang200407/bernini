@@ -5,24 +5,14 @@
 
 import lib.forward.common;
 import lib.forward.MaterialData;
-
-uint DissolveHash(uint x)
-{
-    x ^= x >> 16u;
-    x *= 0x7feb352du;
-    x ^= x >> 15u;
-    x *= 0x846ca68bu;
-    x ^= x >> 16u;
-    return x;
-}
+import lib.math.hash;
 
 // Uniform in [0, 1) per pixel and per frame. Screen-space and the same for both levels' draws at a
 // pixel, which is what makes their coverage exact complements; a world-space hash would differ
 // between two surfaces at one pixel. Moves with the hashed-alpha seed, so the resolve averages it.
 public float LodDissolveHash(float2 pixel)
 {
-    let h = DissolveHash(uint(pixel.x) ^ DissolveHash(uint(pixel.y) ^ DissolveHash(uint(materialData.alphaHashSeed))));
-    return float(h >> 8u) * (1.0 / 16777216.0);
+    return HashFloat(uint(pixel.x) ^ HashUint(uint(pixel.y) ^ HashUint(uint(materialData.alphaHashSeed))));
 }
 
 public void DiscardDissolvedLod(DissolveVSOut input)

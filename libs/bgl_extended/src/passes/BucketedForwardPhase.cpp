@@ -13,8 +13,8 @@
 #include "types/MeshletState.h"
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <bgl_common/idl/LodDrawMode.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -80,8 +80,9 @@ namespace bgl
 				{
 					(*expansionData)["drawBucketIndex"] = drawLane;
 					(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
-					(*expansionData)["lodDraw"] =
-						lane == DrawLane::kDissolve ? idl::cLodDrawDissolve : idl::cLodDrawCurrent;
+					(*expansionData)["lodDrawMode"]     = lane == DrawLane::kDissolve ?
+					                                          idl::LodDrawMode::kDissolve :
+					                                          idl::LodDrawMode::kCurrent;
 					(*expansionData)["cullBackfaces"] =
 						DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
 				}

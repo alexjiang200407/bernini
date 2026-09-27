@@ -1,26 +1,11 @@
 import idl.GrassClump;
 import idl.GrassLook;
+import lib.math.hash;
 
 // A grass blade, built rather than stored: every value comes from its clump and a hash of its index,
 // so a blade has no state of its own and a chunk costs its clumps, never its blades.
 
 public static const float cTwoPi = 6.28318530718;
-
-public uint HashUint(uint x)
-{
-    x ^= x >> 16u;
-    x *= 0x7feb352du;
-    x ^= x >> 15u;
-    x *= 0x846ca68bu;
-    x ^= x >> 16u;
-    return x;
-}
-
-// Uniform in [0, 1).
-public float HashFloat(uint x)
-{
-    return float(HashUint(x) >> 8u) * (1.0 / 16777216.0);
-}
 
 // The inverse of the CPU's EncodeOctahedral (Scene_Grass.cpp): x in the low snorm16, y in the high,
 // folded on z.

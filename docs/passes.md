@@ -636,7 +636,7 @@ accumulates it as coverage. A placement at rest runs neither the interpolant nor
 in an opaque pipeline would cost the hidden-surface removal of every draw through it. Every
 opaque, cutout and hashed program, built-in or generated for a game surface, has both entries; a
 surface's own source does nothing for it, and a grass bucket has no second lane. How a draw reads
-the word is `ExpansionData.lodDraw`: the bucket's own lane swaps at once, its dissolve lane
+the word is `ExpansionData.lodDrawMode` (`idl::LodDrawMode`): the bucket's own lane swaps at once, its dissolve lane
 dissolves, the depth-sorted list swaps at once (a blend has no depth to dither against), and the
 outline mask, which binds no cull output, traces level 0.
 

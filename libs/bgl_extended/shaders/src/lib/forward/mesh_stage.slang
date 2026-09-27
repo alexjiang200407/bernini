@@ -11,6 +11,7 @@
 import idl.Constants;
 import idl.Geom;
 import idl.InstanceLod;
+import idl.LodDrawMode;
 import idl.LodLevel;
 import idl.MeshInstance;
 import idl.Meshlet;
@@ -86,7 +87,7 @@ public uint3 CullBackface(MeshletContext ctx, uint3 tri)
 }
 
 // Which level a compacted entry draws, and its dissolve code: the level the draw's cull chose -- or,
-// for the entry tagged cOutgoingDrawBit, the level it is leaving -- as ExpansionData.lodDraw says to
+// for the entry tagged cOutgoingDrawBit, the level it is leaving -- as ExpansionData.lodDrawMode says to
 // read it.
 public struct LodDraw
 {
@@ -99,7 +100,7 @@ public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
     LodDraw draw;
     draw.submeshEntry = geom.submeshes.EntryLod0(instance.submeshIndex);
     draw.dissolve = 1.0;
-    if (expansionData.lodDraw == cLodDrawLevel0)
+    if (expansionData.lodDrawMode == LodDrawMode::kLevel0)
     {
         return draw;
     }
@@ -116,7 +117,7 @@ public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
     // The draw-nothing tier has no geometry; an entry reaching it is the transparent list's, which
     // swaps without a dissolve, and draws the coarsest level while it leaves.
     draw.submeshEntry = geom.submeshes.Entry(LodLevel(min(level, geom.submeshes.lodCount - 1u)), instance.submeshIndex);
-    if (expansionData.lodDraw == cLodDrawDissolve && word.Fading())
+    if (expansionData.lodDrawMode == LodDrawMode::kDissolve && word.Fading())
     {
         draw.dissolve = outgoing ? 1.0 + word.Fade() : word.Fade();
     }

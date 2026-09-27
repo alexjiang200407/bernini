@@ -63,8 +63,8 @@ namespace bgl
 		// clang-format on
 
 		constexpr std::array<std::string_view, 5> c_ExpansionDataFields = {
-			"drawBucketIndex"sv, "baseTable"sv, "compactedInstances"sv,
-			"cullBackfaces"sv,   "lodDraw"sv,
+			"drawBucketIndex"sv, "baseTable"sv,   "compactedInstances"sv,
+			"cullBackfaces"sv,   "lodDrawMode"sv,
 		};
 
 		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;

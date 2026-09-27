@@ -124,13 +124,6 @@ public static const float cLodHysteresis = 0.15;
 // CullView.lodForcedLevel when no level is forced and every placement is chosen by its size.
 public static const uint cLodForceNone = uint32_t(-1);
 
-// How a forward draw picks a placement's level (ExpansionData.lodDraw): level 0 alone, for a draw
-// that binds no cull output; the level the cull chose, swapped at once; or that level dissolved
-// against the one it is leaving.
-public static const uint cLodDrawLevel0 = 0;
-public static const uint cLodDrawCurrent = 1;
-public static const uint cLodDrawDissolve = 2;
-
 // The bit the compaction sets on a compacted instance index that draws a placement's outgoing
 // level while it fades out; clear on the entry that draws its current level. Instance slots stay
 // below it.
