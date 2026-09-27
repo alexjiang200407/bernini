@@ -34,7 +34,7 @@ void MSMain(
     OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
 )
 {
-    let ctx = PrepareMeshlet(payload.instance, gid);
+    let ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, gid);
 
     SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
 

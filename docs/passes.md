@@ -619,6 +619,18 @@ mesh-output loops are still written out per entry point — Slang's Metal backen
 function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMesh` is the third,
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
+**Levels of detail.** A compacted entry draws the level its placement's cull word names -- the
+level it is leaving, for an entry tagged `cOutgoingDrawBit` -- through the geom's
+`LodSubmeshRange::Entry`, resolved once per amplification group (`ResolveLod` in
+`lib/forward/mesh_stage.slang`) and carried to every vertex as `ForwardVSOut.lodDissolve`. How a
+draw reads the word is `ExpansionData.lodDraw`: the bucketed phases dissolve, the depth-sorted list
+swaps at once (a blend has no depth to dither against), and the outline mask, which binds no cull
+output, traces level 0. Every opaque, cutout and hashed pixel program, built-in or generated for a
+game surface, discards a dissolving fragment against a screen-space hash both levels share
+(`lib/forward/lod_dissolve.slang`), so each pixel is covered by exactly one of them, and marks the
+fragment's scene alpha 0 as hashed alpha does, so the resolve accumulates it as coverage. A
+surface's own source does nothing for it.
+
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered
 surface's `GameSlotN` with its `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material

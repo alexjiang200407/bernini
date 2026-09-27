@@ -5,6 +5,11 @@ import lib.math.motion_vector;
 public struct InstancedPayload
 {
     public SubmeshInstance instance;
+
+    // The place in the geom's submesh range of the level this entry draws, and its dissolve code
+    // (ForwardVSOut.lodDissolve).
+    public uint submeshEntry;
+    public float lodDissolve;
 }
 
 // The static tier's payload: its instance, its submesh's meshlet count, and which of its meshlet
@@ -13,6 +18,8 @@ public struct InstancedPayload
 public struct CulledPayload
 {
     public SubmeshInstance instance;
+    public uint submeshEntry;
+    public float lodDissolve;
     public uint meshletCount;
     public uint survivorMask[cMaxCompactedGroups / 32];
     public uint survivorsBefore[cMaxCompactedGroups / 64];
@@ -94,6 +101,11 @@ public struct ForwardVSOut
     // kind it is, which is what the transparent pipeline reads: it is shared by both, so it cannot
     // know from the PSO the way the others do.
     public nointerpolation uint materialOffset : MATERIAL;
+
+    // A dissolving placement's share of this level: in [0, 1] its current level keeps a pixel whose
+    // dissolve hash is below it, in (1, 2) its outgoing level keeps one at or above it less 1 -- the
+    // complement, so the two levels never both cover a pixel. 1 is a placement not dissolving.
+    public nointerpolation float lodDissolve : LODDISSOLVE;
 
     // Undivided clip position under this frame's and last frame's camera, with each frame's jitter
     // already removed -- SV_Position keeps its offset, these do not, because a velocity is about the

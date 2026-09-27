@@ -1,6 +1,7 @@
 import idl.BaseTable;
 import idl.CullStats;
 import idl.CullView;
+import idl.InstanceLod;
 import lib.types.ComputeBuffer;
 import lib.types.UploadBuffer;
 
@@ -27,6 +28,11 @@ public struct ExpansionData
 
     // Written only under BERNINI_GPU_DEBUG, so a release build drops the handle.
     public ComputeBuffer<CullStats> stats;
+
+    // Each placement's level of detail as this draw's cull chose it, by MeshInstance entry, and how
+    // the draw reads it -- a cLodDraw* constant. Under cLodDrawLevel0 the buffer is never read.
+    public ComputeBuffer<InstanceLod> instanceLod;
+    public uint lodDraw;
 };
 
 public ConstantBuffer<ExpansionData> expansionData;

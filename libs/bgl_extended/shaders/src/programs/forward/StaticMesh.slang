@@ -37,7 +37,7 @@ void MSMain(
 
     if (visible)
     {
-        ctx = PrepareMeshlet(payload.instance, meshletIdx);
+        ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, meshletIdx);
         visible = LocalSphereInCullFrustum(ctx.mesh, ctx.meshlet.boundingSphere);
         vertexCount = visible ? ctx.meshlet.vertexCount : 0u;
         triangleCount = visible ? ctx.meshlet.triangleCount : 0u;
