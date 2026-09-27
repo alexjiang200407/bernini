@@ -28,6 +28,7 @@
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
@@ -247,6 +248,15 @@ namespace bgl
 		GetWind() const noexcept
 		{
 			return m_Wind;
+		}
+
+		void
+		SetLodSelection(const LodSelectionDesc& desc) override;
+
+		[[nodiscard]] LodSelectionDesc
+		GetLodSelection() const noexcept override
+		{
+			return m_LodSelection;
 		}
 
 		[[nodiscard]] const std::optional<SkyboxDesc>&
@@ -664,6 +674,7 @@ namespace bgl
 		DirectionalLightDesc      m_DirectionalLight;
 		float                     m_Exposure = 1.0f;
 		WindDesc                  m_Wind;
+		LodSelectionDesc          m_LodSelection;
 
 		// The placements carrying a velocity: those SetInstanceTransform has written and whose
 		// prevTransform has not yet been brought back up to their transform. Not an upload list --

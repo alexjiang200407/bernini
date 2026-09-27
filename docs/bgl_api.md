@@ -489,6 +489,12 @@ flowchart TD
   Every force bends a blade about its root without stretching it, so a chunk's culling bound -- its
   clumps inflated by the tallest blade -- holds whatever bends it. **Not** an epoch change:
   grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
+* **`SetLodSelection(desc)` / `GetLodSelection()`** — @pre `pixelScale` finite and positive,
+  `fadeSeconds` finite and non-negative, `forceLevel` below `idl::cMaxMeshLods`. How the view
+  chooses each placement's level of detail: every authored threshold scaled by `pixelScale`, one
+  level forced on every placement that has it, and how long a change dissolves over (0 is a hard
+  swap). Per view, and **not** an epoch change: the cull reads it as it selects, so a new selection
+  arrives through the same dissolve a change of size does.
 
 ---
 

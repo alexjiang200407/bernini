@@ -1543,6 +1543,29 @@ namespace bgl
 	}
 
 	void
+	SceneView::SetLodSelection(const LodSelectionDesc& desc)
+	{
+		if (!std::isfinite(desc.pixelScale) || desc.pixelScale <= 0.0f)
+		{
+			throw SceneError("SetLodSelection: pixelScale must be finite and positive");
+		}
+		if (!std::isfinite(desc.fadeSeconds) || desc.fadeSeconds < 0.0f)
+		{
+			throw SceneError("SetLodSelection: fadeSeconds must be finite and non-negative");
+		}
+		if (desc.forceLevel.has_value() && *desc.forceLevel >= idl::cMaxMeshLods)
+		{
+			throw SceneError(
+				std::format(
+					"SetLodSelection: forceLevel {} is past the {} levels a mesh may carry",
+					*desc.forceLevel,
+					idl::cMaxMeshLods));
+		}
+
+		m_LodSelection = desc;
+	}
+
+	void
 	SceneView::SetSkyBox(SkyboxDesc desc)
 	{
 		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);

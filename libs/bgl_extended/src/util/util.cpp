@@ -9,6 +9,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <cstddef>
 #include <cstdint>
@@ -190,5 +191,26 @@ namespace bgl
 				instance.transform[1],
 				instance.transform[2],
 				glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)));
+	}
+
+	InstanceLodState
+	UnpackInstanceLod(idl::InstanceLod word) noexcept
+	{
+		auto state = InstanceLodState();
+		if ((word.packed & idl::cInstanceLodLevelMask) == 0u)
+		{
+			return state;
+		}
+
+		state.level = (word.packed & idl::cInstanceLodLevelMask) - 1u;
+		if (const uint32_t outgoing =
+		        (word.packed >> idl::cInstanceLodOutgoingShift) & idl::cInstanceLodLevelMask;
+		    outgoing != 0u)
+		{
+			state.outgoing = outgoing - 1u;
+			state.fade     = static_cast<float>(word.packed >> idl::cInstanceLodFadeShift) /
+			                 idl::cInstanceLodFadeScale;
+		}
+		return state;
 	}
 }

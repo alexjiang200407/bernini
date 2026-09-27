@@ -9,6 +9,7 @@
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/WindDesc.h>
 #include <core/ref/Ref.h>
@@ -362,6 +363,25 @@ namespace bgl
 		 */
 		virtual void
 		SetWind(const WindDesc& desc) = 0;
+
+		/**
+		 * Sets how this view chooses each placement's level of detail -- see LodSelectionDesc.
+		 * Replaces the previous choice; a view that never calls this draws every mesh as authored.
+		 * Per view, like the light: two views of one Scene may hold detail differently.
+		 *
+		 * Takes effect on the next frame this view is drawn, through the same dissolve a change of
+		 * size causes, so it is not an epoch change.
+		 *
+		 * @throws SceneError if `pixelScale` is not finite and positive, `fadeSeconds` is not finite
+		 *         and non-negative, or `forceLevel` names a level no mesh can carry
+		 *         (idl::cMaxMeshLods or past it).
+		 */
+		virtual void
+		SetLodSelection(const LodSelectionDesc& desc) = 0;
+
+		/** The record SetLodSelection last wrote, or the default. */
+		[[nodiscard]] virtual LodSelectionDesc
+		GetLodSelection() const noexcept = 0;
 
 	protected:
 		ISceneView() noexcept = default;
