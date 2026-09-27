@@ -1,22 +1,26 @@
 #include <algorithm>
 #include <array>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 
 #include <cmath>
+#include <charconv>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -170,6 +174,27 @@ namespace assetlib
 		auto json = doc::parseObject(text, "import document: the document");
 
 		ImportDocument document;
+
+		if (auto identity = json.find("identity"); identity != json.end())
+		{
+			if (!identity->is_object() || !identity->contains("id") ||
+			    !(*identity)["id"].is_string() || !identity->contains("label") ||
+			    !(*identity)["label"].is_string())
+				core::throw_runtime_error("import document: identity needs id and label strings");
+			const auto id = (*identity)["id"].get<std::string>();
+			const auto parsed =
+				std::from_chars(id.data(), id.data() + id.size(), document.identity.id, 16);
+			if (id.size() != 16 || id.find_first_not_of("0123456789abcdef") != std::string::npos ||
+			    parsed.ec != std::errc{} || parsed.ptr != id.data() + id.size())
+				core::throw_runtime_error(
+					"import document: identity id must be 16 lowercase hexadecimal digits");
+			document.identity.label = (*identity)["label"].get<std::string>();
+			(void)importTextureDirectory(document.identity);
+			identity->erase("id");
+			identity->erase("label");
+			if (identity->empty())
+				json.erase(identity);
+		}
 
 		if (auto it = json.find(c_ParametersKey); it != json.end())
 		{
@@ -422,6 +447,16 @@ namespace assetlib
 	AssetCodec<ImportDocument>::Serialize(const ImportDocument& document)
 	{
 		auto json = doc::parseObject(document.extraJson, "import document: extraJson");
+
+		if (document.identity != ImportIdentity{})
+		{
+			(void)importTextureDirectory(document.identity);
+			auto& identity = json["identity"];
+			if (!identity.is_object())
+				identity = nlohmann::json::object();
+			identity["id"]    = std::format("{:016x}", document.identity.id);
+			identity["label"] = document.identity.label;
+		}
 
 		json[c_ParametersKey] = parametersObject(document);
 

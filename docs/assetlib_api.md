@@ -18,12 +18,10 @@ rename, migrate and pack without entering the closed built-in `AssetType`; see
 ## Imported-source contract
 
 The `derived-asset-names` contract declares source identity and lookup, cooked grass inside a mesh,
-and bindings outside its cooked data. **Production adoption is pending.** The declarations below
-are exercised by `assetlib_import_contract_tests`, whose separate executable links a fake host
-instead of assetlib. Existing importers, codecs, acquisition and packing still use the current
-behavior described in the rest of this page. In particular, codecs do not yet persist
-`ImportDocument::identity` or `BMesh::grassFields`, and production regeneration does not yet fill
-`RegenMesh::bindings`.
+and bindings outside its cooked data. Identity generation, sidecar identity persistence and
+`ResolveImport` are implemented and tested against loose and archive mounts. Importer adoption,
+mesh codec changes, acquisition and packing are still pending: codecs do not yet persist
+`BMesh::grassFields`, and production regeneration does not yet fill `RegenMesh::bindings`.
 
 | Contract | Declaration | Responsibility |
 |---|---|---|
@@ -43,6 +41,11 @@ that shared a source material slot to be authored differently without changing c
 Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime container caches
 must observe sidecar changes when this contract is adopted; the current cache behavior below has
 not changed yet.
+
+The sidecar's `identity` object stores `id` as 16 lowercase hexadecimal digits and `label` as the
+frozen source filename. Missing identity marks a legacy document; malformed identity is refused.
+Identity is excluded from the cook parameter hash. `ResolveImport` reads the sidecar on every call
+and returns an owned snapshot without opening the source or derived output.
 
 The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
 import document from one identity and loading a mesh by source through `ResolveImport` and
