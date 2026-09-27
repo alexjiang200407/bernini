@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
@@ -132,27 +133,19 @@ namespace assetlib
 			ImportDocument document;
 			document.sampleRate = sampleRate;
 
-			try
+			if (std::filesystem::exists(existing))
 			{
-				if (std::filesystem::exists(existing))
-				{
-					const ImportDocument authored = loadImportDocument(existing);
-					document.clipFloors           = authored.clipFloors;
-					document.lodMinPixels         = authored.lodMinPixels;
-					document.extraParametersJson  = authored.extraParametersJson;
-					document.materialOverrides    = authored.materialOverrides;
+				const ImportDocument authored = loadImportDocument(existing);
+				document.identity             = authored.identity;
+				document.clipFloors           = authored.clipFloors;
+				document.lodMinPixels         = authored.lodMinPixels;
+				document.extraParametersJson  = authored.extraParametersJson;
+				document.extraJson            = authored.extraJson;
+				document.materialOverrides    = authored.materialOverrides;
 
-					// Authored after the import rather than derived by it, like the floors: a
-					// re-import has no way to put a grass binding back.
-					for (const MaterialBinding& binding : authored.bindings)
-						if (isGrassBinding(binding))
-							document.bindings.push_back(binding);
-				}
-			}
-			catch (const std::exception&)
-			{
-				// One that will not parse authors nothing; the import writes a fresh document
-				// rather than refusing over a file it is about to replace.
+				for (const MaterialBinding& binding : authored.bindings)
+					if (isGrassBinding(binding))
+						document.bindings.push_back(binding);
 			}
 
 			return document;
@@ -285,6 +278,13 @@ namespace assetlib
 
 		ImportDocument document =
 			importParameters(ImportDocumentPath(target.source), target.sampleRate);
+		if (target.identity != ImportIdentity{})
+		{
+			(void)importTextureDirectory(target.identity);
+			if (document.identity != ImportIdentity{} && document.identity != target.identity)
+				core::throw_runtime_error("{}: an import identity cannot change", target.source);
+			document.identity = target.identity;
+		}
 		document.source     = target.source;
 		document.textureDir = target.textureDir;
 		document.skeleton   = target.skeleton;
@@ -304,9 +304,7 @@ namespace assetlib
 			document.bindings.insert(document.bindings.end(), grass.begin(), grass.end());
 		}
 
-		core::file::write_atomic(
-			ImportDocumentPath(target.source),
-			AssetCodec<ImportDocument>::Serialize(document));
+		Save(document, importDocumentKeyFor(target.source));
 	}
 
 	bool

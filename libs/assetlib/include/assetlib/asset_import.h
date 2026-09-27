@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assetlib/ImportIdentity.h>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -73,6 +74,9 @@ namespace assetlib
 		// this import wrote.
 		std::string              skeleton{};
 		std::vector<std::string> outputs{};
+
+		/** Minted before destinations are chosen; an existing document's identity cannot change. */
+		ImportIdentity identity{};
 	};
 
 	/** Whether `binding` binds a grass field, which is said by the document it names: a `.bgrass`. */

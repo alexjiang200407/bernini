@@ -41,14 +41,18 @@ to discover ownership.
 
 Bindings are owned snapshots too. Resolving a material choice per submesh permits two submeshes
 that shared a source material slot to be authored differently without changing cooked geometry.
-Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime container caches
-must observe sidecar changes when this contract is adopted; the current cache behavior below has
-not changed yet.
+Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime mesh caches
+observe the sidecar stamp as well as the cooked container's stamp.
 
 The sidecar's `identity` object stores `id` as 16 lowercase hexadecimal digits and `label` as the
 frozen source filename. Missing identity marks a legacy document; malformed identity is refused.
 Identity is excluded from the cook parameter hash. `ResolveImport` reads the sidecar on every call
 and returns an owned snapshot without opening the source or derived output.
+
+`ImportTarget::identity` carries the identity chosen before generating an import's destinations.
+`WriteImportedDocument` persists it and refuses replacement of an existing identity. Omitting it
+on a subsequent write preserves the stored identity. An unreadable existing sidecar refuses the
+write so it cannot silently discard that identity or authored parameters.
 
 The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
 import document from one identity and loading a mesh by source through `ResolveImport` and

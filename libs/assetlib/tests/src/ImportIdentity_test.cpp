@@ -2,6 +2,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
 #include <assetlib/ResolvedImport.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
@@ -92,6 +93,30 @@ TEST_CASE("invalid authored identities are refused", "[import-identity]")
 	CHECK_THROWS(
 		AssetCodec<ImportDocument>::Deserialize(
 			std::as_bytes(std::span(text.data(), text.size()))));
+}
+
+TEST_CASE("import writes preserve identity and refuse replacement", "[import-identity]")
+{
+	const DataRoot root("bernini-write-import-identity");
+	const auto     store  = root.Source();
+	auto           target = ImportTarget{};
+	target.source         = "Authored/Meshes/street.glb";
+	target.sampleRate     = 30;
+	target.identity       = makeImportIdentity(target.source);
+	target.outputs        = { importOutputKey(target.identity, AssetType::kMesh) };
+	store.WriteImportedDocument(target, nullptr);
+	const auto first = store.Load<ImportDocument>(importDocumentKeyFor(target.source));
+	CHECK(first.identity == target.identity);
+	target.identity   = {};
+	target.sampleRate = 60;
+	store.WriteImportedDocument(target, nullptr);
+	const auto repeated = store.Load<ImportDocument>(importDocumentKeyFor(target.source));
+	CHECK(repeated.identity == first.identity);
+	CHECK(repeated.outputs == first.outputs);
+	CHECK(repeated.sampleRate == 60);
+	target.identity = makeImportIdentity(target.source);
+	CHECK_THROWS(store.WriteImportedDocument(target, nullptr));
+	CHECK(store.Load<ImportDocument>(importDocumentKeyFor(target.source)) == repeated);
 }
 
 TEST_CASE(
