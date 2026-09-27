@@ -65,6 +65,7 @@ TEST_CASE(
 	CHECK_FALSE(store.Exists(document.source));
 	CHECK(store.GetFiles().Read(output) == before);
 	CHECK_FALSE(store.GeometryIsStale(output));
+	CHECK(store.LoadRegenMesh(output).sourceKey == moved.source);
 	CHECK(
 		store.LoadRegenMeshRefs(output).materials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
@@ -80,6 +81,7 @@ TEST_CASE(
 	const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
 	CHECK_FALSE(packed.Exists(moved.source));
 	CHECK_FALSE(packed.GeometryIsStale(output));
+	CHECK(packed.LoadRegenMesh(output).sourceKey == moved.source);
 	CHECK(
 		packed.LoadRegenMeshRefs(output).materials ==
 		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });

@@ -363,6 +363,7 @@ namespace assetlib
 		if (!checked.stale)
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
+			current.sourceKey       = checked.key.source.key;
 			current.mesh.source.key = checked.key.source.key;
 			if (checked.document)
 			{
@@ -386,6 +387,7 @@ namespace assetlib
 		}
 
 		RegenMesh current{ toBMesh(group.import), {} };
+		current.sourceKey = group.ref.key;
 		generateTangents(current.mesh);
 		requireUniqueSubmeshNames(current.mesh);
 		current.mesh.source = group.ref;

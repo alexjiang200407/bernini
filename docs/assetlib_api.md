@@ -48,6 +48,8 @@ The sidecar's `identity` object stores `id` as 16 lowercase hexadecimal digits a
 frozen source filename. Missing identity marks a legacy document; malformed identity is refused.
 Identity is excluded from the cook parameter hash. `ResolveImport` reads the sidecar on every call
 and returns an owned snapshot without opening the source or derived output.
+`RegenMesh::sourceKey` identifies the current owner after source moves, separately from the
+source key recorded when its cooked geometry was produced.
 
 `ImportTarget::identity` carries the identity chosen before generating an import's destinations.
 `WriteImportedDocument` persists it and refuses replacement of an existing identity. Omitting it
