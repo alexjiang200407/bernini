@@ -1379,6 +1379,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 		});
 
 	for (const auto id : editor::defaults::c_StartupPanels) ShowPluginPanel(id);
+	ListUnopenedAssetEditors();
 	SetUpFrameStats();
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
@@ -1591,7 +1592,16 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 		tabifyDockWidget(m_EditorDockAnchor, dock);
 	else
 		m_EditorDockAnchor = dock;
-	m_Ui.windowMenu->addAction(dock->toggleViewAction());
+	if (const auto unopened = m_UnopenedEditors.find(id); unopened != m_UnopenedEditors.end())
+	{
+		m_Ui.windowMenu->insertAction(unopened->second, dock->toggleViewAction());
+		delete unopened->second;
+		m_UnopenedEditors.erase(unopened);
+	}
+	else
+	{
+		m_Ui.windowMenu->addAction(dock->toggleViewAction());
+	}
 	connect(dock, &QDockWidget::visibilityChanged, panel, [this, panel](const bool visible) {
 		panel->SetActive(editor::IsPanelShown(visible, this));
 	});
@@ -1599,6 +1609,34 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 	static_cast<void>(dockOwner.release());
 	dock->show();
 	dock->raise();
+}
+
+void
+MainWindow::ListUnopenedAssetEditors()
+{
+	if (m_EditorHost == nullptr)
+		return;
+	for (const editor::AssetEditorDesc& desc : m_Plugins->Contributions().AssetEditors())
+	{
+		if (m_PluginDocks.contains(desc.id) || m_UnopenedEditors.contains(desc.id))
+			continue;
+		QAction* action =
+			m_Ui.windowMenu->addAction(desc.title.Resolve(m_EditorHost->GetLanguageResolver()));
+		connect(action, &QAction::triggered, this, [this, id = desc.id] {
+			try
+			{
+				ShowPluginPanel(id);
+			}
+			catch (const std::exception& error)
+			{
+				QMessageBox::warning(
+					this,
+					editor::Localize("editor.main_window.plugin_panel_title", "Plugin Panel"),
+					error.what());
+			}
+		});
+		m_UnopenedEditors.emplace(desc.id, action);
+	}
 }
 
 void
@@ -1680,6 +1718,12 @@ MainWindow::ClearPluginPanels()
 		}
 	}
 	m_PluginDocks.clear();
+	for (const auto& [id, action] : m_UnopenedEditors)
+	{
+		static_cast<void>(id);
+		delete action;
+	}
+	m_UnopenedEditors.clear();
 	m_EditorDockAnchor = nullptr;
 	m_EditorHost.reset();
 }

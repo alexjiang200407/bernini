@@ -125,7 +125,8 @@ glTF material-graph writer. It is a statically linked module registered through 
 its target has no editor-host implementation include path. The host supplies configuration by value
 and opens its three startup contributions once the project host exists. Material and Animation
 register general panels; Blend Space registers an asset editor for `.bblend`, and Grass one for
-`.bgrass`, created the first time a look is opened. Showing a contribution
+`.bgrass`, created the first time a look is opened. Until its dock exists, the host lists every
+asset editor in the Window menu (`MainWindow::ListUnopenedAssetEditors`), where it opens empty. Showing a contribution
 by ID creates either kind, and document opening raises its tab before delivering the key.
 The target-public `default_editor/import_writers.h` lets the
 host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.

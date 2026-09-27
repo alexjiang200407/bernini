@@ -1857,3 +1857,34 @@ TEST_CASE(
 	REQUIRE(panel->GetDrawnLook().has_value());
 	CHECK(panel->GetDrawnLook()->material == c_GrassMaterialKey);
 }
+
+TEST_CASE(
+	"An asset editor not opened yet is listed in the Window menu, and opens from there",
+	"[mainwindow][render][grassplugin]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	const auto named = [&window](const QString& text) {
+		int count = 0;
+		for (QMenu* menu : window.findChildren<QMenu*>())
+			for (const QAction* action : menu->actions()) count += action->text() == text ? 1 : 0;
+		return count;
+	};
+
+	REQUIRE(window.findChild<QDockWidget*>("bernini.grass") == nullptr);
+	REQUIRE(named("Grass Editor") == 1);
+
+	QAction* open = ActionNamed(window, "Grass Editor");
+	REQUIRE(open != nullptr);
+	open->trigger();
+	QCoreApplication::processEvents();
+
+	auto* dock = window.findChild<QDockWidget*>("bernini.grass");
+	REQUIRE(dock != nullptr);
+	CHECK(dynamic_cast<GrassEditorWindow*>(dock->widget()) != nullptr);
+	// The dock's own toggle took the entry's place.
+	CHECK(named("Grass Editor") == 1);
+}
