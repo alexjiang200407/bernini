@@ -400,6 +400,8 @@ namespace assetlib
 			std::format("  nodes        {} ({} root(s))\n", mesh.nodes.size(), mesh.roots.size());
 		out += std::format("  meshes       {}\n", mesh.meshes.size());
 		out += std::format("  submeshes    {}\n", mesh.submeshes.size());
+		if (!mesh.lods.empty())
+			out += std::format("  lods         {}\n", mesh.lods.size());
 		out += std::format("  meshlets     {}\n", mesh.meshlets.size());
 		out += std::format("  vertexData   {}\n", byteSize(mesh.vertexData.size()));
 		out += std::format("  indexData    {}\n", byteSize(mesh.indexData.size()));
@@ -420,6 +422,25 @@ namespace assetlib
 				mesh.stringPool.at(entry.nameOffset),
 				entry.firstSubmesh,
 				entry.firstSubmesh + entry.submeshCount);
+			if (!mesh.lods.empty())
+			{
+				// Past level 0 a level's submeshes follow the base's, one run per level, so each
+				// run's triangles are what the level costs.
+				for (uint32_t level = 0; level < entry.lodCount; ++level)
+				{
+					uint32_t triangles = 0;
+					for (uint32_t s = 0; s < entry.submeshCount; ++s)
+						triangles +=
+							mesh.submeshes[entry.firstSubmesh + level * entry.submeshCount + s]
+								.indexCount /
+							3;
+					out += std::format(
+						"    lod {}      from {} px, {} triangles\n",
+						level,
+						mesh.lods[entry.firstLod + level].minPixels,
+						triangles);
+				}
+			}
 
 			for (uint32_t s = 0; s < entry.submeshCount; ++s)
 			{

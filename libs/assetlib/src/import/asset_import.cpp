@@ -18,6 +18,7 @@
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Grass.h>
+#include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
@@ -43,6 +44,7 @@
 
 #include "animation/import_bounds.h"
 #include "animation/plant_bake.h"
+#include "bmesh/lod_table.h"
 #include "io/CheckedFileReader.h"  // IWYU pragma: keep
 #include "io/cache_io.h"           // IWYU pragma: keep
 #include "references/ref_paths.h"
@@ -60,11 +62,30 @@ namespace assetlib
 		}
 	}
 
+	namespace
+	{
+		/**
+		 * Every mesh's level-0 submeshes, in order: the ones a name addresses. A level past 0 shares
+		 * its sibling's name, so counting it would read as a collision and write a binding twice.
+		 */
+		std::vector<Submesh>
+		levelZeroSubmeshes(const BMesh& mesh)
+		{
+			auto levelZero = std::vector<Submesh>();
+			if (mesh.meshes.empty())
+				return mesh.submeshes;
+			for (const Mesh& entry : mesh.meshes)
+				for (uint32_t s = 0; s < entry.submeshCount; ++s)
+					levelZero.push_back(mesh.submeshes[entry.firstSubmesh + s]);
+			return levelZero;
+		}
+	}
+
 	void
 	requireUniqueSubmeshNames(const BMesh& mesh)
 	{
 		auto seen = std::unordered_set<std::string_view>();
-		for (const Submesh& submesh : mesh.submeshes)
+		for (const Submesh& submesh : levelZeroSubmeshes(mesh))
 		{
 			const std::string_view name = mesh.stringPool.at(submesh.nameOffset);
 			if (!seen.insert(name).second)
@@ -177,6 +198,26 @@ namespace assetlib
 			}
 		}
 
+		/** What the document beside `source` authors for its levels of detail, or nothing. */
+		std::vector<float>
+		authoredLodMinPixels(const core::file::IFileSystem& files, const SourceRef& source)
+		{
+			if (source.key.empty())
+				return {};
+
+			const std::string key = importDocumentKeyFor(source.key);
+			if (!files.Exists(key))
+				return {};
+
+			try
+			{
+				return loadImportDocument(files, key).lodMinPixels;
+			}
+			catch (const std::exception&)
+			{
+				return {};
+			}
+		}
 	}
 
 	SourceRef
@@ -398,6 +439,13 @@ namespace assetlib
 		bool                writeClips,
 		const SourceRef&    source) const
 	{
+		// The key this import records hashes the document's thresholds, so the mesh has to carry
+		// them: a re-import that kept the cook's defaults would read as current while drawing each
+		// level at a size nobody chose.
+		if (const std::vector<float> authored = authoredLodMinPixels(GetFiles(), source);
+		    !authored.empty())
+			writeLodTables(mesh.meshes, mesh.lods, authored, mesh.stringPool);
+
 		if (skeleton.bones.empty())
 			return {};
 

@@ -2,11 +2,13 @@
 #include <array>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <limits>
 #include <map>
 #include <optional>
@@ -19,6 +21,7 @@
 #include <vector>
 
 #include "bmesh/bmesh_texture.h"
+#include "bmesh/lod_table.h"
 #include "grass/grass_chunks.h"
 #include <assetlib/cancel.h>
 #include <assetlib/transform.h>
@@ -1540,6 +1543,224 @@ namespace assetlib
 			       void*) { return true; },
 				nullptr);
 		}
+
+		/** A mesh name's level: `<base>_LOD<n>` is level n of `<base>`, and any other name level 0. */
+		struct LevelName
+		{
+			std::string_view base;
+			uint32_t         level = 0;
+		};
+
+		LevelName
+		parseLevelName(const std::string_view name) noexcept
+		{
+			constexpr std::string_view c_Marker = "_LOD";
+
+			const size_t at = name.rfind(c_Marker);
+			if (at == std::string_view::npos || at == 0)
+				return { name, 0 };
+
+			const std::string_view digits = name.substr(at + c_Marker.size());
+			uint32_t               level  = 0;
+			const auto [end, error] =
+				std::from_chars(digits.data(), digits.data() + digits.size(), level);
+			if (digits.empty() || error != std::errc() || end != digits.data() + digits.size())
+				return { name, 0 };
+
+			return { name.substr(0, at), level };
+		}
+
+		bool
+		submeshCarriesJoints(const Submesh& submesh) noexcept
+		{
+			return findAttribute(submesh.layout, VertexSemantic::kJoints0) != nullptr;
+		}
+
+		/**
+		 * Folds every `<base>_LOD<n>` mesh into mesh `<base>` as its level n, level-major: the
+		 * base's submeshes, then level 1's in the same order, and so on (see Mesh). A level's
+		 * submesh takes its level-0 sibling's name and material, so a binding or an override names
+		 * all of a submesh's levels at once. Its node stops naming a mesh, so nothing places it on
+		 * its own; its vertices are taken in its mesh's space, as the base's are.
+		 *
+		 * `<base>_LOD0` is `<base>` itself, for a source following that naming throughout.
+		 *
+		 * @throws std::runtime_error for a level with no base, two meshes naming one level, a gap
+		 *         in the levels, more than c_MaxMeshLods of them, a level whose triangle primitives
+		 *         or skinning differ from the base's, or a level carrying grass.
+		 */
+		void
+		foldLevels(
+			BMeshImport&                 mesh,
+			const tinygltf::Model&       model,
+			const std::span<const float> authored)
+		{
+			const auto count = static_cast<uint32_t>(model.meshes.size());
+
+			auto baseByName = std::map<std::string_view, uint32_t>();
+			for (uint32_t i = 0; i < count; ++i)
+			{
+				const LevelName name = parseLevelName(model.meshes[i].name);
+				if (name.level != 0)
+					continue;
+				if (!baseByName.emplace(name.base, i).second)
+				{
+					throw std::runtime_error(
+						std::format(
+							"bmesh: two meshes are level 0 of '{}' -- '{}' and its `_LOD0` twin; "
+							"name one of them",
+							name.base,
+							name.base));
+				}
+			}
+
+			// Per base, its levels past 0 by level.
+			auto levelsOf = std::map<uint32_t, std::map<uint32_t, uint32_t>>();
+			auto isLevel  = std::vector<bool>(count, false);
+			for (uint32_t i = 0; i < count; ++i)
+			{
+				const LevelName name = parseLevelName(model.meshes[i].name);
+				if (name.level == 0)
+					continue;
+
+				const auto base = baseByName.find(name.base);
+				if (base == baseByName.end())
+				{
+					throw std::runtime_error(
+						std::format(
+							"bmesh: '{}' is level {} of a mesh '{}' the source does not have",
+							model.meshes[i].name,
+							name.level,
+							name.base));
+				}
+				if (!levelsOf[base->second].emplace(name.level, i).second)
+				{
+					throw std::runtime_error(
+						std::format(
+							"bmesh: two meshes are level {} of '{}'",
+							name.level,
+							name.base));
+				}
+				isLevel[i] = true;
+			}
+
+			for (const auto& [base, levels] : levelsOf)
+			{
+				const Mesh&            baseEntry = mesh.meshes[base];
+				const std::string_view baseName  = model.meshes[base].name;
+
+				if (levels.size() + 1 > c_MaxMeshLods)
+				{
+					throw std::runtime_error(
+						std::format(
+							"bmesh: '{}' has {} levels, more than the {} a mesh may carry",
+							baseName,
+							levels.size() + 1,
+							c_MaxMeshLods));
+				}
+
+				uint32_t expected = 1;
+				for (const auto& [level, index] : levels)
+				{
+					if (level != expected)
+					{
+						throw std::runtime_error(
+							std::format(
+								"bmesh: '{}' has a level {} but no level {}; number them from 1 "
+								"without a gap",
+								baseName,
+								level,
+								expected));
+					}
+					++expected;
+
+					const Mesh& levelEntry = mesh.meshes[index];
+					if (levelEntry.submeshCount != baseEntry.submeshCount)
+					{
+						throw std::runtime_error(
+							std::format(
+								"bmesh: '{}' has {} triangle primitives but '{}' has {}; every "
+								"level of a mesh carries one per material of level 0",
+								model.meshes[index].name,
+								levelEntry.submeshCount,
+								baseName,
+								baseEntry.submeshCount));
+					}
+					for (uint32_t s = 0; s < baseEntry.submeshCount; ++s)
+					{
+						if (submeshCarriesJoints(mesh.submeshes[levelEntry.firstSubmesh + s]) !=
+						    submeshCarriesJoints(mesh.submeshes[baseEntry.firstSubmesh + s]))
+						{
+							throw std::runtime_error(
+								std::format(
+									"bmesh: primitive {} of '{}' is skinned differently from "
+									"'{}''s; a level is skinned to the same rig as level 0 or "
+									"neither is",
+									s,
+									model.meshes[index].name,
+									baseName));
+						}
+					}
+					for (const GrassField& field : mesh.grass.fields)
+					{
+						if (field.mesh == index)
+						{
+							throw std::runtime_error(
+								std::format(
+									"bmesh: '{}' carries grass; grass grows on level 0 of '{}' "
+									"and thins itself",
+									model.meshes[index].name,
+									baseName));
+						}
+					}
+				}
+			}
+
+			auto meshes    = std::vector<Mesh>();
+			auto submeshes = std::vector<Submesh>();
+			auto remap     = std::vector<uint32_t>(count, c_InvalidIndex);
+			submeshes.reserve(mesh.submeshes.size());
+			for (uint32_t i = 0; i < count; ++i)
+			{
+				if (isLevel[i])
+					continue;
+
+				const Mesh& source = mesh.meshes[i];
+				Mesh        out    = source;
+				out.firstSubmesh   = static_cast<uint32_t>(submeshes.size());
+				out.lodCount       = 1;
+				for (uint32_t s = 0; s < source.submeshCount; ++s)
+					submeshes.push_back(mesh.submeshes[source.firstSubmesh + s]);
+
+				if (const auto levels = levelsOf.find(i); levels != levelsOf.end())
+				{
+					for (const auto& [level, index] : levels->second)
+					{
+						const Mesh& levelEntry = mesh.meshes[index];
+						for (uint32_t s = 0; s < source.submeshCount; ++s)
+						{
+							Submesh entry    = mesh.submeshes[levelEntry.firstSubmesh + s];
+							entry.nameOffset = mesh.submeshes[source.firstSubmesh + s].nameOffset;
+							entry.material   = mesh.submeshes[source.firstSubmesh + s].material;
+							submeshes.push_back(entry);
+						}
+						++out.lodCount;
+					}
+				}
+
+				remap[i] = static_cast<uint32_t>(meshes.size());
+				meshes.push_back(out);
+			}
+
+			for (Node& node : mesh.nodes)
+				if (node.mesh < count)
+					node.mesh = remap[node.mesh];
+			for (GrassField& field : mesh.grass.fields) field.mesh = remap[field.mesh];
+
+			mesh.meshes    = std::move(meshes);
+			mesh.submeshes = std::move(submeshes);
+			writeLodTables(mesh.meshes, mesh.lods, authored, mesh.stringPool);
+		}
 	}
 
 	std::vector<GltfMaterial>
@@ -1639,6 +1860,8 @@ namespace assetlib
 			entry.submeshCount = static_cast<uint32_t>(mesh.submeshes.size()) - entry.firstSubmesh;
 			mesh.meshes.push_back(entry);
 		}
+
+		foldLevels(mesh, model, options.lodMinPixels);
 
 		if (options.textures == GltfTextures::kDecode)
 		{

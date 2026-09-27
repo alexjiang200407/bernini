@@ -307,8 +307,15 @@ namespace assetlib
 
 		// --- Import writes -----------------------------------------------------------------------
 
-		/** Writes rig outputs, records the joint layout in `mesh`, and returns the sidecar binding.
+		/**
+		 * Writes rig outputs, records the joint layout in `mesh`, and returns the sidecar binding.
 		 * A reused rig is returned as the binding but excluded from the owned outputs.
+		 *
+		 * The mesh takes the `lodMinPixels` the document beside `source` authors, so a re-import of
+		 * a source with levels keeps the thresholds its key records.
+		 *
+		 * @throws std::runtime_error if the authored thresholds do not fit the mesh's levels (see
+		 *         ImportDocument::lodMinPixels).
 		 */
 		ImportedRig
 		WriteImportedRig(

@@ -227,7 +227,9 @@ namespace assetlib
 		RegeneratedGroup group{
 			loadFromGltf(
 				store.ResolveWritePath(sourceKey),
-				{ .sampleRate = document.sampleRate, .textures = GltfTextures::kSkip }),
+				{ .sampleRate   = document.sampleRate,
+			      .textures     = GltfTextures::kSkip,
+			      .lodMinPixels = document.lodMinPixels }),
 			SourceRef(),
 			std::move(document),
 		};

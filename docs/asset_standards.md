@@ -451,6 +451,34 @@ The cost scales with zoom, since zoom multiplies every length on screen, and dou
 render scale for the same reason. Splitting slivers at cook time is recorded as a deferred option
 in `docs/specs/`.
 
+### Levels of detail
+
+A mesh's coarser levels are authored, not generated: each is a mesh of its own in the **same**
+`.glb`, named `<mesh>_LOD1`, `<mesh>_LOD2` and so on, and the cook folds it into `<mesh>` as that
+level (`loadFromGltf`, [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h)). `<mesh>_LOD0`
+names the base itself, for a source following that convention throughout. One file rather than one
+per level because the cache key stamps one source and the textures are extracted from one.
+
+* **What a level owes its base.** One triangle primitive per primitive of level 0, in the same
+  order -- the n-th is drawn with the n-th's material, so a level needs no bindings of its own --
+  and the same skinning, joints or none. No POINTS: grass grows on level 0 and thins itself.
+  Levels are numbered from 1 without a gap, and a mesh carries at most `c_MaxMeshLods` (8) levels,
+  level 0 included. Each of these is refused at the cook, naming the mesh, rather than drawn wrong.
+* **Where the geometry lands.** A level's submeshes follow the base's, one run per level
+  (`Mesh`, [Mesh.h](libs/assetlib_structs/include/assetlib_structs/Mesh.h)), each carrying its
+  level-0 sibling's name, so a binding or an override names every level of a submesh at once and
+  everything that walks a mesh's `submeshCount` sees level 0 alone. A level's node names no mesh
+  afterwards; its vertices are read in its own mesh's space, so a level is exported where its base
+  stands.
+* **When each is drawn.** Level n is drawn while the placement's projected diameter is at least
+  `MeshLod::minPixels` of level n, walked from 0; below the last level's, nothing is drawn. The
+  import document's `lodMinPixels` parameter authors them, one per level from 0, and a level past
+  the list takes the cook's default: 160 pixels for level 0, halving per level, and 0 -- never
+  dropped -- for the last. A single-level mesh may author one entry, its draw-nothing size. The
+  list applies to every mesh of the source, so it is refused when a mesh has fewer levels than it
+  names, and when it and the defaults after it would rise. Every re-import and regeneration takes
+  the document's list, so the key a `.bmesh` records and the thresholds it holds agree.
+
 ### Grass points
 
 Grass is not modelled as blades. A mesh carries it as a glTF **POINTS primitive** (`mode: 0`), one
