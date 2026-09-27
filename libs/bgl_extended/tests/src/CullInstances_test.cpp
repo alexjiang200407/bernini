@@ -301,7 +301,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	for (uint32_t i = 0; i < c_LiveCount; ++i)
 	{
 		CAPTURE(i);
-		CHECK((visibilityOut[i].visible != 0u) == placements[i].visible);
+		CHECK(
+			visibilityOut[i].visible ==
+			(placements[i].visible ? bgl::idl::cVisibleCurrentBit : 0u));
 		visibleCount += visibilityOut[i].visible != 0u ? 1u : 0u;
 	}
 	CHECK(visibleCount == c_LiveCount - expectedCulled - hiddenCount);

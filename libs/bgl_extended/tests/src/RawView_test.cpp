@@ -30,10 +30,10 @@ namespace
 	// size, so a tangent lands at 20 in a layout carrying no normal).
 	constexpr uint32_t c_StateOffset  = 16;
 	constexpr uint32_t c_ViewOffset   = 32;
-	constexpr uint32_t c_VertexOffset = 196;
-	constexpr uint32_t c_BufferBytes  = 224;
+	constexpr uint32_t c_VertexOffset = 228;
+	constexpr uint32_t c_BufferBytes  = 256;
 
-	constexpr uint32_t c_OutValues = 5;
+	constexpr uint32_t c_OutValues = 7;
 }
 
 /**
@@ -92,6 +92,11 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 		const auto f          = static_cast<float>(i);
 		view.frustumPlanes[i] = glm::vec4(f, f + 0.25f, f + 0.5f, f + 0.75f);
 	}
+	// The scalars trailing the float4 are where MSL's 16-byte vector alignment would show.
+	view.cameraPosAndPixelsPerUnit = glm::vec4(31.0f, 32.0f, 33.0f, 34.0f);
+	view.lodPixelScale             = 1.5f;
+	view.lodForcedLevel            = 3u;
+	view.lodFadeStep               = 0.25f;
 
 	const auto vertexVec4 = glm::vec4(11.0f, 12.0f, 13.0f, 14.0f);
 	const auto vertexVec3 = glm::vec3(21.0f, 22.0f, 23.0f);
@@ -192,14 +197,23 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(got[2].z == Catch::Approx(view.viewProj[2][2]).margin(c_Margin));
 	CHECK(got[2].w == Catch::Approx(view.viewProj[3][2]).margin(c_Margin));
 
-	CHECK(got[3].x == Catch::Approx(vertexVec4.x).margin(c_Margin));
-	CHECK(got[3].y == Catch::Approx(vertexVec4.y).margin(c_Margin));
-	CHECK(got[3].z == Catch::Approx(vertexVec4.z).margin(c_Margin));
-	CHECK(got[3].w == Catch::Approx(vertexVec4.w).margin(c_Margin));
+	CHECK(got[3].x == Catch::Approx(view.cameraPosAndPixelsPerUnit.x).margin(c_Margin));
+	CHECK(got[3].y == Catch::Approx(view.cameraPosAndPixelsPerUnit.y).margin(c_Margin));
+	CHECK(got[3].z == Catch::Approx(view.cameraPosAndPixelsPerUnit.z).margin(c_Margin));
+	CHECK(got[3].w == Catch::Approx(view.cameraPosAndPixelsPerUnit.w).margin(c_Margin));
 
-	CHECK(got[4].x == Catch::Approx(vertexVec3.x).margin(c_Margin));
-	CHECK(got[4].y == Catch::Approx(vertexVec3.y).margin(c_Margin));
-	CHECK(got[4].z == Catch::Approx(vertexVec3.z).margin(c_Margin));
+	CHECK(got[4].x == Catch::Approx(view.lodPixelScale).margin(c_Margin));
+	CHECK(got[4].y == Catch::Approx(static_cast<float>(view.lodForcedLevel)).margin(c_Margin));
+	CHECK(got[4].z == Catch::Approx(view.lodFadeStep).margin(c_Margin));
+
+	CHECK(got[5].x == Catch::Approx(vertexVec4.x).margin(c_Margin));
+	CHECK(got[5].y == Catch::Approx(vertexVec4.y).margin(c_Margin));
+	CHECK(got[5].z == Catch::Approx(vertexVec4.z).margin(c_Margin));
+	CHECK(got[5].w == Catch::Approx(vertexVec4.w).margin(c_Margin));
+
+	CHECK(got[6].x == Catch::Approx(vertexVec3.x).margin(c_Margin));
+	CHECK(got[6].y == Catch::Approx(vertexVec3.y).margin(c_Margin));
+	CHECK(got[6].z == Catch::Approx(vertexVec3.z).margin(c_Margin));
 
 	resourceManager->UnmapReadback(rb);
 

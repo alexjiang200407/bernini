@@ -1,5 +1,6 @@
 #include <bgl/Camera.h>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullView.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -138,6 +139,12 @@ TEST_CASE("BuildCullView mirrors the matrix and its extracted planes", "[culling
 		CHECK(view.frustumPlanes[i] == planes[i]);
 		CHECK(glm::length(glm::vec3(view.frustumPlanes[i])) == Catch::Approx(1.0f).margin(1e-5));
 	}
+
+	// Every level as authored, none forced, and a change of level completing in one frame, until
+	// a draw resolves the view's own selection into it.
+	CHECK(view.lodPixelScale == 1.0f);
+	CHECK(view.lodForcedLevel == bgl::idl::cLodForceNone);
+	CHECK(view.lodFadeStep == 1.0f);
 }
 
 TEST_CASE("A degenerate view-projection culls nothing instead of faulting", "[culling]")

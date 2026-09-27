@@ -51,6 +51,7 @@ set(IDL_CPP_SOURCES
     CullView.slang
     CullStats.slang
     InstanceVisibility.slang
+    InstanceLod.slang
     MeshInstance.slang
     DebugRecord.slang
     Constants.slang

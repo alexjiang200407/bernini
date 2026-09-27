@@ -56,6 +56,10 @@ namespace bgl
 		// so it is a compile error here rather than anything a container could carry past.
 		static_assert(assetlib::c_MeshletsPerGroup == idl::cMeshletsPerGroup);
 
+		// The same bargain for the levels a mesh may carry: the document and the cook refuse past
+		// the cook's number, and the geom's threshold table is this long.
+		static_assert(assetlib::c_MaxMeshLods == idl::cMaxMeshLods);
+
 		/**
 		 * The bound each run of `idl::cMeshletsPerGroup` meshlets is culled by, folded out of the
 		 * meshlet spheres.

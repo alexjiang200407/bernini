@@ -70,7 +70,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let visible = SphereInFrustum(gUniforms.cullView[0].frustumPlanes, sphere.xyz, sphere.w);
 
-    gUniforms.visibility[globalIdx].visible = visible ? 1u : 0u;
+    gUniforms.visibility[globalIdx].visible = visible ? cVisibleCurrentBit : 0u;
 
 #if defined(BERNINI_GPU_DEBUG)
     gUniforms.stats[0].tested.add(1u);

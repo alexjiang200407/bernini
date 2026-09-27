@@ -6,8 +6,9 @@ import lib.types.RawBuffer;
 // Loads out of one raw buffer, reported for a CPU comparison against the bytes it wrote.
 //
 // The two record loads answer whether a raw Load<T> lays T out the way bgl_idlgen's C++ mirror
-// asserts: SkinnedTableState is a real playback record of packed scalars, CullView adds a matrix and a
-// fixed array, which are where a target's own packing rules would show up first.
+// asserts: SkinnedTableState is a real playback record of packed scalars, CullView adds a matrix, a
+// fixed array and scalars trailing a float4, which are where a target's own packing rules would
+// show up first.
 //
 // The loose loads answer the other half: a vertex attribute is only ever 4-byte aligned, so both
 // come from an address that is 4-aligned and deliberately not 16-aligned.
@@ -33,7 +34,9 @@ void main()
     let view = gUniforms.records.Load<CullView>(gUniforms.viewOffset);
     gUniforms.outValues[1] = view.frustumPlanes[3];
     gUniforms.outValues[2] = view.viewProj[2];
+    gUniforms.outValues[3] = view.cameraPosAndPixelsPerUnit;
+    gUniforms.outValues[4] = float4(view.lodPixelScale, float(view.lodForcedLevel), view.lodFadeStep, 0.0);
 
-    gUniforms.outValues[3] = gUniforms.records.Load<float4>(gUniforms.vertexOffset);
-    gUniforms.outValues[4] = float4(gUniforms.records.Load<float3>(gUniforms.vertexOffset + 16u), 0.0);
+    gUniforms.outValues[5] = gUniforms.records.Load<float4>(gUniforms.vertexOffset);
+    gUniforms.outValues[6] = float4(gUniforms.records.Load<float3>(gUniforms.vertexOffset + 16u), 0.0);
 }
