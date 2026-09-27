@@ -65,7 +65,11 @@ namespace
 		const auto firstMeshlet = static_cast<uint32_t>(mesh.meshlets.size());
 		mesh.meshlets.push_back(meshlet);
 		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
-		for (const uint8_t index : { 0, 1, 2, 0, 2, 3 }) mesh.meshletTriangles.push_back(index);
+		constexpr std::array<uint8_t, 6> c_Triangles = { 0, 1, 2, 0, 2, 3 };
+		mesh.meshletTriangles.insert(
+			mesh.meshletTriangles.end(),
+			c_Triangles.begin(),
+			c_Triangles.end());
 
 		auto submesh                  = assetlib::Submesh();
 		submesh.layout.attributeCount = 1;
