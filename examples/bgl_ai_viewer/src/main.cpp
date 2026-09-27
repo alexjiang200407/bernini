@@ -284,7 +284,7 @@ namespace
 			const glm::mat4 world = headless::InstanceTransform(model, n);
 			if (!rigged || !assetlib::isSkinned(model, meshIndex))
 			{
-				assets.CreateInstance(view, assets.AcquireMesh(meshKey, meshIndex), world);
+				assets.CreateInstance(view, assets.AcquireMesh(document.source, meshIndex), world);
 				headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
 				continue;
 			}
@@ -296,7 +296,7 @@ namespace
 					assetlib::posedBounds(model, meshIndex, *skeleton, *animations);
 
 			game::AssetManager::SkinnedMesh acquired =
-				assets.AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
+				assets.AcquireSkinnedMesh(document.source, document.source, {}, meshIndex, posed);
 			skinned.emplace_back(acquired.geom, world, meshIndex);
 			clips = std::move(acquired.clips);
 			headless::GrowBounds(bounds, world, posed);

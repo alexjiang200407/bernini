@@ -2,6 +2,7 @@
 
 #include <CLI/CLI.hpp>
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Node.h>
@@ -152,8 +153,9 @@ try
 
 	opts.lit = headless::LightView(view, envAssets, opts.env);
 
-	const auto model  = assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>(opts.mesh);
-	auto       bounds = headless::EmptyBounds();
+	const auto  loaded = assetlib::AssetStore(dataRoot).LoadRegenMesh(opts.mesh);
+	const auto& model  = loaded.mesh;
+	auto        bounds = headless::EmptyBounds();
 	for (uint32_t n = 0; n < model.nodes.size(); ++n)
 	{
 		const uint32_t meshIndex = model.nodes[n].mesh;
@@ -161,7 +163,7 @@ try
 			continue;
 
 		const glm::mat4 world = headless::InstanceTransform(model, n);
-		assets.CreateInstance(view, assets.AcquireMesh(opts.mesh, meshIndex), world);
+		assets.CreateInstance(view, assets.AcquireMesh(loaded.sourceKey, meshIndex), world);
 		headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
 	}
 

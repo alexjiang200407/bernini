@@ -24,7 +24,6 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	constexpr std::string_view c_MeshKey     = "Derived/Meshes/street.bmesh";
 	constexpr std::string_view c_GrassKey    = "Derived/Meshes/street.bgrassfields";
 	constexpr std::string_view c_LookKey     = "Authored/Grass/verge.bgrass";
 	constexpr std::string_view c_MaterialKey = "Authored/Materials/green.bmaterial";
@@ -50,7 +49,14 @@ namespace
 
 		game::test::WriteTexture(dataRoot / "Textures/white.ktx2");
 		game::test::WriteMaterial(dataRoot / c_MaterialKey, false);
-		assetlib::test::ImportUnitGroup(dataRoot, glb.Path(), c_MaterialKey, 30.0f, {}, "street");
+		assetlib::test::ImportUnitGroup(
+			dataRoot,
+			glb.Path(),
+			c_MaterialKey,
+			30.0f,
+			{},
+			"street",
+			{ 1, "street.glb" });
 
 		const assetlib::AssetStore store(dataRoot);
 
@@ -85,7 +91,7 @@ namespace
 		auto                      assets   = game::AssetManager(scene, dataRoot);
 		const bgl::MaterialHandle material = assets.AcquireMaterial(c_MaterialKey);
 
-		const bgl::GeomHandle geom = assets.AcquireMesh(c_MeshKey);
+		const bgl::GeomHandle geom = assets.AcquireMesh("Authored/Meshes/street.glb");
 		REQUIRE(geom.IsValid());
 
 		auto counts     = Counts();
@@ -126,7 +132,7 @@ TEST_CASE("A cached mesh observes a sidecar rebind on reacquire", "[grass][acqui
 	auto       scene    = gfx->CreateScene(bgl::SceneDesc());
 	auto       assets   = game::AssetManager(scene, root.path);
 	const auto material = assets.AcquireMaterial(c_MaterialKey);
-	const auto first    = assets.AcquireMesh(c_MeshKey);
+	const auto first    = assets.AcquireMesh("Authored/Meshes/street.glb");
 	CHECK(assets.MaterialRefCount(material) == 3);
 	assets.ReleaseGeom(first);
 	const assetlib::AssetStore store(root.path);
@@ -134,7 +140,7 @@ TEST_CASE("A cached mesh observes a sidecar rebind on reacquire", "[grass][acqui
 	auto                       document = store.Load<assetlib::ImportDocument>(key);
 	document.bindings.pop_back();
 	store.Save(document, key);
-	const auto second = assets.AcquireMesh(c_MeshKey);
+	const auto second = assets.AcquireMesh("Authored/Meshes/street.glb");
 	CHECK(assets.MaterialRefCount(material) == 2);
 	assets.ReleaseGeom(second);
 	CHECK(assets.MaterialRefCount(material) == 1);

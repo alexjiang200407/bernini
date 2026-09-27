@@ -5,6 +5,8 @@
 #include "mesh_drop_import.h"
 #include <assetlib/MeshBindings.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
+#include <assetlib/import_document.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/mesh_load.h>
@@ -49,6 +51,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/types/FootIKDesc.h>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
 #include <exception>
@@ -609,6 +612,14 @@ AnimationPreviewWindow::LoadMesh(
 		// materials is a hundred-odd megabytes of texture to read and upload, and Invoke blocks its
 		// caller until the render thread has run the closure. A worker may block on the render thread
 		// -- only the reverse deadlocks (see Renderer) -- so the GUI thread stays free to paint.
+		std::string animationSource;
+		if (!animations.empty())
+		{
+			const auto owner = m_Host.GetStore().FindImportForOutput(animations);
+			if (!owner)
+				core::throw_runtime_error("Animation has no owning import document");
+			animationSource = assetlib::importedSourceKeyFor(owner->documentKey, owner->document);
+		}
 		auto loaded = Loaded();
 
 		ClearGeometry();
@@ -635,7 +646,7 @@ AnimationPreviewWindow::LoadMesh(
 
 					const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
 						const bgl::GeomHandle geom =
-							context.assets.AcquireMesh(rel, placement.meshIndex);
+							context.assets.AcquireMesh(current.sourceKey, placement.meshIndex);
 						m_Geoms.push_back(geom);
 						m_Instances.push_back(
 							context.assets.CreateInstance(view, geom, placement.world));
@@ -679,8 +690,8 @@ AnimationPreviewWindow::LoadMesh(
 							// nothing.
 							game::AssetManager::SkinnedMesh skinned =
 								context.assets.AcquireSkinnedMesh(
-									rel,
-									animations,
+									current.sourceKey,
+									animationSource,
 									blend,
 									placement.meshIndex,
 									posed);

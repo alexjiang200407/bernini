@@ -1,9 +1,11 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
@@ -34,7 +36,8 @@ namespace assetlib::test
 		std::string_view             material   = "Authored/Materials/red.bmaterial",
 		float                        sampleRate = c_DefaultSampleRate,
 		std::string_view             textureDir = {},
-		std::string_view             name       = "unit")
+		std::string_view             name       = "unit",
+		ImportIdentity               identity   = {})
 	{
 		const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
 
@@ -48,8 +51,9 @@ namespace assetlib::test
 			std::string(textureDir)
 		};
 		const AssetStore store(dataRoot);
-		const SourceRef  source = store.CopyImportedSource(glb, target);
-		mesh.source             = source;
+		target.identity        = identity;
+		const SourceRef source = store.CopyImportedSource(glb, target);
+		mesh.source            = source;
 
 		if (!textureDir.empty())
 			store.WriteTextures(imported, textureDir);
@@ -58,8 +62,10 @@ namespace assetlib::test
 			imported.skeleton,
 			imported.animations,
 			mesh,
-			std::format("Derived/Skeletons/{}.bskel", name),
-			std::format("Derived/Animations/{}.banim", name),
+			identity.id ? importOutputKey(identity, AssetType::kSkeleton) :
+						  std::format("Derived/Skeletons/{}.bskel", name),
+			identity.id ? importOutputKey(identity, AssetType::kAnimation) :
+						  std::format("Derived/Animations/{}.banim", name),
 			true,
 			source);
 
@@ -69,7 +75,8 @@ namespace assetlib::test
 				  std::string(material) }
 			};
 
-		const std::string meshKey = std::format("Derived/Meshes/{}.bmesh", name);
+		const std::string meshKey = identity.id ? importOutputKey(identity, AssetType::kMesh) :
+		                                          std::format("Derived/Meshes/{}.bmesh", name);
 		store.Save(mesh, meshKey);
 
 		rig.outputs.emplace_back(meshKey);

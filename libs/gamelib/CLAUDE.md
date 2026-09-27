@@ -40,6 +40,10 @@ here, not in either of them.
 ### AssetManager: identity is the path, lifetime is a reference count
 
 **Identity.** A path maps to one texture upload and one material, however many times it is asked for.
+`AcquireMesh` and both mesh/animation arguments of `AcquireSkinnedMesh` take imported source keys
+such as `Authored/Meshes/street.glb`. `AssetStore::ResolveImport` reads the sidecar to find the
+generated output; derived keys are refused. In an archive the source key is only an identifier:
+the source file is excluded and never read.
 Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes -- plus a tier suffix,
 because one mesh may be live as static and as skinned (`#skinned`) geometry at once, and those are
 two different uploads. Cubes and spheres have

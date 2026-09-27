@@ -20,6 +20,9 @@
 #include <FlyCamera.h>
 #include <SDL3/SDL.h>
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
+#include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
@@ -39,7 +42,7 @@ main(int argc, char** argv)
 		bool        headless      = false;
 		uint32_t    frames        = 16;
 		std::string dataRootPath  = "assets/Data";
-		std::string modelPath     = "Derived/Meshes/apples.bmesh";
+		std::string modelPath     = "Authored/Meshes/apples.glb";
 		float       exposure      = 1.0f;
 		bool        exposureGiven = false;
 
@@ -54,7 +57,10 @@ main(int argc, char** argv)
 				"--data-root",
 				dataRootPath,
 				"The project's Data directory: every asset reference is relative to it");
-			app.add_option("--model", modelPath, "The .bmesh to render, relative to --data-root");
+			app.add_option(
+				"--model",
+				modelPath,
+				"The imported source to render, relative to --data-root");
 			app.add_option("-s,--skybox", skyBoxEnabled, "Enable skybox rendering");
 			auto* exposureOpt = app.add_option(
 									   "-e,--exposure",
@@ -120,8 +126,10 @@ main(int argc, char** argv)
 		// Every asset reference is relative to the data root: the environment, the mesh itself, the
 		// materials the mesh names, and the textures those materials name. `operator/` leaves an
 		// absolute --model alone.
-		const auto dataRoot = std::filesystem::path(dataRootPath);
-		const auto model    = assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>(modelPath);
+		const auto                 dataRoot = std::filesystem::path(dataRootPath);
+		const assetlib::AssetStore store(dataRoot);
+		const auto output = store.ResolveImport(modelPath, assetlib::AssetType::kMesh);
+		const auto model  = store.LoadRegenMesh(output.outputKey).mesh;
 
 		// The manager holds the data root and the path -> handle identity: a texture shared by several
 		// routes, or a material shared by several submeshes, is loaded once. Acquiring a mesh acquires

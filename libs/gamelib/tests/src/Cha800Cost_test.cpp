@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/container_info.h>
 #include <assetlib/transform.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
@@ -41,7 +44,7 @@ namespace
 	constexpr uint32_t c_Width  = 2292;
 	constexpr uint32_t c_Height = 1996;
 
-	constexpr std::string_view c_Mesh = "Derived/Meshes/AdaWong/cha800_00.reduced.bmesh";
+	constexpr std::string_view c_Mesh = "Authored/Meshes/cha800_00.reduced.glb";
 	constexpr std::string_view c_Env  = "Authored/Environments/forest.benv";
 
 	glm::mat4
@@ -138,7 +141,9 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 	const auto env       = envAssets.AcquireEnvironment(c_Env);
 	REQUIRE(env.HasLighting());
 
-	const auto file = assetlib::AssetStore(projectRoot).Load<assetlib::BMesh>(c_Mesh);
+	const assetlib::AssetStore store(projectRoot);
+	const auto                 output = store.ResolveImport(c_Mesh, assetlib::AssetType::kMesh);
+	const auto                 file   = store.LoadRegenMesh(output.outputKey).mesh;
 
 	std::vector<Part> parts;
 	for (uint32_t n = 0; n < file.nodes.size(); ++n)

@@ -4,6 +4,7 @@
 #include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/MeshBindings.h>
+#include <assetlib/ResolvedImport.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Mesh.h>
@@ -638,13 +639,16 @@ namespace game
 	}
 
 	bgl::GeomHandle
-	AssetManager::AcquireMesh(std::string_view relPath, uint32_t meshIndex)
+	AssetManager::AcquireMesh(std::string_view sourceKey, uint32_t meshIndex)
 	{
 		ZoneScopedN("gamelib acquire mesh");
+		const auto  source   = assetlib::normalizePath(sourceKey);
+		const auto  resolved = m_Store.ResolveImport(source, assetlib::AssetType::kMesh);
+		const auto& relPath  = resolved.outputKey;
 		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
 
 		// A .bmesh holds several meshes, so the file alone does not identify geometry.
-		const auto key = std::format("{}#{}", relPath, meshIndex);
+		const auto key = std::format("{}#{}", source, meshIndex);
 
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
@@ -798,30 +802,35 @@ namespace game
 
 	AssetManager::SkinnedMesh
 	AssetManager::AcquireSkinnedMesh(
-		std::string_view                       relPath,
-		std::string_view                       animationsRelPath,
+		std::string_view                       sourceKey,
+		std::string_view                       animationSourceKey,
 		std::string_view                       blendRelPath,
 		uint32_t                               meshIndex,
 		const std::optional<assetlib::Bounds>& posedBounds)
 	{
 		ZoneScopedN("gamelib acquire skinned mesh");
+		const auto  source   = assetlib::normalizePath(sourceKey);
+		const auto  resolved = m_Store.ResolveImport(source, assetlib::AssetType::kMesh);
+		const auto& relPath  = resolved.outputKey;
+		const auto  animationsNorm =
+			m_Store.ResolveImport(animationSourceKey, assetlib::AssetType::kAnimation).outputKey;
 		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
 
 		// Its own keyspace beside AcquireMesh's: one mesh may be live as static and as skinned
 		// geometry at once, and the two are different uploads.
-		const auto key = std::format("{}#{}#skinned", relPath, meshIndex);
+		const auto key = std::format("{}#{}#skinned", source, meshIndex);
 
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
 			GeomRecord& record = m_Geoms.at(it->second);
-			if (record.skinnedAnimations != assetlib::normalizePath(animationsRelPath))
+			if (record.skinnedAnimations != animationsNorm)
 			{
 				core::throw_runtime_error(
 					"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
 					"acquiring with '{}'",
 					key,
 					record.skinnedAnimations,
-					animationsRelPath);
+					animationSourceKey);
 			}
 			// Unlike posedBounds, which a shared acquire ignores without even validating: a blend
 			// set is part of what the rig is, so naming a different one is refused here the way a
@@ -842,7 +851,6 @@ namespace game
 			return SkinnedMesh{ record.handle, record.skinnedClips, record.skinnedSpaces };
 		}
 
-		const auto animationsNorm = assetlib::normalizePath(animationsRelPath);
 		const auto blendNorm =
 			blendRelPath.empty() ? std::string() : assetlib::normalizePath(blendRelPath);
 

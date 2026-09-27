@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <gamelib/AssetManager.h>
 
+#include "CountingFileSystem.h"
 #include "util/GoldenImage.h"
 #include "util/RigFixture.h"
 #include "util/TestEnvironment.h"
@@ -15,6 +16,7 @@
 #include <bgl/InstanceDesc.h>
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/pak.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -22,11 +24,8 @@
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <memory>
 #include <stdexcept>
-
-// Acquiring a rig as skinned geometry. There is no bake and no freshness rule -- the containers are
-// the source -- so what this pins is the sharing, the release, and the one check bgl cannot make for
-// itself: that a clip set still matches the rig it names.
 
 namespace
 {
@@ -50,24 +49,26 @@ namespace
 	StaleTheClips(const std::filesystem::path& dataRoot)
 	{
 		auto animations = assetlib::AssetStore(dataRoot).Load<assetlib::AnimationSet>(
-			"Derived/Animations/rig.banim");
+			"Derived/Animations/rig.glb-0000000000000001.banim");
 
 		// What a reordered rig looks like from the clips' side: same bone count, different identity.
 		animations.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
-		assetlib::AssetStore(dataRoot).Save(animations, "Derived/Animations/rig.banim");
+		assetlib::AssetStore(dataRoot).Save(
+			animations,
+			"Derived/Animations/rig.glb-0000000000000001.banim");
 	}
 
 	/** Rewrites the .bmesh with a signature that no longer matches the rig it names. */
 	void
 	StaleTheMesh(const std::filesystem::path& dataRoot)
 	{
-		auto mesh =
-			assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		auto mesh = assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>(
+			"Derived/Meshes/rig.glb-0000000000000001.bmesh");
 
 		mesh.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
-		assetlib::AssetStore(dataRoot).Save(mesh, "Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(dataRoot).Save(mesh, "Derived/Meshes/rig.glb-0000000000000001.bmesh");
 	}
 
 	/**
@@ -80,7 +81,8 @@ namespace
 	{
 		const auto store = assetlib::AssetStore(dataRoot);
 
-		auto skeleton = store.Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+		auto skeleton =
+			store.Load<assetlib::Skeleton>("Derived/Skeletons/rig.glb-0000000000000001.bskel");
 
 		auto grip       = assetlib::Bone();
 		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
@@ -94,7 +96,7 @@ namespace
 		for (size_t i = 0; i < skeleton.bones.size(); ++i)
 			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
 
-		store.Save(skeleton, "Derived/Skeletons/rig.bskel");
+		store.Save(skeleton, "Derived/Skeletons/rig.glb-0000000000000001.bskel");
 	}
 
 	/** Drops the bone names from both containers -- a pair cooked before the list existed. */
@@ -103,13 +105,14 @@ namespace
 	{
 		const auto store = assetlib::AssetStore(dataRoot);
 
-		auto animations = store.Load<assetlib::AnimationSet>("Derived/Animations/rig.banim");
+		auto animations =
+			store.Load<assetlib::AnimationSet>("Derived/Animations/rig.glb-0000000000000001.banim");
 		animations.skeletonBoneNames.clear();
-		store.Save(animations, "Derived/Animations/rig.banim");
+		store.Save(animations, "Derived/Animations/rig.glb-0000000000000001.banim");
 
-		auto mesh = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		auto mesh = store.Load<assetlib::BMesh>("Derived/Meshes/rig.glb-0000000000000001.bmesh");
 		mesh.skeletonBoneNames.clear();
-		store.Save(mesh, "Derived/Meshes/rig.bmesh");
+		store.Save(mesh, "Derived/Meshes/rig.glb-0000000000000001.bmesh");
 	}
 
 	/** Repoints the mesh at a second rig, so it and the clips were never cooked as a pair. */
@@ -125,15 +128,41 @@ namespace
 		other.bones[0].inverseBind = glm::inverse(assetlib::bindPoseModelTransforms(other)[0]);
 
 		const auto store = assetlib::AssetStore(dataRoot);
-		store.Save(other, "Derived/Skeletons/other.bskel");
+		store.Save(other, "Derived/Skeletons/other.glb-0000000000000001.bskel");
 
-		auto mesh         = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		auto mesh = store.Load<assetlib::BMesh>("Derived/Meshes/rig.glb-0000000000000001.bmesh");
 		auto document     = store.Load<assetlib::ImportDocument>("Authored/Meshes/rig.bimport");
-		document.skeleton = "Derived/Skeletons/other.bskel";
+		document.skeleton = "Derived/Skeletons/other.glb-0000000000000001.bskel";
 		store.Save(document, "Authored/Meshes/rig.bimport");
 		mesh.skeletonSignature = assetlib::skeletonSignature(other);
-		store.Save(mesh, "Derived/Meshes/rig.bmesh");
+		store.Save(mesh, "Derived/Meshes/rig.glb-0000000000000001.bmesh");
 	}
+}
+
+TEST_CASE(
+	"a packed rig loads by source identifier without reading its source",
+	"[skinned][archive]")
+{
+	DataRoot root("bernini_skinned_source_archive");
+	WriteRig(root.path);
+	static_cast<void>(
+		assetlib::AssetStore(root.path).Pack(assetlib::PackDesc{ root.path / "Data.bpak" }));
+	const auto archive  = std::make_shared<assetlib::PakFile>(root.path / "Data.bpak");
+	const auto counting = std::make_shared<assetlib::test::CountingFileSystem>(*archive);
+	CHECK_FALSE(archive->Exists("Authored/Meshes/rig.glb"));
+	auto       gfx    = bgl::CreateGraphics(HeadlessOptions());
+	auto       scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto       assets = game::AssetManager(scene, assetlib::AssetStore(root.path, counting));
+	const auto mesh =
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
+	REQUIRE(mesh.geom.IsValid());
+	REQUIRE(mesh.clips.size() == 1);
+	CHECK(mesh.clips.front().name == "slide");
+	CHECK(counting->ReadsOf("Authored/Meshes/rig.glb") == 0);
+	CHECK_THROWS(assets.AcquireSkinnedMesh(
+		"Authored/Meshes/rig.glb",
+		"Derived/Animations/rig.glb-0000000000000001.banim"));
+	assets.ReleaseGeom(mesh.geom);
 }
 
 TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned][acquire]")
@@ -150,7 +179,7 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 	auto assets = game::AssetManager(scene, root.path);
 
 	const auto mesh =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	REQUIRE(mesh.geom.IsValid());
 	REQUIRE(mesh.geom.geomType == bgl::GeomType::kSkinnedMesh);
 
@@ -170,7 +199,7 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 	SECTION("a second acquire shares the upload rather than making another")
 	{
 		const auto again =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 		CHECK(again.geom.handle.index == mesh.geom.handle.index);
 		CHECK(again.clips.size() == mesh.clips.size());
 
@@ -182,7 +211,7 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 	SECTION("the same mesh can be live as static and skinned at once")
 	{
 		// Two keyspaces, two uploads.
-		const auto staticGeom = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
+		const auto staticGeom = assets.AcquireMesh("Authored/Meshes/rig.glb");
 		CHECK(staticGeom.IsValid());
 		CHECK(staticGeom.geomType == bgl::GeomType::kStaticMesh);
 
@@ -194,10 +223,15 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 
 	SECTION("acquiring live geometry with a different clip set is refused")
 	{
-		game::test::WriteClips(root.path, "Derived/Animations/other.banim", "other", 2.0f, 3);
+		game::test::WriteClips(
+			root.path,
+			"Derived/Animations/other.glb-0000000000000001.banim",
+			"other",
+			2.0f,
+			3);
 
 		CHECK_THROWS_AS(
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/other.banim"),
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/other.glb"),
 			std::runtime_error);
 	}
 
@@ -235,7 +269,7 @@ TEST_CASE("a clip set cooked against a since-changed rig is refused", "[skinned]
 	// not link -- and its own bone-count check passes here, because a reordered rig has the same
 	// number of bones. Caught, the clips animate the wrong joints; uncaught, they animate silently.
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		std::runtime_error);
 }
 
@@ -255,7 +289,7 @@ TEST_CASE("a mesh cooked against a since-changed rig is refused", "[skinned][acq
 	// own bake token, so re-cooking the rig leaves this mesh current. Uncaught, its joint indices
 	// address the wrong bones and the rig draws as a heap with no error anywhere.
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		std::runtime_error);
 }
 
@@ -277,7 +311,7 @@ TEST_CASE("a rig that has grown a bone still acquires", "[skinned][acquire][rema
 	SECTION("the pairing acquires rather than throwing")
 	{
 		const game::AssetManager::SkinnedMesh skinned =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 
 		CHECK(skinned.geom.IsValid());
 		CHECK(skinned.geom.geomType == bgl::GeomType::kSkinnedMesh);
@@ -290,15 +324,13 @@ TEST_CASE("a rig that has grown a bone still acquires", "[skinned][acquire][rema
 		// finds it already matching. Two different meshes, so this is a second trip through the
 		// remap path rather than the geom share, which returns before reading anything.
 		{
-			const auto source =
-				assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-			assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+			game::test::CopyRigMesh(root.path);
 		}
 
 		const game::AssetManager::SkinnedMesh body =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 		const game::AssetManager::SkinnedMesh piece =
-			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/rig.glb");
 
 		CHECK(body.geom.handle.index != piece.geom.handle.index);
 		CHECK(piece.geom.IsValid());
@@ -317,9 +349,7 @@ TEST_CASE(
 	WriteRig(root.path);
 
 	{
-		const auto source =
-			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		game::test::CopyRigMesh(root.path);
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -330,14 +360,14 @@ TEST_CASE(
 
 	// Live, and uploaded against the rig as it stands.
 	const game::AssetManager::SkinnedMesh body =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	REQUIRE(body.geom.IsValid());
 
 	// The artist adds a socket while it is drawing.
 	AppendBoneToRig(root.path);
 
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/rig.glb"),
 		std::runtime_error);
 }
 
@@ -357,7 +387,7 @@ TEST_CASE("a grown rig still refuses a pairing with no bone names", "[skinned][a
 	auto assets = game::AssetManager(scene, root.path);
 
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		std::runtime_error);
 }
 
@@ -377,7 +407,7 @@ TEST_CASE("a mesh and a clip set that were never a pair are refused", "[skinned]
 	// other rig is skinned by bones it never addressed -- with the same bone count, and so with
 	// nothing else to notice it.
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		std::runtime_error);
 }
 
@@ -396,7 +426,7 @@ TEST_CASE("a skinned acquire that cannot stand leaves nothing behind", "[skinned
 	auto assets = game::AssetManager(scene, root.path);
 
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		bgl::SceneError);
 
 	// The unwind gave the material reference back: acquiring it now must count 1, not 2 -- a leaked
@@ -425,8 +455,8 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 
 	CHECK_THROWS_AS(
 		assets.AcquireSkinnedMesh(
-			"Derived/Meshes/rig.bmesh",
-			"Derived/Animations/rig.banim",
+			"Authored/Meshes/rig.glb",
+			"Authored/Meshes/rig.glb",
 			{},
 			0,
 			inverted),
@@ -435,14 +465,14 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 	// Measured here instead, and the walk produces a box that stands: the fixture's quad spans
 	// x in [-1, 1] and its one clip slides the root to x = 1, so the pose reaches x = 2.
 	const auto mesh =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	REQUIRE(mesh.geom.IsValid());
 
 	// A shared acquire never looks at the argument -- not even to validate it. The sphere belongs
 	// to the geom, which already exists, so the box that would have been refused above is ignored.
 	const auto shared = assets.AcquireSkinnedMesh(
-		"Derived/Meshes/rig.bmesh",
-		"Derived/Animations/rig.banim",
+		"Authored/Meshes/rig.glb",
+		"Authored/Meshes/rig.glb",
 		{},
 		0,
 		inverted);
@@ -462,17 +492,21 @@ TEST_CASE(
 	// The bake an import writes, replayed by hand -- except the box is the one box the scene
 	// refuses. An acquire that throws on it can only have read the bake; one that measures gets
 	// the valid box the walk always produces, and stands.
-	const auto store    = assetlib::AssetStore(root.path);
-	const auto mesh     = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-	const auto skeleton = store.Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+	const auto store = assetlib::AssetStore(root.path);
+	const auto mesh  = store.Load<assetlib::BMesh>("Derived/Meshes/rig.glb-0000000000000001.bmesh");
+	const auto skeleton =
+		store.Load<assetlib::Skeleton>("Derived/Skeletons/rig.glb-0000000000000001.bskel");
 
-	auto animations = store.Load<assetlib::AnimationSet>("Derived/Animations/rig.banim");
+	auto animations =
+		store.Load<assetlib::AnimationSet>("Derived/Animations/rig.glb-0000000000000001.banim");
 	animations.posedBoxes.push_back(
 		assetlib::PosedBox{ assetlib::posedBoundsSignature(mesh, skeleton),
 	                        glm::vec3(1.0f, -1.0f, -1.0f),
 	                        glm::vec3(-1.0f, 1.0f, 1.0f),
 	                        0 });
-	assetlib::AssetStore(root.path).Save(animations, "Derived/Animations/rig.banim");
+	assetlib::AssetStore(root.path).Save(
+		animations,
+		"Derived/Animations/rig.glb-0000000000000001.banim");
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -481,17 +515,14 @@ TEST_CASE(
 	auto assets = game::AssetManager(scene, root.path);
 
 	CHECK_THROWS_AS(
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb"),
 		bgl::SceneError);
 
 	// A caller's own box still outranks the bake.
 	const auto valid = assetlib::Bounds{ glm::vec3(-2.0f), glm::vec3(2.0f) };
-	const auto own   = assets.AcquireSkinnedMesh(
-		"Derived/Meshes/rig.bmesh",
-		"Derived/Animations/rig.banim",
-		{},
-		0,
-		valid);
+	const auto own =
+		assets
+			.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb", {}, 0, valid);
 	REQUIRE(own.geom.IsValid());
 	assets.ReleaseGeom(own.geom);
 }
@@ -504,9 +535,7 @@ TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][a
 	// A second slot mesh against the same rig -- what a modular unit is: one skeleton, one clip
 	// set, several meshes.
 	{
-		const auto source =
-			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		game::test::CopyRigMesh(root.path);
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -516,9 +545,9 @@ TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][a
 	auto assets = game::AssetManager(scene, root.path);
 
 	const auto body =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	const auto piece =
-		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/rig.glb");
 
 	REQUIRE(body.geom.IsValid());
 	REQUIRE(piece.geom.IsValid());
@@ -533,7 +562,7 @@ TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][a
 
 	// And the rig went with the last geom holding it: acquiring again stands a fresh one up.
 	const auto again =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	CHECK(again.geom.IsValid());
 	assets.ReleaseGeom(again.geom);
 }
@@ -560,13 +589,13 @@ TEST_CASE("a manager torn down over a surviving scene leaves it usable", "[skinn
 	{
 		auto       assets = game::AssetManager(scene, root.path);
 		const auto mesh =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 		REQUIRE(mesh.geom.IsValid());
 	}
 
 	auto       second = game::AssetManager(scene, root.path);
 	const auto again =
-		second.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		second.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	CHECK(again.geom.IsValid());
 	second.ReleaseGeom(again.geom);
 }
@@ -578,9 +607,7 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 
 	// The second slot of a modular unit: same skeleton, same clips, its own mesh.
 	{
-		const auto source =
-			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		game::test::CopyRigMesh(root.path);
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -607,9 +634,9 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 	auto assets = game::AssetManager(scene, root.path);
 
 	const auto body =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	const auto piece =
-		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/rig.glb");
 	REQUIRE(body.geom.IsValid());
 	REQUIRE(piece.geom.IsValid());
 
@@ -699,9 +726,7 @@ namespace
 	game::AssetManager::SkinnedMesh
 	AcquireLeg(game::AssetManager& assets)
 	{
-		return assets.AcquireSkinnedMesh(
-			"Derived/Meshes/leg.bmesh",
-			"Derived/Animations/leg.banim");
+		return assets.AcquireSkinnedMesh("Authored/Meshes/leg.glb", "Authored/Meshes/leg.glb");
 	}
 }
 
@@ -772,12 +797,13 @@ TEST_CASE(
 	// produces, and a byte count that is not two frames of one leg. Trusted, bgl would refuse
 	// the count; measured, the count is right and the rig stands.
 	{
-		const auto store      = assetlib::AssetStore(root.path);
-		auto       animations = store.Load<assetlib::AnimationSet>("Derived/Animations/leg.banim");
+		const auto store = assetlib::AssetStore(root.path);
+		auto       animations =
+			store.Load<assetlib::AnimationSet>("Derived/Animations/leg.glb-0000000000000001.banim");
 		animations.plantWeights.signature = 0xDEADBEEFull;
 		animations.plantWeights.legCount  = 1;
 		animations.plantWeights.weights   = { 255, 255, 255 };
-		store.Save(animations, "Derived/Animations/leg.banim");
+		store.Save(animations, "Derived/Animations/leg.glb-0000000000000001.banim");
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -797,7 +823,7 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 {
 	DataRoot root("bernini_gamelib_blend");
 	WriteRig(root.path);
-	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+	WriteLoopingClips(root.path, "Derived/Animations/loco.glb-0000000000000001.banim");
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -806,8 +832,8 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 
 	const auto acquire = [&](std::string_view blend) {
 		return assets.AcquireSkinnedMesh(
-			"Derived/Meshes/rig.bmesh",
-			"Derived/Animations/loco.banim",
+			"Authored/Meshes/rig.glb",
+			"Authored/Meshes/loco.glb",
 			blend);
 	};
 
@@ -816,7 +842,7 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 		WriteBlendSet(
 			root.path,
 			"Authored/Animations/loco.bblend",
-			"Derived/Animations/loco.banim",
+			"Derived/Animations/loco.glb-0000000000000001.banim",
 			{ { "walk", 0.0f }, { "run", 4.0f } });
 
 		const auto mesh = acquire("Authored/Animations/loco.bblend");
@@ -858,7 +884,7 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 		WriteBlendSet(
 			root.path,
 			"Authored/Animations/loco.bblend",
-			"Derived/Animations/loco.banim",
+			"Derived/Animations/loco.glb-0000000000000001.banim",
 			{ { "walk", 0.0f }, { "sprint", 4.0f } });
 
 		CHECK_THROWS_WITH(
@@ -874,11 +900,11 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 
 	SECTION("a set authored against another clip set is refused")
 	{
-		WriteLoopingClips(root.path, "Derived/Animations/other.banim");
+		WriteLoopingClips(root.path, "Derived/Animations/other.glb-0000000000000001.banim");
 		WriteBlendSet(
 			root.path,
 			"Authored/Animations/other.bblend",
-			"Derived/Animations/other.banim",
+			"Derived/Animations/other.glb-0000000000000001.banim",
 			{ { "walk", 0.0f }, { "run", 4.0f } });
 
 		CHECK_THROWS_WITH(
@@ -890,16 +916,21 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 	{
 		// A clip cooked as a one-shot cycles with the space: its phase wraps whatever the clip's own
 		// flag says.
-		WriteClips(root.path, "Derived/Animations/held.banim", "held", 0.5f, 2);
+		WriteClips(
+			root.path,
+			"Derived/Animations/held.glb-0000000000000001.banim",
+			"held",
+			0.5f,
+			2);
 		WriteBlendSet(
 			root.path,
 			"Authored/Animations/held.bblend",
-			"Derived/Animations/held.banim",
+			"Derived/Animations/held.glb-0000000000000001.banim",
 			{ { "held", 0.0f }, { "held", 4.0f } });
 
 		const auto skinned = assets.AcquireSkinnedMesh(
-			"Derived/Meshes/rig.bmesh",
-			"Derived/Animations/held.banim",
+			"Authored/Meshes/rig.glb",
+			"Authored/Meshes/held.glb",
 			"Authored/Animations/held.bblend");
 		CHECK(skinned.spaces.size() == 1);
 		assets.ReleaseGeom(skinned.geom);
@@ -908,17 +939,22 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 	SECTION("a member of a single frame is refused by the rig")
 	{
 		// Forwarded from AddRig: one frame has no cycle for the space to share.
-		WriteClips(root.path, "Derived/Animations/still.banim", "still", 0.5f, 1);
+		WriteClips(
+			root.path,
+			"Derived/Animations/still.glb-0000000000000001.banim",
+			"still",
+			0.5f,
+			1);
 		WriteBlendSet(
 			root.path,
 			"Authored/Animations/still.bblend",
-			"Derived/Animations/still.banim",
+			"Derived/Animations/still.glb-0000000000000001.banim",
 			{ { "still", 0.0f }, { "still", 4.0f } });
 
 		CHECK_THROWS_WITH(
 			assets.AcquireSkinnedMesh(
-				"Derived/Meshes/rig.bmesh",
-				"Derived/Animations/still.banim",
+				"Authored/Meshes/rig.glb",
+				"Authored/Meshes/still.glb",
 				"Authored/Animations/still.bblend"),
 			Catch::Matchers::ContainsSubstring("one frame"));
 
@@ -932,25 +968,23 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 {
 	DataRoot root("bernini_gamelib_blend_live");
 	WriteRig(root.path);
-	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+	WriteLoopingClips(root.path, "Derived/Animations/loco.glb-0000000000000001.banim");
 	WriteBlendSet(
 		root.path,
 		"Authored/Animations/loco.bblend",
-		"Derived/Animations/loco.banim",
+		"Derived/Animations/loco.glb-0000000000000001.banim",
 		{ { "walk", 0.0f }, { "run", 4.0f } });
 	WriteBlendSet(
 		root.path,
 		"Authored/Animations/other.bblend",
-		"Derived/Animations/loco.banim",
+		"Derived/Animations/loco.glb-0000000000000001.banim",
 		{ { "walk", 0.0f }, { "run", 9.0f } },
 		"other");
 
 	// A second mesh on the same rig -- what a modular unit is, and what makes the rig-level rule
 	// observable apart from the geom-level one.
 	{
-		const auto source =
-			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		game::test::CopyRigMesh(root.path);
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -959,8 +993,8 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 	auto assets = game::AssetManager(scene, root.path);
 
 	const auto first = assets.AcquireSkinnedMesh(
-		"Derived/Meshes/rig.bmesh",
-		"Derived/Animations/loco.banim",
+		"Authored/Meshes/rig.glb",
+		"Authored/Meshes/loco.glb",
 		"Authored/Animations/loco.bblend");
 	REQUIRE(first.spaces.size() == 1);
 
@@ -969,8 +1003,8 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 		// The tables are the rig's, and nothing attaches a set to one already uploaded.
 		CHECK_THROWS_WITH(
 			assets.AcquireSkinnedMesh(
-				"Derived/Meshes/slot.bmesh",
-				"Derived/Animations/loco.banim",
+				"Authored/Meshes/slot.glb",
+				"Authored/Meshes/loco.glb",
 				"Authored/Animations/other.bblend"),
 			Catch::Matchers::ContainsSubstring("release it to zero"));
 	}
@@ -979,7 +1013,7 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 	{
 		// One-sided on purpose: a caller that asked for no spaces is not wrong to find some.
 		const auto second =
-			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/loco.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/loco.glb");
 
 		CHECK(second.spaces.size() == 1);
 		assets.ReleaseGeom(second.geom);
@@ -990,12 +1024,12 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 		// A geom records what the *rig* carries, not what its own call asked for. Recording the
 		// empty request instead would refuse this geom the very set it is already drawing with.
 		const auto second =
-			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/loco.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/slot.glb", "Authored/Meshes/loco.glb");
 		REQUIRE(second.spaces.size() == 1);
 
 		const auto again = assets.AcquireSkinnedMesh(
-			"Derived/Meshes/slot.bmesh",
-			"Derived/Animations/loco.banim",
+			"Authored/Meshes/slot.glb",
+			"Authored/Meshes/loco.glb",
 			"Authored/Animations/loco.bblend");
 		CHECK(again.geom.handle.index == second.geom.handle.index);
 		CHECK(again.spaces.size() == 1);
@@ -1008,8 +1042,8 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 	{
 		CHECK_THROWS_WITH(
 			assets.AcquireSkinnedMesh(
-				"Derived/Meshes/rig.bmesh",
-				"Derived/Animations/loco.banim",
+				"Authored/Meshes/rig.glb",
+				"Authored/Meshes/loco.glb",
 				"Authored/Animations/other.bblend"),
 			Catch::Matchers::ContainsSubstring("release it to zero"));
 	}
@@ -1023,20 +1057,18 @@ TEST_CASE(
 {
 	DataRoot root("bernini_gamelib_blend_move");
 	WriteRig(root.path);
-	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+	WriteLoopingClips(root.path, "Derived/Animations/loco.glb-0000000000000001.banim");
 	WriteBlendSet(
 		root.path,
 		"Authored/Animations/loco.bblend",
-		"Derived/Animations/loco.banim",
+		"Derived/Animations/loco.glb-0000000000000001.banim",
 		{ { "walk", 0.0f }, { "run", 4.0f } });
 
 	// A second mesh on the same rig -- a modular unit. The manager caches the spaces per geom as
 	// well as per rig, so this is what makes the difference between updating one geom's cache and
 	// updating every geom's observable at all.
 	{
-		const auto source =
-			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
-		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		game::test::CopyRigMesh(root.path);
 	}
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
@@ -1047,11 +1079,11 @@ TEST_CASE(
 	const auto acquire = [&](std::string_view meshPath) {
 		return assets.AcquireSkinnedMesh(
 			meshPath,
-			"Derived/Animations/loco.banim",
+			"Authored/Meshes/loco.glb",
 			"Authored/Animations/loco.bblend");
 	};
 
-	const auto mesh = acquire("Derived/Meshes/rig.bmesh");
+	const auto mesh = acquire("Authored/Meshes/rig.glb");
 	REQUIRE(mesh.spaces.size() == 1);
 	REQUIRE(mesh.spaces[0].samples.size() == 2);
 
@@ -1059,7 +1091,7 @@ TEST_CASE(
 	{
 		// The other mesh is acquired *before* the move, so its own cached copy of the spaces is
 		// already sitting on its GeomRecord holding the old parameter.
-		const auto slot = acquire("Derived/Meshes/slot.bmesh");
+		const auto slot = acquire("Authored/Meshes/slot.glb");
 		REQUIRE(slot.geom.handle.index != mesh.geom.handle.index);
 		REQUIRE(slot.spaces[0].samples[1].parameter == 4.0f);
 
@@ -1070,7 +1102,7 @@ TEST_CASE(
 		// A shared acquire answers from the cache without re-reading the container, so one that
 		// was not moved would describe the set the rig was uploaded with rather than the one it
 		// now carries.
-		const auto again = acquire("Derived/Meshes/rig.bmesh");
+		const auto again = acquire("Authored/Meshes/rig.glb");
 		REQUIRE(again.spaces.size() == 1);
 		CHECK(again.spaces[0].samples[1].parameter == 9.0f);
 		CHECK(again.spaces[0].ParameterMax() == 9.0f);
@@ -1081,7 +1113,7 @@ TEST_CASE(
 		// The geom the move was *not* addressed to. This is the whole reason the write sweeps
 		// every geom on the rig rather than the one it was handed: the spaces belong to the rig,
 		// and a sibling mesh on it would otherwise keep answering with the old parameter.
-		const auto slotAgain = acquire("Derived/Meshes/slot.bmesh");
+		const auto slotAgain = acquire("Authored/Meshes/slot.glb");
 		CHECK(slotAgain.geom.handle.index == slot.geom.handle.index);
 		CHECK(slotAgain.spaces[0].samples[1].parameter == 9.0f);
 
@@ -1104,7 +1136,7 @@ TEST_CASE(
 		backwards[0].samples[1].parameter = -1.0f;
 		CHECK_THROWS_AS(assets.SetBlendParameters(mesh.geom, backwards), bgl::SceneError);
 
-		const auto again = acquire("Derived/Meshes/rig.bmesh");
+		const auto again = acquire("Authored/Meshes/rig.glb");
 		CHECK(again.spaces[0].samples[1].parameter == 4.0f);
 		assets.ReleaseGeom(again.geom);
 	}

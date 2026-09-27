@@ -41,7 +41,11 @@ namespace
 		assetlib::test::ImportUnitGroup(
 			dataRoot,
 			source.PackGlb(),
-			"Authored/Materials/unit.bmaterial");
+			"Authored/Materials/unit.bmaterial",
+			30.0f,
+			{},
+			"unit",
+			{ 1, "unit.glb" });
 	}
 
 	void
@@ -56,7 +60,8 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 	DataRoot root("bernini_regen_acquire");
 	ImportRig(root.path);
 
-	const std::filesystem::path banim = root.path / "Derived/Animations/unit.banim";
+	const std::filesystem::path banim =
+		root.path / "Derived/Animations/unit.glb-0000000000000001.banim";
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -68,7 +73,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 	{
 		auto       assets = game::AssetManager(scene, root.path);
 		const auto skinned =
-			assets.AcquireSkinnedMesh("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/unit.glb", "Authored/Meshes/unit.glb");
 		CHECK(skinned.geom.IsValid());
 		REQUIRE(skinned.clips.size() == 2);
 		CHECK(skinned.clips[0].name == "walk");
@@ -81,7 +86,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 
 		auto assets = game::AssetManager(scene, root.path);
 		CHECK_THROWS_WITH(
-			assets.AcquireSkinnedMesh("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim"),
+			assets.AcquireSkinnedMesh("Authored/Meshes/unit.glb", "Authored/Meshes/unit.glb"),
 			Catch::Matchers::ContainsSubstring("assetlib_cli migrate"));
 
 		// Refused, not repaired: making the file current is migrate's, and a load that wrote one
