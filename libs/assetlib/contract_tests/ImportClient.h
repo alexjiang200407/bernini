@@ -18,7 +18,7 @@ namespace assetlib::test
 	};
 
 	ImportDocument
-	newMeshDocument(std::string_view source);
+	createMeshDocument(std::string_view source);
 
 	LoadedImport
 	loadMeshSource(const AssetStore& store, std::string_view source);

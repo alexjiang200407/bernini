@@ -7,6 +7,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Grass.h>
+#include <assetlib_structs/GrassGeometry.h>
 #include <assetlib_structs/Mesh.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -28,18 +29,18 @@ namespace assetlib::test
 		makeHost()
 		{
 			auto host         = std::make_shared<ImportHost>();
-			auto document     = newMeshDocument(c_Source);
+			auto document     = createMeshDocument(c_Source);
 			document.bindings = { { "Road", "Authored/Materials/road.bmaterial" },
 				                  { "Verge", "Authored/Grass/verge.bgrass" } };
 			document.skeleton = "Derived/Skeletons/shared.glb-0000000000000001.bskel";
-			host->imports[{ c_Source, AssetType::kMesh }] = { "Authored/Meshes/street.bimport",
-				                                              c_Output,
-				                                              document };
-			auto& geometry                                = host->meshes[c_Output];
+			host->imports[c_Source][AssetType::kMesh] = { "Authored/Meshes/street.bimport",
+				                                          c_Output,
+				                                          document };
+			auto& geometry                            = host->meshes[c_Output];
 			geometry.mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 2 });
 			geometry.mesh.submeshes.resize(2);
-			geometry.mesh.grassFields.names = { "Verge" };
-			geometry.mesh.grassFields.fields.push_back(GrassField{ 0, 0, 0, 1 });
+			geometry.mesh.grassFields.fields.push_back(
+				NamedGrassField{ "Verge", GrassField{ 0, 0, 0, 1 } });
 			geometry.mesh.grassFields.chunks.push_back(GrassChunk{ glm::vec3(0), 1, 0, 1, 1 });
 			geometry.mesh.grassFields.clumps.push_back(
 				GrassClump{ glm::vec3(0), 1, glm::vec3(0, 1, 0), glm::u8vec4(255) });
@@ -58,7 +59,7 @@ namespace assetlib::test
 		"an import client carries one identity through its document and destinations",
 		"[import-contract]")
 	{
-		const auto document = newMeshDocument(c_Source);
+		const auto document = createMeshDocument(c_Source);
 		CHECK(document.identity == ImportIdentity{ 0x3f9a1c7e0b24d5a6ull, "street.glb" });
 		CHECK(document.source == c_Source);
 		CHECK(document.outputs == std::vector<std::string>{ c_Output });
@@ -99,9 +100,9 @@ namespace assetlib::test
 		CHECK(loaded.geometry.unboundBindings == std::vector<std::string>{ "RemovedSubmesh" });
 		const auto& grass = loaded.geometry.mesh.grassFields;
 		REQUIRE(grass.fields.size() == 1);
-		CHECK(grass.names == std::vector<std::string>{ "Verge" });
+		CHECK(grass.fields[0].name == "Verge");
 		CHECK(
-			loaded.geometry.bindings.grassLooks.at(grass.fields[0].look) ==
+			loaded.geometry.bindings.grassLooks.at(grass.fields[0].field.look) ==
 			"Authored/Grass/verge.bgrass");
 		REQUIRE(grass.chunks.size() == 1);
 		CHECK(grass.chunks[0].clumpCount == 1);

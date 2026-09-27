@@ -30,8 +30,11 @@ namespace assetlib
 		const auto& host = dynamic_cast<const test::ImportHost&>(GetFiles());
 		if (!host.failure.empty())
 			core::throw_runtime_error("{}", host.failure);
-		const auto found = host.imports.find({ std::string(sourceKey), kind });
-		if (found == host.imports.end())
+		const auto source = host.imports.find(sourceKey);
+		if (source == host.imports.end())
+			core::throw_runtime_error("contract: no such output");
+		const auto found = source->second.find(kind);
+		if (found == source->second.end())
 			core::throw_runtime_error("contract: no such output");
 		return found->second;
 	}
@@ -42,7 +45,7 @@ namespace assetlib
 		const auto& host = dynamic_cast<const test::ImportHost&>(GetFiles());
 		if (!host.failure.empty())
 			core::throw_runtime_error("{}", host.failure);
-		const auto found = host.meshes.find(std::string(key));
+		const auto found = host.meshes.find(key);
 		if (found == host.meshes.end())
 			core::throw_runtime_error("contract: missing cooked mesh");
 		return found->second;

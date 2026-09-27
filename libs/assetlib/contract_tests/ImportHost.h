@@ -4,13 +4,13 @@
 #include <assetlib/asset_refs.h>
 #include <core/err/util.h>
 #include <core/file/IFileSystem.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
+#include <unordered_map>
 #include <vector>
 
 namespace assetlib::test
@@ -26,10 +26,10 @@ namespace assetlib::test
 		ImportHost&
 		operator=(ImportHost&&) = delete;
 
-		std::map<std::pair<std::string, AssetType>, ResolvedImport> imports;
-		std::map<std::string, RegenMesh>                            meshes;
-		std::string                                                 failure;
-		bool                                                        readOnly = true;
+		core::str::unordered_str_map<std::unordered_map<AssetType, ResolvedImport>> imports;
+		core::str::unordered_str_map<RegenMesh>                                     meshes;
+		std::string                                                                 failure;
+		bool                                                                        readOnly = true;
 
 		bool
 		Exists(std::string_view) const noexcept override

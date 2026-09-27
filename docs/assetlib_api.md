@@ -29,7 +29,7 @@ behavior described in the rest of this page. In particular, codecs do not yet pe
 |---|---|---|
 | `ImportIdentity` and naming functions | [ImportIdentity.h](../libs/assetlib/include/assetlib/ImportIdentity.h) | Nonzero random 64-bit ID and frozen source filename; category keys use the label and 16 lowercase hexadecimal digits. Zero identifies an unmigrated document. |
 | `AssetStore::ResolveImport` / `ResolvedImport` | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h), [ResolvedImport.h](../libs/assetlib/include/assetlib/ResolvedImport.h) | Resolve a source identifier through its mounted sidecar to one produced output of the requested kind, returning an owned document snapshot. |
-| `GrassGeometry` / `BMesh::grassFields` | [GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h) | Field names, field/chunk ranges and clumps, without look paths. No renderer interface changes. |
+| `NamedGrassField` / `GrassGeometry` / `BMesh::grassFields` | [GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h) | Each field owns its name and `GrassField` data; geometry holds these named fields, chunks and clumps, without look paths. No renderer interface changes. |
 | `MeshBindings` / `RegenMesh::bindings` | [MeshBindings.h](../libs/assetlib/include/assetlib/MeshBindings.h) | Material keys per submesh, named overrides, the bound skeleton and grass-look keys by field look slot. Empty keys mean unbound. |
 
 The source key identifies a sidecar; lookup neither opens nor stamps the source. It checks the

@@ -8,7 +8,7 @@
 namespace assetlib::test
 {
 	ImportDocument
-	newMeshDocument(std::string_view source)
+	createMeshDocument(std::string_view source)
 	{
 		auto document       = ImportDocument();
 		document.source     = source;

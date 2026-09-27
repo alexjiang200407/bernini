@@ -5,11 +5,16 @@
 
 namespace assetlib
 {
+	struct NamedGrassField
+	{
+		std::string name;
+		GrassField  field;
+	};
+
 	struct GrassGeometry
 	{
-		std::vector<GrassField>  fields;
-		std::vector<std::string> names;  // Parallel to fields; the names bindings address.
-		std::vector<GrassChunk>  chunks;
-		std::vector<GrassClump>  clumps;
+		std::vector<NamedGrassField> fields;
+		std::vector<GrassChunk>      chunks;
+		std::vector<GrassClump>      clumps;
 	};
 }
