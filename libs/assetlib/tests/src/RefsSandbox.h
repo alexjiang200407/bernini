@@ -90,7 +90,7 @@ namespace assetlib::test
 
 	/** A minimal but loadable mesh whose submeshes name `materials`, one slot each. */
 	inline BMesh
-	MakeMesh(const std::vector<std::string>& materials, const std::string& skeleton = {})
+	MakeMesh(const std::vector<std::string>& materials)
 	{
 		BMesh mesh;
 
