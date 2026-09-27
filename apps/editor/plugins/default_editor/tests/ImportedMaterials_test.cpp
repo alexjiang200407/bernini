@@ -98,8 +98,9 @@ namespace
 				materials[i].nameOffset = mesh.stringPool.add(names[i]);
 			}
 
-			auto submesh     = assetlib::Submesh();
-			submesh.material = static_cast<uint32_t>(i);
+			auto submesh       = assetlib::Submesh();
+			submesh.material   = static_cast<uint32_t>(i);
+			submesh.nameOffset = mesh.stringPool.add("part" + std::to_string(i));
 			mesh.submeshes.push_back(submesh);
 		}
 
@@ -152,7 +153,7 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	const auto imported = ImportWith({ PbrMaterial() }, { "Rust" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -164,10 +165,10 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	const std::filesystem::path file = project.MaterialDir() / "Rust.bmaterial";
 	REQUIRE(std::filesystem::exists(file));
 
-	// The mesh names it relative to the data root -- that is what makes a project relocatable.
-	REQUIRE(mesh.materials.size() == 1);
-	CHECK(mesh.materials[0] == "Authored/Materials/hydrant/Rust.bmaterial");
-	CHECK(mesh.submeshes[0].material == 0);
+	// The sidecar binding uses a mount key.
+	REQUIRE(bindings.size() == 1);
+	CHECK(bindings[0].material == "Authored/Materials/hydrant/Rust.bmaterial");
+	CHECK(bindings[0].submesh == "part0");
 
 	// And what landed is a material the renderer can draw, routed at this import's own textures.
 	const assetlib::BMaterial material = LoadAt<assetlib::BMaterial>(file);
@@ -195,7 +196,7 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 	const auto imported = ImportWith({ PbrMaterial(), unlit }, { "Metal", "Sign" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -208,8 +209,9 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 	// Deriving a PBR material from one that declares another shading model would invent an authoring
 	// intent the file never carried. Unassigned renders unlit, which is what it is.
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Sign.bmaterial"));
-	CHECK(mesh.submeshes[1].material == assetlib::c_InvalidIndex);
-	CHECK(mesh.materials.size() == 1);
+	REQUIRE(bindings.size() == 1);
+	CHECK(bindings[0].submesh == "part0");
+	CHECK(bindings.size() == 1);
 }
 
 TEST_CASE("Every derived material stem is one the dialog would accept", "[importedmaterials]")
@@ -257,7 +259,7 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 		{ "Rust", "Rust", "", "wood/oak", ".." });
 	auto mesh = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -277,7 +279,7 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 	                            .entryList(QStringList{ "*.bmaterial" }, QDir::Files)
 	                            .size());
 	CHECK(count == 5);
-	CHECK(mesh.materials.size() == 5);
+	CHECK(bindings.size() == 5);
 }
 
 TEST_CASE("A stem list that no longer fits the source is refused", "[importedmaterials]")
@@ -311,7 +313,7 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 	const auto imported = ImportWith({ PbrMaterial() }, { "Rust" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -324,7 +326,7 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 	CHECK(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Rust.bmaterial"));
 
-	CHECK(mesh.materials[0] == "Authored/Materials/hydrant/fur_brown.bmaterial");
+	CHECK(bindings[0].material == "Authored/Materials/hydrant/fur_brown.bmaterial");
 	CHECK(
 		assetlib::AssetStore(project.MaterialDir())
 			.Load<assetlib::BMaterial>("fur_brown.bmaterial")
@@ -340,7 +342,7 @@ TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
 	const auto imported = ImportWith({ PbrMaterial(), PbrMaterial() }, { "Kept", "Dropped" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -350,7 +352,8 @@ TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Kept.bmaterial"));
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Dropped.bmaterial"));
-	CHECK(mesh.submeshes[1].material == assetlib::c_InvalidIndex);
+	REQUIRE(bindings.size() == 1);
+	CHECK(bindings[0].submesh == "part0");
 }
 
 TEST_CASE(
@@ -363,7 +366,7 @@ TEST_CASE(
 	const auto first     = ImportWith({ PbrMaterial() }, { "Fur" });
 	auto       firstMesh = assetlib::toBMesh(first);
 
-	editor::WriteImportedMaterials(
+	(void)editor::WriteImportedMaterials(
 		first,
 		firstMesh,
 		project.Data(),
@@ -375,7 +378,7 @@ TEST_CASE(
 	const auto second     = ImportWith({ PbrMaterial() }, { "Fur" });
 	auto       secondMesh = assetlib::toBMesh(second);
 
-	editor::WriteImportedMaterials(
+	(void)editor::WriteImportedMaterials(
 		second,
 		secondMesh,
 		project.Data(),
@@ -402,13 +405,14 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 	auto imported = ImportWith({ PbrMaterial() }, { "Shared" });
 
 	// A second submesh from the same material, as a multi-primitive mesh produces.
-	auto second     = assetlib::Submesh();
-	second.material = 0;
+	auto second       = assetlib::Submesh();
+	second.material   = 0;
+	second.nameOffset = imported.stringPool.add("part1");
 	imported.submeshes.push_back(second);
 
 	auto mesh = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -416,11 +420,11 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 		project.TextureDir(),
 		StemsFor(imported));
 
-	// One material, named once: attachMaterial shares the slot rather than appending a duplicate, which
-	// is what keeps the reference graph from reporting the mesh twice.
-	CHECK(mesh.materials.size() == 1);
-	CHECK(mesh.submeshes[0].material == 0);
-	CHECK(mesh.submeshes[1].material == 0);
+	// Each submesh names the same authored file.
+	REQUIRE(bindings.size() == 2);
+	CHECK(bindings[0].submesh == "part0");
+	CHECK(bindings[1].submesh == "part1");
+	CHECK(bindings[0].material == bindings[1].material);
 }
 
 TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials]")
@@ -434,7 +438,7 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 	const auto imported = ImportWith({ leaves }, { "Leaves" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -470,7 +474,7 @@ TEST_CASE("An import's specular factors survive the round-trip to disk", "[impor
 	const auto imported = ImportWith({ fur }, { "Fur" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),
@@ -501,7 +505,7 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 	const auto imported = ImportWith({ shared }, { "Shared" });
 	auto       mesh     = assetlib::toBMesh(imported);
 
-	editor::WriteImportedMaterials(
+	const auto bindings = editor::WriteImportedMaterials(
 		imported,
 		mesh,
 		project.Data(),

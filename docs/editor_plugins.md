@@ -133,7 +133,8 @@ register general panels; Blend Space registers an asset editor for `.bblend`, an
 asset editor in the Window menu (`MainWindow::ListUnopenedAssetEditors`), where it opens empty. Showing a contribution
 by ID creates either kind, and document opening raises its tab before delivering the key.
 The target-public `default_editor/import_writers.h` lets the
-host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.
+host import pipeline write Material graphs and receive named material bindings for the import
+sidecar. The writer reads submesh names without changing geometry. It is not a plugin SDK lifecycle interface.
 
 Each preview composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
 resize events to plugin-owned interaction. The host retains render scheduling and presentation.

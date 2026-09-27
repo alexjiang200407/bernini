@@ -2,21 +2,22 @@
 
 #include <QString>
 
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <filesystem>
 #include <span>
+#include <vector>
 
 namespace editor
 {
 	/**
 	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
-	 * and points each submesh cut from it at the file (relative to `dataRoot`, like every asset
-	 * reference). Each is routed at the `.ktx2` files `AssetStore::WriteTextures` puts in `textureDir`.
+	 * and returns named sidecar bindings for its submeshes. Each material is routed at the `.ktx2`
+	 * files `AssetStore::WriteTextures` puts in `textureDir`.
 	 *
 	 * Non-PBR materials are skipped, leaving their submeshes unassigned -- which both runtimes already
-	 * render unlit. Every file is written before any submesh is pointed at one, so a failure part-way
-	 * leaves a mesh naming only materials that exist.
+	 * render unlit. Every file is written before the bindings are returned.
 	 *
 	 * @param stems The file stem to write each material under, index-aligned with
 	 *        `imported.materials` and empty where no file is wanted. The dialog shows these before the
@@ -26,10 +27,10 @@ namespace editor
 	 *         `imported.materials` -- which means the source was rewritten between the probe that
 	 *         named them and the parse that produced these materials.
 	 */
-	void
+	[[nodiscard]] std::vector<assetlib::MaterialBinding>
 	WriteImportedMaterials(
 		const assetlib::imp::BMeshImport& imported,
-		assetlib::BMesh&                  mesh,
+		const assetlib::BMesh&            mesh,
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      materialDir,
 		const std::filesystem::path&      textureDir,

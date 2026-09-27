@@ -11,6 +11,7 @@
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/cancel.h>
+#include <assetlib/import_document.h>
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
@@ -333,8 +334,7 @@ namespace editor
 			},
 			background::Cancellable::kYes);
 
-		// All that is left for the GUI thread: the material graphs, whose nodes own QPixmaps, and the
-		// `.bmesh` -- which follows them, since it names the files they write.
+		// Material graph nodes own QPixmaps and must be created on the GUI thread.
 		if (result.Completed())
 		{
 			// Named apart from the worker's zone because this half is the half that freezes the
@@ -353,8 +353,12 @@ namespace editor
 							tangents.skipped,
 							qPrintable(name));
 
+					assetlib::ImportTarget target{ sourceKey,
+						                           assetlib::c_DefaultSampleRate,
+						                           textureDirKey };
+					target.bindings = std::vector<assetlib::MaterialBinding>{};
 					if (importMaterials)
-						WriteImportedMaterials(
+						target.bindings = WriteImportedMaterials(
 							*imported,
 							*mesh,
 							dataRoot,
@@ -365,9 +369,6 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					assetlib::ImportTarget target{ sourceKey,
-						                           assetlib::c_DefaultSampleRate,
-						                           textureDirKey };
 					target.identity = options.outputs.identity;
 					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
 					target.skeleton = mesh->skeleton;
