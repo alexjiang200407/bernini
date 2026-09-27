@@ -55,8 +55,9 @@ editor authors through `assetlib`, not through this -- so a read re-stamps *and*
 `AssetStore::GeometryIsStale`, because a re-exported source regenerates a cache entry in memory
 without its bytes changing.
 
-The blind spot it carries is **bindings**: `parametersHashOf` excludes them deliberately, so a
-rebind is served from the cache until something else invalidates the entry.
+Mesh cache entries also record the import sidecar's stamp. A rebind reloads that entry on its next
+read even when the mesh bytes and cook parameters are unchanged. Material bindings come from the
+separate snapshot, and embedded grass is adapted to the renderer's existing grass input.
 
 **Lifetime.** References run along the edges the assets themselves have:
 
@@ -68,13 +69,12 @@ instance -> geom -> material -> texture
 
 `AcquireMesh` acquires the materials its submeshes name, which acquires the textures those materials
 name; `Release*` runs the chain in reverse and destroys only at zero. A mesh that grows grass
-(`BMesh::grass`) also gets its fields attached, and the geom holds the `.bgrass` looks they draw
-with, keyed by path like a material; a look holds its material. The grass file is found through
-that reference and never by the mesh's name, since a packed game has no `.bimport` to look it up
-in. A look with no material, or one the renderer refuses, is warned about and its fields drawn
-bare. `SetGrassLook` redraws a held look from a document that is not saved, in place, for an editor
-dragging a value: every geom drawing it follows, and the material's reference moves only once the
-renderer has taken the new look.
+also gets its embedded fields attached, and the geom holds the `.bgrass` looks its binding
+snapshot names, keyed by path like a material; a look holds its material. Packed games ship the
+`.bimport` with those bindings. A look with no material, or one the renderer refuses, is warned
+about and its fields drawn bare. `SetGrassLook` redraws a held look from a document that is not
+saved, in place, for an editor dragging a value: every geom drawing it follows, and the material's
+reference moves only once the renderer has taken the new look.
 
 That is not just tidy — **it is what makes deletion safe**. `bgl_extended` deliberately tracks nothing, and
 documents preconditions it cannot check: a material may not be deleted while a submesh is bound to it,
@@ -113,7 +113,7 @@ still wearing it, since a binding there is a bare slot index with no generation
 (`ISceneView::SetSubmeshMaterialOverride`).
 
 `SetInstanceSubmeshMaterialOverride` is the same override addressed by name: it wears one of the looks the
-mesh registers (`BMesh::materialOverrides`, authored as the `.bimport`'s `materialOverrides`), where
+binding snapshot registers (authored as the `.bimport`'s `materialOverrides`), where
 `SetInstanceSubmeshMaterial` takes any material. The registered material is not loaded until an
 instance wears it, and it is released by the same calls.
 

@@ -18,9 +18,7 @@
 #include <string>
 #include <string_view>
 
-// A mesh that grows grass brings it along when it is acquired: the geom holds every look its fields
-// draw with, and each look holds its material, found through the mesh's own reference to the grass
-// file rather than through anything that names the file after the mesh.
+// An acquired mesh holds every grass look its embedded fields draw with, and each look's material.
 
 namespace
 {
@@ -109,20 +107,37 @@ TEST_CASE("An acquired mesh brings the grass it grows, and gives it back", "[gra
 	CHECK(counts.released == 1);
 }
 
-TEST_CASE("A grass file renamed off its mesh's name is still the mesh's grass", "[grass][acquire]")
+TEST_CASE("Embedded grass loads without the legacy standalone cache", "[grass][acquire]")
 {
 	const game::test::DataRoot root("bernini_grass_acquire_renamed");
 	ImportStreet(root.path, c_MaterialKey);
 
-	const assetlib::AssetStore store(root.path);
-	const assetlib::RenamePlan plan = assetlib::planRename(
-		assetlib::AssetRefGraph::Scan(store),
-		c_GrassKey,
-		"Derived/Meshes/verge.bgrassfields");
-	REQUIRE(store.RenameAsset(plan).status == assetlib::RenameStatus::kRenamed);
-	REQUIRE_FALSE(store.Exists(c_GrassKey));
+	REQUIRE(fs::remove(root.path / c_GrassKey));
 
 	CHECK(CountAcquire(root.path).acquired == 3);
+}
+
+TEST_CASE("A cached mesh observes a sidecar rebind on reacquire", "[grass][acquire]")
+{
+	const game::test::DataRoot root("bernini_grass_rebind_cached");
+	ImportStreet(root.path, c_MaterialKey);
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto       scene    = gfx->CreateScene(bgl::SceneDesc());
+	auto       assets   = game::AssetManager(scene, root.path);
+	const auto material = assets.AcquireMaterial(c_MaterialKey);
+	const auto first    = assets.AcquireMesh(c_MeshKey);
+	CHECK(assets.MaterialRefCount(material) == 3);
+	assets.ReleaseGeom(first);
+	const assetlib::AssetStore store(root.path);
+	const auto                 key = assetlib::importDocumentKeyFor("Authored/Meshes/street.glb");
+	auto                       document = store.Load<assetlib::ImportDocument>(key);
+	document.bindings.pop_back();
+	store.Save(document, key);
+	const auto second = assets.AcquireMesh(c_MeshKey);
+	CHECK(assets.MaterialRefCount(material) == 2);
+	assets.ReleaseGeom(second);
+	CHECK(assets.MaterialRefCount(material) == 1);
 }
 
 TEST_CASE("A look with no material leaves its field bare, and the mesh loads", "[grass][acquire]")

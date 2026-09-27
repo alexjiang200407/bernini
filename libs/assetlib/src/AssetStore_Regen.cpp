@@ -107,6 +107,15 @@ namespace assetlib
 				if (parametersHashOf(*checked.document) != checked.key.source.parametersHash)
 					checked.stale = true;
 			}
+			if (store.IsReadOnly())
+			{
+				if (!checked.document ||
+				    importedSourceKeyFor(documentKey, *checked.document) != checked.key.source.key)
+					core::throw_runtime_error(
+						"{}: packed cache has no matching import document",
+						path);
+				return checked;
+			}
 
 			// An absent source cannot be compared, so it stales nothing: the entry stays current
 			// while its token holds, which is what keeps a project missing its sources loadable.
@@ -115,6 +124,20 @@ namespace assetlib
 				checked.stale = true;
 
 			return checked;
+		}
+
+		void
+		requirePackedKey(
+			const AssetStore& store,
+			std::string_view  path,
+			uint32_t          magic,
+			uint64_t          token,
+			std::string_view  what)
+		{
+			if (checkKey(store, path, magic, token, what).stale)
+				core::throw_runtime_error(
+					"{}: stale packed cache does not match its import document",
+					path);
 		}
 
 		RegeneratedGroup
@@ -181,9 +204,6 @@ namespace assetlib
 			core::throw_runtime_error(
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
-
-		if (IsReadOnly())
-			return false;
 
 		if (extension == c_GrassFieldsExtension)
 			return checkKey(
@@ -333,6 +353,7 @@ namespace assetlib
 
 		if (IsReadOnly())
 		{
+			requirePackedKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (!current.mesh.source.key.empty())
 			{
@@ -401,7 +422,15 @@ namespace assetlib
 		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
 
 		if (IsReadOnly())
+		{
+			requirePackedKey(
+				*this,
+				path,
+				magic::c_BGrassF,
+				AssetCodec<BGrassFields>::c_BakeToken,
+				"bgrassfields");
 			return { load<BGrassFields>(*m_Files, path), {} };
+		}
 
 		CheckedKey checked = checkKey(
 			*this,
@@ -481,7 +510,15 @@ namespace assetlib
 		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
 
 		if (IsReadOnly())
+		{
+			requirePackedKey(
+				*this,
+				path,
+				magic::c_BSkel,
+				AssetCodec<Skeleton>::c_BakeToken,
+				"bskel");
 			return load<Skeleton>(*m_Files, path);
+		}
 
 		CheckedKey checked =
 			checkKey(*this, path, magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, "bskel");
@@ -509,7 +546,15 @@ namespace assetlib
 		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
 
 		if (IsReadOnly())
+		{
+			requirePackedKey(
+				*this,
+				path,
+				magic::c_BAnim,
+				AssetCodec<AnimationSet>::c_BakeToken,
+				"banim");
 			return load<AnimationSet>(*m_Files, path);
+		}
 
 		CheckedKey checked =
 			checkKey(*this, path, magic::c_BAnim, AssetCodec<AnimationSet>::c_BakeToken, "banim");

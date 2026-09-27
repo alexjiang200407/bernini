@@ -173,17 +173,16 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that sit the explicit exclusions: any key under `Authored/Meshes/`, `Authored/EnvSources/` or
-`Derived/SourceTextures/` — matched as a prefix, since `Meshes` names a directory in each half —
-and the `.bimport` import document by its *type* — it is a registered extension, so without its own
-rule it would ride into the archive it must never reach.
+top of that sit the source exclusions: keys under `Authored/Meshes/`, `Authored/EnvSources/` or
+`Derived/SourceTextures/`, except `.bimport` sidecars. Those sidecars ship as the runtime's source
+index and binding authority; the copied source bytes stay out.
 
 | | |
 |---|---|
 | `Derived/SourceTextures/` | excluded — authoring source; the bake reads it, the runtime never does |
-| `Authored/Meshes/` | excluded — the imported `.glb` sources and their `.bimport` documents |
-| `Authored/EnvSources/` | excluded — the imported environment sources (`.hdr`, float `.ktx2` cubes) and their `.bimport` documents; `pack` cooks a stale `.bsky` / `.benvl` from them before it writes, and the runtime reads only the bakes |
-| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings and overrides. Deliberate, so silent (never in `skippedByExtension`) |
+| `Authored/Meshes/` | copied `.glb` sources excluded; `.bimport` sidecars included |
+| `Authored/EnvSources/` | copied `.hdr` and float `.ktx2` sources excluded; `.bimport` sidecars included. `pack` cooks stale environment outputs before writing |
+| `.bimport` | included by type; runtime bindings and source-to-output lookup read this document through the mount |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.bproj` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |

@@ -18,6 +18,29 @@
 using namespace assetlib;
 using namespace assetlib::test;
 
+TEST_CASE("packed mesh loads refuse mismatched sidecar parameters", "[mesh-bindings]")
+{
+	const DataRoot root("bernini-packed-binding-mismatch");
+	auto           document    = ImportDocument();
+	document.source            = "Authored/Meshes/street.glb";
+	auto mesh                  = MakeMesh({});
+	mesh.source.key            = document.source;
+	mesh.source.parametersHash = parametersHashOf(document);
+	document.sampleRate        = 60;
+	const auto archive         = root.path / "Data.bpak";
+	PakWriter  writer(archive);
+	writer.Add(
+		importDocumentKeyFor(document.source),
+		AssetCodec<ImportDocument>::Serialize(document),
+		{});
+	const auto meshBytes = AssetCodec<BMesh>::Serialize(mesh);
+	writer.Add("Derived/Meshes/street.bmesh", meshBytes, { meshBytes.size(), 0 });
+	writer.Finish();
+	const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
+	CHECK_THROWS(packed.LoadRegenMesh("Derived/Meshes/street.bmesh"));
+	CHECK(packed.GeometryIsStale("Derived/Meshes/street.bmesh"));
+}
+
 TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot", "[mesh-bindings]")
 {
 	const DataRoot root("bernini-mesh-bindings");
@@ -51,7 +74,8 @@ TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot",
 		const auto archive = root.path / "Data.bpak";
 		PakWriter  writer(archive);
 		writer.Add(key, AssetCodec<ImportDocument>::Serialize(document), {});
-		writer.Add(output, AssetCodec<BMesh>::Serialize(mesh), {});
+		const auto meshBytes = AssetCodec<BMesh>::Serialize(mesh);
+		writer.Add(output, meshBytes, { meshBytes.size(), 0 });
 		writer.Finish();
 		const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
 		loaded = packed.LoadRegenMesh(output);

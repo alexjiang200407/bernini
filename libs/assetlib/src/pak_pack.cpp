@@ -42,6 +42,8 @@ namespace assetlib
 		isAuthoringSource(const std::filesystem::path& relative)
 		{
 			const std::string key = relative.generic_string();
+			if (extensionOf(key) == c_ImportDocumentExtension)
+				return false;
 
 			return isUnder(key, c_MeshSourcesDirectoryName) ||
 			       isUnder(key, c_EnvSourcesDirectoryName) ||
@@ -280,10 +282,6 @@ namespace assetlib
 				++report.skippedByExtension[extension];
 				continue;
 			}
-			// Authored, and the game never reads it: a read-only store uses the baked-in bindings.
-			if (type == AssetType::kImportDocument)
-				continue;
-
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())

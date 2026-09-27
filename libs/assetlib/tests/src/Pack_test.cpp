@@ -150,15 +150,13 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 			CHECK(entry.find("Derived/SourceTextures/") == std::string::npos);
 	}
 
-	SECTION("an imported source and its document are out, wherever they sit")
+	SECTION("sidecars ship while the imported sources stay out")
 	{
 		CHECK_FALSE(Contains(entries, "Authored/Meshes/kirk.glb"));
-		CHECK_FALSE(Contains(entries, "Authored/Meshes/kirk.bimport"));
+		CHECK(Contains(entries, "Authored/Meshes/kirk.bimport"));
 		CHECK_FALSE(Contains(entries, "Authored/EnvSources/forest.hdr"));
-		CHECK_FALSE(Contains(entries, "Authored/EnvSources/forest.bimport"));
-		// A stray document outside Authored/Meshes is excluded by its *type*, not the directory --
-		// the game never reads one, so it must not ride in on being a registered extension.
-		CHECK_FALSE(Contains(entries, "stray.bimport"));
+		CHECK(Contains(entries, "Authored/EnvSources/forest.bimport"));
+		CHECK(Contains(entries, "stray.bimport"));
 	}
 
 	// An extension nothing claims is an extension the archive does not carry. Counting them is what

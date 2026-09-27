@@ -470,12 +470,12 @@ TEST_CASE("GeometryIsStale answers the key without loading a payload", "[regen]"
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 	CHECK(sandbox.Store().GeometryIsStale("Derived/Meshes/unit.bmesh"));
 
-	SECTION("a read-only store trusts its keys")
+	SECTION("a read-only store also checks the bake token")
 	{
 		const AssetStore readOnly(
 			sandbox.dataRoot,
 			std::make_shared<ReadOnlyFileSystem>(sandbox.dataRoot));
-		CHECK_FALSE(readOnly.GeometryIsStale("Derived/Meshes/unit.bmesh"));
+		CHECK(readOnly.GeometryIsStale("Derived/Meshes/unit.bmesh"));
 	}
 
 	SECTION("a container without a cache key is refused, not guessed at")

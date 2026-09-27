@@ -744,11 +744,10 @@ namespace
 			CHECK(graph.meshesScanned == 1);
 			CHECK(graph.broken.empty());
 
-			// And it packs: Derived/SourceTextures is authoring source and stays out, so the mesh is
-			// the payload.
+			// The mesh and its sidecar ship; extracted authoring textures stay out.
 			const assetlib::PackReport report =
 				store.Pack(assetlib::PackDesc{ root / assetlib::c_DefaultArchiveName });
-			CHECK(report.entries == 1);
+			CHECK(report.entries == 2);
 		}
 
 		fs::remove_all(root);

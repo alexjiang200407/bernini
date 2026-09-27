@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <assetlib/AssetStore.h>
+#include <assetlib/MeshBindings.h>
 #include <assetlib/codecs.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <bgl/GrassHandle.h>
@@ -71,6 +73,37 @@ namespace game
 {
 	namespace
 	{
+		class ScopedMaterialSlots
+		{
+		public:
+			ScopedMaterialSlots(assetlib::BMesh& mesh, const assetlib::Mesh& entry) :
+				m_Mesh(mesh), m_First(entry.firstSubmesh)
+			{
+				m_Slots.reserve(entry.submeshCount);
+				for (uint32_t i = 0; i < entry.submeshCount; ++i)
+					m_Slots.push_back(mesh.submeshes.at(m_First + i).material);
+				for (uint32_t i = 0; i < entry.submeshCount; ++i)
+					mesh.submeshes[m_First + i].material = i;
+			}
+
+			~ScopedMaterialSlots() noexcept
+			{
+				for (uint32_t i = 0; i < m_Slots.size(); ++i)
+					m_Mesh.submeshes[m_First + i].material = m_Slots[i];
+			}
+			ScopedMaterialSlots(const ScopedMaterialSlots&) = delete;
+			ScopedMaterialSlots&
+			operator=(const ScopedMaterialSlots&)      = delete;
+			ScopedMaterialSlots(ScopedMaterialSlots&&) = delete;
+			ScopedMaterialSlots&
+			operator=(ScopedMaterialSlots&&) = delete;
+
+		private:
+			assetlib::BMesh&      m_Mesh;
+			uint32_t              m_First;
+			std::vector<uint32_t> m_Slots;
+		};
+
 		/**
 		 * Refuses a geometry entry the project's sources have moved out from under, before anything
 		 * reads it. A load is a read: re-cooking one here costs an import, writes none of it back,
@@ -133,7 +166,7 @@ namespace game
 		 * unlit, and warning is the strictest a load may be -- `migrate` failing the file is where
 		 * the report escalates.
 		 */
-		assetlib::BMesh
+		assetlib::RegenMesh
 		LoadRegenMeshWarned(const assetlib::AssetStore& store, std::string_view relPath)
 		{
 			RequireCurrent(store, relPath);
@@ -148,7 +181,20 @@ namespace game
 					"no longer has; rebind or re-export",
 					relPath,
 					submesh);
-			return std::move(current.mesh);
+			if (current.bindings.submeshMaterials.empty())
+			{
+				for (const auto& submesh : current.mesh.submeshes)
+					current.bindings.submeshMaterials.push_back(
+						submesh.material < current.mesh.materials.size() ?
+							current.mesh.materials[submesh.material] :
+							std::string());
+				for (const auto& entry : current.mesh.materialOverrides)
+					if (entry.material < current.mesh.materials.size())
+						current.bindings.materialOverrides.push_back(
+							{ entry.submesh, entry.name, current.mesh.materials[entry.material] });
+				current.bindings.skeleton = current.mesh.skeleton;
+			}
+			return current;
 		}
 		// The asset says what the material *is* (its glTF-shaped alpha mode); the renderer says which
 		// pass composites it. They are separate enums because assetlib cannot link bgl, and separate
@@ -159,6 +205,7 @@ namespace game
 		struct Cached
 		{
 			assetlib::SourceStamp stamp;
+			assetlib::SourceStamp documentStamp;
 			T                     value;
 
 			// This cache is the CPU-side residency of everything the reference dimensions price --
@@ -185,12 +232,6 @@ namespace game
 
 		/** The tag a cached container is charged to; one overload per thing ReadCached holds. */
 		constexpr bgl::MemoryTag
-		TagOf(const assetlib::BMesh&) noexcept
-		{
-			return bgl::MemoryTag::kMesh;
-		}
-
-		constexpr bgl::MemoryTag
 		TagOf(const assetlib::Skeleton&) noexcept
 		{
 			return bgl::MemoryTag::kAnimation;
@@ -200,6 +241,27 @@ namespace game
 		TagOf(const assetlib::AnimationSet&) noexcept
 		{
 			return bgl::MemoryTag::kAnimation;
+		}
+
+		bgl::TaggedBytes
+		Charged(const assetlib::RegenMesh& value) noexcept
+		{
+			return bgl::TaggedBytes(bgl::MemoryTag::kMesh, assetlib::residentBytes(value.mesh));
+		}
+
+		template <class T>
+		assetlib::SourceStamp
+		DocumentStamp(const assetlib::AssetStore&, const T&)
+		{
+			return {};
+		}
+
+		assetlib::SourceStamp
+		DocumentStamp(const assetlib::AssetStore& store, const assetlib::RegenMesh& value)
+		{
+			return value.mesh.source.key.empty() ?
+			           assetlib::SourceStamp{} :
+			           store.StampOf(assetlib::importDocumentKeyFor(value.mesh.source.key));
 		}
 
 		template <std::movable T>
@@ -227,7 +289,7 @@ namespace game
 		 * refuses it.
 		 */
 		template <std::movable T, ContainerLoader<T> Load>
-		const T&
+		T&
 		ReadCached(
 			core::str::unordered_str_map<Cached<T>>& reads,
 			const assetlib::AssetStore&              store,
@@ -241,7 +303,9 @@ namespace game
 
 			// GeometryIsStale is asked only of an entry already read once: it throws on a path the
 			// mount does not hold, and a first read must reach `load` to report that itself.
-			if (it != reads.end() && it->second.stamp == stamp && !store.GeometryIsStale(path))
+			if (it != reads.end() && it->second.stamp == stamp &&
+			    it->second.documentStamp == DocumentStamp(store, it->second.value) &&
+			    !store.GeometryIsStale(path))
 				return it->second.value;
 
 			// Loaded before anything enters the map, because StampOf zeroes an absent path and so
@@ -252,8 +316,9 @@ namespace game
 
 			if (it != reads.end())
 			{
-				it->second.value = std::move(value);
-				it->second.stamp = stamp;
+				it->second.value         = std::move(value);
+				it->second.stamp         = stamp;
+				it->second.documentStamp = DocumentStamp(store, it->second.value);
 
 				// Re-seated rather than adjusted: the re-read replaced the container, so the charge
 				// it replaces is released by the assignment.
@@ -264,7 +329,8 @@ namespace game
 			Cached<T>& entry =
 				reads.try_emplace(std::string(path), Cached<T>(stamp, std::move(value)))
 					.first->second;
-			entry.tracked = Charged(entry.value);
+			entry.tracked       = Charged(entry.value);
+			entry.documentStamp = DocumentStamp(store, entry.value);
 			return entry.value;
 		}
 
@@ -600,7 +666,8 @@ namespace game
 			return record.handle;
 		}
 
-		const assetlib::BMesh& mesh = ReadMesh(relPath);
+		const auto& loaded = ReadMesh(relPath);
+		const auto& mesh   = loaded.mesh;
 
 		if (meshIndex >= mesh.meshes.size())
 		{
@@ -613,38 +680,33 @@ namespace game
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
 
-		// AddStaticMeshGeom wants a list parallel to the .bmesh's own material list, but only the
-		// materials *this* mesh's submeshes name are worth loading -- another mesh in the same file
-		// may name others. Anything left invalid renders unlit, which is what AddStaticMeshGeom does with
-		// an out-of-range material index anyway.
-		auto materials = std::vector<bgl::MaterialHandle>(mesh.materials.size());
-
 		// One reference per submesh, not per distinct material: the geom holds a reference for each
 		// submesh bound to a material, so releasing it drops exactly as many as it took.
 		auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
 
 		for (uint32_t i = 0; i < entry.submeshCount; ++i)
 		{
-			const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-			if (index >= mesh.materials.size())
+			const auto& material = loaded.bindings.submeshMaterials.at(entry.firstSubmesh + i);
+			if (material.empty())
 				continue;
 
-			const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
-
-			materials[index]    = handle;
-			submeshMaterials[i] = handle;
+			const bgl::MaterialHandle handle = AcquireMaterial(material);
+			submeshMaterials[i]              = handle;
 		}
 
 		auto record                     = GeomRecord();
-		record.handle                   = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
+		record.handle                   = m_Scene->AddStaticMeshGeom(mesh, meshIndex, {});
 		record.key                      = key;
 		record.submeshMaterials         = std::move(submeshMaterials);
-		record.submeshMaterialOverrides = MaterialOverridesOf(mesh, entry);
+		record.submeshMaterialOverrides = MaterialOverridesOf(loaded.bindings, entry);
 		record.refCount                 = 1;
 
 		try
 		{
-			AttachMeshGrass(record, mesh, meshIndex);
+			for (uint32_t i = 0; i < record.submeshMaterials.size(); ++i)
+				if (record.submeshMaterials[i].IsValid())
+					m_Scene->SetSubmeshMaterial(record.handle, i, record.submeshMaterials[i]);
+			AttachMeshGrass(record, loaded, meshIndex);
 		}
 		catch (...)
 		{
@@ -666,7 +728,7 @@ namespace game
 	// std::unordered_map is node-based, so an insert never moves an existing value.
 	struct AssetManager::ContainerReads
 	{
-		core::str::unordered_str_map<Cached<assetlib::BMesh>>        meshes;
+		core::str::unordered_str_map<Cached<assetlib::RegenMesh>>    meshes;
 		core::str::unordered_str_map<Cached<assetlib::Skeleton>>     skeletons;
 		core::str::unordered_str_map<Cached<assetlib::AnimationSet>> animations;
 	};
@@ -721,7 +783,7 @@ namespace game
 		}
 	}
 
-	const assetlib::BMesh&
+	assetlib::RegenMesh&
 	AssetManager::ReadMesh(const std::string_view path)
 	{
 		return ReadCached(m_Reads->meshes, m_Store, path, [this](const std::string_view p) {
@@ -860,11 +922,18 @@ namespace game
 			}
 		}
 
-		const assetlib::BMesh& mesh = ReadMesh(relPath);
+		auto& loaded = ReadMesh(relPath);
+		auto& mesh   = loaded.mesh;
 
 		if (!assetlib::meshMatchesSkeleton(mesh, skeleton))
 		{
-			if (!RemapCached(m_Reads->meshes, relPath, skeleton, assetlib::remapMesh))
+			if (!RemapCached(
+					m_Reads->meshes,
+					relPath,
+					skeleton,
+					[](assetlib::RegenMesh& value, const assetlib::Skeleton& rig) {
+						return assetlib::remapMesh(value.mesh, rig);
+					}))
 			{
 				core::throw_runtime_error(
 					"AssetManager: '{}' was cooked against a different rig than '{}'; its joint "
@@ -895,19 +964,17 @@ namespace game
 		bool rigAcquired       = false;
 		try
 		{
-			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
 			auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
 
 			for (uint32_t i = 0; i < entry.submeshCount; ++i)
 			{
-				const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-				if (index >= mesh.materials.size())
+				const auto& material = loaded.bindings.submeshMaterials.at(entry.firstSubmesh + i);
+				if (material.empty())
 					continue;
 
-				const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
+				const bgl::MaterialHandle handle = AcquireMaterial(material);
 				acquiredMaterials.push_back(handle);
 
-				materials[index]    = handle;
 				submeshMaterials[i] = handle;
 			}
 
@@ -949,11 +1016,16 @@ namespace game
 			rigAcquired = true;
 
 			auto record = GeomRecord();
-			record.handle =
-				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig.handle, bounds);
+			{
+				// Adapt per-submesh bindings without copying the cached vertex payload.
+				const ScopedMaterialSlots slots(mesh, entry);
+				record.handle =
+					m_Scene
+						->AddSkinnedMeshGeom(mesh, meshIndex, submeshMaterials, rig.handle, bounds);
+			}
 			record.key                      = key;
 			record.submeshMaterials         = std::move(submeshMaterials);
-			record.submeshMaterialOverrides = MaterialOverridesOf(mesh, entry);
+			record.submeshMaterialOverrides = MaterialOverridesOf(loaded.bindings, entry);
 			record.skinnedClips             = clipInfo;
 			record.skinnedAnimations        = animationsNorm;
 			// The rig's, not this call's: a shared rig hands back the set it was built with, and
@@ -1465,24 +1537,25 @@ namespace game
 
 	void
 	AssetManager::AttachMeshGrass(
-		GeomRecord&            record,
-		const assetlib::BMesh& mesh,
-		const uint32_t         meshIndex)
+		GeomRecord&                record,
+		const assetlib::RegenMesh& loaded,
+		const uint32_t             meshIndex)
 	{
-		if (mesh.grass.empty())
+		const auto& geometry = loaded.mesh.grassFields;
+		if (geometry.fields.empty())
 			return;
 
-		RequireCurrent(m_Store, mesh.grass);
-
-		assetlib::RegenGrassFields current = m_Store.LoadRegenGrassFields(mesh.grass);
-		for (const std::string& field : current.unboundBindings)
-			logger::warn(
-				"AssetManager: '{}': its import document binds grass field '{}', which the source "
-				"no longer has; rebind or re-export",
-				mesh.grass,
-				field);
-
-		const assetlib::BGrassFields& grass = current.fields;
+		auto grass = assetlib::BGrassFields();
+		grass.fields.reserve(geometry.fields.size());
+		for (const auto& named : geometry.fields) grass.fields.push_back(named.field);
+		grass.chunks = geometry.chunks;
+		grass.clumps = geometry.clumps;
+		grass.looks  = loaded.bindings.grassLooks;
+		const bgl::TaggedBytes uploadCopy(
+			bgl::MemoryTag::kMesh,
+			grass.clumps.size() * sizeof(assetlib::GrassClump) +
+				grass.chunks.size() * sizeof(assetlib::GrassChunk) +
+				grass.fields.size() * sizeof(assetlib::GrassField));
 
 		// Only the looks this mesh's fields draw with: another mesh of the source may name others.
 		auto looks = std::vector<bgl::GrassHandle>(grass.looks.size());
@@ -1491,7 +1564,8 @@ namespace game
 
 		for (const assetlib::GrassField& field : grass.fields)
 		{
-			if (field.mesh != meshIndex || field.look >= grass.looks.size() || tried[field.look])
+			if (field.mesh != meshIndex || field.look >= grass.looks.size() || tried[field.look] ||
+			    grass.looks[field.look].empty())
 				continue;
 
 			tried[field.look] = true;
@@ -1723,19 +1797,20 @@ namespace game
 	}
 
 	std::vector<AssetManager::RegisteredMaterialOverride>
-	AssetManager::MaterialOverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry)
+	AssetManager::MaterialOverridesOf(
+		const assetlib::MeshBindings& bindings,
+		const assetlib::Mesh&         entry)
 	{
 		auto overrides = std::vector<RegisteredMaterialOverride>();
-		for (const assetlib::SubmeshMaterialOverride& registered : mesh.materialOverrides)
+		for (const assetlib::ResolvedMaterialOverride& registered : bindings.materialOverrides)
 		{
 			if (registered.submesh < entry.firstSubmesh ||
-			    registered.submesh >= entry.firstSubmesh + entry.submeshCount ||
-			    registered.material >= mesh.materials.size())
+			    registered.submesh >= entry.firstSubmesh + entry.submeshCount)
 				continue;
 			overrides.emplace_back(
 				registered.submesh - entry.firstSubmesh,
 				registered.name,
-				mesh.materials[registered.material]);
+				registered.material);
 		}
 		return overrides;
 	}

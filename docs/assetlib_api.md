@@ -20,9 +20,11 @@ rename, migrate and pack without entering the closed built-in `AssetType`; see
 The `derived-asset-names` contract declares source identity and lookup, cooked grass inside a mesh,
 and bindings outside its cooked data. Identity generation, sidecar identity persistence and
 `ResolveImport` are implemented and tested against loose and archive mounts. Importer adoption,
-binding separation, acquisition and packing are still pending. The mesh codec persists
+binding removal and source-key acquisition are still pending. The mesh codec persists
 `BMesh::grassFields`; regeneration fills `RegenMesh::bindings` from a mounted sidecar when present.
-Legacy material members remain populated while callers migrate to the separate snapshot.
+Legacy material members remain populated while callers migrate to the separate snapshot. Packs
+include sidecars, and gamelib uses their binding snapshots and embedded grass. Read-only geometry
+loads check the bake token and sidecar parameters without opening or stamping the source.
 
 | Contract | Declaration | Responsibility |
 |---|---|---|
