@@ -904,10 +904,9 @@ namespace assetlib
 		 *
 		 * The source is copied under `Authored/EnvSources/` and read from the copy, and a
 		 * `.bimport` beside it records the parameters, the copy's stamp and every derived file
-		 * written -- which is what lets `Reimport` produce the family again. Importing only one
-		 * part over an existing document keeps the other part's claim and parameters; that is
-		 * refused when the incoming file is not the one the document was stamped from, since the
-		 * part kept would then describe a different image.
+		 * written, named by a new persisted identity. An occupied source, sidecar or authored
+		 * environment destination is refused; `Reimport` and `RefreshEnvironmentSource` update
+		 * existing imports while preserving their identities.
 		 *
 		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
 		 * half-written environment is never left behind. It removes only what it *created*: a file
@@ -921,7 +920,7 @@ namespace assetlib
 		 * @throws std::runtime_error if nothing is selected, if the source cannot be read or is
 		 *         neither a `.hdr` nor a `.ktx2`, if any directory `desc` names is the wrong half for
 		 *         what would land in it or `importedSourceDir` is outside `Authored/EnvSources`, or
-		 *         on the partial re-import above -- all checked before the projection, so none of
+		 *         an authored destination already exists -- all checked before the projection, so none of
 		 *         them costs a bake.
 		 * @throws Cancelled if `cancel` is signalled.
 		 */
@@ -929,10 +928,9 @@ namespace assetlib
 		ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {}) const;
 
 		/**
-		 * Every file `desc` would write, data-root relative, without writing any of them -- for a
-		 * caller that must decide *before* importing whether it would land on something already
-		 * there. The baked maps are not included: they are content-addressed, so a collision with
-		 * one is two imports agreeing on content rather than one destroying the other.
+		 * Authored destinations `desc` would write, as mount keys, for a caller checking collisions
+		 * before import. Derived outputs are named by the identity minted during import; baked
+		 * maps are content-addressed and shared.
 		 */
 		[[nodiscard]] std::vector<std::string>
 		EnvironmentImportTargets(const EnvImportDesc& desc) const;

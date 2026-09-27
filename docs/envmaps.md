@@ -186,8 +186,8 @@ flowchart TD
 
 * **@post the source is in the project.** It is copied to `importedSourceDir` — under
   `Authored/EnvSources/`, and refused anywhere else — and read from the copy, never from where the
-  caller found it. Importing from that copy again is the recovery path, and copies nothing onto
-  itself.
+  caller found it. An occupied source, sidecar or authored environment destination is refused.
+  `Reimport` restores missing outputs from the project's copy.
 * **@post a `.bimport` stands beside the copy**, written last and stamped from the copy: the
   parameters, the source's stamp and `c_EnvSourceBakeToken`, a hash of each part's parameters as it
   was written, and every container the import produced — the `.bsky`, the `.benvl` — in
@@ -195,10 +195,13 @@ flowchart TD
   [Asset Containers](asset_containers.md). A document an older build wrote may also claim
   `*_sky/_prefilter/_irradiance.ktx2` float cubes; they are dropped as it is read, and the next
   refresh saves it without them. The files themselves are left where they are.
-* **A part-only import keeps the other part.** Re-authoring the sky over an existing document keeps
-  the lighting's claim, parameters and hash as they were, which is what makes the split worth having.
-  It is **refused** when the incoming file is not the one the document was stamped from, since the
-  kept part would then describe a different image.
+* **A new import owns a random identity and frozen source filename.** Sky and lighting keys are
+  generated in their categories as `<label>-<id>.bsky` and `<label>-<id>.benvl`. The dialog offers
+  only the authored name and source folder. `EnvironmentImportTargets` previews the authored
+  destinations for collision checks; generated names are assigned during import.
+* **A parameter edit refreshes only the affected part.** Edit the existing sidecar and call
+  `RefreshEnvironmentSource`; the other part retains its parameters and pixels. Import creates a
+  new source and never replaces an existing one.
 * **Each part projects its own cube.** The sky at `skyFaceSize`, the lighting at twice
   `prefilterFaceSize` (`lightingProjectionSize`), shared when the two agree — as they do at the
   defaults. So a part's pixels follow from its own parameters and never from the other's.

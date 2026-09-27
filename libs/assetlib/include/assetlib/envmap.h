@@ -256,34 +256,21 @@ namespace assetlib
 	/**
 	 * One HDRI, imported into a project as the environment family.
 	 *
-	 * The three outputs are separable because they are separately useful: a sky can be re-authored
-	 * without paying for the lighting's convolution, and an existing `.bsky` can be given a `.benvl`
-	 * later. Every path in the result is relative to `dataRoot`.
+	 * Select the parts to produce. Derived destinations come from a new import identity;
+	 * authored destinations remain selectable. Every path in the result is a mount key.
 	 */
 	struct EnvImportDesc
 	{
 		std::filesystem::path source;  // an equirectangular `.hdr`, or a cube map `.ktx2`
 
-		// Names every file the import writes: `Derived/Sky/<name>.bsky`, the copied source
-		// `Authored/EnvSources/<name>.hdr`, ...
-		std::string name = "env";
-
-		/**
-		 * Where each part lands, relative to the data root. Defaulted to the project's categories, so
-		 * a caller that does not care writes the layout `Project::Create` scaffolds.
-		 *
-		 * A caller that does care -- the import dialog offers a folder per part -- names a
-		 * subdirectory *inside* the category rather than replacing it, so the categories stay the
-		 * layout every other reference is written against.
-		 */
-		std::filesystem::path skyDir         = c_SkyDirectoryName;
-		std::filesystem::path lightingDir    = c_EnvLightingDirectoryName;
+		// Names the copied source and the authored environment document.
+		std::string           name           = "env";
 		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
 
 		// Where `source` itself is copied, with the `.bimport` describing it beside it. What every
 		// bake of this environment reads, so it must sit under `Authored/EnvSources`, the
 		// environment sources' category; anywhere else is refused. The import dialog offers a
-		// subfolder of it, as it does for each part.
+		// subfolder of it.
 		std::filesystem::path importedSourceDir = c_EnvSourcesDirectoryName;
 
 		bool sky         = true;  // write the `.bsky`

@@ -421,8 +421,6 @@ namespace editor
 		desc.lighting    = dialog.ImportLighting();
 		desc.environment = dialog.ImportEnvironment();
 
-		desc.skyDir      = std::filesystem::path(dialog.GetSkyDirectory().toStdWString());
-		desc.lightingDir = std::filesystem::path(dialog.GetLightingDirectory().toStdWString());
 		desc.importedSourceDir =
 			std::filesystem::path(dialog.GetImportedSourceDirectory().toStdWString());
 

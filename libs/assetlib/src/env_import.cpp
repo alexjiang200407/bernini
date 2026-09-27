@@ -1,6 +1,8 @@
 
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/envmap.h>
@@ -108,90 +110,6 @@ namespace assetlib
 				extensionOf(desc.source.generic_string()).c_str());
 		}
 
-		/** The container one part writes. */
-		std::string
-		partOutput(const EnvImportDesc& desc, EnvironmentPart part)
-		{
-			return part == EnvironmentPart::kSky ? assetRef(desc.skyDir, desc.name, ".bsky") :
-			                                       assetRef(desc.lightingDir, desc.name, ".benvl");
-		}
-
-		bool
-		writes(const EnvImportDesc& desc, EnvironmentPart part)
-		{
-			return part == EnvironmentPart::kSky ? desc.sky : desc.lighting;
-		}
-
-		bool
-		claims(const ImportDocument& document, EnvironmentPart part)
-		{
-			return std::ranges::any_of(document.outputs, [part](const std::string& output) {
-				return isPartOutput(output, part);
-			});
-		}
-
-		/**
-		 * The document an import leaves: this run's parts as written, and whatever part it did not
-		 * write carried over from the document already there -- its claim, its parameters and the
-		 * hash they were written with -- so re-authoring a sky never forgets the lighting.
-		 */
-		ImportDocument
-		importedDocument(
-			const EnvImportDesc&                 desc,
-			const std::optional<ImportDocument>& existing,
-			const std::string&                   sourceKey)
-		{
-			ImportDocument document;
-			if (existing)
-			{
-				document.extraJson           = existing->extraJson;
-				document.extraParametersJson = existing->extraParametersJson;
-			}
-
-			document.source             = sourceKey;
-			document.environment        = desc.parameters;
-			document.envSourceBakeToken = c_EnvSourceBakeToken;
-
-			for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
-			{
-				uint64_t& hash = part == EnvironmentPart::kSky ? document.envSkyParametersHash :
-				                                                 document.envLightingParametersHash;
-				if (writes(desc, part))
-				{
-					hash = partParametersHashOf(desc.parameters, part);
-					document.outputs.push_back(partOutput(desc, part));
-					continue;
-				}
-
-				if (!existing || !existing->environment)
-					continue;
-
-				auto&       now = *document.environment;
-				const auto& was = *existing->environment;
-				if (part == EnvironmentPart::kSky)
-				{
-					now.skyFaceSize = was.skyFaceSize;
-					now.skyMips     = was.skyMips;
-					hash            = existing->envSkyParametersHash;
-				}
-				else
-				{
-					now.prefilterFaceSize  = was.prefilterFaceSize;
-					now.prefilterMips      = was.prefilterMips;
-					now.prefilterSamples   = was.prefilterSamples;
-					now.irradianceFaceSize = was.irradianceFaceSize;
-					hash                   = existing->envLightingParametersHash;
-				}
-				std::ranges::copy_if(
-					existing->outputs,
-					std::back_inserter(document.outputs),
-					[part](const std::string& output) { return isPartOutput(output, part); });
-			}
-
-			std::ranges::sort(document.outputs);
-			return document;
-		}
-
 	}
 
 	std::vector<std::string>
@@ -199,10 +117,6 @@ namespace assetlib
 	{
 		const std::string sourceKey = importedSourceKey(desc);
 		auto              out       = std::vector<std::string>{ sourceKey };
-
-		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
-			if (writes(desc, part))
-				out.push_back(partOutput(desc, part));
 
 		if (desc.environment && (desc.sky || desc.lighting))
 			out.push_back(assetRef(desc.environmentDir, desc.name, ".benv"));
@@ -245,10 +159,6 @@ namespace assetlib
 
 		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
 		// `.benvl` until they were spent.
-		if (desc.sky)
-			requireOrigin(desc.skyDir.generic_string(), AssetOrigin::kDerived, "bsky");
-		if (desc.lighting)
-			requireOrigin(desc.lightingDir.generic_string(), AssetOrigin::kDerived, "benvl");
 		if (desc.environment)
 			requireOrigin(desc.environmentDir.generic_string(), AssetOrigin::kAuthored, "benv");
 
@@ -263,31 +173,18 @@ namespace assetlib
 				c_EnvSourcesDirectoryName);
 		}
 
-		// One that will not parse claims nothing; the import writes a fresh document rather than
-		// refusing over a file it is about to replace.
-		auto existing = std::optional<ImportDocument>();
-		try
+		for (const auto& key : EnvironmentImportTargets(desc))
 		{
-			if (std::filesystem::exists(GetDataRoot() / documentKey))
-				existing = loadImportDocument(GetDataRoot() / documentKey);
-		}
-		catch (const std::exception&)
-		{}
-
-		for (const EnvironmentPart part : { EnvironmentPart::kSky, EnvironmentPart::kLighting })
-		{
-			if (!writes(desc, part) && existing && claims(*existing, part) &&
-			    stampOf(desc.source) != existing->envSourceStamp)
-			{
+			requireInsideDataRoot("ImportEnvironment", key);
+			if (Exists(key))
 				core::throw_runtime_error(
-					"AssetStore::ImportEnvironment: '{}' is not the file '{}' was imported from, "
-					"so "
-					"keeping its {} would describe a different image; import both parts",
-					desc.source.string(),
-					sourceKey,
-					part == EnvironmentPart::kSky ? "sky" : "lighting");
-			}
+					"ImportEnvironment: '{}' already exists; reimport its source",
+					key);
 		}
+		const auto identity = makeImportIdentity(sourceKey);
+		for (const auto kind : { AssetType::kSky, AssetType::kEnvLighting })
+			if (Exists(importOutputKey(identity, kind)))
+				core::throw_runtime_error("ImportEnvironment: generated output already exists");
 
 		auto created = CreatedFiles(GetDataRoot());
 		auto result  = EnvImportResult();
@@ -307,13 +204,13 @@ namespace assetlib
 
 		if (desc.sky)
 		{
-			result.sky = partOutput(desc, EnvironmentPart::kSky);
+			result.sky = importOutputKey(identity, AssetType::kSky);
 			produceSky(
 				*this,
 				input,
 				desc.parameters,
 				desc.threads,
-				desc.name,
+				stemOf(identity.label),
 				sourceKey,
 				copiedStamp,
 				result.sky,
@@ -324,13 +221,13 @@ namespace assetlib
 
 		if (desc.lighting)
 		{
-			result.lighting = partOutput(desc, EnvironmentPart::kLighting);
+			result.lighting = importOutputKey(identity, AssetType::kEnvLighting);
 			result.exposure = produceLighting(
 				*this,
 				input,
 				desc.parameters,
 				desc.threads,
-				desc.name,
+				stemOf(identity.label),
 				sourceKey,
 				copiedStamp,
 				result.lighting,
@@ -357,7 +254,24 @@ namespace assetlib
 		}
 
 		// Last: the document then cannot claim a file that was not written.
-		ImportDocument document = importedDocument(desc, existing, sourceKey);
+		auto document               = ImportDocument();
+		document.identity           = identity;
+		document.source             = sourceKey;
+		document.environment        = desc.parameters;
+		document.envSourceBakeToken = c_EnvSourceBakeToken;
+		if (desc.sky)
+		{
+			document.outputs.push_back(result.sky);
+			document.envSkyParametersHash =
+				partParametersHashOf(desc.parameters, EnvironmentPart::kSky);
+		}
+		if (desc.lighting)
+		{
+			document.outputs.push_back(result.lighting);
+			document.envLightingParametersHash =
+				partParametersHashOf(desc.parameters, EnvironmentPart::kLighting);
+		}
+		std::ranges::sort(document.outputs);
 		document.envSourceStamp = copiedStamp;
 		result.document         = documentKey;
 		created.WillWrite(documentKey);

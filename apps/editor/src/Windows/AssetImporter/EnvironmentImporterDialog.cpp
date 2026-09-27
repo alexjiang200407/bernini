@@ -50,9 +50,7 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	m_Name->setToolTip(
 		editor::Localize(
 			"editor.environment_importer.name_tip",
-			"Names every file this import writes: Derived/Sky/<name>.bsky, "
-			"Derived/EnvLighting/<name>.benvl, Authored/Environments/<name>.benv and their "
-			"sources."));
+			"Names the copied source and the environment document."));
 
 	auto* nameForm = new QFormLayout();
 	nameForm->addRow(editor::Localize("editor.environment_importer.name_label", "Name:"), m_Name);
@@ -68,19 +66,6 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 			"The backdrop: one radiance cube map, projected from the source."));
 	layout->addWidget(m_ImportSky);
 
-	m_SkyDir = editor::AddFolderRow(
-		layout,
-		this,
-		{ .label = editor::Localize("editor.environment_importer.sky_folder_label", "Sky folder:"),
-	      .category    = assetlib::c_SkyDirectoryName,
-	      .objectName  = "skyDirectory",
-	      .placeholder = optionalPlaceholder,
-	      .tip         = editor::Localize(
-			  "editor.environment_importer.sky_folder_tip",
-			  "Subfolder of Derived/Sky/ to write the .bsky into. The category itself is fixed: "
-			  "every reference in the project is written against it.") });
-	connect(m_ImportSky, &QCheckBox::toggled, m_SkyDir, &QWidget::setEnabled);
-
 	m_ImportLighting = new QCheckBox(
 		editor::Localize("editor.environment_importer.import_lighting", "Environment lighting"),
 		this);
@@ -90,24 +75,8 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		editor::Localize(
 			"editor.environment_importer.import_lighting_tip",
 			"The image-based lighting: the specular and diffuse convolutions of the same radiance. "
-			"Minutes of work, where the sky is moments -- uncheck it to re-author a backdrop "
-			"without "
-			"paying for the lighting again."));
+			"Uncheck it to import only the backdrop."));
 	layout->addWidget(m_ImportLighting);
-
-	m_LightingDir = editor::AddFolderRow(
-		layout,
-		this,
-		{ .label = editor::Localize(
-			  "editor.environment_importer.lighting_folder_label",
-			  "Lighting folder:"),
-	      .category    = assetlib::c_EnvLightingDirectoryName,
-	      .objectName  = "lightingDirectory",
-	      .placeholder = optionalPlaceholder,
-	      .tip         = editor::Localize(
-			  "editor.environment_importer.lighting_folder_tip",
-			  "Subfolder of Derived/EnvLighting/ to write the .benvl into.") });
-	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
 
 	m_ImportEnvironment = new QCheckBox(
 		editor::Localize(
@@ -181,20 +150,6 @@ EnvironmentImporterDialog::ImportEnvironment() const
 {
 	// Disabled means unavailable, whatever the box happens to be showing.
 	return m_ImportEnvironment->isEnabled() && m_ImportEnvironment->isChecked();
-}
-
-QString
-EnvironmentImporterDialog::GetSkyDirectory() const
-{
-	return editor::JoinCategory(assetlib::c_SkyDirectoryName, m_SkyDir->text().trimmed());
-}
-
-QString
-EnvironmentImporterDialog::GetLightingDirectory() const
-{
-	return editor::JoinCategory(
-		assetlib::c_EnvLightingDirectoryName,
-		m_LightingDir->text().trimmed());
 }
 
 QString
