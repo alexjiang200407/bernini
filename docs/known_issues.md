@@ -342,3 +342,37 @@ deliberately has none.
 **If it comes back.** It never left; this entry exists so the symptom is recognised as the blend
 draw bucket's documented behaviour rather than diagnosed as a regression of whatever feature last
 touched the material path.
+
+---
+
+## Every static mesh is missing on D3D12, and the cull says it dropped everything
+
+**Symptom.** Nothing drawn through the static tier appears on Windows: a headless render is the clear
+colour, and `[culling]` reports `tested 170, culled 170` beside a floor whose luma is 0. Metal is
+unaffected. Four suites fail at once — `assetlib_tests` aside, every one that renders a mesh — which
+looks like four unrelated breakages. What still draws is anything whose program is not
+`StaticMesh.slang`: `AnyMesh` dispatches its meshlets without the group cull, so the
+`[hashedalpha]` figures do not move and are no help in spotting this.
+
+**Cause.** The static tier's amplification stage built its survivor mask with `InterlockedOr` into
+the `CulledPayload` it dispatches with. An amplification payload is its own address space on D3D12,
+and an atomic addressed into one does not land — every bit stayed clear, so the mesh stage was told
+no group survived. Metal's payload is ordinary threadgroup memory, where the same code works, which
+is why it shipped green twice. The mask is built in a `groupshared` array now and copied into the
+payload once the barrier has passed.
+
+**The second half.** With the mask populated the device was *removed* instead
+(`DXGI_ERROR_DEVICE_HUNG`, TDR) from `CulledGroupIndex`, whose two loops counted to values read out
+of payload memory. Both count to constants now — 32 bits in a mask word, 8 halvings over the 256
+words a payload can hold. The preconditions that bound them were checked to hold while the hang
+happened, so this is not a data fault: a trip count that is a payload read is the thing to avoid.
+
+**Gates.** `just run bgl_extended_tests -- "[culling],[pbr],[meshlet]"`. The first case compares a
+culled render against an unculled one pixel for pixel, and the `[culling][view]` case pins the tested
+and culled counts, so an all-zero mask fails both rather than quietly drawing less.
+
+**If it comes back.** Check the gates first: if they are green, the mesh is missing for another
+reason. If they fail with everything culled, look for an atomic or a loop bound that reads payload
+memory — `bgrep -n "Interlocked" libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang` should
+find none addressing `gCulledPayload`. A shader-only change needs no C++ rebuild, so iterate on it
+directly.
