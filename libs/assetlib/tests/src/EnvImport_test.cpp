@@ -585,6 +585,50 @@ TEST_CASE("A source that is neither .hdr nor .ktx2 is refused", "[envimport]")
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.exr"));
 }
 
+TEST_CASE(
+	"Legacy environment names migrate with their authored references once",
+	"[envimport][migrate]")
+{
+	const Sandbox sandbox("bernini_envimport_names_migrate");
+	const auto    store    = sandbox.Store();
+	const auto    imported = store.ImportEnvironment(sandbox.Desc());
+	const auto    graph    = AssetRefGraph::Scan(store);
+	auto          plan     = RenamePlan();
+	plan.subject           = { imported.document, imported.document };
+	plan.outputs           = { { imported.sky, "Derived/Sky/forest.bsky" },
+		                       { imported.lighting, "Derived/EnvLighting/forest.benvl" } };
+	for (const auto& move : plan.outputs)
+		for (const auto& edge : graph.ReferrersOf(move.from))
+			if (isStoredRef(edge.kind))
+				plan.referrers.push_back(edge);
+	REQUIRE(store.RenameAsset(plan).status == RenameStatus::kRenamed);
+	auto legacy     = store.Load<ImportDocument>(imported.document);
+	legacy.identity = {};
+	store.Save(legacy, imported.document);
+	const auto before = sandbox.Bytes(imported.document);
+	const auto dry    = store.Migrate(true);
+	CHECK(dry.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(sandbox.Bytes(imported.document) == before);
+	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
+	const auto migrated = store.Migrate(false);
+	REQUIRE(migrated.Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto document = sandbox.Document();
+	CHECK(document.identity.id != 0);
+	CHECK(document.identity.label == "forest.ktx2");
+	const auto env = store.Load<BEnv>(imported.environment);
+	CHECK(env.sky == SkyOutput(sandbox));
+	CHECK(env.lighting == LightingOutput(sandbox));
+	CHECK(sandbox.Has(env.sky));
+	CHECK(sandbox.Has(env.lighting));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK_FALSE(sandbox.Has("Derived/EnvLighting/forest.benvl"));
+	const auto authored = sandbox.Bytes(imported.document);
+	const auto again    = store.Migrate(false);
+	CHECK(again.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(again.Count(MigratedFile::Outcome::kRewritten) == 0);
+	CHECK(sandbox.Bytes(imported.document) == authored);
+}
+
 // The recovery an environment without its derived files is given: import again from the copy the
 // project already holds. Copying a file onto itself would truncate it first.
 TEST_CASE("Re-importing from the copy in the project leaves the copy intact", "[envimport]")

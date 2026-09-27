@@ -31,40 +31,42 @@ namespace assetlib
 		auto textureOwners  = core::str::unordered_str_map<std::string>();
 		auto identityOwners = std::unordered_map<uint64_t, std::string>();
 		auto blocked        = std::unordered_set<std::string>();
-		for (const auto& key : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
-		{
-			if (extensionOf(key) != c_ImportDocumentExtension)
-				continue;
-			try
+		for (const auto category : { c_MeshSourcesDirectoryName, c_EnvSourcesDirectoryName })
+			for (const auto& key : GetFiles().Enumerate(category))
 			{
-				auto document = Load<ImportDocument>(key);
-				if (document.identity.id != 0)
+				if (extensionOf(key) != c_ImportDocumentExtension)
+					continue;
+				try
 				{
-					const auto [owner, inserted] =
-						identityOwners.emplace(document.identity.id, key);
-					if (!inserted)
+					auto document = Load<ImportDocument>(key);
+					if (document.identity.id != 0)
 					{
-						blocked.insert(owner->second);
-						blocked.insert(key);
+						const auto [owner, inserted] =
+							identityOwners.emplace(document.identity.id, key);
+						if (!inserted)
+						{
+							blocked.insert(owner->second);
+							blocked.insert(key);
+						}
 					}
+					if (!document.textureDir.empty())
+					{
+						const auto [owner, inserted] =
+							textureOwners.emplace(document.textureDir, key);
+						if (!inserted)
+						{
+							blocked.insert(owner->second);
+							blocked.insert(key);
+						}
+					}
+					documents.insert(key);
 				}
-				if (!document.textureDir.empty())
+				catch (const std::exception& error)
 				{
-					const auto [owner, inserted] = textureOwners.emplace(document.textureDir, key);
-					if (!inserted)
-					{
-						blocked.insert(owner->second);
-						blocked.insert(key);
-					}
+					report.files.push_back(
+						{ GetDataRoot() / key, MigratedFile::Outcome::kFailed, error.what() });
 				}
-				documents.insert(key);
 			}
-			catch (const std::exception& error)
-			{
-				report.files.push_back(
-					{ GetDataRoot() / key, MigratedFile::Outcome::kFailed, error.what() });
-			}
-		}
 		for (const auto& key : blocked)
 		{
 			documents.erase(key);
@@ -107,8 +109,10 @@ namespace assetlib
 				for (const auto& output : document.outputs)
 				{
 					const auto type = assetTypeFromExtension(output);
-					if (!type || !isGeometryContainer(*type))
-						core::throw_runtime_error("'{}' is not a mesh import output", output);
+					if (!type || (document.environment ? (*type != AssetType::kSky &&
+					                                      *type != AssetType::kEnvLighting) :
+					                                     !isGeometryContainer(*type)))
+						core::throw_runtime_error("'{}' is not an output of this import", output);
 					const auto target =
 						*type == AssetType::kGrassFields ?
 							swapExtension(

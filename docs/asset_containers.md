@@ -336,6 +336,12 @@ current meshes), everything else as read. A second run rewrites nothing; a file 
 reported per-file, and the CLI exits non-zero. `assetlib_cli describe -p <project> <key> --key`
 prints a cache entry's key without loading its payload.
 
+Legacy mesh and environment imports receive a persisted identity and frozen source filename.
+Migration moves their outputs and extracted-texture directories to generated category keys,
+rewrites tracked references and moves skeleton avatars with their rigs. Materials whose routes
+change are re-baked in the same run. A shared identity or extracted-texture directory is reported
+as a failure for the affected sources; a dry run changes nothing.
+
 **An import binds a rig that has grown, too.** `FindMatchingSkeleton` pairs an imported rig to the
 project's by signature; where nothing matches outright, a project rig that has only *gained* bones
 still addresses every bone the imported one has, and is bound instead — the clips being re-addressed
