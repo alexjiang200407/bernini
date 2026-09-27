@@ -61,8 +61,7 @@ namespace
 
 TEST_CASE("A skinned entry animates; a static one stands beside it", "[animation]")
 {
-	auto mesh     = assetlib::BMesh();
-	mesh.skeleton = "Derived/Skeletons/rig.bskel";
+	auto mesh = assetlib::BMesh();
 
 	const uint32_t skinned = AddEntry(mesh, true);
 	const uint32_t prop    = AddEntry(mesh, false);

@@ -26,6 +26,8 @@
 #include <QRunnable>
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/MeshBindings.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -57,6 +59,7 @@
 #include <system_error>
 #include <tracy/Tracy.hpp>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -152,7 +155,7 @@ namespace
 	{
 	public:
 		using Sink = std::function<void(
-			std::shared_ptr<assetlib::BMesh>,
+			std::shared_ptr<assetlib::RegenMesh>,
 			std::shared_ptr<CookedMeshes>,
 			std::shared_ptr<game::TexturePrefetch>,
 			std::string)>;  // why the read failed, or empty
@@ -180,7 +183,7 @@ namespace
 			ZoneScopedN("editor thumbnail load");
 			ZoneTextF("%s", m_RelPath.c_str());
 
-			std::shared_ptr<assetlib::BMesh>       mesh;
+			std::shared_ptr<assetlib::RegenMesh>   mesh;
 			std::shared_ptr<CookedMeshes>          cooked;
 			std::shared_ptr<game::TexturePrefetch> prefetch;
 			std::string                            failure;
@@ -195,29 +198,31 @@ namespace
 				}
 				else
 				{
-					mesh = std::make_shared<assetlib::BMesh>(editor::LoadMeshThroughSeam(
+					mesh = std::make_shared<assetlib::RegenMesh>(editor::LoadMeshThroughSeam(
 						assetlib::AssetStore(m_DataRoot),
 						std::filesystem::path(m_Path.toStdWString())));
 
-					if (mesh->meshes.empty())
+					if (mesh->mesh.meshes.empty())
 						throw std::runtime_error("mesh contains no meshes");
 
 					cooked = std::make_shared<CookedMeshes>();
-					for (const assetlib::Node& node : mesh->nodes)
+					for (const assetlib::Node& node : mesh->mesh.nodes)
 					{
 						if (node.mesh == assetlib::c_InvalidIndex ||
-						    node.mesh >= mesh->meshes.size() || cooked->contains(node.mesh))
+						    node.mesh >= mesh->mesh.meshes.size() || cooked->contains(node.mesh))
 							continue;
 
-						cooked->emplace(node.mesh, bgl::CookStaticMesh(*mesh, node.mesh));
+						cooked->emplace(node.mesh, bgl::CookStaticMesh(mesh->mesh, node.mesh));
 					}
 
 					// Without a data root the mesh's materials cannot be resolved at all, and every
 					// submesh falls back to the neutral default -- so there is nothing to decode.
 					if (!m_DataRoot.empty())
 					{
-						for (const std::string& relPath : mesh->materials)
-							PrefetchMaterial(m_DataRoot, relPath, m_TextureMaxDim, *prefetch);
+						auto seen = std::unordered_set<std::string>();
+						for (const std::string& relPath : mesh->bindings.submeshMaterials)
+							if (seen.insert(relPath).second)
+								PrefetchMaterial(m_DataRoot, relPath, m_TextureMaxDim, *prefetch);
 					}
 				}
 				if (!m_MaterialOverridePath.empty())
@@ -534,7 +539,7 @@ AssetThumbnailCache::Request(const QString& path)
 				                 epoch,
 				                 materialKey = scene->material.value_or(std::string()),
 				                 camera      = scene->camera](
-									std::shared_ptr<assetlib::BMesh>       mesh,
+									std::shared_ptr<assetlib::RegenMesh>   mesh,
 									std::shared_ptr<CookedMeshes>          cooked,
 									std::shared_ptr<game::TexturePrefetch> prefetch,
 									std::string                            error) {
@@ -610,7 +615,7 @@ AssetThumbnailCache::Request(const QString& path)
 	const uint64_t epoch = m_Epoch;
 
 	auto sink = [this, path, material, stamp, epoch](
-					std::shared_ptr<assetlib::BMesh>       mesh,
+					std::shared_ptr<assetlib::RegenMesh>   mesh,
 					std::shared_ptr<CookedMeshes>          cooked,
 					std::shared_ptr<game::TexturePrefetch> prefetch,
 					std::string                            failure) {
@@ -936,7 +941,8 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 void
 AssetThumbnailCache::BuildMesh(Shot& shot)
 {
-	const assetlib::BMesh& mesh = *shot.item.mesh;
+	const assetlib::BMesh& mesh     = shot.item.mesh->mesh;
+	const auto&            bindings = shot.item.mesh->bindings;
 
 	bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
@@ -945,13 +951,13 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 	if (!shot.item.material.empty())
 	{
 		materials.assign(
-			std::max<std::size_t>(1, mesh.materials.size()),
+			mesh.submeshes.size(),
 			AcquireMaterial(shot.item.material, shot.item.prefetch.get()));
 	}
 	else
 	{
-		materials.reserve(mesh.materials.size());
-		for (const std::string& relPath : mesh.materials)
+		materials.reserve(bindings.submeshMaterials.size());
+		for (const std::string& relPath : bindings.submeshMaterials)
 			materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
 	}
 
@@ -971,7 +977,7 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 			geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 		if (inserted)
 			m_Geoms.push_back(
-				scene->AddStaticMeshGeom(std::move(shot.item.cooked->at(node.mesh)), materials));
+				scene->AddStaticMeshGeom(std::move(shot.item.cooked->at(node.mesh)), {}));
 
 		const glm::mat4               world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 		const bgl::MeshInstanceHandle instance =
@@ -983,8 +989,10 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 		{
 			const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
 
-			if (submesh.material >= materials.size())
-				view->SetSubmeshMaterialOverride(instance, i, m_DefaultMaterial);
+			const auto material = entry.firstSubmesh + i < materials.size() ?
+			                          materials[entry.firstSubmesh + i] :
+			                          m_DefaultMaterial;
+			view->SetSubmeshMaterialOverride(instance, i, material);
 
 			bmesh::GrowBounds(world, submesh.aabbMin, submesh.aabbMax, aabbMin, aabbMax);
 		}

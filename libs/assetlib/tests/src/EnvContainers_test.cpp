@@ -7,7 +7,7 @@
 #include <core/io/ByteWriter.h>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/AssetCodec.h>
 #include <assetlib/project_layout.h>
 #include <catch2/catch_approx.hpp>

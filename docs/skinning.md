@@ -61,7 +61,8 @@ not obvious from a signature. The headers linked below are the source of truth.
   bone table and one sample pool, where a per-geom upload would hold as many copies of the rig as the
   unit has parts. `gamelib` keys the share on the normalized `.banim` path, because a clip set names
   its own skeleton and so the two are one choice. `AssetManager::AcquireRig` is **private** and
-  `AcquireSkinnedMesh` keeps its signature: a public one would be a second handle every caller holds
+  `AcquireSkinnedMesh` accepts mesh and animation source keys, resolved through their `.bimport`
+  sidecars. A public rig acquire would be a second handle every caller holds
   and releases for a share the manager can make itself. When attachments need a rig by handle, that
   door opens then.
 

@@ -1,0 +1,264 @@
+#include "CountingFileSystem.h"
+#include "RefsSandbox.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/ResolvedImport.h>
+#include <assetlib/asset_import.h>
+#include <assetlib/asset_refs.h>
+#include <assetlib/codecs.h>
+#include <assetlib/import_document.h>
+#include <assetlib/pak.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <vector>
+
+using namespace assetlib;
+using namespace assetlib::test;
+
+TEST_CASE("import identities distinguish sources sharing a filename", "[import-identity]")
+{
+	std::unordered_set<uint64_t> ids;
+	for (int i = 0; i < 128; ++i)
+	{
+		const auto source =
+			i % 2 == 0 ? "Authored/Meshes/town/crate.glb" : "Authored/Meshes/props/crate.glb";
+		const auto identity = makeImportIdentity(source);
+		CHECK(identity.id != 0);
+		CHECK(identity.label == "crate.glb");
+		CHECK(ids.insert(identity.id).second);
+	}
+}
+
+TEST_CASE(
+	"packed source revisions round trip without changing cook parameters",
+	"[import-identity]")
+{
+	auto       document        = ImportDocument();
+	const auto parameters      = parametersHashOf(document);
+	document.packedSourceStamp = { 97, 0xfedcba9876543210ull };
+	const auto bytes           = AssetCodec<ImportDocument>::Serialize(document);
+	const auto loaded          = AssetCodec<ImportDocument>::Deserialize(bytes);
+	CHECK(loaded.packedSourceStamp == document.packedSourceStamp);
+	CHECK(parametersHashOf(loaded) == parameters);
+	document.packedSourceStamp = {};
+	CHECK(
+		AssetCodec<ImportDocument>::Deserialize(AssetCodec<ImportDocument>::Serialize(document))
+			.packedSourceStamp == document.packedSourceStamp);
+}
+
+TEST_CASE("derived keys use a frozen label and all 64 identity bits", "[import-identity]")
+{
+	const ImportIdentity identity{ 0xfedcba9876543210ull, "street.glb" };
+	CHECK(
+		importOutputKey(identity, AssetType::kMesh) ==
+		"Derived/Meshes/street.glb-fedcba9876543210.bmesh");
+	CHECK(
+		importOutputKey(identity, AssetType::kSkeleton) ==
+		"Derived/Skeletons/street.glb-fedcba9876543210.bskel");
+	CHECK(
+		importOutputKey(identity, AssetType::kAnimation) ==
+		"Derived/Animations/street.glb-fedcba9876543210.banim");
+	CHECK(
+		importOutputKey(identity, AssetType::kSky) ==
+		"Derived/Sky/street.glb-fedcba9876543210.bsky");
+	CHECK(
+		importOutputKey(identity, AssetType::kEnvLighting) ==
+		"Derived/EnvLighting/street.glb-fedcba9876543210.benvl");
+	CHECK(importTextureDirectory(identity) == "Derived/SourceTextures/street.glb-fedcba9876543210");
+	CHECK(
+		importOutputKey({ 1, "street.glb" }, AssetType::kMesh) ==
+		"Derived/Meshes/street.glb-0000000000000001.bmesh");
+	CHECK_THROWS(importOutputKey(identity, AssetType::kMaterial));
+	CHECK_THROWS(importOutputKey({}, AssetType::kMesh));
+	CHECK_THROWS(importTextureDirectory({ 1, "../street.glb" }));
+	CHECK_THROWS(makeImportIdentity("../../street.glb"));
+}
+
+TEST_CASE("sidecars persist identity without hashing it as a cook parameter", "[import-identity]")
+{
+	auto       document      = ImportDocument();
+	const auto parameterHash = parametersHashOf(document);
+	document.identity        = { 0xfedcba9876543210ull, "street.glb" };
+	document.extraJson       = R"({"identity":{"future":true}})";
+	const auto bytes         = AssetCodec<ImportDocument>::Serialize(document);
+	const auto read          = AssetCodec<ImportDocument>::Deserialize(bytes);
+	CHECK(read.identity == document.identity);
+	CHECK(read.extraJson == document.extraJson);
+	CHECK(parametersHashOf(read) == parameterHash);
+	CHECK(AssetCodec<ImportDocument>::Serialize(read) == bytes);
+	const auto legacy =
+		AssetCodec<ImportDocument>::Deserialize(AssetCodec<ImportDocument>::Serialize({}));
+	CHECK(legacy.identity == ImportIdentity{});
+}
+
+TEST_CASE("invalid authored identities are refused", "[import-identity]")
+{
+	const auto json = GENERATE(
+		R"({"identity":{}})",
+		R"({"identity":{"id":"0000000000000000","label":"x.glb"}})",
+		R"({"identity":{"id":"0000000000000001","label":"../x.glb"}})",
+		R"({"identity":{"id":"FEDCBA9876543210","label":"x.glb"}})",
+		R"({"identity":{"id":1,"label":"x.glb"}})",
+		R"({"identity":{"id":"1","label":"x.glb"}})");
+	const auto text = std::string_view(json);
+	CHECK_THROWS(
+		AssetCodec<ImportDocument>::Deserialize(
+			std::as_bytes(std::span(text.data(), text.size()))));
+}
+
+TEST_CASE("import writes authored bindings without cooked geometry", "[import-identity]")
+{
+	const DataRoot root("bernini-write-import-bindings");
+	const auto     store  = root.Source();
+	auto           target = ImportTarget{};
+	target.source         = "Authored/Meshes/street.glb";
+	target.sampleRate     = 30;
+	target.bindings =
+		std::vector<MaterialBinding>{ { "Body", "Authored/Materials/paint.bmaterial" } };
+	store.WriteImportedDocument(target, nullptr);
+	const auto key      = importDocumentKeyFor(target.source);
+	auto       document = store.Load<ImportDocument>(key);
+	CHECK(document.bindings == *target.bindings);
+	document.materialOverrides = { { "Body", "Wet", "Authored/Materials/wet.bmaterial" } };
+	document.bindings.push_back({ "Lawn", "Authored/Grass/lawn.bgrass" });
+	store.Save(document, key);
+	target.bindings.reset();
+	store.WriteImportedDocument(target, nullptr);
+	CHECK(store.Load<ImportDocument>(key).bindings == document.bindings);
+	target.bindings = std::vector<MaterialBinding>{};
+	store.WriteImportedDocument(target, nullptr);
+	const auto cleared = store.Load<ImportDocument>(key);
+	REQUIRE(cleared.bindings.size() == 1);
+	CHECK(cleared.bindings.front().submesh == "Lawn");
+	CHECK(cleared.materialOverrides == document.materialOverrides);
+}
+
+TEST_CASE("import writes preserve identity and refuse replacement", "[import-identity]")
+{
+	const DataRoot root("bernini-write-import-identity");
+	const auto     store  = root.Source();
+	auto           target = ImportTarget{};
+	target.source         = "Authored/Meshes/street.glb";
+	target.sampleRate     = 30;
+	target.identity       = makeImportIdentity(target.source);
+	target.outputs        = { importOutputKey(target.identity, AssetType::kMesh) };
+	store.WriteImportedDocument(target, nullptr);
+	const auto first = store.Load<ImportDocument>(importDocumentKeyFor(target.source));
+	CHECK(first.identity == target.identity);
+	target.identity   = {};
+	target.sampleRate = 60;
+	store.WriteImportedDocument(target, nullptr);
+	const auto repeated = store.Load<ImportDocument>(importDocumentKeyFor(target.source));
+	CHECK(repeated.identity == first.identity);
+	CHECK(repeated.outputs == first.outputs);
+	CHECK(repeated.sampleRate == 60);
+	target.identity = makeImportIdentity(target.source);
+	CHECK_THROWS(store.WriteImportedDocument(target, nullptr));
+	CHECK(store.Load<ImportDocument>(importDocumentKeyFor(target.source)) == repeated);
+}
+
+TEST_CASE(
+	"source lookup needs only the mounted sidecar and returns an owned snapshot",
+	"[import-identity]")
+{
+	const DataRoot root("bernini-source-resolution");
+	const auto     source   = "Authored/Meshes/street.glb";
+	const auto     key      = importDocumentKeyFor(source);
+	auto           document = ImportDocument();
+	document.source         = source;
+	document.identity       = { 1, "street.glb" };
+	document.outputs        = { importOutputKey(document.identity, AssetType::kMesh) };
+	document.bindings       = { { "Road", "Authored/Materials/road.bmaterial" } };
+	const auto loose        = root.Source();
+	loose.Save(document, key);
+	ResolvedImport snapshot;
+	if (GENERATE(false, true))
+	{
+		const auto archive = root.path / "Data.bpak";
+		PakWriter  writer(archive);
+		writer.Add(key, AssetCodec<ImportDocument>::Serialize(document), {});
+		writer.Finish();
+		const AssetStore packed(root.path, std::make_shared<PakFile>(archive));
+		CHECK_FALSE(packed.Exists(source));
+		snapshot = packed.ResolveImport(source, AssetType::kMesh);
+	}
+	else
+	{
+		CHECK_FALSE(loose.Exists(source));
+		snapshot = loose.ResolveImport(source, AssetType::kMesh);
+	}
+	CHECK(snapshot.outputKey == document.outputs.front());
+	CHECK(snapshot.documentKey == key);
+	document.bindings.clear();
+	loose.Save(document, key);
+	REQUIRE(snapshot.document.bindings.size() == 1);
+	CHECK(snapshot.document.bindings.front().material == "Authored/Materials/road.bmaterial");
+	CHECK(loose.ResolveImport(source, AssetType::kMesh).document.bindings.empty());
+}
+
+TEST_CASE("source lookup refuses mismatched or ambiguous ownership", "[import-identity]")
+{
+	const DataRoot root("bernini-invalid-source-resolution");
+	const auto     store    = root.Source();
+	const auto     source   = "Authored/Meshes/street.glb";
+	auto           document = ImportDocument();
+	document.source         = source;
+	document.identity       = { 1, "street.glb" };
+	document.outputs        = { importOutputKey(document.identity, AssetType::kMesh) };
+	SECTION("missing sidecar")
+	{
+		CHECK_THROWS(store.ResolveImport(source, AssetType::kMesh));
+		return;
+	}
+	SECTION("source mismatch") { document.source = "Authored/Meshes/other.glb"; }
+	SECTION("unmigrated document") { document.identity = {}; }
+	SECTION("wrong name") { document.outputs = { "Derived/Meshes/other.bmesh" }; }
+	SECTION("duplicate kind") { document.outputs.push_back(document.outputs.front()); }
+	SECTION("no produced output") { document.outputs.clear(); }
+	store.Save(document, importDocumentKeyFor(source));
+	CHECK_THROWS(store.ResolveImport(source, AssetType::kMesh));
+}
+
+TEST_CASE(
+	"Output ownership follows a moved sidecar without scanning for every load",
+	"[import-identity][perf]")
+{
+	const DataRoot   root("bernini-output-ownership");
+	const auto       loose = root.Source();
+	auto             files = std::make_shared<CountingFileSystem>(loose.GetFiles());
+	const AssetStore store(root.path, files);
+	auto             document = ImportDocument();
+	document.source           = "Authored/Meshes/street.glb";
+	document.identity         = { 1, "street.glb" };
+	const auto output         = importOutputKey(document.identity, AssetType::kMesh);
+	document.outputs          = { output };
+	const auto key            = importDocumentKeyFor(document.source);
+	store.Save(document, key);
+	store.Save(ImportDocument{}, "Authored/Meshes/unrelated.bimport");
+	const auto first = store.FindImportForOutput(output);
+	REQUIRE(first.has_value());
+	CHECK(first->documentKey == key);
+	const auto unrelatedReads = files->ReadsOf("Authored/Meshes/unrelated.bimport");
+	for (int i = 0; i < 32; ++i) REQUIRE(store.FindImportForOutput(output).has_value());
+	CHECK(files->ReadsOf("Authored/Meshes/unrelated.bimport") == unrelatedReads);
+	const auto moved = "Authored/Meshes/avenue.bimport";
+	std::filesystem::rename(root.path / key, root.path / moved);
+	const auto found = store.FindImportForOutput(output);
+	REQUIRE(found.has_value());
+	CHECK(found->documentKey == moved);
+	CHECK(found->document.identity == document.identity);
+	document.bindings = { { "road", "Authored/Materials/road.bmaterial" } };
+	store.Save(document, moved);
+	CHECK(store.FindImportForOutput(output)->document.bindings == document.bindings);
+	CHECK(first->document.bindings.empty());
+	store.Save(document, "Authored/Meshes/duplicate.bimport");
+	CHECK_THROWS(store.FindImportForOutput(output));
+}

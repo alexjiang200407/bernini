@@ -8,7 +8,7 @@
 
 namespace assetlib
 {
-	struct BMesh;
+	struct MeshBindings;
 }
 
 namespace editor
@@ -24,14 +24,11 @@ namespace editor
 	};
 
 	/**
-	 * The looks `mesh` registers for its submesh at `sourceSubmesh`, by name, as the Material combo
+	 * The looks `bindings` registers for its submesh at `sourceSubmesh`, by name, as the Material combo
 	 * lists them under the submesh's default. Empty for a submesh that registers none.
-	 *
-	 * Read off the mesh rather than the `.bimport`, because that is where a load leaves them
-	 * (`assetlib::rebuildMaterialSlots`) and the panel already holds one.
 	 */
 	[[nodiscard]] std::vector<RegisteredMaterial>
-	RegisteredMaterialsFor(const assetlib::BMesh& mesh, uint32_t sourceSubmesh);
+	RegisteredMaterialsFor(const assetlib::MeshBindings& bindings, uint32_t sourceSubmesh);
 
 	/**
 	 * Whether `name` can be registered for a submesh that already registers `taken`: a name is

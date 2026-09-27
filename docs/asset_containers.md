@@ -30,14 +30,14 @@ when this page disagrees, trust the header, then fix this page.
 | Kind | Files | Written by |
 |---|---|---|
 | Authored text | `.bmaterial`, `.benv`, `.bimport`, `.bavatar`, `.bblend`, `.bgrass` | the editor, `migrate`, deliberate saves |
-| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
+| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/BC/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 | Foreign, authored | `.rml`, `.rcss` (UI documents and styles), `.ttf` (fonts) | a person, in `Authored/UI` and `Authored/Fonts`; this library stores and packs them and parses none of them |
 | Foreign, authored, unpacked | `.slang` (game surfaces) | a person, in `Authored/Shaders`; the renderer opens them off a host path rather than through the mount, so `pack` skips them — see [Game-Defined Surfaces](game_defined_surfaces.md) |
 
 ## Text documents
 
-One shape, shared by every authored container ([libs/assetlib/src/json_doc.h](libs/assetlib/src/json_doc.h)):
+One shape, shared by every authored container ([libs/assetlib/src/io/json_doc.h](libs/assetlib/src/io/json_doc.h)):
 
 * **Canonical on every write**: sorted keys, tab indent, one trailing newline, floats at the
   float's shortest decimal (`doc::plainFloat`). One content is one byte sequence, so `migrate`'s
@@ -56,7 +56,11 @@ skips leading whitespace and asks whether the bytes open a JSON object, exactly 
 
 ## Cache entries
 
-One format, in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen 64-byte
+The mesh cache also stores its source's named grass fields, chunks and clumps. A field's look slot
+is its field index; look paths belong to the source's import bindings. The legacy standalone grass
+cache is still produced until importer and runtime adoption of the embedded data is complete.
+
+One format, in [libs/assetlib/src/io/cache_io.h](libs/assetlib/src/io/cache_io.h): a frozen 64-byte
 header, the source's mount key, 16-byte-aligned schema-less chunks, and a chunk table at the end.
 The header is versioned (`headerVersion`, currently 1) and **frozen forever** — tools address its
 fields by offset (see `tests/src/CacheTamper.h`).
@@ -97,6 +101,18 @@ payload, which is what keeps a whole-project staleness survey off the disk's thr
 
 ### What an import document records about its outputs
 
+The CLI's `bake --name` chooses the copied source's destination under `Authored/Meshes`.
+It mints a random identity before writing and records it in the sidecar. Mesh, skeleton and
+animation filenames use `<source-filename>-<16-digit-id>.<extension>` in their category directories;
+extracted textures use that same label and ID as their folder. Two sources with the same filename
+in different authored folders therefore have distinct outputs. An occupied source destination
+still refuses the import without overwriting files.
+
+The editor's mesh import dialog uses the same naming functions and retains only source and
+material destination fields. Geometry, animation and texture checkboxes choose what to import;
+they do not choose cache names. Texture-only imports also copy their source and write a sidecar,
+so their images have the same regeneration guarantee as a mesh import's images.
+
 A `.bimport` names three things, two of which nothing else can derive
 ([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
 
@@ -132,11 +148,10 @@ last bits differ by platform — so its bump is the author's to remember.
 
 `bindings` names each submesh's default material; `materialOverrides` registers named alternatives
 per submesh (`"materialOverrides": {"crate[0]": {"Rusty": "Authored/Materials/rust.bmaterial"}}`),
-omitted when there are none. `rebuildMaterialSlots` rebuilds every regenerated mesh's material
-slots from both, and the `.bmesh` carries the result, since `pack` leaves the document behind. An
-override-only material still takes a slot in the mesh's `materials`, so it is a reference the scan,
-a rename and a deletion see. A re-import keeps the overrides — nothing in the source can put them
-back.
+omitted when there are none. `LoadRegenMesh` resolves these into an owned `MeshBindings`
+snapshot without editing geometry or its original material slot indices. Named bindings that no
+longer match geometry are reported in `unboundBindings`. The sidecar travels in a pack, and the
+same resolution applies to loose and packed loads. Re-import preserves authored overrides.
 `outputs` is what makes the derived set answerable from the authored side, which is the only way to
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.
@@ -222,7 +237,7 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel`, `.banim` and `.bgrassfields` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, a mesh source's extracted `.ktx2` from the texture re-extract, and an environment's `.bsky` and `.benvl` from `Reimport` when absent and from `migrate` when stale. |
 | **Ignorable, but by hand** | a *material's* baked maps under `Derived/BakedTextures/` — the triplet and the occlusion map alike. `assetlib_cli migrate` re-bakes one whose maps its sources no longer produce, when those sources are there to cook from, as do `assetlib_cli bakematerials` and the editor's **Bake All**. Until one of those has run, a fresh checkout opens with every material stale, drawing untextured where it routes and from the extracted source where it names an occlusion map. An *environment's* maps in the same directory are not in this row: a `.bsky` or `.benvl` is baked as it is written, so `Reimport` and `migrate` put them back with it, and `migrate` re-bakes one lost from under a container still on disk. |
 | **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky` or `.benvl` back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
@@ -319,6 +334,12 @@ form — geometry through the regeneration seam
 current meshes), everything else as read. A second run rewrites nothing; a file it cannot read is
 reported per-file, and the CLI exits non-zero. `assetlib_cli describe -p <project> <key> --key`
 prints a cache entry's key without loading its payload.
+
+Legacy mesh and environment imports receive a persisted identity and frozen source filename.
+Migration moves their outputs and extracted-texture directories to generated category keys,
+rewrites tracked references and moves skeleton avatars with their rigs. Materials whose routes
+change are re-baked in the same run. A shared identity or extracted-texture directory is reported
+as a failure for the affected sources; a dry run changes nothing.
 
 **An import binds a rig that has grown, too.** `FindMatchingSkeleton` pairs an imported rig to the
 project's by signature; where nothing matches outright, a project rig that has only *gained* bones

@@ -79,8 +79,12 @@ and fix the map.
 | Mesh placement | [BMeshUtil.h](../libs/editor_sdk/include/editor_sdk/BMeshUtil.h) | Node transforms and bounds, without renderer state |
 | Preview interaction | [OrbitCamera.h](../libs/editor_sdk/include/editor_sdk/OrbitCamera.h) | Orbit, pan and dolly camera policy |
 | Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
-| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Supplied project store with a plain-file fallback for external meshes |
+| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Returns `RegenMesh`: geometry, owned bindings and the current `sourceKey` used for authoring after a move; external meshes use the codec directly and have no project bindings |
 | Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
+
+Material and animation panels read material choices, registered looks and skeleton keys from the
+binding snapshot. Mesh thumbnails retain that snapshot alongside their cooked geometry and apply
+materials per submesh, so shared cooked material slots do not couple authored choices.
 | Default plugin | [plugin.h](../apps/editor/plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
@@ -129,7 +133,8 @@ register general panels; Blend Space registers an asset editor for `.bblend`, an
 asset editor in the Window menu (`MainWindow::ListUnopenedAssetEditors`), where it opens empty. Showing a contribution
 by ID creates either kind, and document opening raises its tab before delivering the key.
 The target-public `default_editor/import_writers.h` lets the
-host import pipeline write Material graphs; it is not a plugin SDK lifecycle interface.
+host import pipeline write Material graphs and receive named material bindings for the import
+sidecar. The writer reads submesh names without changing geometry. It is not a plugin SDK lifecycle interface.
 
 Each preview composes the QWidget returned by `CreateViewport`, forwarding its mouse, wheel, drag and
 resize events to plugin-owned interaction. The host retains render scheduling and presentation.

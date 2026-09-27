@@ -7,9 +7,7 @@
 namespace assetlib
 {
 	/**
-	 * The grass a mesh source grows: every POINTS primitive of a `.glb`, cooked beside its `.bmesh`
-	 * from the same source and by the same import. A cache entry of its own rather than part of the
-	 * mesh, so a change to how clumps are stored re-cooks grass and leaves every mesh alone.
+	 * Decoded grass for import and renderer inputs. Cooked storage belongs to BMesh::grassFields.
 	 *
 	 * A field's chunks are a run of `chunks`, and each chunk's clumps a run of `clumps`.
 	 */

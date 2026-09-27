@@ -418,7 +418,7 @@ Two couplings worth knowing:
   format renders opaque cards — and plain box mips dilute a sub-texel strand's alpha, which under
   stochastic coverage is expected coverage lost: the strand fades out with distance rather than
   thinning. `bakeMaterial` keeps hashed base colour in BC7 and rescales its mips against the
-  material's cutoff, exactly as the alpha test always had ([material_bake.cpp](libs/assetlib/src/material_bake.cpp)).
+  material's cutoff, exactly as the alpha test always had ([material_bake.cpp](libs/assetlib/src/material/material_bake.cpp)).
 
 * **Near pixel size on both axes, which is what bounds the anisotropy.** The cell is isotropic on
   the surface and the projection is not, so `c_MaxAnisotropy` decides how wide a cell may get across

@@ -416,12 +416,9 @@ TEST_CASE(
 namespace
 {
 	BMesh
-	NamedMesh(
-		const std::vector<std::pair<std::string, uint32_t>>& submeshes,
-		const std::vector<std::string>&                      materials)
+	NamedMesh(const std::vector<std::pair<std::string, uint32_t>>& submeshes)
 	{
 		BMesh mesh;
-		mesh.materials = materials;
 		for (const auto& [name, material] : submeshes)
 		{
 			Submesh submesh{};
@@ -438,13 +435,15 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 	const DataRoot root("bernini_importdoc_write");
 	WriteText(root.path / "kirk.glb", "the source");
 
-	const BMesh mesh = NamedMesh(
-		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
-		{ "Authored/Materials/skin.bmaterial", "Authored/Materials/teeth.bmaterial" });
+	const BMesh mesh =
+		NamedMesh({ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } });
 
-	const ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
-	const AssetStore   store(root.path);
-	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
+	ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
+	target.bindings =
+		std::vector<MaterialBinding>{ { "kirk[0]", "Authored/Materials/skin.bmaterial" },
+		                              { "kirk[1]", "Authored/Materials/teeth.bmaterial" } };
+	const AssetStore store(root.path);
+	const SourceRef  ref = store.CopyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "Authored/Meshes/kirk.glb");
 	CHECK(ref.stamp.size > 0);
 	store.WriteImportedDocument(target, &mesh);
@@ -467,9 +466,11 @@ TEST_CASE(
 	const DataRoot root("bernini_importdoc_overrides");
 	WriteText(root.path / "crate.glb", "the source");
 
-	const BMesh mesh = NamedMesh({ { "crate[0]", 0 } }, { "Authored/Materials/wood.bmaterial" });
-	const ImportTarget target{ "Authored/Meshes/crate.glb", 24.0f, {} };
-	const AssetStore   store(root.path);
+	const BMesh  mesh = NamedMesh({ { "crate[0]", 0 } });
+	ImportTarget target{ "Authored/Meshes/crate.glb", 24.0f, {} };
+	target.bindings =
+		std::vector<MaterialBinding>{ { "crate[0]", "Authored/Materials/wood.bmaterial" } };
+	const AssetStore store(root.path);
 	static_cast<void>(store.CopyImportedSource(root.path / "crate.glb", target));
 	store.WriteImportedDocument(target, &mesh);
 
@@ -605,14 +606,10 @@ TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 
 TEST_CASE("colliding submesh names are refused before anything is written", "[importdoc]")
 {
-	const BMesh colliding = NamedMesh(
-		{ { "cube", 0 }, { "cube", 1 } },
-		{ "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" });
+	const BMesh colliding = NamedMesh({ { "cube", 0 }, { "cube", 1 } });
 	CHECK_THROWS(requireUniqueSubmeshNames(colliding));
 
-	const BMesh unique = NamedMesh(
-		{ { "cube", 0 }, { "sphere", 1 } },
-		{ "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" });
+	const BMesh unique = NamedMesh({ { "cube", 0 }, { "sphere", 1 } });
 	CHECK_NOTHROW(requireUniqueSubmeshNames(unique));
 }
 

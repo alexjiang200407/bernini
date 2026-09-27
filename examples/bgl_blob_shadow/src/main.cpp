@@ -306,7 +306,7 @@ main(int argc, char** argv)
 
 				(void)staticAssets->CreateInstance(
 					view,
-					staticAssets->AcquireMesh(staticMeshKey, meshIndex),
+					staticAssets->AcquireMesh(staticDoc.source, meshIndex),
 					headless::InstanceTransform(staticModel, n));
 			}
 		}
@@ -402,7 +402,7 @@ main(int argc, char** argv)
 					casterParts.emplace_back(
 						casterAssets->CreateInstance(
 							view,
-							casterAssets->AcquireMesh(meshKey, meshIndex),
+							casterAssets->AcquireMesh(document.source, meshIndex),
 							local),
 						local);
 					headless::GrowBounds(
@@ -417,8 +417,12 @@ main(int argc, char** argv)
 						*posedBounds[meshIndex] :
 						assetlib::posedBounds(model, meshIndex, *skeleton, *animations);
 
-				game::AssetManager::SkinnedMesh acquired =
-					casterAssets->AcquireSkinnedMesh(meshKey, animationsKey, {}, meshIndex, posed);
+				game::AssetManager::SkinnedMesh acquired = casterAssets->AcquireSkinnedMesh(
+					document.source,
+					document.source,
+					{},
+					meshIndex,
+					posed);
 				skinnedPlacements.emplace_back(acquired.geom, local);
 				clips = std::move(acquired.clips);
 

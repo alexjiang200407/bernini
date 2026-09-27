@@ -70,6 +70,9 @@ namespace assetlib
 
 		ImportIdentity identity;
 
+		/** Source revision shared by the packed outputs; recorded by pack without shipping the source. */
+		SourceStamp packedSourceStamp;
+
 		float sampleRate = c_DefaultSampleRate;
 
 		// The extracted textures' whole cache key, since a `.ktx2` carries none of its own: where
@@ -130,10 +133,6 @@ namespace assetlib
 		 */
 		[[nodiscard]] std::string
 		GetMeshOutput() const;
-
-		/** The `.bgrassfields` among `outputs`, or empty for a source that grows no grass. */
-		[[nodiscard]] std::string
-		GetGrassOutput() const;
 
 		bool
 		operator==(const ImportDocument&) const = default;

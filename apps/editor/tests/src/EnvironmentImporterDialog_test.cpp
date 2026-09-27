@@ -2,6 +2,7 @@
 
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QPixmap>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -143,12 +144,6 @@ TEST_CASE("A plain environment name is taken as typed", "[envimportdialog]")
 namespace
 {
 	QLineEdit*
-	SkyDirField(const EnvironmentImporterDialog& dialog)
-	{
-		return dialog.findChild<QLineEdit*>("skyDirectory");
-	}
-
-	QLineEdit*
 	ImportedSourceDirField(const EnvironmentImporterDialog& dialog)
 	{
 		return dialog.findChild<QLineEdit*>("importedSourceDirectory");
@@ -161,9 +156,6 @@ TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 {
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
-	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
-	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
-
 	// The copy of the file being imported, which is what the family is re-produced from.
 	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources");
 }
@@ -172,15 +164,10 @@ TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
 {
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
-	SkyDirField(dialog)->setText("outdoor/dusk");
-
-	CHECK(dialog.GetSkyDirectory() == "Derived/Sky/outdoor/dusk");
-
 	ImportedSourceDirField(dialog)->setText("outdoor");
 	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources/outdoor");
 
 	// The others are untouched by it.
-	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
 }
 
 // The category is the fixed part. A folder that could re-root the join would put a `.bsky` somewhere
@@ -200,27 +187,20 @@ TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog
 
 	INFO("typed: " << rejected.toStdString());
 
-	SkyDirField(dialog)->setText(rejected);
 	ImportedSourceDirField(dialog)->setText(rejected);
 
 	// Falls back to the bare category rather than refusing: the import still lands somewhere correct.
-	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
 
 	// And the copied source stays in the one category a re-import looks in.
 	CHECK(dialog.GetImportedSourceDirectory() == "Authored/EnvSources");
 }
 
-// A destination is meaningless when that part is not being written, and leaving it live invites the
-// user to fill in a field that does nothing.
-TEST_CASE("A part's folder is disabled with the part", "[envimportdialog]")
+TEST_CASE("Environment imports offer only authored destination fields", "[envimportdialog]")
 {
-	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
-
-	REQUIRE(SkyDirField(dialog)->isEnabled());
-
-	SkyBox(dialog)->setChecked(false);
-	CHECK_FALSE(SkyDirField(dialog)->isEnabled());
-
-	SkyBox(dialog)->setChecked(true);
-	CHECK(SkyDirField(dialog)->isEnabled());
+	EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
+	CHECK(dialog.findChild<QLineEdit*>("skyDirectory") == nullptr);
+	CHECK(dialog.findChild<QLineEdit*>("lightingDirectory") == nullptr);
+	REQUIRE(ImportedSourceDirField(dialog) != nullptr);
+	dialog.show();
+	CHECK(dialog.grab().save("environment_importer.got.png"));
 }

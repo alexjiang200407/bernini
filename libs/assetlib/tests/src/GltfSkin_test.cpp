@@ -11,7 +11,7 @@
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include "mounted_io.h"
+#include "io/mounted_io.h"  // IWYU pragma: keep
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -21,6 +21,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
+#include "RefsSandbox.h"
 #include "SkinnedGltf.h"
 #include <assetlib/AssetStore.h>
 #include <cstddef>
@@ -406,7 +407,7 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
 	const AssetStore store(outDir);
-	store.WriteImportedRig(
+	const auto       rig = store.WriteImportedRig(
 		import.skeleton,
 		import.animations,
 		baked,
@@ -418,15 +419,10 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 
 	const auto mesh = StoreAt(outDir).Load<BMesh>(KeyIn(c_MeshesDirectoryName, "rig.bmesh"));
 
-	// A mesh whose vertices carry joints and that names no skeleton has indices nothing can resolve,
-	// which is why the two are written together rather than the rig being an authoring choice.
 	REQUIRE(isSkinned(mesh));
-	CHECK(mesh.skeleton == KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
-	CHECK(
-		loadMeshRefs(outDir / KeyIn(c_MeshesDirectoryName, "rig.bmesh")).skeleton ==
-		KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
+	CHECK(rig.skeleton == KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
 
-	const auto skeleton = StoreAt(outDir).Load<Skeleton>(mesh.skeleton);
+	const auto skeleton = StoreAt(outDir).Load<Skeleton>(rig.skeleton);
 	REQUIRE(skeleton.bones.size() == 2);
 
 	const auto animations =
@@ -467,51 +463,22 @@ TEST_CASE("A malformed animation sampler is rejected, not read past", "[gltf][sk
 	}
 }
 
-TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]")
+TEST_CASE("Skinned geometry stores its rig layout without a binding path", "[bmesh][io][skeleton]")
 {
-	// A joint index is a bare number into a bone array. Detached from the skeleton it was remapped
-	// into it resolves to nothing, and neither the renderer nor a reader can tell -- so the file is
-	// refused at both ends rather than written and discovered later.
 	const SkinnedGltf source("bernini_gltf_skin_invariant");
-	const auto        import = loadFromGltf(source.gltf);
-
-	BMesh mesh = toBMesh(import);
-	REQUIRE(isSkinned(mesh));
-	REQUIRE(mesh.skeleton.empty());  // toBMesh assigns no paths; bake is what names the rig
-
-	CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
-
-	SECTION("and naming one makes it writable again")
-	{
-		mesh.skeleton = "rig.bskel";
-		CHECK(
-			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh)).skeleton ==
-			"rig.bskel");
-	}
-
-	SECTION(
-		"but a mesh with no joints may still name one, which is how an attachment hangs off a bone")
-	{
-		BMesh attachment    = mesh;
-		attachment.skeleton = "rig.bskel";
-		for (Submesh& submesh : attachment.submeshes) submesh.layout.attributeCount = 1;
-
-		REQUIRE_FALSE(isSkinned(attachment));
-		CHECK(
-			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(attachment)).skeleton ==
-			"rig.bskel");
-	}
+	const auto        imported = loadFromGltf(source.gltf);
+	auto              mesh     = toBMesh(imported);
+	mesh.skeletonSignature     = skeletonSignature(imported.skeleton);
+	mesh.skeletonBoneNames     = skeletonBoneNames(imported.skeleton);
+	const auto decoded         = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+	CHECK(isSkinned(decoded));
+	CHECK(decoded.skeletonSignature == mesh.skeletonSignature);
+	CHECK(decoded.skeletonBoneNames == mesh.skeletonBoneNames);
 }
 
-TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
+TEST_CASE("A mesh with no joints loads as static geometry", "[bmesh][io]")
 {
-	// Chunks are addressed by id and an absent or empty one is not an error, so a mesh with nothing
-	// in its skeleton chunk reads as what it is, a static mesh.
-	const fs::path bmesh = "assets/Data/Derived/Meshes/apples.bmesh";
-	REQUIRE(fs::exists(bmesh));
-
-	const auto mesh = LoadAt<BMesh>(bmesh);
-	CHECK_FALSE(mesh.materials.empty());
-	CHECK(mesh.skeleton.empty());
+	const auto original = assetlib::test::MakeMesh({ "Authored/Materials/static.bmaterial" });
+	const auto mesh     = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(original));
 	CHECK_FALSE(isSkinned(mesh));
 }

@@ -8,7 +8,7 @@
 #include <QString>
 #include <QTemporaryDir>
 
-#include <assetlib_structs/BMesh.h>
+#include <assetlib/MeshBindings.h>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <qstringliteral.h>
@@ -19,24 +19,20 @@
 
 namespace
 {
-	assetlib::BMesh
+	assetlib::MeshBindings
 	MeshWithLooks()
 	{
-		auto mesh      = assetlib::BMesh();
-		mesh.materials = { "Authored/Materials/wood.bmaterial",
-			               "Authored/Materials/rust.bmaterial",
-			               "Authored/Materials/gold.bmaterial" };
-
-		mesh.materialOverrides = { { 0, "Rusty", 1 },
-			                       { 1, "Gilded", 2 },
-			                       { 0, "Gone", 7 } };  // a slot the mesh does not have
+		auto mesh              = assetlib::MeshBindings();
+		mesh.materialOverrides = { { 0, "Rusty", "Authored/Materials/rust.bmaterial" },
+			                       { 1, "Gilded", "Authored/Materials/gold.bmaterial" },
+			                       { 0, "Gone", "" } };
 		return mesh;
 	}
 }
 
 TEST_CASE("A submesh lists only the looks registered for it", "[materialoverrides]")
 {
-	const assetlib::BMesh mesh = MeshWithLooks();
+	const assetlib::MeshBindings mesh = MeshWithLooks();
 
 	CHECK(
 		editor::RegisteredMaterialsFor(mesh, 0) ==
@@ -49,11 +45,11 @@ TEST_CASE("A submesh lists only the looks registered for it", "[materialoverride
 	CHECK(editor::RegisteredMaterialsFor(mesh, 2).empty());
 }
 
-TEST_CASE("A look naming a material the mesh does not carry is not listed", "[materialoverrides]")
+TEST_CASE("An unbound registered look is not listed", "[materialoverrides]")
 {
 	// Listing it would put an entry in the combo that resolves to nothing, and selecting it would
 	// silently show the submesh's default instead.
-	const assetlib::BMesh mesh = MeshWithLooks();
+	const assetlib::MeshBindings mesh = MeshWithLooks();
 	for (const editor::RegisteredMaterial& look : editor::RegisteredMaterialsFor(mesh, 0))
 		CHECK(look.name != QStringLiteral("Gone"));
 }

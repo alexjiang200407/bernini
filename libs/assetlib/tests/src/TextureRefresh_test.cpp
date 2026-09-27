@@ -59,7 +59,7 @@ namespace
 		Textures() const
 		{
 			auto names = std::vector<std::string>();
-			for (const auto& entry : fs::directory_iterator(root / c_TextureDir))
+			for (const auto& entry : fs::directory_iterator(root / Document().textureDir))
 				names.push_back(entry.path().filename().string());
 			std::ranges::sort(names);
 			return names;

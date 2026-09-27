@@ -83,7 +83,6 @@ namespace
 		mesh.submeshes.emplace_back(submesh);
 
 		mesh.meshes.emplace_back(assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1 });
-		mesh.materials = { "Materials/ground.bmaterial" };
 
 		return mesh;
 	}

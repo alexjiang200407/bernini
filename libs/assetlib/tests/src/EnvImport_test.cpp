@@ -1,6 +1,7 @@
 
 #include <algorithm>
 #include <array>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_import.h>  // IWYU pragma: keep -- completes MigrateReport's MovedTexture
 #include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
@@ -9,6 +10,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
+#include <assetlib/pak.h>
 #include <assetlib/progress.h>
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BEnv.h>
@@ -35,7 +37,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
 #include <assetlib_structs/VkFormat.h>
@@ -174,10 +176,22 @@ namespace
 		return path;
 	}
 
-	std::vector<std::string>
-	FamilyOutputs()
+	std::string
+	SkyOutput(const Sandbox& sandbox)
 	{
-		return { "Derived/EnvLighting/forest.benvl", "Derived/Sky/forest.bsky" };
+		return importOutputKey(sandbox.Document().identity, AssetType::kSky);
+	}
+
+	std::string
+	LightingOutput(const Sandbox& sandbox)
+	{
+		return importOutputKey(sandbox.Document().identity, AssetType::kEnvLighting);
+	}
+
+	std::vector<std::string>
+	FamilyOutputs(const Sandbox& sandbox)
+	{
+		return { LightingOutput(sandbox), SkyOutput(sandbox) };
 	}
 }
 
@@ -189,8 +203,8 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 
 	const EnvImportResult result = sandbox.Store().ImportEnvironment(sandbox.Desc());
 
-	REQUIRE(result.sky == "Derived/Sky/forest.bsky");
-	REQUIRE(result.lighting == "Derived/EnvLighting/forest.benvl");
+	REQUIRE(result.sky == SkyOutput(sandbox));
+	REQUIRE(result.lighting == LightingOutput(sandbox));
 	REQUIRE(result.environment == "Authored/Environments/forest.benv");
 
 	CHECK(sandbox.Has(result.sky));
@@ -228,8 +242,8 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 		written == std::vector<std::string>{ "Authored/EnvSources/forest.bimport",
 	                                         "Authored/EnvSources/forest.ktx2",
 	                                         "Authored/Environments/forest.benv",
-	                                         "Derived/EnvLighting/forest.benvl",
-	                                         "Derived/Sky/forest.bsky" });
+	                                         LightingOutput(sandbox),
+	                                         SkyOutput(sandbox) });
 }
 
 // The checkboxes. A sky is re-authored in seconds and the lighting takes minutes, so paying for the
@@ -249,7 +263,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		CHECK(result.lighting.empty());
 		CHECK(result.environment.empty());
 		CHECK(sandbox.Has(result.sky));
-		CHECK_FALSE(sandbox.Has("Derived/EnvLighting/forest.benvl"));
+		CHECK(sandbox.Store().GetFiles().Enumerate("Derived/EnvLighting").empty());
 
 		// No lighting means nothing derived an exposure, and reporting one would be inventing it.
 		CHECK(result.exposure == Catch::Approx(1.0f));
@@ -267,7 +281,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 
 		CHECK(result.sky.empty());
 		CHECK(sandbox.Has(result.lighting));
-		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+		CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 	}
 
 	SECTION("an environment composes only the half that was written")
@@ -296,7 +310,7 @@ TEST_CASE("A cancelled import is refused before it writes anything", "[envimport
 
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(sandbox.Desc(), stop.get_token()), Cancelled);
 
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
 }
 
@@ -325,7 +339,7 @@ TEST_CASE("A failure part-way rolls back what it had written", "[envimport]")
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The sky was fully written -- bake and `.bsky` -- before the lighting failed.
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 	CHECK_FALSE(sandbox.Has("Authored/Environments/forest.benv"));
 
 	// The copy went in first and the document goes in last; a failure between them takes the first
@@ -341,10 +355,10 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 	const Sandbox sandbox("bernini_envimport_spares");
 
 	// Put the `.bsky` there first, so the failing import overwrites it rather than creating it.
-	auto sky        = sandbox.Desc();
-	sky.lighting    = false;
-	sky.environment = false;
-	static_cast<void>(sandbox.Store().ImportEnvironment(sky));
+	auto sky            = sandbox.Desc();
+	sky.lighting        = false;
+	sky.environment     = false;
+	const auto existing = sandbox.Store().ImportEnvironment(sky);
 	fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.bimport");
 	fs::remove(sandbox.DataRoot() / "Authored/EnvSources/forest.ktx2");
 
@@ -353,7 +367,7 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 	// The copy was this import's, and goes. The `.bsky` was already there, and stays -- deleting it
 	// would destroy whatever wrote it first.
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.ktx2"));
-	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Has(existing.sky));
 }
 
 // Baked maps are content-addressed and shared, so the map an import wrote may be one another
@@ -367,7 +381,7 @@ TEST_CASE("A rollback leaves the baked maps to the prune", "[envimport]")
 
 	// The `.bsky` naming it is gone, so the map is now an orphan -- but it is still on disk, which is
 	// the whole point: FindUnusedBakedTextures is what decides an orphan's fate, not this call.
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 
 	bool anyBakedMap = false;
 	for (const auto& entry : fs::directory_iterator(sandbox.DataRoot() / "Derived/BakedTextures"))
@@ -424,7 +438,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		CHECK_THROWS(sandbox.Store().ImportEnvironment(desc));
 
 		// And the refusal is not a half-import: nothing was written before the source was read.
-		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+		CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 	}
 }
 
@@ -443,8 +457,8 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		const std::vector<std::string> targets =
 			sandbox.Store().EnvironmentImportTargets(sandbox.Desc());
 
-		CHECK(names(targets, "Derived/Sky/forest.bsky"));
-		CHECK(names(targets, "Derived/EnvLighting/forest.benvl"));
+		CHECK(names(targets, "Authored/EnvSources/forest.ktx2"));
+		CHECK(names(targets, "Authored/EnvSources/forest.bimport"));
 		CHECK(names(targets, "Authored/Environments/forest.benv"));
 
 		// Content-addressed, so a collision with one is two imports agreeing rather than one
@@ -492,11 +506,11 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 	// Folders move the targets with them, or the check would look in the wrong place.
 	SECTION("a subfolder moves what it would write")
 	{
-		auto desc   = sandbox.Desc();
-		desc.skyDir = "Derived/Sky/outdoor";
+		auto desc              = sandbox.Desc();
+		desc.importedSourceDir = "Authored/EnvSources/outdoor";
 
 		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
-		CHECK(names(targets, "Derived/Sky/outdoor/forest.bsky"));
+		CHECK(names(targets, "Authored/EnvSources/outdoor/forest.ktx2"));
 	}
 }
 
@@ -516,7 +530,7 @@ TEST_CASE("An import copies its source and writes the document beside it", "[env
 	const ImportDocument document = sandbox.Document();
 	CHECK(document.source == result.source);
 	CHECK(document.environment == desc.parameters);
-	CHECK(document.outputs == FamilyOutputs());
+	CHECK(document.outputs == FamilyOutputs(sandbox));
 	CHECK(document.envSourceStamp == stampOf(sandbox.DataRoot() / result.source));
 	CHECK(document.envSourceBakeToken == c_EnvSourceBakeToken);
 	CHECK(document.envSkyParametersHash != 0);
@@ -550,7 +564,7 @@ TEST_CASE("A source copied outside its category is refused before anything runs"
 	CHECK_THROWS_WITH(
 		sandbox.Store().ImportEnvironment(desc),
 		Catch::Matchers::ContainsSubstring("Authored/EnvSources"));
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 
 	desc                   = sandbox.Desc();
 	desc.importedSourceDir = "Authored/EnvSources/outdoor";
@@ -572,6 +586,50 @@ TEST_CASE("A source that is neither .hdr nor .ktx2 is refused", "[envimport]")
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.exr"));
 }
 
+TEST_CASE(
+	"Legacy environment names migrate with their authored references once",
+	"[envimport][migrate]")
+{
+	const Sandbox sandbox("bernini_envimport_names_migrate");
+	const auto    store    = sandbox.Store();
+	const auto    imported = store.ImportEnvironment(sandbox.Desc());
+	const auto    graph    = AssetRefGraph::Scan(store);
+	auto          plan     = RenamePlan();
+	plan.subject           = { imported.document, imported.document };
+	plan.outputs           = { { imported.sky, "Derived/Sky/forest.bsky" },
+		                       { imported.lighting, "Derived/EnvLighting/forest.benvl" } };
+	for (const auto& move : plan.outputs)
+		for (const auto& edge : graph.ReferrersOf(move.from))
+			if (isStoredRef(edge.kind))
+				plan.referrers.push_back(edge);
+	REQUIRE(store.RenameAsset(plan).status == RenameStatus::kRenamed);
+	auto legacy     = store.Load<ImportDocument>(imported.document);
+	legacy.identity = {};
+	store.Save(legacy, imported.document);
+	const auto before = sandbox.Bytes(imported.document);
+	const auto dry    = store.Migrate(true);
+	CHECK(dry.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(sandbox.Bytes(imported.document) == before);
+	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
+	const auto migrated = store.Migrate(false);
+	REQUIRE(migrated.Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto document = sandbox.Document();
+	CHECK(document.identity.id != 0);
+	CHECK(document.identity.label == "forest.ktx2");
+	const auto env = store.Load<BEnv>(imported.environment);
+	CHECK(env.sky == SkyOutput(sandbox));
+	CHECK(env.lighting == LightingOutput(sandbox));
+	CHECK(sandbox.Has(env.sky));
+	CHECK(sandbox.Has(env.lighting));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK_FALSE(sandbox.Has("Derived/EnvLighting/forest.benvl"));
+	const auto authored = sandbox.Bytes(imported.document);
+	const auto again    = store.Migrate(false);
+	CHECK(again.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(again.Count(MigratedFile::Outcome::kRewritten) == 0);
+	CHECK(sandbox.Bytes(imported.document) == authored);
+}
+
 // The recovery an environment without its derived files is given: import again from the copy the
 // project already holds. Copying a file onto itself would truncate it first.
 TEST_CASE("Re-importing from the copy in the project leaves the copy intact", "[envimport]")
@@ -582,56 +640,53 @@ TEST_CASE("Re-importing from the copy in the project leaves the copy intact", "[
 
 	auto desc   = sandbox.Desc();
 	desc.source = sandbox.DataRoot() / "Authored/EnvSources/forest.ktx2";
-	CHECK_NOTHROW(sandbox.Store().ImportEnvironment(desc));
+	CHECK_THROWS(sandbox.Store().ImportEnvironment(desc));
+	fs::remove_all(sandbox.DataRoot() / "Derived");
+	CHECK(sandbox.Store().Reimport(false).GetFailedCount() == 0);
 
 	CHECK(sandbox.Bytes("Authored/EnvSources/forest.ktx2") == before);
-	CHECK(sandbox.Document().outputs == FamilyOutputs());
+	CHECK(sandbox.Document().outputs == FamilyOutputs(sandbox));
 }
 
-// The split exists so a sky is re-authored without paying for the lighting. A document forgetting
-// the lighting there would leave a `.benvl` nothing can re-produce.
-TEST_CASE("A sky-only re-import keeps the lighting's claim and parameters", "[envimport]")
+TEST_CASE(
+	"A second environment import refuses the occupied source without changing files",
+	"[envimport]")
 {
-	const Sandbox sandbox("bernini_envimport_skyonly");
-	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
-	const ImportDocument first = sandbox.Document();
-
-	auto desc                     = sandbox.Desc();
-	desc.lighting                 = false;
-	desc.parameters.skyMips       = 2;
-	desc.parameters.prefilterMips = 5;  // not what the lighting on disk was made with
-	static_cast<void>(sandbox.Store().ImportEnvironment(desc));
-
-	const ImportDocument second = sandbox.Document();
-	CHECK(second.outputs == FamilyOutputs());
-	REQUIRE(second.environment.has_value());
-	CHECK(second.environment->skyMips == 2);
-	CHECK(second.environment->prefilterMips == first.environment->prefilterMips);
-	CHECK(second.envLightingParametersHash == first.envLightingParametersHash);
-	CHECK(second.envSkyParametersHash != first.envSkyParametersHash);
-}
-
-TEST_CASE("A part-only re-import from a different file is refused", "[envimport]")
-{
-	const Sandbox sandbox("bernini_envimport_otherfile");
-	static_cast<void>(sandbox.Store().ImportEnvironment(sandbox.Desc()));
-	const std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
-
-	const fs::path other = sandbox.path / "incoming" / "dusk.ktx2";
-	writeKTX2(ConstantCube(16, 2.0f), other, false, Ktx2Compression::kNone);
-
-	auto desc     = sandbox.Desc();
-	desc.source   = other;
-	desc.lighting = false;
+	const Sandbox sandbox("bernini_envimport_duplicate");
+	const auto    result    = sandbox.Store().ImportEnvironment(sandbox.Desc());
+	const auto    source    = sandbox.Bytes(result.source);
+	const auto    document  = sandbox.Bytes(result.document);
+	const auto    sky       = sandbox.Bytes(result.sky);
+	const auto    lighting  = sandbox.Bytes(result.lighting);
+	auto          desc      = sandbox.Desc();
+	desc.lighting           = false;
+	desc.parameters.skyMips = 2;
 	CHECK_THROWS_WITH(
 		sandbox.Store().ImportEnvironment(desc),
-		Catch::Matchers::ContainsSubstring("lighting"));
+		Catch::Matchers::ContainsSubstring("already exists"));
+	CHECK(sandbox.Bytes(result.source) == source);
+	CHECK(sandbox.Bytes(result.document) == document);
+	CHECK(sandbox.Bytes(result.sky) == sky);
+	CHECK(sandbox.Bytes(result.lighting) == lighting);
+}
 
-	CHECK(sandbox.Bytes("Derived/Sky/forest.bsky") == sky);
-
-	// Both parts from the new file describe one image again, so that is not refused.
-	desc.lighting = true;
-	CHECK_NOTHROW(sandbox.Store().ImportEnvironment(desc));
+TEST_CASE("Same-named environment sources own distinct generated outputs", "[envimport]")
+{
+	const Sandbox sandbox("bernini_envimport_same_name");
+	auto          desc     = sandbox.Desc();
+	desc.environment       = false;
+	desc.importedSourceDir = "Authored/EnvSources/one";
+	const auto first       = sandbox.Store().ImportEnvironment(desc);
+	desc.importedSourceDir = "Authored/EnvSources/two";
+	const auto second      = sandbox.Store().ImportEnvironment(desc);
+	const auto a           = sandbox.Store().Load<ImportDocument>(first.document).identity;
+	const auto b           = sandbox.Store().Load<ImportDocument>(second.document).identity;
+	CHECK(a.label == "forest.ktx2");
+	CHECK(b.label == a.label);
+	CHECK(a.id != b.id);
+	CHECK(first.sky != second.sky);
+	CHECK(first.lighting != second.lighting);
+	CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);
 }
 
 // A document records each part's parameters apart, which only means something if each part's pixels
@@ -645,7 +700,7 @@ TEST_CASE("The lighting's pixels do not depend on the sky's face size", "[envimp
 		desc.parameters.skyFaceSize = skyFaceSize;
 		static_cast<void>(sandbox.Store().ImportEnvironment(desc));
 		const BEnvLighting lighting =
-			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>("Derived/EnvLighting/forest.benvl");
+			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>(LightingOutput(sandbox));
 		return std::pair{ sandbox.Bytes(lighting.prefilter.baked),
 			              sandbox.Bytes(lighting.irradiance.baked) };
 	};
@@ -666,12 +721,6 @@ namespace
 		auto desc   = sandbox.Desc();
 		desc.source = WriteGradientHdr(sandbox.path / "incoming" / "forest.hdr");
 		return sandbox.Store().ImportEnvironment(desc);
-	}
-
-	std::vector<std::string>
-	GradientOutputs()
-	{
-		return FamilyOutputs();
 	}
 
 	const ReimportedSource*
@@ -697,7 +746,8 @@ TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport
 	static_cast<void>(ImportGradient(sandbox));
 
 	auto before = std::vector<std::vector<std::byte>>();
-	for (const std::string& output : GradientOutputs()) before.push_back(sandbox.Bytes(output));
+	for (const std::string& output : FamilyOutputs(sandbox))
+		before.push_back(sandbox.Bytes(output));
 	const std::vector<std::byte> document    = sandbox.Bytes("Authored/EnvSources/forest.bimport");
 	const std::vector<std::byte> environment = sandbox.Bytes("Authored/Environments/forest.benv");
 
@@ -708,13 +758,13 @@ TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport
 	const auto* entry  = Find(report, "Authored/EnvSources/forest.hdr");
 	REQUIRE(entry != nullptr);
 	CHECK(entry->message.empty());
-	CHECK(entry->written == GradientOutputs());
-	CHECK(steps == GradientOutputs().size());
+	CHECK(entry->written == FamilyOutputs(sandbox));
+	CHECK(steps == FamilyOutputs(sandbox).size());
 
 	for (size_t i = 0; i < before.size(); ++i)
 	{
-		INFO(GradientOutputs()[i]);
-		CHECK(sandbox.Bytes(GradientOutputs()[i]) == before[i]);
+		INFO(FamilyOutputs(sandbox)[i]);
+		CHECK(sandbox.Bytes(FamilyOutputs(sandbox)[i]) == before[i]);
 	}
 
 	// What a person authored is neither an output nor rewritten.
@@ -722,7 +772,7 @@ TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport
 	CHECK(sandbox.Bytes("Authored/Environments/forest.benv") == environment);
 
 	// And the maps the containers name were baked on the way.
-	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox));
 	CHECK(sandbox.Has(sky.sky.baked));
 
 	SECTION("a second run finds nothing to do")
@@ -738,17 +788,17 @@ TEST_CASE("A lost container is re-cooked alone", "[envimport][reimport]")
 	const Sandbox sandbox("bernini_envreimport_container");
 	static_cast<void>(ImportGradient(sandbox));
 
-	const auto lightingAt            = WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl");
-	const std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
-	fs::remove(sandbox.DataRoot() / "Derived/Sky/forest.bsky");
+	const auto                   lightingAt = WrittenAt(sandbox, LightingOutput(sandbox));
+	const std::vector<std::byte> sky        = sandbox.Bytes(SkyOutput(sandbox));
+	fs::remove(sandbox.DataRoot() / SkyOutput(sandbox));
 
 	const ReimportReport report = sandbox.Store().Reimport(false);
 	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
 	REQUIRE(entry != nullptr);
-	CHECK(entry->written == std::vector<std::string>{ "Derived/Sky/forest.bsky" });
+	CHECK(entry->written == std::vector<std::string>{ SkyOutput(sandbox) });
 
-	CHECK(sandbox.Bytes("Derived/Sky/forest.bsky") == sky);
-	CHECK(WrittenAt(sandbox, "Derived/EnvLighting/forest.benvl") == lightingAt);
+	CHECK(sandbox.Bytes(SkyOutput(sandbox)) == sky);
+	CHECK(WrittenAt(sandbox, LightingOutput(sandbox)) == lightingAt);
 }
 
 // No float source is left to draw instead, so a baked map lost under a container that is still there
@@ -758,7 +808,7 @@ TEST_CASE("Migrate re-bakes a map lost from under its container", "[envimport][r
 	const Sandbox sandbox("bernini_envreimport_bakedmap");
 	static_cast<void>(ImportGradient(sandbox));
 
-	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	const BSky                   sky   = StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox));
 	const std::vector<std::byte> baked = sandbox.Bytes(sky.sky.baked);
 	fs::remove(sandbox.DataRoot() / sky.sky.baked);
 	REQUIRE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
@@ -766,7 +816,7 @@ TEST_CASE("Migrate re-bakes a map lost from under its container", "[envimport][r
 	// The preview names it without cooking it, and writes nothing.
 	const MigrateReport dry = sandbox.Store().Migrate(true);
 	CHECK(std::ranges::any_of(dry.files, [&](const MigratedFile& file) {
-		return file.path == sandbox.DataRoot() / "Derived/Sky/forest.bsky" &&
+		return file.path == sandbox.DataRoot() / SkyOutput(sandbox) &&
 		       file.outcome == MigratedFile::Outcome::kRewritten;
 	}));
 	CHECK_FALSE(sandbox.Has(sky.sky.baked));
@@ -775,7 +825,7 @@ TEST_CASE("Migrate re-bakes a map lost from under its container", "[envimport][r
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 	CHECK(sandbox.Bytes(sky.sky.baked) == baked);
 	CHECK_FALSE(isSkyBakeStale(
-		StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"),
+		StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox)),
 		MountAt(sandbox.DataRoot())));
 }
 
@@ -788,8 +838,8 @@ TEST_CASE("A dry run names an absent environment's files and writes none", "[env
 	const ReimportReport report = sandbox.Store().Reimport(true);
 	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
 	REQUIRE(entry != nullptr);
-	CHECK(entry->written == GradientOutputs());
-	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(entry->written == FamilyOutputs(sandbox));
+	CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 }
 
 TEST_CASE(
@@ -821,7 +871,7 @@ TEST_CASE(
 		const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
 		REQUIRE(entry != nullptr);
 		CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("forest_extra.ktx2"));
-		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+		CHECK(sandbox.Store().GetFiles().Enumerate("Derived/Sky").empty());
 	}
 }
 
@@ -835,14 +885,11 @@ namespace
 		StoreAt(sandbox.DataRoot()).Save(document, "Authored/EnvSources/forest.bimport");
 	}
 
-	const std::vector<std::string> c_SkyOutputs      = { "Derived/Sky/forest.bsky" };
-	const std::vector<std::string> c_LightingOutputs = { "Derived/EnvLighting/forest.benvl" };
-
 	/** The map a part's container names, decoded. */
 	ImageData
 	BakedSky(const Sandbox& sandbox)
 	{
-		const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+		const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox));
 		return loadKTX2(sandbox.DataRoot() / sky.sky.baked);
 	}
 
@@ -850,7 +897,7 @@ namespace
 	BakedPrefilter(const Sandbox& sandbox)
 	{
 		const BEnvLighting lighting =
-			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>("Derived/EnvLighting/forest.benvl");
+			StoreAt(sandbox.DataRoot()).Load<BEnvLighting>(LightingOutput(sandbox));
 		return sandbox.Bytes(lighting.prefilter.baked);
 	}
 
@@ -880,16 +927,18 @@ TEST_CASE("An edited sky parameter re-cooks the sky alone", "[envimport][stale]"
 {
 	const Sandbox sandbox("bernini_envstale_sky");
 	static_cast<void>(ImportGradient(sandbox));
-	const ImportDocument before     = sandbox.Document();
-	const auto           lightingAt = WrittenAll(sandbox, c_LightingOutputs);
+	const ImportDocument before = sandbox.Document();
+	const auto           lightingAt =
+		WrittenAll(sandbox, std::vector<std::string>{ LightingOutput(sandbox) });
 
 	EditDocument(sandbox, [](ImportDocument& document) { document.environment->skyMips = 2; });
 	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
 
 	CHECK(
-		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") == c_SkyOutputs);
+		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
+		std::vector<std::string>{ SkyOutput(sandbox) });
 	CHECK(BakedSky(sandbox).mipLevels == 2);
-	CHECK(WrittenAll(sandbox, c_LightingOutputs) == lightingAt);
+	CHECK(WrittenAll(sandbox, std::vector<std::string>{ LightingOutput(sandbox) }) == lightingAt);
 
 	const ImportDocument after = sandbox.Document();
 	CHECK(after.envSkyParametersHash != before.envSkyParametersHash);
@@ -897,7 +946,7 @@ TEST_CASE("An edited sky parameter re-cooks the sky alone", "[envimport][stale]"
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 
 	// The container was re-baked at the new parameters, so it is current against its source.
-	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky");
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox));
 	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 }
 
@@ -905,7 +954,7 @@ TEST_CASE("An edited lighting parameter re-cooks the lighting alone", "[envimpor
 {
 	const Sandbox sandbox("bernini_envstale_lighting");
 	static_cast<void>(ImportGradient(sandbox));
-	const auto skyAt = WrittenAll(sandbox, c_SkyOutputs);
+	const auto skyAt = WrittenAll(sandbox, std::vector<std::string>{ SkyOutput(sandbox) });
 
 	EditDocument(sandbox, [](ImportDocument& document) {
 		document.environment->prefilterSamples = 8;
@@ -914,8 +963,8 @@ TEST_CASE("An edited lighting parameter re-cooks the lighting alone", "[envimpor
 
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
-		c_LightingOutputs);
-	CHECK(WrittenAll(sandbox, c_SkyOutputs) == skyAt);
+		std::vector<std::string>{ LightingOutput(sandbox) });
+	CHECK(WrittenAll(sandbox, std::vector<std::string>{ SkyOutput(sandbox) }) == skyAt);
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
@@ -931,7 +980,7 @@ TEST_CASE("A source re-exported in place re-cooks every part", "[envimport][stal
 
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
-		GradientOutputs());
+		FamilyOutputs(sandbox));
 	CHECK(BakedPrefilter(sandbox) != prefilter);
 	CHECK(
 		sandbox.Document().envSourceStamp ==
@@ -950,7 +999,7 @@ TEST_CASE("A moved revision re-cooks every part", "[envimport][stale]")
 
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
-		GradientOutputs());
+		FamilyOutputs(sandbox));
 	CHECK(sandbox.Document().envSourceBakeToken == c_EnvSourceBakeToken);
 }
 
@@ -986,7 +1035,7 @@ TEST_CASE("Migrate re-cooks a stale environment; a dry run only names it", "[env
 	static_cast<void>(ImportGradient(sandbox));
 	EditDocument(sandbox, [](ImportDocument& document) { document.environment->skyMips = 2; });
 
-	const auto skyAt   = WrittenAll(sandbox, c_SkyOutputs);
+	const auto skyAt   = WrittenAll(sandbox, std::vector<std::string>{ SkyOutput(sandbox) });
 	const auto hasPath = [&](const MigrateReport& report, const std::string& relative) {
 		return std::ranges::any_of(report.files, [&](const MigratedFile& file) {
 			return file.path == sandbox.DataRoot() / relative &&
@@ -996,12 +1045,12 @@ TEST_CASE("Migrate re-cooks a stale environment; a dry run only names it", "[env
 
 	const MigrateReport dry = sandbox.Store().Migrate(true);
 	CHECK(hasPath(dry, "Authored/EnvSources/forest.bimport"));
-	CHECK(WrittenAll(sandbox, c_SkyOutputs) == skyAt);
+	CHECK(WrittenAll(sandbox, std::vector<std::string>{ SkyOutput(sandbox) }) == skyAt);
 	CHECK(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
 
 	const MigrateReport wet = sandbox.Store().Migrate(false);
 	CHECK(wet.Count(MigratedFile::Outcome::kFailed) == 0);
-	CHECK(hasPath(wet, "Derived/Sky/forest.bsky"));
+	CHECK(hasPath(wet, SkyOutput(sandbox)));
 	CHECK_FALSE(sandbox.Has("Derived/SourceTextures"));
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
@@ -1013,21 +1062,22 @@ TEST_CASE("A container written at another revision re-cooks its part alone", "[e
 {
 	const Sandbox sandbox("bernini_envstale_revision");
 	static_cast<void>(ImportGradient(sandbox));
-	const auto lightingAt = WrittenAll(sandbox, c_LightingOutputs);
+	const auto lightingAt =
+		WrittenAll(sandbox, std::vector<std::string>{ LightingOutput(sandbox) });
 
 	// The header's bake token, eight bytes after the magic and the header version.
-	std::vector<std::byte> sky = sandbox.Bytes("Derived/Sky/forest.bsky");
+	std::vector<std::byte> sky = sandbox.Bytes(SkyOutput(sandbox));
 	REQUIRE(sky.size() > 16);
 	sky[8] = static_cast<std::byte>(static_cast<uint8_t>(sky[8]) ^ 0xffu);
-	core::file::write_atomic(sandbox.DataRoot() / "Derived/Sky/forest.bsky", sky);
-	REQUIRE_THROWS(StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"));
+	core::file::write_atomic(sandbox.DataRoot() / SkyOutput(sandbox), sky);
+	REQUIRE_THROWS(StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox)));
 
 	REQUIRE(sandbox.Store().GetStaleEnvironmentSources() == c_Stale);
 
 	const MigrateReport report = sandbox.Store().Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
-	CHECK_NOTHROW(StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/forest.bsky"));
-	CHECK(WrittenAll(sandbox, c_LightingOutputs) == lightingAt);
+	CHECK_NOTHROW(StoreAt(sandbox.DataRoot()).Load<BSky>(SkyOutput(sandbox)));
+	CHECK(WrittenAll(sandbox, std::vector<std::string>{ LightingOutput(sandbox) }) == lightingAt);
 	CHECK(sandbox.Store().GetStaleEnvironmentSources().empty());
 }
 
@@ -1040,11 +1090,11 @@ TEST_CASE("Migrate cooks a part both absent and stale once", "[envimport][stale]
 	EditDocument(sandbox, [](ImportDocument& document) {
 		document.environment->prefilterSamples = 8;
 	});
-	fs::remove(sandbox.DataRoot() / "Derived/EnvLighting/forest.benvl");
+	fs::remove(sandbox.DataRoot() / LightingOutput(sandbox));
 
 	const MigrateReport report = sandbox.Store().Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
-	for (const std::string& output : c_LightingOutputs)
+	for (const std::string& output : std::vector<std::string>{ LightingOutput(sandbox) })
 	{
 		INFO(output);
 		// The walk reports every container it reads; only a rewrite is a cook.
@@ -1068,15 +1118,15 @@ TEST_CASE("A part written before a later one throws is still reported", "[envimp
 	EditDocument(sandbox, [](ImportDocument& document) {
 		document.environment->prefilterMips = 5;
 	});
-	fs::remove(sandbox.DataRoot() / "Derived/Sky/forest.bsky");
-	fs::remove(sandbox.DataRoot() / "Derived/EnvLighting/forest.benvl");
+	fs::remove(sandbox.DataRoot() / SkyOutput(sandbox));
+	fs::remove(sandbox.DataRoot() / LightingOutput(sandbox));
 
 	const ReimportReport report = sandbox.Store().Reimport(false);
 	const auto*          entry  = Find(report, "Authored/EnvSources/forest.hdr");
 	REQUIRE(entry != nullptr);
 	CHECK_THAT(entry->message, Catch::Matchers::ContainsSubstring("mips"));
-	CHECK(entry->written == std::vector<std::string>{ "Derived/Sky/forest.bsky" });
-	CHECK(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(entry->written == std::vector<std::string>{ SkyOutput(sandbox) });
+	CHECK(sandbox.Has(SkyOutput(sandbox)));
 }
 
 // A project an older build imported claims the float cubes it wrote beside each container. Those are
@@ -1092,11 +1142,11 @@ TEST_CASE("A document claiming the old float cubes reads without them", "[envimp
 		document.outputs.push_back("Derived/SourceTextures/forest_irradiance.ktx2");
 		document.envSourceBakeToken = 1;
 	});
-	CHECK(sandbox.Document().outputs == GradientOutputs());
+	CHECK(sandbox.Document().outputs == FamilyOutputs(sandbox));
 
 	CHECK(
 		sandbox.Store().RefreshEnvironmentSource("Authored/EnvSources/forest.hdr") ==
-		GradientOutputs());
+		FamilyOutputs(sandbox));
 	CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);
 	CHECK_FALSE(sandbox.Has("Derived/SourceTextures"));
 
@@ -1121,45 +1171,32 @@ namespace
 		return store.DeleteAsset(planCascadeDeletion(AssetRefGraph::Scan(store), target));
 	}
 
-	/** The family `ImportGradient` writes, under another name. */
-	std::vector<std::string>
-	RenamedOutputs(std::string_view name)
-	{
-		auto out = std::vector<std::string>();
-		for (const std::string& output : GradientOutputs())
-		{
-			std::string renamed = output;
-			renamed.replace(renamed.find("forest"), 6, name);
-			out.push_back(renamed);
-		}
-		std::ranges::sort(out);
-		return out;
-	}
-
 	void
 	CheckRenamedToDusk(const Sandbox& sandbox)
 	{
-		for (const std::string& gone : GradientOutputs()) CHECK_FALSE(sandbox.Has(gone));
-		for (const std::string& now : RenamedOutputs("dusk")) CHECK(sandbox.Has(now));
 		CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
 
 		const ImportDocument document =
 			loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport");
-		CHECK(document.outputs == RenamedOutputs("dusk"));
+		CHECK(
+			document.outputs ==
+			std::vector<std::string>{ importOutputKey(document.identity, AssetType::kEnvLighting),
+		                              importOutputKey(document.identity, AssetType::kSky) });
 
 		// Everything that names the family follows it: the authored `.benv`, and the containers'
 		// routes into the source.
 		const BEnv env =
 			StoreAt(sandbox.DataRoot()).Load<BEnv>("Authored/Environments/forest.benv");
-		CHECK(env.sky == "Derived/Sky/dusk.bsky");
-		CHECK(env.lighting == "Derived/EnvLighting/dusk.benvl");
-		CHECK(
-			StoreAt(sandbox.DataRoot()).Load<BSky>("Derived/Sky/dusk.bsky").sky.source ==
-			document.source);
+		CHECK(env.sky == importOutputKey(document.identity, AssetType::kSky));
+		CHECK(env.lighting == importOutputKey(document.identity, AssetType::kEnvLighting));
 		CHECK(
 			StoreAt(sandbox.DataRoot())
-				.Load<BEnvLighting>("Derived/EnvLighting/dusk.benvl")
-				.prefilter.source == document.source);
+				.Load<BSky>(importOutputKey(document.identity, AssetType::kSky))
+				.sky.source == "Authored/EnvSources/" + document.identity.label);
+		CHECK(
+			StoreAt(sandbox.DataRoot())
+				.Load<BEnvLighting>(importOutputKey(document.identity, AssetType::kEnvLighting))
+				.prefilter.source == "Authored/EnvSources/" + document.identity.label);
 
 		const AssetStore store = sandbox.Store();
 		CHECK(AssetRefGraph::Scan(store).broken.empty());
@@ -1167,10 +1204,15 @@ namespace
 	}
 }
 
-TEST_CASE("Renaming an environment source moves the whole environment", "[envimport][assetrename]")
+TEST_CASE("Renaming an environment source preserves derived bytes", "[envimport][assetrename]")
 {
 	const Sandbox sandbox("bernini_envrename_source");
 	static_cast<void>(ImportGradient(sandbox));
+	const auto store         = sandbox.Store();
+	const auto skyKey        = SkyOutput(sandbox);
+	const auto lightingKey   = LightingOutput(sandbox);
+	const auto skyBytes      = store.GetFiles().Read(skyKey);
+	const auto lightingBytes = store.GetFiles().Read(lightingKey);
 
 	REQUIRE(
 		RenameIn(sandbox, "Authored/EnvSources/forest.hdr", "Authored/EnvSources/dusk.hdr")
@@ -1180,6 +1222,21 @@ TEST_CASE("Renaming an environment source moves the whole environment", "[envimp
 		loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport").source ==
 		"Authored/EnvSources/dusk.hdr");
 	CheckRenamedToDusk(sandbox);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+	CHECK(store.Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+	CHECK(store.Pack(PackDesc{ sandbox.DataRoot() / "moved.bpak" }).envsRebaked == 0);
+	CHECK(store.GetFiles().Read(skyKey) == skyBytes);
+	CHECK(store.GetFiles().Read(lightingKey) == lightingBytes);
+
+	SECTION("missing maps regenerate through the moved sidecar")
+	{
+		fs::remove(sandbox.DataRoot() / store.Load<BSky>(skyKey).sky.baked);
+		CHECK(store.Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+		CHECK(store.Exists(store.Load<BSky>(skyKey).sky.baked));
+	}
 
 	SECTION("and the renamed document still produces what it claims")
 	{
@@ -1188,7 +1245,9 @@ TEST_CASE("Renaming an environment source moves the whole environment", "[envimp
 		const auto*          entry  = Find(report, "Authored/EnvSources/dusk.hdr");
 		REQUIRE(entry != nullptr);
 		CHECK(entry->message.empty());
-		CHECK(entry->written == RenamedOutputs("dusk"));
+		CHECK(
+			entry->written ==
+			loadImportDocument(sandbox.DataRoot() / "Authored/EnvSources/dusk.bimport").outputs);
 	}
 }
 
@@ -1288,12 +1347,13 @@ TEST_CASE(
 {
 	const Sandbox sandbox("bernini_envdelete_document");
 	static_cast<void>(ImportGradient(sandbox));
+	const auto outputs = FamilyOutputs(sandbox);
 
 	REQUIRE(
 		DeleteIn(sandbox, "Authored/EnvSources/forest.bimport").status == DeletionStatus::kDeleted);
 	CHECK_FALSE(sandbox.Has("Authored/EnvSources/forest.bimport"));
 	CHECK(sandbox.Has("Authored/EnvSources/forest.hdr"));
-	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
+	for (const std::string& output : outputs) CHECK(sandbox.Has(output));
 }
 
 TEST_CASE("An environment's source and parts are held by what names them", "[envimport][cascade]")
@@ -1310,8 +1370,8 @@ TEST_CASE("An environment's source and parts are held by what names them", "[env
 	static_cast<void>(sandbox.Store().ImportEnvironment(cube));
 	CHECK(DeleteIn(sandbox, "Authored/EnvSources/valley.ktx2").status == DeletionStatus::kRefused);
 	CHECK(sandbox.Has("Authored/EnvSources/valley.ktx2"));
-	CHECK(DeleteIn(sandbox, "Derived/Sky/forest.bsky").status == DeletionStatus::kRefused);
-	for (const std::string& output : GradientOutputs()) CHECK(sandbox.Has(output));
+	CHECK(DeleteIn(sandbox, SkyOutput(sandbox)).status == DeletionStatus::kRefused);
+	for (const std::string& output : FamilyOutputs(sandbox)) CHECK(sandbox.Has(output));
 }
 
 // Deleting the environment a person authored frees what only it named. Each freed file's claim goes
@@ -1323,7 +1383,7 @@ TEST_CASE("Deleting the environment frees its parts and their claims", "[envimpo
 
 	REQUIRE(
 		DeleteIn(sandbox, "Authored/Environments/forest.benv").status == DeletionStatus::kDeleted);
-	for (const std::string& output : GradientOutputs()) CHECK_FALSE(sandbox.Has(output));
+	for (const std::string& output : FamilyOutputs(sandbox)) CHECK_FALSE(sandbox.Has(output));
 
 	CHECK(sandbox.Document().outputs.empty());
 	CHECK(sandbox.Store().Reimport(false).GetWrittenCount() == 0);

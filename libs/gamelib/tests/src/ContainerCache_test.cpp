@@ -126,9 +126,10 @@ namespace
 	};
 
 	// The three an acquire reads, and the only three this task caches.
-	const auto c_Containers = std::array<std::string, 3>{ { "Derived/Meshes/rig.bmesh",
-		                                                    "Derived/Skeletons/rig.bskel",
-		                                                    "Derived/Animations/rig.banim" } };
+	const auto c_Containers =
+		std::array<std::string, 3>{ { "Derived/Meshes/rig.glb-0000000000000001.bmesh",
+		                              "Derived/Skeletons/rig.glb-0000000000000001.bskel",
+		                              "Derived/Animations/rig.glb-0000000000000001.banim" } };
 }
 
 TEST_CASE("The static door reads its mesh once too", "[static][acquire][cache]")
@@ -148,20 +149,19 @@ TEST_CASE("The static door reads its mesh once too", "[static][acquire][cache]")
 	auto files  = std::make_shared<CountingFiles>(root.path);
 	auto assets = game::AssetManager(scene, assetlib::AssetStore(root.path, files));
 
-	const bgl::GeomHandle first = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
+	const bgl::GeomHandle first = assets.AcquireMesh("Authored/Meshes/rig.glb");
 	REQUIRE(first.IsValid());
 
 	// Released to zero, so the geom cache cannot be what answers the second acquire.
 	assets.ReleaseGeom(first);
 
-	const int before = files->ReadsOf("Derived/Meshes/rig.bmesh");
+	const int before = files->ReadsOf("Derived/Meshes/rig.glb-0000000000000001.bmesh");
 
-	const bgl::GeomHandle second = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
+	const bgl::GeomHandle second = assets.AcquireMesh("Authored/Meshes/rig.glb");
 	REQUIRE(second.IsValid());
 
-	// Two, not three: both staleness questions are asked again and the deserialize is what is
-	// skipped, exactly as it is for the skinned door below.
-	CHECK(files->ReadsOf("Derived/Meshes/rig.bmesh") == before + 2);
+	// The source key requires a separate ranged read; deserialization stays cached.
+	CHECK(files->ReadsOf("Derived/Meshes/rig.glb-0000000000000001.bmesh") == before + 3);
 }
 
 TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire][cache]")
@@ -179,12 +179,10 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	auto assets = game::AssetManager(scene, assetlib::AssetStore(root.path, files));
 
 	const auto first =
-		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 	REQUIRE(first.geom.IsValid());
 
-	// Four apiece: the stamp, the key the load's staleness refusal peeks at, the key the seam
-	// peeks at behind it, and the deserialize.
-	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 4);
+	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 6);
 
 	SECTION("a re-acquire after a full release reads nothing back off the disk")
 	{
@@ -201,7 +199,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		}
 
 		const auto second =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 		REQUIRE(second.geom.IsValid());
 
 		// Two apiece, not three: both staleness questions are asked again -- the stamp, and whether
@@ -212,7 +210,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		for (const std::string& path : c_Containers)
 		{
 			INFO(path);
-			CHECK(files->ReadsOf(path) == readsBefore[path] + 2);
+			CHECK(files->ReadsOf(path) == readsBefore[path] + 3);
 
 			// Still asked: a cache that stopped asking would serve a stale rig.
 			CHECK(files->StatsOf(path) > statsBefore[path]);
@@ -223,13 +221,14 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	{
 		assets.ReleaseGeom(first.geom);
 
-		auto clips = LoadAt<assetlib::AnimationSet>(root.path / "Derived/Animations/rig.banim");
+		auto clips = LoadAt<assetlib::AnimationSet>(
+			root.path / "Derived/Animations/rig.glb-0000000000000001.banim");
 		REQUIRE(clips.clips.size() == 1);
 		clips.clips[0].nameOffset = clips.stringPool.add("renamed");
-		SaveAt(clips, root.path / "Derived/Animations/rig.banim");
+		SaveAt(clips, root.path / "Derived/Animations/rig.glb-0000000000000001.banim");
 
 		const auto second =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+			assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 		REQUIRE(second.clips.size() == 1);
 		CHECK(second.clips[0].name == "renamed");
 	}
@@ -247,8 +246,8 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 			try
 			{
 				(void)other.AcquireSkinnedMesh(
-					"Derived/Meshes/rig.bmesh",
-					"Derived/Animations/rig.banim");
+					"Authored/Meshes/rig.glb",
+					"Authored/Meshes/rig.glb");
 			}
 			catch (const std::exception& e)
 			{
@@ -265,9 +264,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		const std::string firstFailure  = failureOf();
 		const std::string secondFailure = failureOf();
 
-		CHECK_THAT(
-			firstFailure,
-			Catch::Matchers::ContainsSubstring("Derived/Animations/rig.banim"));
+		CHECK_THAT(firstFailure, Catch::Matchers::ContainsSubstring("Authored/Meshes/rig.bimport"));
 		CHECK(secondFailure == firstFailure);
 	}
 }
@@ -297,7 +294,7 @@ TEST_CASE("A cached container is charged to its subsystem's memory tag", "[conta
 			scene,
 			assetlib::AssetStore(root.path, std::make_shared<CountingFiles>(root.path)));
 
-		(void)assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		(void)assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 
 		// The .bmesh under mesh, and the .banim and the .bskel it named under animation.
 		CHECK(tag_totals(MemoryTag::kMesh).live > meshBefore);

@@ -1,5 +1,7 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/MeshBindings.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/grass_patch.h>
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
@@ -185,19 +187,19 @@ namespace game
 		AcquireMaterial(std::string_view relPath, TexturePrefetch* prefetch = nullptr);
 
 		/**
-		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath`, or shares the geometry from a previous
-		 * call, acquiring a reference to each material its submeshes name (and thus to their textures).
+		 * Resolves the imported `sourceKey` and uploads mesh `meshIndex` of its geometry, or shares
+		 * the geometry from a previous call, acquiring its bound materials and their textures.
 		 *
-		 * A mesh that grows grass (`BMesh::grass`) gets it attached: each field on this mesh is drawn
+		 * A mesh with embedded grass gets it attached: each field on this mesh is drawn
 		 * with the `.bgrass` its slot names, and every look and its material is acquired and held by
 		 * the geom. A look that cannot be drawn -- no material, or one the renderer refuses -- is
 		 * warned about and its fields left bare, as an unbound submesh is left unlit.
 		 *
-		 * @throws std::runtime_error if the file or its grass file cannot be read, either is stale, or
+		 * @throws std::runtime_error if the import cannot resolve, the geometry is unreadable or stale, or
 		 *         `meshIndex` is out of range.
 		 */
 		bgl::GeomHandle
-		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
+		AcquireMesh(std::string_view sourceKey, uint32_t meshIndex = 0);
 
 		/**
 		 * An acquired skinned mesh: the geom to instance, and the two kinds of thing its instances
@@ -217,12 +219,13 @@ namespace game
 		};
 
 		/**
-		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as skinned geometry, or shares it from
-		 * a previous call, acquiring its materials like AcquireMesh does. See
+		 * Resolves the imported `sourceKey` and uploads mesh `meshIndex` as skinned geometry, or
+		 * shares it from a previous call, acquiring its materials like AcquireMesh does. See
 		 * [Skinned Meshes](docs/skinning.md).
 		 *
-		 * `animationsRelPath` names the clip set; the skeleton is the one that set was cooked against,
-		 * so a caller never names it. A live geom must be re-acquired with the same `.banim`.
+		 * `animationSourceKey` identifies the imported source of the clip set; the skeleton is the
+		 * one that set was cooked against, so a caller never names it. A live geom must be
+		 * re-acquired with the same `.banim`.
 		 *
 		 * `blendRelPath` names a `.bblend` whose spaces become nodes after the clips, resolved
 		 * against this clip set. Unlike `posedBounds` below, a **shared** acquire *is* checked
@@ -257,8 +260,8 @@ namespace game
 		 */
 		SkinnedMesh
 		AcquireSkinnedMesh(
-			std::string_view                       relPath,
-			std::string_view                       animationsRelPath,
+			std::string_view                       sourceKey,
+			std::string_view                       animationSourceKey,
 			std::string_view                       blendRelPath = {},
 			uint32_t                               meshIndex    = 0,
 			const std::optional<assetlib::Bounds>& posedBounds  = std::nullopt);
@@ -692,7 +695,7 @@ namespace game
 
 		/** `mesh`'s registered overrides for the submeshes of `entry`, rebased to the geom's own. */
 		[[nodiscard]] static std::vector<RegisteredMaterialOverride>
-		MaterialOverridesOf(const assetlib::BMesh& mesh, const assetlib::Mesh& entry);
+		MaterialOverridesOf(const assetlib::MeshBindings& bindings, const assetlib::Mesh& entry);
 
 		// Every kind now shares one arena, so a byte offset already identifies a material on its
 		// own. The type stays in the key regardless: a handle whose type disagrees with the record
@@ -744,7 +747,7 @@ namespace game
 		//
 		// The cache never trusts itself: the editor authors through assetlib rather than through
 		// this, so a write is invisible here and every read re-stamps.
-		const assetlib::BMesh&
+		assetlib::RegenMesh&
 		ReadMesh(std::string_view path);
 
 		const assetlib::Skeleton&
@@ -797,7 +800,7 @@ namespace game
 		 * `meshIndex` name. Nothing for a mesh with no grass.
 		 */
 		void
-		AttachMeshGrass(GeomRecord& record, const assetlib::BMesh& mesh, uint32_t meshIndex);
+		AttachMeshGrass(GeomRecord& record, const assetlib::RegenMesh& mesh, uint32_t meshIndex);
 
 		/**
 		 * The look the `.bgrass` at `key` describes, created on the first acquire and shared after;

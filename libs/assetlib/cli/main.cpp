@@ -3,8 +3,8 @@
 #include <array>
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/Project.h>
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -27,7 +27,6 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/err/util.h>
@@ -99,8 +98,6 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
-		case assetlib::RefKind::kMeshGrass:
-			return "grows the grass of";
 		case assetlib::RefKind::kDocumentSkeleton:
 			return "binds its source's joints to";
 		case assetlib::RefKind::kDocumentOutput:
@@ -230,7 +227,7 @@ main(int argc, char** argv)
 	bake->add_option(
 		"-n,--name",
 		name,
-		"Base name for the imported assets (default: the source's stem)");
+		"Source destination under Authored/Meshes, without .glb (default: the source's stem)");
 	bake->add_option(
 			"-r,--sample-rate",
 			sampleRate,
@@ -438,7 +435,7 @@ main(int argc, char** argv)
 		"migrate",
 		"Put every container the project's sources say should exist on disk, at what its current "
 		"state says it should hold: an absent one is produced from the source that names it, "
-		"stale geometry regenerates from its copied source, a rebind reaches its mesh, and a "
+		"stale geometry regenerates from its copied source, import outputs get stable names, and a "
 		"material whose sources no longer produce the maps it names is re-baked. A "
 		"file that is already current is left untouched, so running it twice rewrites nothing "
 		"the second time; a file that cannot be read -- or a stale group with no source -- is "
@@ -449,17 +446,6 @@ main(int argc, char** argv)
 		migrateDryRun,
 		"Report what would be rewritten; write nothing");
 	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
-
-	bool reauthorYes = false;
-
-	auto* reauthor = app.add_subcommand(
-		"reauthor",
-		"Rewrite every import document's bindings from its mesh's current state -- the one-time "
-		"adoption step that makes the documents authoritative. Run it once when a project first "
-		"picks up documents; run later it would overwrite any rebind saved only to a document "
-		"with the mesh's older state");
-	addProject(reauthor);
-	reauthor->add_flag("-y,--yes", reauthorYes, "Rewrite without asking for confirmation");
 
 	bool boundsDryRun = false;
 	bool boundsYes    = false;
@@ -512,15 +498,21 @@ main(int argc, char** argv)
 			if (name.empty())
 				name = fs::path(input).stem().string();
 
-			const fs::path bmeshPath = dataRoot / assetlib::c_MeshesDirectoryName /
-			                           (name + std::string(assetlib::c_MeshExtension));
-			const fs::path bskelPath =
-				dataRoot / assetlib::c_SkeletonsDirectoryName / assetlib::skeletonFileName(name);
-			const fs::path banimPath =
-				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
-
-			// Its own folder: two sources naming an image alike would collide in a shared one.
-			const fs::path textureDir = dataRoot / assetlib::c_SourceTexturesDirectoryName / name;
+			const std::string sourceKey = std::format(
+				"{}/{}{}",
+				assetlib::c_MeshSourcesDirectoryName,
+				name,
+				assetlib::c_ImportedSourceExtension);
+			const assetlib::AssetStore importStore(dataRoot);
+			const auto                 identity  = assetlib::makeImportIdentity(sourceKey);
+			const fs::path             bmeshPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kMesh));
+			const fs::path bskelPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kSkeleton));
+			const fs::path banimPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kAnimation));
+			const fs::path textureDir =
+				importStore.ResolveWritePath(assetlib::importTextureDirectory(identity));
 
 			assetlib::requireSelfContainedSource(input);
 
@@ -532,18 +524,12 @@ main(int argc, char** argv)
 			// else's on a rollback is not.
 			const bool writesRig   = !imported.skeleton.bones.empty();
 			const bool writesClips = writesRig && !imported.animations.clips.empty();
-			const bool writesGrass = !imported.grass.fields.empty();
-
-			fs::path grassPath = bmeshPath;
-			grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
 
 			auto files = std::vector<fs::path>{ bmeshPath };
 			if (writesRig)
 				files.push_back(bskelPath);
 			if (writesClips)
 				files.push_back(banimPath);
-			if (writesGrass)
-				files.push_back(grassPath);
 
 			// Import never overwrites, the same rule the editor's does: what it would replace is a
 			// mesh someone authored materials against, and none of it is recoverable.
@@ -555,14 +541,8 @@ main(int argc, char** argv)
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
 
-			const std::string sourceKey = std::format(
-				"{}/{}{}",
-				assetlib::c_MeshSourcesDirectoryName,
-				name,
-				assetlib::c_ImportedSourceExtension);
-
-			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ResolveWritePath(sourceKey);
-			const fs::path importDoc = assetlib::AssetStore(dataRoot).ImportDocumentPath(sourceKey);
+			const fs::path sourceCopy = importStore.ResolveWritePath(sourceKey);
+			const fs::path importDoc  = importStore.ImportDocumentPath(sourceKey);
 			files.push_back(sourceCopy);
 			files.push_back(importDoc);
 
@@ -600,18 +580,18 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::AssetStore importStore(dataRoot);
-				assetlib::ImportTarget     target{ sourceKey,
-					                               sampleRate,
-					                               importStore.KeyFor(textureDir) };
-				const assetlib::SourceRef  source = importStore.CopyImportedSource(input, target);
-				mesh.source                       = source;
+				assetlib::ImportTarget target{ sourceKey,
+					                           sampleRate,
+					                           importStore.KeyFor(textureDir) };
+				target.identity                  = identity;
+				const assetlib::SourceRef source = importStore.CopyImportedSource(input, target);
+				mesh.source                      = source;
 
 				importStore.WriteTextures(imported, target.textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				auto outputs = importStore.WriteImportedRig(
+				auto rig = importStore.WriteImportedRig(
 					imported.skeleton,
 					imported.animations,
 					mesh,
@@ -620,18 +600,11 @@ main(int argc, char** argv)
 					true,
 					source);
 
-				for (std::string& grass : importStore.WriteImportedGrass(
-						 imported.grass,
-						 mesh,
-						 importStore.KeyFor(grassPath),
-						 source))
-					outputs.push_back(std::move(grass));
-
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
-				outputs.push_back(importStore.KeyFor(bmeshPath));
-				target.skeleton = mesh.skeleton;
-				target.outputs  = std::move(outputs);
+				rig.outputs.push_back(importStore.KeyFor(bmeshPath));
+				target.skeleton = std::move(rig.skeleton);
+				target.outputs  = std::move(rig.outputs);
 				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
@@ -865,11 +838,7 @@ main(int argc, char** argv)
 				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
 				break;
 			}
-			case assetlib::AssetType::kGrassFields:
-			{
-				std::cout << describeAsset(store.LoadRegenGrassFields(key).fields);
-				break;
-			}
+
 			// sniff never answers either: a foreign kind has no codec, and an import document is
 			// text whose extension the text branch does not accept. Listed so the switch stays
 			// exhaustive, which is what makes a new AssetType a compile error here.
@@ -1005,56 +974,6 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("migrate failed: {}", e.what());
-			return 1;
-		}
-	}
-
-	if (*reauthor)
-	{
-		try
-		{
-			const assetlib::Project     project = assetlib::Project::Open(projectFile);
-			const std::filesystem::path root    = project.GetDataDirectory();
-
-			if (!reauthorYes &&
-			    !confirm("Rewrite the import documents' bindings from the meshes in place?"))
-			{
-				spdlog::info("Left '{}' alone.", root.string());
-				return 0;
-			}
-
-			const std::vector<assetlib::ReauthoredDocument> report =
-				assetlib::AssetStore(root).ReauthorImportDocuments();
-
-			size_t rewritten = 0;
-			size_t failed    = 0;
-			for (const assetlib::ReauthoredDocument& document : report)
-			{
-				switch (document.outcome)
-				{
-				case assetlib::ReauthoredDocument::Outcome::kUnchanged:
-					break;
-				case assetlib::ReauthoredDocument::Outcome::kRewritten:
-					++rewritten;
-					std::cout << "reauthored      " << document.key << '\n';
-					break;
-				case assetlib::ReauthoredDocument::Outcome::kFailed:
-					++failed;
-					std::cout << "cannot reauthor " << document.key << ": " << document.message
-							  << '\n';
-					break;
-				}
-			}
-			std::cout << std::format(
-				"{} unchanged, {} reauthored, {} failed\n",
-				report.size() - rewritten - failed,
-				rewritten,
-				failed);
-			return failed == 0 ? 0 : 1;
-		}
-		catch (const std::exception& e)
-		{
-			spdlog::error("reauthor failed: {}", e.what());
 			return 1;
 		}
 	}

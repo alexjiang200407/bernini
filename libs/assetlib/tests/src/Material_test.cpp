@@ -22,7 +22,7 @@
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
-#include "mounted_io.h"
+#include "io/mounted_io.h"
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Node.h>
@@ -702,16 +702,13 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 		REQUIRE(
 			std::filesystem::exists(outDir / "textures" / ("tex" + std::to_string(i) + ".ktx2")));
 
-	// The glTF's PBR materials do not. Nothing is written for them, and -- this is the part that used
-	// to be wrong -- the container does not name files that were never written: every submesh comes out
-	// unassigned rather than pointing at a matN.bmaterial that does not exist.
 	REQUIRE_FALSE(std::filesystem::exists(outDir / "mat0.bmaterial"));
 
 	const auto mesh = StoreAt(outDir).Load<BMesh>(KeyIn(c_MeshesDirectoryName, "suzanne.bmesh"));
-	REQUIRE(mesh.materials.empty());
 	REQUIRE_FALSE(mesh.submeshes.empty());
 
-	for (const Submesh& submesh : mesh.submeshes) REQUIRE(submesh.material == c_InvalidIndex);
+	for (size_t i = 0; i < mesh.submeshes.size(); ++i)
+		REQUIRE(mesh.submeshes[i].material == import.submeshes[i].material);
 
 	// suzanne.glb carries normals and UVs but no tangents, which is the ordinary case for a DCC
 	// export -- and a mesh that reaches disk without one renders its normal map as nothing at all.
@@ -719,28 +716,6 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	for (const Submesh& submesh : mesh.submeshes) REQUIRE(hasTangent(submesh));
 
 	std::filesystem::remove_all(outDir);
-}
-
-TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bmaterial][attach]")
-{
-	// The other half of the contract: an import leaves the submeshes unassigned, and this is how they
-	// get a material -- what the material editor calls when a material is saved.
-	const std::filesystem::path glb = "assets/suzanne.glb";
-	REQUIRE(std::filesystem::exists(glb));
-
-	auto mesh = toBMesh(loadFromGltf(glb));
-	REQUIRE(mesh.materials.empty());
-	REQUIRE_FALSE(mesh.submeshes.empty());
-
-	REQUIRE(attachMaterial(mesh, 0, "Authored/Materials/suzanne.bmaterial"));
-
-	REQUIRE(mesh.materials.size() == 1);
-	REQUIRE(mesh.materials[0] == "Authored/Materials/suzanne.bmaterial");
-	REQUIRE(mesh.submeshes[0].material == 0);
-
-	// Attaching the same material again is a no-op, not a duplicate slot.
-	REQUIRE_FALSE(attachMaterial(mesh, 0, "Authored/Materials/suzanne.bmaterial"));
-	REQUIRE(mesh.materials.size() == 1);
 }
 
 TEST_CASE("a material document is canonical text", "[bmaterial][io]")

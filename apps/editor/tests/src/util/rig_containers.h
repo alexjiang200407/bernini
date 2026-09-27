@@ -2,7 +2,9 @@
 
 #include "StoreAt.h"
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>  // IWYU pragma: keep
+#include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/glm.h>
@@ -21,8 +23,16 @@ namespace editor::test
 		const std::filesystem::path& rel,
 		std::string_view             skeleton)
 	{
-		auto mesh     = assetlib::BMesh();
-		mesh.skeleton = std::string(skeleton);
+		auto mesh                  = assetlib::BMesh();
+		auto document              = assetlib::ImportDocument();
+		document.source            = "Authored/Meshes/" + rel.stem().string() + ".glb";
+		document.skeleton          = std::string(skeleton);
+		document.outputs           = { rel.generic_string() };
+		mesh.source.key            = document.source;
+		mesh.source.parametersHash = assetlib::parametersHashOf(document);
+		assetlib::AssetStore(dataRoot).Save(
+			document,
+			assetlib::importDocumentKeyFor(document.source));
 		SaveAt(mesh, dataRoot / rel);
 	}
 

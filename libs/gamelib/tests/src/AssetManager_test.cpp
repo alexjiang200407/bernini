@@ -1,7 +1,9 @@
+#include "CountingFileSystem.h"
 #include "StoreAt.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
@@ -114,13 +116,13 @@ namespace
 		const std::filesystem::path&                       path,
 		std::span<const std::string>                       materials,
 		std::span<const uint32_t>                          materialIndices,
-		std::span<const assetlib::SubmeshMaterialOverride> overrides = {})
+		std::span<const assetlib::MaterialOverrideBinding> overrides = {})
 	{
 		constexpr uint16_t c_Stride = 12;  // one float32x3 position
 
-		auto mesh = assetlib::BMesh();
-		mesh.materials.assign(materials.begin(), materials.end());
-		mesh.materialOverrides.assign(overrides.begin(), overrides.end());
+		auto mesh     = assetlib::BMesh();
+		auto document = assetlib::ImportDocument();
+		document.materialOverrides.assign(overrides.begin(), overrides.end());
 
 		mesh.vertexData.resize(materialIndices.size() * 3 * c_Stride);
 
@@ -154,7 +156,10 @@ namespace
 			submesh.material              = materialIndex;
 			submesh.aabbMin               = glm::vec3(-1.0f);
 			submesh.aabbMax               = glm::vec3(1.0f);
-			submesh.nameOffset            = 0;
+			submesh.nameOffset = mesh.stringPool.add(std::to_string(mesh.submeshes.size()));
+			if (materialIndex < materials.size())
+				document.bindings.push_back(
+					{ std::to_string(mesh.submeshes.size()), materials[materialIndex] });
 			mesh.submeshes.push_back(submesh);
 
 			vertexCursor += 3;
@@ -173,6 +178,16 @@ namespace
 		mesh.roots.push_back(0);
 
 		std::filesystem::create_directories(path.parent_path());
+		const auto dataRoot = path.parent_path().parent_path().parent_path();
+		const auto label    = path.stem().string().substr(0, path.stem().string().size() - 17);
+		document.source     = "Authored/Meshes/" + label;
+		document.identity   = { 1, label };
+		document.outputs    = { path.lexically_relative(dataRoot).generic_string() };
+		mesh.source.key     = document.source;
+		mesh.source.parametersHash = assetlib::parametersHashOf(document);
+		assetlib::AssetStore(dataRoot).Save(
+			document,
+			assetlib::importDocumentKeyFor(document.source));
 		SaveAt(mesh, path);
 	}
 
@@ -404,11 +419,14 @@ TEST_CASE("AssetManager acquires a mesh's whole tree", "[gamelib][assets]")
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
 	SECTION("mesh -> materials -> textures, acquired and released transitively")
 	{
-		const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+		const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 		REQUIRE(geom.IsValid());
 		CHECK((*fx).GeomRefCount(geom) == 1);
 
@@ -432,8 +450,8 @@ TEST_CASE("AssetManager acquires a mesh's whole tree", "[gamelib][assets]")
 
 	SECTION("the same mesh asked for twice is uploaded once")
 	{
-		const bgl::GeomHandle first  = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
-		const bgl::GeomHandle second = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+		const bgl::GeomHandle first  = (*fx).AcquireMesh("Authored/Meshes/one.glb");
+		const bgl::GeomHandle second = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 		CHECK(first.handle.index == second.handle.index);
 		CHECK((*fx).GeomRefCount(first) == 2);
@@ -456,9 +474,12 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
@@ -486,11 +507,14 @@ TEST_CASE("AssetManager places instances into more than one view", "[gamelib][as
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
 	const bgl::SceneViewRef second = fx.gfx->CreateSceneView(fx.scene, 16);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 	// A null view is refused here, not left to crash inside bgl.
 	REQUIRE_THROWS_AS(
@@ -554,9 +578,12 @@ TEST_CASE("AssetManager swaps a submesh's material", "[gamelib][assets]")
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	const bgl::GeomHandle     geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle     geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 	const bgl::MaterialHandle m0   = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	(*fx).ReleaseMaterial(m0);
 	REQUIRE((*fx).MaterialRefCount(m0) == 1);  // held by the geom's one submesh
@@ -586,9 +613,12 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 	// Two units, same mesh. One will wear a skin.
 	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
@@ -670,10 +700,16 @@ TEST_CASE(
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial",
 		                                                   "Authored/Materials/rust.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0, 0 };
-	const auto overrides = std::vector<assetlib::SubmeshMaterialOverride>{ { 1, "Rusty", 1 } };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "two.bmesh", materials, materialIndices, overrides);
+	const auto overrides       = std::vector<assetlib::MaterialOverrideBinding>{
+		{ "1", "Rusty", "Authored/Materials/rust.bmaterial" }
+	};
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "two.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices,
+		overrides);
 
-	const bgl::GeomHandle         geom = (*fx).AcquireMesh("Derived/Meshes/two.bmesh");
+	const bgl::GeomHandle         geom = (*fx).AcquireMesh("Authored/Meshes/two.glb");
 	const bgl::MaterialHandle     m0   = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	const bgl::MeshInstanceHandle worn = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 	(*fx).ReleaseMaterial(m0);
@@ -1089,12 +1125,20 @@ TEST_CASE("AssetManager acquires a mesh's tree out of an archive", "[gamelib][as
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	fx.Remount(Archived(fx));
+	const auto archive  = Archived(fx);
+	const auto counting = std::make_shared<assetlib::test::CountingFileSystem>(archive.GetFiles());
+	CHECK_FALSE(archive.Exists("Authored/Meshes/one.glb"));
+	fx.Remount(assetlib::AssetStore(fx.root.path, counting));
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 	REQUIRE(geom.IsValid());
+	CHECK(counting->ReadsOf("Authored/Meshes/one.glb") == 0);
+	CHECK_THROWS((*fx).AcquireMesh("Derived/Meshes/one.glb-0000000000000001.bmesh"));
 	CHECK((*fx).GeomRefCount(geom) == 1);
 
 	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
@@ -1127,7 +1171,10 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
 	static_cast<void>(
 		assetlib::AssetStore(fx.root.path).Pack(assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
@@ -1163,9 +1210,12 @@ TEST_CASE("AssetManager: an instance can be moved through the manager", "[gameli
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
 	const auto moved  = glm::translate(glm::mat4(1.0f), glm::vec3(-4.0f, 0.0f, 0.5f));
@@ -1190,9 +1240,12 @@ TEST_CASE("AssetManager: moving an instance it does not own is refused", "[gamel
 
 	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(
+		fx.root.path / "Derived/Meshes" / "one.glb-0000000000000001.bmesh",
+		materials,
+		materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 	const auto            inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 
 	// Placed directly on the view, so the manager never recorded it.

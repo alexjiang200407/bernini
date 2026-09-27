@@ -245,54 +245,26 @@ TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 	CheckSameFiles(DerivedFiles(dataRoot), before);
 }
 
-// The document is now the only record of what a source produced, which puts it in the reference
-// graph: an `outputs` entry naming a key that no longer exists reads as *absent* to the producing
-// side, so a rename the document did not follow would put the old file back under its old name --
-// silently, on the next machine to run migrate, on exactly the gitignored-derived-tree project this
-// work exists to enable.
-TEST_CASE("A renamed output is followed, not reproduced under its old name", "[reimport]")
+TEST_CASE("A refused output move leaves reimport at the original keys", "[reimport][assetrename]")
 {
 	const test::SkinnedGltf source("bernini_reimport_rename_gltf");
 	const ImportedProject   project("bernini_reimport_rename", source.PackGlb());
-
-	const AssetStore& store = project.Store();
-
-	SECTION("a renamed mesh")
-	{
-		store.RenameAsset(planRename(
-			AssetRefGraph::Scan(store),
-			"Derived/Meshes/unit.bmesh",
-			"Derived/Meshes/hero.bmesh"));
-
-		const ImportDocument document =
-			loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
-		CHECK(
-			std::ranges::find(document.outputs, "Derived/Meshes/hero.bmesh") !=
-			document.outputs.end());
-		CHECK(
-			std::ranges::find(document.outputs, "Derived/Meshes/unit.bmesh") ==
-			document.outputs.end());
-
-		const ReimportReport report = store.Reimport(/*dryRun*/ false);
-		CHECK(report.GetWrittenCount() == 0);
-		CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
-	}
-
-	SECTION("a renamed rig")
-	{
-		store.RenameAsset(planRename(
-			AssetRefGraph::Scan(store),
-			"Derived/Skeletons/unit.bskel",
-			"Derived/Skeletons/hero.bskel"));
-
-		const ImportDocument document =
-			loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
-		CHECK(document.skeleton == "Derived/Skeletons/hero.bskel");
-
-		const ReimportReport report = store.Reimport(/*dryRun*/ false);
-		CHECK(report.GetWrittenCount() == 0);
-		CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Skeletons/unit.bskel"));
-	}
+	const AssetStore&       store  = project.Store();
+	const auto              before = store.GetFiles().Read("Authored/Meshes/unit.bimport");
+	CHECK_THROWS(planRename(
+		AssetRefGraph::Scan(store),
+		"Derived/Meshes/unit.bmesh",
+		"Derived/Meshes/hero.bmesh"));
+	CHECK_THROWS(planRename(
+		AssetRefGraph::Scan(store),
+		"Derived/Skeletons/unit.bskel",
+		"Derived/Skeletons/hero.bskel"));
+	CHECK(store.GetFiles().Read("Authored/Meshes/unit.bimport") == before);
+	fs::remove(project.dataRoot / "Derived/Meshes/unit.bmesh");
+	const auto report = store.Reimport(false);
+	CHECK(report.GetFailedCount() == 0);
+	CHECK(store.Exists("Derived/Meshes/unit.bmesh"));
+	CHECK_FALSE(store.Exists("Derived/Meshes/hero.bmesh"));
 }
 
 // `outputs` is a claim about what a source produced, not a need, so it must not turn every imported
@@ -381,6 +353,7 @@ TEST_CASE("Migrate produces what the sources name before it re-saves", "[reimpor
 {
 	const test::SkinnedGltf source("bernini_reimport_migrate_gltf");
 	const ImportedProject   project("bernini_reimport_migrate", source.PackGlb());
+	REQUIRE(project.Store().Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
 
 	const auto before = DerivedFiles(project.dataRoot);
 	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);

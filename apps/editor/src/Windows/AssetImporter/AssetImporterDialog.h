@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <assetlib/ImportIdentity.h>
 
 #include <assetlib/bmesh_gltf.h>
 #include <qcontainerfwd.h>
@@ -20,15 +21,10 @@ namespace editor
 	class ImportSection;
 }
 
-/**
- * Every file an import will write, and the one folder it cannot name file by file.
- *
- * Each path is relative to the project's data root and already inside its category --
- * `Derived/Meshes/animals/coyote.bmesh` -- because every reference in a project is written against
- * that layout: an import organises *within* a category and can never move an asset out of one.
- */
+/** Authored destinations and the derived keys generated from this import's identity. */
 struct ImportOutputs
 {
+	assetlib::ImportIdentity identity;
 	/**
 	 * The copied `.glb`. Its `.bimport` sidecar is derived from it by
 	 * `assetlib::importDocumentKeyFor`, so the pair is one destination and not two.
@@ -131,15 +127,7 @@ private:
 	[[nodiscard]] QString
 	Folder(const QLineEdit* field, const QString& category) const;
 
-	/**
-	 * Where the copied source goes: `Authored/Meshes/<what was typed>`, or the category itself when
-	 * nothing usable was typed.
-	 *
-	 * A blank field means the category root here and the source's name everywhere else. A derived
-	 * category must not be shared flat -- two imports' extracted textures would overwrite one
-	 * another -- while this one always has been, and a default that moved it would put a project's
-	 * sources in two places depending on when they were imported.
-	 */
+	/** The authored source folder; an empty field selects the category root. */
 	[[nodiscard]] QString
 	SourceFolder() const;
 
@@ -160,17 +148,10 @@ private:
 	QCheckBox* m_ImportPbrMaterials = nullptr;
 	QCheckBox* m_ImportAnimations   = nullptr;
 
-	editor::ImportSection* m_SourceSection    = nullptr;
-	editor::ImportSection* m_MeshSection      = nullptr;
-	editor::ImportSection* m_SkeletonSection  = nullptr;
-	editor::ImportSection* m_TextureSection   = nullptr;
-	editor::ImportSection* m_MaterialSection  = nullptr;
-	editor::ImportSection* m_AnimationSection = nullptr;
+	editor::ImportSection* m_SourceSection   = nullptr;
+	editor::ImportSection* m_MaterialSection = nullptr;
 
-	QLineEdit* m_SourceName    = nullptr;
-	QLineEdit* m_MeshName      = nullptr;
-	QLineEdit* m_SkeletonName  = nullptr;
-	QLineEdit* m_AnimationName = nullptr;
+	QLineEdit* m_SourceName = nullptr;
 
 	// One per material in the source's table, index-aligned with it and null where the material is not
 	// PBR -- so a stem list built from this lines up with what the writer iterates.
@@ -180,6 +161,7 @@ private:
 	QLabel*      m_Problem = nullptr;
 	QPushButton* m_Ok      = nullptr;
 
-	QString m_DefaultName;
-	QString m_DataRoot;
+	QString                  m_DefaultName;
+	QString                  m_DataRoot;
+	assetlib::ImportIdentity m_Identity;
 };

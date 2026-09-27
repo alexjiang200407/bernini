@@ -1,9 +1,11 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
@@ -13,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace assetlib::test
 {
@@ -33,7 +36,8 @@ namespace assetlib::test
 		std::string_view             material   = "Authored/Materials/red.bmaterial",
 		float                        sampleRate = c_DefaultSampleRate,
 		std::string_view             textureDir = {},
-		std::string_view             name       = "unit")
+		std::string_view             name       = "unit",
+		ImportIdentity               identity   = {})
 	{
 		const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
 
@@ -47,35 +51,37 @@ namespace assetlib::test
 			std::string(textureDir)
 		};
 		const AssetStore store(dataRoot);
-		const SourceRef  source = store.CopyImportedSource(glb, target);
-		mesh.source             = source;
+		target.identity        = identity;
+		const SourceRef source = store.CopyImportedSource(glb, target);
+		mesh.source            = source;
 
 		if (!textureDir.empty())
 			store.WriteTextures(imported, textureDir);
 
-		auto outputs = store.WriteImportedRig(
+		auto rig = store.WriteImportedRig(
 			imported.skeleton,
 			imported.animations,
 			mesh,
-			std::format("Derived/Skeletons/{}.bskel", name),
-			std::format("Derived/Animations/{}.banim", name),
+			identity.id ? importOutputKey(identity, AssetType::kSkeleton) :
+						  std::format("Derived/Skeletons/{}.bskel", name),
+			identity.id ? importOutputKey(identity, AssetType::kAnimation) :
+						  std::format("Derived/Animations/{}.banim", name),
 			true,
 			source);
 
-		const std::string grassKey =
-			std::format("Derived/Meshes/{}{}", name, c_GrassFieldsExtension);
-		for (std::string& grass : store.WriteImportedGrass(imported.grass, mesh, grassKey, source))
-			outputs.push_back(std::move(grass));
-
 		if (!mesh.submeshes.empty())
-			static_cast<void>(attachMaterial(mesh, 0, material));
+			target.bindings = std::vector<MaterialBinding>{
+				{ std::string(mesh.stringPool.at(mesh.submeshes[0].nameOffset)),
+				  std::string(material) }
+			};
 
-		const std::string meshKey = std::format("Derived/Meshes/{}.bmesh", name);
+		const std::string meshKey = identity.id ? importOutputKey(identity, AssetType::kMesh) :
+		                                          std::format("Derived/Meshes/{}.bmesh", name);
 		store.Save(mesh, meshKey);
 
-		outputs.emplace_back(meshKey);
-		target.skeleton = mesh.skeleton;
-		target.outputs  = std::move(outputs);
+		rig.outputs.emplace_back(meshKey);
+		target.skeleton = std::move(rig.skeleton);
+		target.outputs  = std::move(rig.outputs);
 
 		store.WriteImportedDocument(target, &mesh);
 	}

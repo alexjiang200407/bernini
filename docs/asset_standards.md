@@ -41,13 +41,10 @@ must feed data that matches.
   the widespread shared-ORM convention, not the format. An imported material takes `R` from the
   material's own `occlusionTexture` wherever it names one — see
   [Importing a glTF's materials](#importing-a-gltfs-materials).
-* **assetlib never derives a material; the editor's import does.** `toBMesh` lands every submesh
-  unassigned, and `attachMaterial` is the only thing that ever binds one — so `assetlib_cli bake`
-  produces geometry and textures and nothing else. The editor's import is a *caller* of that seam: it
-  builds the graph each PBR glTF material describes, writes the `.bmaterial`, and attaches it. The
-  split matters because a glTF material is only glTF's shading model, and the choice to accept it is
-  the editor's to make per import, not a property of the container. See
-  [Importing a glTF's materials](#importing-a-gltfs-materials).
+* **assetlib never derives a material; the editor's import does.** `toBMesh` preserves the
+  source's material slot indices as geometry metadata. The editor writes `.bmaterial` documents
+  and records named submesh bindings in the source's `.bimport`; runtime loads resolve those
+  bindings separately. The CLI produces geometry and textures without authoring materials.
 
   It is also why the split cannot be closed by moving code down. The board *is* the routing table --
   `CompileMaterial` reads a material's nine routes back out of it, so there is no second table to
@@ -86,7 +83,7 @@ must feed data that matches.
 There are **two producers of textures**, and they compress differently:
 
 * **Mesh import** (`AssetStore::WriteTextures` in
-  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
+  [libs/assetlib/src/bmesh/bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
   per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
   on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
@@ -99,7 +96,7 @@ There are **two producers of textures**, and they compress differently:
   that did not touch it but says nothing about which map an artist meant. See
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
-  [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
+  [libs/assetlib/src/material/material_bake.cpp](libs/assetlib/src/material/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet — or, for a surface material, into one packed map
   per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
@@ -107,7 +104,7 @@ There are **two producers of textures**, and they compress differently:
   `ktxTexture2_TranscodeBasis`es to the target.
 
   **Which target a map takes is one table.** `textureEncoding`
-  ([libs/assetlib/src/texture_encoding.cpp](libs/assetlib/src/texture_encoding.cpp)) maps each role —
+  ([libs/assetlib/src/texture/texture_encoding.cpp](libs/assetlib/src/texture/texture_encoding.cpp)) maps each role —
   base colour opaque or carrying alpha, ORM, normal, geometry occlusion, surface slot, environment LDR
   and HDR, and the transcode a Basis file gets at load — to a `Ktx2Compression` and a stable string
   tag. The material bake, the environment bake and `loadKTX2` all read it, so the formats in the
@@ -263,12 +260,12 @@ One more consequence of the baked formats: the compositor copies channel *bytes*
 base colour is written into an sRGB map regardless of its own source's tag — keep one decode role per
 source texture.
 
-* **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
+* **What the bake emits**: [libs/assetlib/src/bmesh/bmesh_texture.cpp](libs/assetlib/src/bmesh/bmesh_texture.cpp)
   (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`, in linear light for an image the
   glTF extract tagged sRGB (one a material reads as its base colour); `AssetStore::WriteTextures`
-  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes **that tag**, so a
+  ([libs/assetlib/src/bmesh/bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp)) writes **that tag**, so a
   base-color map lands sRGB and everything else `_UNORM`, then `writeKTX2`
-  ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
+  ([libs/assetlib/src/texture/image_io.cpp](libs/assetlib/src/texture/image_io.cpp)) **Basis-UASTC-compresses** LDR
   maps (multi-threaded, `LEVEL_FASTER`) and writes one `.ktx2` per image. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
   back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
@@ -389,7 +386,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
 ### Meshlets
 * **64 vertices / 124 triangles** per meshlet, built with meshopt at import
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp), `buildMeshlets`). This
+  ([libs/assetlib/src/bmesh/bmesh_gltf.cpp](libs/assetlib/src/bmesh/bmesh_gltf.cpp), `buildMeshlets`). This
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
 * **One bounding sphere per run of `c_MeshletsPerGroup` (8) meshlets**, fitted to the vertices of
   the whole run and stored in `BMesh::meshletGroups`, which each submesh names by
@@ -415,9 +412,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   **No renderer reads it** — `bgl_extended` uploads `meshletVertices`/`meshletTriangles` instead — so it
   profiles as pure cook-size overhead and is the obvious thing to drop. Three shipped paths read it
   today: cook-time tangent generation
-  ([mesh_tangents.cpp](libs/assetlib/src/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
-  ([asset_describe.cpp](libs/assetlib/src/asset_describe.cpp)), and the CLI's raw-OBJ export
-  ([bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp), `rawIndexAt`, the `--obj-raw` branch). It is also
+  ([mesh_tangents.cpp](libs/assetlib/src/bmesh/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
+  ([asset_describe.cpp](libs/assetlib/src/describe/asset_describe.cpp)), and the CLI's raw-OBJ export
+  ([bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp), `rawIndexAt`, the `--obj-raw` branch). It is also
   what a renderer with no mesh-shader stage would draw. Removing it breaks those three *and* costs
   an `AssetCodec<BMesh>::c_BakeToken` bump plus a re-cook of every asset in every project.
 * **`vertexByteOffset`/`vertexCount` is not the duplicated half, and is not a candidate.** There is
@@ -461,15 +458,10 @@ point per clump, which the import reads as a grass field (`BMeshImport::grass`,
 [BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)) instead of a
 submesh. The renderer grows the blades from the points; the DCC never sees one.
 
-The fields are cooked into a `.bgrassfields` beside the `.bmesh` (`AssetStore::WriteImportedGrass`),
-written, listed in the `.bimport`'s `outputs` and named by the `.bmesh` (`BMesh::grass`) only when
-the source has a POINTS primitive. It is
-a cache entry of its own with its own bake token, so a change to how clumps are stored re-cooks
-grass and no mesh -- and a fourth member of the geometry group, so `Reimport`, `migrate`, `pack`,
-staleness and rename carry it exactly as they carry the `.bmesh` beside it. It stores the looks it
-was written with; `LoadRegenGrassFields` applies the document's grass bindings over them on every
-load, as `LoadRegenMesh` does the material ones, and reports a binding naming a field the source no
-longer has. A re-import keeps the grass bindings authored since, as it keeps the clip floors.
+The fields are named geometry chunks inside `.bmesh`. `LoadRegenMesh` resolves their
+`.bgrass` looks from the sidecar into `MeshBindings::grassLooks`; it reports bindings whose
+field or submesh no longer exists. `migrate` and `pack` refuse those unresolved bindings.
+A re-import preserves authored grass bindings. No standalone grass container is written.
 
 | Attribute | Meaning | Absent |
 |---|---|---|
@@ -668,8 +660,8 @@ longer has. A re-import keeps the grass bindings authored since, as it keeps the
     never the source, which is an image to convolve rather than one to sample. A route with no baked
     map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
-**`.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky` and `.benvl` are the same cache-entry container**,
-in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
+**`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
+in [libs/assetlib/src/io/cache_io.h](libs/assetlib/src/io/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an
 error**. There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
@@ -722,59 +714,21 @@ Five rules, each of which is a way to get this wrong:
   re-cooking a `.bskel` leaves the `.bmesh` and `.banim` beside it current. It deliberately does **not** hash the bind pose: re-authoring a rest
   pose does not invalidate a clip, and treating it as though it did would make every rig tweak a re-cook
   of every clip set.
-* **The rig is not an authoring choice, unlike a material.** `bake` writes `<name>.bskel` and
-  `<name>.banim` beside the mesh and points `BMesh::skeleton` at them, because joint indices remapped
-  into a bone order that was never written down are indices nothing can resolve. That is an invariant,
-  not a convention: **a mesh carrying joints and naming no skeleton is refused by `serialize` and by
-  `deserialize`** — at write so the file is never produced, at read because a file may not have come
-  from here. It is the editor's import that this catches today, which cooks a `.bmesh` but not yet a
-  rig, and whose existing rollback turns the refusal into a clean failed import.
+* **Rig layout and rig binding have different owners.** `WriteImportedRig` writes or reuses a
+  skeleton, stamps the mesh's bone names and signature, and returns `ImportedRig`: the selected
+  skeleton key and the outputs this import owns. The caller records the key in `.bimport`.
+  `.bmesh` contains no skeleton path. Runtime checks the binding against its cooked layout.
 
-  Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
-  that is how a static attachment — a scabbard, a saddle — hangs off a bone.
+**Authored destinations are editable; derived destinations are generated.** A copied `.glb`
+and its `.bimport` live under `Authored/Meshes/`, and authored materials under `Authored/Materials/`.
+The importer exposes those destinations and refuses an occupied source destination.
+An import's persisted random identity and frozen filename label determine its `.bmesh`, `.bskel`
+and `.banim` names under their `Derived/` categories, and its extracted-texture directory.
+Moving the source and sidecar does not rename or rewrite those outputs.
 
-**Where an import's output lands is decided by what it is, never by where the file was dropped.** The
-data root splits first into `Authored/` — what a person decided — and `Derived/` — what a bake or an
-import computed; the categories sit under one or the other. A
-`.bmesh` goes under `Derived/Meshes/`, a rig under `Derived/Skeletons/`, its clips under `Derived/Animations/`, textures
-under `Derived/SourceTextures/`, the copied `.glb` and its `.bimport` under `Authored/Meshes/`, and materials under `Authored/Materials/`. Each category has its own folder field, which
-organises *inside* its category — it may name nested folders (`animals/coyote`) and can never name a
-way out of one, which `editor::JoinCategory` enforces. Every reference in a project is written against
-that layout, so an asset that could move across categories is an asset whose references stop
-meaning anything.
-
-**Each folder field folds out into the files it will write**, one editable name apiece — the copied
-`.glb`, the `.bmesh`, the `.bskel`, the `.banim`, and one per PBR material. Without them every output
-took the source file's name, so two imports that belonged in one folder collided and each had to be
-given a subfolder to keep them apart; naming the files is what lets `animals/coyote/` hold both skins
-rather than `animals/coyote/skin1/` and `animals/coyote/skin2/`. For the source that is the difference
-between importing a second `scene.glb` and not being able to at all: a DCC hands you the same stem
-whatever the asset is. Textures are the exception and stay folder-only:
-`AssetStore::WriteTextures` names its output after the image each came from, so an import can neither name them
-nor -- since two sources may name an image alike -- share their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
-folder-per-category one it has always been, and every name starts at the source's own — an untouched
-import lands exactly where it used to.
-
-The source's field sits above every checkbox rather than under the mesh's, because the copy is made
-for a clips-only import too. Its `.bimport` is not a field of its own — `assetlib::importDocumentKeyFor`
-derives it, so one name places both halves of what is one asset under two names.
-
-A *folder* that cannot be honoured falls back to the source's name — except the source's own, which
-falls back to the category root, because that is where every `.glb` copied so far sits and a default
-that moved it would leave a project's sources in two places depending on when each was imported. A
-*file name* does not fall back at all: it
-disables OK and states the reason, because discarding a name someone deliberately typed writes a file
-they did not ask for and cannot see coming. Names are also checked against the project as they are
-typed — importing into a folder another import already owns is the case this exists for, and finding
-the clash out after OK would mean filling the form in twice.
-
-**The import writes the rig too**: a `.bskel` whenever the source carries a skin and the mesh is
-coming across with it, and a `.banim` when the editor's *Import animations* box is ticked — the CLI
-always writes both. The
-skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
-one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
-merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the
-import fails or is cancelled.
+**The import writes or reuses the rig too.** A skinned mesh always gets a skeleton binding in
+its sidecar. The *Import animations* checkbox controls clips; the CLI writes them when present.
+Rollback removes outputs this import created, preserving a shared rig it only bound.
 
 **One rig, many clip sets.** Artists routinely ship one file per animation, each carrying its own
 copy of the skeleton and the geometry. Turning the importer's *Import mesh* box **off** brings only
@@ -808,7 +762,7 @@ A `.bskel` is the first asset held by two different kinds of edge, and
 
 | Edge | Held by | Field |
 | --- | --- | --- |
-| mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
+| mesh → skeleton | `.bimport` | `ImportDocument::skeleton` |
 | clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
 
 A clip set names a skeleton for the same reason a mesh does: its samples are stored one per bone per
@@ -817,8 +771,9 @@ that fixed that order the samples are unreadable — not wrong, but meaningless,
 Naming the skeleton is what makes the pairing checkable at all, and `skeletonSignature` is what
 checks it. It is not retargeting: a clip set belongs to one rig.
 
-Both are read without the container's bulk — `loadMeshRefs` and `loadAnimationSkeletonPath` seek to the
-reference chunks, for the reason the material scan does. Nothing produces an edge *into* a `.banim`, so
+Both are read without the container's bulk. `LoadRegenMeshRefs` uses the frozen header and current
+sidecar bindings, resolving a moved source through the output-owner index. Legacy source-less
+meshes and `loadAnimationSkeletonPath` use their reference chunks. Nothing produces an edge *into* a `.banim`, so
 a clip set always deletes and leaves its skeleton behind, exactly as a mesh leaves its materials.
 
 ---
@@ -832,10 +787,10 @@ flowchart TD
     IMP -- "bake / WriteTextures (writeKTX2)" --> TEX[".ktx2 (per map)"]
     IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
     IMP -- "bake (skinned sources only)" --> ANIM["&lt;name&gt;.banim (clips resampled to 30 Hz)"]
-    SKEL -. "BMesh::skeleton" .-> BMESH
+    SKEL -. "sidecar skeleton binding" .-> BMESH
     SKEL -. "AnimationSet::skeleton" .-> ANIM
     IMP -. "editor import only: graph per PBR material" .-> BMAT["&lt;name&gt;.bmaterial (routes + editorGraph)"]
-    BMAT -. "attachMaterial" .-> BMESH
+    BMAT -. "sidecar material binding" .-> BMESH
 
     BMESH -- "assetlib::load" --> SCENE
     BMAT -- "loadMaterial" --> SCENE
@@ -858,7 +813,7 @@ LDR material maps are **Basis Universal (UASTC)** supercompressed at bake and **
 at load — cross-platform, DirectXTex-free, and roughly **4:1** smaller than uncompressed RGBA8 in
 both file and VRAM.
 
-* **Encode (bake).** `writeKTX2` ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp))
+* **Encode (bake).** `writeKTX2` ([libs/assetlib/src/texture/image_io.cpp](libs/assetlib/src/texture/image_io.cpp))
   builds the uncompressed RGBA8 mip chain into a `ktxTexture2`, then, for 8-bit LDR formats only,
   calls `ktxTexture2_CompressBasisEx` with **UASTC** (`LEVEL_FASTER`, `threadCount =
   hardware_concurrency` — UASTC output is deterministic regardless of thread count, and
@@ -982,7 +937,7 @@ Ten rules, each of which is a way to get this wrong:
   baked AO is commonly unwrapped onto a second UV set, so folding it in would be confident garbage.
   The import keeps it beside the ORM as `geometryOcclusionTexture` instead, and the board wires it into
   the sink's *Geometry Occlusion (UV1)* port — see [Geometry AO](#geometry-ao-on-a-second-uv-set). A map on any later set is refused
-  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)). `occlusionTexture.strength`
+  ([libs/assetlib/src/bmesh/bmesh_gltf.cpp](libs/assetlib/src/bmesh/bmesh_gltf.cpp)). `occlusionTexture.strength`
   has no home in `PbrParams` and is ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
@@ -1065,10 +1020,10 @@ There are exactly five edges:
 
 | Edge | Held by | Field |
 | --- | --- | --- |
-| mesh → material | `.bmesh` | `BMesh::materials`, which `Submesh::material` indexes into |
+| mesh → material | `.bimport` | Named `bindings` and `materialOverrides`, resolved per submesh |
 | material → baked map | `.bmaterial` | `PbrParams::baseColorTexture` / `normalTexture` / `ormTexture` / `geometryOcclusionBakedTexture` |
 | material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel, and `geometryOcclusionTexture` |
-| mesh → skeleton | `.bmesh` | `BMesh::skeleton` |
+| mesh → skeleton | `.bimport` | `ImportDocument::skeleton` |
 | clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
 
 A material names textures **twice** — the maps its last bake wrote, and the sources it read them from
@@ -1129,10 +1084,10 @@ category, like `Derived/SourceTextures/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
 
-* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data, and only its reference chunks
-  are wanted. `loadMeshRefs` seeks to `kMaterialPaths` and `kSkeletonPath` instead: in Test Project those
-  are 0.0015%–0.017% of the file, so surveying its meshes reads ~3 KB rather than 16.8 MB. That is what
-  lets the graph be rebuilt on demand rather than cached. `loadAnimationSkeletonPath` does the same for a
+* **The scan must not `load()` a mesh.** A `.bmesh` is mostly vertex data; `LoadRegenMeshRefs` reads
+  its frozen header and current sidecar instead. The legacy reference-chunk reader measured
+  ~3 KB rather than 16.8 MB across Test Project's meshes; sidecar lookup likewise excludes geometry.
+  `loadAnimationSkeletonPath` reads only reference chunks for a
   `.banim`, whose samples are the bulk.
 * **The graph is never cached.** The data root is shared with the user's file manager. A cached graph
   would not merely go stale, it would be *wrong* — refusing a deletion while naming a blocker that had
@@ -1140,10 +1095,8 @@ Three things the implementation must get right, each of which is a real failure 
   error, or one file removed behind the editor's back would make every deletion in the project
   impossible. A *referrer* that will not parse **aborts the scan**, for the reason the prune's mark phase
   does: edges we cannot see are edges we would delete through.
-* **Edges are deduplicated on (referrer, target, kind).** `attachMaterial` splits a shared slot rather
-  than repointing its siblings, so a `.bmesh` legitimately names one material from two submesh slots —
-  `tree_alpha_test.bmesh` does. Reporting that mesh twice would misstate how much is holding the
-  material.
+* **Edges are deduplicated on (referrer, target, kind).** Several submesh names may bind the same
+  material. An import document keeps that material alive even when its cooked mesh is removed.
 
 `AssetStore::DeleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
 decodes `.ktx2` thumbnails on a thread pool, and Windows will not unlink a file that is open. "Still
@@ -1154,7 +1107,11 @@ referenced" and "the file is in use" are different things to tell a user, and ar
 Identity is the data-root-relative path, so a rename is a reference rewrite or it is a break. `planRename`
 / `AssetStore::RenameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
 rewrite every referrer to follow, so a rename is **never blocked by references** the way a deletion is.
-Three rules of its own:
+Rules:
+
+* **Derived files and folders cannot move independently.** Move the source and its sidecar;
+  output keys and bytes stay fixed, including outputs from legacy imports. Authored assets
+  cannot move into `Derived/`. Migration alone changes legacy output names and tracked references.
 
 * **A rename never overwrites**: a destination that exists refuses the plan, the same stance import
   takes. The one exception is the same file spelled in a different case, which is how a
@@ -1235,7 +1192,7 @@ assetlib_cli envmap -p <project> forest.hdr --name forest
 # Print what is actually inside a container (the kind is read from the file's magic, not its name).
 # Every routed source is stat'd against the project, so a stale bake is always reported; a clip set
 # resolves its skeleton, and a .benv says whether the files it names are there
-assetlib_cli describe -p <project> Derived/Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
+assetlib_cli describe -p <project> Derived/Meshes/model.bmesh          # hierarchy, submeshes, layouts, original material slots
 assetlib_cli describe -p <project> Derived/Meshes/model.bmesh --brief  # summary + material table only
 assetlib_cli describe -p <project> Authored/Materials/skin.bmaterial    # factors, triplet, routes, bake state
 assetlib_cli describe -p <project> Derived/Sky/forest.bsky             # the radiance route and its bake state
@@ -1261,7 +1218,7 @@ assetlib_cli prune -p <project>
 
 # Move an asset and rewrite every reference that followed it. A file or a directory, and the
 # hand-migration path for a project written against an older layout
-assetlib_cli rename -p <project> Derived/BakedTextures/old.ktx2 Derived/BakedTextures/new.ktx2
+assetlib_cli rename -p <project> Authored/Textures/old.ktx2 Authored/Textures/new.ktx2
 
 # Why will the editor not let me delete this? -- who references it, and how
 assetlib_cli refs -p <project> Derived/BakedTextures/basecolor_700a22db7b7ef785.ktx2

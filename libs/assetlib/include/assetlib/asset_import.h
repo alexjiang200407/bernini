@@ -1,13 +1,15 @@
 #pragma once
 
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/import_document.h>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 namespace assetlib
 {
-	struct BGrassFields;
 	struct BMesh;
 	struct MaterialBinding;
 	struct MaterialOverrideBinding;
@@ -50,8 +52,7 @@ namespace assetlib
 
 	/**
 	 * What an import is named and what it writes with, carried as one value so a write cannot take
-	 * half of it. The data root is still the store's; `textureDir` is not one, and a person picks
-	 * it in the importer.
+	 * half of it. The data root is the store's; `textureDir` is an identity-derived output key.
 	 */
 	struct ImportTarget
 	{
@@ -73,55 +74,23 @@ namespace assetlib
 		// this import wrote.
 		std::string              skeleton{};
 		std::vector<std::string> outputs{};
+
+		/** Minted before destinations are chosen; an existing document's identity cannot change. */
+		ImportIdentity identity{};
+
+		/** Unset preserves material defaults; an empty vector clears them. Grass choices remain. */
+		std::optional<std::vector<MaterialBinding>> bindings{};
 	};
 
 	/** Whether `binding` binds a grass field, which is said by the document it names: a `.bgrass`. */
 	[[nodiscard]] bool
 	isGrassBinding(const MaterialBinding& binding) noexcept;
 
-	/**
-	 * Rebuilds `mesh.materials`, every `Submesh::material` and `mesh.materialOverrides`
-	 * canonically from the document's bindings and overrides -- a pure function of the document,
-	 * never a mutation of what was loaded, so two checkouts with one document hold one array. A
-	 * submesh the document does not name is unbound and has no overrides. Override-only materials
-	 * follow every default in `mesh.materials`. A grass binding (isGrassBinding) is not this
-	 * function's, and is neither applied nor reported.
-	 *
-	 * @return The submeshes named by bindings or overrides this mesh does not have -- the source
-	 *         changed shape under the document. Never guessed at: the editor warns, `migrate`
-	 *         fails the file, `pack` fails the pack.
-	 */
-	[[nodiscard]] std::vector<std::string>
-	rebuildMaterialSlots(
-		BMesh&                                   mesh,
-		std::span<const MaterialBinding>         bindings,
-		std::span<const MaterialOverrideBinding> overrides);
-
-	/**
-	 * The grass half of rebuildMaterialSlots: rebuilds `grass.looks` and every `GrassField::look` from the
-	 * grass bindings among `bindings`, matched by field name. A field the document does not name
-	 * is unbound, and its `look` is `c_InvalidIndex`. Material bindings are not this function's.
-	 *
-	 * @return The field names grass bindings name that `grass` does not have.
-	 * @throws std::runtime_error if two fields share a name -- two meshes named alike in the DCC,
-	 *         each of one primitive -- since the name is what a binding addresses.
-	 */
-	[[nodiscard]] std::vector<std::string>
-	applyGrassBindings(BGrassFields& grass, std::span<const MaterialBinding> bindings);
-
-	/** What happened to one import document under `AssetStore::ReauthorImportDocuments`. */
-	struct ReauthoredDocument
+	/** The chosen rig binding and the outputs this import actually wrote. */
+	struct ImportedRig
 	{
-		enum class Outcome
-		{
-			kUnchanged,  // the bindings already matched the mesh
-			kRewritten,
-			kFailed  // `message` says why
-		};
-
-		std::string key;  // the document's mount key
-		Outcome     outcome;
-		std::string message;
+		std::string              skeleton;
+		std::vector<std::string> outputs;
 	};
 
 	/** One extracted texture that turned out to have moved rather than gone. */

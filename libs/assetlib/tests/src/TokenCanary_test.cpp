@@ -2,7 +2,6 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Grass.h>
 #include <assetlib_structs/ImageData.h>
@@ -25,8 +24,8 @@
 #include <string_view>
 #include <vector>
 
-#include "bmesh_texture.h"
-#include "texture_encoding.h"
+#include "bmesh/bmesh_texture.h"
+#include "texture/texture_encoding.h"
 
 using namespace assetlib;
 
@@ -172,8 +171,6 @@ namespace
 		mesh.indexData = { std::byte{ 1 }, std::byte{ 2 }, std::byte{ 3 },
 			               std::byte{ 4 }, std::byte{ 5 }, std::byte{ 6 } };
 
-		mesh.materials         = { "Materials/unit.bmaterial" };
-		mesh.skeleton          = "Skeletons/unit.bskel";
 		mesh.skeletonSignature = 0x55;
 		mesh.skeletonBoneNames = { "hip" };
 		mesh.source            = FixedSource();
@@ -211,30 +208,6 @@ namespace
 		skeleton.bones  = { bone };
 		skeleton.source = FixedSource();
 		return skeleton;
-	}
-
-	BGrassFields
-	CanaryGrassFields()
-	{
-		BGrassFields grass;
-		grass.looks  = { "grass/verge.bgrass" };
-		grass.fields = { GrassField{ .mesh = 3, .look = 0, .firstChunk = 0, .chunkCount = 1 } };
-		grass.names  = { "Street[5]" };
-		grass.chunks = { GrassChunk{ .boundingCenter = glm::vec3(1.0f, 2.0f, 3.0f),
-			                         .boundingRadius = 4.0f,
-			                         .firstClump     = 0,
-			                         .clumpCount     = 2,
-			                         .maxHeightScale = 5.0f } };
-		grass.clumps = { GrassClump{ .position    = glm::vec3(6.0f, 7.0f, 8.0f),
-			                         .heightScale = 9.0f,
-			                         .normal      = glm::vec3(0.0f, 1.0f, 0.0f),
-			                         .color       = glm::u8vec4(10, 11, 12, 13) },
-			             GrassClump{ .position    = glm::vec3(14.0f, 15.0f, 16.0f),
-			                         .heightScale = 17.0f,
-			                         .normal      = glm::vec3(1.0f, 0.0f, 0.0f),
-			                         .color       = glm::u8vec4(18, 19, 20, 21) } };
-		grass.source = FixedSource();
-		return grass;
 	}
 
 	AnimationSet
@@ -373,7 +346,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0x4757e5f12b30883full, .hash = 0x20533f7e376844f6ull },
+			Pin{ .token = 0x6e8cec455db7dcbbull, .hash = 0xc40274f7aff135cdull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
@@ -391,14 +364,6 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 			AssetCodec<AnimationSet>::c_BakeToken,
 			Pin{ .token = 0xc72f38da695b104eull, .hash = 0x12ba29bd4c5dafd1ull },
 			AssetCodec<AnimationSet>::Serialize(CanaryAnimations()));
-	}
-
-	SECTION(".bgrassfields")
-	{
-		CheckCanary(
-			AssetCodec<BGrassFields>::c_BakeToken,
-			Pin{ .token = 0xe5302fa6f31de788ull, .hash = 0xf585f90515d85c7aull },
-			AssetCodec<BGrassFields>::Serialize(CanaryGrassFields()));
 	}
 
 	SECTION(".bsky")

@@ -52,7 +52,7 @@ namespace assetlib::imp
 		AnimationSet animations;
 
 		// Every POINTS primitive, its clumps chunked. Unbound: each field's `look` is invalid until
-		// the `.bimport`'s bindings are applied (applyGrassBindings).
+		// the `.bimport`'s bindings resolve through LoadRegenMesh.
 		BGrassFields grass;
 	};
 }

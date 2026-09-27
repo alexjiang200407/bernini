@@ -1,5 +1,6 @@
 #pragma once
 #include "StoreAt.h"
+#include <assetlib/import_document.h>
 
 #include <array>
 #include <assetlib/AssetStore.h>
@@ -94,7 +95,7 @@ namespace game::test
 		skeleton.bones[0].inverseBind = glm::inverse(binds[0]);
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.glb-0000000000000001.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
@@ -189,18 +190,67 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
-		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
-		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
-		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
+		auto document                = assetlib::ImportDocument();
+		document.source              = "Authored/Meshes/rig.glb";
+		document.identity            = { 1, "rig.glb" };
+		document.skeleton            = "Derived/Skeletons/rig.glb-0000000000000001.bskel";
+		document.outputs             = { "Derived/Meshes/rig.glb-0000000000000001.bmesh",
+			                             "Derived/Skeletons/rig.glb-0000000000000001.bskel",
+			                             "Derived/Animations/rig.glb-0000000000000001.banim" };
+		document.bindings            = { { "body", "Authored/Materials/skin.bmaterial" } };
+		mesh.submeshes[0].nameOffset = mesh.stringPool.add("body");
+		mesh.source.key              = document.source;
+		mesh.source.parametersHash   = assetlib::parametersHashOf(document);
+		mesh.skeletonSignature       = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames       = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
-		store.Save(mesh, "Derived/Meshes/rig.bmesh");
-		store.Save(skeleton, "Derived/Skeletons/rig.bskel");
-		store.Save(animations, "Derived/Animations/rig.banim");
+		animations.source = mesh.source;
+		skeleton.source   = mesh.source;
+		store.Save(document, assetlib::importDocumentKeyFor(document.source));
+		store.Save(mesh, "Derived/Meshes/rig.glb-0000000000000001.bmesh");
+		store.Save(skeleton, "Derived/Skeletons/rig.glb-0000000000000001.bskel");
+		store.Save(animations, "Derived/Animations/rig.glb-0000000000000001.banim");
 
 		WriteTexture(dataRoot / "Textures/white.ktx2");
 		WriteMaterial(dataRoot / "Authored/Materials/skin.bmaterial", looseMaterial);
+	}
+
+	inline void
+	SaveClipsImport(
+		const fs::path&        dataRoot,
+		const fs::path&        output,
+		assetlib::AnimationSet animations)
+	{
+		const assetlib::AssetStore store(dataRoot);
+		const auto label    = output.stem().string().substr(0, output.stem().string().size() - 17);
+		const auto source   = "Authored/Meshes/" + label;
+		const auto key      = assetlib::importDocumentKeyFor(source);
+		auto       document = store.Exists(key) ? store.Load<assetlib::ImportDocument>(key) :
+		                                          assetlib::ImportDocument();
+		document.source     = source;
+		document.identity   = { 1, label };
+		document.skeleton   = animations.skeleton;
+		if (document.outputs.empty())
+			document.outputs = { output.generic_string() };
+		animations.source.key            = source;
+		animations.source.parametersHash = assetlib::parametersHashOf(document);
+		store.Save(document, key);
+		store.Save(animations, output.generic_string());
+	}
+
+	inline void
+	CopyRigMesh(const fs::path& dataRoot)
+	{
+		const assetlib::AssetStore store(dataRoot);
+		auto document     = store.Load<assetlib::ImportDocument>("Authored/Meshes/rig.bimport");
+		document.source   = "Authored/Meshes/slot.glb";
+		document.identity = { 1, "slot.glb" };
+		document.outputs  = { "Derived/Meshes/slot.glb-0000000000000001.bmesh" };
+		auto mesh = store.Load<assetlib::BMesh>("Derived/Meshes/rig.glb-0000000000000001.bmesh");
+		mesh.source.key = document.source;
+		store.Save(document, "Authored/Meshes/slot.bimport");
+		store.Save(mesh, document.outputs.front());
 	}
 
 	/**
@@ -215,11 +265,11 @@ namespace game::test
 		float            strideX,
 		uint32_t         frameCount)
 	{
-		const auto skeleton =
-			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+		const auto skeleton = assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>(
+			"Derived/Skeletons/rig.glb-0000000000000001.bskel");
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.glb-0000000000000001.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
@@ -240,7 +290,7 @@ namespace game::test
 			      glm::vec3(1.0f) });
 		}
 
-		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
+		SaveClipsImport(dataRoot, banimRel, std::move(animations));
 	}
 
 	/**
@@ -250,11 +300,11 @@ namespace game::test
 	inline void
 	WriteLoopingClips(const fs::path& dataRoot, const fs::path& banimRel)
 	{
-		const auto skeleton =
-			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+		const auto skeleton = assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>(
+			"Derived/Skeletons/rig.glb-0000000000000001.bskel");
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.glb-0000000000000001.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
@@ -285,7 +335,7 @@ namespace game::test
 			}
 		}
 
-		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
+		SaveClipsImport(dataRoot, banimRel, std::move(animations));
 	}
 
 	/** A `.bblend` over `samples`, authored against `banimRel`. Authored, so it goes under Authored/. */
@@ -341,7 +391,7 @@ namespace game::test
 		for (uint32_t i = 0; i < 4; ++i) skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Derived/Skeletons/leg.bskel";
+		animations.skeleton          = "Derived/Skeletons/leg.glb-0000000000000001.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 4;
@@ -422,15 +472,27 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
-		mesh.skeleton          = "Derived/Skeletons/leg.bskel";
-		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
-		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
+		auto document                = assetlib::ImportDocument();
+		document.source              = "Authored/Meshes/leg.glb";
+		document.identity            = { 1, "leg.glb" };
+		document.skeleton            = "Derived/Skeletons/leg.glb-0000000000000001.bskel";
+		document.outputs             = { "Derived/Meshes/leg.glb-0000000000000001.bmesh",
+			                             "Derived/Skeletons/leg.glb-0000000000000001.bskel",
+			                             "Derived/Animations/leg.glb-0000000000000001.banim" };
+		document.bindings            = { { "body", "Authored/Materials/skin.bmaterial" } };
+		mesh.submeshes[0].nameOffset = mesh.stringPool.add("body");
+		mesh.source.key              = document.source;
+		mesh.source.parametersHash   = assetlib::parametersHashOf(document);
+		mesh.skeletonSignature       = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames       = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
-		store.Save(mesh, "Derived/Meshes/leg.bmesh");
-		store.Save(skeleton, "Derived/Skeletons/leg.bskel");
-		store.Save(animations, "Derived/Animations/leg.banim");
+		animations.source = mesh.source;
+		skeleton.source   = mesh.source;
+		store.Save(document, assetlib::importDocumentKeyFor(document.source));
+		store.Save(mesh, "Derived/Meshes/leg.glb-0000000000000001.bmesh");
+		store.Save(skeleton, "Derived/Skeletons/leg.glb-0000000000000001.bskel");
+		store.Save(animations, "Derived/Animations/leg.glb-0000000000000001.banim");
 
 		WriteTexture(dataRoot / "Textures/white.ktx2");
 		WriteMaterial(dataRoot / "Authored/Materials/skin.bmaterial", false);
@@ -442,6 +504,8 @@ namespace game::test
 	{
 		auto avatar = assetlib::Avatar();
 		avatar.legs = std::move(legs);
-		assetlib::AssetStore(dataRoot).Save(avatar, "Authored/Skeletons/leg.bavatar");
+		assetlib::AssetStore(dataRoot).Save(
+			avatar,
+			"Authored/Skeletons/leg.glb-0000000000000001.bavatar");
 	}
 }

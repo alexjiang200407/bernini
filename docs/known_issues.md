@@ -83,7 +83,7 @@ destructor to hold `m_mutex` while setting the flag, and it never takes it.
 
 The window is a few instructions wide, so it takes load to land in — `just test` shards
 `assetlib_tests` four ways and each shard asks for `hardware_concurrency()` basisu threads
-(`bp.threadCount`, [image_io.cpp](../libs/assetlib/src/image_io.cpp)), so a 12-core machine runs 48
+(`bp.threadCount`, [image_io.cpp](../libs/assetlib/src/texture/image_io.cpp)), so a 12-core machine runs 48
 workers and a thread descheduled inside that window stays there for a scheduler quantum rather than
 nanoseconds.
 

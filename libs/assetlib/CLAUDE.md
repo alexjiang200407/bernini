@@ -21,12 +21,12 @@ the pose — and `exactPosedBounds` is the per-vertex walk it is proved against.
 Two container regimes (see docs/asset_containers.md):
 
 `.bmaterial`, `.benv` and `.bimport` are **authored text documents**: canonical JSON
-(`src/bmaterial_io.cpp`, `src/benv_io.cpp`, `src/import_document.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
+(`src/material/bmaterial_io.cpp`, `src/environment/benv_io.cpp`, `src/import/import_document.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
 the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
-Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky`, `.benvl` — is a **cache
-entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
+Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` — is a **cache
+entry**, in `src/io/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
 parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
 table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
 old shape to parse — a token mismatch is a cache miss. For geometry, `AssetStore`'s `LoadRegen*`
@@ -46,6 +46,22 @@ writer's output hash beside its token; a semantic change the fixture cannot see 
 remember.
 
 The public surface is documented as a map in [docs/assetlib_api.md](../../docs/assetlib_api.md).
+
+## Source layout
+
+Public headers stay under `include/assetlib/`. Private includes are relative to `src/`, including
+their subsystem directory.
+
+| Directory under `src/` | Responsibility |
+|---|---|
+| `AssetStore/` | Mounted store operations, regeneration, reimport and migration |
+| `describe/` | Human-readable asset descriptions |
+| `bmesh/`, `grass/` | Mesh/glTF cooking and embedded grass geometry |
+| `animation/` | Skeletons, clips, skinning, avatars, blend sets and posed bounds |
+| `environment/`, `material/`, `texture/` | Environment cooking, materials and texture processing |
+| `import/`, `references/` | Import documents and identities; reference graphs and rename operations |
+| `pak/`, `project/`, `registry/` | Archives, project layout and asset-kind registration |
+| `io/`, `util/` | Container readers, cache/JSON encoding, filesystem and progress helpers |
 
 ## Test workloads
 
@@ -97,7 +113,7 @@ Concretely, before adding to `include/assetlib/`:
   relative to. `MaterialBakeDesc`, `EnvBakeDesc`, `ImportTarget` and `EnvImportDesc` all carried one
   as a member; a descriptor that names *what* to write does not also get to say *where*.
 - **A new container type is a new `AssetCodec` specialization** in `include/assetlib/codecs.h`,
-  listed in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
+  listed in `Containers` in `src/registry/container_table.cpp`. That is the whole registration: `containerKinds()`
   is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the
   enum and forgotten in the tuple does not compile. The assertion anchors on `AssetType::kCount`
   rather than the last enumerator — anchoring it on the latter meant *appending* a type satisfied

@@ -14,9 +14,9 @@
 
 #include "MountAt.h"
 #include "RefsSandbox.h"
-#include "baked_name.h"
-#include "mounted_io.h"
-#include "texture_encoding.h"
+#include "io/mounted_io.h"
+#include "texture/baked_name.h"
+#include "texture/texture_encoding.h"
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -184,31 +184,11 @@ TEST_CASE("a material recording content names reads through them", "[bmaterial][
 		CHECK_FALSE(graph.IsReferenced(material.pbr.baseColorTexture));
 	}
 
-	SECTION("moving the file keeps the content name when the suffix travels with it")
+	SECTION("a baked map cannot move away from its content key")
 	{
-		const std::string contentName = material.pbr.baseColorTexture;
-		const std::string suffix      = file.substr(contentName.size());
-		const std::string moved       = "Derived/BakedTextures/basecolor_fedcba9876543210" + suffix;
-
-		REQUIRE(
-			root.Source().RenameAsset(planRename(root.Scan(), file, moved)).status ==
-			RenameStatus::kRenamed);
-
-		const BMaterial after =
-			StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial");
-		CHECK(after.pbr.baseColorTexture == "Derived/BakedTextures/basecolor_fedcba9876543210");
-		CHECK(bakedTextureKey(after.pbr.baseColorTexture) == moved);
-	}
-
-	SECTION("moving the file anywhere else names the file outright")
-	{
-		REQUIRE(
-			root.Source()
-				.RenameAsset(planRename(root.Scan(), file, "Derived/BakedTextures/kept.ktx2"))
-				.status == RenameStatus::kRenamed);
-
-		const BMaterial after =
-			StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial");
-		CHECK(after.pbr.baseColorTexture == "Derived/BakedTextures/kept.ktx2");
+		CHECK_THROWS(planRename(root.Scan(), file, "Derived/BakedTextures/kept.ktx2"));
+		const auto after = StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial");
+		CHECK(after.pbr.baseColorTexture == material.pbr.baseColorTexture);
+		CHECK(fs::exists(root.path / file));
 	}
 }

@@ -1,5 +1,6 @@
 #include <array>
 #include <assetlib/avatar.h>
+#include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skinning.h>
@@ -98,7 +99,8 @@ namespace
 		submesh.aabbMax = corner;
 		mesh.submeshes.push_back(submesh);
 		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
-		mesh.skeleton = "Derived/Skeletons/rig.bskel";
+		mesh.source.key            = "Authored/Meshes/rig.glb";
+		mesh.source.parametersHash = parametersHashOf(ImportDocument{});
 
 		// Stamped as a cook does: a container that records no bone names is one nothing can
 		// re-address, which is a case worth writing on purpose rather than inheriting.
@@ -111,6 +113,11 @@ namespace
 	WriteProject(const DataRoot& root)
 	{
 		const Skeleton skeleton = MakeRig();
+		auto           document = ImportDocument();
+		document.source         = "Authored/Meshes/rig.glb";
+		document.skeleton       = "Derived/Skeletons/rig.bskel";
+		document.outputs        = { "Derived/Meshes/rig.bmesh" };
+		StoreAt(root.path).Save(document, "Authored/Meshes/rig.bimport");
 
 		fs::create_directories(root.path / "Derived/Meshes");
 		fs::create_directories(root.path / "Derived/Skeletons");

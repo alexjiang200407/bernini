@@ -1,8 +1,12 @@
 #include <algorithm>
 #include <array>
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/RegenMesh.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/migrate.h>
 #include <assetlib/skinning.h>
@@ -17,7 +21,7 @@
 #include "ImportUnitGroup.h"
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
-#include "bmesh_texture.h"
+#include "bmesh/bmesh_texture.h"
 #include <assetlib/progress.h>
 
 #include <catch2/catch_message.hpp>
@@ -156,10 +160,13 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 	const Project           project;
 	const test::SkinnedGltf source("bernini_migrate_regen_gltf");
 	test::ImportUnitGroup(project.root, source.PackGlb());
+	REQUIRE(AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto identity =
+		AssetStore(project.root).Load<ImportDocument>("Authored/Meshes/unit.bimport").identity;
 
-	const auto meshPath  = project.root / "Derived/Meshes/unit.bmesh";
-	const auto bskelPath = project.root / "Derived/Skeletons/unit.bskel";
-	const auto banimPath = project.root / "Derived/Animations/unit.banim";
+	const auto meshPath  = project.root / importOutputKey(identity, AssetType::kMesh);
+	const auto bskelPath = project.root / importOutputKey(identity, AssetType::kSkeleton);
+	const auto banimPath = project.root / importOutputKey(identity, AssetType::kAnimation);
 
 	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
 	test::TamperHeaderByte(bskelPath, test::c_TokenOffset);
@@ -197,10 +204,13 @@ TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migr
 	const Project           project;
 	const test::SkinnedGltf source("bernini_migrate_remap_gltf");
 	test::ImportUnitGroup(project.root, source.PackGlb());
+	REQUIRE(AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto identity =
+		AssetStore(project.root).Load<ImportDocument>("Authored/Meshes/unit.bimport").identity;
 
-	const auto bskelPath = project.root / "Derived/Skeletons/unit.bskel";
-	const auto meshPath  = project.root / "Derived/Meshes/unit.bmesh";
-	const auto banimPath = project.root / "Derived/Animations/unit.banim";
+	const auto bskelPath = project.root / importOutputKey(identity, AssetType::kSkeleton);
+	const auto meshPath  = project.root / importOutputKey(identity, AssetType::kMesh);
+	const auto banimPath = project.root / importOutputKey(identity, AssetType::kAnimation);
 
 	// A socket appended to the rig, exactly as the editor would: the mesh and clips on disk are
 	// left as they were cooked, so both now name a rig they no longer match.
@@ -219,7 +229,7 @@ TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migr
 		for (size_t i = 0; i < skeleton.bones.size(); ++i)
 			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
 
-		AssetStore(project.root).Save(skeleton, "Derived/Skeletons/unit.bskel");
+		AssetStore(project.root).Save(skeleton, importOutputKey(identity, AssetType::kSkeleton));
 	}
 
 	const Skeleton grown = LoadAt<Skeleton>(bskelPath);
@@ -247,11 +257,14 @@ TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migr
 	}
 }
 
-TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migrate][regen]")
+TEST_CASE("a rebind is visible without rewriting cooked geometry", "[migrate][regen]")
 {
 	const Project           project;
 	const test::SkinnedGltf source("bernini_migrate_rebind_gltf");
 	test::ImportUnitGroup(project.root, source.PackGlb());
+	REQUIRE(AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto identity =
+		AssetStore(project.root).Load<ImportDocument>("Authored/Meshes/unit.bimport").identity;
 
 	// The source is gone, so what follows cannot be a regeneration -- the document alone
 	// carries the rebind onto the disk bytes.
@@ -263,12 +276,12 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 			"Authored/Materials/blue.bmaterial");
 
 	const auto report = AssetStore(project.root).Migrate(false);
-	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
+	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 
-	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Derived/Meshes/unit.bmesh");
-	REQUIRE(mesh.materials.size() == 1);
-	CHECK(mesh.materials[0] == "Authored/Materials/blue.bmaterial");
+	const auto loaded =
+		AssetStore(project.root).LoadRegenMesh(importOutputKey(identity, AssetType::kMesh));
+	CHECK(loaded.bindings.submeshMaterials.at(0) == "Authored/Materials/blue.bmaterial");
 }
 
 TEST_CASE("migrate brings a material's bake current", "[migrate][bake]")
@@ -399,6 +412,7 @@ TEST_CASE("Migrate's threaded walk leaves a settled project untouched", "[migrat
 	const std::filesystem::path glb = source.PackGlb();
 	test::ImportUnitGroup(root, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "one");
 	test::ImportUnitGroup(root, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "two");
+	REQUIRE(AssetStore(root).Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
 
 	auto before = std::map<std::string, std::vector<std::byte>>();
 	for (const auto& entry : std::filesystem::recursive_directory_iterator(root))

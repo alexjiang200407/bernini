@@ -1045,8 +1045,8 @@ TEST_CASE("A remapped mesh and clip set skin exactly as the cooked pair did", "[
 		{ { 2, 0, 0, 0 } },
 		{ { c_Unorm16Max, 0, 0, 0 } });
 
-	fixture.mesh.submeshes         = { fixture.submesh };
-	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.submeshes = { fixture.submesh };
+
 	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
 	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
 
@@ -1096,8 +1096,8 @@ TEST_CASE(
 		{ { 7, 0, 0, 0 } },  // no such bone, and it carries all the weight
 		{ { c_Unorm16Max, 0, 0, 0 } });
 
-	fixture.mesh.submeshes         = { fixture.submesh };
-	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.submeshes = { fixture.submesh };
+
 	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
 	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
 
@@ -1126,8 +1126,8 @@ TEST_CASE("remapMesh zeroes an unweighted influence it cannot place", "[skinning
 		{ { 2, 9, 0, 0 } },  // bone 2 carries everything; 9 does not exist and carries nothing
 		{ { c_Unorm16Max, 0, 0, 0 } });
 
-	fixture.mesh.submeshes         = { fixture.submesh };
-	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.submeshes = { fixture.submesh };
+
 	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
 	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
 
@@ -1170,8 +1170,8 @@ TEST_CASE("An added bone does not move the posed-bounds key", "[skinning][perf][
 		{ { 2, 0, 0, 0 } },
 		{ { c_Unorm16Max, 0, 0, 0 } });
 
-	fixture.mesh.submeshes         = { fixture.submesh };
-	fixture.mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+	fixture.mesh.submeshes = { fixture.submesh };
+
 	fixture.mesh.skeletonSignature = skeletonSignature(cooked);
 	fixture.mesh.skeletonBoneNames = skeletonBoneNames(cooked);
 

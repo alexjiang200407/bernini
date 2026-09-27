@@ -3,6 +3,10 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "mesh_drop_import.h"
+#include <assetlib/MeshBindings.h>
+#include <assetlib/RegenMesh.h>
+#include <assetlib/ResolvedImport.h>
+#include <assetlib/import_document.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/mesh_load.h>
@@ -47,6 +51,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/types/FootIKDesc.h>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
 #include <exception>
@@ -441,7 +446,8 @@ AnimationPreviewWindow::LoadMesh(
 		return;
 	}
 
-	assetlib::BMesh           mesh;
+	auto                      current = assetlib::RegenMesh();
+	auto&                     mesh    = current.mesh;
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
 	std::string               blend      = blendRelPath;
@@ -475,7 +481,7 @@ AnimationPreviewWindow::LoadMesh(
 					m_Host.GetLanguageResolver(),
 					"bernini.animation_preview.reading_mesh_progress",
 					"Reading mesh..."));
-			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
+			current = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 
@@ -491,7 +497,7 @@ AnimationPreviewWindow::LoadMesh(
 			// asking each of them for its own would double the cost of every load.
 			const auto graph = assetlib::AssetRefGraph::Scan(m_Host.GetStore());
 
-			bindings = editor::ResolveAnimationBindings(graph, mesh.skeleton);
+			bindings = editor::ResolveAnimationBindings(graph, current.bindings.skeleton);
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
@@ -564,7 +570,7 @@ AnimationPreviewWindow::LoadMesh(
 
 	// This panel animates; a static mesh has nothing to animate, and silently previewing one
 	// reads as the panel being broken. The Material Editor's preview is the place to look at it.
-	if (mesh.skeleton.empty())
+	if (current.bindings.skeleton.empty())
 	{
 		QMessageBox::warning(
 			window(),
@@ -606,6 +612,14 @@ AnimationPreviewWindow::LoadMesh(
 		// materials is a hundred-odd megabytes of texture to read and upload, and Invoke blocks its
 		// caller until the render thread has run the closure. A worker may block on the render thread
 		// -- only the reverse deadlocks (see Renderer) -- so the GUI thread stays free to paint.
+		std::string animationSource;
+		if (!animations.empty())
+		{
+			const auto owner = m_Host.GetStore().FindImportForOutput(animations);
+			if (!owner)
+				core::throw_runtime_error("Animation has no owning import document");
+			animationSource = assetlib::importedSourceKeyFor(owner->documentKey, owner->document);
+		}
 		auto loaded = Loaded();
 
 		ClearGeometry();
@@ -632,7 +646,7 @@ AnimationPreviewWindow::LoadMesh(
 
 					const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
 						const bgl::GeomHandle geom =
-							context.assets.AcquireMesh(rel, placement.meshIndex);
+							context.assets.AcquireMesh(current.sourceKey, placement.meshIndex);
 						m_Geoms.push_back(geom);
 						m_Instances.push_back(
 							context.assets.CreateInstance(view, geom, placement.world));
@@ -676,8 +690,8 @@ AnimationPreviewWindow::LoadMesh(
 							// nothing.
 							game::AssetManager::SkinnedMesh skinned =
 								context.assets.AcquireSkinnedMesh(
-									rel,
-									animations,
+									current.sourceKey,
+									animationSource,
 									blend,
 									placement.meshIndex,
 									posed);
@@ -796,6 +810,7 @@ AnimationPreviewWindow::LoadMesh(
 		if (!loaded.refusal.isEmpty())
 			OfferBakeForRefusal(
 				mesh,
+				current.bindings,
 				absolutePath,
 				animations,
 				name,
@@ -838,6 +853,7 @@ namespace
 	RefusedEntriesLine(
 		const editor::ILanguageResolver& resolver,
 		const assetlib::BMesh&           mesh,
+		const assetlib::MeshBindings&    bindings,
 		std::span<const uint32_t>        entries)
 	{
 		if (entries.empty())
@@ -852,12 +868,12 @@ namespace
 			const assetlib::Mesh& record = mesh.meshes[entry];
 			for (uint32_t i = 0; i < record.submeshCount; ++i)
 			{
-				const uint32_t material = mesh.submeshes[record.firstSubmesh + i].material;
-				if (material >= mesh.materials.size())
+				const uint32_t material = record.firstSubmesh + i;
+				if (material >= bindings.submeshMaterials.size())
 					continue;
 
 				const QString stem = QString::fromStdString(
-					std::filesystem::path(mesh.materials[material]).stem().string());
+					std::filesystem::path(bindings.submeshMaterials[material]).stem().string());
 				if (!stem.isEmpty() && !named.contains(stem))
 					named << stem;
 			}
@@ -888,6 +904,7 @@ namespace
 void
 AnimationPreviewWindow::OfferBakeForRefusal(
 	const assetlib::BMesh&          mesh,
+	const assetlib::MeshBindings&   bindings,
 	const std::filesystem::path&    absolutePath,
 	const std::string&              animations,
 	const QString&                  name,
@@ -899,7 +916,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	// unrelated unbaked material: that bake is worth doing and the text says only what is true, but
 	// it will not lift this refusal.
 	const std::vector<std::string> loose =
-		editor::BakeableMaterials(m_Host.GetStore(), mesh.materials);
+		editor::BakeableMaterials(m_Host.GetStore(), bindings.submeshMaterials);
 
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
@@ -914,7 +931,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 			"bernini.animation_preview.bind_pose_refusal",
 			{ name,
 	          refusal,
-	          RefusedEntriesLine(m_Host.GetLanguageResolver(), mesh, refusedEntries) },
+	          RefusedEntriesLine(m_Host.GetLanguageResolver(), mesh, bindings, refusedEntries) },
 			"'{0}' is shown in bind pose -- its clips cannot play:\n\n{1}{2}"));
 
 	QPushButton* bakeButton = nullptr;

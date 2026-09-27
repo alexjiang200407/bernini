@@ -29,7 +29,7 @@ class TestModuleOf:
         the whole reason `assetlib_cli` is nameable at all.
         """
         assert count_source.module_of('libs/assetlib/cli/main.cpp') == 'assetlib_cli'
-        assert count_source.module_of('libs/assetlib/src/AssetStore.cpp') == 'assetlib'
+        assert count_source.module_of('libs/assetlib/src/AssetStore/AssetStore.cpp') == 'assetlib'
 
     def test_a_sibling_sharing_a_name_prefix_is_not_swallowed(self):
         """`libs/assetlib` is a character-prefix of `libs/assetlib_structs` but not a path one."""

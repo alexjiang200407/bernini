@@ -3,7 +3,7 @@
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMesh.h>
 
-#include "cache_io.h"
+#include "io/cache_io.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 
@@ -83,7 +83,6 @@ namespace
 		mesh.indexData = { std::byte{ 0 }, std::byte{ 0 }, std::byte{ 1 },
 			               std::byte{ 0 }, std::byte{ 2 }, std::byte{ 0 } };
 
-		mesh.materials = { "mat0.bmaterial", "mat1.bmaterial" };
 		return mesh;
 	}
 }
@@ -104,7 +103,6 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(restored.indexData == original.indexData);
 	REQUIRE(restored.stringPool == original.stringPool);
 	REQUIRE(restored.roots == original.roots);
-	REQUIRE(restored.materials == original.materials);
 	REQUIRE(restored.nodes[0].firstChild == 1);
 	REQUIRE(restored.submeshes[0].vertexCount == 3);
 
@@ -145,13 +143,11 @@ TEST_CASE("a mesh's levels of detail round-trip with their table", "[bmesh][io][
 TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleton]")
 {
 	auto mesh              = MakeSampleMesh();
-	mesh.skeleton          = "Derived/Skeletons/unit.bskel";
 	mesh.skeletonSignature = 0xfeedfacecafebeefull;
 	mesh.skeletonBoneNames = { "hip", "knee", "ankle" };
 
 	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
 
-	CHECK(restored.skeleton == mesh.skeleton);
 	CHECK(restored.skeletonSignature == mesh.skeletonSignature);
 	CHECK(restored.skeletonBoneNames == mesh.skeletonBoneNames);
 }
@@ -161,7 +157,6 @@ TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleto
 TEST_CASE("a mesh with no stored bone names round-trips as empty", "[bmesh][io][skeleton]")
 {
 	auto mesh              = MakeSampleMesh();
-	mesh.skeleton          = "Derived/Skeletons/unit.bskel";
 	mesh.skeletonSignature = 0xfeedfacecafebeefull;
 
 	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
@@ -356,93 +351,5 @@ TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 
 	REQUIRE(restored.nodes.size() == original.nodes.size());
 	REQUIRE(restored.vertexData == original.vertexData);
-	REQUIRE(restored.materials == original.materials);
 	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == AssetCodec<BMesh>::Serialize(original));
-}
-
-namespace
-{
-	// A mesh with `submeshMaterials.size()` submeshes, each pointing at the given material slot.
-	BMesh
-	MakeMaterialMesh(std::vector<uint32_t> submeshMaterials, std::vector<std::string> materials)
-	{
-		BMesh mesh;
-		mesh.materials = std::move(materials);
-		for (const uint32_t material : submeshMaterials)
-		{
-			auto submesh     = Submesh();
-			submesh.material = material;
-			mesh.submeshes.push_back(submesh);
-		}
-		return mesh;
-	}
-}
-
-TEST_CASE("attachMaterial rewrites an unshared slot in place", "[bmesh][material]")
-{
-	// Submesh 1 is the only user of slot 1, so it may claim it.
-	auto mesh = MakeMaterialMesh({ 0, 1 }, { "mat0.bmaterial", "mat1.bmaterial" });
-
-	REQUIRE(attachMaterial(mesh, 1, "authored.bmaterial"));
-
-	REQUIRE(mesh.materials.size() == 2);  // no new slot
-	REQUIRE(mesh.materials[1] == "authored.bmaterial");
-	REQUIRE(mesh.submeshes[1].material == 1);
-	REQUIRE(mesh.materials[0] == "mat0.bmaterial");  // submesh 0 untouched
-	REQUIRE(mesh.submeshes[0].material == 0);
-}
-
-TEST_CASE("attachMaterial does not repoint siblings sharing a slot", "[bmesh][material]")
-{
-	// Both submeshes were imported with the same material. Re-materialing one must not change the
-	// other -- it gets a slot of its own instead.
-	auto mesh = MakeMaterialMesh({ 0, 0 }, { "shared.bmaterial" });
-
-	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
-
-	REQUIRE(mesh.materials.size() == 2);
-	REQUIRE(mesh.materials[mesh.submeshes[0].material] == "authored.bmaterial");
-	REQUIRE(mesh.submeshes[1].material == 0);
-	REQUIRE(mesh.materials[0] == "shared.bmaterial");
-}
-
-TEST_CASE("attachMaterial reuses an existing entry instead of duplicating", "[bmesh][material]")
-{
-	auto mesh = MakeMaterialMesh({ 0, 0 }, { "shared.bmaterial", "other.bmaterial" });
-
-	REQUIRE(attachMaterial(mesh, 1, "other.bmaterial"));
-
-	REQUIRE(mesh.materials.size() == 2);  // "other" was already there
-	REQUIRE(mesh.submeshes[1].material == 1);
-	REQUIRE(mesh.submeshes[0].material == 0);
-}
-
-TEST_CASE("attachMaterial reports no change when already attached", "[bmesh][material]")
-{
-	auto mesh = MakeMaterialMesh({ 0 }, { "mat0.bmaterial" });
-
-	// Sole user of the slot, and it already names this material.
-	REQUIRE_FALSE(attachMaterial(mesh, 0, "mat0.bmaterial"));
-
-	// Shared slot already naming the material: the submesh stays where it is.
-	auto shared = MakeMaterialMesh({ 0, 0 }, { "mat0.bmaterial" });
-	REQUIRE_FALSE(attachMaterial(shared, 0, "mat0.bmaterial"));
-	REQUIRE(shared.materials.size() == 1);
-	REQUIRE(shared.submeshes[0].material == 0);
-}
-
-TEST_CASE("attachMaterial gives an unmaterialed submesh a new slot", "[bmesh][material]")
-{
-	auto mesh = MakeMaterialMesh({ c_InvalidIndex }, {});
-
-	REQUIRE(attachMaterial(mesh, 0, "authored.bmaterial"));
-
-	REQUIRE(mesh.materials.size() == 1);
-	REQUIRE(mesh.submeshes[0].material == 0);
-}
-
-TEST_CASE("attachMaterial rejects an out-of-range submesh", "[bmesh][material]")
-{
-	auto mesh = MakeMaterialMesh({ 0 }, { "mat0.bmaterial" });
-	REQUIRE_THROWS_AS(attachMaterial(mesh, 1, "authored.bmaterial"), std::runtime_error);
 }

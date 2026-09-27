@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -30,7 +31,7 @@ namespace assetlib
 	struct ReimportReport;
 	struct PackDesc;
 	struct PackReport;
-	struct ReauthoredDocument;
+	struct ImportedRig;
 	struct RebakeBoundsReport;
 	struct RenamePlan;
 	struct RenameResult;
@@ -57,7 +58,6 @@ namespace assetlib
 	enum class Ktx2Decode : uint32_t;
 	enum class AssetType : uint32_t;
 
-	struct RegenGrassFields;
 	struct RegenMesh;
 	struct SourceRef;
 
@@ -180,6 +180,15 @@ namespace assetlib
 		[[nodiscard]] ResolvedImport
 		ResolveImport(std::string_view sourceKey, AssetType kind) const;
 
+		/**
+		 * Finds the sidecar whose outputs contain this key, including after its source moved.
+		 * Indexes sidecar ownership lazily; re-reads the owner to return a fresh snapshot. Store
+		 * writes invalidate the index, and a missing/moved owner triggers a rebuild.
+		 * @throws std::runtime_error if multiple sidecars claim the same output.
+		 */
+		[[nodiscard]] std::optional<ResolvedImport>
+		FindImportForOutput(std::string_view outputKey) const;
+
 		// --- Containers, by codec ----------------------------------------------------------------
 
 		/**
@@ -298,39 +307,10 @@ namespace assetlib
 
 		// --- Import writes -----------------------------------------------------------------------
 
-		/**
-		 * Writes the grass an import's source grows -- every POINTS primitive, as `imp::BMeshImport`
-		 * read it -- to `key`, beside its `.bmesh`. Its fields are unbound: the `.bimport`'s grass
-		 * bindings are applied over them wherever they are loaded (LoadRegenGrassFields). `mesh`,
-		 * written after, is pointed at it (`BMesh::grass`), which is how a runtime finds a mesh's
-		 * grass.
-		 *
-		 * @return `key` when the source had grass and a file was written; empty when it had none,
-		 *         so a source without POINTS names no grass file among its outputs.
-		 * @throws std::runtime_error if the container cannot be written.
+		/** Writes rig outputs, records the joint layout in `mesh`, and returns the sidecar binding.
+		 * A reused rig is returned as the binding but excluded from the owned outputs.
 		 */
-		std::vector<std::string>
-		WriteImportedGrass(
-			BGrassFields     grass,
-			BMesh&           mesh,
-			std::string_view key,
-			const SourceRef& source) const;
-
-		/**
-		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.
-		 *
-		 * A joint index is a bare number into a bone array, so a mesh carrying joints while naming
-		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
-		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
-		 *
-		 * @return The containers it put on disk -- the `.bskel` only when this import is what wrote
-		 *         it, and the `.banim` when it wrote clips. A rig it bound rather than produced is
-		 *         named by `mesh.skeleton` and is deliberately not here: deleting this source must
-		 *         not take another source's rig with it.
-		 *
-		 * @throws std::runtime_error if either container cannot be written.
-		 */
-		std::vector<std::string>
+		ImportedRig
 		WriteImportedRig(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,
@@ -360,15 +340,11 @@ namespace assetlib
 
 		// --- Containers ------------------------------------------------------------------------
 
-		/** The materials and skeleton a `.bmesh` names, read seek-only. See loadMeshRefs. */
-		[[nodiscard]] MeshRefs
-		LoadMeshRefs(std::string_view path) const;
-
 		// --- The regeneration seam -------------------------------------------------------------
 		//
 		// The Regen forms answer with the container as the project's sources say it should be. A
-		// read-only store trusts its keys outright -- `pack` made them true -- and serves the baked
-		// bytes. A writable store checks the entry's cache key: fresh bytes load as-is; a stale
+		// read-only store validates bake tokens, parameters and the packed source revision without
+		// reading sources. A writable store checks the entry's cache key: fresh bytes load as-is; a stale
 		// entry regenerates in memory from its copied source, and one whose source is missing or
 		// was never recorded, or whose import document is gone, refuses. Either way the import
 		// document's bindings are applied over the result, so a rebind is a document edit no mesh
@@ -377,9 +353,10 @@ namespace assetlib
 		/**
 		 * Whether the geometry entry at `path` is a cache miss the LoadRegen forms would re-cook:
 		 * a stale bake token, a source stamp that moved, or parameters the `.bimport` no longer
-		 * matches. Always false on a read-only store, which trusts its keys.
+		 * matches. A read-only store checks the bake token and packed sidecar metadata without
+		 * opening the source file.
 		 *
-		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`/`.bgrassfields`,
+		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`,
 		 *         or its header cannot be read.
 		 */
 		[[nodiscard]] bool
@@ -425,32 +402,9 @@ namespace assetlib
 		LoadRegenAnimations(std::string_view path) const;
 
 		/**
-		 * The grass the mesh source grows, with the import document's grass bindings applied over
-		 * it, as LoadRegenMesh applies the material ones.
-		 *
-		 * @throws what LoadRegenMesh throws, and std::runtime_error when the re-exported source no
-		 *         longer carries a POINTS primitive, or two of its fields now share a name.
-		 */
-		[[nodiscard]] RegenGrassFields
-		LoadRegenGrassFields(std::string_view path) const;
-
-		/**
-		 * The `.bgrass` looks a `.bgrassfields` draws its fields with, surviving a foreign bake token
-		 * the way LoadRegenMeshRefs does: from the import document's grass bindings rather than a
-		 * regeneration, so a reference scan stays a header read per file.
-		 *
-		 * @throws std::runtime_error on a foreign-token entry with no recorded source or whose import
-		 *         document is gone.
-		 */
-		[[nodiscard]] std::vector<std::string>
-		LoadRegenGrassLooks(std::string_view path) const;
-
-		/**
-		 * LoadMeshRefs surviving a foreign bake token: chunks that cannot be parsed answer from
-		 * the frozen header and the import document instead -- the document's bindings are the
-		 * materials, the group's rig resolves by source key -- so nothing regenerates and a scan
-		 * of a whole project stays a header read per file. A matched token's refs read as stored,
-		 * stamps unchecked.
+		 * Reads current bindings from the import document, including after a source move or a
+		 * foreign bake token. Reads only the frozen header and sidecar; never regenerates geometry.
+		 * A current source-less mesh has no bindings and returns empty references.
 		 *
 		 * @throws std::runtime_error on a foreign-token mesh with no recorded source or whose
 		 *         import document is gone -- what it references cannot be known, and the
@@ -819,8 +773,9 @@ namespace assetlib
 
 		/**
 		 * Writes the `.bimport` beside the copied source: the sample rate, where the textures went
-		 * and the source as it stood when they did, and -- when `mesh` is given -- the
-		 * submesh-name -> material bindings it carries. Null `mesh` is a clips-only import.
+		 * and the source as it stood when they did. `target.bindings` supplies authored material
+		 * choices directly; an omitted list preserves existing bindings and an empty list clears
+		 * material defaults, retaining grass choices. A supplied `mesh` validates submesh names.
 		 *
 		 * @throws std::runtime_error if `target.source` is not a `.glb` under `Authored/Meshes/`, or
 		 *         on a write failure.
@@ -875,29 +830,15 @@ namespace assetlib
 			std::string_view name) const;
 
 		/**
-		 * Rewrites every import document's bindings from its mesh's current state, parameters and
-		 * unknown keys preserved -- the one-time adoption pass that makes the documents
-		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
-		 * recorded nowhere else; after it, the document is what a load applies, so running this
-		 * again later would overwrite document-only rebinds with stale mesh state.
-		 *
-		 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
-		 * document is missing is reported per document and never guessed at.
-		 */
-		[[nodiscard]] std::vector<ReauthoredDocument>
-		ReauthorImportDocuments() const;
-
-		/**
 		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing
 		 * them, each part projected and convolved in memory from the copied source and baked into
 		 * `Derived/BakedTextures/`. The routes name that copy: nothing float is kept.
 		 *
 		 * The source is copied under `Authored/EnvSources/` and read from the copy, and a
 		 * `.bimport` beside it records the parameters, the copy's stamp and every derived file
-		 * written -- which is what lets `Reimport` produce the family again. Importing only one
-		 * part over an existing document keeps the other part's claim and parameters; that is
-		 * refused when the incoming file is not the one the document was stamped from, since the
-		 * part kept would then describe a different image.
+		 * written, named by a new persisted identity. An occupied source, sidecar or authored
+		 * environment destination is refused; `Reimport` and `RefreshEnvironmentSource` update
+		 * existing imports while preserving their identities.
 		 *
 		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
 		 * half-written environment is never left behind. It removes only what it *created*: a file
@@ -911,7 +852,7 @@ namespace assetlib
 		 * @throws std::runtime_error if nothing is selected, if the source cannot be read or is
 		 *         neither a `.hdr` nor a `.ktx2`, if any directory `desc` names is the wrong half for
 		 *         what would land in it or `importedSourceDir` is outside `Authored/EnvSources`, or
-		 *         on the partial re-import above -- all checked before the projection, so none of
+		 *         an authored destination already exists -- all checked before the projection, so none of
 		 *         them costs a bake.
 		 * @throws Cancelled if `cancel` is signalled.
 		 */
@@ -919,10 +860,9 @@ namespace assetlib
 		ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {}) const;
 
 		/**
-		 * Every file `desc` would write, data-root relative, without writing any of them -- for a
-		 * caller that must decide *before* importing whether it would land on something already
-		 * there. The baked maps are not included: they are content-addressed, so a collision with
-		 * one is two imports agreeing on content rather than one destroying the other.
+		 * Authored destinations `desc` would write, as mount keys, for a caller checking collisions
+		 * before import. Derived outputs are named by the identity minted during import; baked
+		 * maps are content-addressed and shared.
 		 */
 		[[nodiscard]] std::vector<std::string>
 		EnvironmentImportTargets(const EnvImportDesc& desc) const;
@@ -1027,6 +967,9 @@ namespace assetlib
 		Describe(const BGrassFields& grass) const;
 
 	private:
+		struct ImportIndex;
+		void
+		MigrateImportNames(bool dryRun, MigrateReport& report) const;
 		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */
 		[[nodiscard]] ImportDocument
 		LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const;
@@ -1048,5 +991,6 @@ namespace assetlib
 		std::filesystem::path                          m_DataRoot;
 		std::shared_ptr<const AssetKindRegistry>       m_Registry;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;
+		std::shared_ptr<ImportIndex>                   m_ImportIndex;
 	};
 }

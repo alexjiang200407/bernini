@@ -1,6 +1,8 @@
 #include "PointsGltf.h"
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
@@ -30,6 +32,40 @@ namespace
 	Load(const Glb& glb)
 	{
 		return loadFromGltf(glb.Path(), { .textures = GltfTextures::kSkip });
+	}
+}
+
+TEST_CASE("Cooked meshes own named grass geometry with stable look slots", "[grass][import][io]")
+{
+	Buffer     buffer;
+	const auto points = ShuffledGrid(15);
+	const Glb  glb("bernini_embedded_grass.glb", StreetDocument(buffer, points), buffer.bytes);
+	const auto mesh  = toBMesh(Load(glb));
+	const auto bytes = AssetCodec<BMesh>::Serialize(mesh);
+	const auto read  = AssetCodec<BMesh>::Deserialize(bytes);
+	REQUIRE(read.grassFields.fields.size() == 1);
+	CHECK(read.grassFields.fields[0].name == "Street[1]");
+	CHECK(read.grassFields.fields[0].field.look == 0);
+	CHECK(read.grassFields.fields[0].field.mesh == 0);
+	CHECK(read.grassFields.chunks.size() == 4);
+	REQUIRE(read.grassFields.clumps.size() == points.size());
+	CHECK(
+		std::memcmp(
+			read.grassFields.clumps.data(),
+			mesh.grassFields.clumps.data(),
+			points.size() * sizeof(GrassClump)) == 0);
+	CHECK(AssetCodec<BMesh>::Serialize(read) == bytes);
+	SECTION("a field cannot address another mesh")
+	{
+		auto invalid                             = mesh;
+		invalid.grassFields.fields[0].field.mesh = static_cast<uint32_t>(mesh.meshes.size());
+		CHECK_THROWS(AssetCodec<BMesh>::Serialize(invalid));
+	}
+	SECTION("a chunk cannot escape the clump pool")
+	{
+		auto invalid                             = mesh;
+		invalid.grassFields.chunks[0].firstClump = std::numeric_limits<uint32_t>::max();
+		CHECK_THROWS(AssetCodec<BMesh>::Serialize(invalid));
 	}
 }
 
@@ -188,55 +224,6 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 	}
 }
 
-TEST_CASE(
-	"A .bimport binds a grass field by name, apart from the mesh's materials",
-	"[grass][import]")
-{
-	Buffer    buffer;
-	const Glb glb("bernini_grass_bind.glb", StreetDocument(buffer, ShuffledGrid(4)), buffer.bytes);
-	imp::BMeshImport mesh = Load(glb);
-
-	const std::vector<MaterialBinding> bindings = {
-		{ .submesh = "Street[0]", .material = "Authored/Materials/road.bmaterial" },
-		{ .submesh = "Street[1]", .material = "Authored/Grass/verge.bgrass" },
-		{ .submesh = "Gone[3]", .material = "Authored/Grass/old.bgrass" },
-	};
-
-	BGrassFields grass = mesh.grass;
-	CHECK(applyGrassBindings(grass, bindings) == std::vector<std::string>{ "Gone[3]" });
-	CHECK(grass.looks == std::vector<std::string>{ "Authored/Grass/verge.bgrass" });
-	CHECK(grass.fields[0].look == 0);
-
-	// Unbound again once the document stops naming it.
-	CHECK(applyGrassBindings(grass, std::span(bindings.data(), 1)).empty());
-	CHECK(grass.fields[0].look == c_InvalidIndex);
-	CHECK(grass.looks.empty());
-
-	CHECK(isGrassBinding(bindings[1]));
-	CHECK_FALSE(isGrassBinding(bindings[0]));
-}
-
-TEST_CASE("A mesh's bindings neither apply nor report a grass binding", "[grass][import]")
-{
-	Buffer    buffer;
-	const Glb glb(
-		"bernini_grass_meshbind.glb",
-		StreetDocument(buffer, ShuffledGrid(4)),
-		buffer.bytes);
-	const imp::BMeshImport import = Load(glb);
-
-	BMesh mesh;
-	mesh.submeshes  = import.submeshes;
-	mesh.stringPool = import.stringPool;
-
-	const std::vector<MaterialBinding> bindings = {
-		{ .submesh = "Street[0]", .material = "Authored/Materials/road.bmaterial" },
-		{ .submesh = "Street[1]", .material = "Authored/Grass/verge.bgrass" },
-	};
-	CHECK(rebuildMaterialSlots(mesh, bindings, {}).empty());
-	CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
-}
-
 TEST_CASE("A primitive that is neither triangles nor points is still refused", "[grass][import]")
 {
 	Buffer buffer;
@@ -244,18 +231,4 @@ TEST_CASE("A primitive that is neither triangles nor points is still refused", "
 	document["meshes"][0]["primitives"][1]["mode"] = 1;  // LINES
 	const Glb glb("bernini_grass_lines.glb", document, buffer.bytes);
 	CHECK_THROWS(Load(glb));
-}
-
-TEST_CASE(
-	"Two grass fields of one name are refused where a binding would address them",
-	"[grass][import]")
-{
-	auto grass   = BGrassFields();
-	grass.fields = { GrassField{ .mesh = 0, .look = c_InvalidIndex },
-		             GrassField{ .mesh = 1, .look = c_InvalidIndex } };
-	grass.names  = { "Verge", "Verge" };
-
-	const std::vector<MaterialBinding> bindings = { { .submesh  = "Verge",
-		                                              .material = "Authored/Grass/verge.bgrass" } };
-	CHECK_THROWS(applyGrassBindings(grass, bindings));
 }

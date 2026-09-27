@@ -17,13 +17,12 @@ rename, migrate and pack without entering the closed built-in `AssetType`; see
 
 ## Imported-source contract
 
-The `derived-asset-names` contract declares source identity and lookup, cooked grass inside a mesh,
-and bindings outside its cooked data. **Production adoption is pending.** The declarations below
-are exercised by `assetlib_import_contract_tests`, whose separate executable links a fake host
-instead of assetlib. Existing importers, codecs, acquisition and packing still use the current
-behavior described in the rest of this page. In particular, codecs do not yet persist
-`ImportDocument::identity` or `BMesh::grassFields`, and production regeneration does not yet fill
-`RegenMesh::bindings`.
+Imports own a stable identity and generated output names. `ResolveImport` maps a source key to
+its output through the mounted sidecar; gamelib's mesh and animation acquisition takes those
+source keys. Meshes contain geometry, original material slots, rig signatures and named grass
+fields, while materials, overrides, skeleton bindings and grass looks live in the sidecar.
+Packs include sidecars and exclude copied sources. Read-only geometry loads check bake tokens,
+sidecar parameters and the packed source revision without opening or stamping a source.
 
 | Contract | Declaration | Responsibility |
 |---|---|---|
@@ -40,15 +39,45 @@ to discover ownership.
 
 Bindings are owned snapshots too. Resolving a material choice per submesh permits two submeshes
 that shared a source material slot to be authored differently without changing cooked geometry.
-Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime container caches
-must observe sidecar changes when this contract is adopted; the current cache behavior below has
-not changed yet.
+Unknown binding names remain diagnostics in `RegenMesh::unboundBindings`. Runtime mesh caches
+observe the sidecar stamp as well as the cooked container's stamp.
 
-The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
-import document from one identity and loading a mesh by source through `ResolveImport` and
-`LoadRegenMesh`. Its tests prove client wiring, snapshot ownership and error propagation. The fake
-does not prove random-ID quality, name generation, serialization, migration, production validation,
-or loose/packed parity; those require the implementation's real-store tests.
+The sidecar's `identity` object stores `id` as 16 lowercase hexadecimal digits and `label` as the
+frozen source filename. Missing identity marks a legacy document; malformed identity is refused.
+Identity is excluded from the cook parameter hash. `ResolveImport` reads the sidecar on every call
+and returns an owned snapshot without opening the source or derived output.
+`RegenMesh::sourceKey` identifies the current owner after source moves, separately from the
+source key recorded when its cooked geometry was produced.
+
+`ImportTarget::identity` carries the identity chosen before generating an import's destinations.
+`WriteImportedDocument` persists it and refuses replacement of an existing identity. Omitting it
+on a subsequent write preserves the stored identity. An unreadable existing sidecar refuses the
+write so it cannot silently discard that identity or authored parameters.
+`ImportTarget::bindings` writes named material choices directly into the sidecar, without requiring
+cooked geometry. An explicitly empty list clears mesh defaults while retaining authored overrides
+and grass choices; an omitted list preserves existing bindings.
+`ImportDocument::packedSourceStamp` records the source revision shared by a packed group's
+outputs. It is export metadata outside the cook parameter hash; it contains no source bytes.
+
+`FindImportForOutput` supplies the inverse lookup for cooked containers whose recorded source path
+predates a move. It indexes sidecar output claims lazily, rejects duplicate owners, and reads the
+owner afresh for each returned snapshot. Sidecar writes through the store invalidate the index;
+an absent or moved owner triggers a rescan. Repeated reads of an owned output do not rescan other
+documents. Geometry loads use it when the recorded source path no longer identifies the owning
+sidecar. Moving a source keeps its output keys and cache bytes, including legacy imports.
+Independent moves of derived files or directories are refused.
+
+`Migrate` assigns identities to existing mesh and environment imports, moves their outputs and extracted-texture
+directories, and rewrites tracked references, including the skeleton's companion avatar. It saves
+the identity before moving files so a retry keeps the same destinations. A shared identity or
+texture directory refuses migration for the affected imports. Materials whose texture routes move
+are baked against their new paths in the same run; a settled second run writes nothing. Dry runs
+leave identities, files and references unchanged.
+
+Production tests cover identity persistence and source lookup in `ImportIdentity_test.cpp`,
+repeatable migration in `ImportNameMigration_test.cpp`, and loose/packed bindings in
+`GrassFields_test.cpp` and `Pack_test.cpp`. Gamelib archive tests verify static and skinned
+acquisition with no source files present and no source reads.
 
 ---
 
@@ -106,7 +135,7 @@ or loose/packed parity; those require the implementation's real-store tests.
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv`,
   `.bimport`, `.bavatar`, `.bblend` and `.bgrass` are canonical-JSON text documents, unknown keys preserved on
-  round-trip; `.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
+  round-trip; `.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
   the cache key (bake token, source stamp, parameter hash, source mount key) over schema-less
   chunks. A key mismatch is a cache miss that regenerates, never a conversion.
   [docs/asset_containers.md](docs/asset_containers.md)
@@ -121,8 +150,8 @@ or loose/packed parity; those require the implementation's real-store tests.
   re-extract land back on the files materials already route at.
   [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)
 
-* **Every reference is data-root-relative, and layout is a table.** A `.bmesh` in
-  `Derived/Meshes/props/` names `Derived/BakedTextures/skin.ktx2`, not a path relative to itself, so a bake writing
+* **Every reference is data-root-relative, and layout is a table.** A material in
+  `Authored/Materials/props/` names `Derived/BakedTextures/skin.ktx2`, not a path relative to itself, so a bake writing
   that file and a mesh naming it agree without either knowing where the other lives. The data root's
   first level is the authored/derived split — `Authored/` holds what a person decided, `Derived/`
   what a bake or an import computed — so a project's commit rule is a directory rather than a list
@@ -141,8 +170,8 @@ or loose/packed parity; those require the implementation's real-store tests.
   materials on the floor: they are that format's model, not necessarily the engine's, and
   deriving `.bmaterial` files inside assetlib would stamp glTF's model into the engine's own
   container for every caller — including `assetlib_cli bake`, which has no user to ask. Textures
-  *are* extracted; binding a material is `attachMaterial`, and the editor's import is what calls
-  it, behind a checkbox.
+  *are* extracted. The editor authors materials behind a checkbox and passes named bindings
+  to `WriteImportedDocument`.
 
 * **Reference queries are snapshots, never caches.** The data root is shared with the user's file
   manager. A cached graph would not merely go stale — it would refuse a deletion while naming a
@@ -172,7 +201,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 
 | Container | Holds |
 |---|---|
-| `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path, and the path of the `.bgrassfields` cooked from the same source (`RefKind::kMeshGrass`). Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
+| `.bmesh` | Geometry, meshlets, node hierarchy, original material slots, rig layout signature/bone names, and embedded named grass geometry. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
 | `.bmaterial` | Factors, the baked triplet, the per-channel routing table -- or, under `shadingModel: "pbrSurface"`, the surface it names and the parameters and textures it sets on it ([Game-Defined Surfaces](game_defined_surfaces.md)) |
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. The `.banim` also carries what the cook derived off the walk: a posed box per mesh entry, and a plant weight per leg per frame, each self-keyed so a pairing that has changed is measured instead. |
 | `.rml` / `.rcss` / `.ttf` | Not containers — foreign kinds the UI runtime parses. Listed here only because the project stores and packs them. |
@@ -180,7 +209,6 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bimport` | One per copied source under `Authored/Meshes/` or `Authored/EnvSources/`: the source it describes, and the bindings, registered material overrides and parameters an import was authored with, as text. What a stale cache entry re-cooks from. `source` is recorded rather than derived from the document's own name, so a source kind with more than one extension is still reachable; one written before that field falls back to the `.glb` swap. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name, and how far each named clip plants (`plant`, a weight per clip name; zero takes the clip out, and the `unplanted` list it once was still reads). Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
 | `.bblend` | The blend spaces authored against one clip set: each a named, ordered run of clips with the parameter each plays alone at. Names the `.banim` by a path it stores, so unlike a `.bavatar` it is an ordinary asset — renamed freely, and a rename of the clip set rewrites it (`RefKind::kBlendClips`). Clips are named, never indexed, and resolved where both name tables meet. Its struct is [blend.h](libs/assetlib/include/assetlib/blend.h). |
-| `.bgrassfields` | The grass one mesh source grows, cooked beside its `.bmesh` from the source's POINTS primitives: fields (named as submeshes are, each on one mesh and drawn with a look slot), Morton-ordered chunks of at most `c_GrassClumpsPerChunk` clumps with a sphere each, and the clumps. Its looks name `.bgrass` documents (`RefKind::kFieldGrass`, as a `.bimport`'s grass binding does), so a rename of the look rewrites it. A member of the geometry group. Its `.bmesh` names it, which is how a runtime finds a mesh's grass -- a pack carries no reference back from the grass, and the mesh is the file the runtime already holds; deleting it clears that name rather than being refused (`DeletionPlan::grassMeshes`), and deleting the mesh cascades to it. Its struct is [BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h). |
 | `.bgrass` | A grass look: the `.bmaterial` its blades shade through (a path it stores, `RefKind::kGrassMaterial`, so a rename of the material rewrites it) and the blade, clump, density, response, lighting and colour groups `bgl::GrassDesc` mirrors. A key it omits takes the default, and unknown keys are kept inside a group as well as at the top. Ranges are not checked on read: the renderer states them once, where it creates the look. Its struct is [BGrass.h](libs/assetlib_structs/include/assetlib_structs/BGrass.h). A look with no mesh under it is grown on `makeGrassPatch`'s square of clumps ([grass_patch.h](libs/assetlib/include/assetlib/grass_patch.h)), which is what a preview draws. |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
@@ -259,9 +287,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`StampOf`** — an absent path yields a **zeroed** stamp, which never compares equal to a real
   one. A missing source therefore reads as *stale*, not as unchanged.
 ### Containers
-* **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
-  at write time because nothing reading the file afterwards can tell a joint index that resolves
-  to nothing from one that does not.
+* **`LoadRegenMesh`** returns geometry and an owned binding snapshot from the current sidecar.
+  A binding edit changes the snapshot without rewriting the mesh; unmatched names are reported.
+* **`WriteImportedRig`** returns the bound skeleton and owned outputs. A reused rig is a binding,
+  never an output this source may delete. The mesh records only the joint layout.
 * **`Save` creates the directories its key names.** A key is a location in the data root, not one
   that already exists, so an import aimed at a subfolder needs nothing from its caller. The *data
   root* itself must exist — `AssetStore`'s constructor refuses one that does not, since a write
@@ -277,9 +306,9 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
   `assetlib_cli migrate` rewrites a whole project. The geometry group is every container one mesh
-  import produces -- `.bmesh`, `.bskel`, `.banim` and `.bgrassfields` (`isGeometryContainer`) --
-  and each has its `LoadRegen*` door; `LoadRegenGrassFields` answers with the document's grass
-  bindings applied, and a `RegenGrassFields::unboundBindings` that `migrate` and `pack` fail on.
+  import produces -- `.bmesh`, `.bskel` and `.banim` (`isGeometryContainer`) --
+  and each has its `LoadRegen*` door. Grass geometry is part of the mesh; sidecar look bindings
+  resolve through `LoadRegenMesh`, whose `unboundBindings` makes `migrate` and `pack` fail.
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we
@@ -294,38 +323,14 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
   Custom referrers are rewritten through `IAssetKind::RewriteReferences` using their field tokens.
-* **`planRename` on an imported source** — a source and its `.bimport` are one asset under two
-  names, so either spelling plans the same move and `subject` reads back as the document's. A file
-  is a source when a document records it as one (`RefKind::kImportedSource`), whatever its extension,
-  and it keeps that extension; a rename that would move the document out of `Authored/Meshes` or
-  `Authored/EnvSources` is refused. What travels with it splits by the same rule the whole data root
-  does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
-  that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
-  containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An output a
-  rename of its own has since taken off the source's stem is left where it is — its name no longer
-  says it came from this source — and the document's reference to it is rewritten like any other.
-
-  This is what makes a rig shared between two imports safe. A `.bskel` one source produced and
-  another source's document *binds* is a move like any other, so the second document is among the
-  `referrers` and is rewritten — where moving the file alone would skin the second model to nothing.
-* **`planRename` on a skeleton** — `RenamePlan::avatars` is the `.bavatar` beside each `.bskel` the
-  rename moves. **Authored**, like the `.glb`: nothing regenerates one, so a move that fails is
-  fatal. It is a field of its own rather than an output because the path *is* the attachment — an
-  avatar left behind by a skeleton that moved is not stale, it is detached, and no re-cook
-  reattaches it. Renaming a `.bavatar` on its own is refused for the same reason, naming the
-  skeleton to rename instead. Only avatars that exist are listed; most rigs have none.
-
-  Its edge is derived from its key rather than stored in the document, so it is not a referrer to
-  rewrite — see `isStoredRef`, and it is now the only such edge. A `.bimport`'s edge to its own
-  source *is* stored: the document records `source` because the extension swap that finds one cannot
-  answer for a source kind with more than one extension, so a rename rewrites it like any other
-  reference.
-
-  A **directory** rename gets the same treatment one file at a time, because the pair straddles the
-  two halves and no single move can carry both ends: renaming a directory of `.bskel`s takes each
-  avatar to the mirrored directory under `Authored/`, creating it if it is not there, and renaming a
-  directory of `.bavatar`s is refused for the reason renaming one is.
+* **`planRename` on an imported source** moves only the source and its `.bimport`, preserving
+  identity, output keys and derived bytes. It rewrites tracked source references; a destination
+  outside the corresponding authored source directory is refused. Source or sidecar spelling
+  identifies the same move. Renaming a derived file or directory independently is refused.
+* **Migration moves the skeleton's companion avatar** alongside a generated skeleton rename.
+  The avatar is authored and its path supplies the attachment, so a failed avatar move is fatal;
+  a missing derived output can be regenerated. `RenamePlan::avatars` keeps these cases separate.
+  Independent avatar moves are refused to prevent detaching it from its rig.
 
 ## Usage Sketch
 

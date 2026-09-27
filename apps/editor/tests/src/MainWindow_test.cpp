@@ -20,7 +20,11 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/blend.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/bmesh_gltf.h>
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BMesh.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -158,6 +162,15 @@ namespace
 		Open() const
 		{
 			return assetlib::Project::Open(ProjectFile());
+		}
+
+		[[nodiscard]] fs::path
+		ExternalMesh() const
+		{
+			const auto mesh = assetlib::toBMesh(assetlib::loadFromGltf("assets/suzanne.glb"));
+			const auto path = fs::path(temp.path().toStdString()) / "external.bmesh";
+			core::file::write_atomic(path, assetlib::AssetCodec<assetlib::BMesh>::Serialize(mesh));
+			return path;
 		}
 
 		// What main() does before the window: the directories the config names, and no others.
@@ -664,8 +677,7 @@ TEST_CASE(
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
 	// An external mesh exercises the plain-file preview without retargeting the project host.
-	const fs::path dataRoot = fs::absolute("assets/Data");
-	const fs::path mesh     = dataRoot / "Derived" / "Meshes" / "apples.bmesh";
+	const fs::path mesh = editor.ExternalMesh();
 	REQUIRE(fs::exists(mesh));
 
 	preview->LoadMesh(mesh);
@@ -720,7 +732,7 @@ TEST_CASE(
 	REQUIRE(preview->MeshPath().empty());
 	CHECK(stage->currentIndex() == 0);
 
-	const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+	const fs::path mesh = editor.ExternalMesh();
 	REQUIRE(fs::exists(mesh));
 
 	preview->LoadMesh(mesh);
@@ -840,7 +852,7 @@ TEST_CASE(
 		auto* preview = window.findChild<MaterialPreviewWindow*>();
 		REQUIRE(preview != nullptr);
 
-		const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+		const fs::path mesh = editor.ExternalMesh();
 		REQUIRE(fs::exists(mesh));
 		preview->LoadMesh(mesh);
 		REQUIRE_FALSE(preview->MeshPath().empty());
@@ -1584,7 +1596,7 @@ TEST_CASE(
 
 	// A mesh first: with none open the panel shows its drop prompt instead, and a viewport on the
 	// page behind it is hidden, which is a state no click can reach rather than one to pin.
-	const fs::path mesh = fs::absolute("assets/Data") / "Derived" / "Meshes" / "apples.bmesh";
+	const fs::path mesh = editor.ExternalMesh();
 	REQUIRE(fs::exists(mesh));
 	preview->LoadMesh(mesh);
 	REQUIRE(editor::test::WaitFor([view] { return view->isVisible(); }));

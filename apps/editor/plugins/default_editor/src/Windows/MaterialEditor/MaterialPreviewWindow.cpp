@@ -30,6 +30,8 @@
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <assetlib/MeshBindings.h>
+#include <assetlib/RegenMesh.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <bgl/Camera.h>
@@ -59,14 +61,14 @@ namespace
 {
 	QString
 	ResolveMaterialPath(
-		const assetlib::BMesh&       mesh,
-		const assetlib::Submesh&     submesh,
-		const std::filesystem::path& dataRoot)
+		const assetlib::MeshBindings& bindings,
+		uint32_t                      submesh,
+		const std::filesystem::path&  dataRoot)
 	{
-		if (dataRoot.empty() || submesh.material >= mesh.materials.size())
+		if (dataRoot.empty() || submesh >= bindings.submeshMaterials.size())
 			return {};
 
-		const std::string& relative = mesh.materials[submesh.material];
+		const std::string& relative = bindings.submeshMaterials[submesh];
 		if (relative.empty())
 			return {};
 
@@ -241,8 +243,9 @@ MaterialPreviewWindow::Reset()
 void
 MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 {
-	assetlib::BMesh mesh;
-	const QString   name = QString::fromStdString(path.filename().string());
+	auto          loaded = assetlib::RegenMesh();
+	auto&         mesh   = loaded.mesh;
+	const QString name   = QString::fromStdString(path.filename().string());
 
 	const QString title = editor::Localize(
 		m_Host.GetLanguageResolver(),
@@ -264,7 +267,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					m_Host.GetLanguageResolver(),
 					"bernini.material.reading_mesh_progress",
 					"Reading mesh..."));
-			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
+			loaded = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 		});
@@ -302,12 +305,6 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 			bgl::IScene* scene = &context.scene;
 
-			// The preview authors a material, so bind the same neutral material to every source
-			// material slot; the graph then rebinds it per submesh.
-			const auto materials = std::vector<bgl::MaterialHandle>(
-				std::max<size_t>(1, mesh.materials.size()),
-				m_DefaultMaterial);
-
 			// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the
 			// same mesh can be instanced by several nodes). Upload each mesh once, then place an
 			// instance for every node that references one, at that node's world transform.
@@ -327,7 +324,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 				if (inserted)
 				{
-					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, materials));
+					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, {}));
 					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
 
 					// Name each of this mesh's submeshes once, in the order the selector shows them.
@@ -335,6 +332,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					for (uint32_t i = 0; i < entry.submeshCount; ++i)
 					{
 						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+						scene->SetSubmeshMaterial(m_Geoms[it->second], i, m_DefaultMaterial);
 
 						const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
 						auto                   name =
@@ -344,7 +342,10 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 						if (name.isEmpty())
 							name = QString("Submesh %1").arg(m_SubmeshNames.size());
 						m_SubmeshNames << name;
-						m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
+						m_SubmeshMaterialPaths << ResolveMaterialPath(
+							loaded.bindings,
+							entry.firstSubmesh + i,
+							m_DataRoot);
 						m_SubmeshRefs.push_back(
 							{ it->second,
 						      i,

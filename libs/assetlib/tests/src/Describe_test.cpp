@@ -1,4 +1,4 @@
-#include "asset_describe.h"
+#include "describe/asset_describe.h"
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
@@ -265,7 +265,6 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 {
 	BMesh mesh;
 	REQUIRE(mesh.stringPool.add("head") == 1);
-	mesh.materials = { "Authored/Materials/head.bmaterial" };
 	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 2, .nameOffset = 0 });
 
 	Submesh named{};
@@ -283,12 +282,12 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 	const std::string text = describe(mesh);
 
 	CHECK(text.find("'head'") != std::string::npos);
-	CHECK(text.find("[0] Authored/Materials/head.bmaterial") != std::string::npos);
-	CHECK(text.find("[7] (out of range -- no material)") != std::string::npos);
+	CHECK(text.find("material slot 0") != std::string::npos);
+	CHECK(text.find("material slot 7") != std::string::npos);
 
 	// Brief mode keeps the material table but drops the per-submesh listing.
 	const std::string brief = describe(mesh, /*verbose*/ false);
-	CHECK(brief.find("Authored/Materials/head.bmaterial") != std::string::npos);
+	CHECK(brief.find("material slot") == std::string::npos);
 	CHECK(brief.find("'head'") == std::string::npos);
 }
 
@@ -372,43 +371,13 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 	}
 }
 
-// A joint index resolves against a bone array or against nothing, and which one is invisible in the
-// geometry -- so the mesh dump has to say when a skinned mesh names no rig.
-TEST_CASE("describe(BMesh) reports the skeleton a skinned mesh names", "[describe][skeleton]")
+TEST_CASE("describe(BMesh) reports its cooked rig layout", "[describe][skeleton]")
 {
 	BMesh mesh;
-	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
-
-	Submesh submesh{};
-	submesh.indexType                     = IndexType::kUint16;
-	submesh.layout.attributeCount         = 1;
-	submesh.layout.attributes[0].semantic = VertexSemantic::kJoints0;
-	submesh.layout.attributes[0].format   = VertexFormat::kUint16x4;
-	mesh.submeshes.push_back(submesh);
-
-	REQUIRE(isSkinned(mesh));
-
-	SECTION("named")
-	{
-		mesh.skeleton = "Derived/Meshes/rig.bskel";
-		CHECK(describe(mesh).find("skeleton     Derived/Meshes/rig.bskel") != std::string::npos);
-	}
-
-	SECTION("carrying joints but naming none")
-	{
-		CHECK(describe(mesh).find("(SKINNED, but names none)") != std::string::npos);
-	}
-
-	SECTION("a static mesh naming a rig says the rig is unused")
-	{
-		BMesh attachment;
-		attachment.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
-		attachment.submeshes.push_back(Submesh{});
-		attachment.skeleton = "Derived/Meshes/rig.bskel";
-
-		REQUIRE_FALSE(isSkinned(attachment));
-		CHECK(describe(attachment).find("unused: no submesh carries joints") != std::string::npos);
-	}
+	mesh.skeletonSignature = 42;
+	mesh.skeletonBoneNames = { "root", "head" };
+	CHECK(describe(mesh).find("signature    000000000000002a") != std::string::npos);
+	CHECK(describe(mesh).find("rig bones    2") != std::string::npos);
 }
 
 TEST_CASE("describe(BEnv) reports whether the files it names are there", "[describe]")

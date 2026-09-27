@@ -15,7 +15,7 @@
 
 namespace editor
 {
-	assetlib::BMesh
+	assetlib::RegenMesh
 	LoadMeshThroughSeam(const assetlib::AssetStore& store, const std::filesystem::path& path)
 	{
 		const auto& dataRoot = store.GetDataRoot();
@@ -32,14 +32,16 @@ namespace editor
 						"has; rebind or re-export",
 						rel.generic_string().c_str(),
 						submesh.c_str());
-				return std::move(current.mesh);
+				return current;
 			}
 		}
 
 		// No project owns this file -- either the editor has no data root open, or the mesh sits
 		// outside it. Bytes off the host, decoded by the codec: a store cannot answer for a path
 		// it does not contain, and pretending otherwise is what the key/path split exists to stop.
-		return assetlib::AssetCodec<assetlib::BMesh>::Deserialize(
-			core::file::read_file_bytes(path.string()));
+		return { assetlib::AssetCodec<assetlib::BMesh>::Deserialize(
+					 core::file::read_file_bytes(path.string())),
+			     {},
+			     {} };
 	}
 }

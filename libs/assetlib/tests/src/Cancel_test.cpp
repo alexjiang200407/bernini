@@ -21,8 +21,8 @@
 #include <vector>
 
 #include "MountAt.h"
-#include "bmesh_texture.h"
-#include "fs_util.h"
+#include "bmesh/bmesh_texture.h"
+#include "util/fs_util.h"
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
 

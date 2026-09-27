@@ -16,5 +16,7 @@ namespace assetlib
 		BMesh                    mesh;
 		std::vector<std::string> unboundBindings;
 		MeshBindings             bindings{};
+		/** Current owner after source moves; the cooked header retains its original source key. */
+		std::string sourceKey{};
 	};
 }

@@ -72,8 +72,8 @@ assetlib::AssetStore store(dataRoot, std::move(mount));     // reads through mou
 
 A container is loaded by its type — `store.Load<BMesh>(key)`, `store.Save(value, key)` — because
 the type is what names the codec; there is no method per container. The reads that are *not* a whole
-container keep their own names, since a type cannot say "the references only": `LoadMeshRefs`,
-`LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
+container keep their own names, since a type cannot say "the references only": `LoadRegenMeshRefs`, which resolves sidecar bindings,
+`LoadAnimationSkeletonPath`, the other `LoadRegen*` methods, and
 `LoadTexture`, which decodes an image rather than deserializing a struct. The staleness predicates
 (`BakeIsStale`, `DrawsLoose`) and `Describe` are methods too. The mount-taking free
 functions they forward to are internal to `assetlib/src`; a caller outside the library reaches them
@@ -132,7 +132,7 @@ Header, 16-byte-aligned payloads, entry table, string pool — in that order, al
 ```
 
 Both structs are `static_assert`-ed at 48 bytes
-([pak_io.cpp:49](../libs/assetlib/src/pak_io.cpp)). The alignment constant is the archive's own and
+([pak_io.cpp:49](../libs/assetlib/src/pak/pak_io.cpp)). The alignment constant is the archive's own and
 deliberately *not* `cache::c_Align`, which happens to be the same number: sharing it would make
 bumping one format silently change the other's layout.
 
@@ -142,7 +142,7 @@ vector is sized from a field the file supplied.
 
 ### It is its own format, not the cache container
 
-`cache::Writer` ([cache_io.h](../libs/assetlib/src/cache_io.h)) builds the whole file in memory
+`cache::Writer` ([cache_io.h](../libs/assetlib/src/io/cache_io.h)) builds the whole file in memory
 before writing, addresses chunks by a small `uint32` id, and has no path strings. An archive is
 gigabytes, addressed by path, and must be readable without loading it. Same *shape* — header, aligned
 payloads, table at the end — different problem.
@@ -173,23 +173,30 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that sit the explicit exclusions: any key under `Authored/Meshes/`, `Authored/EnvSources/` or
-`Derived/SourceTextures/` — matched as a prefix, since `Meshes` names a directory in each half —
-and the `.bimport` import document by its *type* — it is a registered extension, so without its own
-rule it would ride into the archive it must never reach.
+top of that sit the source exclusions: keys under `Authored/Meshes/`, `Authored/EnvSources/` or
+`Derived/SourceTextures/`, except `.bimport` sidecars. Those sidecars ship as the runtime's source
+index and binding authority; the copied source bytes stay out.
+For geometry groups, packing checks that the serialized outputs share one source revision and
+match the sidecar's cook parameters. It records that revision as `packedSourceSize` and
+`packedSourceHash` in the archived sidecar. Read-only loads compare it with each container's
+header and refuse mismatches without reading a source. The loose sidecar is not rewritten.
+
+`AssetManager::AcquireMesh` and the mesh and animation arguments of `AcquireSkinnedMesh` take
+source keys, such as `Authored/Meshes/street.glb`. `AssetStore::ResolveImport` resolves each through
+its packed sidecar. The identifier does not require the source file to exist in the mount.
 
 | | |
 |---|---|
 | `Derived/SourceTextures/` | excluded — authoring source; the bake reads it, the runtime never does |
-| `Authored/Meshes/` | excluded — the imported `.glb` sources and their `.bimport` documents |
-| `Authored/EnvSources/` | excluded — the imported environment sources (`.hdr`, float `.ktx2` cubes) and their `.bimport` documents; `pack` cooks a stale `.bsky` / `.benvl` from them before it writes, and the runtime reads only the bakes |
-| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings and overrides. Deliberate, so silent (never in `skippedByExtension`) |
+| `Authored/Meshes/` | copied `.glb` sources excluded; `.bimport` sidecars included |
+| `Authored/EnvSources/` | copied `.hdr` and float `.ktx2` sources excluded; `.bimport` sidecars included. `pack` cooks stale environment outputs before writing |
+| `.bimport` | included by type; runtime bindings and source-to-output lookup read this document through the mount |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.bproj` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
 | `Derived/BakedTextures/` (baked) | **included**, and it is most of the bytes |
 | `Authored/UI/`, `Authored/Fonts/` | **included**, packed verbatim — the UI runtime reads its documents, styles and fonts through the mount like any other asset |
-| `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
+| `.bmesh` / `.bskel` / `.banim` | **included as the seam answers** — a stale group re-bakes into the archive, and a group the seam cannot serve fails the pack. Mesh bindings stay in the packed sidecar. `PackReport::geometryRebaked` counts the entries that differ |
 | `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
 
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped

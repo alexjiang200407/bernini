@@ -11,6 +11,7 @@
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/cancel.h>
+#include <assetlib/import_document.h>
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
@@ -145,23 +146,17 @@ namespace editor
 		const fs::path bskelPath = under(options.outputs.skeleton);
 		const fs::path banimPath = under(options.outputs.animations);
 
-		// Beside the mesh, and sampled unconditionally for the rig's reason: whether the source has
-		// grass is not known until it is parsed.
-		fs::path grassPath = bmeshPath;
-		grassPath.replace_extension(assetlib::c_GrassFieldsExtension);
-
 		// Only what this import may actually write.
 		auto files = std::vector<assetlib::ImportedFile>();
 		if (options.mesh)
 		{
 			files.push_back({ bmeshPath, fs::exists(bmeshPath, ec) });
 			files.push_back({ bskelPath, fs::exists(bskelPath, ec) });
-			files.push_back({ grassPath, fs::exists(grassPath, ec) });
 		}
 		if (options.animations)
 			files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
-		if (options.mesh || options.animations)
+		if (options.mesh || options.animations || options.textures)
 		{
 			const assetlib::AssetStore store(dataRoot);
 			const fs::path             sourceCopy = store.ResolveWritePath(sourceKey);
@@ -212,7 +207,7 @@ namespace editor
 
 		// Filled in on the worker, read on the GUI thread below where the document is written: only
 		// the writer knows whether it produced the rig or bound one already here.
-		auto rigOutputs = std::vector<std::string>();
+		auto rig = assetlib::ImportedRig();
 
 		ZoneScopedN("editor import");
 		ZoneTextF("%s", qPrintable(name));
@@ -283,7 +278,7 @@ namespace editor
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
-					rigOutputs = store.WriteImportedRig(
+					rig = store.WriteImportedRig(
 						imported->skeleton,
 						imported->animations,
 						*mesh,
@@ -291,11 +286,6 @@ namespace editor
 						store.KeyFor(banimPath),
 						options.animations,
 						sourceRef);
-
-					const std::string grassKey = store.KeyFor(grassPath);
-					for (std::string& grass :
-				         store.WriteImportedGrass(imported->grass, *mesh, grassKey, sourceRef))
-						rigOutputs.push_back(std::move(grass));
 				}
 				else if (options.animations)
 				{
@@ -310,8 +300,9 @@ namespace editor
 					assetlib::ImportTarget     target{ sourceKey,
 					                                   assetlib::c_DefaultSampleRate,
 					                                   textureDirKey };
-					const assetlib::SourceRef  sourceRef = store.CopyImportedSource(source, target);
-					target.skeleton                      = store.WriteImportedClips(
+					target.identity                     = options.outputs.identity;
+					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
+					target.skeleton                     = store.WriteImportedClips(
 						imported->skeleton,
 						imported->animations,
 						store.KeyFor(banimPath),
@@ -319,11 +310,20 @@ namespace editor
 					target.outputs = { store.KeyFor(banimPath) };
 					store.WriteImportedDocument(target, nullptr);
 				}
+				else if (options.textures)
+				{
+					const assetlib::AssetStore store(dataRoot);
+					assetlib::ImportTarget     target{ sourceKey,
+					                                   assetlib::c_DefaultSampleRate,
+					                                   textureDirKey };
+					target.identity = options.outputs.identity;
+					(void)store.CopyImportedSource(source, target);
+					store.WriteImportedDocument(target, nullptr);
+				}
 			},
 			background::Cancellable::kYes);
 
-		// All that is left for the GUI thread: the material graphs, whose nodes own QPixmaps, and the
-		// `.bmesh` -- which follows them, since it names the files they write.
+		// Material graph nodes own QPixmaps and must be created on the GUI thread.
 		if (result.Completed())
 		{
 			// Named apart from the worker's zone because this half is the half that freezes the
@@ -342,8 +342,12 @@ namespace editor
 							tangents.skipped,
 							qPrintable(name));
 
+					assetlib::ImportTarget target{ sourceKey,
+						                           assetlib::c_DefaultSampleRate,
+						                           textureDirKey };
+					target.bindings = std::vector<assetlib::MaterialBinding>{};
 					if (importMaterials)
-						WriteImportedMaterials(
+						target.bindings = WriteImportedMaterials(
 							*imported,
 							*mesh,
 							dataRoot,
@@ -354,12 +358,10 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					assetlib::ImportTarget target{ sourceKey,
-						                           assetlib::c_DefaultSampleRate,
-						                           textureDirKey };
-					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
-					target.skeleton = mesh->skeleton;
-					target.outputs  = std::move(rigOutputs);
+					target.identity = options.outputs.identity;
+					rig.outputs.push_back(meshStore.KeyFor(bmeshPath));
+					target.skeleton = std::move(rig.skeleton);
+					target.outputs  = std::move(rig.outputs);
 
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
@@ -409,8 +411,6 @@ namespace editor
 		desc.lighting    = dialog.ImportLighting();
 		desc.environment = dialog.ImportEnvironment();
 
-		desc.skyDir      = std::filesystem::path(dialog.GetSkyDirectory().toStdWString());
-		desc.lightingDir = std::filesystem::path(dialog.GetLightingDirectory().toStdWString());
 		desc.importedSourceDir =
 			std::filesystem::path(dialog.GetImportedSourceDirectory().toStdWString());
 

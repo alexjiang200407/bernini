@@ -10,61 +10,17 @@ namespace assetlib
 {
 	struct BMesh;
 
-	/** Every asset a `.bmesh` names. See loadMeshRefs. */
+	/** References resolved from a mesh source's import document. */
 	struct MeshRefs
 	{
-		/**
-		 * As stored, in `mesh.materials` order, duplicates and all: a submesh slot can legitimately
-		 * repeat a path (see attachMaterial).
-		 */
 		std::vector<std::string> materials;
 
 		std::string skeleton;  // empty for a static mesh
-		std::string grass;     // empty for a source that grows none
 	};
 
-	/**
-	 * What `path` references, read without deserializing its geometry: the header, the chunk table and
-	 * the two reference chunks alone. Those are a few hundred bytes in a file of many megabytes, so a
-	 * caller surveying every mesh in a project -- which is what a reference scan does -- must come
-	 * through here rather than `store.Load<BMesh>`.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] MeshRefs
-	loadMeshRefs(const std::filesystem::path& path);
-
-	/**
-	 * Bakes a flattened import into its modular file form: the geometry is copied verbatim and every
-	 * submesh arrives with no material (`Submesh::material` is c_InvalidIndex, `materials` is empty).
-	 *
-	 * **This does not carry materials across, and nothing in assetlib does.** A glTF's materials are
-	 * PBR, which is that format's shading model and not necessarily the engine's, so deriving
-	 * `.bmaterial` files here would stamp glTF's model into the engine's own container for every
-	 * caller -- including `assetlib_cli bake`, which has no user to ask. attachMaterial is the only
-	 * thing that binds a material, and a caller that wants the glTF's has to derive them and call it:
-	 * the editor's import does exactly that, behind a checkbox, for the PBR ones alone. The import's
-	 * *textures* are still extracted (see AssetStore::WriteTextures) -- they are what a material
-	 * routes at.
-	 */
+	/** Copies cooked geometry, original material slot indices and named grass from an import. */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
-
-	/**
-	 * Points submesh `submeshIndex` at the material file `relativePath` (relative to the project's data
-	 * root, like every asset reference), adjusting `mesh.materials` and `Submesh::material` as needed.
-	 * Used when an authoring tool saves a material and the mesh must reference it from then on.
-	 *
-	 * Material slots are shared: an import gives every submesh cut from the same source material the
-	 * same index. So the submesh's existing slot is rewritten in place only when no other submesh uses
-	 * it; otherwise the submesh moves to its own slot, reusing an entry that already holds
-	 * `relativePath` rather than appending a duplicate. Sibling submeshes are never repointed.
-	 *
-	 * @return true if `mesh` changed, false if it already referenced that material (nothing to write).
-	 * @throws std::runtime_error if `submeshIndex` is out of range.
-	 */
-	bool
-	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
 
 	/**
 	 * The file name AssetStore::WriteTextures gives each of an import's textures, parallel to

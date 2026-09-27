@@ -1,4 +1,5 @@
 #include <assetlib/bmesh.h>
+#include <assetlib/import_document.h>
 #include <default_editor/import_writers.h>
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
@@ -18,10 +19,10 @@
 
 namespace editor
 {
-	void
+	std::vector<assetlib::MaterialBinding>
 	WriteImportedMaterials(
 		const assetlib::imp::BMeshImport& imported,
-		assetlib::BMesh&                  mesh,
+		const assetlib::BMesh&            mesh,
 		const std::filesystem::path&      dataRoot,
 		const std::filesystem::path&      materialDir,
 		const std::filesystem::path&      textureDir,
@@ -85,15 +86,17 @@ namespace editor
 				Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();
 		}
 
-		// Only once every file is on disk: a `.bmesh` naming a material that does not exist is what
-		// gamelib's AcquireMaterial throws on, and is the reference an import must never make.
+		auto bindings = std::vector<assetlib::MaterialBinding>();
 		for (size_t i = 0; i < imported.submeshes.size(); ++i)
 		{
 			const uint32_t index = imported.submeshes[i].material;
 			if (index >= relative.size() || relative[index].empty())
 				continue;
 
-			assetlib::attachMaterial(mesh, static_cast<uint32_t>(i), relative[index]);
+			bindings.push_back(
+				{ std::string(mesh.stringPool.at(mesh.submeshes.at(i).nameOffset)),
+			      relative[index] });
 		}
+		return bindings;
 	}
 }
