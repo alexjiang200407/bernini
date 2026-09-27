@@ -3,6 +3,7 @@
 #include <array>
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/Project.h>
 #include <assetlib/RegenGrassFields.h>
 #include <assetlib/asset_import.h>
@@ -230,7 +231,7 @@ main(int argc, char** argv)
 	bake->add_option(
 		"-n,--name",
 		name,
-		"Base name for the imported assets (default: the source's stem)");
+		"Source destination under Authored/Meshes, without .glb (default: the source's stem)");
 	bake->add_option(
 			"-r,--sample-rate",
 			sampleRate,
@@ -512,15 +513,21 @@ main(int argc, char** argv)
 			if (name.empty())
 				name = fs::path(input).stem().string();
 
-			const fs::path bmeshPath = dataRoot / assetlib::c_MeshesDirectoryName /
-			                           (name + std::string(assetlib::c_MeshExtension));
-			const fs::path bskelPath =
-				dataRoot / assetlib::c_SkeletonsDirectoryName / assetlib::skeletonFileName(name);
-			const fs::path banimPath =
-				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
-
-			// Its own folder: two sources naming an image alike would collide in a shared one.
-			const fs::path textureDir = dataRoot / assetlib::c_SourceTexturesDirectoryName / name;
+			const std::string sourceKey = std::format(
+				"{}/{}{}",
+				assetlib::c_MeshSourcesDirectoryName,
+				name,
+				assetlib::c_ImportedSourceExtension);
+			const assetlib::AssetStore importStore(dataRoot);
+			const auto                 identity  = assetlib::makeImportIdentity(sourceKey);
+			const fs::path             bmeshPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kMesh));
+			const fs::path bskelPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kSkeleton));
+			const fs::path banimPath = importStore.ResolveWritePath(
+				assetlib::importOutputKey(identity, assetlib::AssetType::kAnimation));
+			const fs::path textureDir =
+				importStore.ResolveWritePath(assetlib::importTextureDirectory(identity));
 
 			assetlib::requireSelfContainedSource(input);
 
@@ -555,14 +562,8 @@ main(int argc, char** argv)
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
 
-			const std::string sourceKey = std::format(
-				"{}/{}{}",
-				assetlib::c_MeshSourcesDirectoryName,
-				name,
-				assetlib::c_ImportedSourceExtension);
-
-			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ResolveWritePath(sourceKey);
-			const fs::path importDoc = assetlib::AssetStore(dataRoot).ImportDocumentPath(sourceKey);
+			const fs::path sourceCopy = importStore.ResolveWritePath(sourceKey);
+			const fs::path importDoc  = importStore.ImportDocumentPath(sourceKey);
 			files.push_back(sourceCopy);
 			files.push_back(importDoc);
 
@@ -600,12 +601,12 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::AssetStore importStore(dataRoot);
-				assetlib::ImportTarget     target{ sourceKey,
-					                               sampleRate,
-					                               importStore.KeyFor(textureDir) };
-				const assetlib::SourceRef  source = importStore.CopyImportedSource(input, target);
-				mesh.source                       = source;
+				assetlib::ImportTarget target{ sourceKey,
+					                           sampleRate,
+					                           importStore.KeyFor(textureDir) };
+				target.identity                  = identity;
+				const assetlib::SourceRef source = importStore.CopyImportedSource(input, target);
+				mesh.source                      = source;
 
 				importStore.WriteTextures(imported, target.textureDir);
 

@@ -101,6 +101,13 @@ payload, which is what keeps a whole-project staleness survey off the disk's thr
 
 ### What an import document records about its outputs
 
+The CLI's `bake --name` chooses the copied source's destination under `Authored/Meshes`.
+It mints a random identity before writing and records it in the sidecar. Mesh, skeleton and
+animation filenames use `<source-filename>-<16-digit-id>.<extension>` in their category directories;
+extracted textures use that same label and ID as their folder. Two sources with the same filename
+in different authored folders therefore have distinct outputs. An occupied source destination
+still refuses the import without overwriting files.
+
 A `.bimport` names three things, two of which nothing else can derive
 ([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
 
