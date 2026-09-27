@@ -287,7 +287,7 @@ namespace bgl
 			auto cullState = CullState();
 			try
 			{
-				cullState.Init(padded, m_ResourceManager);
+				cullState.Init(padded, m_MeshBuffer.Capacity(), m_ResourceManager);
 			}
 			catch (...)
 			{
@@ -307,7 +307,7 @@ namespace bgl
 
 		for (CullState& cullState : m_CullStates)
 		{
-			cullState.Resize(padded);
+			cullState.Resize(padded, m_MeshBuffer.Capacity());
 		}
 
 		m_TransparentSort.Resize(padded);
@@ -1815,6 +1815,7 @@ namespace bgl
 		// same names without aliasing. The view's own imports stay outside, shared by all of them.
 		for (uint32_t cullIdx = 0; cullIdx < m_CullStates.size(); ++cullIdx)
 		{
+			m_CullStates[cullIdx].AdvanceLodHistory();
 			m_CullStates[cullIdx].ImportResources(fg, GetCullNamespace(cullIdx), resourceNames);
 		}
 

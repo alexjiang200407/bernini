@@ -29,7 +29,9 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     let instance = gUniforms.instanceBuffer[globalIdx];
 
-    if (!instance.meshInstance.Null() && gUniforms.visibility[globalIdx].visible != 0u)
+    // One entry per bit: a placement dissolving between two levels draws both.
+    let entries = countbits(gUniforms.visibility[globalIdx].visible & (cVisibleCurrentBit | cVisibleOutgoingBit));
+    if (!instance.meshInstance.Null() && entries != 0u)
     {
         let bucket = instance.drawBucket;
 
@@ -37,7 +39,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
         if (bucket < cMaxDrawBuckets)
         {
-            gLocalHistogram[bucket].add(1u);
+            gLocalHistogram[bucket].add(entries);
         }
     }
 

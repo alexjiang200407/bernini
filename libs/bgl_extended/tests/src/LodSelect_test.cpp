@@ -1,0 +1,348 @@
+#include "cmd/CommandAllocator.h"
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "gfx/GraphicsBase.h"
+#include "resource/Readback.h"
+#include "resource/ResourceManager.h"
+#include "scene/CullState.h"
+#include "scene/SceneView.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
+#include "util/LodMesh.h"
+#include "util/TestOptions.h"
+#include "util/util.h"
+#include <array>
+#include <bgl/Camera.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <bgl/RenderJob.h>
+#include <bgl/Viewport.h>
+#include <bgl/glm.h>
+#include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl_common/idl/InstanceLod.h>
+#include <bgl_common/idl/InstanceVisibility.h>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <vector>
+
+// The cull choosing each placement's level, driven by real frames: a three-level mesh placed at
+// known distances before a known camera, and each placement's word and visibility read back after
+// the frame. The level a size earns, the hysteresis that holds one in the gap above a threshold, a
+// forced level, the draw-nothing tier, and a change that dissolves -- two entries, then one.
+
+namespace
+{
+	constexpr uint32_t c_Size = 64;
+
+	// Level 0's box spans -1..1 on every axis, so its sphere's radius is sqrt(3). A 90-degree field
+	// of view on a 64-pixel grid spans 32 pixels per unit at distance one, so a placement at
+	// distance d spans 2 * sqrt(3) * 32 / d = 110.85 / d pixels.
+	constexpr float c_PixelsAtOne = 110.851f;
+
+	// Levels 0, 1 and 2 from 30, 10 and 3 pixels; nothing below 3.
+	const std::vector<float> c_Thresholds = { 30.0f, 10.0f, 3.0f };
+
+	float
+	DistanceFor(float pixels)
+	{
+		return c_PixelsAtOne / pixels;
+	}
+
+	/** Copies a whole compute buffer back after the frame that wrote it. */
+	std::vector<std::byte>
+	ReadBack(bgl::GraphicsBase* gfxBase, const bgl::ComputeBuffer& buffer)
+	{
+		auto resourceManager = gfxBase->GetResourceManagerCpy();
+		auto device          = gfxBase->GetDevice();
+		gfxBase->WaitIdle();
+
+		auto listDesc  = bgl::CommandListDesc();
+		listDesc.type  = bgl::QueueType::kGraphics;
+		auto allocator = device->CreateCommandAllocator();
+		auto list      = device->CreateCommandList(listDesc, allocator, resourceManager);
+		auto queue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+
+		auto rbDesc      = bgl::ReadbackBufferDesc();
+		rbDesc.byteSize  = buffer.ByteSize();
+		rbDesc.debugName = "LOD Readback";
+		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		list->Open(queue, allocator);
+		list->Barrier(
+			buffer.GetBufferHandle(),
+			bgl::BufferBarrierDesc()
+				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		list->CopyBufferToReadback(rb, buffer.GetBufferHandle());
+		list->Close();
+		queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list));
+
+		const auto* mapped = static_cast<const std::byte*>(resourceManager->MapReadback(rb));
+		REQUIRE(mapped != nullptr);
+		auto bytes = std::vector<std::byte>(mapped, mapped + rbDesc.byteSize);
+		resourceManager->UnmapReadback(rb);
+		resourceManager->DestroyReadbackBuffer(rb, false);
+		return bytes;
+	}
+
+	/** A scene of one three-level mesh, a camera at the origin looking down -Z, and a clock. */
+	struct LodScene
+	{
+		bgl::GraphicsRef                     gfx;
+		bgl::SceneRef                        scene;
+		bgl::SceneViewRef                    view;
+		bgl::RenderTargetRef                 target;
+		bgl::GeomHandle                      geom;
+		std::vector<bgl::MeshInstanceHandle> placements;
+		float                                time = 0.0f;
+
+		LodScene()
+		{
+			auto opts           = bgl::GraphicsOptions();
+			opts.shaderCacheDir = bgl::test::ShaderCacheDir();
+			gfx                 = bgl::CreateGraphics(opts);
+			REQUIRE(gfx != nullptr);
+
+			auto desc                        = bgl::SceneDesc();
+			desc.initialGeom                 = 4;
+			desc.initialSubmeshes            = 8;
+			desc.initialMeshlets             = 32;
+			desc.initialVertexBufferByteSize = 8000;
+			desc.initialIndices              = 500;
+			scene                            = gfx->CreateScene(desc);
+			view                             = gfx->CreateSceneView(scene, 16);
+
+			const std::array<bgl::test::EntrySpec, 3> levels = { {
+				{ 4, glm::vec3(-1.0f), glm::vec3(1.0f) },
+				{ 2, glm::vec3(-1.0f), glm::vec3(1.0f) },
+				{ 1, glm::vec3(-1.0f), glm::vec3(1.0f) },
+			} };
+			const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+			geom                = scene->AddStaticMeshGeom(
+				bgl::test::MakeLodMesh(levels, 1, c_Thresholds),
+				0,
+				std::array{ material });
+			REQUIRE(geom.IsValid());
+
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = c_Size;
+			targetDesc.height   = c_Size;
+			targetDesc.headless = true;
+			target              = gfx->CreateRenderTarget(targetDesc);
+		}
+
+		/** A placement at `distance` straight ahead; the placements' slots follow their order. */
+		bgl::MeshInstanceHandle
+		Place(float distance)
+		{
+			placements.push_back(view->CreateStaticMeshInstance(geom, At(distance)));
+			return placements.back();
+		}
+
+		static glm::mat4
+		At(float distance)
+		{
+			return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -distance));
+		}
+
+		/** One frame, 30 ms after the last. */
+		void
+		Frame()
+		{
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
+			job.camera   = bgl::Camera()
+			                   .LookAt(
+								   glm::vec3(0.0f),
+								   glm::vec3(0.0f, 0.0f, -1.0f),
+								   glm::vec3(0.0f, 1.0f, 0.0f))
+			                   .Perspective(glm::radians(90.0f), 1.0f, 0.1f, 200.0f);
+			job.time     = time;
+			gfx->DrawFrame(target, job);
+			time += 0.03f;
+		}
+
+		/** Each placement's word and visibility bits, as the last frame's cull left them. */
+		struct Read
+		{
+			bgl::InstanceLodState lod;
+			uint32_t              visible = 0;
+		};
+
+		std::vector<Read>
+		ReadAll()
+		{
+			auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+			auto* raw     = view->As<bgl::SceneView>();
+			auto& cull    = raw->GetCullState(0);
+
+			const auto words      = ReadBack(gfxBase, cull.GetInstanceLod());
+			const auto visibility = ReadBack(gfxBase, cull.GetInstanceVisibility());
+
+			auto reads = std::vector<Read>();
+			for (size_t i = 0; i < placements.size(); ++i)
+			{
+				auto word = bgl::idl::InstanceLod();
+				std::memcpy(
+					&word,
+					words.data() + placements[i].handle.index * sizeof(word),
+					sizeof(word));
+				auto bits = bgl::idl::InstanceVisibility();
+				std::memcpy(&bits, visibility.data() + i * sizeof(bits), sizeof(bits));
+				reads.push_back({ bgl::UnpackInstanceLod(word), bits.visible });
+			}
+			return reads;
+		}
+	};
+
+	constexpr uint32_t c_Current = bgl::idl::cVisibleCurrentBit;
+	constexpr uint32_t c_Both    = bgl::idl::cVisibleCurrentBit | bgl::idl::cVisibleOutgoingBit;
+
+	// The draw-nothing tier of a three-level mesh reads back as level 3.
+	constexpr auto c_Nothing = static_cast<bgl::LodLevel>(3);
+}
+
+TEST_CASE("a placement draws the level its size on screen earns", "[lod][culling][render]")
+{
+	auto lods = LodScene();
+	lods.Place(DistanceFor(55.0f));
+	lods.Place(DistanceFor(22.0f));
+	lods.Place(DistanceFor(5.5f));
+	lods.Place(DistanceFor(2.2f));
+	lods.Frame();
+
+	const auto reads = lods.ReadAll();
+	CHECK(reads[0].lod.level == bgl::LodLevel::kLod0);
+	CHECK(reads[1].lod.level == bgl::LodLevel::kLod1);
+	CHECK(reads[2].lod.level == bgl::LodLevel::kLod2);
+	CHECK(reads[3].lod.level == c_Nothing);
+
+	// A first choice has nothing to dissolve from, and the tier below the last draws nothing.
+	for (size_t i = 0; i < 3; ++i)
+	{
+		INFO("placement " << i);
+		CHECK_FALSE(reads[i].lod.outgoing.has_value());
+		CHECK(reads[i].visible == c_Current);
+	}
+	CHECK(reads[3].visible == 0u);
+}
+
+TEST_CASE("a placement resting just past a threshold holds its level", "[lod][culling][render]")
+{
+	auto desc        = bgl::LodSelectionDesc();
+	desc.fadeSeconds = 0.0f;
+
+	auto lods = LodScene();
+	lods.view->SetLodSelection(desc);
+	const auto placement = lods.Place(DistanceFor(29.0f));
+	lods.Frame();
+	REQUIRE(lods.ReadAll()[0].lod.level == bgl::LodLevel::kLod1);
+
+	SECTION("into the gap above level 0's floor, it stays at level 1")
+	{
+		lods.view->SetInstanceTransform(placement, LodScene::At(DistanceFor(32.0f)));
+		lods.Frame();
+		CHECK(lods.ReadAll()[0].lod.level == bgl::LodLevel::kLod1);
+
+		SECTION("and clearing the gap takes it finer")
+		{
+			lods.view->SetInstanceTransform(placement, LodScene::At(DistanceFor(35.0f)));
+			lods.Frame();
+			CHECK(lods.ReadAll()[0].lod.level == bgl::LodLevel::kLod0);
+
+			SECTION("while going coarser happens at the threshold itself")
+			{
+				lods.view->SetInstanceTransform(placement, LodScene::At(DistanceFor(29.0f)));
+				lods.Frame();
+				CHECK(lods.ReadAll()[0].lod.level == bgl::LodLevel::kLod1);
+			}
+		}
+	}
+}
+
+TEST_CASE("a forced level draws on every placement that has it", "[lod][culling][render]")
+{
+	auto lods = LodScene();
+	lods.Place(DistanceFor(55.0f));
+	lods.Place(DistanceFor(2.2f));
+
+	auto desc       = bgl::LodSelectionDesc();
+	desc.forceLevel = bgl::LodLevel::kLod2;
+	lods.view->SetLodSelection(desc);
+	lods.Frame();
+
+	for (const auto& read : lods.ReadAll())
+	{
+		CHECK(read.lod.level == bgl::LodLevel::kLod2);
+		CHECK(read.visible == c_Current);
+	}
+
+	SECTION("a level past the mesh's draws its coarsest, never nothing")
+	{
+		desc.forceLevel = bgl::LodLevel::kLod7;
+		lods.view->SetLodSelection(desc);
+		lods.Frame();
+		for (const auto& read : lods.ReadAll())
+		{
+			CHECK(read.lod.level == bgl::LodLevel::kLod2);
+			CHECK_FALSE(read.lod.outgoing.has_value());
+		}
+	}
+}
+
+TEST_CASE("a change of level dissolves: both levels draw until it ends", "[lod][culling][render]")
+{
+	auto       lods      = LodScene();
+	const auto placement = lods.Place(DistanceFor(22.0f));
+	lods.Frame();
+	REQUIRE(lods.ReadAll()[0].lod.level == bgl::LodLevel::kLod1);
+
+	// The default dissolve is 0.15 s and a frame here 30 ms, so it takes five frames.
+	lods.view->SetInstanceTransform(placement, LodScene::At(DistanceFor(55.0f)));
+	lods.Frame();
+
+	auto read = lods.ReadAll()[0];
+	CHECK(read.lod.level == bgl::LodLevel::kLod0);
+	REQUIRE(read.lod.outgoing.has_value());
+	CHECK(*read.lod.outgoing == bgl::LodLevel::kLod1);
+	CHECK(read.lod.fade == Catch::Approx(0.2f).margin(0.01f));
+	CHECK(read.visible == c_Both);
+
+	for (int frame = 0; frame < 3; ++frame) lods.Frame();
+	read = lods.ReadAll()[0];
+	CHECK(read.lod.fade == Catch::Approx(0.8f).margin(0.01f));
+	CHECK(read.visible == c_Both);
+
+	lods.Frame();
+	read = lods.ReadAll()[0];
+	CHECK(read.lod.level == bgl::LodLevel::kLod0);
+	CHECK_FALSE(read.lod.outgoing.has_value());
+	CHECK(read.visible == c_Current);
+
+	SECTION("a placement out of view snaps rather than dissolving")
+	{
+		lods.view->SetInstanceTransform(
+			placement,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, DistanceFor(22.0f))));
+		lods.Frame();
+		read = lods.ReadAll()[0];
+		CHECK(read.lod.level == bgl::LodLevel::kLod1);
+		CHECK_FALSE(read.lod.outgoing.has_value());
+		CHECK(read.visible == 0u);
+	}
+}

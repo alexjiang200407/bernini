@@ -29,6 +29,7 @@
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/Geom.h>
+#include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/Submesh.h>
@@ -190,6 +191,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	auto cullView   = makeCompute(bgl::idl::CullView{}, 1, "Cull View");
 	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, padded, "Visibility");
 	auto stats      = makeCompute(bgl::idl::CullStats{}, 1, "Cull Stats");
+	// Every placement unchosen: the cull picks each one's level afresh.
+	auto lodPrevious = makeCompute(bgl::idl::InstanceLod{}, c_LiveCount + 1, "Lod Previous");
+	auto lodCurrent  = makeCompute(bgl::idl::InstanceLod{}, c_LiveCount + 1, "Lod Current");
 
 	auto cull = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
@@ -207,6 +211,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.ImportBuffer("cullView", cullView.GetBufferHandle());
 	fg.ImportBuffer("visibility", visibility.GetBufferHandle());
 	fg.ImportBuffer("stats", stats.GetBufferHandle());
+	fg.ImportBuffer("lodPrevious", lodPrevious.GetBufferHandle());
+	fg.ImportBuffer("lodCurrent", lodCurrent.GetBufferHandle());
 
 	fg.AddPass(
 		bgl::PassDesc()
@@ -218,6 +224,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.AddCopyDest("cullView")
 			.AddCopyDest("visibility")
 			.AddCopyDest("stats")
+			.AddCopyDest("lodPrevious")
+			.AddCopyDest("lodCurrent")
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				submeshBuffer.Update(cmd);
@@ -226,6 +234,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				instanceBuffer.Update(cmd);
 				visibility.Clear(cmd);
 				stats.Clear(cmd);
+				lodPrevious.Clear(cmd);
+				lodCurrent.Clear(cmd);
 				cmd->WriteBuffer(
 					cullView.GetBufferHandle(),
 					&cullViewData,
@@ -242,6 +252,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.AddBufferReadWrite("cullView", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferReadWrite("stats", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("lodPrevious", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("lodCurrent", bgl::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
@@ -251,6 +263,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				cull["gUniforms"]["geomBuffer"]     = geomBuffer.GetBufferHandle();
 				cull["gUniforms"]["submeshBuffer"]  = submeshBuffer.GetBufferHandle();
 				cull["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
+				cull["gUniforms"]["lodPrevious"]    = lodPrevious.GetBufferHandle();
+				cull["gUniforms"]["lodCurrent"]     = lodCurrent.GetBufferHandle();
 #if defined(BERNINI_GPU_DEBUG)
 				cull["gUniforms"]["stats"] = stats.GetBufferHandle();
 #endif

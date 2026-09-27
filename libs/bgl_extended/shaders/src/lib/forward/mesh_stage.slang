@@ -84,15 +84,16 @@ public uint3 CullBackface(MeshletContext ctx, uint3 tri)
 // is one submesh, so only that submesh's meshlets are dispatched.
 public uint ResolveDispatch(uint gid, out InstancedPayload payload)
 {
-    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
-    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let entry = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(entry & ~cOutgoingDrawBit);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
     let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
 
     payload.instance = instance;
 
-    return submesh.GetMeshletCount();
+    // Level 0 draws for the placement's current level; its outgoing one adds nothing yet.
+    return (entry & cOutgoingDrawBit) != 0u ? 0u : submesh.GetMeshletCount();
 }
 
 // Whether any of `sphere`, in the placement's local space, can reach the draw's cull frustum. The
@@ -122,12 +123,13 @@ groupshared uint gSurvivorMask[cMaxCompactedGroups / 32];
 // group calls it.
 public uint CullMeshlets(uint gid, uint lane)
 {
-    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
-    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let entry = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(entry & ~cOutgoingDrawBit);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
     let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
-    let meshletCount = submesh.GetMeshletCount();
+    // Level 0 draws for the placement's current level; its outgoing one adds nothing yet.
+    let meshletCount = (entry & cOutgoingDrawBit) != 0u ? 0u : submesh.GetMeshletCount();
     let groupCount = MeshletGroupCount(meshletCount);
 
     if (lane == 0u)

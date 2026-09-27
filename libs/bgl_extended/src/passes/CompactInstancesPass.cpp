@@ -88,6 +88,8 @@ namespace bgl
 					.AddCopyDest(c_CompactDispatchArgsName)
 					.AddCopyDest(c_CullViewName)
 					.AddCopyDest(c_CullStatsName)
+					.AddCopyDest(c_InstanceLodName)
+					.AddCopyDest(c_InstanceLodPreviousName)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteClear(ctx, draw); }))
 			.AddPass(
 				PassDesc()
@@ -97,6 +99,8 @@ namespace bgl
 					.AddBufferRead(c_GeomBufferName, BarrierSyncFlag::kComputeShader)
 					.AddBufferRead(c_SubmeshBufferName, BarrierSyncFlag::kComputeShader)
 					.AddBufferRead(c_CullViewName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceLodPreviousName, BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceLodName, BarrierSyncFlag::kComputeShader)
 					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
 					.AddBufferReadWrite(c_CullStatsName, BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
@@ -134,6 +138,12 @@ namespace bgl
 		draw.cullState->GetDrawBucketPrefixSum().Clear(cmd);
 		m_CullStats.Clear(cmd);
 
+		if (draw.cullState->TakeLodClear())
+		{
+			draw.cullState->GetInstanceLod().Clear(cmd);
+			draw.cullState->GetPreviousInstanceLod().Clear(cmd);
+		}
+
 		// Assigned here rather than at attach time: a view drawn twice in one frame shares this
 		// state, and each draw's cull must run against its own matrices.
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
@@ -169,6 +179,8 @@ namespace bgl
 		uniforms["geomBuffer"]     = ctx.GetBuffer(c_GeomBufferName);
 		uniforms["submeshBuffer"]  = ctx.GetBuffer(c_SubmeshBufferName);
 		uniforms["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
+		uniforms["lodPrevious"]    = ctx.GetBuffer(c_InstanceLodPreviousName);
+		uniforms["lodCurrent"]     = ctx.GetBuffer(c_InstanceLodName);
 
 		// The stats writes are gated to BERNINI_GPU_DEBUG, so a release build drops the handle from
 		// the kernel's reflection; bind it only when it survived.

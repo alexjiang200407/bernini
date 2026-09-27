@@ -33,15 +33,18 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     let instance = gUniforms.instanceBuffer[globalIdx];
     let bucket = instance.drawBucket;
 
-    // Skip exactly what the histogram skipped, or the bucket bases and the scatter disagree.
-    let scatters = !instance.meshInstance.Null() && bucket < cMaxDrawBuckets && gUniforms.visibility[globalIdx].visible != 0u;
+    // Skip exactly what the histogram skipped, and scatter as many entries as it counted, or the
+    // bucket bases and the scatter disagree.
+    let bits = gUniforms.visibility[globalIdx].visible & (cVisibleCurrentBit | cVisibleOutgoingBit);
+    let entries = countbits(bits);
+    let scatters = !instance.meshInstance.Null() && bucket < cMaxDrawBuckets && entries != 0u;
 
     // No early-out past this point: a thread that does not scatter must still reach every
     // GroupMemoryBarrierWithGroupSync below, or the ones that do scatter hang on it.
     uint groupSlot = 0u;
     if (scatters)
     {
-        groupSlot = gGroupCount[bucket].add(1u);
+        groupSlot = gGroupCount[bucket].add(entries);
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -58,6 +61,15 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     if (scatters)
     {
         let base = (bucket == 0u) ? 0u : gUniforms.drawBucketPrefixSum[bucket - 1u];
-        gUniforms.compactedInstances[base + gGroupBase[bucket] + groupSlot] = globalIdx;
+        var slot = base + gGroupBase[bucket] + groupSlot;
+        if ((bits & cVisibleCurrentBit) != 0u)
+        {
+            gUniforms.compactedInstances[slot] = globalIdx;
+            ++slot;
+        }
+        if ((bits & cVisibleOutgoingBit) != 0u)
+        {
+            gUniforms.compactedInstances[slot] = globalIdx | cOutgoingDrawBit;
+        }
     }
 }

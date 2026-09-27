@@ -439,7 +439,18 @@ It adds **four sub-passes**:
    depth-key passes all gate on it, so a culled instance reaches no draw. A placement whose
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
-3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per draw bucket into
+
+   It also chooses the placement's **level of detail** (`lib/culling/lod_select.slang`): the
+   diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
+   `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
+   going finer, and a change dissolved over the view's `fadeSeconds`. The choice is one word per
+   placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
+   from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
+   the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries
+   `cVisibleCurrentBit` for the level it draws and `cVisibleOutgoingBit` for the one a dissolve is
+   leaving; a placement no one sees, and a forced level, change at once.
+3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** entries per draw bucket -- one
+   per set visibility bit, so a dissolving placement counts twice -- into
    `drawBucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
    sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
    zero. The scan is one thread group of `cMaxDrawBuckets` threads, which is why that constant is a
@@ -448,13 +459,16 @@ It adds **four sub-passes**:
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
 4. **Compact Instances** — scatters each **visible** instance into `scene.compactedInstances` at its
-   draw bucket's prefix-sum offset and finalizes each draw bucket's dispatch args. Skipped when the instance count
+   draw bucket's prefix-sum offset -- once per bit, the outgoing level's entry tagged
+   `cOutgoingDrawBit`, which is why the list holds two entries a slot -- and finalizes each draw
+   bucket's dispatch args. Skipped when the instance count
    is 0.
 
-* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`
-  (all read).
-* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `drawBucketPrefixSumBuffer`,
-  `compactDispatchArgs` (and `cull.stats` in debug) — all UAV / indirect-args downstream.
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`,
+  `scene.instanceLodPrevious` (all read).
+* **Out:** `scene.instanceVisibility`, `scene.instanceLod`, `scene.compactedInstances`,
+  `drawBucketPrefixSumBuffer`, `compactDispatchArgs` (and `cull.stats` in debug) — all UAV /
+  indirect-args downstream.
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl_extended/src/passes/TransparentSortPass.cpp)
 

@@ -2,10 +2,12 @@
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/UploadBuffer.h"
+#include <array>
 #include <bgl_common/idl/CullView.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace bgl
@@ -37,22 +39,35 @@ namespace bgl
 		/**
 		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
 		 *        size; every per-slot buffer here must cover it exactly or a cull writes past the end.
+		 * @param placements the placement buffer's capacity, which the level-of-detail words are
+		 *        indexed by.
 		 * @throws std::runtime_error if the device cannot allocate.
 		 */
 		void
-		Init(uint32_t paddedInstances, ResourceManagerRef resourceManager);
+		Init(uint32_t paddedInstances, uint32_t placements, ResourceManagerRef resourceManager);
 
 		/**
-		 * Grows the per-slot buffers to `paddedInstances`. A no-op when they already cover it.
+		 * Grows the per-slot buffers to `paddedInstances` and the per-placement ones to `placements`.
+		 * A no-op for whichever already covers its count.
 		 *
-		 * They resize together or not at all: each is indexed by instance slot and written over the
-		 * whole padded range, so growing one without the others is an out-of-bounds UAV write rather
-		 * than a capacity shortfall.
+		 * The per-slot ones resize together or not at all: each is indexed by instance slot and
+		 * written over the whole padded range, so growing one without the others is an
+		 * out-of-bounds UAV write rather than a capacity shortfall. A grown level-of-detail word
+		 * starts from zero, so every placement chooses afresh, without a dissolve, the next frame.
 		 *
 		 * @throws std::runtime_error if the device cannot allocate; the buffers are left intact.
 		 */
 		void
-		Resize(uint32_t paddedInstances);
+		Resize(uint32_t paddedInstances, uint32_t placements);
+
+		/**
+		 * Makes last frame's level-of-detail words the ones this frame's cull reads, and the other
+		 * pair the ones it writes. Once per draw, before ImportResources: the cull's threads all read
+		 * the old word and agree on the new one, which one buffer read and written in place would
+		 * not let them do.
+		 */
+		void
+		AdvanceLodHistory() noexcept;
 
 		void
 		Release(bool deferred = true) noexcept;
@@ -95,6 +110,37 @@ namespace bgl
 			return m_CullView;
 		}
 
+		/** One idl::InstanceVisibility per instance slot, as this frustum's last cull wrote them. */
+		[[nodiscard]] const ComputeBuffer&
+		GetInstanceVisibility() const noexcept
+		{
+			return m_InstanceVisibility;
+		}
+
+		/** The level-of-detail words this frame's cull writes, one per placement slot. */
+		[[nodiscard]] ComputeBuffer&
+		GetInstanceLod() noexcept
+		{
+			return m_InstanceLod[m_LodCurrent];
+		}
+
+		/** The ones it reads: what the previous cull of this frustum wrote. */
+		[[nodiscard]] ComputeBuffer&
+		GetPreviousInstanceLod() noexcept
+		{
+			return m_InstanceLod[m_LodCurrent ^ 1u];
+		}
+
+		/**
+		 * Whether the words were allocated since the last clear. The cull's clear zeroes both, so
+		 * every placement starts unchosen rather than reading what the allocation held.
+		 */
+		[[nodiscard]] bool
+		TakeLodClear() noexcept
+		{
+			return std::exchange(m_LodNeedsClear, false);
+		}
+
 	private:
 		// Written by the compaction, bounded by the dispatch args that same compaction wrote, so it
 		// is never cleared between frames -- a reader only touches slots this frame's scatter filled.
@@ -111,5 +157,12 @@ namespace bgl
 
 		// This frustum's planes, assigned per draw and read by the cull dispatch.
 		UploadBuffer<idl::CullView> m_CullView;
+
+		// One idl::InstanceLod per placement slot, twice: the cull reads one and writes the other,
+		// and AdvanceLodHistory swaps them. Indexed by the placement's MeshInstance entry, which
+		// holds still while the placement lives where the dense instance slot does not.
+		std::array<ComputeBuffer, 2> m_InstanceLod;
+		uint32_t                     m_LodCurrent    = 0;
+		bool                         m_LodNeedsClear = true;
 	};
 }

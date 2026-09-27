@@ -195,8 +195,9 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	bgl::ReadbackBufferHandle rbPrefixSum[2];
 	for (uint32_t cullIdx = 0; cullIdx < 2; ++cullIdx)
 	{
-		auto rbDesc          = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize      = static_cast<uint64_t>(paddedCount) * sizeof(uint32_t);
+		auto rbDesc = bgl::ReadbackBufferDesc();
+		// The whole list: two entries a slot, since a placement dissolving between levels draws both.
+		rbDesc.byteSize      = static_cast<uint64_t>(paddedCount) * 2 * sizeof(uint32_t);
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
