@@ -102,6 +102,7 @@ set(IDL_CPP_SOURCES
 set(IDL_PUBLIC_CPP_SOURCES
     MaterialType.slang
     MeshInstanceFlag.slang
+    LodLevel.slang
 )
 
 # The C++ mirror follows the backend's own rules; see IDL_CPP_OUT_DIR above.

@@ -1,10 +1,10 @@
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
 #include <bgl/error.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -47,14 +47,14 @@ TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 
 	auto desc        = bgl::LodSelectionDesc();
 	desc.pixelScale  = 0.5f;
-	desc.forceLevel  = 2u;
+	desc.forceLevel  = bgl::LodLevel::kLod2;
 	desc.fadeSeconds = 0.0f;
 	CHECK_NOTHROW(view->SetLodSelection(desc));
 
 	const bgl::LodSelectionDesc read = view->GetLodSelection();
 	CHECK(read.pixelScale == 0.5f);
 	REQUIRE(read.forceLevel.has_value());
-	CHECK(*read.forceLevel == 2u);
+	CHECK(*read.forceLevel == bgl::LodLevel::kLod2);
 	CHECK(read.fadeSeconds == 0.0f);
 
 	SECTION("a later write replaces the whole record")
@@ -66,7 +66,7 @@ TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 
 	SECTION("the last level a mesh may carry can be forced")
 	{
-		desc.forceLevel = bgl::idl::cMaxMeshLods - 1u;
+		desc.forceLevel = bgl::LodLevel::kLod7;
 		CHECK_NOTHROW(view->SetLodSelection(desc));
 	}
 }
@@ -107,7 +107,7 @@ TEST_CASE("a selection no cull could act on is refused, and the old one kept", "
 	SECTION("a forced level no mesh can carry")
 	{
 		auto desc       = bgl::LodSelectionDesc();
-		desc.forceLevel = bgl::idl::cMaxMeshLods;
+		desc.forceLevel = bgl::LodLevel::kCount;
 		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
 	}
 

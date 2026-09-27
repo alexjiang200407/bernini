@@ -18,6 +18,7 @@
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/MeshInstanceHandle.h>
@@ -1553,13 +1554,13 @@ namespace bgl
 		{
 			throw SceneError("SetLodSelection: fadeSeconds must be finite and non-negative");
 		}
-		if (desc.forceLevel.has_value() && *desc.forceLevel >= idl::cMaxMeshLods)
+		if (desc.forceLevel.has_value() && *desc.forceLevel >= LodLevel::kCount)
 		{
 			throw SceneError(
 				std::format(
 					"SetLodSelection: forceLevel {} is past the {} levels a mesh may carry",
-					*desc.forceLevel,
-					idl::cMaxMeshLods));
+					static_cast<uint32_t>(*desc.forceLevel),
+					cMaxMeshLods));
 		}
 
 		m_LodSelection = desc;

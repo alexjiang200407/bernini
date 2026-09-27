@@ -2,6 +2,7 @@
 #include "types/Format.h"
 #include "types/FormatInfo.h"
 #include <bgl/GeomType.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
@@ -89,10 +90,10 @@ namespace bgl
 	struct InstanceLodState
 	{
 		// Empty until a cull has chosen for the placement.
-		std::optional<uint32_t> level;
+		std::optional<LodLevel> level;
 
 		// The level being faded out of, empty while not fading.
-		std::optional<uint32_t> outgoing;
+		std::optional<LodLevel> outgoing;
 
 		// Progress toward `level`, in [0, 1]; 1 on a placement not fading.
 		float fade = 1.0f;

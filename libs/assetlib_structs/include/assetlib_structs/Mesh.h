@@ -95,7 +95,7 @@ namespace assetlib
 
 	/**
 	 * Levels one mesh may carry, level 0 included. The renderer names the same number as
-	 * `idl::cMaxMeshLods` -- the length of its per-geom table -- and a static_assert in
+	 * `bgl::cMaxMeshLods` (`LodLevel::kCount`) -- the length of its per-geom table -- and a static_assert in
 	 * `Scene_Geometry.cpp`
 	 * holds them equal; the document and the cook refuse a source past it.
 	 */

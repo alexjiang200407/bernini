@@ -67,7 +67,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
         geom.submeshes.SubmeshCount()
     );
 
-    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, geom.submeshes.Entry(0u, instance.submeshIndex));
+    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
 
     // The centre transforms like a vertex -- the same accessor the forward pass uses -- so cull and
     // draw cannot disagree on where the instance is.

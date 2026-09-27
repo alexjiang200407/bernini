@@ -1,3 +1,5 @@
+import LodLevel;
+
 // The level of detail one placement draws under one culled frustum, and the dissolve it is in.
 // Written by CullInstances each frame and read back by it the next, which is what hysteresis
 // needs; indexed by the placement's MeshInstance entry, which holds still while the placement
@@ -18,23 +20,25 @@ public struct InstanceLod
 
     public bool Unset() { return (packed & cInstanceLodLevelMask) == 0u; }
 
-    public uint Level() { return (packed & cInstanceLodLevelMask) - 1u; }
+    // @pre !Unset().
+    public LodLevel Level() { return LodLevel((packed & cInstanceLodLevelMask) - 1u); }
 
     public bool Fading() { return ((packed >> cInstanceLodOutgoingShift) & cInstanceLodLevelMask) != 0u; }
 
-    public uint OutgoingLevel() { return ((packed >> cInstanceLodOutgoingShift) & cInstanceLodLevelMask) - 1u; }
+    // @pre Fading().
+    public LodLevel OutgoingLevel() { return LodLevel(((packed >> cInstanceLodOutgoingShift) & cInstanceLodLevelMask) - 1u); }
 
     // 1 once the dissolve is over, and on a placement not fading.
     public float Fade() { return Fading() ? float(packed >> cInstanceLodFadeShift) / cInstanceLodFadeScale : 1.0; }
 
-    // @pre level and outgoing below cInstanceLodLevelMask, fade in [0, 1].
-    public static InstanceLod Make(uint level, bool fading, uint outgoing, float fade)
+    // @pre fade in [0, 1].
+    public static InstanceLod Make(LodLevel level, bool fading, LodLevel outgoing, float fade)
     {
         InstanceLod word;
-        word.packed = (level + 1u) & cInstanceLodLevelMask;
+        word.packed = (uint(level) + 1u) & cInstanceLodLevelMask;
         if (fading)
         {
-            word.packed |= ((outgoing + 1u) & cInstanceLodLevelMask) << cInstanceLodOutgoingShift;
+            word.packed |= ((uint(outgoing) + 1u) & cInstanceLodLevelMask) << cInstanceLodOutgoingShift;
             word.packed |= uint(round(saturate(fade) * cInstanceLodFadeScale)) << cInstanceLodFadeShift;
         }
         return word;

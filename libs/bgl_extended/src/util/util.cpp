@@ -3,6 +3,7 @@
 #include "types/FormatInfo.h"
 #include <algorithm>
 #include <bgl/GeomType.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
@@ -202,12 +203,12 @@ namespace bgl
 			return state;
 		}
 
-		state.level = (word.packed & idl::cInstanceLodLevelMask) - 1u;
+		state.level = static_cast<LodLevel>((word.packed & idl::cInstanceLodLevelMask) - 1u);
 		if (const uint32_t outgoing =
 		        (word.packed >> idl::cInstanceLodOutgoingShift) & idl::cInstanceLodLevelMask;
 		    outgoing != 0u)
 		{
-			state.outgoing = outgoing - 1u;
+			state.outgoing = static_cast<LodLevel>(outgoing - 1u);
 			state.fade     = static_cast<float>(word.packed >> idl::cInstanceLodFadeShift) /
 			                 idl::cInstanceLodFadeScale;
 		}

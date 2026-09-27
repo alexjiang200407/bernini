@@ -1,4 +1,4 @@
-import Constants;
+import LodLevel;
 import LodSubmeshRange;
 
 // What a geometry-creating method produced and every placement from it shares. A placement names one

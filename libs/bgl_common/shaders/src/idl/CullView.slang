@@ -17,7 +17,7 @@ public struct CullView
 
     // ISceneView::SetLodSelection, resolved for this draw: every authored threshold is scaled by
     // lodPixelScale; lodForcedLevel draws that level of every placement (clamped to what it has)
-    // unless it is cLodForceNone; lodFadeStep is how far a level change's dissolve advances this
+    // -- a LodLevel -- unless it is cLodForceNone; lodFadeStep is how far a level change's dissolve advances this
     // frame, 1 or more being a hard swap.
     public float lodPixelScale;
     public uint lodForcedLevel;

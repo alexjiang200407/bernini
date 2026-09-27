@@ -1,5 +1,5 @@
 #pragma once
-#include <cstdint>
+#include <bgl/LodLevel.h>
 #include <optional>
 
 namespace bgl
@@ -17,7 +17,7 @@ namespace bgl
 
 		// Draws this level of every placement, skipping the size test -- a mesh with fewer levels
 		// draws its coarsest -- which is how a level is looked at on its own. Empty selects by size.
-		std::optional<uint32_t> forceLevel;
+		std::optional<LodLevel> forceLevel;
 
 		// How long a change of level dissolves over, the two levels dithered against each other
 		// and resolved by temporal AA. 0 swaps in one frame.

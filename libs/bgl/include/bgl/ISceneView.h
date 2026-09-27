@@ -375,8 +375,8 @@ namespace bgl
 		 * size causes, so it is not an epoch change.
 		 *
 		 * @throws SceneError if `pixelScale` is not finite and positive, `fadeSeconds` is not finite
-		 *         and non-negative, or `forceLevel` names a level no mesh can carry
-		 *         (idl::cMaxMeshLods or past it).
+		 *         and non-negative, or `forceLevel` is not a level
+		 *         (LodLevel::kCount or past it).
 		 */
 		virtual void
 		SetLodSelection(const LodSelectionDesc& desc) = 0;

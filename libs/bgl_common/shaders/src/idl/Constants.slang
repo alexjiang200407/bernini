@@ -117,10 +117,6 @@ public static const uint cRawBlockBytes = 16;
 // payload keeps the grid's alignment rather than the header's four bytes.
 public static const uint cRawPayloadOffset = 16;
 
-// Levels of detail one mesh may carry, level 0 included: the length of Geom's threshold table.
-// The cook refuses a source past it rather than overrunning here.
-public static const uint cMaxMeshLods = 8;
-
 // Coming back to a finer level needs the placement's size to clear that level's floor by this
 // share, so a placement resting on a threshold does not switch every frame.
 public static const float cLodHysteresis = 0.15;

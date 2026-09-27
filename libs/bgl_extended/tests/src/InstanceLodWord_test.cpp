@@ -16,6 +16,7 @@
 #include "util/util.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl/LodLevel.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -42,7 +43,7 @@ TEST_CASE("a level rests in the low byte, one above its index", "[lod][idl]")
 		bgl::UnpackInstanceLod(bgl::idl::InstanceLod{ .packed = 3u });
 
 	REQUIRE(state.level.has_value());
-	CHECK(*state.level == 2u);
+	CHECK(*state.level == bgl::LodLevel::kLod2);
 	CHECK_FALSE(state.outgoing.has_value());
 	CHECK(state.fade == 1.0f);
 }
@@ -57,9 +58,9 @@ TEST_CASE("a fading placement carries the outgoing level and its progress", "[lo
 		bgl::UnpackInstanceLod(bgl::idl::InstanceLod{ .packed = word });
 
 	REQUIRE(state.level.has_value());
-	CHECK(*state.level == 1u);
+	CHECK(*state.level == bgl::LodLevel::kLod1);
 	REQUIRE(state.outgoing.has_value());
-	CHECK(*state.outgoing == 0u);
+	CHECK(*state.outgoing == bgl::LodLevel::kLod0);
 	CHECK(state.fade == Catch::Approx(0.5f).margin(1.0f / bgl::idl::cInstanceLodFadeScale));
 
 	SECTION("a fade at its end is exactly one")
@@ -166,18 +167,19 @@ TEST_CASE(
 	// What the shader packed, in the order CSLodWord.slang writes them.
 	struct Expected
 	{
-		uint32_t                level;
-		std::optional<uint32_t> outgoing;
-		float                   fade;
+		bgl::LodLevel                level;
+		std::optional<bgl::LodLevel> outgoing;
+		float                        fade;
 	};
+	using enum bgl::LodLevel;
 	const std::array<Expected, c_Words> expected = { {
-		{ 0u, std::nullopt, 1.0f },
-		{ 2u,
+		{ kLod0, std::nullopt, 1.0f },
+		{ kLod2,
 		  std::nullopt,
 		  1.0f },  // not fading: the outgoing level and fade it was handed are dropped
-		{ 1u, 0u, 0.5f },
-		{ 3u, 1u, 0.0f },
-		{ 7u, 6u, 1.0f },
+		{ kLod1, kLod0, 0.5f },
+		{ kLod3, kLod1, 0.0f },
+		{ kLod7, kLod6, 1.0f },
 	} };
 	for (uint32_t i = 0; i < c_Words; ++i)
 	{
