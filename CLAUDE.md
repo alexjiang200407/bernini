@@ -417,7 +417,7 @@ One tag is not about behaviour: **`[perf]`** pins what a cook costs as its input
 that must not scale with an input, a ratio between two problem sizes that must stay far below the
 ratio of the sizes. Never a wall-clock ceiling, so the cases hold in a debug build and under load.
 The pre-PR read runs them when a diff touches a path they cover ([`ws-profile.md`](ws-profile.md)
-§ Precheck): `just run assetlib_tests -- "[perf]" --no-lock`.
+§ Precheck): `just run assetlib_tests --no-lock -- "[perf]"`.
 
 **Only one suite runs on the machine at a time.** A suite is expensive — each one is split
 across several processes, each holding a graphics device — so several checkouts testing at once
