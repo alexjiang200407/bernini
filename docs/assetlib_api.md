@@ -53,6 +53,9 @@ and returns an owned snapshot without opening the source or derived output.
 `WriteImportedDocument` persists it and refuses replacement of an existing identity. Omitting it
 on a subsequent write preserves the stored identity. An unreadable existing sidecar refuses the
 write so it cannot silently discard that identity or authored parameters.
+`ImportTarget::bindings` writes named material choices directly into the sidecar, without requiring
+cooked geometry. An explicitly empty list clears mesh defaults while retaining authored overrides
+and grass choices; an omitted list uses the supplied mesh's legacy bindings during migration.
 
 `FindImportForOutput` supplies the inverse lookup for cooked containers whose recorded source path
 predates a move. It indexes sidecar output claims lazily, rejects duplicate owners, and reads the

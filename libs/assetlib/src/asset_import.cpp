@@ -297,10 +297,10 @@ namespace assetlib
 			document.textureStamp     = stampOf(ResolveWritePath(target.source));
 			document.textureBakeToken = c_TextureBakeToken;
 		}
-		if (mesh != nullptr)
+		if (target.bindings || mesh != nullptr)
 		{
 			std::vector<MaterialBinding> grass = std::move(document.bindings);
-			document.bindings                  = bindingsOf(*mesh);
+			document.bindings = target.bindings ? *target.bindings : bindingsOf(*mesh);
 			document.bindings.insert(document.bindings.end(), grass.begin(), grass.end());
 		}
 

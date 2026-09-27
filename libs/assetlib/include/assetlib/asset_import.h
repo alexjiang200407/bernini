@@ -1,7 +1,9 @@
 #pragma once
 
 #include <assetlib/ImportIdentity.h>
+#include <assetlib/import_document.h>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -77,6 +79,9 @@ namespace assetlib
 
 		/** Minted before destinations are chosen; an existing document's identity cannot change. */
 		ImportIdentity identity{};
+
+		/** Authored material choices; an empty vector explicitly leaves every submesh unbound. */
+		std::optional<std::vector<MaterialBinding>> bindings{};
 	};
 
 	/** Whether `binding` binds a grass field, which is said by the document it names: a `.bgrass`. */

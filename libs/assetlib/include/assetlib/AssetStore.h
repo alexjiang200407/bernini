@@ -829,8 +829,8 @@ namespace assetlib
 
 		/**
 		 * Writes the `.bimport` beside the copied source: the sample rate, where the textures went
-		 * and the source as it stood when they did, and -- when `mesh` is given -- the
-		 * submesh-name -> material bindings it carries. Null `mesh` is a clips-only import.
+		 * and the source as it stood when they did. `target.bindings` supplies authored material
+		 * choices directly; when absent, a supplied `mesh` supplies its legacy bindings.
 		 *
 		 * @throws std::runtime_error if `target.source` is not a `.glb` under `Authored/Meshes/`, or
 		 *         on a write failure.

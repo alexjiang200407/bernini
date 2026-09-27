@@ -97,6 +97,30 @@ TEST_CASE("invalid authored identities are refused", "[import-identity]")
 			std::as_bytes(std::span(text.data(), text.size()))));
 }
 
+TEST_CASE("import writes authored bindings without cooked geometry", "[import-identity]")
+{
+	const DataRoot root("bernini-write-import-bindings");
+	const auto     store  = root.Source();
+	auto           target = ImportTarget{};
+	target.source         = "Authored/Meshes/street.glb";
+	target.sampleRate     = 30;
+	target.bindings =
+		std::vector<MaterialBinding>{ { "Body", "Authored/Materials/paint.bmaterial" } };
+	store.WriteImportedDocument(target, nullptr);
+	const auto key      = importDocumentKeyFor(target.source);
+	auto       document = store.Load<ImportDocument>(key);
+	CHECK(document.bindings == *target.bindings);
+	document.materialOverrides = { { "Body", "Wet", "Authored/Materials/wet.bmaterial" } };
+	document.bindings.push_back({ "Lawn", "Authored/Grass/lawn.bgrass" });
+	store.Save(document, key);
+	target.bindings->clear();
+	store.WriteImportedDocument(target, nullptr);
+	const auto cleared = store.Load<ImportDocument>(key);
+	REQUIRE(cleared.bindings.size() == 1);
+	CHECK(cleared.bindings.front().submesh == "Lawn");
+	CHECK(cleared.materialOverrides == document.materialOverrides);
+}
+
 TEST_CASE("import writes preserve identity and refuse replacement", "[import-identity]")
 {
 	const DataRoot root("bernini-write-import-identity");
