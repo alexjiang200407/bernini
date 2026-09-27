@@ -60,9 +60,14 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let geom = gUniforms.geomBuffer.Get(mesh.geom);
 
-    dbg_assert(instance.submeshIndex < geom.submeshes.count, ErrorCode.kInvalidSubmeshIndex, instance.submeshIndex, geom.submeshes.count);
+    dbg_assert(
+        instance.submeshIndex < geom.submeshes.SubmeshCount(),
+        ErrorCode.kInvalidSubmeshIndex,
+        instance.submeshIndex,
+        geom.submeshes.SubmeshCount()
+    );
 
-    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, geom.submeshes.Entry(0u, instance.submeshIndex));
 
     // The centre transforms like a vertex -- the same accessor the forward pass uses -- so cull and
     // draw cannot disagree on where the instance is.

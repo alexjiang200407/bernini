@@ -133,8 +133,10 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		geomBuffer.Init(desc, resourceManager);
 	}
 
-	auto geomRecord      = bgl::idl::Geom();
-	geomRecord.submeshes = submeshRange;
+	auto geomRecord                   = bgl::idl::Geom();
+	geomRecord.submeshes.range        = submeshRange;
+	geomRecord.submeshes.submeshCount = 1u;
+	geomRecord.submeshes.lodCount     = 1u;
 
 	const auto geomHandle = geomBuffer.Add(geomRecord);
 

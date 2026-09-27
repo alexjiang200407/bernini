@@ -80,11 +80,11 @@ TEST_CASE("Every geom kind uploads a record naming its submeshes", "[geom]")
 		const bgl::idl::RangeWithCount& onCpu = scene->GetGeomSubmeshes(geom.handle.index);
 		const bgl::idl::Geom&           onGpu = RecordOf(scene, geom);
 
-		CHECK(onGpu.submeshes.count == onCpu.count);
+		CHECK(onGpu.submeshes.submeshCount == onCpu.count);
 		CHECK(onGpu.submeshes.range.offsetStart == onCpu.range.offsetStart);
 
 		// One level, so the whole range is that level's submeshes.
-		CHECK(onGpu.lodCount == 1u);
+		CHECK(onGpu.submeshes.lodCount == 1u);
 
 		// Element 0 is the arena's reserved null, so a live geom never lands on it -- which is what
 		// lets a placement's Entry<Geom> mean "no geom" by being zero.

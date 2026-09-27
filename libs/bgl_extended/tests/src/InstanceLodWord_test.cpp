@@ -99,7 +99,7 @@ TEST_CASE(
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
 	constexpr uint32_t c_Words   = 5;
-	constexpr uint32_t c_Entries = 4;
+	constexpr uint32_t c_Entries = 5;
 
 	auto wordsDesc         = bgl::ComputeBufferDesc();
 	wordsDesc.initialCount = c_Words;
@@ -200,6 +200,7 @@ TEST_CASE(
 	CHECK(entry[1] == 2u);
 	CHECK(entry[2] == 3u);
 	CHECK(entry[3] == 5u);
+	CHECK(entry[4] == 6u);
 	resourceManager->UnmapReadback(rbEntries);
 
 	resourceManager->DestroyReadbackBuffer(rbEntries, false);

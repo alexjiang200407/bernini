@@ -1,10 +1,10 @@
-import idl.Geom;
+import idl.LodSubmeshRange;
 import idl.InstanceLod;
 import lib.types.ComputeBuffer;
 
 // Packs a few levels of detail the way the cull will, and one geom's submesh entry lookup, for a
 // CPU comparison: whether InstanceLod::Make and bgl::UnpackInstanceLod agree on the bits, and
-// whether Geom::SubmeshEntry lands where the upload put a level's submesh.
+// whether LodSubmeshRange::Entry lands where the upload put a level's submesh.
 struct Uniforms
 {
     ComputeBuffer<InstanceLod> words;
@@ -23,11 +23,12 @@ void main()
     gUniforms.words[3] = InstanceLod.Make(3u, true, 1u, 0.0);
     gUniforms.words[4] = InstanceLod.Make(7u, true, 6u, 1.0);
 
-    Geom geom;
-    geom.submeshes.count = 6u;
-    geom.lodCount = 2u;
-    gUniforms.entries[0] = geom.SubmeshEntry(0u, 0u);
-    gUniforms.entries[1] = geom.SubmeshEntry(0u, 2u);
-    gUniforms.entries[2] = geom.SubmeshEntry(1u, 0u);
-    gUniforms.entries[3] = geom.SubmeshEntry(1u, 2u);
+    LodSubmeshRange submeshes;
+    submeshes.submeshCount = 3u;
+    submeshes.lodCount = 2u;
+    gUniforms.entries[0] = submeshes.Entry(0u, 0u);
+    gUniforms.entries[1] = submeshes.Entry(0u, 2u);
+    gUniforms.entries[2] = submeshes.Entry(1u, 0u);
+    gUniforms.entries[3] = submeshes.Entry(1u, 2u);
+    gUniforms.entries[4] = submeshes.TotalCount();
 }
