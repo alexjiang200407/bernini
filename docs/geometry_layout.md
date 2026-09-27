@@ -333,7 +333,10 @@ green channel.
   and a `SceneView` resolves each `SubmeshInstance` from the same index. Any change that makes
   `AddStaticMeshGeom` emit a number of submeshes other than `meshEntry.submeshCount` silently breaks every
   such caller — a mesh materialed along the wrong surface, or half-textured with a hard,
-  triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
+  triangle-aligned seam. Levels of detail keep to it: a mesh's levels upload as further runs of the same
+  count after level 0's, and everything a placement holds -- its `SubmeshInstance`s, its material
+  defaults and overrides, `SetSubmeshMaterial`'s index -- is counted by one level's
+  `LodSubmeshRange::submeshCount`, never by the range's total. If a future feature must expand a submesh (cluster culling, for instance),
   expand it at the *instance* level, not in the geometry buffers — which is exactly where the
   material and PSO now live.
 * **A stale instance reads a stale default.** An instance that outlives its geom keeps the submesh

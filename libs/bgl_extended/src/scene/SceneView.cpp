@@ -1044,7 +1044,7 @@ namespace bgl
 			// The geom's record is named, not copied. The range is still read once here for the
 			// submesh count and the root the shading resolve indexes by; deleting the geom out from
 			// under the placement leaves it reading whatever record lands in that slot next.
-			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
+			const idl::LodSubmeshRange submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
 			auto mesh = idl::MeshInstance();
 			mesh.geom = m_SceneRaw->GetGeomEntry(geom.handle.index);
@@ -1065,7 +1065,8 @@ namespace bgl
 			meta.animState   = animState;
 			meta.submeshRoot = submeshes.range.offsetStart;
 
-			const uint32_t submeshCount = submeshes.count;
+			// One level's: a placement draws each source submesh once, at whichever level.
+			const uint32_t submeshCount = submeshes.submeshCount;
 			meta.submeshInstances.reserve(submeshCount);
 			meta.overrides.assign(submeshCount, MaterialHandle{});
 			meta.selected.assign(submeshCount, 0);

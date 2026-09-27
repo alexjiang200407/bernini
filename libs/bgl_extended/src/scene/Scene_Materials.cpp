@@ -638,8 +638,8 @@ namespace bgl
 				"material -- neither animated pipeline has an unlit or loose variant");
 		}
 
-		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;
-		if (submeshIndex >= submeshes.count)
+		const idl::LodSubmeshRange& submeshes = m_Geoms[geom.handle.index].submeshes;
+		if (submeshIndex >= submeshes.submeshCount)
 		{
 			throw SceneError("submeshIndex passed to SetSubmeshMaterial is out of range");
 		}

@@ -359,11 +359,14 @@ namespace bgl
 
 			m_SubmeshBuffer.MetaAt(baseSubmeshGlobal.index) = SubmeshDefaults{ material };
 
-			auto submeshRange = idl::RangeWithCount();
-			submeshRange      = baseSubmeshGlobal;
+			auto record                   = GeomRecord();
+			record.submeshes.range        = baseSubmeshGlobal;
+			record.submeshes.submeshCount = 1u;
+			record.submeshes.lodCount     = 1u;
+			record.boundingSphere         = submesh.boundingSphere;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(GeomRecord{ .submeshes = submeshRange });
+			retVal.handle   = AllocateGeomSlot(record);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -641,7 +644,14 @@ namespace bgl
 			glm::vec4                      boundingSphere = glm::vec4(0.0f);
 		};
 
+		// Every level's, level-major: `lodCount` runs of `submeshCount`.
 		std::vector<Submesh> submeshes;
+		uint32_t             submeshCount = 0;
+		uint32_t             lodCount     = 1;
+
+		// Over level 0 alone, and each level's threshold; see idl::Geom.
+		glm::vec4                       boundingSphere = glm::vec4(0.0f);
+		std::array<float, cMaxMeshLods> lodMinPixels{};
 	};
 
 	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
@@ -660,10 +670,74 @@ namespace bgl
 
 		const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
 
-		auto impl = std::make_unique<PreparedStaticMesh::Impl>();
-		impl->submeshes.reserve(meshEntry.submeshCount);
+		// The file's claim about its own levels, checked like its byte ranges below.
+		if (meshEntry.lodCount == 0 || meshEntry.lodCount > cMaxMeshLods)
+		{
+			throw SceneError(
+				std::format(
+					"CookStaticMesh: mesh {} claims {} levels of detail; a mesh carries 1 to {}",
+					meshIndex,
+					meshEntry.lodCount,
+					cMaxMeshLods));
+		}
+		const auto entries = meshEntry.submeshCount * meshEntry.lodCount;
+		if (static_cast<uint64_t>(meshEntry.firstSubmesh) + entries > mesh.submeshes.size())
+		{
+			throw SceneError(
+				std::format(
+					"CookStaticMesh: mesh {} claims {} submeshes at {}, past the end of the mesh's "
+					"{}",
+					meshIndex,
+					entries,
+					meshEntry.firstSubmesh,
+					mesh.submeshes.size()));
+		}
 
-		for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+		auto impl          = std::make_unique<PreparedStaticMesh::Impl>();
+		impl->submeshCount = meshEntry.submeshCount;
+		impl->lodCount     = meshEntry.lodCount;
+		impl->submeshes.reserve(entries);
+
+		if (!mesh.lods.empty())
+		{
+			if (static_cast<uint64_t>(meshEntry.firstLod) + meshEntry.lodCount > mesh.lods.size())
+			{
+				throw SceneError(
+					std::format(
+						"CookStaticMesh: mesh {} claims {} levels at {}, past the end of the "
+						"mesh's {} thresholds",
+						meshIndex,
+						meshEntry.lodCount,
+						meshEntry.firstLod,
+						mesh.lods.size()));
+			}
+			for (uint32_t level = 0; level < meshEntry.lodCount; ++level)
+				impl->lodMinPixels[level] = mesh.lods[meshEntry.firstLod + level].minPixels;
+		}
+		else if (meshEntry.lodCount > 1)
+		{
+			throw SceneError(
+				std::format(
+					"CookStaticMesh: mesh {} has {} levels of detail and no thresholds to choose "
+					"them by",
+					meshIndex,
+					meshEntry.lodCount));
+		}
+
+		if (meshEntry.submeshCount > 0)
+		{
+			auto levelZeroMin = glm::vec3(std::numeric_limits<float>::max());
+			auto levelZeroMax = glm::vec3(std::numeric_limits<float>::lowest());
+			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
+				levelZeroMin                 = glm::min(levelZeroMin, src.aabbMin);
+				levelZeroMax                 = glm::max(levelZeroMax, src.aabbMax);
+			}
+			impl->boundingSphere = BoundingSphereOf(levelZeroMin, levelZeroMax);
+		}
+
+		for (uint32_t s = 0; s < entries; ++s)
 		{
 			const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
 
@@ -849,8 +923,10 @@ namespace bgl
 			std::vector<idl::Submesh> submeshes;
 			submeshes.reserve(mesh.m_Impl->submeshes.size());
 
+			// One per source submesh: a SubmeshInstance names its default by the source index, and
+			// a level draws with its level-0 sibling's material.
 			std::vector<MaterialHandle> defaults;
-			defaults.reserve(mesh.m_Impl->submeshes.size());
+			defaults.reserve(mesh.m_Impl->submeshCount);
 
 			// Nothing below is the scene's until Commit(); see GeomRollback.
 			auto rollback = GeomRollback();
@@ -875,8 +951,10 @@ namespace bgl
 				submesh.boundingSphere = sphereOverride.value_or(src.boundingSphere);
 
 				submeshes.push_back(submesh);
-				defaults.push_back(
-					src.material < materials.size() ? materials[src.material] : MaterialHandle{});
+				if (defaults.size() < mesh.m_Impl->submeshCount)
+					defaults.push_back(
+						src.material < materials.size() ? materials[src.material] :
+														  MaterialHandle{});
 			}
 
 			const auto baseSubmeshGlobal = rollback.Track(
@@ -886,12 +964,15 @@ namespace bgl
 			// Meta is keyed at the range root, so it can only be filed once the range is allocated.
 			m_SubmeshBuffer.MetaAt(baseSubmeshGlobal.index) = std::move(defaults);
 
-			// RangeWithCount is assignable from the buffer handle, but not constructible from it.
-			auto submeshRange = idl::RangeWithCount();
-			submeshRange      = baseSubmeshGlobal;
+			auto record                   = GeomRecord();
+			record.submeshes.range        = baseSubmeshGlobal;
+			record.submeshes.submeshCount = mesh.m_Impl->submeshCount;
+			record.submeshes.lodCount     = mesh.m_Impl->lodCount;
+			record.boundingSphere         = sphereOverride.value_or(mesh.m_Impl->boundingSphere);
+			record.lodMinPixels           = mesh.m_Impl->lodMinPixels;
 
 			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(GeomRecord{ .submeshes = submeshRange });
+			retVal.handle   = AllocateGeomSlot(record);
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -941,7 +1022,9 @@ namespace bgl
 		// free them per submesh before releasing the submesh range itself.
 		const uint32_t submeshRoot = submeshes.range.offsetStart;
 
-		for (uint32_t i = 0; i < submeshes.count; ++i)
+		// Every level's: each owns its own per-part ranges.
+		const uint32_t entries = submeshes.submeshCount * submeshes.lodCount;
+		for (uint32_t i = 0; i < entries; ++i)
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
