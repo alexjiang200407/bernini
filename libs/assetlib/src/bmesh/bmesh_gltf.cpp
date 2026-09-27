@@ -1545,14 +1545,14 @@ namespace assetlib
 		}
 
 		/** A mesh name's level: `<base>_LOD<n>` is level n of `<base>`, and any other name level 0. */
-		struct LevelName
+		struct LodName
 		{
 			std::string_view base;
 			uint32_t         level = 0;
 		};
 
-		LevelName
-		parseLevelName(const std::string_view name) noexcept
+		LodName
+		parseLodName(const std::string_view name) noexcept
 		{
 			constexpr std::string_view c_Marker = "_LOD";
 
@@ -1577,8 +1577,10 @@ namespace assetlib
 		}
 
 		/**
-		 * Folds every `<base>_LOD<n>` mesh into mesh `<base>` as its level n, level-major: the
-		 * base's submeshes, then level 1's in the same order, and so on (see Mesh). A level's
+		 * Folds every `<base>_LOD<n>` glTF mesh into the Mesh entry of `<base>`, as that entry's
+		 * level n: the level's submeshes join the base's submesh range, level-major -- the base's
+		 * submeshes, then level 1's in the same order, and so on (see Mesh) -- and the level stops
+		 * being a mesh of its own. A level's
 		 * submesh takes its level-0 sibling's name and material, so a binding or an override names
 		 * all of a submesh's levels at once. Its node stops naming a mesh, so nothing places it on
 		 * its own; its vertices are taken in its mesh's space, as the base's are.
@@ -1590,7 +1592,7 @@ namespace assetlib
 		 *         or skinning differ from the base's, or a level carrying grass.
 		 */
 		void
-		foldLevels(
+		foldLodLevels(
 			BMeshImport&                 mesh,
 			const tinygltf::Model&       model,
 			const std::span<const float> authored)
@@ -1600,17 +1602,16 @@ namespace assetlib
 			auto baseByName = std::map<std::string_view, uint32_t>();
 			for (uint32_t i = 0; i < count; ++i)
 			{
-				const LevelName name = parseLevelName(model.meshes[i].name);
+				const LodName name = parseLodName(model.meshes[i].name);
 				if (name.level != 0)
 					continue;
 				if (!baseByName.emplace(name.base, i).second)
 				{
-					throw std::runtime_error(
-						std::format(
-							"bmesh: two meshes are level 0 of '{}' -- '{}' and its `_LOD0` twin; "
-							"name one of them",
-							name.base,
-							name.base));
+					core::throw_runtime_error(
+						"bmesh: two meshes are level 0 of '{}' -- '{}' and its `_LOD0` twin; "
+						"name one of them",
+						name.base,
+						name.base);
 				}
 			}
 
@@ -1619,27 +1620,25 @@ namespace assetlib
 			auto isLevel  = std::vector<bool>(count, false);
 			for (uint32_t i = 0; i < count; ++i)
 			{
-				const LevelName name = parseLevelName(model.meshes[i].name);
+				const LodName name = parseLodName(model.meshes[i].name);
 				if (name.level == 0)
 					continue;
 
 				const auto base = baseByName.find(name.base);
 				if (base == baseByName.end())
 				{
-					throw std::runtime_error(
-						std::format(
-							"bmesh: '{}' is level {} of a mesh '{}' the source does not have",
-							model.meshes[i].name,
-							name.level,
-							name.base));
+					core::throw_runtime_error(
+						"bmesh: '{}' is level {} of a mesh '{}' the source does not have",
+						model.meshes[i].name,
+						name.level,
+						name.base);
 				}
 				if (!levelsOf[base->second].emplace(name.level, i).second)
 				{
-					throw std::runtime_error(
-						std::format(
-							"bmesh: two meshes are level {} of '{}'",
-							name.level,
-							name.base));
+					core::throw_runtime_error(
+						"bmesh: two meshes are level {} of '{}'",
+						name.level,
+						name.base);
 				}
 				isLevel[i] = true;
 			}
@@ -1651,12 +1650,11 @@ namespace assetlib
 
 				if (levels.size() + 1 > c_MaxMeshLods)
 				{
-					throw std::runtime_error(
-						std::format(
-							"bmesh: '{}' has {} levels, more than the {} a mesh may carry",
-							baseName,
-							levels.size() + 1,
-							c_MaxMeshLods));
+					core::throw_runtime_error(
+						"bmesh: '{}' has {} levels, more than the {} a mesh may carry",
+						baseName,
+						levels.size() + 1,
+						c_MaxMeshLods);
 				}
 
 				uint32_t expected = 1;
@@ -1664,53 +1662,49 @@ namespace assetlib
 				{
 					if (level != expected)
 					{
-						throw std::runtime_error(
-							std::format(
-								"bmesh: '{}' has a level {} but no level {}; number them from 1 "
-								"without a gap",
-								baseName,
-								level,
-								expected));
+						core::throw_runtime_error(
+							"bmesh: '{}' has a level {} but no level {}; number them from 1 "
+							"without a gap",
+							baseName,
+							level,
+							expected);
 					}
 					++expected;
 
 					const Mesh& levelEntry = mesh.meshes[index];
 					if (levelEntry.submeshCount != baseEntry.submeshCount)
 					{
-						throw std::runtime_error(
-							std::format(
-								"bmesh: '{}' has {} triangle primitives but '{}' has {}; every "
-								"level of a mesh carries one per material of level 0",
-								model.meshes[index].name,
-								levelEntry.submeshCount,
-								baseName,
-								baseEntry.submeshCount));
+						core::throw_runtime_error(
+							"bmesh: '{}' has {} triangle primitives but '{}' has {}; every "
+							"level of a mesh carries one per material of level 0",
+							model.meshes[index].name,
+							levelEntry.submeshCount,
+							baseName,
+							baseEntry.submeshCount);
 					}
 					for (uint32_t s = 0; s < baseEntry.submeshCount; ++s)
 					{
 						if (submeshCarriesJoints(mesh.submeshes[levelEntry.firstSubmesh + s]) !=
 						    submeshCarriesJoints(mesh.submeshes[baseEntry.firstSubmesh + s]))
 						{
-							throw std::runtime_error(
-								std::format(
-									"bmesh: primitive {} of '{}' is skinned differently from "
-									"'{}''s; a level is skinned to the same rig as level 0 or "
-									"neither is",
-									s,
-									model.meshes[index].name,
-									baseName));
+							core::throw_runtime_error(
+								"bmesh: primitive {} of '{}' is skinned differently from "
+								"'{}''s; a level is skinned to the same rig as level 0 or "
+								"neither is",
+								s,
+								model.meshes[index].name,
+								baseName);
 						}
 					}
 					for (const GrassField& field : mesh.grass.fields)
 					{
 						if (field.mesh == index)
 						{
-							throw std::runtime_error(
-								std::format(
-									"bmesh: '{}' carries grass; grass grows on level 0 of '{}' "
-									"and thins itself",
-									model.meshes[index].name,
-									baseName));
+							core::throw_runtime_error(
+								"bmesh: '{}' carries grass; grass grows on level 0 of '{}' "
+								"and thins itself",
+								model.meshes[index].name,
+								baseName);
 						}
 					}
 				}
@@ -1759,7 +1753,7 @@ namespace assetlib
 
 			mesh.meshes    = std::move(meshes);
 			mesh.submeshes = std::move(submeshes);
-			writeLodTables(mesh.meshes, mesh.lods, authored, mesh.stringPool);
+			writeLodTables(mesh, authored);
 		}
 	}
 
@@ -1861,7 +1855,7 @@ namespace assetlib
 			mesh.meshes.push_back(entry);
 		}
 
-		foldLevels(mesh, model, options.lodMinPixels);
+		foldLodLevels(mesh, model, options.lodMinPixels);
 
 		if (options.textures == GltfTextures::kDecode)
 		{

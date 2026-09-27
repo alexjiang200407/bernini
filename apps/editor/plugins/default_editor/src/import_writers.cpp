@@ -87,29 +87,16 @@ namespace editor
 				Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();
 		}
 
-		// A level of detail past 0 repeats its sibling's name and material, so only level 0 is
-		// bound: a binding names every level of a submesh at once.
-		auto levelZero = std::vector<size_t>();
-		if (mesh.meshes.empty())
-		{
-			for (size_t i = 0; i < mesh.submeshes.size(); ++i) levelZero.push_back(i);
-		}
-		for (const assetlib::Mesh& entry : mesh.meshes)
-		{
-			for (uint32_t s = 0; s < entry.submeshCount; ++s)
-				levelZero.push_back(entry.firstSubmesh + s);
-		}
-
+		// A binding names every level of a submesh at once, so only level 0 is bound.
 		auto bindings = std::vector<assetlib::MaterialBinding>();
-		for (const size_t i : levelZero)
+		for (const assetlib::Submesh& submesh : assetlib::lodNSubmeshes(mesh, 0))
 		{
-			const uint32_t index = imported.submeshes.at(i).material;
+			const uint32_t index = submesh.material;
 			if (index >= relative.size() || relative[index].empty())
 				continue;
 
 			bindings.push_back(
-				{ std::string(mesh.stringPool.at(mesh.submeshes.at(i).nameOffset)),
-			      relative[index] });
+				{ std::string(mesh.stringPool.at(submesh.nameOffset)), relative[index] });
 		}
 		return bindings;
 	}

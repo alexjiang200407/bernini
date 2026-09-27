@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Mesh.h>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -21,6 +22,14 @@ namespace assetlib
 	/** Copies cooked geometry, original material slot indices and named grass from an import. */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
+
+	/**
+	 * Level `level` of every mesh's submeshes, in mesh order; a mesh with no such level adds none.
+	 * Level 0 is the one a name or a binding addresses, since a level past it repeats its
+	 * sibling's name and material. A container with no mesh entries is all level 0.
+	 */
+	[[nodiscard]] std::vector<Submesh>
+	lodNSubmeshes(const BMesh& mesh, uint32_t level);
 
 	/**
 	 * The file name AssetStore::WriteTextures gives each of an import's textures, parallel to

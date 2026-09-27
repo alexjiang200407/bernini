@@ -62,30 +62,11 @@ namespace assetlib
 		}
 	}
 
-	namespace
-	{
-		/**
-		 * Every mesh's level-0 submeshes, in order: the ones a name addresses. A level past 0 shares
-		 * its sibling's name, so counting it would read as a collision and write a binding twice.
-		 */
-		std::vector<Submesh>
-		levelZeroSubmeshes(const BMesh& mesh)
-		{
-			auto levelZero = std::vector<Submesh>();
-			if (mesh.meshes.empty())
-				return mesh.submeshes;
-			for (const Mesh& entry : mesh.meshes)
-				for (uint32_t s = 0; s < entry.submeshCount; ++s)
-					levelZero.push_back(mesh.submeshes[entry.firstSubmesh + s]);
-			return levelZero;
-		}
-	}
-
 	void
 	requireUniqueSubmeshNames(const BMesh& mesh)
 	{
 		auto seen = std::unordered_set<std::string_view>();
-		for (const Submesh& submesh : levelZeroSubmeshes(mesh))
+		for (const Submesh& submesh : lodNSubmeshes(mesh, 0))
 		{
 			const std::string_view name = mesh.stringPool.at(submesh.nameOffset);
 			if (!seen.insert(name).second)
@@ -444,7 +425,7 @@ namespace assetlib
 		// level at a size nobody chose.
 		if (const std::vector<float> authored = authoredLodMinPixels(GetFiles(), source);
 		    !authored.empty())
-			writeLodTables(mesh.meshes, mesh.lods, authored, mesh.stringPool);
+			writeLodTables(mesh, authored);
 
 		if (skeleton.bones.empty())
 			return {};
