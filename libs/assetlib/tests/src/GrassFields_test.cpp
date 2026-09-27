@@ -197,13 +197,12 @@ TEST_CASE("A mesh names its grass file wherever the pair is written", "[grass][c
 			named.end());
 	}
 
-	SECTION("a rename of the grass file")
+	SECTION("a grass cache cannot move independently")
 	{
-		constexpr std::string_view c_Renamed = "Derived/Meshes/verge.bgrassfields";
-		const RenamePlan           plan =
-			planRename(AssetRefGraph::Scan(project.Store()), c_GrassKey, c_Renamed);
-		REQUIRE(project.Store().RenameAsset(plan).status == RenameStatus::kRenamed);
-		CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass == c_Renamed);
+		CHECK_THROWS(planRename(
+			AssetRefGraph::Scan(project.Store()),
+			c_GrassKey,
+			"Derived/Meshes/verge.bgrassfields"));
 	}
 
 	SECTION("pack")
@@ -401,9 +400,7 @@ TEST_CASE(
 	CHECK(project.Store().Load<BMesh>(std::string(c_MeshKey)).grass.empty());
 }
 
-TEST_CASE(
-	"Renaming a source carries its grass file with the mesh",
-	"[grass][container][assetrename]")
+TEST_CASE("Renaming a source preserves its legacy grass output", "[grass][container][assetrename]")
 {
 	const GrassyProject project("bernini_grass_rename_source");
 
@@ -411,15 +408,13 @@ TEST_CASE(
 		planRename(AssetRefGraph::Scan(project.Store()), c_SourceKey, "Authored/Meshes/avenue.glb");
 	REQUIRE(project.Store().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK_FALSE(project.Store().Exists(c_GrassKey));
-	CHECK(project.Store().Exists("Derived/Meshes/avenue.bgrassfields"));
-	CHECK(project.Store().Exists("Derived/Meshes/avenue.bmesh"));
+	CHECK(project.Store().Exists(c_GrassKey));
+	CHECK(project.Store().Exists(c_MeshKey));
+	CHECK_FALSE(project.Store().Exists("Derived/Meshes/avenue.bgrassfields"));
 
 	const ImportDocument document =
 		project.Store().Load<ImportDocument>("Authored/Meshes/avenue.bimport");
-	CHECK(
-		std::ranges::find(document.outputs, "Derived/Meshes/avenue.bgrassfields") !=
-		document.outputs.end());
+	CHECK(std::ranges::find(document.outputs, c_GrassKey) != document.outputs.end());
 }
 
 // A grass file cooked at another revision regenerates from its source like the mesh beside it --

@@ -312,7 +312,9 @@ TEST_CASE("The reference scan derives an avatar's skeleton from its key", "[avat
 	CHECK(named[0].kind == RefKind::kAvatarSkeleton);
 }
 
-TEST_CASE("An avatar moves with the skeleton it belongs to", "[avatar][assetrename]")
+TEST_CASE(
+	"An avatar and its derived skeleton cannot be moved independently",
+	"[avatar][assetrename]")
 {
 	const DataRoot root("bernini_avatar_rename");
 	fs::create_directories(root.path / c_SkeletonsDirectoryName);
@@ -321,54 +323,14 @@ TEST_CASE("An avatar moves with the skeleton it belongs to", "[avatar][assetrena
 	StoreAt(root.path).Save(MakeRig(), "Derived/Skeletons/dog.bskel");
 	StoreAt(root.path).Save(MakeAvatar(), "Authored/Skeletons/dog.bavatar");
 
-	SECTION("renaming the skeleton carries the avatar to the key that still finds it")
+	SECTION("neither a skeleton nor its folder can move")
 	{
-		const RenamePlan plan = planRename(
+		CHECK_THROWS(planRename(
 			root.Scan(),
 			"Derived/Skeletons/dog.bskel",
-			"Derived/Skeletons/coyote.bskel");
-
-		REQUIRE(plan.avatars.size() == 1);
-		CHECK(plan.avatars[0].from == "Authored/Skeletons/dog.bavatar");
-		CHECK(plan.avatars[0].to == "Authored/Skeletons/coyote.bavatar");
-
-		CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
-		CHECK(fs::exists(root.path / "Authored/Skeletons/coyote.bavatar"));
-		CHECK_FALSE(fs::exists(root.path / "Authored/Skeletons/dog.bavatar"));
-	}
-
-	SECTION("a skeleton with no avatar plans none")
-	{
-		fs::remove(root.path / "Authored/Skeletons/dog.bavatar");
-
-		const RenamePlan plan = planRename(
-			root.Scan(),
-			"Derived/Skeletons/dog.bskel",
-			"Derived/Skeletons/coyote.bskel");
-
-		CHECK(plan.avatars.empty());
-		CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
-	}
-
-	SECTION("a directory of skeletons carries its avatars into the mirrored directory")
-	{
-		// The pair straddles the two halves, so the directory move itself can only ever carry one
-		// end of it. A rename that reported success and left the avatars behind would detach every
-		// rig in the folder at once.
-		StoreAt(root.path).Save(MakeRig(), "Derived/Skeletons/quadrupeds/wolf.bskel");
-		StoreAt(root.path).Save(MakeAvatar(), "Authored/Skeletons/quadrupeds/wolf.bavatar");
-
-		const RenamePlan plan =
-			planRename(root.Scan(), "Derived/Skeletons/quadrupeds", "Derived/Skeletons/mammals");
-
-		REQUIRE(plan.IsDirectory());
-		REQUIRE(plan.avatars.size() == 1);
-		CHECK(plan.avatars[0].to == "Authored/Skeletons/mammals/wolf.bavatar");
-
-		CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
-		CHECK(fs::exists(root.path / "Derived/Skeletons/mammals/wolf.bskel"));
-		CHECK(fs::exists(root.path / "Authored/Skeletons/mammals/wolf.bavatar"));
-		CHECK_FALSE(fs::exists(root.path / "Authored/Skeletons/quadrupeds/wolf.bavatar"));
+			"Derived/Skeletons/coyote.bskel"));
+		CHECK_THROWS(planRename(root.Scan(), "Derived/Skeletons", "Derived/Rigs"));
+		CHECK(fs::exists(root.path / "Authored/Skeletons/dog.bavatar"));
 	}
 
 	SECTION("a directory of avatars cannot move, exactly as one avatar cannot")

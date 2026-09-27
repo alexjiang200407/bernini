@@ -1155,7 +1155,11 @@ referenced" and "the file is in use" are different things to tell a user, and ar
 Identity is the data-root-relative path, so a rename is a reference rewrite or it is a break. `planRename`
 / `AssetStore::RenameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
 rewrite every referrer to follow, so a rename is **never blocked by references** the way a deletion is.
-Three rules of its own:
+Rules:
+
+* **Derived files and folders cannot move independently.** Move the source and its sidecar;
+  output keys and bytes stay fixed, including outputs from legacy imports. Authored assets
+  cannot move into `Derived/`. Migration alone changes legacy output names and tracked references.
 
 * **A rename never overwrites**: a destination that exists refuses the plan, the same stance import
   takes. The one exception is the same file spelled in a different case, which is how a
@@ -1262,7 +1266,7 @@ assetlib_cli prune -p <project>
 
 # Move an asset and rewrite every reference that followed it. A file or a directory, and the
 # hand-migration path for a project written against an older layout
-assetlib_cli rename -p <project> Derived/BakedTextures/old.ktx2 Derived/BakedTextures/new.ktx2
+assetlib_cli rename -p <project> Authored/Textures/old.ktx2 Authored/Textures/new.ktx2
 
 # Why will the editor not let me delete this? -- who references it, and how
 assetlib_cli refs -p <project> Derived/BakedTextures/basecolor_700a22db7b7ef785.ktx2

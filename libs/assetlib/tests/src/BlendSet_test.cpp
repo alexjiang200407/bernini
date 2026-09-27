@@ -225,7 +225,9 @@ TEST_CASE("The reference scan reads the clip set a blend names", "[blend][assetr
 	CHECK(named[0].kind == RefKind::kBlendClips);
 }
 
-TEST_CASE("Renaming a clip set rewrites the blend that names it", "[blend][assetrename]")
+TEST_CASE(
+	"A blend keeps its derived clip reference when a clip move is refused",
+	"[blend][assetrename]")
 {
 	const DataRoot root("bernini_blend_rename");
 	fs::create_directories(root.path / c_SkeletonsDirectoryName);
@@ -239,12 +241,10 @@ TEST_CASE("Renaming a clip set rewrites the blend that names it", "[blend][asset
 		std::string(c_ClipsKey));
 	StoreAt(root.path).Save(MakeSet(), "Authored/Animations/wolf.bblend");
 
-	const RenamePlan plan =
-		planRename(root.Scan(), c_ClipsKey, "Derived/Animations/dire_wolf.banim");
-	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
+	CHECK_THROWS(planRename(root.Scan(), c_ClipsKey, "Derived/Animations/dire_wolf.banim"));
 
 	const BlendSet after = StoreAt(root.path).Load<BlendSet>("Authored/Animations/wolf.bblend");
-	CHECK(after.animations == "Derived/Animations/dire_wolf.banim");
+	CHECK(after.animations == c_ClipsKey);
 
 	// The spaces are untouched: a rename moves a path, and a clip name is not one.
 	CHECK(after.spaces == MakeSet().spaces);

@@ -73,35 +73,6 @@ namespace assetlib
 			return stored;
 		}
 
-		/** `key` in the same directory and with the same extension, under `stem`. */
-		std::string
-		reStem(std::string_view key, std::string_view stem)
-		{
-			const size_t      slash     = key.find_last_of('/');
-			const std::string directory = slash == std::string_view::npos ?
-			                                  std::string() :
-			                                  std::string(key.substr(0, slash + 1));
-			return directory + std::string(stem) + extensionOf(key);
-		}
-
-		/**
-		 * Adds the avatar beside `skeleton`, when there is one on disk.
-		 *
-		 * By convention and not by an edge, which is the whole of ADR-3: a `.bskel` that moved
-		 * without its avatar has not stranded it, it has *detached* it -- the new key resolves to
-		 * no avatar and the old avatar resolves to no skeleton, both silently.
-		 */
-		void
-		planAvatar(
-			const std::filesystem::path& dataRoot,
-			RenamePlan&                  plan,
-			const RenameMove&            skeleton)
-		{
-			const auto move = RenameMove{ avatarKeyFor(skeleton.from), avatarKeyFor(skeleton.to) };
-			if (std::filesystem::exists(dataRoot / move.from))
-				plan.avatars.push_back(move);
-		}
-
 		/** The imported-source category `key` sits under, or empty when it is under neither. */
 		std::string_view
 		sourceCategoryOf(std::string_view key)
@@ -159,14 +130,9 @@ namespace assetlib
 		}
 
 		/**
-		 * Fills in what travels with an import document: the source it describes, and each
-		 * container `outputs` names after that source's stem.
+		 * Fills in the source that travels with an import document. Outputs retain their keys.
 		 *
-		 * @throws std::runtime_error if the document is absent or will not parse -- it is what says
-		 *         which containers move, so a source moved without it strands all of them -- or if
-		 *         the source itself is not on disk. A missing output is ordinary and regenerable; a
-		 *         missing source is a project already broken, and moving the document away from it
-		 *         would leave nothing able to put it back.
+		 * @throws std::runtime_error if the document cannot be read or its source is absent.
 		 */
 		void
 		planImportGroup(const std::filesystem::path& dataRoot, RenamePlan& plan)
@@ -189,27 +155,6 @@ namespace assetlib
 			}
 
 			plan.source = source;
-			if (document.identity.id != 0)
-				return;
-
-			const std::string_view was = stemOf(plan.subject.from);
-			const std::string_view now = stemOf(plan.subject.to);
-
-			for (const std::string& output : document.outputs)
-			{
-				const std::string key = normalizeRef(output);
-
-				// An output already taken off the source's stem by a rename of its own is not this
-				// source's to move: its name no longer says it came from here.
-				if (stemOf(key) != was)
-					continue;
-
-				plan.outputs.push_back({ key, reStem(key, std::string(now)) });
-			}
-
-			for (const RenameMove& output : plan.outputs)
-				if (assetTypeFromExtension(output.from) == AssetType::kSkeleton)
-					planAvatar(dataRoot, plan, output);
 		}
 
 		/** One referrer file: where it is now, and the bytes that can undo its rewrite. */
@@ -357,6 +302,13 @@ namespace assetlib
 		plan.subject.from = normalizeRef(from);
 		plan.subject.to   = normalizeRef(to);
 		plan.registry     = graph.GetKindRegistry();
+		if (plan.subject.from == c_DerivedDirectoryName ||
+		    plan.subject.to == c_DerivedDirectoryName ||
+		    isUnder(plan.subject.from, c_DerivedDirectoryName) ||
+		    isUnder(plan.subject.to, c_DerivedDirectoryName))
+			core::throw_runtime_error(
+				"assetlib::planRename: derived files and folders cannot move independently; move "
+				"the source instead");
 
 		// A source and its `.bimport` are one asset under two names, and the document is what says
 		// which containers move -- so a source named on either side plans as its document, and the
@@ -414,9 +366,6 @@ namespace assetlib
 				if (isUnder(edge.target, plan.subject.from) && isStoredRef(edge.kind))
 					plan.referrers.push_back(edge);
 
-			// The avatars straddle the halves, so no directory move can carry both ends of the
-			// convention: a directory of skeletons takes its avatars along one file at a time, and
-			// a directory of avatars cannot move at all -- exactly as one avatar cannot.
 			for (const std::string& file : graph.GetFilesUnder(plan.subject.from))
 			{
 				const std::optional<AssetType> type = assetTypeFromExtension(file);
@@ -426,19 +375,13 @@ namespace assetlib
 				if (type == AssetType::kAvatar)
 					core::throw_runtime_error(
 						"assetlib::planRename: '{}' holds '{}', which is found by its path from "
-						"'{}'; rename the skeletons and the avatars follow",
+						"'{}'; that attachment has a fixed key",
 						plan.subject.from,
 						file,
 						skeletonKeyForAvatar(file));
 
 				if (type == AssetType::kImportDocument)
 					requireSourceCategoryKept(file, plan.subject.to + std::string(tail));
-
-				if (type == AssetType::kSkeleton)
-					planAvatar(
-						graph.DataRoot(),
-						plan,
-						{ file, plan.subject.to + std::string(tail) });
 			}
 		}
 		else
@@ -456,26 +399,18 @@ namespace assetlib
 					"assetlib::planRename: renaming '" + plan.subject.from + "' to '" +
 					plan.subject.to + "' would change what kind of asset it is");
 
-			// Its source key is derived from its own path and its outputs are named from the
-			// source, so a document never moves alone: the whole import goes with it.
 			if (plan.assetType == AssetType::kImportDocument)
 			{
 				requireSourceCategoryKept(plan.subject.from, plan.subject.to);
 				planImportGroup(graph.DataRoot(), plan);
 			}
 
-			// A skeleton's avatar is found from the skeleton's key, so it moves with it or stops
-			// being reachable at all.
-			if (plan.assetType == AssetType::kSkeleton)
-				planAvatar(graph.DataRoot(), plan, plan.subject);
-
 			// The other direction is refused rather than followed: the avatar's key is what
 			// attaches it, so moving one alone detaches it from a rig that has not moved.
 			if (plan.assetType == AssetType::kAvatar)
 				core::throw_runtime_error(
-					"assetlib::planRename: '{}' is found by its path from '{}'; rename the "
-					"skeleton "
-					"and the avatar follows",
+					"assetlib::planRename: '{}' is found by its path from '{}'; that attachment "
+					"has a fixed key",
 					plan.subject.from,
 					skeletonKeyForAvatar(plan.subject.from));
 
