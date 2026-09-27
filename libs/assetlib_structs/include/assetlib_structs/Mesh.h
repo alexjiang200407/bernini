@@ -80,12 +80,45 @@ namespace assetlib
 
 	static_assert(sizeof(Submesh) == 100);
 
+	/**
+	 * One level of detail of a mesh, in `BMesh::lods`. A level is drawn while the placement's
+	 * projected diameter, in pixels, is at least `minPixels`, walked from level 0: a size below
+	 * every level's draws nothing, so the last level's `minPixels` is the draw-nothing size and 0
+	 * there means the mesh is never dropped. Non-increasing across a mesh's levels.
+	 */
+	struct MeshLod
+	{
+		float minPixels;
+	};
+
+	static_assert(sizeof(MeshLod) == 4);
+
+	/**
+	 * Levels one mesh may carry, level 0 included. The renderer names the same number as
+	 * `idl::cMaxMeshLods` -- the length of its per-geom table -- and a static_assert in
+	 * `Scene_Geometry.cpp`
+	 * holds them equal; the document and the cook refuse a source past it.
+	 */
+	constexpr uint32_t c_MaxMeshLods = 8;
+
+	/**
+	 * `submeshCount` is one level's, and the submesh range spans `lodCount` of them, level-major:
+	 * level 0's submeshes first in source order, then level 1's in the same order, so
+	 * `firstSubmesh + lod * submeshCount + s` is submesh `s` of level `lod`. Every reader that walks
+	 * `firstSubmesh .. + submeshCount` therefore sees level 0 and only the upload sees them all. A
+	 * level's entry carries the same `nameOffset` and `material` as its level-0 sibling.
+	 *
+	 * `lodCount` levels of `BMesh::lods` start at `firstLod`. An empty `BMesh::lods` is one level
+	 * drawn at every size, whatever `firstLod` says: it is read only when the table is there.
+	 */
 	struct Mesh
 	{
 		uint32_t firstSubmesh;  // range into BMeshImport::submeshes
 		uint32_t submeshCount;
 		uint32_t nameOffset;  // into BMeshImport::stringPool
+		uint32_t lodCount = 1;
+		uint32_t firstLod = 0;  // range into BMeshImport::lods
 	};
 
-	static_assert(sizeof(Mesh) == 12);
+	static_assert(sizeof(Mesh) == 20);
 }

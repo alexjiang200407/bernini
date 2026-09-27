@@ -5,6 +5,7 @@
 #include <assetlib/env_import_parameters.h>
 #include <assetlib/import_document.h>
 
+#include <cmath>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/hash.h>
@@ -23,6 +24,7 @@
 #include "json_doc.h"
 #include "ref_paths.h"
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Mesh.h>
 
 namespace assetlib
 {
@@ -31,6 +33,7 @@ namespace assetlib
 		constexpr std::string_view c_ParametersKey        = "parameters";
 		constexpr std::string_view c_SampleRateKey        = "sampleRate";
 		constexpr std::string_view c_ClipFloorKey         = "clipFloor";
+		constexpr std::string_view c_LodMinPixelsKey      = "lodMinPixels";
 		constexpr std::string_view c_BindingsKey          = "bindings";
 		constexpr std::string_view c_MaterialOverridesKey = "materialOverrides";
 		constexpr std::string_view c_TextureDirKey        = "textureDir";
@@ -106,6 +109,16 @@ namespace assetlib
 					grounds[ground.clip] = doc::plainFloat(ground.floor);
 				}
 				parameters[c_ClipFloorKey] = std::move(grounds);
+			}
+
+			// Omitted when empty, as clipFloor is: the key must not move for a source that authors
+			// no levels.
+			if (!document.lodMinPixels.empty())
+			{
+				auto levels = nlohmann::json::array();
+				for (const float minPixels : document.lodMinPixels)
+					levels.push_back(doc::plainFloat(minPixels));
+				parameters[c_LodMinPixelsKey] = std::move(levels);
 			}
 
 			return parameters;
@@ -196,6 +209,44 @@ namespace assetlib
 					document.clipFloors.push_back({ clip, floor.get<float>() });
 				}
 				it->erase(grounds);
+			}
+			if (auto levels = it->find(c_LodMinPixelsKey); levels != it->end())
+			{
+				if (!levels->is_array())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' is not an array",
+						c_LodMinPixelsKey);
+				}
+				if (levels->size() > c_MaxMeshLods)
+				{
+					core::throw_runtime_error(
+						"import document: '{}' lists {} levels, more than the {} a mesh may carry",
+						c_LodMinPixelsKey,
+						levels->size(),
+						c_MaxMeshLods);
+				}
+				float previous = std::numeric_limits<float>::infinity();
+				for (const auto& level : *levels)
+				{
+					if (!level.is_number() || level.get<float>() < 0.0f ||
+					    !std::isfinite(level.get<float>()))
+					{
+						core::throw_runtime_error(
+							"import document: '{}' holds an entry that is not a non-negative "
+							"number",
+							c_LodMinPixelsKey);
+					}
+					if (level.get<float>() > previous)
+					{
+						core::throw_runtime_error(
+							"import document: '{}' must not increase from one level to the next",
+							c_LodMinPixelsKey);
+					}
+					previous = level.get<float>();
+					document.lodMinPixels.push_back(previous);
+				}
+				it->erase(levels);
 			}
 			if (auto environment = it->find(c_EnvironmentKey); environment != it->end())
 			{

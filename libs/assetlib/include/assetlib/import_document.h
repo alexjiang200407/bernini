@@ -84,6 +84,15 @@ namespace assetlib
 		std::vector<ClipFloor> clipFloors;
 
 		/**
+		 * The mesh's levels of detail, one `MeshLod::minPixels` per level starting at level 0; the
+		 * last level's entry is the draw-nothing size (0: never dropped). Non-increasing. The levels
+		 * themselves are the source's `<mesh>_LOD<n>` meshes; a level this list does not reach
+		 * takes the cook's default. A parameter: it is written into the `.bmesh`, so it has to
+		 * key. Empty for a source that authors none.
+		 */
+		std::vector<float> lodMinPixels;
+
+		/**
 		 * Set for an environment source, and then the whole of its parameters: such a document
 		 * writes no `sampleRate`, which nothing reads for it and which would otherwise key every
 		 * environment on a mesh default.
