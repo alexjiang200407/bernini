@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/env_import_parameters.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/SourceStamp.h>
@@ -66,6 +67,8 @@ namespace assetlib
 		 * change what the importer computes from it.
 		 */
 		std::string source;
+
+		ImportIdentity identity;
 
 		float sampleRate = c_DefaultSampleRate;
 

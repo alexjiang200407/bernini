@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/MeshBindings.h>
 #include <assetlib_structs/BMesh.h>
 #include <string>
 #include <vector>
@@ -14,5 +15,6 @@ namespace assetlib
 	{
 		BMesh                    mesh;
 		std::vector<std::string> unboundBindings;
+		MeshBindings             bindings{};
 	};
 }

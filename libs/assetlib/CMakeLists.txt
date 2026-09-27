@@ -150,6 +150,7 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/cli" PREFIX "Source Files" FILES 
 
 if (BUILD_TESTS)
 	find_package(Catch2 CONFIG REQUIRED)
+	add_subdirectory(contract_tests)
 
 	file(GLOB_RECURSE ASSETLIB_TESTS_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp

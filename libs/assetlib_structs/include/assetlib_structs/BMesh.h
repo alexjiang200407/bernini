@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib_structs/GrassGeometry.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
@@ -76,5 +77,7 @@ namespace assetlib
 		uint64_t geometrySignature = 0;
 
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
+
+		GrassGeometry grassFields;
 	};
 }

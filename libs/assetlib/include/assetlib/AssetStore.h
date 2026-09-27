@@ -35,6 +35,7 @@ namespace assetlib
 	struct RenamePlan;
 	struct RenameResult;
 	struct ResolvedEnvironment;
+	struct ResolvedImport;
 	struct Skeleton;
 	struct SourceStamp;
 	struct SurfaceTextureBinding;
@@ -54,6 +55,7 @@ namespace assetlib
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
+	enum class AssetType : uint32_t;
 
 	struct RegenGrassFields;
 	struct RegenMesh;
@@ -166,6 +168,17 @@ namespace assetlib
 		{
 			return m_Files->Exists(path);
 		}
+
+		/**
+		 * Resolves a source identifier through its mounted .bimport to one produced output of kind.
+		 * Never opens or stamps the source, and works on a read-only mount. A bound skeleton is not
+		 * a produced output; read document.skeleton for that binding.
+		 * @throws std::runtime_error for a missing/invalid document or identity, a source mismatch,
+		 *         an unsupported kind, or an absent, ambiguous or incorrectly named output entry.
+		 * Does not open the output: its loader checks availability and cache validity separately.
+		 */
+		[[nodiscard]] ResolvedImport
+		ResolveImport(std::string_view sourceKey, AssetType kind) const;
 
 		// --- Containers, by codec ----------------------------------------------------------------
 
