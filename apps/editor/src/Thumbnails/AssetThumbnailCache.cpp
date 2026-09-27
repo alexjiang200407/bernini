@@ -195,9 +195,11 @@ namespace
 				}
 				else
 				{
-					mesh = std::make_shared<assetlib::BMesh>(editor::LoadMeshThroughSeam(
-						assetlib::AssetStore(m_DataRoot),
-						std::filesystem::path(m_Path.toStdWString())));
+					mesh = std::make_shared<assetlib::BMesh>(
+						editor::LoadMeshThroughSeam(
+							assetlib::AssetStore(m_DataRoot),
+							std::filesystem::path(m_Path.toStdWString()))
+							.mesh);
 
 					if (mesh->meshes.empty())
 						throw std::runtime_error("mesh contains no meshes");

@@ -475,7 +475,7 @@ AnimationPreviewWindow::LoadMesh(
 					m_Host.GetLanguageResolver(),
 					"bernini.animation_preview.reading_mesh_progress",
 					"Reading mesh..."));
-			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
+			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath).mesh;
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 

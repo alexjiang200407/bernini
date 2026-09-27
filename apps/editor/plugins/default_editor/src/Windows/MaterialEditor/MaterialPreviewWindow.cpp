@@ -264,7 +264,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					m_Host.GetLanguageResolver(),
 					"bernini.material.reading_mesh_progress",
 					"Reading mesh..."));
-			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
+			mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), path).mesh;
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 		});

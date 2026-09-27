@@ -277,7 +277,7 @@ namespace editor
 				// Through the seam, so a stale mesh regenerates first rather than refusing --
 				// and a regeneration already derives tangents, which then reports as nothing
 				// left to generate.
-				assetlib::BMesh mesh = LoadMeshThroughSeam(store, meshPath);
+				assetlib::BMesh mesh = LoadMeshThroughSeam(store, meshPath).mesh;
 				result               = assetlib::generateTangents(mesh);
 
 				if (result.generated > 0)

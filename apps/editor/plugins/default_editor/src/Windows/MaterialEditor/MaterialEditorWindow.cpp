@@ -1194,7 +1194,7 @@ MaterialEditorWindow::MakeShownMaterialDefault(int submeshIndex)
 		try
 		{
 			const assetlib::AssetStore& store = m_Host.GetStore();
-			const auto     mesh   = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+			const auto     mesh   = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
 			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
 
 			store.SetSubmeshMaterialOverrideInDocument(
@@ -1291,7 +1291,7 @@ MaterialEditorWindow::AddMaterialOverride()
 
 		// Read before anything is written: a mesh with no source has no document to register in,
 		// and a copy saved first would be a `.bmaterial` nothing names.
-		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
 		if (mesh.source.key.empty())
 		{
 			core::throw_runtime_error(
@@ -1348,7 +1348,7 @@ MaterialEditorWindow::RemoveShownMaterialOverride()
 	try
 	{
 		const assetlib::AssetStore& store = m_Host.GetStore();
-		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		auto mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
 		store.RemoveSubmeshMaterialOverrideInDocument(
 			mesh.source.key,
 			mesh.stringPool.at(mesh.submeshes[source].nameOffset),
@@ -1441,7 +1441,7 @@ MaterialEditorWindow::RenameShownMaterialOverride()
 	try
 	{
 		const assetlib::AssetStore& store = m_Host.GetStore();
-		const auto        mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath());
+		const auto        mesh = editor::LoadMeshThroughSeam(store, m_Preview->MeshPath()).mesh;
 		const std::string submeshName =
 			std::string(mesh.stringPool.at(mesh.submeshes[source].nameOffset));
 
@@ -1520,7 +1520,8 @@ MaterialEditorWindow::ReloadRegisteredMaterials()
 
 	try
 	{
-		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		const auto mesh =
+			editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath()).mesh;
 		m_MeshSourceKey = mesh.source.key;
 
 		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
@@ -1688,7 +1689,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 
 	try
 	{
-		auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), meshPath);
+		auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), meshPath).mesh;
 
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
