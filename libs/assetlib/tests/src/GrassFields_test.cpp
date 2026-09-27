@@ -446,7 +446,10 @@ TEST_CASE("A stale grass file regenerates from its source", "[grass][container][
 		const MigrateReport first = project.Store().Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) >= 1);
-		CHECK_FALSE(project.Store().GeometryIsStale(c_GrassKey));
+		CHECK_FALSE(project.Store().GeometryIsStale(
+			project.Store()
+				.Load<ImportDocument>("Authored/Meshes/street.bimport")
+				.GetGrassOutput()));
 		CHECK(project.Store().Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);
 	}
 

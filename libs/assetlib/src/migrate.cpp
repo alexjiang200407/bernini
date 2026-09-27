@@ -585,6 +585,7 @@ namespace assetlib
 			if (file)
 				report.files.push_back(std::move(*file));
 
+		MigrateImportNames(dryRun, report);
 		return report;
 	}
 }

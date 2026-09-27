@@ -307,8 +307,9 @@ namespace assetlib
 				for (MaterialOverrideBinding& entry : document.materialOverrides)
 					entry.material = mapTarget(plan, entry.material);
 
-				document.source   = mapTarget(plan, document.source);
-				document.skeleton = mapTarget(plan, document.skeleton);
+				document.source     = mapTarget(plan, document.source);
+				document.skeleton   = mapTarget(plan, document.skeleton);
+				document.textureDir = mapTarget(plan, document.textureDir);
 				for (std::string& output : document.outputs) output = mapTarget(plan, output);
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
@@ -679,6 +680,8 @@ namespace assetlib
 
 		for (const RenameMove& step : steps)
 		{
+			if (step.from == step.to)
+				continue;
 			// A directory rename carries its skeletons' avatars into the mirrored directory under
 			// the other half, which nothing has created yet -- the subject's own destination is the
 			// only one planRename could check for.

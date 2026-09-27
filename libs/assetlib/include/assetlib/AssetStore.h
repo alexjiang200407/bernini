@@ -1038,6 +1038,8 @@ namespace assetlib
 
 	private:
 		struct ImportIndex;
+		void
+		MigrateImportNames(bool dryRun, MigrateReport& report) const;
 		/** The document a submesh edit rewrites; `submesh` only names it in what is thrown. */
 		[[nodiscard]] ImportDocument
 		LoadDocumentToRebind(std::string_view sourceKey, std::string_view submesh) const;

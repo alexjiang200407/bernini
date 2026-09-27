@@ -62,6 +62,13 @@ documents. Geometry loads use it when the recorded source path no longer identif
 sidecar. Moving an identified mesh source keeps its output keys and cache bytes; a direct rename
 of a claimed generated output refuses. Legacy imports retain their old move behavior until migrated.
 
+`Migrate` assigns identities to existing mesh imports, moves their outputs and extracted-texture
+directories, and rewrites tracked references, including the skeleton's companion avatar. It saves
+the identity before moving files so a retry keeps the same destinations. A shared identity or
+texture directory refuses migration for the affected imports. Materials whose texture routes move
+are baked against their new paths in the same run; a settled second run writes nothing. Dry runs
+leave identities, files and references unchanged. Environment naming migration is separate.
+
 The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
 import document from one identity and loading a mesh by source through `ResolveImport` and
 `LoadRegenMesh`. Its tests prove client wiring, snapshot ownership and error propagation. The fake

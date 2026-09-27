@@ -381,6 +381,7 @@ TEST_CASE("Migrate produces what the sources name before it re-saves", "[reimpor
 {
 	const test::SkinnedGltf source("bernini_reimport_migrate_gltf");
 	const ImportedProject   project("bernini_reimport_migrate", source.PackGlb());
+	REQUIRE(project.Store().Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
 
 	const auto before = DerivedFiles(project.dataRoot);
 	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
