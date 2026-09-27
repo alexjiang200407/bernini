@@ -29,11 +29,18 @@ public uint MeshletGroupCount(uint meshletCount)
 // @pre `ordinal` is below the payload's survivor count.
 public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
 {
-    // The last mask word whose earlier survivors number no more than `ordinal` holds it.
+    // The last mask word whose earlier survivors number no more than `ordinal` holds it. Counted to
+    // a constant number of halvings for the same reason the bit loop below is counted to 32: eight
+    // exhausts the cMaxCompactedGroups / 32 words a payload can carry.
     uint lo = 0u;
-    uint hi = (MeshletGroupCount(payload.meshletCount) + 31u) / 32u;
-    while (hi - lo > 1u)
+    uint hi = min((MeshletGroupCount(payload.meshletCount) + 31u) / 32u, cMaxCompactedGroups / 32u);
+    for (uint step = 0u; step < 8u; ++step)
     {
+        if (hi - lo <= 1u)
+        {
+            break;
+        }
+
         let mid = (lo + hi) / 2u;
         let before = (payload.survivorsBefore[mid / 2u] >> ((mid & 1u) * 16u)) & 0xFFFFu;
         if (before <= ordinal)
@@ -48,8 +55,18 @@ public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
 
     uint mask = payload.survivorMask[lo];
     let before = (payload.survivorsBefore[lo / 2u] >> ((lo & 1u) * 16u)) & 0xFFFFu;
-    for (uint skip = ordinal - before; skip > 0u; --skip)
+    let skip = ordinal - before;
+
+    // Counted to the word's width, never to `skip`, though the precondition puts `skip` below it.
+    // Bounded by `skip` alone this loop does not terminate on D3D12 -- the group spins, the queue
+    // wedges and TDR removes the device -- and it does so with the precondition holding, checked.
+    // What it turns on is the trip count being a read of payload memory; 32 is a constant instead.
+    for (uint cleared = 0u; cleared < 32u; ++cleared)
     {
+        if (cleared >= skip)
+        {
+            break;
+        }
         mask &= mask - 1u;
     }
     return lo * 32u + firstbitlow(mask);
