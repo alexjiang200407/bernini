@@ -14,6 +14,7 @@
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/DrawBucket.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -61,26 +62,35 @@ namespace bgl
 				continue;
 			}
 
-			// A bucket never demanded has no kernel -- and, by the same fact, no instances to draw.
-			MeshletKernel* kernel = kernels.BindDrawBucketKernel(bucket, state, draw, resources);
-			if (kernel == nullptr)
+			// Placements at rest, then those dissolving, each lane its own dispatch through its own
+			// pipeline; a lane the cull left empty dispatches nothing (DrawBucketCountIndex).
+			for (const DrawLane lane : { DrawLane::kAtRest, DrawLane::kDissolve })
 			{
-				continue;
-			}
+				// A bucket never demanded has no kernel -- and, by the same fact, no instances.
+				MeshletKernel* kernel =
+					kernels.BindDrawBucketKernel(bucket, lane, state, draw, resources);
+				if (kernel == nullptr)
+				{
+					continue;
+				}
 
-			if (auto expansionData = kernel->FindUniforms("expansionData"))
-			{
-				(*expansionData)["drawBucketIndex"] = bucket;
-				(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
-				(*expansionData)["lodDraw"]         = idl::cLodDrawDissolve;
-				(*expansionData)["cullBackfaces"] =
-					DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
-			}
+				const uint32_t drawLane =
+					lane == DrawLane::kDissolve ? bucket + idl::cDissolveLane : bucket;
+				if (auto expansionData = kernel->FindUniforms("expansionData"))
+				{
+					(*expansionData)["drawBucketIndex"] = drawLane;
+					(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
+					(*expansionData)["lodDraw"] =
+						lane == DrawLane::kDissolve ? idl::cLodDrawDissolve : idl::cLodDrawCurrent;
+					(*expansionData)["cullBackfaces"] =
+						DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
+				}
 
-			state.indirectArgs  = dispatchArgs;
-			state.commandCounts = dispatchArgs;
-			cmd->SetMeshletState(state);
-			cmd->DispatchMeshIndirectCount(bucket, DrawBucketCountIndex(bucket));
+				state.indirectArgs  = dispatchArgs;
+				state.commandCounts = dispatchArgs;
+				cmd->SetMeshletState(state);
+				cmd->DispatchMeshIndirectCount(drawLane, DrawBucketCountIndex(drawLane));
+			}
 		}
 	}
 }

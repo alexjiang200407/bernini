@@ -108,7 +108,8 @@ namespace bgl
 		for (const SceneView::GrassBatch& batch : view.GetGrassBatches())
 		{
 			MeshletKernel* kernel =
-				kernels.BindDrawBucketKernel(batch.bucket, state, draw, resources);
+				kernels
+					.BindDrawBucketKernel(batch.bucket, DrawLane::kAtRest, state, draw, resources);
 			gassert(
 				kernel != nullptr,
 				"a grass batch's bucket was drawn before its kernel was built");

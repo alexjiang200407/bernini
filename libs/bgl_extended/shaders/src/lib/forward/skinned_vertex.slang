@@ -160,7 +160,6 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
 
     ForwardVSOut vertexOut;
     ProjectVertex(vertexOut, worldPos, prevWorldPos);
-    vertexOut.lodDissolve = ctx.lodDissolve;
 
     // The skin matrix carries the bones' rotation, so the basis follows it before the instance
     // transform does. Not renormalized, exactly as the static tier leaves it.

@@ -110,6 +110,10 @@ void main(uint globalIdx: SV_DispatchThreadID)
     {
         bits |= cVisibleOutgoingBit;
     }
+    if (bits != 0u && word.Fading())
+    {
+        bits |= cVisibleDissolvingBit;
+    }
     gUniforms.visibility[globalIdx].visible = bits;
 
 #if defined(BERNINI_GPU_DEBUG)

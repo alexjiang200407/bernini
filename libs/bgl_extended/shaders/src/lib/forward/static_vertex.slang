@@ -22,7 +22,6 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
 
     ForwardVSOut vertexOut;
     ProjectVertex(vertexOut, worldPos, prevWorldPos);
-    vertexOut.lodDissolve = ctx.lodDissolve;
 
     vertexOut.normal = ctx.mesh.TransformDirection(vertex.normal);
     vertexOut.uv = vertex.uv;

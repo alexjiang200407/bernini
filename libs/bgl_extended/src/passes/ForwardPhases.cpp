@@ -83,14 +83,25 @@ namespace bgl
 			bool             blend;
 			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
 			std::string_view geomSrc;
+			// The dissolve lane's entries: MSDissolve and PSDissolve, which carry and read the
+			// placement's dissolve code, beside the at-rest lane's MSMain and PSMain.
+			std::string_view meshEntry  = "MSMain"sv;
+			std::string_view pixelEntry = "PSMain"sv;
 		};
 
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
 		PsoConfig
-		ConfigFor(const DrawBucketDesc& desc)
+		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane)
 		{
-			return PsoConfig{ DrawBucketPixelSrc(desc), DrawBucketCullMode(desc),   true, false,
-				              ComparisonFunc::kLess,    DrawBucketGeometrySrc(desc) };
+			auto config =
+				PsoConfig{ DrawBucketPixelSrc(desc), DrawBucketCullMode(desc),   true, false,
+				           ComparisonFunc::kLess,    DrawBucketGeometrySrc(desc) };
+			if (lane == DrawLane::kDissolve)
+			{
+				config.meshEntry  = "MSDissolve"sv;
+				config.pixelEntry = "PSDissolve"sv;
+			}
+			return config;
 		}
 
 		MeshletPipelineDesc
@@ -98,10 +109,12 @@ namespace bgl
 		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
-			pipelineDesc.ampShader  = device->CreateShader(std::string(cfg.geomSrc), "ASMain");
-			pipelineDesc.meshShader = device->CreateShader(std::string(cfg.geomSrc), "MSMain");
+			pipelineDesc.ampShader = device->CreateShader(std::string(cfg.geomSrc), "ASMain");
+			pipelineDesc.meshShader =
+				device->CreateShader(std::string(cfg.geomSrc), std::string(cfg.meshEntry));
 
-			pipelineDesc.pixelShader = device->CreateShader(std::string(cfg.pixelSrc), "PSMain");
+			pipelineDesc.pixelShader =
+				device->CreateShader(std::string(cfg.pixelSrc), std::string(cfg.pixelEntry));
 
 			pipelineDesc.AddRtvFormat(c_SceneColorFormat);
 
@@ -152,6 +165,12 @@ namespace bgl
 		}
 	}
 
+	bool
+	DrawBucketDissolves(const DrawBucketDesc& desc) noexcept
+	{
+		return desc.geom != GeometryStage::kGrass;
+	}
+
 	void
 	ForwardPhases::Init(const PassInitContext& ctx)
 	{
@@ -170,6 +189,7 @@ namespace bgl
 		if (m_Kernels.size() < count)
 		{
 			m_Kernels.resize(count);
+			m_DissolveKernels.resize(count);
 		}
 
 		for (uint32_t bucket = 0; bucket < count; ++bucket)
@@ -179,9 +199,16 @@ namespace bgl
 				gassert(
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
+				const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
 				ctx.pipelines->Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(ctx.device, ConfigFor(m_DrawBucketTable->Desc(bucket))));
+					ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kAtRest)));
+				if (DrawBucketDissolves(desc))
+				{
+					ctx.pipelines->Add(
+						m_DissolveKernels[bucket],
+						ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kDissolve)));
+				}
 			}
 		}
 	}
@@ -210,6 +237,7 @@ namespace bgl
 	ForwardPhases::CheckBindings() const
 	{
 		CheckKernelNames(m_Kernels);
+		CheckKernelNames(m_DissolveKernels);
 		CheckKernelNames({ &m_TransparentKernel, 1 });
 	}
 
@@ -297,16 +325,18 @@ namespace bgl
 	MeshletKernel*
 	ForwardPhases::BindDrawBucketKernel(
 		const uint32_t     bucket,
+		const DrawLane     lane,
 		MeshletState&      state,
 		const DrawData&    draw,
 		const PassContext& resources)
 	{
-		if (!DrawBucketInitialized(bucket))
+		auto& kernels = lane == DrawLane::kDissolve ? m_DissolveKernels : m_Kernels;
+		if (bucket >= kernels.size() || !kernels[bucket].pipeline.IsInitialized())
 		{
 			return nullptr;
 		}
 
-		MeshletKernel& kernel = m_Kernels[bucket];
+		MeshletKernel& kernel = kernels[bucket];
 		BindKernel(kernel, draw, resources);
 		state.kernel      = &kernel;
 		state.frameBuffer = FrameBuffer()

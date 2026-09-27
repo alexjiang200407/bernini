@@ -64,15 +64,22 @@ namespace bgl
 		}
 
 		// A registered surface's programs, generated rather than shipped because a program has to
-		// name the surface's type.
+		// name the surface's type: PSMain, and PSDissolve for the bucket's dissolve lane.
 		std::string
 		ColorProgramSource(uint32_t slot, std::string_view program)
 		{
 			return std::format(
-				"import {};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
-				"import lib.forward.common;\n\n[shader(\"pixel\")]\n"
+				"import {0};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.common;\nimport "
+				"lib.forward.lod_dissolve;\n\n[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
-				"    return materialData.{}<Slot{}Surface>(input, isFrontFace);\n}}\n",
+				"    return materialData.{1}<Slot{2}Surface>(input, isFrontFace);\n}}\n\n"
+				"[shader(\"pixel\")]\n"
+				"ForwardPSOut PSDissolve(DissolveVSOut input, bool isFrontFace: "
+				"SV_IsFrontFace)\n{{\n"
+				"    DiscardDissolvedLod(input);\n"
+				"    return MarkDissolvedLod(materialData.{1}<Slot{2}Surface>(input.Surface(), "
+				"isFrontFace));\n}}\n",
 				BindingModuleName(slot),
 				program,
 				slot);

@@ -17,14 +17,14 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gGroupCount[cMaxDrawBuckets];
-groupshared uint gGroupBase[cMaxDrawBuckets];
+groupshared Atomic<uint> gGroupCount[cMaxDrawLanes];
+groupshared uint gGroupBase[cMaxDrawLanes];
 
 [shader("compute")]
 [numthreads(cCompactGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    for (uint i = localIdx; i < cMaxDrawBuckets; i += cCompactGroupSize)
+    for (uint i = localIdx; i < cMaxDrawLanes; i += cCompactGroupSize)
     {
         gGroupCount[i].store(0u);
     }
@@ -35,23 +35,25 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     // Skip exactly what the histogram skipped, and scatter as many entries as it counted, or the
     // bucket bases and the scatter disagree.
-    let bits = gUniforms.visibility[globalIdx].visible & (cVisibleCurrentBit | cVisibleOutgoingBit);
+    let visibility = gUniforms.visibility[globalIdx];
+    let bits = visibility.visible & (cVisibleCurrentBit | cVisibleOutgoingBit);
     let entries = countbits(bits);
     let scatters = !instance.meshInstance.Null() && bucket < cMaxDrawBuckets && entries != 0u;
+    let lane = visibility.Lane(bucket);
 
     // No early-out past this point: a thread that does not scatter must still reach every
     // GroupMemoryBarrierWithGroupSync below, or the ones that do scatter hang on it.
     uint groupSlot = 0u;
     if (scatters)
     {
-        groupSlot = gGroupCount[bucket].add(entries);
+        groupSlot = gGroupCount[lane].add(entries);
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // One reservation per bucket per group, and none at all for a bucket this group did not fill.
+    // One reservation per lane per group, and none at all for a lane this group did not fill.
     // Reserving per instance instead makes threadCountX a single contended address -- a scene drawn
     // from one bucket serializes its every instance on it.
-    for (uint i = localIdx; i < cMaxDrawBuckets; i += cCompactGroupSize)
+    for (uint i = localIdx; i < cMaxDrawLanes; i += cCompactGroupSize)
     {
         let count = gGroupCount[i].load();
         gGroupBase[i] = (count != 0u) ? gUniforms.dispatchArgs[i].threadCountX.add(count) : 0u;
@@ -60,8 +62,8 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     if (scatters)
     {
-        let base = (bucket == 0u) ? 0u : gUniforms.drawBucketPrefixSum[bucket - 1u];
-        var slot = base + gGroupBase[bucket] + groupSlot;
+        let base = (lane == 0u) ? 0u : gUniforms.drawBucketPrefixSum[lane - 1u];
+        var slot = base + gGroupBase[lane] + groupSlot;
         if ((bits & cVisibleCurrentBit) != 0u)
         {
             gUniforms.compactedInstances[slot] = globalIdx;

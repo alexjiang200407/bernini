@@ -117,7 +117,7 @@ namespace bgl
 	}
 
 	// 1024 is a compute thread group's maximum; PrefixSumInstances.slang is one group.
-	static_assert(idl::cMaxDrawBuckets <= 1024);
+	static_assert(idl::cMaxDrawLanes <= 1024);
 
 	std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept

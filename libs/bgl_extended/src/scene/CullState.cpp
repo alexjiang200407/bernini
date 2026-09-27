@@ -44,7 +44,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::cMaxDrawBuckets)
+				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Draw Bucket Prefix Sum");
 
 			m_DrawBucketPrefixSum.Init(std::move(desc), resourceManager);
@@ -53,7 +53,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::cMaxDrawBuckets)
+				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);

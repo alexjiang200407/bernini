@@ -201,7 +201,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
+		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(uint32_t);
 		rbDesc.debugName     = "Prefix-Sum Readback";
 		rbPrefixSum[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 	}
@@ -275,7 +275,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		REQUIRE(prefixSum != nullptr);
 
 		// Inclusive scan over the whole ceiling, so the last entry is everything that survived.
-		const uint32_t visible = prefixSum[bgl::idl::cMaxDrawBuckets - 1];
+		const uint32_t visible = prefixSum[bgl::idl::cMaxDrawLanes - 1];
 		resourceManager->UnmapReadback(rbPrefixSum[cullIdx]);
 
 		CHECK(visible == expected[cullIdx].size());

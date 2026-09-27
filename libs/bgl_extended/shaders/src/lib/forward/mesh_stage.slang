@@ -37,7 +37,7 @@ public struct MeshletContext
     public Submesh submesh;
     public Meshlet meshlet;
 
-    // The level's dissolve code for every vertex the group emits; see ForwardVSOut.lodDissolve.
+    // The level's dissolve code for every vertex the group emits; see DissolveVSOut.lodDissolve.
     public float lodDissolve;
 
     // Whether this group's back-facing triangles are the mesh stage's to cull: the draw says its

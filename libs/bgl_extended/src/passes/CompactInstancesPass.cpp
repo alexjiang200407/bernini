@@ -149,8 +149,8 @@ namespace bgl
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
 		draw.cullState->GetCullView().Update(cmd);
 
-		static constexpr std::array<idl::DispatchArgs, idl::cMaxDrawBuckets> c_Seed = [] {
-			std::array<idl::DispatchArgs, idl::cMaxDrawBuckets> seed{};
+		static constexpr std::array<idl::DispatchArgs, idl::cMaxDrawLanes> c_Seed = [] {
+			std::array<idl::DispatchArgs, idl::cMaxDrawLanes> seed{};
 			for (idl::DispatchArgs& args : seed)
 			{
 				args = { 0u, 1u, 1u };

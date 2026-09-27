@@ -8,7 +8,6 @@ import idl.IMaterial;
 import idl.RawEntry;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
-import lib.forward.lod_dissolve;
 import lib.forward.common;
 import lib.geom.vertexdecode;
 import lib.math.HashedAlpha;
@@ -323,32 +322,26 @@ public extension MaterialData
     // program (surface_registry.cpp) is a one-line call to one of these.
     public ForwardPSOut GameOpaqueProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGame<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public ForwardPSOut GameAlphaTestedProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGameAlphaTested<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public ForwardPSOut GameHashedAlphaProgram<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGameHashedAlpha<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public float4 ShadeGame<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
@@ -429,32 +422,26 @@ public extension MaterialData
     // (bgl/LitSurfaceSource.slang), so everything after the forward pass keeps one meaning.
     public ForwardPSOut GameLitOpaqueProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGameLit<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public ForwardPSOut GameLitAlphaTestedProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGameLitAlphaTested<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public ForwardPSOut GameLitHashedAlphaProgram<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
-        DiscardDissolvedLod(input);
-
         ForwardPSOut output;
         output.color = ShadeGameLitHashedAlpha<G>(input, isFrontFace);
         output.motion = ComputeMotionVector(input);
-        return MarkDissolvedLod(output, input);
+        return output;
     }
 
     public float4 ShadeGameLit<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)

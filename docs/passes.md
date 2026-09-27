@@ -431,7 +431,7 @@ threads; past 1024 that scan has to be replaced first.
 It adds **four sub-passes**:
 
 1. **Clear** — zeroes `drawBucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
-   `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
+   `cull.view`, and seeds every lane's `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
    Y = Z = 1). The written buffers are declared copy-dest.
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
    bounding sphere (the placement's transform × the submesh's local sphere) and writes a per-instance
@@ -447,21 +447,24 @@ It adds **four sub-passes**:
    placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
    from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
    the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries
-   `cVisibleCurrentBit` for the level it draws and `cVisibleOutgoingBit` for the one a dissolve is
-   leaving; a placement no one sees, and a forced level, change at once.
-3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** entries per draw bucket -- one
-   per set visibility bit, so a dissolving placement counts twice -- into
+   `cVisibleCurrentBit` for the level it draws, `cVisibleOutgoingBit` for the one a dissolve is
+   leaving and `cVisibleDissolvingBit` while either dissolves; a placement no one sees, and a forced
+   level, change at once.
+3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** entries per draw
+   **lane** -- two a bucket, its id for placements at rest and its id plus `cDissolveLane` for those
+   dissolving (`InstanceVisibility::Lane`); one entry per set level bit, so a dissolving placement
+   counts twice -- into
    `drawBucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
    sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
-   zero. The scan is one thread group of `cMaxDrawBuckets` threads, which is why that constant is a
+   zero. The scan is one thread group of `cMaxDrawLanes` threads, which is why that constant is a
    hard ceiling. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
    no barrier between them; the pass issues the one intra-pass UAV barrier itself — the sanctioned
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
 4. **Compact Instances** — scatters each **visible** instance into `scene.compactedInstances` at its
-   draw bucket's prefix-sum offset -- once per bit, the outgoing level's entry tagged
-   `cOutgoingDrawBit`, which is why the list holds two entries a slot -- and finalizes each draw
-   bucket's dispatch args. Skipped when the instance count
+   draw lane's prefix-sum offset -- once per level bit, the outgoing level's entry tagged
+   `cOutgoingDrawBit`, which is why the list holds two entries a slot -- and finalizes each lane's
+   dispatch args. Skipped when the instance count
    is 0.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`,
@@ -622,14 +625,20 @@ and calls whichever of the two an instance's `MeshInstance` names — see the tr
 **Levels of detail.** A compacted entry draws the level its placement's cull word names -- the
 level it is leaving, for an entry tagged `cOutgoingDrawBit` -- through the geom's
 `LodSubmeshRange::Entry`, resolved once per amplification group (`ResolveLod` in
-`lib/forward/mesh_stage.slang`) and carried to every vertex as `ForwardVSOut.lodDissolve`. How a
-draw reads the word is `ExpansionData.lodDraw`: the bucketed phases dissolve, the depth-sorted list
-swaps at once (a blend has no depth to dither against), and the outline mask, which binds no cull
-output, traces level 0. Every opaque, cutout and hashed pixel program, built-in or generated for a
-game surface, discards a dissolving fragment against a screen-space hash both levels share
-(`lib/forward/lod_dissolve.slang`), so each pixel is covered by exactly one of them, and marks the
-fragment's scene alpha 0 as hashed alpha does, so the resolve accumulates it as coverage. A
-surface's own source does nothing for it.
+`lib/forward/mesh_stage.slang`). A placement dissolving between two levels draws through its
+bucket's **dissolve lane**: the cull tags it `cVisibleDissolvingBit`, the histogram and the
+compaction count and place its entries at the bucket's id plus `cDissolveLane`, and the bucketed
+phase dispatches that lane after the bucket's own through a second pipeline, `MSDissolve` and
+`PSDissolve`. Those entries alone carry the dissolve code (`DissolveVSOut`), discard against a
+screen-space hash both levels share (`lib/forward/lod_dissolve.slang`), so each pixel is covered by
+exactly one of them, and mark the fragment's scene alpha 0 as hashed alpha does, so the resolve
+accumulates it as coverage. A placement at rest runs neither the interpolant nor the discard, which
+in an opaque pipeline would cost the hidden-surface removal of every draw through it. Every
+opaque, cutout and hashed program, built-in or generated for a game surface, has both entries; a
+surface's own source does nothing for it, and a grass bucket has no second lane. How a draw reads
+the word is `ExpansionData.lodDraw`: the bucket's own lane swaps at once, its dissolve lane
+dissolves, the depth-sorted list swaps at once (a blend has no depth to dither against), and the
+outline mask, which binds no cull output, traces level 0.
 
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered

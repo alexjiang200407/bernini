@@ -1,6 +1,7 @@
 // The pixel half of a level-of-detail dissolve: which of a dissolving placement's two levels covers a
 // pixel, and the mark that tells the temporal resolve the result is stochastic coverage. Every
-// opaque, cutout and hashed program calls both; a placement not dissolving pays one comparison.
+// opaque, cutout and hashed program's PSDissolve entry calls both around the shading its PSMain
+// does; only a bucket's dissolve lane draws through it, so a placement at rest pays nothing.
 
 import lib.forward.common;
 import lib.forward.MaterialData;
@@ -24,13 +25,8 @@ public float LodDissolveHash(float2 pixel)
     return float(h >> 8u) * (1.0 / 16777216.0);
 }
 
-public void DiscardDissolvedLod(ForwardVSOut input)
+public void DiscardDissolvedLod(DissolveVSOut input)
 {
-    if (input.lodDissolve == 1.0)
-    {
-        return;
-    }
-
     let hash = LodDissolveHash(input.position.xy);
     let keeps = input.lodDissolve < 1.0 ? hash < input.lodDissolve : hash >= input.lodDissolve - 1.0;
     if (!keeps)
@@ -41,11 +37,8 @@ public void DiscardDissolvedLod(ForwardVSOut input)
 
 // A dissolving pixel is coverage the resolve accumulates, not an opaque edge: alpha 0, as hashed
 // alpha writes (docs/taa.md).
-public ForwardPSOut MarkDissolvedLod(ForwardPSOut output, ForwardVSOut input)
+public ForwardPSOut MarkDissolvedLod(ForwardPSOut output)
 {
-    if (input.lodDissolve != 1.0)
-    {
-        output.color.a = 0.0;
-    }
+    output.color.a = 0.0;
     return output;
 }

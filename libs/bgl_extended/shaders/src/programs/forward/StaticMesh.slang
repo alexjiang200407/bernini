@@ -77,3 +77,59 @@ void MSMain(
         tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
     }
 }
+
+// MSMain for the bucket's dissolve lane: every vertex also carries its placement's dissolve code,
+// which MSMain leaves out so a placement at rest pays no interpolant for it. A copy rather than one
+// generic body because Slang cannot hand mesh outputs to a function on Metal.
+[shader("mesh")]
+[numthreads(cMeshGroupSize, 1, 1)]
+[outputtopology("triangle")]
+void MSDissolve(
+    uint gid: SV_GroupID,
+    uint gtid: SV_GroupThreadID,
+    payload CulledPayload payload,
+    OutputVertices<DissolveVSOut, cMaxVerticesPerMeshlet> verts,
+    OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
+)
+{
+    let meshletIdx = CulledMeshletIndex(payload, gid);
+
+    uint vertexCount = 0u;
+    uint triangleCount = 0u;
+    MeshletContext ctx;
+    bool visible = meshletIdx < payload.meshletCount;
+
+    if (visible)
+    {
+        ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, meshletIdx);
+        visible = LocalSphereInCullFrustum(ctx.mesh, ctx.meshlet.boundingSphere);
+        vertexCount = visible ? ctx.meshlet.vertexCount : 0u;
+        triangleCount = visible ? ctx.meshlet.triangleCount : 0u;
+    }
+
+    SetMeshOutputCounts(vertexCount, triangleCount);
+    if (!visible)
+    {
+        return;
+    }
+
+    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    {
+        let vertex = StaticVertex(ctx, payload.instance, v);
+        verts[v] = DissolveVSOut(vertex, ctx.lodDissolve);
+        if (ctx.cull)
+        {
+            RecordClip(v, vertex.position);
+        }
+    }
+
+    if (DrawCullsBackfaces())
+    {
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
+    {
+        tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
+    }
+}

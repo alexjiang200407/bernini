@@ -8,6 +8,8 @@ import lib.types.UploadBuffer;
 // Which slice of the compacted instance list one dispatch covers.
 public struct ExpansionData
 {
+    // The draw lane: the bucket's id for its placements at rest, or that plus cDissolveLane for
+    // those dissolving (idl DrawBucket).
     public uint drawBucketIndex;
 
     // Where in `compactedInstances` this dispatch's instances start is a GPU value, so what the CPU

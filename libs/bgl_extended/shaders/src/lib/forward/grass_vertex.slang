@@ -51,7 +51,6 @@ public struct GrassVSOut
         surface.clip = clip;
         surface.prevClip = prevClip;
         surface.cameraPrevClip = cameraPrevClip;
-        surface.lodDissolve = 1.0;
         return surface;
     }
 };

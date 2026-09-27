@@ -60,3 +60,44 @@ void MSMain(
         tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
     }
 }
+
+// MSMain for the bucket's dissolve lane: every vertex also carries its placement's dissolve code,
+// which MSMain leaves out so a placement at rest pays no interpolant for it. A copy rather than one
+// generic body because Slang cannot hand mesh outputs to a function on Metal.
+[shader("mesh")]
+[numthreads(cMeshGroupSize, 1, 1)]
+[outputtopology("triangle")]
+void MSDissolve(
+    uint gid: SV_GroupID,
+    uint gtid: SV_GroupThreadID,
+    payload InstancedPayload payload,
+    OutputVertices<DissolveVSOut, cMaxVerticesPerMeshlet> verts,
+    OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
+)
+{
+    let ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, gid);
+
+    SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
+
+    let pose = ResolveSkinnedPose(ctx);
+
+    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    {
+        let vertex = SkinnedVertex(ctx, pose, payload.instance, v);
+        verts[v] = DissolveVSOut(vertex, ctx.lodDissolve);
+        if (ctx.cull)
+        {
+            RecordClip(v, vertex.position);
+        }
+    }
+
+    if (DrawCullsBackfaces())
+    {
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
+    {
+        tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
+    }
+}

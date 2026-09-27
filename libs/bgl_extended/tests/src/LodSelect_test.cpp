@@ -211,7 +211,9 @@ namespace
 	};
 
 	constexpr uint32_t c_Current = bgl::idl::cVisibleCurrentBit;
-	constexpr uint32_t c_Both    = bgl::idl::cVisibleCurrentBit | bgl::idl::cVisibleOutgoingBit;
+	// Both levels, in the bucket's dissolve lane.
+	constexpr uint32_t c_Both = bgl::idl::cVisibleCurrentBit | bgl::idl::cVisibleOutgoingBit |
+	                            bgl::idl::cVisibleDissolvingBit;
 
 	// The draw-nothing tier of a three-level mesh reads back as level 3.
 	constexpr auto c_Nothing = static_cast<bgl::LodLevel>(3);
