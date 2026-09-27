@@ -83,13 +83,8 @@ namespace assetlib
 		// rather than a binding: it changes the samples the importer writes, so it has to key.
 		std::vector<ClipFloor> clipFloors;
 
-		/**
-		 * The mesh's levels of detail, one `MeshLod::minPixels` per level starting at level 0; the
-		 * last level's entry is the draw-nothing size (0: never dropped). Non-increasing. The levels
-		 * themselves are the source's `<mesh>_LOD<n>` meshes; a level this list does not reach
-		 * takes the cook's default. A parameter: it is written into the `.bmesh`, so it has to
-		 * key. Empty for a source that authors none.
-		 */
+		// One `MeshLod::minPixels` per level from 0, non-increasing; a level past the list takes the
+		// cook's default. A parameter because the `.bmesh` stores it.
 		std::vector<float> lodMinPixels;
 
 		/**

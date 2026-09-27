@@ -85,7 +85,6 @@ TEST_CASE("Every geom kind uploads a record naming its submeshes", "[geom]")
 
 		// One level, so the whole range is that level's submeshes.
 		CHECK(onGpu.lodCount == 1u);
-		CHECK(onGpu.submeshCount == onCpu.count);
 
 		// Element 0 is the arena's reserved null, so a live geom never lands on it -- which is what
 		// lets a placement's Entry<Geom> mean "no geom" by being zero.

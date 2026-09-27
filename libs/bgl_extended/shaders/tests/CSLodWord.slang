@@ -24,7 +24,7 @@ void main()
     gUniforms.words[4] = InstanceLod.Make(7u, true, 6u, 1.0);
 
     Geom geom;
-    geom.submeshCount = 3u;
+    geom.submeshes.count = 6u;
     geom.lodCount = 2u;
     gUniforms.entries[0] = geom.SubmeshEntry(0u, 0u);
     gUniforms.entries[1] = geom.SubmeshEntry(0u, 2u);

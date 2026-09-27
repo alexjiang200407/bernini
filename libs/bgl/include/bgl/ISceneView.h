@@ -367,7 +367,9 @@ namespace bgl
 		/**
 		 * Sets how this view chooses each placement's level of detail -- see LodSelectionDesc.
 		 * Replaces the previous choice; a view that never calls this draws every mesh as authored.
-		 * Per view, like the light: two views of one Scene may hold detail differently.
+		 * Per view, like the light: two views of one Scene may hold detail differently. A setting
+		 * rather than a per-frame or per-placement call -- set it when the view is made or its
+		 * quality changes; each placement's level is the cull's to choose.
 		 *
 		 * Takes effect on the next frame this view is drawn, through the same dissolve a change of
 		 * size causes, so it is not an epoch change.
