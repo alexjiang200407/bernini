@@ -14,8 +14,10 @@ tests/embed is the only consumer in the repository. Every other build here is th
 building itself, where a path built from CMAKE_SOURCE_DIR is right and stays right through
 any refactor -- so without this the property is invisible to the whole suite. A configure
 proves the build; compiling main.cpp proves the public include surface, which a configure
-cannot see. Running it proves the renderer's library loads beside the executable and that the
-shaders and assets it resolves from its working directory were staged there. See docs/embedding.md.
+cannot see. Before it runs, `otool -L` or `dumpbin /dependents` says which of the engine's own
+libraries it loads, and each must be one the engine build made shared. Running it proves those
+load beside the executable and that the shaders and assets it resolves from its working directory
+were staged there. See docs/embedding.md.
 
 --package consumes the configured preset's build instead of compiling the engine into this tree:
 it builds that build's `bernini_package` target, then configures tests/embed with Bernini_DIR at
@@ -94,6 +96,68 @@ def report_cache(before, after):
         return
 
     print(f"Compiler cache: {hits}/{total} hits ({100 * hits // total}%), {misses} compiled.")
+
+
+# --- Linkage ---------------------------------------------------------------
+
+# The engine's own libraries that are a separate file beside the executable in some builds.
+ENGINE_LIBRARIES = ("bgl_extended", "core_process")
+
+
+def library_name(path):
+    """`bgl_extended` for `@rpath/libbgl_extended.dylib` or `bgl_extended.dll`."""
+    name = os.path.basename(path).split(".", 1)[0]
+    return name[3:] if name.startswith("lib") else name
+
+
+def parse_otool(output):
+    """The libraries `otool -L` lists, skipping its first line, which names the binary itself."""
+    names = set()
+    for line in output.splitlines()[1:]:
+        line = line.strip()
+        if line:
+            names.add(library_name(line.split(" (", 1)[0]))
+    return names
+
+
+def parse_dumpbin(output):
+    """The DLLs `dumpbin /dependents` lists: the indented lines between its header and summary."""
+    names = set()
+    for line in output.splitlines():
+        line = line.strip()
+        if line.lower().endswith(".dll"):
+            names.add(library_name(line))
+    return names
+
+
+def linked_libraries(exe, env):
+    """The names of the libraries `exe` loads at start-up, or None when no tool here can say."""
+    if sys.platform == "darwin":
+        cmd, parse = ["otool", "-L", exe], parse_otool
+    elif sys.platform == "win32":
+        cmd, parse = ["dumpbin", "/nologo", "/dependents", exe], parse_dumpbin
+    else:
+        return None
+    try:
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    except OSError:
+        return None
+    return parse(result.stdout) if result.returncode == 0 else None
+
+
+def linkage_mismatches(linked, expected):
+    """Every engine library whose presence in `linked` is not what `expected` says, described."""
+    wrong = []
+    for name in ENGINE_LIBRARIES:
+        if (name in linked) != expected[name]:
+            wrong.append(f"{name} is {'' if name in linked else 'not '}a library it loads, and the "
+                         f"engine build says it {'is' if expected[name] else 'is not'} one")
+    return wrong
+
+
+def expected_linkage():
+    """Which engine libraries the executable must load from beside it: every one, in every build."""
+    return {name: True for name in ENGINE_LIBRARIES}
 
 
 # --- Configure -------------------------------------------------------------
@@ -245,7 +309,18 @@ def main():
         print()
         report_cache(before, ccache_stats(ccache))
 
-    rc = subprocess.run([os.path.join(bin_dir, EXE_NAME)], cwd=bin_dir).returncode
+    exe = os.path.join(bin_dir, EXE_NAME)
+    linked = linked_libraries(exe, env)
+    if linked is None:
+        print("Linkage: no otool or dumpbin here, so which engine libraries it loads is unchecked.")
+    else:
+        wrong = linkage_mismatches(linked, expected_linkage())
+        if wrong:
+            print(f"\n{EXE_NAME} is linked against the wrong engine libraries:\n  " +
+                  "\n  ".join(wrong), file=sys.stderr)
+            return 1
+
+    rc = subprocess.run([exe], cwd=bin_dir).returncode
     if rc != 0:
         print(f"\n{EXE_NAME} exited {rc}: it links but does not run from {bin_dir}.",
               file=sys.stderr)
