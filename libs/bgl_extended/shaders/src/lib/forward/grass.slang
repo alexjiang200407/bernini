@@ -42,41 +42,45 @@ public float4 UnpackColor(uint packed)
     return float4(packed & 0xffu, (packed >> 8u) & 0xffu, (packed >> 16u) & 0xffu, packed >> 24u) / 255.0;
 }
 
-// The share of a chunk's blades kept at `distance`: all of them up to fadeStart, none past fadeEnd.
-public float KeptShare(GrassLook look, float distance)
+// How much of its size every blade of a field keeps at `distance`: all of it up to fadeStart, none
+// past fadeEnd, linearly between. The field shrinks as one rather than thinning by count: at a
+// runner's speed every blade of a verge crosses whatever threshold a count sets, and each one
+// switching -- or even shrinking -- on its own reads as patches of grass swapping in and out.
+public float FadeScale(GrassLook look, float distance)
 {
     return saturate(1.0 - (distance - look.fadeStart) / (look.fadeEnd - look.fadeStart));
 }
 
-// The narrowest a drawn blade's root may project, in pixels, and the most any one blade widens to
-// get there. A blade thinner than this costs its rasterization and shows nothing that fewer, wider
-// ones would not.
-public static const float cGrassMinBladePixels = 8.0;
-public static const float cGrassMaxScreenWidening = 4.0;
+// The fewest pixels a blade's height may span and still be drawn. Below it the blade shows nothing,
+// so dropping it cannot be seen.
+public static const float cGrassMinBladeHeightPixels = 1.0;
 
 // Pixels a blade's height spans per segment before another segment is worth drawing.
 public static const float cGrassPixelsPerSegment = 6.0;
 
-// How a field thins at `distance`: the share of its blades kept -- the look's fade, and on top of it
-// whatever keeps the survivors at least cGrassMinBladePixels wide on screen -- and how much wider
-// the survivors grow to hold the field's cover. `pixelsPerUnit` is what one world unit spans at a
-// distance of one.
+// How a blade is sized at `distance`: `scale` multiplies its height and width, and `widen` its width
+// again, so a fading blade narrows more slowly than it shortens (the look's `widening`).
 public struct Thinning
 {
-    public float kept;
+    public float scale;
     public float widen;
 };
 
-public Thinning ThinningAt(GrassLook look, float distance, float pixelsPerUnit)
+public Thinning ThinningAt(GrassLook look, float distance)
 {
-    let fade = KeptShare(look, distance);
-    let rootPixels = look.rootWidth * pixelsPerUnit / max(distance, 1e-3);
-    let screen = saturate(rootPixels / cGrassMinBladePixels);
+    let scale = FadeScale(look, distance);
 
     Thinning thinning;
-    thinning.kept = fade * screen;
-    thinning.widen = (1.0 + look.widening * (1.0 - fade)) / max(screen, 1.0 / cGrassMaxScreenWidening);
+    thinning.scale = scale;
+    thinning.widen = 1.0 + look.widening * (1.0 - scale);
     return thinning;
+}
+
+// Whether a blade `height` tall, already scaled, spans enough of the screen at `distance` to draw.
+// `pixelsPerUnit` is what one world unit spans at a distance of one.
+public bool BladeVisible(float height, float distance, float pixelsPerUnit)
+{
+    return height * pixelsPerUnit / max(distance, 1e-3) >= cGrassMinBladeHeightPixels;
 }
 
 // Segments along a blade at `distance`: from nearSegments at the camera to farSegments at fadeEnd,
@@ -95,7 +99,8 @@ public uint SegmentsAt(GrassLook look, float distance, float bladeHeight, float 
 // and half the widest blade.
 public float BladeReach(GrassLook look, float heightScale)
 {
-    let widest = look.rootWidth * (1.0 + look.widening) * cGrassMaxScreenWidening;
+    // A fading blade's scale is at most 1, so its widening never takes it past this.
+    let widest = look.rootWidth * (1.0 + look.widening);
     return look.maxHeight * heightScale * 1.25 + 0.5 * widest;
 }
 
@@ -107,8 +112,7 @@ public uint BladesPerGroup(uint segments, uint maxVertices, uint maxPrims)
 }
 
 // The clump and the blade within it that blade `b` of a chunk of `clumpCount` clumps is. Blades
-// interleave across clumps, so keeping the first K of a chunk thins every clump evenly and drops
-// one blade at a time as K falls.
+// interleave across clumps, so a mesh group's run of blades spreads over the chunk's clumps.
 public void BladeAddress(uint b, uint clumpCount, out uint clump, out uint bladeInClump)
 {
     clump = b % clumpCount;
