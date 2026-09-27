@@ -5,8 +5,8 @@ managing resources. It is also the offline asset-cook host — artists export gl
 editor imports it (via assetlib) and converts it into the game-ready format.
 
 - CMake targets: `editor_lib` (host), `editor` (just `main.cpp`), `editor_tests`.
-  `plugins/default_editor` owns Material, Animation and Blend Space and their authoring code; it
-  links only public engine/editor contracts and SDK helpers. The host creates all three through
+  `plugins/default_editor` owns Material, Animation, Blend Space and Grass and their authoring code; it
+  links only public engine/editor contracts and SDK helpers. The host creates all four through
   registered factories and routes document opens by the registered extension.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.

@@ -161,6 +161,10 @@ private:
 	void
 	SetUpFrameStats();
 
+	// Puts `dock`'s viewports on the frame-time readout while the dock is the one shown.
+	void
+	WatchFrameStats(QDockWidget* dock);
+
 	void
 	ClearFrameStats() noexcept;
 
@@ -214,6 +218,11 @@ private:
 	void
 	ShowPluginPanel(std::string_view id);
 
+	// Lists every asset editor with no dock yet in the Window menu, beside the docks that exist: an
+	// asset editor is built when a document first opens, and was otherwise reachable only that way.
+	void
+	ListUnopenedAssetEditors();
+
 	void
 	OpenPluginAsset(std::string_view key);
 
@@ -256,11 +265,13 @@ private:
 	std::unique_ptr<editor::plugins::PluginSession> m_Plugins;
 	std::unique_ptr<editor::plugins::EditorHost>    m_EditorHost;
 	core::str::unordered_str_map<PluginDock>        m_PluginDocks;
-	std::unique_ptr<assetlib::Project>              m_Project;
-	ContentExplorerWindow*                          m_ContentExplorer     = nullptr;
-	QDockWidget*                                    m_EditorDockAnchor    = nullptr;
-	QDockWidget*                                    m_ContentExplorerDock = nullptr;
-	QLabel*                                         m_FrameStats          = nullptr;
+	// The Window menu entry of each asset editor not built yet, which its dock's toggle replaces.
+	core::str::unordered_str_map<QAction*> m_UnopenedEditors;
+	std::unique_ptr<assetlib::Project>     m_Project;
+	ContentExplorerWindow*                 m_ContentExplorer     = nullptr;
+	QDockWidget*                           m_EditorDockAnchor    = nullptr;
+	QDockWidget*                           m_ContentExplorerDock = nullptr;
+	QLabel*                                m_FrameStats          = nullptr;
 
 	// The viewport the readout is currently about, or null when none is visible. A viewport that
 	// leaves the frame loop stops reporting, so without this its last figures would stay on the

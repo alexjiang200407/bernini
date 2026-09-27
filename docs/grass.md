@@ -29,6 +29,12 @@ square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That i
 opens the same patch in a window with a fly camera, and changes the wind as it runs: `[` `]` its
 strength, `,` `.` its heading, `G` the gusts.
 
+In the editor a `.bgrass` opens in the **Grass Editor**: every value of the look beside a patch of it
+in a wind the panel sets and never saves. An edit is drawn at once and written on Save, or when the
+panel closes with it pending: `AssetManager::SetGrassLook` puts the unsaved document on the look in
+place, and a patch whose look could not be drawn as stored is grown from the document instead. Where
+the clumps go is the mesh source's, and is not edited there.
+
 ## A blade
 
 A blade is a quadratic Bézier strip, built from its clump and a hash of its index
@@ -65,22 +71,24 @@ differs from the last, and the velocity says so.
 
 ## Distance
 
-Two things fall off with distance: the look's fade, and what the screen can show.
+Two things fall off with distance: how large every blade is, and how finely it is built.
 
-- **How many blades.** All of them up to `fadeStart`, none past `fadeEnd`, linearly between
-  (`KeptShare`) -- and on top of that, the engine keeps only as many as stay at least
-  `cGrassMinBladePixels` (8) wide at the root on the render grid, widening the survivors by the
-  inverse, up to four times, so the field holds its cover (`ThinningAt`). A blade narrower than that
-  costs its rasterization and shows nothing fewer, wider ones would not; the rule follows the render
-  grid, so the same look thins sooner at a lower resolution or a wider field of view. Blades are addressed interleaved across a chunk's clumps -- blade `b` is clump
-  `b % clumpCount`'s blade `b / clumpCount` -- so keeping the first K of a chunk thins every clump
-  evenly. The amplification group launches enough mesh groups for the share kept at the chunk's
-  *nearest* point, and each mesh group keeps a blade only if its index is under the share at the
-  blade's *own* root. So a field thins smoothly across a chunk rather than in steps between chunks.
+- **How large.** Every blade is whole up to `fadeStart` and shrinks, height and width together, to
+  nothing at `fadeEnd`, linearly between (`FadeScale`, `ThinningAt`); the look's `widening` makes a
+  fading blade narrow more slowly than it shortens. The whole field shrinks as one: **no blade is
+  dropped while it can be seen**. The only blades not drawn are those whose height spans less than
+  `cGrassMinBladeHeightPixels` (1) on the render grid (`BladeVisible`), which show nothing; a chunk
+  whose largest blade, at its *nearest* point, is under that launches no mesh groups at all.
+
+  Thinning by count was tried first and replaced. A share of the blades kept by index -- down with the
+  fade, and further to keep survivors 8 px wide -- is cheaper, but every blade crosses its threshold
+  as the camera moves, and at a runner's speed that read as patches of grass swapping in and out.
+  Shrinking a blade across a band of the share instead of dropping it softened the switch and did not
+  end it. What is left of a fading field is short grass settling into the ground, which the look's
+  ground-normal blend (below) makes read as the ground itself.
 - **How finely.** Segments along a blade go from `nearSegments` at the camera to `farSegments` at
   `fadeEnd`, and no more than one per `cGrassPixelsPerSegment` (6) pixels of the blade's height on
-  screen, chosen once per chunk at its nearest point. As the fade thins blades, the survivors also
-  widen by the look's `widening`.
+  screen, chosen once per chunk at its nearest point.
 
 A mesh group holds as many blades as fit its 64 vertices and 124 triangles at the chunk's segment
 count: 16 at one segment, 8 at three, 4 at seven.
@@ -137,37 +145,37 @@ verge at 4K with 0.667 render scale and prints the `Forward Grass 0` row. The co
 emitted, about half of it in the mesh stage and half in rasterizing them -- distant blades are
 thinner than a pixel, the worst case for a rasterizer -- while the amplification stage is near free.
 
-Screen-size thinning took that verge, fading over 10-60 m, from 2.0 ms to 1.13 ms (best of three
-runs; single runs on the M-series machine vary by up to 2x with the GPU's clock). The threshold is
-the trade: 6 px read 1.32 ms and is indistinguishable from no thinning, 12 px read 0.88 ms with far
-grass visibly chunky. The rest is the look's own density near the camera: the same verge fading over
-5-20 m cost 0.83 ms before thinning. Per-blade frustum rejection in the mesh stage was tried and
-saved nothing on a verge the camera looks along, so it is not there.
+Fading by size rather than count draws every blade inside the fade, and that verge fades over
+10-60 m: 2.5 ms against the 1.27 ms thinning by count cost it (both in the debug build, best of
+three; single runs on the M-series machine vary by up to 2x with the GPU's clock). Most of it is the
+far half of the fade, where blades are thinner than a pixel. A look pays for its fade distance: the
+same verge fading over 5-20 m cost 0.83 ms before any thinning, and animal-run's verge, fading over
+12-45 m, draws in 0.46 ms at 4K in a release build. Per-blade frustum rejection in the mesh stage was
+tried and saved nothing on a verge the camera looks along, so it is not there.
 
 Lighting took the same verge from 1.12 ms to about 1.25 ms. The tint interpolant is 0.04 ms of that
 and the translucency term the rest, paid whether a look uses it or not: branching on its strength
 saved nothing measurable. Carrying the translucency as a flat per-vertex attribute instead cost
 0.42 ms, and as an interpolated one 0.18 ms, which is why the program reads it from the look.
 
-At landing the test verge draws in 1.25 ms (best of three). The reference it was set beside is
-animal-run's street, whose grass is baked into its mesh and costs Forward World 0.82 ms; the verge is
-shaped after that street, not the same field. The difference buys wind, a field that thins and
-coarsens rather than popping, and no grass geometry in the file.
+The reference the test verge was set beside is animal-run's street, whose grass was baked into its
+mesh. That street now grows GPU grass, and at 4K in a release build its Forward World and Forward
+Grass together cost 2.33 ms against the 2.56 ms Forward World its baked grass cost; the difference
+buys wind, a field that fades rather than popping, and no grass geometry in the file.
 
 ## Where it comes from
 
 - **The blade and the field.** A blade as a tapered strip of solid triangles along a quadratic
-  Bezier, fewer segments far away, and a field that thins per blade with distance while the
-  survivors widen to hold its cover: Ghost of Tsushima's grass (Eric Wohllaib, "Procedural Grass in
-  'Ghost of Tsushima'", GDC 2021). Tsushima places and culls blades in a compute pass writing an
+  Bezier, fewer segments far away: Ghost of Tsushima's grass (Eric Wohllaib, "Procedural Grass in
+  'Ghost of Tsushima'", GDC 2021). Tsushima also thins its field per blade with distance, widening
+  the survivors; the engine did too, and fades the whole field by size instead (Distance, above). Tsushima places and culls blades in a compute pass writing an
   indirect draw; here the mesh stage builds them, with no blade buffer (ADR-1 of the plan).
 - **The blade's three control points.** The root, a guide at the blade's height above it, and the
   tip, with forces acting on the tip: Jahrmann and Wimmer, "Responsive Real-Time Grass Rendering
   for General 3D Scenes", I3D 2017. `PoseBlade` holds the rest pose; wind is its first force.
 - **The interleaved addressing is the engine's own.** Numbering blades across a chunk's clumps
-  (`BladeAddress`) so that keeping the first K thins every clump evenly is what lets a chunk launch
-  mesh groups for only the blades it keeps. Neither source does this: Tsushima's compute pass
-  compacts survivors instead.
+  (`BladeAddress`), so a mesh group's run of blades spreads over the chunk; Tsushima's compute pass
+  compacts its blades into a buffer instead.
 - **The lighting terms.** A normal rounded across the blade's width, blended toward the terrain's
   with distance, and a translucency term for the sun behind a blade: Tsushima again. Turning each
   blade's face toward the camera is the engine's own, so a blade needs no back-face flip.
@@ -182,8 +190,8 @@ coarsens rather than popping, and no grass geometry in the file.
 - Grass does not follow deforming ground: clumps are in their mesh's space, and only a static geom
   takes grass.
 - Blades are not in a shadow map, and do not collide.
-- There is no grass editor: a `.bgrass` is edited as text and looked at with
-  `bgl_ai_viewer --grass`.
+- Clumps are not placed in the editor: a field is its mesh source's `POINTS`, authored where the
+  mesh is.
 
 ## Kept open
 

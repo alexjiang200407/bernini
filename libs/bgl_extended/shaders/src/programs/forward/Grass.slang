@@ -92,12 +92,12 @@ void ASMain(uint3 gid: SV_GroupID)
 
         if (visible)
         {
-            // The nearest any blade of the chunk can be: the most it can keep.
+            // The nearest any blade of the chunk can be, where it is largest: a chunk whose largest
+            // blade is too small to see launches nothing, and otherwise every blade.
             let nearest = max(0.0, distance(grassData.cameraPos, world.xyz) - world.w);
             let total = chunk.clumpCount * look.bladesPerClump;
-            let thinning = ThinningAt(look, nearest, grassData.pixelsPerUnit);
-            let kept = min(total, uint(ceil(float(total) * thinning.kept)));
             let tallest = look.maxHeight * chunk.maxHeightScale;
+            let kept = BladeVisible(tallest * ThinningAt(look, nearest).scale, nearest, grassData.pixelsPerUnit) ? total : 0u;
             let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
             let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
 
@@ -147,7 +147,6 @@ void MSMain(
     let look = grassData.looks.Get(draw.look);
     let chunk = grassData.chunks[chunkRef.chunk];
     let mesh = forwardData.meshBuffer.Get(draw.mesh);
-    let total = chunk.clumpCount * look.bladesPerClump;
 
     let first = gid * launch.bladesPerGroup;
     let last = min(launch.keptBlades, first + launch.bladesPerGroup);
@@ -158,8 +157,8 @@ void MSMain(
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // Each blade kept or dropped against its own distance, so the field thins smoothly across a
-    // chunk rather than in steps between chunks. The order survivors land in does not matter.
+    // A blade too small to see where it stands is dropped; every other one is drawn, sized by its own
+    // distance. The order survivors land in does not matter.
     let b = first + gtid;
     if (b < last)
     {
@@ -168,8 +167,9 @@ void MSMain(
         BladeAddress(b, chunk.clumpCount, clumpLocal, bladeInClump);
         let clump = grassData.clumps[chunk.firstClump + clumpLocal];
         let rootWorld = mesh.TransformPoint(clump.position.xyz);
-        let thinning = ThinningAt(look, distance(grassData.cameraPos, rootWorld), grassData.pixelsPerUnit);
-        if (float(b) < float(total) * thinning.kept)
+        let away = distance(grassData.cameraPos, rootWorld);
+        let tallest = look.maxHeight * clump.position.w * ThinningAt(look, away).scale;
+        if (BladeVisible(tallest, away, grassData.pixelsPerUnit))
         {
             uint slot;
             InterlockedAdd(gSurvivorCount, 1u, slot);
@@ -199,19 +199,23 @@ void MSMain(
         uint bladeInClump;
         BladeAddress(gSurvivors[gtid], chunk.clumpCount, clumpLocal, bladeInClump);
         let clumpIndex = chunk.firstClump + clumpLocal;
-        let shape = MakeBladeShape(look, grassData.clumps[clumpIndex], clumpIndex, bladeInClump);
+        var shape = MakeBladeShape(look, grassData.clumps[clumpIndex], clumpIndex, bladeInClump);
         let wind = ViewWind();
+        let rootWorld = mesh.TransformPoint(shape.root);
+        let distanceToCamera = distance(grassData.cameraPos, rootWorld);
+        let thinning = ThinningAt(look, distanceToCamera);
+        // A survivor's scale is above zero; the floor keeps its placed height a length to divide by.
+        let scale = max(thinning.scale, 1e-3);
+        shape.height *= scale;
         let placed = PlacedShape(mesh, shape, false);
         let placedBefore = PlacedShape(mesh, shape, true);
-        let distanceToCamera = distance(grassData.cameraPos, placed.root);
-        let thinning = ThinningAt(look, distanceToCamera, grassData.pixelsPerUnit);
 
         PosedBlade posed;
         posed.now = PoseAt(look, wind, placed, viewData.time);
         posed.before = PoseAt(look, wind, placedBefore, viewData.prevTime);
         posed.side = placed.side;
         posed.sideBefore = placedBefore.side;
-        posed.width = look.rootWidth * thinning.widen;
+        posed.width = look.rootWidth * thinning.widen * scale;
 
         // One side per blade, judged at its middle, so a bending blade never shades half from each.
         let middleFace = cross(placed.side, BezierTangent(posed.now, 0.5));

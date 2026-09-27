@@ -50,17 +50,17 @@ namespace bgl
 	};
 
 	/**
-	 * How the field thins with distance from the camera: every blade is kept up to `fadeStart`,
-	 * none past `fadeEnd`, and the kept share falls linearly between. A blade is kept by comparing
-	 * a hash of its index against that share, so blades vanish one at a time rather than in bands.
+	 * How the field fades with distance from the camera: every blade is whole up to `fadeStart`, and
+	 * every blade shrinks together, linearly, to nothing at `fadeEnd`. No blade is dropped while it
+	 * can be seen, so none appears or vanishes on its own as the camera moves.
 	 */
 	struct GrassDensityDesc
 	{
 		float fadeStart = 10.0f;
 		float fadeEnd   = 60.0f;
 
-		// A surviving blade's width is multiplied by 1 + widening * (1 - kept share), so the field's
-		// coverage holds as it thins. Zero keeps every blade its authored width.
+		// A fading blade's width is multiplied by 1 + widening * (1 - its scale) on top of the scale,
+		// so it narrows more slowly than it shortens. Zero shrinks width and height alike.
 		float widening = 1.0f;
 	};
 
