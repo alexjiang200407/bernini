@@ -1,3 +1,4 @@
+#include "CountingFileSystem.h"
 #include "RefsSandbox.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
@@ -13,6 +14,7 @@
 #include <assetlib_structs/GrassGeometry.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 #include <filesystem>
 #include <memory>
@@ -42,8 +44,15 @@ TEST_CASE(
 	mesh.source.stamp                 = stampOf(root.path / document.source);
 	mesh.source.parametersHash        = parametersHashOf(document);
 	store.Save(mesh, output);
-	const auto before = store.GetFiles().Read(output);
-	const auto graph  = root.Scan();
+	const auto       before   = store.GetFiles().Read(output);
+	const auto       loose    = std::make_shared<core::file::LooseFileSystem>(root.path);
+	const auto       counting = std::make_shared<CountingFileSystem>(*loose);
+	const AssetStore counted(root.path, counting);
+	CHECK(
+		counted.LoadRegenMeshRefs(output).materials ==
+		std::vector<std::string>{ "Authored/Materials/road.bmaterial" });
+	CHECK(counting->ReadsOf(document.source) == 0);
+	const auto graph = root.Scan();
 	CHECK_THROWS(planRename(graph, output, "Derived/Meshes/renamed.bmesh"));
 	std::filesystem::create_directories(root.path / "Authored/Meshes/town");
 	const auto plan = planRename(graph, document.source, "Authored/Meshes/town/avenue.glb");

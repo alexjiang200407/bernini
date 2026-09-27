@@ -93,7 +93,8 @@ namespace assetlib
 			std::string_view  path,
 			uint32_t          magic,
 			uint64_t          bakeToken,
-			std::string_view  what)
+			std::string_view  what,
+			bool              compareSource = true)
 		{
 			MountedFileReader reader(store.GetFiles(), path, what);
 			CheckedKey        checked{ cache::peekKey(reader, magic, what), {}, false };
@@ -138,9 +139,12 @@ namespace assetlib
 
 			// An absent source cannot be compared, so it stales nothing: the entry stays current
 			// while its token holds, which is what keeps a project missing its sources loadable.
-			const SourceStamp stamp = stampOf(store.GetFiles(), checked.key.source.key);
-			if (stamp != SourceStamp() && stamp != checked.key.source.stamp)
-				checked.stale = true;
+			if (compareSource)
+			{
+				const SourceStamp stamp = stampOf(store.GetFiles(), checked.key.source.key);
+				if (stamp != SourceStamp() && stamp != checked.key.source.stamp)
+					checked.stale = true;
+			}
 
 			return checked;
 		}
@@ -289,7 +293,7 @@ namespace assetlib
 	AssetStore::LoadRegenMeshRefs(std::string_view path) const
 	{
 		const CheckedKey checked =
-			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
+			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh", false);
 		if (checked.document)
 		{
 			MeshRefs refs;
