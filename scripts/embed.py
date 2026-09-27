@@ -15,7 +15,8 @@ building itself, where a path built from CMAKE_SOURCE_DIR is right and stays rig
 any refactor -- so without this the property is invisible to the whole suite. A configure
 proves the build; compiling main.cpp proves the public include surface, which a configure
 cannot see. Before it runs, `otool -L` or `dumpbin /dependents` says which of the engine's own
-libraries it loads, and each must be one the engine build made shared. Running it proves those
+libraries it loads: both where the engine build made the renderer a DLL, neither where it made it
+static. Running it proves those
 load beside the executable and that the shaders and assets it resolves from its working directory
 were staged there. See docs/embedding.md.
 
@@ -155,9 +156,11 @@ def linkage_mismatches(linked, expected):
     return wrong
 
 
-def expected_linkage():
-    """Which engine libraries the executable must load from beside it: every one, in every build."""
-    return {name: True for name in ENGINE_LIBRARIES}
+def expected_linkage(cache):
+    """Which engine libraries the executable must load from beside it, per the CMake cache of the
+    build that made the engine: both where the renderer is a DLL, neither where it is static."""
+    shared = cache.get("BERNINI_RENDERER_LIBRARY_TYPE") == "SHARED"
+    return {name: shared for name in ENGINE_LIBRARIES}
 
 
 # --- Configure -------------------------------------------------------------
@@ -314,7 +317,9 @@ def main():
     if linked is None:
         print("Linkage: no otool or dumpbin here, so which engine libraries it loads is unchecked.")
     else:
-        wrong = linkage_mismatches(linked, expected_linkage())
+        # A subdirectory build configured the engine itself; a package's is the engine build's.
+        wrong = linkage_mismatches(linked, expected_linkage(
+            ct.read_cache(engine_dir if args.package else build_dir)))
         if wrong:
             print(f"\n{EXE_NAME} is linked against the wrong engine libraries:\n  " +
                   "\n  ".join(wrong), file=sys.stderr)

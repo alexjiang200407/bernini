@@ -26,16 +26,15 @@ find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config fo
 find_package(Tracy CONFIG REQUIRED)
 
 # The state that is wrong when doubled, which core -- static, and linked into every binary -- cannot
-# hold. Shared wherever the renderer is, since the renderer is a DLL. See docs/core_process.md.
+# hold. Shared exactly where the renderer is, the one decision the root makes for both. See
+# docs/core_process.md.
 file(GLOB_RECURSE CORE_PROCESS_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/process/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/process/*.h
 )
 
-if (RENDERER_BACKEND STREQUAL "NONE")
-    add_library(core_process STATIC ${CORE_PROCESS_SOURCES})
-else()
-    add_library(core_process SHARED ${CORE_PROCESS_SOURCES})
+add_library(core_process ${BERNINI_RENDERER_LIBRARY_TYPE} ${CORE_PROCESS_SOURCES})
+if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
     target_compile_definitions(core_process
         PUBLIC CORE_PROCESS_SHARED
         PRIVATE CORE_PROCESS_EXPORTS)

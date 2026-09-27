@@ -116,7 +116,8 @@ Two things every manual invocation must get right:
   shards each suite four ways — otherwise overwrite one file, and the merge sees a single shard.
   Relative patterns scatter profiles into whatever each process's cwd is.
 * **`llvm-cov` reports only the binary images it is handed, and omission is silent** — exit 0, no
-  warning. `bgl_extended` is a shared library, so nearly all of `libs/bgl_extended` lives in `libbgl_extended.dylib`; a
+  warning. The coverage preset is a top-level build with Qt, so `bgl_extended` is a shared library there (the
+editor SDK implies it; [core_process.md](core_process.md#linkage)) and nearly all of `libs/bgl_extended` lives in `libbgl_extended.dylib`; a
   report for any suite that loads it (`editor_tests`, the examples) must pass
   `-object $BIN/libbgl_extended.dylib`, or everything that lives in the dylib is missing — a few
   header-inline rows compiled into the executable still appear, which is exactly what makes the

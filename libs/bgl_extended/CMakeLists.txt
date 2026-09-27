@@ -81,14 +81,16 @@ if(RENDERER_BACKEND STREQUAL "NONE")
 	return()
 endif()
 
+# STATIC unless the build asks for the renderer as a DLL (the root CMakeLists.txt decides, for
+# core_process too). Either way it is the same objects; only the last step differs.
 if(RENDERER_BACKEND STREQUAL "DX12")
-	add_library(bgl_extended SHARED
+	add_library(bgl_extended ${BERNINI_RENDERER_LIBRARY_TYPE}
 		$<TARGET_OBJECTS:bgl_extended_objects>
 		$<TARGET_OBJECTS:bgl_d3d12>
 		${BGL_SHARED_HEADERS}
 	)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
-	add_library(bgl_extended SHARED
+	add_library(bgl_extended ${BERNINI_RENDERER_LIBRARY_TYPE}
 		$<TARGET_OBJECTS:bgl_extended_objects>
 		$<TARGET_OBJECTS:bgl_metal>
 		${BGL_SHARED_HEADERS}
@@ -115,6 +117,17 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 	BGL_EXPORTS
 )
 
+# What the renderer loads by name goes beside the executables, which is where the renderer's DLL
+# is too -- but not a static renderer's archive, so the runtime directory is named rather than
+# $<TARGET_FILE_DIR:bgl_extended>. A step on bgl_extended still, so it runs when the renderer does.
+function(stage_renderer_runtime)
+	add_custom_command(TARGET bgl_extended POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ARGN} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMENT "Staging what the renderer loads by name beside the executables"
+		VERBATIM)
+endfunction()
+
 # Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
 # so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
 # table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so
@@ -128,7 +141,7 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 # have to be: a validator older than the compiler rejects the container.
 if(WIN32)
 	find_package(directx-dxc CONFIG REQUIRED)
-	copy_to_target(bgl_extended ITEMS
+	stage_renderer_runtime(
 		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
 		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
 	)
@@ -149,7 +162,7 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	target_link_libraries(bgl_extended PRIVATE bgl_d3d12)
 
 	find_package(directx12-agility CONFIG REQUIRED)
-	copy_to_target(bgl_extended ITEMS "$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
+	stage_renderer_runtime("$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 	enable_coverage(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")

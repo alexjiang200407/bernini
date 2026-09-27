@@ -54,3 +54,13 @@ def test_a_library_the_build_says_is_static_but_the_executable_loads_is_reported
 def test_a_match_reports_nothing():
     assert embed.linkage_mismatches(embed.parse_dumpbin(DUMPBIN),
                                     {"bgl_extended": True, "core_process": True}) == []
+
+
+def test_a_static_renderer_expects_neither_library():
+    assert embed.expected_linkage({"BERNINI_RENDERER_LIBRARY_TYPE": "STATIC"}) == {
+        "bgl_extended": False, "core_process": False}
+
+
+def test_a_shared_renderer_expects_both():
+    assert embed.expected_linkage({"BERNINI_RENDERER_LIBRARY_TYPE": "SHARED"}) == {
+        "bgl_extended": True, "core_process": True}
