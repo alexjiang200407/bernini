@@ -30,7 +30,7 @@ namespace assetlib
 
 		/**
 		 * Geometry entries whose archived bytes differ from the file on disk -- a stale group
-		 * re-baked into the archive, or a rebind baked in.
+		 * re-baked into the archive, or a rig pairing re-addressed.
 		 */
 		uint32_t geometryRebaked = 0;
 

@@ -235,12 +235,18 @@ namespace assetlib
 			}
 
 			[[nodiscard]] ImportDocument
-			DocumentFor(ImportDocument document)
+			DocumentFor(std::string_view documentKey, ImportDocument document)
 			{
 				auto revision = std::optional<SourceStamp>();
 				for (const auto& output : document.outputs)
 				{
 					const auto type = assetTypeFromExtension(output);
+					if (!type || importDocumentKeyFor(document.source) != documentKey ||
+					    m_Store.ResolveImport(document.source, *type).outputKey != output)
+						core::throw_runtime_error(
+							"AssetStore::Pack: '{}' cannot resolve its output '{}'",
+							documentKey,
+							output);
 					if (!type || !isGeometryContainer(*type))
 						continue;
 					const auto info = inspectCacheEntry(BytesFor(*type, output));
@@ -331,8 +337,9 @@ namespace assetlib
 					regenerated = archived.BytesFor(*type, key);
 					break;
 				case AssetType::kImportDocument:
-					regenerated = AssetCodec<ImportDocument>::Serialize(
-						archived.DocumentFor(AssetCodec<ImportDocument>::Deserialize(diskBytes)));
+					regenerated = AssetCodec<ImportDocument>::Serialize(archived.DocumentFor(
+						key,
+						AssetCodec<ImportDocument>::Deserialize(diskBytes)));
 					break;
 
 				// Packed verbatim: a bake produces none of them, so the disk bytes are the answer.

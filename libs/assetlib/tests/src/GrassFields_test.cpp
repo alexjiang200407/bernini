@@ -42,7 +42,7 @@ namespace
 
 	constexpr std::string_view c_SourceKey = "Authored/Meshes/street.glb";
 	constexpr std::string_view c_GrassKey  = "Derived/Meshes/street.bgrassfields";
-	constexpr std::string_view c_MeshKey   = "Derived/Meshes/street.bmesh";
+	constexpr std::string_view c_MeshKey   = "Derived/Meshes/street.glb-0000000000000001.bmesh";
 	constexpr std::string_view c_LookKey   = "Authored/Grass/verge.bgrass";
 	constexpr std::string_view c_Field     = "Street[1]";
 
@@ -83,7 +83,8 @@ namespace
 				"Authored/Materials/red.bmaterial",
 				30.0f,
 				{},
-				"street");
+				"street",
+				{ 1, "street.glb" });
 			project.ReloadStore();
 		}
 
@@ -160,6 +161,15 @@ TEST_CASE(
 	CHECK(shipped.bindings.grassLooks == loaded.bindings.grassLooks);
 	CHECK(shipped.mesh.grassFields.clumps.size() == 144);
 	CHECK(project.Store().GetFiles().Read(c_MeshKey) == before);
+	auto document = project.Store().Load<ImportDocument>(importDocumentKeyFor(c_SourceKey));
+	for (auto& binding : document.bindings)
+		if (binding.submesh == c_Field)
+			binding.material.clear();
+	project.Store().Save(document, importDocumentKeyFor(c_SourceKey));
+	const auto cleared = project.Store().LoadRegenMesh(c_MeshKey);
+	CHECK(cleared.unboundBindings.empty());
+	CHECK(cleared.bindings.grassLooks == std::vector<std::string>{ "" });
+	CHECK_NOTHROW(project.Store().Pack(PackDesc{ archive }));
 	project.Bind("Gone[4]", "Authored/Grass/old.bgrass");
 	CHECK(
 		project.Store().LoadRegenMesh(c_MeshKey).unboundBindings ==

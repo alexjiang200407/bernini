@@ -42,9 +42,20 @@ namespace
 		BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
 		SaveMesh(
 			root,
-			"hero.bmesh",
+			"hero.glb-0000000000000001.bmesh",
 			{ "Authored/Materials/skin.bmaterial" },
 			"Derived/Skeletons/hero.bskel");
+
+		const auto store = StoreAt(root.path);
+		auto       document =
+			store.Load<ImportDocument>("Authored/Meshes/hero.glb-0000000000000001.bimport");
+		document.identity = { 1, "hero.glb" };
+		document.source   = "Authored/Meshes/hero.glb";
+		store.Save(document, "Authored/Meshes/hero.bimport");
+		fs::remove(root.path / "Authored/Meshes/hero.glb-0000000000000001.bimport");
+		auto mesh       = store.Load<BMesh>(document.outputs.front());
+		mesh.source.key = document.source;
+		store.Save(mesh, document.outputs.front());
 
 		Skeleton skeleton;
 		Bone     bone{};
@@ -118,7 +129,7 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 
 	SECTION("every asset type is in")
 	{
-		CHECK(Contains(entries, "Derived/Meshes/hero.bmesh"));
+		CHECK(Contains(entries, "Derived/Meshes/hero.glb-0000000000000001.bmesh"));
 		CHECK(Contains(entries, "Authored/Materials/skin.bmaterial"));
 		CHECK(Contains(entries, "Derived/Skeletons/hero.bskel"));
 		CHECK(Contains(entries, environment.env));
@@ -288,9 +299,16 @@ TEST_CASE(
 {
 	const test::DataRoot    root("bernini_pack_regen");
 	const test::SkinnedGltf source("bernini_pack_regen_gltf");
-	test::ImportUnitGroup(root.path, source.PackGlb());
+	test::ImportUnitGroup(
+		root.path,
+		source.PackGlb(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		{},
+		"unit",
+		{ 1, "unit.glb" });
 
-	const auto meshPath = root.path / "Derived/Meshes/unit.bmesh";
+	const auto meshPath = root.path / "Derived/Meshes/unit.glb-0000000000000001.bmesh";
 	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
 	AssetStore(root.path).RebindSubmeshInDocument(
 		"Authored/Meshes/unit.glb",
@@ -305,11 +323,12 @@ TEST_CASE(
 	// The archive carries the current cook with the document's binding baked in -- a read-only
 	// store trusts it, which is exactly what pack just made true.
 	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
-	const BMesh      mesh     = packed.Load<BMesh>("Derived/Meshes/unit.bmesh");
+	const BMesh      mesh = packed.Load<BMesh>("Derived/Meshes/unit.glb-0000000000000001.bmesh");
 	const auto       document = packed.Load<ImportDocument>("Authored/Meshes/unit.bimport");
 	CHECK(document.packedSourceStamp == mesh.source.stamp);
 	CHECK(
-		packed.LoadRegenMesh("Derived/Meshes/unit.bmesh").bindings.submeshMaterials ==
+		packed.LoadRegenMesh("Derived/Meshes/unit.glb-0000000000000001.bmesh")
+			.bindings.submeshMaterials ==
 		std::vector<std::string>{ "Authored/Materials/blue.bmaterial" });
 	CHECK_FALSE(packed.Exists("Authored/Meshes/unit.glb"));
 
@@ -321,7 +340,14 @@ TEST_CASE("packing refuses mixed source revisions when no source can repair them
 {
 	const test::DataRoot    root("bernini_pack_mixed_revision");
 	const test::SkinnedGltf source("bernini_pack_mixed_revision_gltf");
-	test::ImportUnitGroup(root.path, source.PackGlb());
+	test::ImportUnitGroup(
+		root.path,
+		source.PackGlb(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		{},
+		"unit",
+		{ 1, "unit.glb" });
 	const AssetStore store(root.path);
 	const auto       document = store.Load<ImportDocument>("Authored/Meshes/unit.bimport");
 	auto             rig      = store.Load<Skeleton>(document.skeleton);
@@ -335,9 +361,18 @@ TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
 {
 	const test::DataRoot    root("bernini_pack_unbakeable");
 	const test::SkinnedGltf source("bernini_pack_unbakeable_gltf");
-	test::ImportUnitGroup(root.path, source.PackGlb());
+	test::ImportUnitGroup(
+		root.path,
+		source.PackGlb(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		{},
+		"unit",
+		{ 1, "unit.glb" });
 
-	test::TamperHeaderByte(root.path / "Derived/Meshes/unit.bmesh", test::c_TokenOffset);
+	test::TamperHeaderByte(
+		root.path / "Derived/Meshes/unit.glb-0000000000000001.bmesh",
+		test::c_TokenOffset);
 	std::filesystem::remove(root.path / "Authored/Meshes/unit.glb");
 
 	CHECK_THROWS(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
@@ -350,12 +385,19 @@ TEST_CASE("pack bakes down a grown rig's re-addressing", "[pak][remap]")
 {
 	const DataRoot          root("bernini_pack_remap");
 	const test::SkinnedGltf source("bernini_pack_remap_gltf");
-	test::ImportUnitGroup(root.path, source.PackGlb());
+	test::ImportUnitGroup(
+		root.path,
+		source.PackGlb(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		{},
+		"unit",
+		{ 1, "unit.glb" });
 
 	const auto store = AssetStore(root.path);
 
 	{
-		auto skeleton = store.Load<Skeleton>("Derived/Skeletons/unit.bskel");
+		auto skeleton = store.Load<Skeleton>("Derived/Skeletons/unit.glb-0000000000000001.bskel");
 
 		auto grip       = Bone();
 		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
@@ -369,22 +411,53 @@ TEST_CASE("pack bakes down a grown rig's re-addressing", "[pak][remap]")
 		for (size_t i = 0; i < skeleton.bones.size(); ++i)
 			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
 
-		store.Save(skeleton, "Derived/Skeletons/unit.bskel");
+		store.Save(skeleton, "Derived/Skeletons/unit.glb-0000000000000001.bskel");
 	}
 
 	// Mismatched on disk, and deliberately left that way: pack is what has to notice.
-	const Skeleton grown = store.Load<Skeleton>("Derived/Skeletons/unit.bskel");
-	REQUIRE_FALSE(meshMatchesSkeleton(store.Load<BMesh>("Derived/Meshes/unit.bmesh"), grown));
+	const Skeleton grown =
+		store.Load<Skeleton>("Derived/Skeletons/unit.glb-0000000000000001.bskel");
+	REQUIRE_FALSE(meshMatchesSkeleton(
+		store.Load<BMesh>("Derived/Meshes/unit.glb-0000000000000001.bmesh"),
+		grown));
 
 	static_cast<void>(store.Pack(PackDesc{ root.path / "Data.bpak" }));
 
 	// Read back out of the archive, not off disk: the loose files are deliberately still stale.
 	const AssetStore shipped(root.path, std::make_shared<PakFile>(root.path / "Data.bpak"));
 
-	const auto archivedRig   = shipped.Load<Skeleton>("Derived/Skeletons/unit.bskel");
-	const auto archivedMesh  = shipped.Load<BMesh>("Derived/Meshes/unit.bmesh");
-	const auto archivedClips = shipped.Load<AnimationSet>("Derived/Animations/unit.banim");
+	const auto archivedRig =
+		shipped.Load<Skeleton>("Derived/Skeletons/unit.glb-0000000000000001.bskel");
+	const auto archivedMesh = shipped.Load<BMesh>("Derived/Meshes/unit.glb-0000000000000001.bmesh");
+	const auto archivedClips =
+		shipped.Load<AnimationSet>("Derived/Animations/unit.glb-0000000000000001.banim");
 
 	CHECK(meshMatchesSkeleton(archivedMesh, archivedRig));
 	CHECK(animationsMatchSkeleton(archivedClips, archivedRig));
+}
+
+TEST_CASE(
+	"packing refuses an import that runtime source lookup cannot resolve",
+	"[pack][importidentity]")
+{
+	const DataRoot          root("bernini_pack_invalid_identity");
+	const test::SkinnedGltf source("bernini_pack_invalid_identity_gltf");
+	test::ImportUnitGroup(
+		root.path,
+		source.PackGlb(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		{},
+		"unit",
+		{ 1, "unit.glb" });
+	const AssetStore store(root.path);
+	auto             document = store.Load<ImportDocument>("Authored/Meshes/unit.bimport");
+	SECTION("an edited identity no longer names its output") { document.identity.id = 2; }
+	SECTION("an unmigrated import has no identity") { document.identity = {}; }
+	SECTION("a sidecar cannot claim another source")
+	{
+		document.source = "Authored/Meshes/other.glb";
+	}
+	store.Save(document, "Authored/Meshes/unit.bimport");
+	CHECK_THROWS(store.Pack(PackDesc{ root.path / "Data.bpak" }));
 }

@@ -17,14 +17,12 @@ rename, migrate and pack without entering the closed built-in `AssetType`; see
 
 ## Imported-source contract
 
-The `derived-asset-names` contract declares source identity and lookup, cooked grass inside a mesh,
-and bindings outside its cooked data. Identity generation, sidecar identity persistence and
-`ResolveImport` are implemented and tested against loose and archive mounts. Importer adoption,
-binding removal and source-key acquisition are still pending. The mesh codec persists
-`BMesh::grassFields`; regeneration fills `RegenMesh::bindings` from a mounted sidecar when present.
-Legacy material members remain populated while callers migrate to the separate snapshot. Packs
-include sidecars, and gamelib uses their binding snapshots and embedded grass. Read-only geometry
-loads check the bake token and sidecar parameters without opening or stamping the source.
+Imports own a stable identity and generated output names. `ResolveImport` maps a source key to
+its output through the mounted sidecar; gamelib's mesh and animation acquisition takes those
+source keys. Meshes contain geometry, original material slots, rig signatures and named grass
+fields, while materials, overrides, skeleton bindings and grass looks live in the sidecar.
+Packs include sidecars and exclude copied sources. Read-only geometry loads check bake tokens,
+sidecar parameters and the packed source revision without opening or stamping a source.
 
 | Contract | Declaration | Responsibility |
 |---|---|---|
@@ -57,7 +55,7 @@ on a subsequent write preserves the stored identity. An unreadable existing side
 write so it cannot silently discard that identity or authored parameters.
 `ImportTarget::bindings` writes named material choices directly into the sidecar, without requiring
 cooked geometry. An explicitly empty list clears mesh defaults while retaining authored overrides
-and grass choices; an omitted list uses the supplied mesh's legacy bindings during migration.
+and grass choices; an omitted list preserves existing bindings.
 `ImportDocument::packedSourceStamp` records the source revision shared by a packed group's
 outputs. It is export metadata outside the cook parameter hash; it contains no source bytes.
 
@@ -66,8 +64,8 @@ predates a move. It indexes sidecar output claims lazily, rejects duplicate owne
 owner afresh for each returned snapshot. Sidecar writes through the store invalidate the index;
 an absent or moved owner triggers a rescan. Repeated reads of an owned output do not rescan other
 documents. Geometry loads use it when the recorded source path no longer identifies the owning
-sidecar. Moving an identified mesh source keeps its output keys and cache bytes; a direct rename
-of a claimed generated output refuses. Legacy imports retain their old move behavior until migrated.
+sidecar. Moving a source keeps its output keys and cache bytes, including legacy imports.
+Independent moves of derived files or directories are refused.
 
 `Migrate` assigns identities to existing mesh and environment imports, moves their outputs and extracted-texture
 directories, and rewrites tracked references, including the skeleton's companion avatar. It saves
@@ -76,11 +74,10 @@ texture directory refuses migration for the affected imports. Materials whose te
 are baked against their new paths in the same run; a settled second run writes nothing. Dry runs
 leave identities, files and references unchanged.
 
-The compiled client in `libs/assetlib/contract_tests/ImportClient.cpp` demonstrates creating an
-import document from one identity and loading a mesh by source through `ResolveImport` and
-`LoadRegenMesh`. Its tests prove client wiring, snapshot ownership and error propagation. The fake
-does not prove random-ID quality, name generation, serialization, migration, production validation,
-or loose/packed parity; those require the implementation's real-store tests.
+Production tests cover identity persistence and source lookup in `ImportIdentity_test.cpp`,
+repeatable migration in `ImportNameMigration_test.cpp`, and loose/packed bindings in
+`GrassFields_test.cpp` and `Pack_test.cpp`. Gamelib archive tests verify static and skinned
+acquisition with no source files present and no source reads.
 
 ---
 
@@ -153,8 +150,8 @@ or loose/packed parity; those require the implementation's real-store tests.
   re-extract land back on the files materials already route at.
   [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)
 
-* **Every reference is data-root-relative, and layout is a table.** A `.bmesh` in
-  `Derived/Meshes/props/` names `Derived/BakedTextures/skin.ktx2`, not a path relative to itself, so a bake writing
+* **Every reference is data-root-relative, and layout is a table.** A material in
+  `Authored/Materials/props/` names `Derived/BakedTextures/skin.ktx2`, not a path relative to itself, so a bake writing
   that file and a mesh naming it agree without either knowing where the other lives. The data root's
   first level is the authored/derived split — `Authored/` holds what a person decided, `Derived/`
   what a bake or an import computed — so a project's commit rule is a directory rather than a list
@@ -326,38 +323,14 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
   Custom referrers are rewritten through `IAssetKind::RewriteReferences` using their field tokens.
-* **`planRename` on an imported source** — a source and its `.bimport` are one asset under two
-  names, so either spelling plans the same move and `subject` reads back as the document's. A file
-  is a source when a document records it as one (`RefKind::kImportedSource`), whatever its extension,
-  and it keeps that extension; a rename that would move the document out of `Authored/Meshes` or
-  `Authored/EnvSources` is refused. What travels with it splits by the same rule the whole data root
-  does. `RenamePlan::source` is the file the document names — a `.glb`, `.hdr` or `.ktx2`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
-  that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
-  containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
-  since the document names the new path either way and `Reimport` writes it there. An output a
-  rename of its own has since taken off the source's stem is left where it is — its name no longer
-  says it came from this source — and the document's reference to it is rewritten like any other.
-
-  This is what makes a rig shared between two imports safe. A `.bskel` one source produced and
-  another source's document *binds* is a move like any other, so the second document is among the
-  `referrers` and is rewritten — where moving the file alone would skin the second model to nothing.
-* **`planRename` on a skeleton** — `RenamePlan::avatars` is the `.bavatar` beside each `.bskel` the
-  rename moves. **Authored**, like the `.glb`: nothing regenerates one, so a move that fails is
-  fatal. It is a field of its own rather than an output because the path *is* the attachment — an
-  avatar left behind by a skeleton that moved is not stale, it is detached, and no re-cook
-  reattaches it. Renaming a `.bavatar` on its own is refused for the same reason, naming the
-  skeleton to rename instead. Only avatars that exist are listed; most rigs have none.
-
-  Its edge is derived from its key rather than stored in the document, so it is not a referrer to
-  rewrite — see `isStoredRef`, and it is now the only such edge. A `.bimport`'s edge to its own
-  source *is* stored: the document records `source` because the extension swap that finds one cannot
-  answer for a source kind with more than one extension, so a rename rewrites it like any other
-  reference.
-
-  A **directory** rename gets the same treatment one file at a time, because the pair straddles the
-  two halves and no single move can carry both ends: renaming a directory of `.bskel`s takes each
-  avatar to the mirrored directory under `Authored/`, creating it if it is not there, and renaming a
-  directory of `.bavatar`s is refused for the reason renaming one is.
+* **`planRename` on an imported source** moves only the source and its `.bimport`, preserving
+  identity, output keys and derived bytes. It rewrites tracked source references; a destination
+  outside the corresponding authored source directory is refused. Source or sidecar spelling
+  identifies the same move. Renaming a derived file or directory independently is refused.
+* **Migration moves the skeleton's companion avatar** alongside a generated skeleton rename.
+  The avatar is authored and its path supplies the attachment, so a failed avatar move is fatal;
+  a missing derived output can be regenerated. `RenamePlan::avatars` keeps these cases separate.
+  Independent avatar moves are refused to prevent detaching it from its rig.
 
 ## Usage Sketch
 

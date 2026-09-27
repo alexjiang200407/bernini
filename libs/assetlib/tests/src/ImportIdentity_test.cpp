@@ -130,7 +130,10 @@ TEST_CASE("import writes authored bindings without cooked geometry", "[import-id
 	document.materialOverrides = { { "Body", "Wet", "Authored/Materials/wet.bmaterial" } };
 	document.bindings.push_back({ "Lawn", "Authored/Grass/lawn.bgrass" });
 	store.Save(document, key);
-	target.bindings->clear();
+	target.bindings.reset();
+	store.WriteImportedDocument(target, nullptr);
+	CHECK(store.Load<ImportDocument>(key).bindings == document.bindings);
+	target.bindings = std::vector<MaterialBinding>{};
 	store.WriteImportedDocument(target, nullptr);
 	const auto cleared = store.Load<ImportDocument>(key);
 	REQUIRE(cleared.bindings.size() == 1);

@@ -76,6 +76,12 @@ namespace assetlib
 			};
 			for (const auto& binding : document.bindings)
 			{
+				if (binding.material.empty())
+				{
+					if (!fields.contains(binding.submesh) && !submeshes.contains(binding.submesh))
+						reportMissing(binding.submesh);
+					continue;
+				}
 				const bool  grass = isGrassBinding(binding);
 				const auto& names = grass ? fields : submeshes;
 				if (const auto found = names.find(binding.submesh); found != names.end())

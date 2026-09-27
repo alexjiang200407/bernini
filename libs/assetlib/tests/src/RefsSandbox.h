@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
@@ -124,14 +125,18 @@ namespace assetlib::test
 		const DataRoot&                 root,
 		const char*                     name,
 		const std::vector<std::string>& materials,
-		const std::string&              skeleton = {})
+		const std::string&              skeleton = {},
+		ImportIdentity                  identity = {})
 	{
 		const std::string key      = KeyIn(c_MeshesDirectoryName, name);
 		auto              mesh     = MakeMesh(materials);
 		auto              document = ImportDocument();
 		document.source            = "Authored/Meshes/" + fs::path(name).stem().string() + ".glb";
-		document.outputs           = { key };
-		document.skeleton          = skeleton;
+		if (identity.id != 0)
+			document.source = "Authored/Meshes/" + identity.label;
+		document.identity = identity;
+		document.outputs  = { key };
+		document.skeleton = skeleton;
 		for (size_t i = 0; i < materials.size(); ++i)
 			document.bindings.push_back({ std::to_string(i), materials[i] });
 		mesh.source.key            = document.source;

@@ -143,9 +143,7 @@ namespace assetlib
 				document.extraJson            = authored.extraJson;
 				document.materialOverrides    = authored.materialOverrides;
 
-				for (const MaterialBinding& binding : authored.bindings)
-					if (isGrassBinding(binding))
-						document.bindings.push_back(binding);
+				document.bindings = authored.bindings;
 			}
 
 			return document;
@@ -269,7 +267,8 @@ namespace assetlib
 		if (target.bindings)
 		{
 			std::vector<MaterialBinding> grass = std::move(document.bindings);
-			document.bindings                  = *target.bindings;
+			std::erase_if(grass, [](const auto& binding) { return !isGrassBinding(binding); });
+			document.bindings = *target.bindings;
 			document.bindings.insert(document.bindings.end(), grass.begin(), grass.end());
 		}
 

@@ -33,7 +33,12 @@ namespace
 	{
 		WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
 		BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
-		SaveMesh(root, "hero.bmesh", { "Authored/Materials/skin.bmaterial" });
+		SaveMesh(
+			root,
+			"hero.glb-0000000000000001.bmesh",
+			{ "Authored/Materials/skin.bmaterial" },
+			{},
+			{ 1, "hero.glb" });
 
 		return WriteEnvironment(root);
 	}
@@ -216,7 +221,12 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 	Pack(root);
 
 	// Re-point the mesh at a different material, loose only.
-	SaveMesh(root, "hero.bmesh", { "Authored/Materials/edited.bmaterial" });
+	SaveMesh(
+		root,
+		"hero.glb-0000000000000001.bmesh",
+		{ "Authored/Materials/edited.bmaterial" },
+		{},
+		{ 1, "hero.glb" });
 
 	core::file::LayeredFileSystem mount;
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
@@ -229,8 +239,8 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 	const std::vector<std::string> referrers =
 		ReferrerPaths(graph, "Authored/Materials/edited.bmaterial");
 	CHECK(
-		referrers ==
-		std::vector<std::string>{ "Authored/Meshes/hero.bimport", "Derived/Meshes/hero.bmesh" });
+		referrers == std::vector<std::string>{ "Authored/Meshes/hero.bimport",
+	                                           "Derived/Meshes/hero.glb-0000000000000001.bmesh" });
 
 	// The packed edge is gone, not merely outvoted: one mesh was scanned, and it named one material.
 	CHECK(graph.ReferrersOf("Authored/Materials/skin.bmaterial").empty());

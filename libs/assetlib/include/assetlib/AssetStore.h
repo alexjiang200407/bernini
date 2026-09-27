@@ -343,8 +343,8 @@ namespace assetlib
 		// --- The regeneration seam -------------------------------------------------------------
 		//
 		// The Regen forms answer with the container as the project's sources say it should be. A
-		// read-only store trusts its keys outright -- `pack` made them true -- and serves the baked
-		// bytes. A writable store checks the entry's cache key: fresh bytes load as-is; a stale
+		// read-only store validates bake tokens, parameters and the packed source revision without
+		// reading sources. A writable store checks the entry's cache key: fresh bytes load as-is; a stale
 		// entry regenerates in memory from its copied source, and one whose source is missing or
 		// was never recorded, or whose import document is gone, refuses. Either way the import
 		// document's bindings are applied over the result, so a rebind is a document edit no mesh
@@ -353,7 +353,8 @@ namespace assetlib
 		/**
 		 * Whether the geometry entry at `path` is a cache miss the LoadRegen forms would re-cook:
 		 * a stale bake token, a source stamp that moved, or parameters the `.bimport` no longer
-		 * matches. Always false on a read-only store, which trusts its keys.
+		 * matches. A read-only store checks the bake token and packed sidecar metadata without
+		 * opening the source file.
 		 *
 		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`,
 		 *         or its header cannot be read.
@@ -403,7 +404,7 @@ namespace assetlib
 		/**
 		 * Reads current bindings from the import document, including after a source move or a
 		 * foreign bake token. Reads only the frozen header and sidecar; never regenerates geometry.
-		 * Source-less legacy containers fall back to their stored reference chunks.
+		 * A current source-less mesh has no bindings and returns empty references.
 		 *
 		 * @throws std::runtime_error on a foreign-token mesh with no recorded source or whose
 		 *         import document is gone -- what it references cannot be known, and the
@@ -773,7 +774,8 @@ namespace assetlib
 		/**
 		 * Writes the `.bimport` beside the copied source: the sample rate, where the textures went
 		 * and the source as it stood when they did. `target.bindings` supplies authored material
-		 * choices directly; when absent, a supplied `mesh` supplies its legacy bindings.
+		 * choices directly; an omitted list preserves existing bindings and an empty list clears
+		 * material defaults, retaining grass choices. A supplied `mesh` validates submesh names.
 		 *
 		 * @throws std::runtime_error if `target.source` is not a `.glb` under `Authored/Meshes/`, or
 		 *         on a write failure.
