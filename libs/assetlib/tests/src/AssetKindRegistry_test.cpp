@@ -123,9 +123,13 @@ TEST_CASE(
 		"Renamed.bexample");
 	std::ofstream(root / "Holder.bref", std::ios::trunc) << "Target.bexample";
 	REQUIRE(store.RenameAsset(plan).status == assetlib::RenameStatus::kRenamed);
-	std::ifstream holder(root / "Holder.bref");
-	std::string   value;
-	holder >> value;
+	// Scoped, because the remove_all below cannot delete a directory holding a file this process
+	// still has open -- on Windows, where an unlink of one is refused rather than deferred.
+	std::string value;
+	{
+		std::ifstream holder(root / "Holder.bref");
+		holder >> value;
+	}
 	REQUIRE(value == "Renamed.bexample");
 
 	std::filesystem::remove_all(root);

@@ -45,7 +45,7 @@ namespace
 		const assetlib::test::Glb glb(
 			"bernini_grass_acquire.glb",
 			assetlib::test::StreetDocument(buffer, assetlib::test::ShuffledGrid(8)),
-			buffer.bytes);
+			buffer);
 
 		game::test::WriteTexture(dataRoot / "Textures/white.ktx2");
 		game::test::WriteMaterial(dataRoot / c_MaterialKey, false);

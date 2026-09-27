@@ -57,7 +57,7 @@ namespace
 		explicit GrassyProject(const char* name) :
 			glb(std::format("{}.glb", name).c_str(),
 		        StreetDocument(buffer, ShuffledGrid(12)),
-		        buffer.bytes),
+		        buffer),
 			project(MakeProject(name))
 		{
 			dataRoot = project.GetDataDirectory();
