@@ -405,7 +405,7 @@ enum sits at the lowest point that everything charging memory can see — the re
 gamelib's container cache — so `bgl_wgpu` reaches it from there too. A report never names a tag enum
 at all: each instantiation registers its table on first use and the report walks what registered,
 which is what lets `assetlib_cli` write one without linking a renderer. The registry is held once
-per process, in `core_process` ([core_process.md](core_process.md)), which is how the renderer
+per process, in `core_process` ([core_process.md](core_process.md)), which is how a renderer
 DLL's `device buffer` and `device texture` charges reach a report the executable writes.
 
 **`untagged` is not an error, it is the mechanism.** It is `footprint - tagged live`: memory the OS

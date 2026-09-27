@@ -60,7 +60,8 @@ Everything else has a host-derived default and is only worth naming to change it
 | `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_extended_objects` alone with no runtime, shaders or tests. Defaults from the host. |
 | `IS_DEBUG` | Shader debug info and the `dbg_raise()` bodies. Defaults from `CMAKE_BUILD_TYPE`; a multi-config generator has none, so there it is a choice. |
 | `BERNINI_PROFILING` | Tracy zones and the client that opens a socket. `OFF`. |
-| `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. |
+| `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. Implies `BERNINI_SHARED_RENDERER`. |
+| `BERNINI_SHARED_RENDERER` | `bgl_extended`, and with it `core_process`, as shared libraries. `OFF`: a game is one binary. See [core_process.md](core_process.md#linkage). |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 
@@ -173,8 +174,9 @@ at link on MSVC and a Debug engine silently inside a Release game elsewhere. `BE
 needs no check: `TRACY_ENABLE` rides on the link interface, so the consumer inherits the engine's.
 
 **The library shapes are the build's.** A top-level build with Qt turns
-`BERNINI_EDITOR_SDK` on, and with it `assetlib` and `gamelib` become shared; without Qt they are
-static. The package exports whichever this build made, and nothing on the consumer's side changes.
+`BERNINI_EDITOR_SDK` on, and with it `assetlib`, `gamelib`, `bgl_extended` and `core_process` become
+shared; without Qt they are static unless `BERNINI_SHARED_RENDERER` makes the renderer shared. The
+package exports whichever this build made, and nothing on the consumer's side changes.
 
 **What the config gives a consumer beyond the targets:** `find_dependency` for every vcpkg port
 the exported link interfaces name, the same Release-only mapping for `KTX::ktx` the engine applies,

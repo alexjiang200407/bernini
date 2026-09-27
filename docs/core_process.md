@@ -1,7 +1,7 @@
 # core_process
 
 `core` is a static library, so every binary that links it gets a copy: the executable, the renderer
-DLL, and every plugin to come. For a function a copy costs nothing. For state it is a bug. A second
+DLL where the build makes one, and every editor plugin. For a function a copy costs nothing. For state it is a bug. A second
 log flag opens a second log file, a second tag registry keeps the renderer's GPU bytes out of the
 executable's memory report, and a second id counter hands Tracy colliding allocation ids.
 
@@ -29,13 +29,31 @@ thread, so it has no counter to share.
 
 ## Linkage
 
-**Shared wherever the renderer is.** `bgl_extended` is always a shared library, so `core_process` is
-`SHARED` whenever a backend is built and `STATIC` under `RENDERER_BACKEND=NONE`. A static
-`core_process` beside a shared renderer would be two copies again, so this is derived and is not an
-option. Once the renderer can link statically, a game can be one binary; that is when a switch
-belongs here.
+**Shared exactly where the renderer is.** The root [CMakeLists.txt](../CMakeLists.txt) makes one
+decision, `BERNINI_RENDERER_LIBRARY_TYPE`, and `bgl_extended` and `core_process` are both built as
+it says:
 
-It is one more library a binary loads. In the build tree it sits next to `bgl_extended`: the
+| Build | `bgl_extended` | `core_process` |
+|---|---|---|
+| default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` |
+| `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` |
+| `BERNINI_EDITOR_SDK` on — a top-level build with Qt, by default | `SHARED` | `SHARED` |
+| `RENDERER_BACKEND=NONE` | not built | `STATIC` |
+
+The default is the game that ships as one binary. The editor SDK implies the shared renderer:
+its plugins are DLLs that reach the renderer through shared `gamelib`, and the editor links the
+renderer as well, so a static one would be linked into two binaries. A static `core_process` beside
+anything shared would be two copies again, so it is derived and is never an option of its own.
+`BERNINI_SHARED_RENDERER` with `RENDERER_BACKEND=NONE` is a configure error.
+
+The rule is not the renderer's alone: any engine library that holds process-wide GPU state — the
+device, the Slang session, or a later target that shares them — is built as the renderer is and
+lands in the same binary it does.
+
+`BGL_API` follows `CORE_PROCESS_API`: it exports and imports only under `BGL_SHARED`, which
+`bgl`'s interface carries when the renderer is shared, and is empty otherwise.
+
+Shared, it is one more library a binary loads. In the build tree it sits next to `bgl_extended`: the
 runtime directory on Windows, `lib/` on macOS, found through the build rpath. `just install` stages
 it next to `assetlib_cli` ([libs/assetlib/CMakeLists.txt](../libs/assetlib/CMakeLists.txt)).
 

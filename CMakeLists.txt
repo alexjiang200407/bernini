@@ -22,7 +22,6 @@ set(BERNINI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 include(${BERNINI_ROOT}/cmake/target_force_include.cmake)
-include(${BERNINI_ROOT}/cmake/copy_to_target.cmake)
 include(${BERNINI_ROOT}/cmake/compile_shader.cmake)
 include(${BERNINI_ROOT}/cmake/enable_strict_compiler.cmake)
 include(${BERNINI_ROOT}/cmake/enable_coverage.cmake)
@@ -157,6 +156,23 @@ option(BERNINI_EDITOR_SDK "Build the shared libraries and build-tree package for
 if (BERNINI_EDITOR_SDK AND NOT _bernini_editor_sdk_eligible)
     message(FATAL_ERROR "BERNINI_EDITOR_SDK requires a top-level editor build with Qt6")
 endif()
+
+# A game is one binary unless it asks for the renderer as a DLL. The editor SDK asks: its plugins
+# are DLLs that reach the renderer through shared gamelib, and the editor links the renderer too,
+# so a static one would be two. core_process follows, since it is shared exactly where something
+# beside the executable needs it. See docs/core_process.md, "Linkage".
+option(BERNINI_SHARED_RENDERER "Build bgl_extended as a shared library (BERNINI_EDITOR_SDK implies it)"
+    OFF)
+if (BERNINI_SHARED_RENDERER AND RENDERER_BACKEND STREQUAL "NONE")
+    message(FATAL_ERROR "BERNINI_SHARED_RENDERER needs a renderer, and RENDERER_BACKEND is NONE")
+endif()
+set(_bernini_renderer_library_type STATIC)
+if (BERNINI_SHARED_RENDERER OR BERNINI_EDITOR_SDK)
+    set(_bernini_renderer_library_type SHARED)
+endif()
+# Cached so a script can read what a build directory made of it (scripts/embed.py).
+set(BERNINI_RENDERER_LIBRARY_TYPE ${_bernini_renderer_library_type} CACHE INTERNAL
+    "STATIC or SHARED: what bgl_extended and core_process are built as")
 
 if (BERNINI_EDITOR_SDK)
     set(_bernini_build_id_file "${CMAKE_BINARY_DIR}/bernini-editor-build-id.txt")
@@ -307,6 +323,11 @@ if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
         list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12_agility)
+        # A static renderer's PRIVATE link of its backend is part of what it exports: the consumer
+        # links the backend's system libraries itself.
+        if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "STATIC")
+            list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12)
+        endif()
     endif()
 
     file(MAKE_DIRECTORY "${BERNINI_PACKAGE_DIR}")

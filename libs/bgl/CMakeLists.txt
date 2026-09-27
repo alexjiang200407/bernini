@@ -20,6 +20,12 @@ target_include_directories(bgl INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # is reached through <core/glm.h>, and core links glm::glm PUBLIC, so it needs no entry of its own.
 target_link_libraries(bgl INTERFACE core assetlib_structs)
 
+# On the contract rather than the renderer: an SDK gamelib links the renderer's file, not its target
+# (libs/gamelib/CMakeLists.txt), so a definition on bgl_extended would never reach it.
+if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
+	target_compile_definitions(bgl INTERFACE BGL_SHARED)
+endif()
+
 # An INTERFACE target compiles nothing, so on its own it enforces nothing. This one TU is the
 # enforcement -- see src/selfcheck.cpp for why it is a library and not an executable.
 add_library(bgl_selfcheck STATIC
