@@ -161,7 +161,7 @@ namespace editor
 		if (options.animations)
 			files.push_back({ banimPath, fs::exists(banimPath, ec) });
 
-		if (options.mesh || options.animations)
+		if (options.mesh || options.animations || options.textures)
 		{
 			const assetlib::AssetStore store(dataRoot);
 			const fs::path             sourceCopy = store.ResolveWritePath(sourceKey);
@@ -310,13 +310,24 @@ namespace editor
 					assetlib::ImportTarget     target{ sourceKey,
 					                                   assetlib::c_DefaultSampleRate,
 					                                   textureDirKey };
-					const assetlib::SourceRef  sourceRef = store.CopyImportedSource(source, target);
-					target.skeleton                      = store.WriteImportedClips(
+					target.identity                     = options.outputs.identity;
+					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
+					target.skeleton                     = store.WriteImportedClips(
 						imported->skeleton,
 						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
 					target.outputs = { store.KeyFor(banimPath) };
+					store.WriteImportedDocument(target, nullptr);
+				}
+				else if (options.textures)
+				{
+					const assetlib::AssetStore store(dataRoot);
+					assetlib::ImportTarget     target{ sourceKey,
+					                                   assetlib::c_DefaultSampleRate,
+					                                   textureDirKey };
+					target.identity = options.outputs.identity;
+					(void)store.CopyImportedSource(source, target);
 					store.WriteImportedDocument(target, nullptr);
 				}
 			},
@@ -357,6 +368,7 @@ namespace editor
 					assetlib::ImportTarget target{ sourceKey,
 						                           assetlib::c_DefaultSampleRate,
 						                           textureDirKey };
+					target.identity = options.outputs.identity;
 					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
 					target.skeleton = mesh->skeleton;
 					target.outputs  = std::move(rigOutputs);

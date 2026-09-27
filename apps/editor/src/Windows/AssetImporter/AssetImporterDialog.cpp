@@ -4,6 +4,8 @@
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/editor_language.h"
 #include <algorithm>
+#include <assetlib/ImportIdentity.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
@@ -35,9 +37,6 @@
 namespace
 {
 	constexpr auto c_SourceExtension   = ".glb";
-	constexpr auto c_MeshExtension     = ".bmesh";
-	constexpr auto c_SkeletonExtension = ".bskel";
-	constexpr auto c_AnimExtension     = ".banim";
 	constexpr auto c_MaterialExtension = ".bmaterial";
 
 	/** How a message names the material at `index`, which the glTF may have left unnamed. */
@@ -62,7 +61,9 @@ AssetImporterDialog::AssetImporterDialog(
 	setWindowTitle(editor::Localize("editor.asset_importer.window_title", "Import Asset"));
 	setModal(true);
 
-	m_DefaultName     = QFileInfo(sourceFile).completeBaseName();
+	m_DefaultName = QFileInfo(sourceFile).completeBaseName();
+	m_Identity    = assetlib::makeImportIdentity(
+		("Authored/Meshes/" + QFileInfo(sourceFile).fileName()).toStdString());
 	m_DataRoot        = dataRoot;
 	m_HasPbrMaterials = std::ranges::any_of(materials, &assetlib::GltfMaterial::isPbr);
 
@@ -88,10 +89,6 @@ AssetImporterDialog::AssetImporterDialog(
 		scrollBox->setMaximumHeight(screen->availableGeometry().height() * 2 / 3);
 	layout->addWidget(scrollBox);
 
-	// Every category gets its own section, each folder starting where that category's files have
-	// always landed -- so the layout an import lands in is the one it always was until a field is
-	// actually changed. For the derived categories that is a subfolder named after the source; for
-	// the source itself it is the category root, which is where every `.glb` copied so far sits.
 	const auto addSection = [&](const QString& label,
 	                            const char*    category,
 	                            const char*    objectName,
@@ -148,49 +145,6 @@ AssetImporterDialog::AssetImporterDialog(
 			"mesh."));
 	contents->addWidget(m_ImportMesh);
 
-	m_MeshSection = addSection(
-		editor::Localize("editor.asset_importer.mesh_folder_label", "Mesh folder:"),
-		assetlib::c_MeshesDirectoryName,
-		"meshFolder",
-		editor::Localize(
-			"editor.asset_importer.mesh_folder_tip",
-			"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed "
-			"(animals/coyote); the category itself is fixed, because every reference in the "
-			"project is "
-			"written against it."),
-		m_DefaultName);
-	m_MeshName = m_MeshSection->AddFile(
-		{ .label      = editor::Localize("editor.asset_importer.mesh_file_label", "Mesh file:"),
-	      .stem       = m_DefaultName,
-	      .extension  = c_MeshExtension,
-	      .objectName = "meshName",
-	      .tip        = editor::Localize(
-			  "editor.asset_importer.mesh_file_tip",
-			  "What the geometry is written as. Naming it rather than taking the source's "
-			  "name is what lets two imports share one folder.") });
-
-	// The rig rides with the geometry -- a skin is only meaningful against the mesh it deforms -- so
-	// its folder follows the mesh box rather than one of its own.
-	m_SkeletonSection = addSection(
-		editor::Localize("editor.asset_importer.skeleton_folder_label", "Skeleton folder:"),
-		assetlib::c_SkeletonsDirectoryName,
-		"skeletonFolder",
-		editor::Localize(
-			"editor.asset_importer.skeleton_folder_tip",
-			"Folder under Derived/Skeletons/ to write the .bskel into. Only written when the "
-			"source "
-			"carries a skin."),
-		m_DefaultName);
-	m_SkeletonName = m_SkeletonSection->AddFile(
-		{ .label = editor::Localize("editor.asset_importer.skeleton_file_label", "Skeleton file:"),
-	      .stem  = m_DefaultName,
-	      .extension  = c_SkeletonExtension,
-	      .objectName = "skeletonName",
-	      .tip        = editor::Localize(
-			  "editor.asset_importer.skeleton_file_tip",
-			  "What the rig is written as, when the source carries one. A rig shared by several "
-			  "files wants the same name in each of them.") });
-
 	m_ImportTextures = new QCheckBox(
 		editor::Localize("editor.asset_importer.import_textures", "Import textures"),
 		content);
@@ -201,19 +155,6 @@ AssetImporterDialog::AssetImporterDialog(
 			"editor.asset_importer.import_textures_tip",
 			"Extract the mesh's textures into the project."));
 	contents->addWidget(m_ImportTextures);
-
-	// No file rows: WriteTextures names its output after the source's images, so there is nothing
-	// here to name.
-	m_TextureSection = addSection(
-		editor::Localize("editor.asset_importer.texture_folder_label", "Texture folder:"),
-		assetlib::c_SourceTexturesDirectoryName,
-		"textureFolder",
-		editor::Localize(
-			"editor.asset_importer.texture_folder_tip",
-			"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants "
-			"its own: they are named after the images they came from, so two imports sharing a "
-			"folder would overwrite one another."),
-		m_DefaultName);
 
 	m_ImportPbrMaterials = new QCheckBox(
 		editor::Localize("editor.asset_importer.import_pbr_materials", "Import PBR materials"),
@@ -280,25 +221,6 @@ AssetImporterDialog::AssetImporterDialog(
 			"the "
 			"project, matched by signature."));
 	contents->addWidget(m_ImportAnimations);
-
-	m_AnimationSection = addSection(
-		editor::Localize("editor.asset_importer.animation_folder_label", "Animation folder:"),
-		assetlib::c_AnimationsDirectoryName,
-		"animationFolder",
-		editor::Localize(
-			"editor.asset_importer.animation_folder_tip",
-			"Folder under Derived/Animations/ to write the .banim into."),
-		m_DefaultName);
-	m_AnimationName = m_AnimationSection->AddFile(
-		{ .label =
-	          editor::Localize("editor.asset_importer.animation_file_label", "Animation file:"),
-	      .stem       = m_DefaultName,
-	      .extension  = c_AnimExtension,
-	      .objectName = "animationName",
-	      .tip        = editor::Localize(
-			  "editor.asset_importer.animation_file_tip",
-			  "What the clips are written as. Every clip in the source goes into this one file; "
-			  "the Animation Editor picks one out of it.") });
 
 	contents->addStretch(1);
 
@@ -412,9 +334,7 @@ AssetImporterDialog::PlanFiles() const
 		      .path      = File(Folder(section->GetFolder(), category), name, extension) });
 	};
 
-	// Copied for a clips-only import as well, which is the one place the source's destination is
-	// not the mesh's business.
-	if (m_ImportMesh->isChecked() || m_ImportAnimations->isChecked())
+	if (ImportsAnything())
 	{
 		const QString name   = m_SourceName->text().trimmed();
 		const QString source = File(SourceFolder(), m_SourceName, c_SourceExtension);
@@ -445,42 +365,6 @@ AssetImporterDialog::PlanFiles() const
 			      .path = QString::fromStdString(
 					  assetlib::importDocumentKeyFor(source.toStdString())) });
 		}
-	}
-
-	if (m_ImportMesh->isChecked())
-	{
-		plan(
-			editor::Localize("editor.asset_importer.label_mesh", "Mesh"),
-			editor::Localize("editor.asset_importer.mesh_needs_name", "The mesh needs a name."),
-			m_MeshSection,
-			m_MeshName,
-			assetlib::c_MeshesDirectoryName,
-			c_MeshExtension);
-
-		// Planned whether or not the source turns out to carry a skin: that is not known until it is
-		// parsed, and by then a file already there cannot be told from one this import wrote.
-		plan(
-			editor::Localize("editor.asset_importer.label_skeleton", "Skeleton"),
-			editor::Localize(
-				"editor.asset_importer.skeleton_needs_name",
-				"The skeleton needs a name."),
-			m_SkeletonSection,
-			m_SkeletonName,
-			assetlib::c_SkeletonsDirectoryName,
-			c_SkeletonExtension);
-	}
-
-	if (m_ImportAnimations->isChecked())
-	{
-		plan(
-			editor::Localize("editor.asset_importer.label_animations", "Animations"),
-			editor::Localize(
-				"editor.asset_importer.animations_need_name",
-				"The animations need a name."),
-			m_AnimationSection,
-			m_AnimationName,
-			assetlib::c_AnimationsDirectoryName,
-			c_AnimExtension);
 	}
 
 	if (CanImportPbrMaterials())
@@ -559,24 +443,19 @@ AssetImporterDialog::GetOutputs() const
 {
 	auto outputs = ImportOutputs();
 
-	outputs.source = File(SourceFolder(), m_SourceName, c_SourceExtension);
-	outputs.mesh   = File(
-		Folder(m_MeshSection->GetFolder(), assetlib::c_MeshesDirectoryName),
-		m_MeshName,
-		c_MeshExtension);
-	outputs.skeleton = File(
-		Folder(m_SkeletonSection->GetFolder(), assetlib::c_SkeletonsDirectoryName),
-		m_SkeletonName,
-		c_SkeletonExtension);
-	outputs.animations = File(
-		Folder(m_AnimationSection->GetFolder(), assetlib::c_AnimationsDirectoryName),
-		m_AnimationName,
-		c_AnimExtension);
+	outputs.source         = File(SourceFolder(), m_SourceName, c_SourceExtension);
+	outputs.identity       = m_Identity;
+	outputs.identity.label = QFileInfo(outputs.source).fileName().toStdString();
+	outputs.mesh           = QString::fromStdString(
+		assetlib::importOutputKey(outputs.identity, assetlib::AssetType::kMesh));
+	outputs.skeleton = QString::fromStdString(
+		assetlib::importOutputKey(outputs.identity, assetlib::AssetType::kSkeleton));
+	outputs.animations = QString::fromStdString(
+		assetlib::importOutputKey(outputs.identity, assetlib::AssetType::kAnimation));
 
 	outputs.materialDir =
 		Folder(m_MaterialSection->GetFolder(), assetlib::c_MaterialsDirectoryName);
-	outputs.textureDir =
-		Folder(m_TextureSection->GetFolder(), assetlib::c_SourceTexturesDirectoryName);
+	outputs.textureDir = QString::fromStdString(assetlib::importTextureDirectory(outputs.identity));
 
 	for (QLineEdit* name : m_MaterialNames)
 		outputs.materialStems << (name == nullptr ? QString() : name->text().trimmed());
@@ -589,12 +468,8 @@ AssetImporterDialog::Refresh()
 {
 	// A field is dead when nothing is going to be written through it. Disabling the section takes its
 	// file names with it, which is what keeps a dead name out of the validation.
-	m_SourceSection->setEnabled(m_ImportMesh->isChecked() || m_ImportAnimations->isChecked());
-	m_MeshSection->setEnabled(m_ImportMesh->isChecked());
-	m_SkeletonSection->setEnabled(m_ImportMesh->isChecked());
-	m_TextureSection->setEnabled(m_ImportTextures->isChecked());
+	m_SourceSection->setEnabled(ImportsAnything());
 	m_MaterialSection->setEnabled(CanImportPbrMaterials());
-	m_AnimationSection->setEnabled(m_ImportAnimations->isChecked());
 
 	const QString problem = GetProblem();
 	m_Problem->setText(problem);

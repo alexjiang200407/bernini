@@ -108,6 +108,11 @@ extracted textures use that same label and ID as their folder. Two sources with 
 in different authored folders therefore have distinct outputs. An occupied source destination
 still refuses the import without overwriting files.
 
+The editor's mesh import dialog uses the same naming functions and retains only source and
+material destination fields. Geometry, animation and texture checkboxes choose what to import;
+they do not choose cache names. Texture-only imports also copy their source and write a sidecar,
+so their images have the same regeneration guarantee as a mesh import's images.
+
 A `.bimport` names three things, two of which nothing else can derive
 ([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
 

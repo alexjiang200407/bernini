@@ -36,8 +36,8 @@ namespace editor
 	 * Which category each piece lands in is decided by what it is, not by where a drop happened: the
 	 * mesh under `Derived/Meshes/`, the rig under `Derived/Skeletons/`, the clips under
 	 * `Derived/Animations/`.
-	 * `options.outputs` says where inside each -- a project's references are written against that
-	 * layout, so an import may organise within a category and never across one.
+	 * `options.outputs` carries generated keys from the dialog's identity, alongside the authored
+	 * source and material destinations.
 	 *
 	 * Everything expensive runs on a worker thread behind a cancellable loading screen, because all of
 	 * it takes long enough to freeze the editor and none of it touches Qt or bgl: parsing the glTF,
