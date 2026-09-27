@@ -1,12 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/MeshBindings.h>
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/ResolvedImport.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
-#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
@@ -39,6 +37,7 @@
 #include <tracy/Tracy.hpp>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -55,7 +54,10 @@ namespace assetlib
 		};
 
 		MeshBindings
-		bindingSnapshot(const BMesh& mesh, const ImportDocument& document)
+		bindingSnapshot(
+			const BMesh&              mesh,
+			const ImportDocument&     document,
+			std::vector<std::string>& unbound)
 		{
 			auto result     = MeshBindings();
 			result.skeleton = document.skeleton;
@@ -67,6 +69,11 @@ namespace assetlib
 			auto fields = std::unordered_map<std::string_view, uint32_t>();
 			for (uint32_t i = 0; i < mesh.grassFields.fields.size(); ++i)
 				fields.emplace(mesh.grassFields.fields[i].name, i);
+			auto       missing       = std::unordered_set<std::string_view>();
+			const auto reportMissing = [&](std::string_view name) {
+				if (missing.insert(name).second)
+					unbound.emplace_back(name);
+			};
 			for (const auto& binding : document.bindings)
 			{
 				const bool  grass = isGrassBinding(binding);
@@ -76,11 +83,15 @@ namespace assetlib
 					auto& materials          = grass ? result.grassLooks : result.submeshMaterials;
 					materials[found->second] = binding.material;
 				}
+				else
+					reportMissing(binding.submesh);
 			}
 			for (const auto& entry : document.materialOverrides)
 				if (const auto found = submeshes.find(entry.submesh); found != submeshes.end())
 					result.materialOverrides.push_back(
 						{ found->second, entry.name, entry.material });
+				else
+					reportMissing(entry.submesh);
 			std::ranges::sort(result.materialOverrides, [](const auto& a, const auto& b) {
 				return std::tie(a.submesh, a.name) < std::tie(b.submesh, b.name);
 			});
@@ -225,19 +236,10 @@ namespace assetlib
 	{
 		const std::string extension = extensionOf(path);
 		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
-		    extension != c_AnimationExtension && extension != c_GrassFieldsExtension)
+		    extension != c_AnimationExtension)
 			core::throw_runtime_error(
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
-
-		if (extension == c_GrassFieldsExtension)
-			return checkKey(
-					   *this,
-					   path,
-					   magic::c_BGrassF,
-					   AssetCodec<BGrassFields>::c_BakeToken,
-					   "bgrassfields")
-			    .stale;
 
 		if (extension == c_MeshExtension)
 			return checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh")
@@ -254,13 +256,13 @@ namespace assetlib
 	{
 		const std::string extension = extensionOf(path);
 		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
-		    extension != c_AnimationExtension && extension != c_GrassFieldsExtension)
+		    extension != c_AnimationExtension)
 			core::throw_runtime_error(
 				"'{}' is not a geometry cache entry, so it has no cache key to check",
 				path);
 
-		uint32_t         magic = magic::c_BGrassF;
-		std::string_view what  = "bgrassfields";
+		uint32_t         magic = magic::c_BMesh;
+		std::string_view what  = "bmesh";
 		if (extension == c_MeshExtension)
 		{
 			magic = magic::c_BMesh;
@@ -308,7 +310,6 @@ namespace assetlib
 		{
 			MeshRefs refs;
 			refs.skeleton = checked.document->skeleton;
-			refs.grass    = checked.document->GetGrassOutput();
 			for (const MaterialBinding& binding : checked.document->bindings)
 				refs.materials.push_back(binding.material);
 			for (const MaterialOverrideBinding& entry : checked.document->materialOverrides)
@@ -374,9 +375,10 @@ namespace assetlib
 			current.sourceKey = checked.key.source.key;
 			if (checked.document)
 			{
-				current.bindings = bindingSnapshot(current.mesh, *checked.document);
+				current.bindings =
+					bindingSnapshot(current.mesh, *checked.document, current.unboundBindings);
 				if (!IsReadOnly())
-					current.unboundBindings = rebuildMaterialSlots(
+					(void)rebuildMaterialSlots(
 						current.mesh,
 						checked.document->bindings,
 						checked.document->materialOverrides);
@@ -398,7 +400,6 @@ namespace assetlib
 		generateTangents(current.mesh);
 		requireUniqueSubmeshNames(current.mesh);
 		current.mesh.source = group.ref;
-		current.mesh.grass  = group.document->GetGrassOutput();
 		if (isSkinned(current.mesh))
 		{
 			current.mesh.skeleton          = group.document->skeleton;
@@ -412,100 +413,12 @@ namespace assetlib
 					path);
 			}
 		}
-		current.bindings        = bindingSnapshot(current.mesh, *group.document);
-		current.unboundBindings = rebuildMaterialSlots(
+		current.bindings = bindingSnapshot(current.mesh, *group.document, current.unboundBindings);
+		(void)rebuildMaterialSlots(
 			current.mesh,
 			group.document->bindings,
 			group.document->materialOverrides);
 		return current;
-	}
-
-	RegenGrassFields
-	AssetStore::LoadRegenGrassFields(std::string_view path) const
-	{
-		ZoneScopedN("assetlib load bgrassfields");
-		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
-
-		if (IsReadOnly())
-		{
-			requirePackedKey(
-				*this,
-				path,
-				magic::c_BGrassF,
-				AssetCodec<BGrassFields>::c_BakeToken,
-				"bgrassfields");
-			return { load<BGrassFields>(*m_Files, path), {} };
-		}
-
-		CheckedKey checked = checkKey(
-			*this,
-			path,
-			magic::c_BGrassF,
-			AssetCodec<BGrassFields>::c_BakeToken,
-			"bgrassfields");
-		if (!checked.stale)
-		{
-			RegenGrassFields current{ load<BGrassFields>(*m_Files, path), {} };
-			if (checked.document)
-				current.unboundBindings =
-					applyGrassBindings(current.fields, checked.document->bindings);
-			return current;
-		}
-
-		RegeneratedGroup group = regenerate(*this, std::move(checked), "bgrassfields");
-		if (group.import.grass.fields.empty())
-		{
-			core::throw_runtime_error(
-				"'{}': its re-exported source no longer carries a POINTS primitive; restore it in "
-				"the "
-				"DCC, or delete this file",
-				path);
-		}
-
-		RegenGrassFields current{ std::move(group.import.grass), {} };
-		current.fields.source   = group.ref;
-		current.unboundBindings = applyGrassBindings(current.fields, group.document->bindings);
-		return current;
-	}
-
-	std::vector<std::string>
-	AssetStore::LoadRegenGrassLooks(std::string_view path) const
-	{
-		if (!IsReadOnly())
-		{
-			MountedFileReader      reader(GetFiles(), path, "bgrassfields");
-			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BGrassF, "bgrassfields");
-			if (key.bakeToken != AssetCodec<BGrassFields>::c_BakeToken)
-			{
-				if (key.source.key.empty())
-				{
-					core::throw_runtime_error(
-						"bgrassfields '{}': written at another bake revision and no source was "
-						"ever "
-						"recorded, so what it references cannot be known; re-import it",
-						path);
-				}
-
-				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				if (!GetFiles().Exists(documentKey))
-				{
-					core::throw_runtime_error(
-						"bgrassfields '{}': written at another bake revision and the import "
-						"document "
-						"beside '{}' is gone, so what it references cannot be known",
-						path,
-						key.source.key);
-				}
-
-				auto looks = std::vector<std::string>();
-				for (const MaterialBinding& binding :
-				     loadImportDocument(GetFiles(), documentKey).bindings)
-					if (isGrassBinding(binding))
-						looks.push_back(binding.material);
-				return looks;
-			}
-		}
-		return loadGrassLooks(*m_Files, path);
 	}
 
 	Skeleton

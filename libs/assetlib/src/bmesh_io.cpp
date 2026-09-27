@@ -123,7 +123,6 @@ namespace assetlib
 			kMeshletGroups,      // one bound per run of c_MeshletsPerGroup meshlets
 			kMaterialOverrides,  // (submesh, material) pairs; absent when there are none
 			kMaterialOverrideNames,
-			kGrassPath,  // the .bgrassfields cooked from the same source; absent when none
 			kLods,       // each mesh's levels of detail, see Mesh::firstLod
 			kGrassFields,
 			kGrassNames,
@@ -206,7 +205,6 @@ namespace assetlib
 			ChunkId::kSkeletonSignature,
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
-		writer.Add(ChunkId::kGrassPath, std::span<const char>(mesh.grass));
 		auto fields     = std::vector<GrassField>();
 		auto fieldNames = std::vector<std::string>();
 		fields.reserve(mesh.grassFields.fields.size());
@@ -273,8 +271,6 @@ namespace assetlib
 		mesh.skeletonBoneNames =
 			cache::unpackStrings(reader.Read<char>(ChunkId::kSkeletonBoneNames));
 
-		const auto grass = reader.Read<char>(ChunkId::kGrassPath);
-		mesh.grass.assign(grass.begin(), grass.end());
 		const auto fields     = reader.Read<GrassField>(ChunkId::kGrassFields);
 		const auto fieldNames = cache::unpackStrings(reader.Read<char>(ChunkId::kGrassNames));
 		if (fields.size() != fieldNames.size())
@@ -308,10 +304,9 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr std::array<uint32_t, 3> c_WantedRefChunks = {
+		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
 			{ static_cast<uint32_t>(ChunkId::kMaterialPaths),
-			  static_cast<uint32_t>(ChunkId::kSkeletonPath),
-			  static_cast<uint32_t>(ChunkId::kGrassPath) }
+			  static_cast<uint32_t>(ChunkId::kSkeletonPath) }
 		};
 
 		MeshRefs
@@ -326,9 +321,6 @@ namespace assetlib
 
 			const auto skeleton = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
 			refs.skeleton.assign(skeleton.begin(), skeleton.end());
-
-			const auto grass = chunks.Read<char>(ChunkId::kGrassPath, c_What);
-			refs.grass.assign(grass.begin(), grass.end());
 
 			return refs;
 		}

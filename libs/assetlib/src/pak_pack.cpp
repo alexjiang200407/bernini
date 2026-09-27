@@ -1,12 +1,10 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/ResolvedImport.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
-#include <assetlib_structs/BGrassFields.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
@@ -177,19 +175,7 @@ namespace assetlib
 				remapToItsRig(rigs, store, clips);
 				return AssetCodec<AnimationSet>::Serialize(clips);
 			}
-			case AssetType::kGrassFields:
-			{
-				RegenGrassFields current = store.LoadRegenGrassFields(key);
-				if (!current.unboundBindings.empty())
-				{
-					core::throw_runtime_error(
-						"AssetStore::Pack: '{}' binds grass field '{}', which the source does "
-						"not have; rebind or re-export",
-						key,
-						current.unboundBindings.front());
-				}
-				return AssetCodec<BGrassFields>::Serialize(current.fields);
-			}
+
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kSky:
@@ -237,10 +223,9 @@ namespace assetlib
 			StampFor(const std::string& key)
 			{
 				const std::string extension = extensionOf(key);
-				const AssetType type = extension == c_MeshExtension      ? AssetType::kMesh :
-				                       extension == c_SkeletonExtension  ? AssetType::kSkeleton :
-				                       extension == c_AnimationExtension ? AssetType::kAnimation :
-				                                                           AssetType::kGrassFields;
+				const AssetType   type = extension == c_MeshExtension     ? AssetType::kMesh :
+				                         extension == c_SkeletonExtension ? AssetType::kSkeleton :
+				                                                            AssetType::kAnimation;
 
 				const std::vector<std::byte>& bytes = BytesFor(type, key);
 				return SourceStamp{
@@ -343,7 +328,6 @@ namespace assetlib
 				case AssetType::kMesh:
 				case AssetType::kSkeleton:
 				case AssetType::kAnimation:
-				case AssetType::kGrassFields:
 					regenerated = archived.BytesFor(*type, key);
 					break;
 				case AssetType::kImportDocument:

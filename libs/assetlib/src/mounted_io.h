@@ -64,10 +64,6 @@ namespace assetlib
 	[[nodiscard]] std::string
 	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path);
 
-	/** The `.bgrass` looks a `.bgrassfields` names, read seek-only: never its clumps. */
-	[[nodiscard]] std::vector<std::string>
-	loadGrassLooks(const core::file::IFileSystem& fileSystem, std::string_view path);
-
 	[[nodiscard]] ImageData
 	loadKTX2(
 		const core::file::IFileSystem& fileSystem,

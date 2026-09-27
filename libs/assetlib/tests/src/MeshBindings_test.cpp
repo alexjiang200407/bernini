@@ -134,7 +134,11 @@ TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot",
 		                           { "Pavement", "Authored/Materials/pavement.bmaterial" },
 		                           { "Verge", "Authored/Grass/verge.bgrass" } };
 	document.materialOverrides = { { "Road", "wet", "Authored/Materials/wet.bmaterial" } };
-	document.skeleton          = "Derived/Skeletons/shared.bskel";
+	document.bindings.push_back({ "MissingField", "Authored/Grass/verge.bgrass" });
+	document.bindings.push_back({ "MissingMesh", "Authored/Materials/road.bmaterial" });
+	document.materialOverrides.push_back(
+		{ "MissingMesh", "wet", "Authored/Materials/wet.bmaterial" });
+	document.skeleton = "Derived/Skeletons/shared.bskel";
 	auto mesh =
 		MakeMesh({ "Authored/Materials/old.bmaterial", "Authored/Materials/old.bmaterial" });
 	mesh.submeshes[0].nameOffset = mesh.stringPool.add("Road");
@@ -174,6 +178,7 @@ TEST_CASE("loose and packed mesh loads resolve the same owned binding snapshot",
 	CHECK(loaded.bindings.materialOverrides[0].material == "Authored/Materials/wet.bmaterial");
 	CHECK(loaded.bindings.skeleton == document.skeleton);
 	CHECK(loaded.bindings.grassLooks == std::vector<std::string>{ "Authored/Grass/verge.bgrass" });
+	CHECK(loaded.unboundBindings == std::vector<std::string>{ "MissingField", "MissingMesh" });
 	const auto before = store.GetFiles().Read(output);
 	document.bindings.clear();
 	document.materialOverrides.clear();

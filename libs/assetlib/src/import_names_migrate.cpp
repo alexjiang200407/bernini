@@ -1,7 +1,6 @@
 #include "ref_paths.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
@@ -9,7 +8,6 @@
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
 #include <assetlib/project_layout.h>
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/err/util.h>
@@ -100,8 +98,11 @@ namespace assetlib
 		{
 			try
 			{
-				auto       document = Load<ImportDocument>(key);
-				const auto grassKey = document.GetGrassOutput();
+				auto        document = Load<ImportDocument>(key);
+				std::string grassKey;
+				for (const auto& output : document.outputs)
+					if (extensionOf(output) == ".bgrassfields")
+						grassKey = output;
 				if (grassKey.empty())
 					continue;
 				const auto meshKey = document.GetMeshOutput();
@@ -110,28 +111,10 @@ namespace assetlib
 				if (!dryRun)
 				{
 					auto current = LoadRegenMesh(meshKey);
-					auto legacy  = LoadRegenGrassFields(grassKey);
-					if (!current.unboundBindings.empty() || !legacy.unboundBindings.empty())
+					if (!current.unboundBindings.empty())
 						core::throw_runtime_error(
 							"{}: unresolved bindings prevent grass migration",
 							key);
-					if (current.mesh.grassFields.fields.empty())
-					{
-						auto& grass = legacy.fields;
-						if (grass.names.size() != grass.fields.size())
-							core::throw_runtime_error(
-								"{}: grass field names do not match its geometry",
-								grassKey);
-						for (uint32_t i = 0; i < grass.fields.size(); ++i)
-						{
-							grass.fields[i].look = i;
-							current.mesh.grassFields.fields.push_back(
-								{ grass.names[i], grass.fields[i] });
-						}
-						current.mesh.grassFields.chunks = std::move(grass.chunks);
-						current.mesh.grassFields.clumps = std::move(grass.clumps);
-					}
-					current.mesh.grass.clear();
 					Save(current.mesh, meshKey);
 					std::erase(document.outputs, grassKey);
 					Save(document, key);
@@ -180,17 +163,14 @@ namespace assetlib
 				plan.registry  = GetKindRegistry();
 				for (const auto& output : document.outputs)
 				{
+					if (extensionOf(output) == ".bgrassfields")
+						continue;
 					const auto type = assetTypeFromExtension(output);
 					if (!type || (document.environment ? (*type != AssetType::kSky &&
 					                                      *type != AssetType::kEnvLighting) :
 					                                     !isGeometryContainer(*type)))
 						core::throw_runtime_error("'{}' is not an output of this import", output);
-					const auto target =
-						*type == AssetType::kGrassFields ?
-							swapExtension(
-								importOutputKey(document.identity, AssetType::kMesh),
-								".bgrassfields") :
-							importOutputKey(document.identity, *type);
+					const auto target = importOutputKey(document.identity, *type);
 					if (output == target)
 						continue;
 					plan.outputs.push_back({ output, target });

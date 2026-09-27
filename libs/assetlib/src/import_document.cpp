@@ -143,16 +143,6 @@ namespace assetlib
 	}
 
 	std::string
-	ImportDocument::GetGrassOutput() const
-	{
-		for (const std::string& output : outputs)
-			if (assetTypeFromExtension(output) == AssetType::kGrassFields)
-				return output;
-
-		return {};
-	}
-
-	std::string
 	importDocumentKeyFor(std::string_view sourceKey)
 	{
 		return swapExtension(sourceKey, c_ImportDocumentExtension);

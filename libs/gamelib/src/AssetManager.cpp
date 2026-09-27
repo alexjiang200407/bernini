@@ -33,7 +33,6 @@
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
 #include <assetlib/benv.h>

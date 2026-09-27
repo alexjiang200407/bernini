@@ -254,23 +254,6 @@ namespace assetlib
 		return ref;
 	}
 
-	std::vector<std::string>
-	AssetStore::WriteImportedGrass(
-		BGrassFields     grass,
-		BMesh&           mesh,
-		std::string_view key,
-		const SourceRef& source) const
-	{
-		mesh.grass.clear();
-		if (grass.fields.empty())
-			return {};
-
-		grass.source = source;
-		Save(grass, key);
-		mesh.grass = std::string(key);
-		return { mesh.grass };
-	}
-
 	void
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
@@ -388,52 +371,6 @@ namespace assetlib
 	isGrassBinding(const MaterialBinding& binding) noexcept
 	{
 		return binding.material.ends_with(c_GrassExtension);
-	}
-
-	std::vector<std::string>
-	applyGrassBindings(BGrassFields& grass, std::span<const MaterialBinding> bindings)
-	{
-		auto byField = std::unordered_map<std::string_view, std::string_view>();
-		for (const MaterialBinding& binding : bindings)
-			if (isGrassBinding(binding))
-				byField.emplace(binding.submesh, binding.material);
-
-		auto seen = std::unordered_set<std::string_view>();
-		for (const std::string& name : grass.names)
-			if (!seen.insert(name).second)
-			{
-				core::throw_runtime_error(
-					"'{}' names two grass fields; the name is what a grass binding addresses, so "
-					"name "
-					"the meshes in the DCC",
-					name);
-			}
-
-		grass.looks.clear();
-		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
-		auto matched = std::unordered_set<std::string_view>();
-		for (size_t f = 0; f < grass.fields.size(); ++f)
-		{
-			GrassField& field = grass.fields[f];
-			const auto  found = byField.find(grass.names[f]);
-			if (found == byField.end())
-			{
-				field.look = c_InvalidIndex;
-				continue;
-			}
-			const auto [slot, added] =
-				indexOf.emplace(found->second, static_cast<uint32_t>(grass.looks.size()));
-			if (added)
-				grass.looks.emplace_back(found->second);
-			field.look = slot->second;
-			matched.insert(found->first);
-		}
-
-		auto unbound = std::vector<std::string>();
-		for (const MaterialBinding& binding : bindings)
-			if (isGrassBinding(binding) && !matched.contains(binding.submesh))
-				unbound.emplace_back(binding.submesh);
-		return unbound;
 	}
 
 	ImportDocument

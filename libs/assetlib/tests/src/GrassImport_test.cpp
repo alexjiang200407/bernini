@@ -224,34 +224,6 @@ TEST_CASE("A POINTS primitive refuses a point no pass could place", "[grass][imp
 	}
 }
 
-TEST_CASE(
-	"A .bimport binds a grass field by name, apart from the mesh's materials",
-	"[grass][import]")
-{
-	Buffer    buffer;
-	const Glb glb("bernini_grass_bind.glb", StreetDocument(buffer, ShuffledGrid(4)), buffer.bytes);
-	imp::BMeshImport mesh = Load(glb);
-
-	const std::vector<MaterialBinding> bindings = {
-		{ .submesh = "Street[0]", .material = "Authored/Materials/road.bmaterial" },
-		{ .submesh = "Street[1]", .material = "Authored/Grass/verge.bgrass" },
-		{ .submesh = "Gone[3]", .material = "Authored/Grass/old.bgrass" },
-	};
-
-	BGrassFields grass = mesh.grass;
-	CHECK(applyGrassBindings(grass, bindings) == std::vector<std::string>{ "Gone[3]" });
-	CHECK(grass.looks == std::vector<std::string>{ "Authored/Grass/verge.bgrass" });
-	CHECK(grass.fields[0].look == 0);
-
-	// Unbound again once the document stops naming it.
-	CHECK(applyGrassBindings(grass, std::span(bindings.data(), 1)).empty());
-	CHECK(grass.fields[0].look == c_InvalidIndex);
-	CHECK(grass.looks.empty());
-
-	CHECK(isGrassBinding(bindings[1]));
-	CHECK_FALSE(isGrassBinding(bindings[0]));
-}
-
 TEST_CASE("A mesh's bindings neither apply nor report a grass binding", "[grass][import]")
 {
 	Buffer    buffer;
@@ -280,18 +252,4 @@ TEST_CASE("A primitive that is neither triangles nor points is still refused", "
 	document["meshes"][0]["primitives"][1]["mode"] = 1;  // LINES
 	const Glb glb("bernini_grass_lines.glb", document, buffer.bytes);
 	CHECK_THROWS(Load(glb));
-}
-
-TEST_CASE(
-	"Two grass fields of one name are refused where a binding would address them",
-	"[grass][import]")
-{
-	auto grass   = BGrassFields();
-	grass.fields = { GrassField{ .mesh = 0, .look = c_InvalidIndex },
-		             GrassField{ .mesh = 1, .look = c_InvalidIndex } };
-	grass.names  = { "Verge", "Verge" };
-
-	const std::vector<MaterialBinding> bindings = { { .submesh  = "Verge",
-		                                              .material = "Authored/Grass/verge.bgrass" } };
-	CHECK_THROWS(applyGrassBindings(grass, bindings));
 }

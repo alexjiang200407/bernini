@@ -5,7 +5,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/ImportIdentity.h>
 #include <assetlib/Project.h>
-#include <assetlib/RegenGrassFields.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -28,7 +27,6 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BGrass.h>
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/err/util.h>
@@ -100,8 +98,6 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
-		case assetlib::RefKind::kMeshGrass:
-			return "grows the grass of";
 		case assetlib::RefKind::kDocumentSkeleton:
 			return "binds its source's joints to";
 		case assetlib::RefKind::kDocumentOutput:
@@ -853,11 +849,7 @@ main(int argc, char** argv)
 				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
 				break;
 			}
-			case assetlib::AssetType::kGrassFields:
-			{
-				std::cout << describeAsset(store.LoadRegenGrassFields(key).fields);
-				break;
-			}
+
 			// sniff never answers either: a foreign kind has no codec, and an import document is
 			// text whose extension the text branch does not accept. Listed so the switch stays
 			// exhaustive, which is what makes a new AssetType a compile error here.

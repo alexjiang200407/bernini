@@ -62,11 +62,6 @@ namespace assetlib::test
 			true,
 			source);
 
-		const std::string grassKey =
-			std::format("Derived/Meshes/{}{}", name, c_GrassFieldsExtension);
-		for (std::string& grass : store.WriteImportedGrass(imported.grass, mesh, grassKey, source))
-			outputs.push_back(std::move(grass));
-
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 

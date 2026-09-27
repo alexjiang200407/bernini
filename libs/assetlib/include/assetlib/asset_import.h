@@ -10,7 +10,6 @@
 #include <vector>
 namespace assetlib
 {
-	struct BGrassFields;
 	struct BMesh;
 	struct MaterialBinding;
 	struct MaterialOverrideBinding;
@@ -105,18 +104,6 @@ namespace assetlib
 		BMesh&                                   mesh,
 		std::span<const MaterialBinding>         bindings,
 		std::span<const MaterialOverrideBinding> overrides);
-
-	/**
-	 * The grass half of rebuildMaterialSlots: rebuilds `grass.looks` and every `GrassField::look` from the
-	 * grass bindings among `bindings`, matched by field name. A field the document does not name
-	 * is unbound, and its `look` is `c_InvalidIndex`. Material bindings are not this function's.
-	 *
-	 * @return The field names grass bindings name that `grass` does not have.
-	 * @throws std::runtime_error if two fields share a name -- two meshes named alike in the DCC,
-	 *         each of one primitive -- since the name is what a binding addresses.
-	 */
-	[[nodiscard]] std::vector<std::string>
-	applyGrassBindings(BGrassFields& grass, std::span<const MaterialBinding> bindings);
 
 	/** What happened to one import document under `AssetStore::ReauthorImportDocuments`. */
 	struct ReauthoredDocument

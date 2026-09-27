@@ -461,15 +461,10 @@ point per clump, which the import reads as a grass field (`BMeshImport::grass`,
 [BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h)) instead of a
 submesh. The renderer grows the blades from the points; the DCC never sees one.
 
-The fields are cooked into a `.bgrassfields` beside the `.bmesh` (`AssetStore::WriteImportedGrass`),
-written, listed in the `.bimport`'s `outputs` and named by the `.bmesh` (`BMesh::grass`) only when
-the source has a POINTS primitive. It is
-a cache entry of its own with its own bake token, so a change to how clumps are stored re-cooks
-grass and no mesh -- and a fourth member of the geometry group, so `Reimport`, `migrate`, `pack`,
-staleness and rename carry it exactly as they carry the `.bmesh` beside it. It stores the looks it
-was written with; `LoadRegenGrassFields` applies the document's grass bindings over them on every
-load, as `LoadRegenMesh` does the material ones, and reports a binding naming a field the source no
-longer has. A re-import keeps the grass bindings authored since, as it keeps the clip floors.
+The fields are named geometry chunks inside `.bmesh`. `LoadRegenMesh` resolves their
+`.bgrass` looks from the sidecar into `MeshBindings::grassLooks`; it reports bindings whose
+field or submesh no longer exists. `migrate` and `pack` refuse those unresolved bindings.
+A re-import preserves authored grass bindings. No standalone grass container is written.
 
 | Attribute | Meaning | Absent |
 |---|---|---|
@@ -668,7 +663,7 @@ longer has. A re-import keeps the grass bindings authored since, as it keeps the
     never the source, which is an image to convolve rather than one to sample. A route with no baked
     map on disk throws, naming `assetlib_cli migrate`, which is what a fresh checkout runs.
 
-**`.bmesh`, `.bskel`, `.banim`, `.bgrassfields`, `.bsky` and `.benvl` are the same cache-entry container**,
+**`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an

@@ -112,7 +112,7 @@ TEST_CASE("Embedded grass loads without the legacy standalone cache", "[grass][a
 	const game::test::DataRoot root("bernini_grass_acquire_renamed");
 	ImportStreet(root.path, c_MaterialKey);
 
-	REQUIRE(fs::remove(root.path / c_GrassKey));
+	REQUIRE_FALSE(fs::exists(root.path / c_GrassKey));
 
 	CHECK(CountAcquire(root.path).acquired == 3);
 }

@@ -58,10 +58,9 @@ namespace assetlib
 		 * Rigs before meshes before clips: a mesh names the rig it binds, and a clip set sweeps its
 		 * boxes through the meshes standing on disk.
 		 */
-		constexpr std::array<AssetType, 4> c_Order = { { AssetType::kSkeleton,
-			                                             AssetType::kMesh,
-			                                             AssetType::kAnimation,
-			                                             AssetType::kGrassFields } };
+		constexpr std::array<AssetType, 3> c_Order = {
+			{ AssetType::kSkeleton, AssetType::kMesh, AssetType::kAnimation }
+		};
 
 		/**
 		 * A source's outputs of one type that this run has to produce, and where in `pending` the
@@ -97,7 +96,6 @@ namespace assetlib
 				generateTangents(mesh);
 				requireUniqueSubmeshNames(mesh);
 				mesh.source = group.ref;
-				mesh.grass  = document.GetGrassOutput();
 
 				if (isSkinned(mesh))
 				{
@@ -176,21 +174,7 @@ namespace assetlib
 				store.Save(clips, key);
 				return;
 			}
-			case AssetType::kGrassFields:
-			{
-				if (group.import.grass.fields.empty())
-				{
-					core::throw_runtime_error(
-						"'{}': its source no longer carries a POINTS primitive",
-						key);
-				}
 
-				BGrassFields grass = group.import.grass;
-				grass.source       = group.ref;
-				static_cast<void>(applyGrassBindings(grass, document.bindings));
-				store.Save(grass, key);
-				return;
-			}
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kEnvironment:

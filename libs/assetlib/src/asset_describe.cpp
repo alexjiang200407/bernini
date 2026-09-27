@@ -418,9 +418,6 @@ namespace assetlib
 				"  skeleton     {} (unused: no submesh carries joints)\n",
 				mesh.skeleton);
 
-		if (!mesh.grass.empty())
-			out += std::format("  grass        {}\n", mesh.grass);
-
 		// Every path is relative to the project's data root, not to this file -- worth saying, since a
 		// path that looks broken relative to the .bmesh is usually correct.
 		out += std::format(

@@ -22,11 +22,11 @@ then draws them, placed by its transform. `docs/bgl_api.md` has the call's rules
 it: `game::AssetManager::AcquireMesh` reads embedded fields and the sidecar's grass bindings,
 creates each named `.bgrass` look and attaches them, and the geom's release gives them back
 (`libs/gamelib/CLAUDE.md`).
-The renderer still receives `BGrassFields` as its decoded input. New CLI and editor imports emit
-no standalone grass container; the legacy `.bgrassfields` codec remains for migration.
-`migrate` folds a legacy grass output into its mesh before renaming the import's outputs, retains
-the sidecar's look bindings, and removes the standalone cache. Unresolved bindings or shared output
-ownership refuse that conversion. A dry run leaves both containers untouched.
+The renderer still receives `BGrassFields` as its decoded input. The standalone `.bgrassfields`
+codec and asset kind are retired. `migrate` regenerates foreign-token meshes from the copied
+source, retains the sidecar's look bindings, and removes legacy grass output claims and files.
+It never parses the retired cache. Unresolved bindings or shared output ownership refuse
+conversion. A dry run leaves the project unchanged.
 
 A look with no mesh under it grows on a patch: `assetlib::makeGrassPatch` jitters clumps over a
 square, and `AssetManager::CreateGrassPatch` puts them on a ground plane. That is what
