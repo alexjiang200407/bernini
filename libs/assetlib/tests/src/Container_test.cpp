@@ -112,6 +112,36 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == bytes);
 }
 
+TEST_CASE("a mesh's levels of detail round-trip with their table", "[bmesh][io][lod]")
+{
+	auto mesh = MakeSampleMesh();
+
+	// Two levels of the one submesh, level-major, each level's entry its own row.
+	mesh.submeshes.push_back(mesh.submeshes[0]);
+	mesh.meshes[0].lodCount = 2;
+	mesh.meshes[0].firstLod = 1;
+	mesh.lods               = { { 0.0f }, { 120.0f }, { 4.0f } };
+
+	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+
+	REQUIRE(restored.meshes.size() == 1);
+	CHECK(restored.meshes[0].lodCount == 2);
+	CHECK(restored.meshes[0].firstLod == 1);
+	REQUIRE(restored.lods.size() == 3);
+	CHECK(restored.lods[1].minPixels == 120.0f);
+	CHECK(restored.lods[2].minPixels == 4.0f);
+	CHECK(restored.submeshes.size() == 2);
+
+	SECTION("a mesh with no table reads as one level")
+	{
+		const auto single =
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(MakeSampleMesh()));
+
+		CHECK(single.meshes[0].lodCount == 1);
+		CHECK(single.lods.empty());
+	}
+}
+
 TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleton]")
 {
 	auto mesh              = MakeSampleMesh();

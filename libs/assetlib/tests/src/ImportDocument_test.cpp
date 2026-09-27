@@ -658,6 +658,45 @@ TEST_CASE("a document refuses a skeleton or outputs of the wrong shape", "[impor
 		DocumentFrom(R"({"outputs": [7]})"),
 		Catch::Matchers::ContainsSubstring("'outputs' holds a non-string entry"));
 }
+TEST_CASE("authored LOD thresholds round-trip as a parameter", "[importdoc][lod]")
+{
+	ImportDocument document;
+	document.lodMinPixels = { 160.0f, 80.0f, 0.0f };
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	CHECK(read.lodMinPixels == std::vector<float>{ 160.0f, 80.0f, 0.0f });
+
+	// A parameter, not a binding: the table is written into the .bmesh, so an edit has to stale it.
+	ImportDocument edited  = read;
+	edited.lodMinPixels[1] = 60.0f;
+	CHECK(parametersHashOf(edited) != parametersHashOf(read));
+
+	SECTION("a document authoring none hashes as it did before the key existed")
+	{
+		const ImportDocument none;
+		CHECK(DocumentText(none).find("lodMinPixels") == std::string::npos);
+		CHECK(parametersHashOf(none) == parametersHashOf(DocumentFrom("{}")));
+	}
+
+	SECTION("a malformed table is refused with its reason")
+	{
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"parameters": {"lodMinPixels": 160}})"),
+			Catch::Matchers::ContainsSubstring("'lodMinPixels' is not an array"));
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"parameters": {"lodMinPixels": [160, -1]}})"),
+			Catch::Matchers::ContainsSubstring("not a non-negative number"));
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"parameters": {"lodMinPixels": [80, 160]}})"),
+			Catch::Matchers::ContainsSubstring("must not increase"));
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"parameters": {"lodMinPixels": [9, 8, 7, 6, 5, 4, 3, 2, 1]}})"),
+			Catch::Matchers::ContainsSubstring("more than the 8 a mesh may carry"));
+	}
+}
+
 TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grounding]")
 {
 	ImportDocument document;

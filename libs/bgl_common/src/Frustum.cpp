@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullView.h>
 #include <limits>
 
@@ -65,6 +66,10 @@ namespace bgl
 
 		const FrustumPlanes frustum = ExtractFrustumPlanes(viewProj);
 		std::ranges::copy(frustum.planes, view.frustumPlanes);
+
+		view.lodPixelScale  = 1.0f;
+		view.lodForcedLevel = idl::cLodForceNone;
+		view.lodFadeStep    = 1.0f;
 
 		return view;
 	}

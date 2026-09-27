@@ -18,6 +18,7 @@
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/MeshInstanceHandle.h>
@@ -1540,6 +1541,29 @@ namespace bgl
 		}
 
 		m_Wind = desc;
+	}
+
+	void
+	SceneView::SetLodSelection(const LodSelectionDesc& desc)
+	{
+		if (!std::isfinite(desc.pixelScale) || desc.pixelScale <= 0.0f)
+		{
+			throw SceneError("SetLodSelection: pixelScale must be finite and positive");
+		}
+		if (!std::isfinite(desc.fadeSeconds) || desc.fadeSeconds < 0.0f)
+		{
+			throw SceneError("SetLodSelection: fadeSeconds must be finite and non-negative");
+		}
+		if (desc.forceLevel.has_value() && *desc.forceLevel >= LodLevel::kCount)
+		{
+			throw SceneError(
+				std::format(
+					"SetLodSelection: forceLevel {} is past the {} levels a mesh may carry",
+					static_cast<uint32_t>(*desc.forceLevel),
+					cMaxMeshLods));
+		}
+
+		m_LodSelection = desc;
 	}
 
 	void

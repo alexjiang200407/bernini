@@ -173,7 +173,7 @@ Terrain and the LOD/atlas multipliers are absent: terrain has no container yet, 
 atlasing multiply these rows rather than adding one.
 
 **Run the cases** where the diff touches a path they cover:
-`just run assetlib_tests -- "[perf]" --no-lock`. `--no-lock` because `assetlib` holds no graphics
+`just run assetlib_tests --no-lock -- "[perf]"`. `--no-lock` because `assetlib` holds no graphics
 device, so the suite lock's reason does not apply. Never report a number that was not observed.
 
 **A new cook stage with no zone** is a finding (`revise`): name the call and the dimensions its

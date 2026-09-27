@@ -121,6 +121,7 @@ namespace assetlib
 			kMaterialOverrides,  // (submesh, material) pairs; absent when there are none
 			kMaterialOverrideNames,
 			kGrassPath,  // the .bgrassfields cooked from the same source; absent when none
+			kLods,       // each mesh's levels of detail, see Mesh::firstLod
 		};
 
 		struct PackedOverride
@@ -168,6 +169,7 @@ namespace assetlib
 		writer.Add(ChunkId::kRoots, mesh.roots);
 		writer.Add(ChunkId::kMeshes, mesh.meshes);
 		writer.Add(ChunkId::kSubmeshes, mesh.submeshes);
+		writer.Add(ChunkId::kLods, mesh.lods);
 		writer.Add(ChunkId::kMeshlets, mesh.meshlets);
 		writer.Add(ChunkId::kMeshletGroups, mesh.meshletGroups);
 		writer.Add(ChunkId::kMeshletVertices, mesh.meshletVertices);
@@ -217,6 +219,7 @@ namespace assetlib
 		mesh.meshes           = reader.Require<Mesh>(ChunkId::kMeshes);
 		mesh.roots            = reader.Read<uint32_t>(ChunkId::kRoots);
 		mesh.submeshes        = reader.Read<Submesh>(ChunkId::kSubmeshes);
+		mesh.lods             = reader.Read<MeshLod>(ChunkId::kLods);
 		mesh.meshlets         = reader.Read<Meshlet>(ChunkId::kMeshlets);
 		mesh.meshletGroups    = reader.Read<MeshletGroup>(ChunkId::kMeshletGroups);
 		mesh.meshletVertices  = reader.Read<uint32_t>(ChunkId::kMeshletVertices);
@@ -318,6 +321,7 @@ namespace assetlib
 		out.roots            = mesh.roots;
 		out.meshes           = mesh.meshes;
 		out.submeshes        = mesh.submeshes;
+		out.lods             = mesh.lods;
 		out.meshlets         = mesh.meshlets;
 		out.meshletGroups    = mesh.meshletGroups;
 		out.meshletVertices  = mesh.meshletVertices;

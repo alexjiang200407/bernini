@@ -11,6 +11,7 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
@@ -55,6 +56,10 @@ namespace bgl
 		// fitted to another submesh's meshlets, which is geometry dropped with pixels on screen --
 		// so it is a compile error here rather than anything a container could carry past.
 		static_assert(assetlib::c_MeshletsPerGroup == idl::cMeshletsPerGroup);
+
+		// The same bargain for the levels a mesh may carry: the document and the cook refuse past
+		// the cook's number, and the geom's threshold table is this long.
+		static_assert(assetlib::c_MaxMeshLods == cMaxMeshLods);
 
 		/**
 		 * The bound each run of `idl::cMeshletsPerGroup` meshlets is culled by, folded out of the

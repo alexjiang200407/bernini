@@ -290,8 +290,12 @@ namespace bgl
 	core::slot_handle
 	Scene::AllocateGeomSlot(const GeomRecord& record)
 	{
-		auto placed  = record;
-		placed.entry = m_GeomBuffer.Add(idl::Geom{ .submeshes = record.submeshes });
+		auto placed    = record;
+		auto geom      = idl::Geom();
+		geom.submeshes = idl::LodSubmeshRange{ .range        = record.submeshes.range,
+			                                   .submeshCount = record.submeshes.count,
+			                                   .lodCount     = 1u };
+		placed.entry   = m_GeomBuffer.Add(geom);
 
 		try
 		{

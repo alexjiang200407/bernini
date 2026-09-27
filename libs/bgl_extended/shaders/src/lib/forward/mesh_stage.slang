@@ -88,7 +88,7 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
-    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
 
     payload.instance = instance;
 
@@ -121,7 +121,7 @@ public uint CullMeshlets(uint gid, uint lane)
     let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
-    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
     let meshletCount = submesh.GetMeshletCount();
     let groupCount = MeshletGroupCount(meshletCount);
 
@@ -184,14 +184,14 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)
     let geom = forwardData.geomBuffer.Get(ctx.mesh.geom);
 
     dbg_assert(
-        instance.submeshIndex < geom.submeshes.count,
+        instance.submeshIndex < geom.submeshes.SubmeshCount(),
         ErrorCode.kInvalidSubmeshIndex,
         instance.submeshIndex,
-        geom.submeshes.count,
+        geom.submeshes.SubmeshCount(),
         instance.meshInstance.GetOffset()
     );
 
-    ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
+    ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
 
     dbg_assert(
         meshletIdx < ctx.submesh.GetMeshletCount(),

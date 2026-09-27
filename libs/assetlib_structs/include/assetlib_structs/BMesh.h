@@ -37,6 +37,7 @@ namespace assetlib
 		std::vector<uint32_t> roots;  // node indices whose parent == c_InvalidIndex
 		std::vector<Mesh>     meshes;
 		std::vector<Submesh>  submeshes;
+		std::vector<MeshLod>  lods;  // each mesh's levels, see Mesh::firstLod
 
 		std::vector<Meshlet>      meshlets;
 		std::vector<MeshletGroup> meshletGroups;     // one bound per c_MeshletsPerGroup meshlets

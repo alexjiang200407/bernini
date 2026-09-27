@@ -496,8 +496,11 @@ longer has. A re-import keeps the grass bindings authored since, as it keeps the
 
 ### Containers
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
-  meshopt vertex/triangle pools, interleaved `vertexData`, the plain `indexData` pool (above), and
-  **material references by file path**.
+  meshopt vertex/triangle pools, interleaved `vertexData`, the plain `indexData` pool (above),
+  each mesh's levels of detail (`MeshLod`, one `minPixels` per level; a mesh's submesh range holds
+  every level's entries, level-major, so a reader walking `submeshCount` from `firstSubmesh` sees
+  level 0), and **material references by file path**. The thresholds are the import document's
+  `lodMinPixels` parameter, one per level from 0, the last level's being the draw-nothing size.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text

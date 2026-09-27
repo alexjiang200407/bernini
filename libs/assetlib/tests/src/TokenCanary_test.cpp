@@ -147,7 +147,8 @@ namespace
 		submesh.nameOffset            = mesh.stringPool.add("submesh");
 		mesh.submeshes                = { submesh };
 
-		mesh.meshes = { Mesh{ 0x30, 0x31, mesh.stringPool.add("mesh") } };
+		mesh.meshes = { Mesh{ 0x30, 0x31, mesh.stringPool.add("mesh"), 0x32, 0x33 } };
+		mesh.lods   = { { 96.0f }, { 24.0f } };
 
 		Meshlet meshlet{};
 		meshlet.vertexOffset   = 0x40;
@@ -372,7 +373,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0x7273be2a8d9c3a00ull, .hash = 0x940ff677ec98a1a4ull },
+			Pin{ .token = 0x4757e5f12b30883full, .hash = 0x20533f7e376844f6ull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 

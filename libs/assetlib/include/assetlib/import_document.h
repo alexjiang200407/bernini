@@ -83,6 +83,10 @@ namespace assetlib
 		// rather than a binding: it changes the samples the importer writes, so it has to key.
 		std::vector<ClipFloor> clipFloors;
 
+		// One `MeshLod::minPixels` per level from 0, non-increasing; a level past the list takes the
+		// cook's default. A parameter because the `.bmesh` stores it.
+		std::vector<float> lodMinPixels;
+
 		/**
 		 * Set for an environment source, and then the whole of its parameters: such a document
 		 * writes no `sampleRate`, which nothing reads for it and which would otherwise key every

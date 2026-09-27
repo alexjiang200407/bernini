@@ -138,6 +138,7 @@ namespace assetlib
 				{
 					const ImportDocument authored = loadImportDocument(existing);
 					document.clipFloors           = authored.clipFloors;
+					document.lodMinPixels         = authored.lodMinPixels;
 					document.extraParametersJson  = authored.extraParametersJson;
 					document.materialOverrides    = authored.materialOverrides;
 

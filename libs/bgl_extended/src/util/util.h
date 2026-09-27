@@ -2,11 +2,13 @@
 #include "types/Format.h"
 #include "types/FormatInfo.h"
 #include <bgl/GeomType.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
+#include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <cstdint>
 #include <optional>
@@ -79,4 +81,25 @@ namespace bgl
 	/** The affine matrix WriteInstanceTransform packed, with the implied fourth row restored. */
 	[[nodiscard]] glm::mat4
 	ReadInstanceTransform(const idl::MeshInstance& instance) noexcept;
+
+	/**
+	 * A placement's level of detail under one frustum, as idl::InstanceLod's Slang accessors read
+	 * the word. The CPU never writes one -- the cull does -- but a readback has to decode it, and
+	 * this reads the IDL's own shifts and masks rather than restating them.
+	 */
+	struct InstanceLodState
+	{
+		// Empty until a cull has chosen for the placement.
+		std::optional<LodLevel> level;
+
+		// The level being faded out of, empty while not fading.
+		std::optional<LodLevel> outgoing;
+
+		// Progress toward `level`, in [0, 1]; 1 on a placement not fading.
+		float fade = 1.0f;
+	};
+
+	/** What the Slang accessors read out of `word`. */
+	[[nodiscard]] InstanceLodState
+	UnpackInstanceLod(idl::InstanceLod word) noexcept;
 }

@@ -964,3 +964,33 @@ TEST_CASE("Re-importing a source keeps the floors its document authors", "[impor
 	// the authored floor.
 	CHECK(ref.parametersHash == parametersHashOf(rewritten));
 }
+
+// The same bargain for the levels of detail: the thresholds are authored in the document, and a
+// re-import that dropped them would silently draw every level at the cook's default.
+TEST_CASE(
+	"Re-importing a source keeps the LOD thresholds its document authors",
+	"[importedrig][lod]")
+{
+	using namespace assetlib;
+
+	const TempRoot     root;
+	const AssetStore   store = root.Store();
+	const ImportTarget target{ "Authored/Meshes/unit.glb", c_DefaultSampleRate, {} };
+
+	const fs::path source = root.Data() / "unit_source.glb";
+	core::file::write_atomic(source, std::span<const std::byte>());
+
+	ImportDocument authored;
+	authored.lodMinPixels = { 160.0f, 40.0f, 0.0f };
+	core::file::write_atomic(
+		root.Data() / c_MeshSourcesDirectoryName / "unit.bimport",
+		AssetCodec<ImportDocument>::Serialize(authored));
+
+	const SourceRef ref = store.CopyImportedSource(source, target);
+	store.WriteImportedDocument(target, nullptr);
+
+	const ImportDocument rewritten =
+		loadImportDocument(root.Data() / c_MeshSourcesDirectoryName / "unit.bimport");
+	CHECK(rewritten.lodMinPixels == std::vector<float>{ 160.0f, 40.0f, 0.0f });
+	CHECK(ref.parametersHash == parametersHashOf(rewritten));
+}
