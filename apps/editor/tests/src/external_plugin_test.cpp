@@ -37,10 +37,14 @@ namespace
 {
 	namespace fs = std::filesystem;
 
+	// Named per case, and never shared: the session below loads a plugin out of `root/copies` with
+	// PreventUnloadHint, so Windows holds that file for the life of the process and nothing can
+	// delete the root again. Two cases in one shard sharing a name is the flake that was.
 	struct SampleProject
 	{
-		fs::path root = fs::temp_directory_path() / "bernini_external_plugin";
-		SampleProject()
+		fs::path root;
+
+		explicit SampleProject(const char* name) : root(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(root);
 			assetlib::Project::Create(root / "Sample.bproj", "Sample");
@@ -64,7 +68,7 @@ TEST_CASE(
 	"An independently built plugin carries authored references into a runtime archive",
 	"[plugins][sample]")
 {
-	SampleProject sandbox;
+	SampleProject sandbox("bernini_external_plugin_archive");
 	const auto    projectFile = sandbox.root / "Sample.bproj";
 	auto          session     = editor::plugins::PluginSession::Load(
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
@@ -124,7 +128,7 @@ TEST_CASE(
 	"The independently built sample creates project-owned tabs through the host",
 	"[plugins][sample]")
 {
-	SampleProject sandbox;
+	SampleProject sandbox("bernini_external_plugin_tabs");
 	auto          session = editor::plugins::PluginSession::Load(
 		std::vector<fs::path>{ EDITOR_PLUGIN_SAMPLE_DIR },
 		editor::plugins::CurrentBuildIdentity(),
