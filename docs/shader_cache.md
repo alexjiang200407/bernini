@@ -209,6 +209,14 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   instrumented and its owners would cache driver pipelines built without the instrumentation —
   which is the case this gate exists to prevent.
 
+* **One writer per directory holds the pipeline library.** The library is serialized and
+  replaced *whole* by whoever writes it last, so two writers on one directory — `just test`
+  runs four shards against the suite's `shadercache`, and a process may hold two renderers —
+  would each discard the other's. The first to open `pipelines.psolib.lock` unshared owns the
+  library; the rest run with none, paying PSO creation and nothing else, since the program
+  cache beside it is content-keyed and shared safely. The lock is delete-on-close, so a killed
+  process releases it with nothing to clean up.
+
 * **The cache is called from several threads at once.** The renderer builds its pipelines in
   parallel, so `TryLoad`/`Store` run concurrently — safe because each key is its own file and
   `WriteFileAtomic` renames a uniquely named temp into place — and the driver pipeline library

@@ -104,11 +104,20 @@ namespace bgl
 		// a text any owner changed.
 		bgpu::GpuContextRef m_Context;
 
-		// Null when GPU-based validation is on: that run exists to instrument every shader, and a
-		// PSO replayed out of the library was compiled without the instrumentation.
+		// Null when GPU-based validation is on -- that run exists to instrument every shader, and a
+		// PSO replayed out of the library was compiled without the instrumentation -- and null when
+		// another writer holds the directory's library.
 		wrl::ComPtr<ID3D12PipelineLibrary1> m_PsoLibrary;
 		std::vector<std::byte>              m_PsoLibraryBlob;  // backs m_PsoLibrary
 		bool                                m_PsoLibraryDirty = false;
 		std::mutex                          m_PsoLibraryMutex;
+
+		// Held for as long as this cache may write the library, so the claim below is the OS's to
+		// arbitrate and a killed process releases it with nothing to clean up.
+		HANDLE m_PsoLibraryLock = nullptr;
+
+		/** Whether this cache is the one writer of the directory's driver library. */
+		[[nodiscard]] bool
+		ClaimPipelineLibrary();
 	};
 }
