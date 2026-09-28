@@ -376,3 +376,47 @@ reason. If they fail with everything culled, look for an atomic or a loop bound 
 memory — `bgrep -n "Interlocked" libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang` should
 find none addressing `gCulledPayload`. A shader-only change needs no C++ rebuild, so iterate on it
 directly.
+
+---
+
+## `--gpu-validation` removes the device, in a case that passes without it
+
+**Symptom.** `just run bgl_extended_tests -- "[culling],[pbr],[meshlet]" --gpu-validation` dies with
+`PIX detected a Device Removal` and `DXGI_ERROR_DEVICE_HUNG` in the log, followed by ten
+`ID3D12GraphicsCommandList::*: This API cannot be called on a closed command list` as the frame graph
+runs on past it. The stack is `CommandList::Barrier` under `FrameGraph::Execute`, in
+`DirectionalLight_test.cpp`'s `[pbr]` metal case. The same 37 cases pass without the flag, and the
+named case passes *with* the flag when it is the only case in the run — so it reads like an
+interaction between cases, and it is not.
+
+**Cause.** GPU-based validation patches every shader, and that case draws 48 frames (24 per `Shoot`,
+twice, because TAA has to converge). Instrumented, one of those submits takes longer than the
+display driver's TDR window and Windows removes the device. It is a cost limit, not a defect: there
+is nothing wrong with the frame.
+
+**Why it looks order-dependent.** `SetEnableGPUBasedValidation` sets it on the *debug layer*, which
+is the process's, not the `ID3D12Debug1` that asked: every device created afterwards is instrumented,
+including one whose own controller never asked and one created after that controller was released.
+Roughly half the suite's cases set `enableGPUValidationLayer` and half do not, so under the flag the
+ones that do not are instrumented anyway — whenever one that does ran first. The metal case is one
+that never asks, which is why it survives alone and hangs behind `[compute]`. Minimal repro, two
+cases:
+
+    bgl_extended_tests.exe "Compute dispatch writes a bindless buffer,A metal is lit by a directional light" --gpu-validation
+
+**Ruled out**, each by measurement: a stale driver pipeline library replayed into a validating device
+(it hangs the same with the cache directory emptied); a second device in the process (two cases that
+both decline validation pass under the flag); and the case itself (it hangs *alone* once edited to
+ask for validation). What is left is the instrumented frame's cost.
+
+**Gates.** None — the hang is the machine's TDR window against an instrumented frame, so a gate would
+pin the GPU rather than the code. `bgpu::GpuContext::GpuValidationActive`
+([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the half that *is*
+code: it answers for the process rather than reading the desc back, so a successor context
+cannot report "off" while running instrumented and have its owners cache driver pipelines built
+without the instrumentation.
+
+**If it comes back.** It has not gone. Run GPU validation over a tag at a time rather than the whole
+suite, and read the log for the validation findings rather than the exit code. Raising the driver's
+`TdrDelay` lets a longer run finish, which is a machine setting and not something the tree can carry.
+Do not chase the predecessor case: it is only what turned instrumentation on.
