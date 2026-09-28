@@ -78,11 +78,11 @@ namespace bgl
 					lane == DrawLane::kDissolve ? bucket + idl::cDissolveLane : bucket;
 				if (auto expansionData = kernel->FindUniforms("expansionData"))
 				{
-					(*expansionData)["drawBucketIndex"] = drawLane;
-					(*expansionData)["baseTable"]       = idl::BaseTable::kDrawBucketed;
-					(*expansionData)["lodDrawMode"]     = lane == DrawLane::kDissolve ?
-					                                          idl::LodDrawMode::kDissolve :
-					                                          idl::LodDrawMode::kCurrent;
+					(*expansionData)["drawLane"]    = drawLane;
+					(*expansionData)["baseTable"]   = idl::BaseTable::kDrawBucketed;
+					(*expansionData)["lodDrawMode"] = lane == DrawLane::kDissolve ?
+					                                      idl::LodDrawMode::kDissolve :
+					                                      idl::LodDrawMode::kCurrent;
 					(*expansionData)["cullBackfaces"] =
 						DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
 				}

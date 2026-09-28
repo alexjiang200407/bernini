@@ -11,7 +11,7 @@ public struct ExpansionData
 {
     // The draw lane: the bucket's id for its placements at rest, or that plus cDissolveLane for
     // those dissolving (idl DrawBucket).
-    public uint drawBucketIndex;
+    public uint drawLane;
 
     // Where in `compactedInstances` this dispatch's instances start is a GPU value, so what the CPU
     // supplies is which table to read it out of.
@@ -50,5 +50,5 @@ public uint ResolveInstanceBase()
         return 0u;
     }
 
-    return (expansionData.drawBucketIndex == 0u) ? 0u : expansionData.drawBucketPrefixSum[expansionData.drawBucketIndex - 1u];
+    return (expansionData.drawLane == 0u) ? 0u : expansionData.drawBucketPrefixSum[expansionData.drawLane - 1u];
 }

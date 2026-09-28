@@ -153,7 +153,7 @@ namespace bgl
 			expansion["compactedInstances"]  = selected;
 			expansion["drawBucketPrefixSum"] = selected;
 			expansion["baseTable"]           = idl::BaseTable::kDepthSorted;
-			expansion["drawBucketIndex"]     = 0u;
+			expansion["drawLane"]            = 0u;
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;

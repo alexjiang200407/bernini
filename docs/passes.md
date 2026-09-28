@@ -660,7 +660,7 @@ material offset, and neither says which tier filled them.
 **Opaque and alpha-test** are draw-bucketed: per draw bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
-derive the pose from), `expansionData` (`drawBucketIndex` and the instance-list tables), `materialData`
+derive the pose from), `expansionData` (`drawLane` and the instance-list tables), `materialData`
 (samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls `DispatchMeshIndirectCount`, whose grid comes from
 the `compactDispatchArgs` entry that `Compact Instances` produced -- and whose command count is the
@@ -691,7 +691,7 @@ pre-pass. That replaced an `occlude` flag which drew a blend material twice — 
 then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
 The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum` indexed by
-`drawBucketIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
+`drawLane - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
