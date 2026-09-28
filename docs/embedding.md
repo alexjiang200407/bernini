@@ -155,6 +155,7 @@ project(subway CXX)
 find_package(Bernini CONFIG REQUIRED)             # Bernini_DIR=<engine build>/bernini_sdk
 add_executable(subway main.cpp)
 target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl_extended)  # bgpu comes with the renderer
+# Bernini::crowdlib too, for compute on the async queue beside the frame (docs/crowdlib.md).
 # D3D12 only: the Agility SDK's exports must live in the executable.
 if (TARGET Bernini::bgl_d3d12_agility)
     target_link_libraries(subway PRIVATE Bernini::bgl_d3d12_agility)
@@ -175,8 +176,8 @@ at link on MSVC and a Debug engine silently inside a Release game elsewhere. `BE
 needs no check: `TRACY_ENABLE` rides on the link interface, so the consumer inherits the engine's.
 
 **The library shapes are the build's.** A top-level build with Qt turns
-`BERNINI_EDITOR_SDK` on, and with it `assetlib`, `gamelib`, `bgl_extended`, `bgpu` and
-`core_process` become shared; without Qt they are static unless `BERNINI_SHARED_RENDERER` makes the renderer shared. The
+`BERNINI_EDITOR_SDK` on, and with it `assetlib`, `gamelib`, `bgl_extended`, `bgpu`, `crowdlib`
+and `core_process` become shared; without Qt they are static unless `BERNINI_SHARED_RENDERER` makes the renderer shared. The
 package exports whichever this build made, and nothing on the consumer's side changes.
 
 **What the config gives a consumer beyond the targets:** `find_dependency` for every vcpkg port

@@ -1,7 +1,8 @@
 # bgpu — the process's GPU device, owned by no renderer
 
 The process has one GPU device, and more than one library runs work on it: the renderer, and a
-library that runs its own compute beside the frame — the crowd simulation's, the first.
+library that runs its own compute beside the frame — the crowd simulation's, the first
+([crowdlib.md](crowdlib.md)).
 `bgpu` is that device as an object of its own, with the debug layer that must precede it
 and the Slang sessions that compile for it: the application creates one and hands it to every owner.
 

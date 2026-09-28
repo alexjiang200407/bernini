@@ -219,6 +219,8 @@ add_subdirectory(libs/assetlib)
 # gamelib is the seam: the only library that links both the renderer and the asset layer.
 if (TARGET bgl_extended)
     add_subdirectory(libs/gamelib)
+    # Compute beside the renderer on the device they share; it links bgpu, never bgl_extended.
+    add_subdirectory(libs/crowdlib)
 endif()
 
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
@@ -244,6 +246,9 @@ assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib_structs" "editor")
 
 if (TARGET gamelib)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/gamelib" "misc")
+endif()
+if (TARGET crowdlib)
+    assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/crowdlib" "gfx")
 endif()
 if (BERNINI_BUILD_EXAMPLES AND TARGET bgl_extended)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
@@ -321,7 +326,7 @@ if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
         core_process core assetlib_structs bgl bgl_common bgpu bgl_extended_objects
-        bgl_extended assetlib gamelib)
+        bgl_extended assetlib gamelib crowdlib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
         list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12_agility)
