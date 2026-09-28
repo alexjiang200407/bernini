@@ -15,7 +15,8 @@ namespace assetlib
 		{
 			kUnchanged,  // already what the current serializer writes
 			kRewritten,  // not byte-identical to the current form; re-saved -- or would be, on a dry run
-			kFailed  // could not be read or converted; `message` says why
+			kDiscarded,  // stale geometry no import document owns; removed -- or would be, on a dry run
+			kFailed      // could not be read or converted; `message` says why
 		};
 
 		std::filesystem::path path;

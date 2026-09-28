@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <exception>
 #include <optional>
 #include <span>
 #include <string>
@@ -240,6 +241,44 @@ namespace assetlib
 	}
 
 	bool
+	isOrphanedGeometry(const AssetStore& store, std::string_view key) noexcept
+	{
+		if (store.IsReadOnly())
+			return false;
+
+		try
+		{
+			const std::string extension = extensionOf(key);
+			CheckedKey        checked;
+			if (extension == c_MeshExtension)
+				checked =
+					checkKey(store, key, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
+			else if (extension == c_SkeletonExtension)
+				checked = checkKey(
+					store,
+					key,
+					magic::c_BSkel,
+					AssetCodec<Skeleton>::c_BakeToken,
+					"bskel");
+			else if (extension == c_AnimationExtension)
+				checked = checkKey(
+					store,
+					key,
+					magic::c_BAnim,
+					AssetCodec<AnimationSet>::c_BakeToken,
+					"banim");
+			else
+				return false;
+
+			return checked.stale && !checked.document;
+		}
+		catch (const std::exception&)
+		{
+			return false;
+		}
+	}
+
+	bool
 	AssetStore::GeometryIsStale(std::string_view path) const
 	{
 		const std::string extension = extensionOf(path);
@@ -326,7 +365,9 @@ namespace assetlib
 		}
 		if (checked.stale)
 			core::throw_runtime_error(
-				"bmesh '{}': stale cache has no import document, so its references cannot be known",
+				"bmesh '{}': stale cache has no import document, so its references cannot be "
+				"known; "
+				"`assetlib_cli migrate` discards it",
 				path);
 		return {};
 	}
@@ -340,18 +381,22 @@ namespace assetlib
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BAnim, "banim");
 			if (key.bakeToken != AssetCodec<AnimationSet>::c_BakeToken)
 			{
-				const std::string documentKey = importDocumentKeyFor(key.source.key);
-				if (!GetFiles().Exists(documentKey))
+				const CheckedKey checked = checkKey(
+					*this,
+					path,
+					magic::c_BAnim,
+					AssetCodec<AnimationSet>::c_BakeToken,
+					"banim",
+					false);
+				if (!checked.document)
 				{
 					core::throw_runtime_error(
-						"'{}': written at another bake revision and the import document beside "
-						"'{}' "
-						"is gone, so the rig it names cannot be known",
-						path,
-						key.source.key);
+						"'{}': written at another bake revision and no import document owns it, so "
+						"the rig it names cannot be known; `assetlib_cli migrate` discards it",
+						path);
 				}
 
-				const std::string rig = loadImportDocument(GetFiles(), documentKey).skeleton;
+				const std::string& rig = checked.document->skeleton;
 				if (rig.empty())
 				{
 					core::throw_runtime_error(

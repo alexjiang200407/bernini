@@ -422,11 +422,12 @@ namespace assetlib
 
 		/**
 		 * The same one regeneration for a `.banim`'s skeleton reference: a foreign-token clip set
-		 * answers with its group's own `.bskel`, found by source key from the frozen headers
-		 * alone -- never the full clip regeneration, whose posed-box walk a scan must not pay.
+		 * answers with the rig named by the import document that owns it, read from the frozen
+		 * header and that document alone -- never the full clip regeneration, whose posed-box walk
+		 * a scan must not pay.
 		 *
-		 * @throws std::runtime_error when a foreign-token clip set's source produced no rig in
-		 *         this project -- a stale clips-only group, whose re-resolve needs the full seam.
+		 * @throws std::runtime_error when a foreign-token clip set has no owning import document,
+		 *         or the one that owns it names no skeleton.
 		 */
 		[[nodiscard]] std::string
 		LoadRegenAnimationSkeletonPath(std::string_view path) const;

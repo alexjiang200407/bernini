@@ -36,6 +36,7 @@
 #include <utility>
 #include <vector>
 
+#include "AssetStore/regen_group.h"
 #include "material/material_texture_refs.h"
 #include "references/ref_paths.h"
 #include <assetlib/codecs.h>
@@ -84,7 +85,10 @@ namespace assetlib
 			catch (const std::exception& e)
 			{
 				// Fatal, as it is for the prune: a mesh we cannot read is a mesh whose materials we cannot
-				// see, and we would then delete one of them out from under it.
+				// see, and we would then delete one of them out from under it. An orphan is the
+				// exception: nothing can load it, so nothing it names is in use through it.
+				if (isOrphanedGeometry(store, referrer))
+					return;
 				throw std::runtime_error(
 					"assetlib::AssetRefGraph: cannot read the mesh '" + referrer +
 					"', so the assets it references cannot be known: " + e.what());
@@ -110,6 +114,8 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
+				if (isOrphanedGeometry(store, referrer))
+					return;
 				throw std::runtime_error(
 					"assetlib::AssetRefGraph: cannot read the clip set '" + referrer +
 					"', so the skeleton it references cannot be known: " + e.what());

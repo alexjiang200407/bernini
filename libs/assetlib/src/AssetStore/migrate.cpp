@@ -42,6 +42,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tracy/Tracy.hpp>
 #include <unordered_map>
 #include <utility>
@@ -383,6 +384,30 @@ namespace assetlib
 			if (file.outcome != MigratedFile::Outcome::kUnchanged)
 				report.files.push_back(std::move(file));
 		}
+
+		// After the backfill, which may give a file its owner; before anything that scans the
+		// reference graph, which must know a referrer's references and cannot know an orphan's.
+		// A dry run keeps them out of its walk too, since the real run would never reach them.
+		std::erase_if(paths, [&](const std::filesystem::path& path) {
+			const auto type = assetTypeFromExtension(path);
+			if (!type.has_value() || !isGeometryContainer(*type))
+				return false;
+
+			const std::string key =
+				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+			if (!isOrphanedGeometry(*this, key))
+				return false;
+
+			MigratedFile    file{ path, MigratedFile::Outcome::kDiscarded, {} };
+			std::error_code error;
+			if (!dryRun && !std::filesystem::remove(path, error) && error)
+			{
+				file.outcome = MigratedFile::Outcome::kFailed;
+				file.message = error.message();
+			}
+			report.files.push_back(std::move(file));
+			return true;
+		});
 
 		// Before Reimport: a part both absent and stale is re-cooked whole here, where Reimport
 		// would first convolve its missing files only for this to convolve them again. And before

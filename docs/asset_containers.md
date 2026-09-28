@@ -323,6 +323,9 @@ being reported twice when `migrate` runs both.
 `assetlib_cli migrate -p <project>` backfills any import document written before it recorded its
 source, its rig and its outputs -- the source from the document's own key, so that one is backfilled
 whether or not the file is there to be read --
+discards every stale `.bmesh`, `.bskel` and `.banim` that no import document owns (an output a
+re-import renamed away, say: nothing records the parameters to regenerate it, so no `LoadRegen*`
+form can read it, and the reference graph reads it as naming nothing),
 re-cooks the parts of every environment whose document no longer matches them
 (`GetStaleEnvironmentSources` / `RefreshEnvironmentSource`; first, so a part both absent and stale
 is convolved once rather than by `Reimport` and then again),
