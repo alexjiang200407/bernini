@@ -78,3 +78,8 @@ while (running)
 count that is not a multiple of the kernel's group, and a second seed replaces the first result; the
 job runs its queue while a renderer on the same context draws a cube, each polled and neither
 waiting; and a job destroyed mid-flight lets its context go, so the next context can be created.
+
+`examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
+kernel runs on the async queue, the fence logged before and after each draw, and every readback's
+checksum against the CPU's. `--frames N` exits non-zero on a mismatch or no readback at all, and
+`--headless` draws offscreen.
