@@ -9,7 +9,7 @@
 #include <optional>
 #include <vector>
 
-// What the Mesh Editor's level-of-detail strip lists of a mesh and says it draws, pinned without a
+// What the Mesh Editor's level-of-detail selector lists of a mesh and says Auto draws, pinned without a
 // window or a device. That the level read here is the one the GPU draws is bgl_extended's
 // LodSelect_test, against the same bgl/lod_select.h.
 
@@ -74,11 +74,10 @@ namespace
 	}
 }
 
-TEST_CASE("A mesh lists each level's triangles and the size it is drawn from", "[mesheditor][lod]")
+TEST_CASE("A mesh lists the size each level is drawn from", "[mesheditor][lod]")
 {
 	const editor::MeshLods lods = editor::LodsOf(ThreeLevels(), 0);
 
-	CHECK(lods.triangles == std::vector<uint32_t>{ 18, 9, 3 });
 	CHECK(lods.minPixels == std::vector<float>{ 30.0f, 10.0f, 3.0f });
 	CHECK(glm::vec3(lods.levelZeroSphere) == glm::vec3(0.0f));
 	CHECK(lods.levelZeroSphere.w == Catch::Approx(glm::sqrt(3.0f)));
@@ -89,7 +88,6 @@ TEST_CASE("A mesh lists each level's triangles and the size it is drawn from", "
 		mesh.meshes[0].lodCount = 1;
 		mesh.lods.clear();
 		const editor::MeshLods one = editor::LodsOf(mesh, 0);
-		CHECK(one.triangles == std::vector<uint32_t>{ 18 });
 		CHECK(one.minPixels == std::vector<float>{ 0.0f });
 	}
 
@@ -102,7 +100,7 @@ TEST_CASE("A mesh lists each level's triangles and the size it is drawn from", "
 	}
 }
 
-TEST_CASE("The strip reads the level the size on screen earns", "[mesheditor][lod]")
+TEST_CASE("Auto reads the level the size on screen earns", "[mesheditor][lod]")
 {
 	const editor::MeshLods lods = editor::LodsOf(ThreeLevels(), 0);
 

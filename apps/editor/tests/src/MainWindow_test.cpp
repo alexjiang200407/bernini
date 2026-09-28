@@ -74,7 +74,6 @@
 #include <QStringList>
 #include <QTabBar>
 #include <QTabWidget>
-#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -1636,7 +1635,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-	"The Mesh Editor lists a mesh's levels of detail and pins the one chosen",
+	"The Mesh Editor names the level Auto draws and pins the one chosen",
 	"[mainwindow][render][materialplugin][lod]")
 {
 	const HeadlessEditor editor;
@@ -1649,11 +1648,7 @@ TEST_CASE(
 	auto* view = preview->findChild<RenderTargetWindow*>();
 	REQUIRE(view != nullptr);
 	auto* selector = window.findChild<QComboBox*>(QStringLiteral("LodSelector"));
-	auto* table    = window.findChild<QTableWidget*>(QStringLiteral("LodTable"));
-	auto* readout  = window.findChild<QLabel*>(QStringLiteral("LodReadout"));
 	REQUIRE(selector != nullptr);
-	REQUIRE(table != nullptr);
-	REQUIRE(readout != nullptr);
 
 	const auto forcedLevel = [view]() {
 		auto forced = std::optional<bgl::LodLevel>();
@@ -1663,34 +1658,35 @@ TEST_CASE(
 		return forced;
 	};
 
+	// The default sphere has no levels to pin.
+	CHECK_FALSE(selector->isEnabled());
+
 	preview->LoadMesh(editor.ExternalLodMesh());
-	REQUIRE(table->rowCount() == 3);
-	CHECK(selector->count() == 4);
-	CHECK(table->item(0, 2)->text() == QStringLiteral("100 px"));
-	CHECK(table->item(2, 2)->text() == QStringLiteral("any size"));
+	CHECK(selector->isEnabled());
+	REQUIRE(selector->count() == 4);
+	CHECK(selector->itemText(3) == QStringLiteral("LOD 2"));
 
 	// Framed at three times its radius, the mesh spans far more than level 0's 100 pixels.
-	CHECK(readout->text().startsWith(QStringLiteral("Drawing LOD 0")));
+	CHECK(selector->currentIndex() == 0);
+	CHECK(selector->currentText() == QStringLiteral("Auto: LOD 0"));
 	CHECK_FALSE(forcedLevel().has_value());
 
 	selector->setCurrentIndex(3);
 	CHECK(forcedLevel() == bgl::LodLevel::kLod2);
-	CHECK(readout->text().startsWith(QStringLiteral("Pinned to LOD 2")));
-	CHECK(table->item(2, 0)->font().bold());
-	CHECK_FALSE(table->item(0, 0)->font().bold());
+	CHECK(selector->itemText(0) == QStringLiteral("Auto"));
 
 	SECTION("Auto hands the choice back to the size on screen")
 	{
 		selector->setCurrentIndex(0);
 		CHECK_FALSE(forcedLevel().has_value());
-		CHECK(readout->text().startsWith(QStringLiteral("Drawing LOD 0")));
+		CHECK(selector->currentText() == QStringLiteral("Auto: LOD 0"));
 	}
 
 	SECTION("Another mesh starts from Auto")
 	{
 		preview->LoadMesh(editor.ExternalMesh());
 		CHECK_FALSE(forcedLevel().has_value());
-		CHECK(table->rowCount() == 1);
+		CHECK(selector->count() == 2);
 		CHECK(selector->currentIndex() == 0);
 	}
 }

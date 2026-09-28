@@ -57,6 +57,7 @@ namespace editor
 		QPushButton*       removeOverride   = nullptr;
 		QListWidget*       materialList     = nullptr;
 		QPushButton*       generateTangents = nullptr;
+		QComboBox*         lodSelector      = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;
 		QLabel*            tangentWarning   = nullptr;

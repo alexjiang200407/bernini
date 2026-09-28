@@ -72,11 +72,11 @@
 #include <utility>
 #include <vector>
 
-#include "Windows/MeshEditor/LodBar.h"
 #include "Windows/MeshEditor/MaterialGraphModel.h"
 #include "Windows/MeshEditor/MaterialGraphScene.h"
 #include "Windows/MeshEditor/MaterialGraphView.h"
 #include "Windows/MeshEditor/graph_compiler.h"
+#include "Windows/MeshEditor/lod_view.h"
 #include "Windows/MeshEditor/material_graph.h"
 #include "Windows/MeshEditor/material_io.h"
 #include "Windows/MeshEditor/material_overrides.h"
@@ -91,6 +91,7 @@
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
+#include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/TexturePreviewCache.h>
 
@@ -162,6 +163,7 @@ MeshEditorWindow::MeshEditorWindow(
 	m_RemoveOverride    = ui.removeOverride;
 	m_MaterialList      = ui.materialList;
 	m_GenerateTangents  = ui.generateTangents;
+	m_LodSelector       = ui.lodSelector;
 	m_SubmeshSelector   = ui.submeshSelector;
 	m_OutputSelector    = ui.outputSelector;
 	m_TangentWarning    = ui.tangentWarning;
@@ -352,29 +354,19 @@ MeshEditorWindow::MeshEditorWindow(
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
 	QWidget* rightPanel = nullptr;
 	{
-		// The bar sits under the preview rather than inside it, so the preview stays the size of
-		// the viewport its camera aspect and its picking are measured against.
-		rightPanel = new QWidget(splitter);
-		m_Preview  = new MeshPreviewWindow(m_Host, rightPanel, m_Desc.viewport, m_Desc.previewEnv);
-		m_LodBar   = new LodBar(m_Host.GetLanguageResolver(), rightPanel);
-
-		auto* rightLayout = new QVBoxLayout(rightPanel);
-		rightLayout->setContentsMargins(0, 0, 0, 0);
-		rightLayout->setSpacing(0);
-		rightLayout->addWidget(m_Preview, 1);
-		rightLayout->addWidget(m_LodBar);
+		m_Preview  = new MeshPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
+		rightPanel = m_Preview;
 
 		connect(
 			m_Preview,
 			&MeshPreviewWindow::ShownLodsChanged,
 			this,
-			&MeshEditorWindow::RefreshLodBar);
-		connect(m_Preview, &MeshPreviewWindow::ViewChanged, this, [this]() {
-			m_LodBar->ShowReadout(m_Preview->ReadShownLod(), m_Preview->GetForcedLod().has_value());
-		});
-		connect(m_LodBar, &LodBar::ForcedLodChosen, this, [this](std::optional<uint32_t> level) {
-			m_Preview->SetForcedLod(level);
-			m_LodBar->ShowReadout(m_Preview->ReadShownLod(), level.has_value());
+			&MeshEditorWindow::RefreshLodSelector);
+		connect(m_Preview, &MeshPreviewWindow::ViewChanged, this, &MeshEditorWindow::ShowAutoLod);
+		connect(m_LodSelector, &QComboBox::currentIndexChanged, this, [this]() {
+			const QVariant level = m_LodSelector->currentData();
+			m_Preview->SetForcedLod(level.isValid() ? std::optional(level.toUInt()) : std::nullopt);
+			ShowAutoLod();
 		});
 
 		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
@@ -386,7 +378,7 @@ MeshEditorWindow::MeshEditorWindow(
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MeshPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
-			RefreshLodBar();
+			RefreshLodSelector();
 			RefreshStage();
 		});
 
@@ -752,13 +744,61 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 }
 
 void
-MeshEditorWindow::RefreshLodBar()
+MeshEditorWindow::RefreshLodSelector()
 {
 	if (m_Preview == nullptr)
 		return;
 
-	m_LodBar->ShowLods(m_Preview->GetShownLods(), m_Preview->GetForcedLod());
-	m_LodBar->ShowReadout(m_Preview->ReadShownLod(), m_Preview->GetForcedLod().has_value());
+	const editor::MeshLods*       lods   = m_Preview->GetShownLods();
+	const std::optional<uint32_t> forced = m_Preview->GetForcedLod();
+	{
+		const QSignalBlocker blocker(m_LodSelector);
+		m_LodSelector->clear();
+		m_LodSelector->addItem(
+			editor::Localize(m_Host.GetLanguageResolver(), "bernini.material.lod_auto", "Auto"));
+
+		const auto count = lods != nullptr ? static_cast<uint32_t>(lods->minPixels.size()) : 0u;
+		for (uint32_t level = 0; level < count; ++level)
+		{
+			m_LodSelector->addItem(
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.lod_level",
+					{ level },
+					"LOD {0}"),
+				level);
+		}
+		m_LodSelector->setCurrentIndex(
+			forced.has_value() && *forced < count ? static_cast<int>(*forced) + 1 : 0);
+		m_LodSelector->setEnabled(lods != nullptr);
+	}
+	ShowAutoLod();
+}
+
+void
+MeshEditorWindow::ShowAutoLod()
+{
+	if (m_Preview == nullptr || m_LodSelector->count() == 0)
+		return;
+
+	const editor::ILanguageResolver&        language = m_Host.GetLanguageResolver();
+	const std::optional<editor::LodReadout> readout  = m_Preview->ReadShownLod();
+	const editor::MeshLods*                 lods     = m_Preview->GetShownLods();
+
+	QString text = editor::Localize(language, "bernini.material.lod_auto", "Auto");
+	if (readout.has_value() && lods != nullptr && !m_Preview->GetForcedLod().has_value())
+	{
+		text = readout->level < lods->minPixels.size() ? editor::Localize(
+															 language,
+															 "bernini.material.lod_auto_level",
+															 { readout->level },
+															 "Auto: LOD {0}") :
+		                                                 editor::Localize(
+															 language,
+															 "bernini.material.lod_auto_nothing",
+															 "Auto: nothing drawn");
+	}
+	m_LodSelector->setItemText(0, text);
 }
 
 void

@@ -21,17 +21,9 @@ namespace editor
 		auto lods      = MeshLods();
 		lods.minPixels = assetlib::meshLodMinPixels(mesh, meshIndex);
 
-		for (uint32_t level = 0; level < lods.minPixels.size(); ++level)
-		{
-			const std::span<const assetlib::Submesh> submeshes =
-				assetlib::meshLodSubmeshes(mesh, meshIndex, level);
-			if (submeshes.empty())
-				return {};
-
-			uint32_t triangles = 0;
-			for (const assetlib::Submesh& submesh : submeshes) triangles += submesh.indexCount / 3;
-			lods.triangles.push_back(triangles);
-		}
+		const auto coarsest = static_cast<uint32_t>(lods.minPixels.size());
+		if (coarsest == 0 || assetlib::meshLodSubmeshes(mesh, meshIndex, coarsest - 1).empty())
+			return {};
 
 		const std::span<const assetlib::Submesh> levelZero =
 			assetlib::meshLodSubmeshes(mesh, meshIndex, 0);

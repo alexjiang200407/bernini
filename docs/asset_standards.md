@@ -490,12 +490,13 @@ object meant to switch as one is one mesh with a primitive per material.
   list applies to every mesh of the source, so it is refused when a mesh has fewer levels than it
   names, and when it and the defaults after it would rise. Every re-import and regeneration takes
   the document's list, so the key a `.bmesh` records and the thresholds it holds agree.
-* **Looking at them.** The editor's Mesh Editor lists the levels of the mesh the selected submesh
-  belongs to under its preview: each one's triangles and the size it is drawn from, and which it
-  draws now at what size on screen. *Auto* is the game's own choice, read with the cull's arithmetic
+* **Looking at them.** The Mesh Editor's *Level of Detail* selector, above its submesh selector,
+  offers the levels of the mesh the selected submesh belongs to. *Auto* is the game's own choice and
+  names the level it draws (`Auto: LOD 1`), read with the cull's arithmetic
   ([lod_select.h](libs/bgl/include/bgl/lod_select.h)) against the preview's first placement of that
   mesh; a level pins every placement to it (`ISceneView::SetLodSelection`), which is how a coarse
-  level is inspected up close. It reads the thresholds and does not edit them.
+  level is inspected up close. The selection outline follows the level drawn. It reads the
+  thresholds and does not edit them.
 
 ### Grass points
 

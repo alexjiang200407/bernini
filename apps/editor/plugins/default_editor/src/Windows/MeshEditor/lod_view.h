@@ -13,11 +13,11 @@ namespace assetlib
 
 namespace editor
 {
-	/** What the Mesh Editor lists of one mesh's levels of detail, level 0 first. */
+	/** What the Mesh Editor reads of one mesh's levels of detail. */
 	struct MeshLods
 	{
-		std::vector<uint32_t> triangles;
-		std::vector<float>    minPixels;
+		// Each level's size on screen from which it is drawn, level 0 first.
+		std::vector<float> minPixels;
 
 		// The sphere the renderer measures every level by: level 0's submesh boxes, folded.
 		glm::vec4 levelZeroSphere = glm::vec4(0.0f);
