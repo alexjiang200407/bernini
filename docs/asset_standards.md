@@ -459,6 +459,18 @@ level (`loadFromGltf`, [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.
 names the base itself, for a source following that convention throughout. One file rather than one
 per level because the cache key stamps one source and the textures are extracted from one.
 
+A level belongs to a **mesh**, which is neither the file nor a submesh:
+
+| Blender | glTF | `.bmesh` | Levels |
+|---|---|---|---|
+| the exported scene | the `.glb` | the `BMesh` container | none |
+| an object's mesh data (`Tree`) | a mesh (`meshes[i]`) | a `Mesh` entry | named here: `Tree_LOD1` |
+| one material slot's faces | a primitive of that mesh | a `Submesh` | switch with their mesh |
+
+The suffix goes on the mesh data's name, not the object's, and on any mesh in the file, wherever
+its node sits. Each mesh of a multi-mesh file has levels of its own, chosen from its own size, so an
+object meant to switch as one is one mesh with a primitive per material.
+
 * **What a level owes its base.** One triangle primitive per primitive of level 0, in the same
   order -- the n-th is drawn with the n-th's material, so a level needs no bindings of its own --
   and the same skinning, joints or none. No POINTS: grass grows on level 0 and thins itself.
