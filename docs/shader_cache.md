@@ -198,11 +198,16 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   run crashed at device creation unless the cache directory was deleted first. That is why nobody had
   run one.
 
-  **Metal's validation is turned on by the environment, not by a flag** —
-  `MTL_SHADER_VALIDATION` / `METAL_DEVICE_WRAPPER_TYPE` are read by the Metal runtime before the
-  process gets a say. The GPU context therefore reads both variables as well as
-  `enableGPUValidationLayer` (`bgpu::GpuContext::GpuValidationActive`), or the flag would say
-  "off" during a validating run.
+  **Neither backend can decide this from its own options alone.** On Metal the switches are
+  environment variables — `MTL_SHADER_VALIDATION` / `METAL_DEVICE_WRAPPER_TYPE`, read by the Metal
+  runtime before the process gets a say — so the context reads both as well as
+  `enableGPUValidationLayer`. On D3D12 `SetEnableGPUBasedValidation` sets it on the *debug layer*,
+  which belongs to the process and not to the `ID3D12Debug1` that called it: every device created
+  afterwards is instrumented, including one whose desc never asked and one created after that
+  context was dropped. `bgpu::GpuContext::GpuValidationActive` therefore answers for the process
+  rather than reading the desc back, or a successor context would report "off" while running
+  instrumented and its owners would cache driver pipelines built without the instrumentation —
+  which is the case this gate exists to prevent.
 
 * **The cache is called from several threads at once.** The renderer builds its pipelines in
   parallel, so `TryLoad`/`Store` run concurrently — safe because each key is its own file and
