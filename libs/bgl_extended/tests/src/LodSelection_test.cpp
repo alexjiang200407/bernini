@@ -161,29 +161,3 @@ TEST_CASE("a draw resolves the view's selection into the cull view it uploads", 
 		CHECK(view.lodFadeStep == 1.0f);
 	}
 }
-
-TEST_CASE(
-	"a world unit spans the pixels the projection gives it at a distance of one",
-	"[lod][culling]")
-{
-	// A 90-degree vertical field of view puts a unit at distance one across half the height.
-	const glm::mat4 viewProj =
-		bgl::Camera()
-			.LookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-			.Perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 100.0f)
-			.GetViewProjection();
-
-	CHECK(bgl::PixelsPerUnit(bgl::Viewport(1920.0f, 1080.0f), viewProj) == Catch::Approx(540.0f));
-
-	SECTION("turning the camera does not change it")
-	{
-		const glm::mat4 turned = bgl::Camera()
-		                             .LookAt(
-										 glm::vec3(4.0f, 1.0f, 2.0f),
-										 glm::vec3(-3.0f, 0.5f, 7.0f),
-										 glm::vec3(0.0f, 1.0f, 0.0f))
-		                             .Perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 100.0f)
-		                             .GetViewProjection();
-		CHECK(bgl::PixelsPerUnit(bgl::Viewport(1920.0f, 1080.0f), turned) == Catch::Approx(540.0f));
-	}
-}

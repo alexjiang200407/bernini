@@ -443,7 +443,8 @@ It adds **four sub-passes**:
    It also chooses the placement's **level of detail** (`lib/culling/lod_select.slang`): the
    diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
    `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
-   going finer, and a change dissolved over the view's `fadeSeconds`. The choice is one word per
+   going finer, and a change dissolved over the view's `fadeSeconds`. Its C++ twin is
+   [bgl/lod_select.h](libs/bgl/include/bgl/lod_select.h). The choice is one word per
    placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
    from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
    the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries

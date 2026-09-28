@@ -181,6 +181,7 @@ disagrees, trust the header, then fix this doc.
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
 | `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
+| `ChooseLevel`, `ProjectedDiameter` | [libs/bgl/include/bgl/lod_select.h](libs/bgl/include/bgl/lod_select.h) | The cull's level-of-detail size test on the CPU: pixels per unit, a mesh's level-0 sphere placed, its diameter on screen, and the level that earns with its hysteresis. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). `geometryOcclusionTexture` is geometry occlusion through the mesh's second UV set, multiplied into the material's own AO — see [Passes](docs/passes.md). A `SurfaceMaterialDesc` has none: a surface binds that map to a slot it declares and samples through `IMaterialReader::Uv1`. |
 | `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
@@ -497,7 +498,10 @@ flowchart TD
   chooses each placement's level of detail: every authored threshold scaled by `pixelScale`, one
   level forced on every placement that has it, and how long a change dissolves over (0 is a hard
   swap). Per view, and **not** an epoch change: the cull reads it as it selects, so a new selection
-  arrives through the same dissolve a change of size does.
+  arrives through the same dissolve a change of size does. The choice is never read back: a tool
+  that says which level a placement draws runs the same size test on the CPU,
+  [lod_select.h](libs/bgl/include/bgl/lod_select.h), which the renderer computes its own inputs
+  through and `LodSelect_test` pins to the GPU's choice.
 
 ---
 

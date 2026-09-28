@@ -19,5 +19,6 @@ namespace bgl
 	static_assert(sizeof(LodLevel) == 4);
 
 	constexpr uint32_t cMaxMeshLods = uint32_t(LodLevel::kCount);
+	constexpr float cLodHysteresis = 0.15f;
 
 }

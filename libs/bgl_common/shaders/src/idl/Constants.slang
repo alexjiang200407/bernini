@@ -117,10 +117,6 @@ public static const uint cRawBlockBytes = 16;
 // payload keeps the grid's alignment rather than the header's four bytes.
 public static const uint cRawPayloadOffset = 16;
 
-// Coming back to a finer level needs the placement's size to clear that level's floor by this
-// share, so a placement resting on a threshold does not switch every frame.
-public static const float cLodHysteresis = 0.15;
-
 // CullView.lodForcedLevel when no level is forced and every placement is chosen by its size.
 public static const uint cLodForceNone = uint32_t(-1);
 

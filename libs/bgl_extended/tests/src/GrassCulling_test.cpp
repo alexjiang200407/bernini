@@ -34,6 +34,7 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/Viewport.h>
+#include <bgl/lod_select.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>

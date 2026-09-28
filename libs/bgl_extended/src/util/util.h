@@ -7,7 +7,6 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl_common/idl/CullView.h>
@@ -105,15 +104,6 @@ namespace bgl
 	/** What the Slang accessors read out of `word`. */
 	[[nodiscard]] InstanceLodState
 	UnpackInstanceLod(idl::InstanceLod word) noexcept;
-
-	/**
-	 * What one world unit spans on the render grid, in pixels, at a distance of one: half the
-	 * viewport's height times the projection's y scale, which is the length of the view-projection's
-	 * y row since the view is a rotation. Take the unjittered matrix -- the jitter is a sub-pixel
-	 * translation and has no size.
-	 */
-	[[nodiscard]] float
-	PixelsPerUnit(const Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept;
 
 	/**
 	 * Resolves a view's LodSelectionDesc into the cull view one draw uploads: the camera and the

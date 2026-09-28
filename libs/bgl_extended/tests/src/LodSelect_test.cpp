@@ -24,6 +24,7 @@
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/lod_select.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
@@ -243,6 +244,50 @@ TEST_CASE("a placement draws the level its size on screen earns", "[lod][culling
 		CHECK(reads[i].visible == c_Current);
 	}
 	CHECK(reads[3].visible == 0u);
+}
+
+TEST_CASE("the size test a tool reads chooses the level the cull chose", "[lod][culling][render]")
+{
+	auto lods = LodScene();
+	lods.Place(DistanceFor(55.0f));
+	lods.Place(DistanceFor(22.0f));
+	lods.Place(DistanceFor(5.5f));
+	lods.Place(DistanceFor(2.2f));
+	// Off-axis and scaled, so the distance is not the depth and the radius is not the box's.
+	const glm::mat4 aside = glm::scale(
+		glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 1.0f, -9.0f)),
+		glm::vec3(0.5f, 1.5f, 1.0f));
+	lods.placements.push_back(lods.view->CreateStaticMeshInstance(lods.geom, aside));
+	lods.Frame();
+
+	// Frame()'s camera stands at the origin looking down -Z, so its view is the identity.
+	const glm::mat4 viewProj =
+		bgl::Camera().Perspective(glm::radians(90.0f), 1.0f, 0.1f, 200.0f).GetProjection();
+	const float pixelsPerUnit = bgl::PixelsPerUnit(
+		bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size)),
+		viewProj);
+	const glm::vec4 sphere = bgl::BoundingSphereOf(glm::vec3(-1.0f), glm::vec3(1.0f));
+
+	const std::array<glm::mat4, 5> worlds = {
+		LodScene::At(DistanceFor(55.0f)),
+		LodScene::At(DistanceFor(22.0f)),
+		LodScene::At(DistanceFor(5.5f)),
+		LodScene::At(DistanceFor(2.2f)),
+		aside,
+	};
+	const auto reads = lods.ReadAll();
+	for (size_t i = 0; i < worlds.size(); ++i)
+	{
+		INFO("placement " << i);
+		REQUIRE(reads[i].lod.level.has_value());
+		const float size = bgl::ProjectedDiameter(
+			bgl::TransformSphere(worlds[i], sphere),
+			glm::vec3(0.0f),
+			pixelsPerUnit);
+		CHECK(
+			bgl::ChooseLevel(c_Thresholds, size, 1.0f, std::nullopt) ==
+			static_cast<uint32_t>(*reads[i].lod.level));
+	}
 }
 
 TEST_CASE("a placement resting just past a threshold holds its level", "[lod][culling][render]")
