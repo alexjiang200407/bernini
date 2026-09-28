@@ -1,8 +1,8 @@
-#include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
+#include <bgpu/SlangErrorChecker.h>
 #include <slang.h>
 
-namespace bgl
+namespace bgpu
 {
 	void
 	operator>>(SlangResult res, const SlangErrorChecker& checker)
@@ -11,7 +11,7 @@ namespace bgl
 		{
 			if (!checker.ReportError())
 			{
-				gfatal("Slang operation failed with no diagnostics available.");
+				bgl::gfatal("Slang operation failed with no diagnostics available.");
 			}
 		}
 	}
@@ -22,7 +22,7 @@ namespace bgl
 		if (m_DiagnosticBlob)
 		{
 			const char* errorMessage = (const char*)m_DiagnosticBlob->getBufferPointer();
-			gfatal("Slang operation failed with error: {}", errorMessage);
+			bgl::gfatal("Slang operation failed with error: {}", errorMessage);
 		}
 
 		return false;

@@ -1,11 +1,9 @@
 #pragma once
-#include <bgl_common/SurfaceReflection.h>
 #include <bgpu/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <filesystem>
-#include <optional>
 #include <slang.h>
 #include <string>
 #include <string_view>
@@ -147,15 +145,14 @@ namespace bgpu
 		LoadModule(std::string_view moduleName) noexcept = 0;
 
 		/**
-		 * The surface a game's module declares, read at the offsets a raw load reads a record at.
-		 * Empty when the module is not a surface at all -- it does not import the contract.
+		 * The named module compiled for a DXIL target whatever this device draws with, so a layout
+		 * read from it is the scalar one a raw load reads a record at on every backend. Null, with
+		 * the compiler's diagnostic, when the module does not compile.
 		 *
-		 * @pre no compile in flight on this thread.
-		 * @throws std::runtime_error if the module does not compile, or imports the contract and
-		 *         does not hold exactly one struct conforming to its ISurfaceSource.
+		 * @post as LoadModule's: the module belongs to the calling thread's session.
 		 */
-		[[nodiscard]] virtual std::optional<bgl::ReflectedSurface>
-		ReflectSurface(std::string_view moduleName, std::string_view surfaceName) = 0;
+		[[nodiscard]] virtual slang::IModule*
+		LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic) = 0;
 
 		/**
 		 * Drops every thread's Slang session -- a few hundred resident megabytes apiece once a

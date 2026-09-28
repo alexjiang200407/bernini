@@ -151,7 +151,7 @@ namespace bgl
 	}
 
 	ShaderCache::ShaderCache(
-		const bgpu::GpuContext&         context,
+		bgpu::GpuContextRef             context,
 		MTL::Device*                    device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
@@ -159,7 +159,7 @@ namespace bgl
 		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)),
 		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, c_CacheFormatVersion)),
-		m_Context(&context)
+		m_Context(std::move(context))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);

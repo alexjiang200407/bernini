@@ -56,7 +56,8 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 | Symbol | File | Role |
 |---|---|---|
 | `GpuContextDesc`, `LogLevel` | [include/bgpu/GpuContext.h](../libs/bgpu/include/bgpu/GpuContext.h) | The device-level options: `enableDebugLayer`, `enableGPUValidationLayer`, `enablePixDebug`, `strictError`, `logLevel`, `clientShaderDir` |
-| `GpuContext` | same | The context: the desc, whether validation is running, and the Slang compiler — search paths, source modules, `LoadModule`, `ReflectSurface`, `ReleaseSlangSessions` |
+| `GpuContext` | same | The context: the desc, whether validation is running, and the Slang compiler — search paths, source modules, `LoadModule`, `LoadScalarLayoutModule`, `ReleaseSlangSessions`. Surface reflection is the renderer's, on the module the scalar-layout load returns |
+| `SlangErrorChecker` | [include/bgpu/SlangErrorChecker.h](../libs/bgpu/include/bgpu/SlangErrorChecker.h) | `result >> checker`: the one Slang failure check, for every owner that compiles |
 | `SlangSourceModule` | same | A module given as text under an import name |
 | `GetSourceSalt` | same | The order-independent fold of every registered module, name and text; an owner's shader cache mixes it into each key |
 | `CreateGpuContext` | same | The one factory, defined by the backend the build selected |

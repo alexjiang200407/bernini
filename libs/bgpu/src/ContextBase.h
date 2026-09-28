@@ -1,10 +1,8 @@
 #pragma once
 #include "SlangSessions.h"
-#include <bgl_common/SurfaceReflection.h>
 #include <bgpu/GpuContext.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
-#include <optional>
 #include <slang.h>
 #include <string>
 #include <string_view>
@@ -70,10 +68,10 @@ namespace bgpu
 			return m_Slang.LoadModule(moduleName);
 		}
 
-		std::optional<bgl::ReflectedSurface>
-		ReflectSurface(std::string_view moduleName, std::string_view surfaceName) override
+		slang::IModule*
+		LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic) override
 		{
-			return m_Slang.ReflectSurface(moduleName, surfaceName);
+			return m_Slang.LoadScalarLayoutModule(moduleName, diagnostic);
 		}
 
 		void

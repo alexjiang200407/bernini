@@ -75,6 +75,10 @@ namespace bgl
 		virtual void
 		ReleaseSlangSession() noexcept = 0;
 
+		/** The GPU context this device draws on and compiles through. */
+		[[nodiscard]] virtual bgpu::GpuContext&
+		GetGpuContext() const noexcept = 0;
+
 		/**
 		 * The surface a game's module declares, read through this device's compiler and so at the
 		 * offsets this backend will read a record at.
@@ -85,8 +89,8 @@ namespace bgl
 		 * @throws std::runtime_error if the module does not compile, or imports the contract and
 		 *         declares no single surface.
 		 */
-		[[nodiscard]] virtual std::optional<ReflectedSurface>
-		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) = 0;
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) const;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

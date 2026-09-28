@@ -17,8 +17,8 @@
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
 #include "types/QueueType.h"
-#include <bgl_common/SlangErrorChecker.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/SlangErrorChecker.h>
 #include <bgpu/d3d12/native_device.h>
 #include <core/ref/SharedRef.h>
 #include <filesystem>
@@ -43,15 +43,17 @@ namespace bgl
 		}
 	}
 
-	Device::Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir) :
-		m_Context(std::move(context)), m_Device(bgpu::GetD3d12Device(*m_Context))
+	Device::Device(
+		const bgpu::GpuContextRef&   context,
+		const std::filesystem::path& shaderCacheDir) :
+		m_Context(context), m_Device(bgpu::GetD3d12Device(*context))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
 
 		if (!shaderCacheDir.empty())
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
-				*m_Context,
+				m_Context,
 				m_Device.Get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
@@ -64,12 +66,6 @@ namespace bgl
 	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
 		m_Context->AddSourceModule(sourceModule);
-	}
-
-	std::optional<ReflectedSurface>
-	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
-	{
-		return m_Context->ReflectSurface(moduleName, surfaceName);
 	}
 
 	void
@@ -116,7 +112,7 @@ namespace bgl
 	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), m_Context.Get());
+		return core::SharedRef<Shader>::Make(std::move(desc), m_Context);
 	}
 
 	MeshletPipelineRef

@@ -57,7 +57,8 @@ target_precompile_headers(bgpu
 
 if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx-headers CONFIG REQUIRED)
-	target_link_libraries(bgpu PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers)
+	# PUBLIC: <bgpu/d3d12/native_device.h> names ID3D12Device from these headers.
+	target_link_libraries(bgpu PUBLIC Microsoft::DirectX-Headers PRIVATE d3d12 dxgi dxguid)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	# metal-cpp is Apple's C++ interface to Metal -- header-only, not on vcpkg, so pulled in here.
 	# Pinned to a commit on the mirror's metal-cpp_27 branch (the macOS 26 / current SDK line).

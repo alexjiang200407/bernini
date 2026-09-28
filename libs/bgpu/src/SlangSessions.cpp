@@ -1,10 +1,9 @@
 #include "SlangSessions.h"
 #include <algorithm>
-#include <bgl_common/SlangErrorChecker.h>
-#include <bgl_common/SurfaceReflection.h>
 #include <bgl_common/gassert.h>
-#include <bgl_common/shadercache/util.h>
+#include <bgpu/SlangErrorChecker.h>
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
@@ -29,6 +28,14 @@ namespace bgpu
 
 	namespace
 	{
+		// One module's contribution to the source salt: name and text, XOR-combined with the rest so the
+		// order modules arrive in does not matter, and so a replaced text can be unfolded.
+		uint64_t
+		FoldOf(std::string_view name, std::string_view source) noexcept
+		{
+			return core::hash_string(source, core::hash_string(name, core::hash_seed()));
+		}
+
 		// Every other loader here reports a diagnostic through SlangErrorChecker, which ends in
 		// gfatal -- right for the engine's own shaders, where a diagnostic is a bug. These two load
 		// text the client wrote, where it is a message to hand back.
@@ -99,7 +106,7 @@ namespace bgpu
 #endif
 
 			Slang::ComPtr<slang::ISession> session;
-			bgl::SlangErrorChecker         errChecker;
+			SlangErrorChecker              errChecker;
 			global->createSession(sessionDesc, session.writeRef()) >> errChecker;
 			bgl::gassert(session != nullptr, "Failed to create Slang session");
 
@@ -115,8 +122,8 @@ namespace bgpu
 
 				const std::string path = SlangModulePath(sourceModule.name);
 
-				bgl::SlangErrorChecker moduleChecker;
-				slang::IModule*        loaded = session->loadModuleFromSourceString(
+				SlangErrorChecker moduleChecker;
+				slang::IModule*   loaded = session->loadModuleFromSourceString(
 					path.c_str(),
 					(path + ".slang").c_str(),
 					sourceModule.source.c_str(),
@@ -182,8 +189,8 @@ namespace bgpu
 			}
 		}
 
-		const std::string      path = SlangModulePath(moduleName);
-		bgl::SlangErrorChecker errChecker;
+		const std::string path = SlangModulePath(moduleName);
+		SlangErrorChecker errChecker;
 
 		if (onDemand == nullptr)
 		{
@@ -212,10 +219,9 @@ namespace bgpu
 		return slangModule;
 	}
 
-	std::optional<bgl::ReflectedSurface>
-	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
+	slang::IModule*
+	SlangSessions::LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic)
 	{
-		// DXIL whatever this device draws with -- see ReflectSurface in SurfaceReflection.h for why.
 		// For its side effect: this thread's entry, and the global session the one below is made
 		// from, exist once it returns.
 		static_cast<void>(ForThisThread());
@@ -230,17 +236,7 @@ namespace bgpu
 			session = mine.scalarLayout.get();
 		}
 
-		std::string     diagnostic;
-		slang::IModule* slangModule = LoadReporting(session, moduleName, diagnostic);
-		if (slangModule == nullptr)
-		{
-			core::throw_runtime_error(
-				"surface '{}': its module did not compile\n{}",
-				surfaceName,
-				diagnostic);
-		}
-
-		return bgl::ReflectSurface(slangModule, surfaceName);
+		return LoadReporting(session, moduleName, diagnostic);
 	}
 
 	void
@@ -261,8 +257,7 @@ namespace bgpu
 			});
 		if (found == m_Desc.sourceModules.end())
 		{
-			m_SourceSalt ^=
-				bgl::shader_cache::FoldSource(0, sourceModule.name, sourceModule.source);
+			m_SourceSalt ^= FoldOf(sourceModule.name, sourceModule.source);
 			m_Desc.sourceModules.push_back(std::move(sourceModule));
 		}
 		else
@@ -272,9 +267,8 @@ namespace bgpu
 			// fold is an XOR, so the old text is unfolded rather than folded twice.
 			if (found->source == sourceModule.source && found->imported == sourceModule.imported)
 				return;
-			m_SourceSalt ^= bgl::shader_cache::FoldSource(0, found->name, found->source);
-			m_SourceSalt ^=
-				bgl::shader_cache::FoldSource(0, sourceModule.name, sourceModule.source);
+			m_SourceSalt ^= FoldOf(found->name, found->source);
+			m_SourceSalt ^= FoldOf(sourceModule.name, sourceModule.source);
 			*found = std::move(sourceModule);
 		}
 		m_ByThread.clear();

@@ -6,13 +6,13 @@
 
 namespace bgl
 {
-	Shader::Shader(ShaderDesc desc, bgpu::GpuContext* context) :
-		m_Desc(std::move(desc)), m_Context(context)
+	Shader::Shader(ShaderDesc desc, bgpu::GpuContextRef context) :
+		m_Desc(std::move(desc)), m_Context(std::move(context))
 	{
 		gassert(
 			m_Desc.slangModuleName.empty() == false,
 			"Shader must have a valid Slang module name");
-		gassert(context != nullptr, "GPU context cannot be null");
+		gassert(m_Context != nullptr, "GPU context cannot be null");
 	}
 
 	slang::IModule*

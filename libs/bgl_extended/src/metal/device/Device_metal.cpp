@@ -53,13 +53,15 @@ namespace bgl
 
 	Device::~Device() = default;
 
-	Device::Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir) :
-		m_Context(std::move(context)), m_Device(NS::RetainPtr(bgpu::GetMtlDevice(*m_Context)))
+	Device::Device(
+		const bgpu::GpuContextRef&   context,
+		const std::filesystem::path& shaderCacheDir) :
+		m_Context(context), m_Device(NS::RetainPtr(bgpu::GetMtlDevice(*context)))
 	{
 		if (!shaderCacheDir.empty())
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
-				*m_Context,
+				m_Context,
 				m_Device.get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
@@ -72,12 +74,6 @@ namespace bgl
 	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
 		m_Context->AddSourceModule(sourceModule);
-	}
-
-	std::optional<ReflectedSurface>
-	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
-	{
-		return m_Context->ReflectSurface(moduleName, surfaceName);
 	}
 
 	void
@@ -196,7 +192,7 @@ namespace bgl
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), m_Context.Get());
+		return core::SharedRef<Shader>::Make(std::move(desc), m_Context);
 	}
 
 	core::SharedRef<IComputePipeline>

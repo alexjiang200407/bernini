@@ -8,8 +8,8 @@
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_metal.h"
 #include "uniforms/UniformLayoutEntry.h"
-#include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
+#include <bgpu/SlangErrorChecker.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -29,7 +29,7 @@ namespace bgl
 		CachedProgram
 		CompileProgram(IShader* shader, const std::string& entryName)
 		{
-			SlangErrorChecker errChecker;
+			bgpu::SlangErrorChecker errChecker;
 
 			slang::IModule* module = shader->GetSlangModule();
 			gassert(module != nullptr, "Shader module cannot be null");

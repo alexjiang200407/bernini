@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bgl_common/SurfaceReflection.h>
 #include <bgpu/GpuContext.h>
 #include <core/str/str.h>
 #include <cstdint>
@@ -88,21 +87,13 @@ namespace bgpu
 		operator=(const SlangSessions&) = delete;
 
 		/**
-		 * The surface a game's module declares.
-		 *
-		 * Reflected on a DXIL target whatever this device compiles for: the offsets have to be the
-		 * ones `RawBuffer.Load<T>` reads a record at, and a raw load is scalar-packed on every
-		 * backend. The module is loaded and reflected here rather than handed back, because a
-		 * slang::IModule only lives as long as the session that parsed it and the next
-		 * AddSourceModule drops that.
-		 *
-		 * Empty when the module is not a surface at all -- it does not import the contract.
-		 *
-		 * @throws std::runtime_error if the module does not compile, or imports the contract and
-		 *         does not hold exactly one struct conforming to its ISurfaceSource.
+		 * The named module in the calling thread's second session, compiled for a DXIL target
+		 * whatever this device draws with: a layout read there is the scalar one `RawBuffer.Load<T>`
+		 * reads a record at on every backend. Null, with the compiler's diagnostic, when the module
+		 * does not compile -- text a client wrote, where a diagnostic is a message to hand back.
 		 */
-		[[nodiscard]] std::optional<bgl::ReflectedSurface>
-		ReflectSurface(std::string_view moduleName, std::string_view surfaceName);
+		[[nodiscard]] slang::IModule*
+		LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic);
 
 		/**
 		 * The named module in the calling thread's session: a registered module nothing imports is
@@ -140,8 +131,8 @@ namespace bgpu
 			Slang::ComPtr<slang::IGlobalSession> global;
 			Slang::ComPtr<slang::ISession>       session;
 
-			// A second session on a DXIL target, made only if a surface is reflected: the layout a
-			// record is read at is the scalar one, which this device's own target may not give.
+			// A second session on a DXIL target, made only when a scalar layout is asked for: the layout
+			// a record is read at is the scalar one, which this device's own target may not give.
 			Slang::ComPtr<slang::ISession> scalarLayout;
 
 			// The on-demand modules `session` has loaded so far, by name. Owned by the session.

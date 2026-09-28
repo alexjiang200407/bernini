@@ -1,10 +1,6 @@
 #pragma once
+#include <Metal/Metal.hpp>
 #include <bgpu/api.h>
-
-namespace MTL  // NOLINT(readability-identifier-naming): metal-cpp's own namespace
-{
-	class Device;
-}
 
 namespace bgpu
 {

@@ -150,7 +150,7 @@ namespace bgl
 			// Before the context: it builds every pipeline, and a slot's pipelines compile against
 			// whatever module this bound to that slot.
 			m_SurfaceTypes =
-				RegisterSurfaces(*m_Device, device->GetContext().GetDesc().clientShaderDir);
+				RegisterSurfaces(*m_Device, device->GetGpuContext().GetDesc().clientShaderDir);
 
 			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 			m_Context         = std::make_unique<RenderContext>(
@@ -158,7 +158,7 @@ namespace bgl
 				m_ResourceManager,
 				m_DrawBucketTable,
 				m_SurfaceTypes,
-				device->GetContext().GetDesc().enableDebugLayer);
+				device->GetGpuContext().GetDesc().enableDebugLayer);
 
 			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
 			// by the first Draw that demands each, and that path drops the sessions again after

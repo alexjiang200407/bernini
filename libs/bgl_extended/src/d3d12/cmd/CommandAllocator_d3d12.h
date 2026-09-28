@@ -1,6 +1,6 @@
 #pragma once
+#include "D3d12ErrorChecker.h"
 #include "cmd/CommandAllocator.h"
-#include <bgpu/d3d12/D3d12ErrorChecker.h>
 
 namespace bgl
 {

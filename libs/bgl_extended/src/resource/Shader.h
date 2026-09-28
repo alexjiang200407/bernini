@@ -62,8 +62,7 @@ namespace bgl
 	class Shader final : public core::RefCounter<IShader>
 	{
 	public:
-		/** @pre `context` outlives the shader; the device that holds both guarantees it. */
-		Shader(ShaderDesc desc, bgpu::GpuContext* context);
+		Shader(ShaderDesc desc, bgpu::GpuContextRef context);
 		~Shader() noexcept override { logger::trace("~Shader"); }
 		Shader(const Shader&)     = delete;
 		Shader(Shader&&) noexcept = delete;
@@ -91,7 +90,7 @@ namespace bgl
 		}
 
 	private:
-		ShaderDesc        m_Desc;
-		bgpu::GpuContext* m_Context = nullptr;
+		ShaderDesc          m_Desc;
+		bgpu::GpuContextRef m_Context;
 	};
 }

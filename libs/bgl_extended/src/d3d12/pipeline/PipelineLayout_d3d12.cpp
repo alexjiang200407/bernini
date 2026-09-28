@@ -27,7 +27,7 @@ namespace bgl::pipeline_util
 		{
 			gassert(!shaders.empty(), "A PSO needs at least one shader to compile");
 
-			SlangErrorChecker                              errChecker;
+			bgpu::SlangErrorChecker                        errChecker;
 			slang::ISession*                               session = nullptr;
 			std::vector<slang::IComponentType*>            components;
 			std::unordered_set<slang::IModule*>            uniqueModules;
