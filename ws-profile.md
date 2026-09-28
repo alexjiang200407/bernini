@@ -6,6 +6,7 @@ format: just format
 tidy: just tidy --changed
 docs_index: CLAUDE.md
 review: bypass
+merge-method: squash
 flows:
   one-shot: { pr: true }
   fast: { contract: true, landing: pr }
