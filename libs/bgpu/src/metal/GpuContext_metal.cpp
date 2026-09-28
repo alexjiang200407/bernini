@@ -3,7 +3,6 @@
 #include <bgpu/GpuContext.h>
 #include <bgpu/metal/native_device.h>
 #include <core/err/util.h>
-#include <core/log/bassert.h>
 #include <core/log/log.h>
 #include <core/platform/util.h>
 #include <core/ref/SharedRef.h>
@@ -71,7 +70,7 @@ namespace bgpu
 	GetMtlDevice(const GpuContext& context) noexcept
 	{
 		const auto* metal = dynamic_cast<const Context*>(&context);
-		core::logging::bassert(metal != nullptr, "The GPU context is not a Metal one");
+		core::ensure(metal != nullptr, "The GPU context is not a Metal one");
 		return metal->GetDevice();
 	}
 

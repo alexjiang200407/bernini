@@ -3,7 +3,6 @@
 #include <bgpu/d3d12/D3d12ErrorChecker.h>
 #include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
-#include <core/log/bassert.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
 #include <slang.h>
@@ -146,7 +145,7 @@ namespace bgpu
 
 				const auto* self = static_cast<const Context*>(context);
 				if (severe && self != nullptr && self->GetDesc().strictError)
-					core::logging::bfatal("[D3D12] strict error: {}", description);
+					core::fatal("[D3D12] strict error: {}", description);
 			}
 
 			wrl::ComPtr<ID3D12Device>     m_Device;
@@ -161,7 +160,7 @@ namespace bgpu
 	GetD3d12Device(const GpuContext& context) noexcept
 	{
 		const auto* d3d12 = dynamic_cast<const Context*>(&context);
-		core::logging::bassert(d3d12 != nullptr, "The GPU context is not a D3D12 one");
+		core::ensure(d3d12 != nullptr, "The GPU context is not a D3D12 one");
 		return d3d12->GetDevice();
 	}
 

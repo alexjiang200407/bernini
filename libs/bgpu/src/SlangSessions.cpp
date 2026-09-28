@@ -3,7 +3,6 @@
 #include <bgpu/SlangErrorChecker.h>
 #include <core/err/util.h>
 #include <core/hash.h>
-#include <core/log/bassert.h>
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
@@ -108,7 +107,7 @@ namespace bgpu
 			Slang::ComPtr<slang::ISession> session;
 			SlangErrorChecker              errChecker;
 			global->createSession(sessionDesc, session.writeRef()) >> errChecker;
-			core::logging::bassert(session != nullptr, "Failed to create Slang session");
+			core::ensure(session != nullptr, "Failed to create Slang session");
 
 			// Loaded under the path form, which is what an import of a dotted name looks up:
 			// registered as `game.probe` the text is never found and the file wins. The second
@@ -129,7 +128,7 @@ namespace bgpu
 					sourceModule.source.c_str(),
 					moduleChecker.WriteDiagnosticBlob());
 				moduleChecker.ReportError();
-				core::logging::bassert(
+				core::ensure(
 					loaded != nullptr,
 					"Failed to load Slang module '{}' from source",
 					sourceModule.name);
@@ -155,7 +154,7 @@ namespace bgpu
 		// the load of the core module -- the one step here worth running several of at once.
 		ThreadSessions mine;
 		slang::createGlobalSession(mine.global.writeRef());
-		core::logging::bassert(mine.global != nullptr, "Failed to create Slang global session");
+		core::ensure(mine.global != nullptr, "Failed to create Slang global session");
 
 		mine.session = CreateSession(mine.global.get(), desc, desc.target);
 
@@ -208,7 +207,7 @@ namespace bgpu
 			onDemand->source.c_str(),
 			errChecker.WriteDiagnosticBlob());
 		errChecker.ReportError();
-		core::logging::bassert(
+		core::ensure(
 			slangModule != nullptr,
 			"Failed to load Slang module '{}' from source",
 			moduleName);

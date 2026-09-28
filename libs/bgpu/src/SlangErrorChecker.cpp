@@ -1,5 +1,5 @@
 #include <bgpu/SlangErrorChecker.h>
-#include <core/log/bassert.h>
+#include <core/err/util.h>
 #include <slang.h>
 
 namespace bgpu
@@ -11,7 +11,7 @@ namespace bgpu
 		{
 			if (!checker.ReportError())
 			{
-				core::logging::bfatal("Slang operation failed with no diagnostics available.");
+				core::fatal("Slang operation failed with no diagnostics available.");
 			}
 		}
 	}
@@ -22,7 +22,7 @@ namespace bgpu
 		if (m_DiagnosticBlob)
 		{
 			const char* errorMessage = (const char*)m_DiagnosticBlob->getBufferPointer();
-			core::logging::bfatal("Slang operation failed with error: {}", errorMessage);
+			core::fatal("Slang operation failed with error: {}", errorMessage);
 		}
 
 		return false;

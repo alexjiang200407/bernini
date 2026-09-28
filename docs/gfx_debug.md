@@ -204,16 +204,16 @@ for the warnings/errors/info the run emitted.
 
 ## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
 
-The family is `core`'s, beside the logger it reports through:
-[core/log/bassert.h](libs/core/include/core/log/bassert.h) defines `core::logging::bassert`,
-`bfatal`, `berror` and `bunimplemented`, with the macros `BDEBUG_BREAK` and `BWARN_ONCE`. Code
-outside the renderer, `bgpu` among it, calls those names. The renderer keeps its own, `g` for
-graphics: [bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h) defines `bgl::gassert`,
-`gfatal`, `gerror` and `gunimplemented` as forwards to the `b` originals, `GDEBUG_BREAK` and
-`GWARN_ONCE` as aliases of the macros, and the `bgl::logger` alias -- so a source that reaches it
-through `libs/bgl_extended/src/pch.h` needs no include, and one outside that PCH's reach gets the
-whole family from the single line. All three log then break into the debugger on MSVC
-(`__debugbreak`):
+The family is `core`'s error handling, beside `throw_runtime_error` in
+[core/err/util.h](libs/core/include/core/err/util.h): `core::ensure`, `fatal`, `error` and
+`unimplemented`, reporting through the process's log. The check is `ensure` because `assert` is
+`<cassert>`'s macro, which would expand any call of that name before the compiler saw its namespace.
+Code outside the renderer, `bgpu` among it, calls those names. The renderer keeps its own, `g` for
+graphics: [bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h) defines
+`bgl::gassert`, `gfatal`, `gerror` and `gunimplemented` as forwards to core's, and the `bgl::logger`
+alias -- so a source that reaches it through `libs/bgl_extended/src/pch.h` needs no include, and one
+outside that PCH's reach gets the whole family from the single line. All three log then break into
+the debugger on MSVC (`__debugbreak`):
 
 * `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.
   Use for internal invariants.
@@ -221,7 +221,6 @@ whole family from the single line. All three log then break into the debugger on
   the GPU-assertion crash path.
 * `gerror(fmt, args...)` — `logger::error` + break, but **does not terminate** (execution
   continues).
-* `GWARN_ONCE(fmt_str, ...)` — logs a `warn` exactly once via a function-local `static bool`.
 
 **Contracts / gotchas:**
 * **Blame split:** `gassert` is for bgl_extended's *own* broken invariants. For bad input from the caller
