@@ -284,15 +284,47 @@ namespace assetlib
 			return level == 0 ? mesh.submeshes : std::vector<Submesh>();
 
 		auto submeshes = std::vector<Submesh>();
-		for (const Mesh& entry : mesh.meshes)
+		for (uint32_t m = 0; m < mesh.meshes.size(); ++m)
 		{
-			if (level >= entry.lodCount)
-				continue;
-			const uint32_t first = entry.firstSubmesh + level * entry.submeshCount;
-			for (uint32_t s = 0; s < entry.submeshCount; ++s)
-				submeshes.push_back(mesh.submeshes[first + s]);
+			const std::span<const Submesh> entries = meshLodSubmeshes(mesh, m, level);
+			submeshes.insert(submeshes.end(), entries.begin(), entries.end());
 		}
 		return submeshes;
+	}
+
+	std::span<const Submesh>
+	meshLodSubmeshes(const BMesh& mesh, const uint32_t meshIndex, const uint32_t level) noexcept
+	{
+		if (meshIndex >= mesh.meshes.size())
+			return {};
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+		if (level >= entry.lodCount)
+			return {};
+
+		const uint64_t first =
+			entry.firstSubmesh + static_cast<uint64_t>(level) * entry.submeshCount;
+		if (first + entry.submeshCount > mesh.submeshes.size())
+			return {};
+		return std::span(mesh.submeshes).subspan(first, entry.submeshCount);
+	}
+
+	std::vector<float>
+	meshLodMinPixels(const BMesh& mesh, const uint32_t meshIndex)
+	{
+		if (meshIndex >= mesh.meshes.size())
+			return {};
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+		if (mesh.lods.empty())
+			return entry.lodCount == 1 ? std::vector<float>{ 0.0f } : std::vector<float>();
+		if (static_cast<uint64_t>(entry.firstLod) + entry.lodCount > mesh.lods.size())
+			return {};
+
+		auto minPixels = std::vector<float>();
+		for (uint32_t level = 0; level < entry.lodCount; ++level)
+			minPixels.push_back(mesh.lods[entry.firstLod + level].minPixels);
+		return minPixels;
 	}
 
 	uint64_t

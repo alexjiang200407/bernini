@@ -533,6 +533,8 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   every level's entries, level-major, so a reader walking `submeshCount` from `firstSubmesh` sees
   level 0), and **material references by file path**. The thresholds are the import document's
   `lodMinPixels` parameter, one per level from 0, the last level's being the draw-nothing size.
+  One level of one mesh, and its thresholds, are `meshLodSubmeshes` and `meshLodMinPixels` in
+  [bmesh.h](libs/assetlib/include/assetlib/bmesh.h), so no reader restates the layout.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
