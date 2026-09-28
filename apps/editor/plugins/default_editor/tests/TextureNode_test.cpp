@@ -1,6 +1,6 @@
-#include "Windows/MaterialEditor/nodes/ChannelData.h"
-#include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
-#include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include "Windows/MeshEditor/nodes/ChannelData.h"
+#include "Windows/MeshEditor/nodes/SurfaceTextureData.h"
+#include "Windows/MeshEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 
 #include "util/QtSupport.h"  // IWYU pragma: keep

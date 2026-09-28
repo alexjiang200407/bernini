@@ -1,6 +1,6 @@
-#include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
-#include "Windows/MaterialEditor/nodes/ChannelData.h"
-#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MeshEditor/nodes/AlphaTestedMaterialOutputNode.h"
+#include "Windows/MeshEditor/nodes/ChannelData.h"
+#include "Windows/MeshEditor/nodes/MaterialOutputNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 
 #include "util/QtSupport.h"  // IWYU pragma: keep

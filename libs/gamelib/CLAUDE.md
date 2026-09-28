@@ -26,7 +26,7 @@ here, not in either of them.
   sphere for procedural shapes), place instances of it, and ask which (instance, submesh) a
   world-space `game::Ray` meets first. It keeps its own compact copy of positions and triangles,
   because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
-  in scope. Pure CPU, no bgl_extended involvement; the editor's material preview drives click-to-select
+  in scope. Pure CPU, no bgl_extended involvement; the Mesh Editor's preview drives click-to-select
   with it.
 - `UiRuntime` / `UiContext` — the in-game UI: RmlUi's lifetime, its clock and log, and the file
   interface every document, stylesheet and font is read through. See *The UI runtime* below.

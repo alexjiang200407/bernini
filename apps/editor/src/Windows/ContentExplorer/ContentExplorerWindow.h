@@ -80,7 +80,7 @@ public:
 Q_SIGNALS:
 	/**
 	 * A bake rewrote `asset` (data-root-relative) on disk. Anything showing what that file says -- the
-	 * Material Editor's properties panel -- has to re-read it; nothing here watches the filesystem.
+	 * Mesh Editor's properties panel -- has to re-read it; nothing here watches the filesystem.
 	 */
 	void
 	MaterialBaked(const QString& asset);

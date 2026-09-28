@@ -8,8 +8,8 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/GrassEditor/GrassEditorWindow.h"
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
-#include "Windows/MaterialEditor/MaterialPreviewWindow.h"
+#include "Windows/MeshEditor/MeshEditorWindow.h"
+#include "Windows/MeshEditor/MeshPreviewWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
@@ -454,7 +454,7 @@ TEST_CASE(
 	const HeadlessEditor             first;
 	const HeadlessEditor             second;
 	MainWindow                       window(first.Plugins(), first.Open(), first.ConfigFile());
-	QPointer<MaterialEditorWindow>   material  = window.findChild<MaterialEditorWindow*>();
+	QPointer<MeshEditorWindow>       material  = window.findChild<MeshEditorWindow*>();
 	QPointer<AnimationEditorWindow>  animation = window.findChild<AnimationEditorWindow*>();
 	QPointer<BlendSpaceEditorWindow> blend     = window.findChild<BlendSpaceEditorWindow*>();
 	REQUIRE(material != nullptr);
@@ -484,7 +484,7 @@ TEST_CASE(
 		std::vector<fs::path> releasedRoots;
 		QObject               teardownObserver;
 		ObserveViewportTeardown(window, teardownObserver, releasedRoots);
-		material                  = window.findChild<MaterialEditorWindow*>();
+		material                  = window.findChild<MeshEditorWindow*>();
 		animation                 = window.findChild<AnimationEditorWindow*>();
 		blend                     = window.findChild<BlendSpaceEditorWindow*>();
 		const bool nativeDisabled = QCoreApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
@@ -535,7 +535,7 @@ TEST_CASE(
 		REQUIRE(releasedRoots.size() == c_ViewportCount);
 		for (const auto& root : releasedRoots)
 			CHECK(root == (replacementIndex == 0 ? first.DataRoot() : second.DataRoot()));
-		auto* replacement = window.findChild<MaterialEditorWindow*>();
+		auto* replacement = window.findChild<MeshEditorWindow*>();
 		REQUIRE(replacement != nullptr);
 		CHECK(replacement->GetDataRoot() == second.DataRoot());
 		const auto views = window.findChildren<RenderTargetWindow*>();
@@ -591,7 +591,7 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
 	// The project is open by the time the constructor returns.
-	auto* materials = window.findChild<MaterialEditorWindow*>();
+	auto* materials = window.findChild<MeshEditorWindow*>();
 	auto* animation = window.findChild<AnimationEditorWindow*>();
 
 	REQUIRE(materials != nullptr);
@@ -639,7 +639,7 @@ struct TintSurface : ISurfaceSource
 
 	const MainWindow window(editor.Plugins(), assetlib::Project::Open(other), editor.ConfigFile());
 
-	auto* materials = window.findChild<MaterialEditorWindow*>();
+	auto* materials = window.findChild<MeshEditorWindow*>();
 	REQUIRE(materials != nullptr);
 
 	CHECK(materials->GetDataRoot() == assetlib::Project::DataDirectoryOf(other));
@@ -664,15 +664,15 @@ TEST_CASE(
 
 	auto* materialDock  = window.findChild<QDockWidget*>("bernini.material");
 	auto* animationDock = window.findChild<QDockWidget*>("bernini.animation");
-	auto* materials     = window.findChild<MaterialEditorWindow*>();
-	auto* preview       = window.findChild<MaterialPreviewWindow*>();
+	auto* materials     = window.findChild<MeshEditorWindow*>();
+	auto* preview       = window.findChild<MeshPreviewWindow*>();
 
 	REQUIRE(materialDock != nullptr);
 	REQUIRE(animationDock != nullptr);
 	REQUIRE(materials != nullptr);
 	REQUIRE(preview != nullptr);
 
-	// The Material tab on top, as it is when a user switches away from the editor.
+	// The Mesh Editor tab on top, as it is when a user switches away from the editor.
 	materialDock->raise();
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
@@ -705,7 +705,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-	"The material panel prompts for a mesh until one is open",
+	"The Mesh Editor prompts for a mesh until one is open",
 	"[mainwindow][panelclear][render]")
 {
 	const HeadlessEditor editor;
@@ -714,8 +714,8 @@ TEST_CASE(
 	window.show();
 
 	auto* materialDock = window.findChild<QDockWidget*>("bernini.material");
-	auto* materials    = window.findChild<MaterialEditorWindow*>();
-	auto* preview      = window.findChild<MaterialPreviewWindow*>();
+	auto* materials    = window.findChild<MeshEditorWindow*>();
+	auto* preview      = window.findChild<MeshPreviewWindow*>();
 	REQUIRE(materialDock != nullptr);
 	REQUIRE(materials != nullptr);
 	REQUIRE(preview != nullptr);
@@ -724,7 +724,7 @@ TEST_CASE(
 	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
 
 	// The panel's one stack: the prompt, or everything the panel is for.
-	auto* stage = materials->findChild<QStackedWidget*>("MaterialStage");
+	auto* stage = materials->findChild<QStackedWidget*>("MeshStage");
 	REQUIRE(stage != nullptr);
 
 	// Nothing open, so nothing of the editing surface is offered -- the default sphere is behind
@@ -744,7 +744,7 @@ TEST_CASE(
 	bool                          promptUpBeforeGeometryWent = false;
 	const QMetaObject::Connection watch                      = QObject::connect(
 		preview,
-		&MaterialPreviewWindow::GeometryAboutToChange,
+		&MeshPreviewWindow::GeometryAboutToChange,
 		materials,
 		[&promptUpBeforeGeometryWent, stage] {
 			promptUpBeforeGeometryWent = stage->currentIndex() == 0;
@@ -805,16 +805,16 @@ TEST_CASE(
 }
 
 TEST_CASE(
-	"An environment dropped on the empty material panel still reaches the preview",
+	"An environment dropped on the empty Mesh Editor still reaches the preview",
 	"[mainwindow][render][materialplugin]")
 {
 	const HeadlessEditor editor;
 	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 
-	auto* panel = window.findChild<MaterialEditorWindow*>();
+	auto* panel = window.findChild<MeshEditorWindow*>();
 	REQUIRE(panel != nullptr);
-	auto* preview = panel->findChild<MaterialPreviewWindow*>();
+	auto* preview = panel->findChild<MeshPreviewWindow*>();
 	REQUIRE(preview != nullptr);
 
 	// Nothing open, so the prompt is up and the preview is on the page behind it. Qt routes a drag
@@ -841,7 +841,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-	"The material panel tears down with a mesh still open",
+	"The Mesh Editor tears down with a mesh still open",
 	"[mainwindow][render][materialplugin]")
 {
 	const HeadlessEditor editor;
@@ -849,7 +849,7 @@ TEST_CASE(
 		MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		window.show();
 
-		auto* preview = window.findChild<MaterialPreviewWindow*>();
+		auto* preview = window.findChild<MeshPreviewWindow*>();
 		REQUIRE(preview != nullptr);
 
 		const fs::path mesh = editor.ExternalMesh();
@@ -872,7 +872,7 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 
 	const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 
-	// The Material Editor's preview, the Animation Editor's and the Blend Space Editor's. A panel added later fails this
+	// The Mesh Editor's preview, the Animation Editor's and the Blend Space Editor's. A panel added later fails this
 	// line, which is the point: it then has to say whether it threads `headless` through, rather
 	// than being window-backed in a suite that cannot realise a window.
 	CHECK(static_cast<int>(viewports.size()) == c_ViewportCount);
@@ -900,7 +900,7 @@ TEST_CASE(
 
 	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
-	const auto* material = window.findChild<MaterialEditorWindow*>();
+	const auto* material = window.findChild<MeshEditorWindow*>();
 	REQUIRE(material != nullptr);
 	const auto* materialView = material->findChild<RenderTargetWindow*>();
 	REQUIRE(materialView != nullptr);
@@ -957,7 +957,7 @@ TEST_CASE(
 
 	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 
-	const auto* material = window.findChild<MaterialEditorWindow*>();
+	const auto* material = window.findChild<MeshEditorWindow*>();
 	REQUIRE(material != nullptr);
 	auto* materialView = material->findChild<RenderTargetWindow*>();
 	REQUIRE(materialView != nullptr);
@@ -999,7 +999,7 @@ TEST_CASE(
 
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
 // behaviour rather than layout: the panel behind it holds no mesh and renders nothing.
-TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
+TEST_CASE("A project opens on the Mesh Editor tab", "[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
@@ -1015,7 +1015,7 @@ TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
 	});
 
 	REQUIRE(docked != bars.end());
-	CHECK((*docked)->tabText((*docked)->currentIndex()) == QStringLiteral("Material Editor"));
+	CHECK((*docked)->tabText((*docked)->currentIndex()) == QStringLiteral("Mesh Editor"));
 }
 
 // The graph costs a resolve per frame to fill, so it turns timing on for itself rather than opening
@@ -1408,7 +1408,7 @@ TEST_CASE(
 	const auto current  = [bar = *docked] { return bar->tabText(bar->currentIndex()); };
 	const auto blendTab = QStringLiteral("Blend Space Editor");
 
-	// A project opens on the Material Editor's tab, so the double-click is what brings this one up.
+	// A project opens on the Mesh Editor's tab, so the double-click is what brings this one up.
 	QCoreApplication::processEvents();
 	REQUIRE(current() != blendTab);
 
@@ -1588,7 +1588,7 @@ TEST_CASE(
 	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 	window.show();
 	QCoreApplication::processEvents();
-	auto* preview = window.findChild<MaterialPreviewWindow*>();
+	auto* preview = window.findChild<MeshPreviewWindow*>();
 	REQUIRE(preview != nullptr);
 	auto* view = preview->findChild<RenderTargetWindow*>();
 	REQUIRE(view != nullptr);
@@ -1601,7 +1601,7 @@ TEST_CASE(
 	preview->LoadMesh(mesh);
 	REQUIRE(editor::test::WaitFor([view] { return view->isVisible(); }));
 
-	QSignalSpy picked(preview, &MaterialPreviewWindow::SubmeshPicked);
+	QSignalSpy picked(preview, &MeshPreviewWindow::SubmeshPicked);
 	QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->rect().center());
 	REQUIRE(picked.count() == 1);
 	CHECK(picked.front().front().toInt() == 0);
@@ -1613,7 +1613,7 @@ TEST_CASE(
 {
 	const HeadlessEditor editor;
 	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
-	auto*                preview = window.findChild<MaterialPreviewWindow*>();
+	auto*                preview = window.findChild<MeshPreviewWindow*>();
 	REQUIRE(preview != nullptr);
 	auto* view = preview->findChild<RenderTargetWindow*>();
 	REQUIRE(view != nullptr);
@@ -1640,9 +1640,9 @@ TEST_CASE(
 		{ "animationEditor", { { "temporalAA", false }, { "environmentMap", "" } } }
 	}.dump(2);
 	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
-	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	auto*      panel = window.findChild<MeshEditorWindow*>();
 	REQUIRE(panel != nullptr);
-	auto* preview = panel->findChild<MaterialPreviewWindow*>();
+	auto* preview = panel->findChild<MeshPreviewWindow*>();
 	REQUIRE(preview != nullptr);
 	const std::vector<std::string> expected{ "Authored/Environments/pending.benv" };
 	// An unavailable environment remains held while the user repairs its files.
@@ -1667,7 +1667,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-	"An explorer bake refreshes the registered Material panel",
+	"An explorer bake refreshes the registered Mesh Editor",
 	"[mainwindow][render][materialplugin]")
 {
 	const HeadlessEditor       editor;
@@ -1684,7 +1684,7 @@ TEST_CASE(
 	material.pbr.routes[0].texture = source;
 	store.Save(material, key);
 	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
-	auto*      panel = window.findChild<MaterialEditorWindow*>();
+	auto*      panel = window.findChild<MeshEditorWindow*>();
 	REQUIRE(panel != nullptr);
 	REQUIRE(dynamic_cast<editor::EditorPanel*>(panel) != nullptr);
 	QPushButton* open = nullptr;

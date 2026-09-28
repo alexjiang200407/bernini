@@ -124,7 +124,7 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-`apps/editor/plugins/default_editor` owns Material, Animation, Blend Space and Grass, their authoring widgets and the
+`apps/editor/plugins/default_editor` owns Mesh, Animation, Blend Space and Grass, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;
 its target has no editor-host implementation include path. The host supplies configuration by value
 and opens its three startup contributions once the project host exists. Material and Animation
@@ -241,7 +241,7 @@ first; any refusal keeps the project alive. Then destroy panels and their viewpo
 join plugin work while the old host still exists. The host tracks returned panels with guarded pointers; a panel that survives dock teardown is
 logged by contribution ID and deleted before project services. Destroy the host last. On another project, create
 new panels against a new host; do not silently retarget stored references to old services.
-The built-in Material, Animation and Blend Space panels follow the same project lifetime: an
+The built-in Mesh, Animation and Blend Space panels follow the same project lifetime: an
 empty editor allocates no preview viewports, and project replacement destroys the old panels before
 releasing their asset manager. New viewports retain the current Render-menu overrides. Preview teardown stops rendering and
 releases owned geometry, materials and environment maps from the persistent scene.

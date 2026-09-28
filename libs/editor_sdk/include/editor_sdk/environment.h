@@ -63,7 +63,7 @@ namespace editor
 	/**
 	 * Puts a `.benv`'s image-based lighting onto a view: the IBL pair, the skybox, and the exposure.
 	 *
-	 * Shared by the material preview and the thumbnail cache so the two cannot light the same asset
+	 * Shared by the Mesh Editor's preview and the thumbnail cache so the two cannot light the same asset
 	 * differently -- a thumbnail that disagrees with the preview it was generated from is a bug that
 	 * only shows up side by side.
 	 *

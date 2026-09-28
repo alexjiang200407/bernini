@@ -32,7 +32,7 @@ namespace assetlib
 		kMask   = 1,
 		kBlend  = 2,
 
-		// Not a glTF mode: nothing imports it, and it is chosen in the material editor. Alpha becomes
+		// Not a glTF mode: nothing imports it, and it is chosen in the Mesh Editor. Alpha becomes
 		// stochastic coverage rather than a cutoff, which only resolves under temporal AA.
 		kHashed = 3,
 	};

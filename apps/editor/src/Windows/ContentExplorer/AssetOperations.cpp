@@ -50,7 +50,7 @@ AssetOperations::Bake(const QString& asset)
 
 	// Compositing decodes, resizes and re-encodes a KTX2 for each map, so it runs off the UI thread. It
 	// touches files only, never bgl. Baking reads the material off disk, so the routes it composites are
-	// the ones last saved -- Save in the Material Editor first to bake unsaved edits.
+	// the ones last saved -- Save in the Mesh Editor first to bake unsaved edits.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		m_Parent,
 		editor::Localize(
@@ -79,7 +79,7 @@ AssetOperations::Bake(const QString& asset)
 		return;
 	}
 
-	// The thumbnail cache watches the material's mtime and repaints itself; the Material Editor does
+	// The thumbnail cache watches the material's mtime and repaints itself; the Mesh Editor does
 	// not, and is showing what this file said before the bake.
 	Q_EMIT MaterialBaked(asset);
 }
@@ -148,14 +148,14 @@ AssetOperations::DeleteWithPlanner(
 					"editor.asset_operations.delete_held_open_directory",
 					{ asset },
 					"'{0}' holds an asset that is open in an editor panel.\n\nClose it there "
-					"first: the Material Editor's next Save would write it back, the Animation "
+					"first: the Mesh Editor's next Save would write it back, the Animation "
 					"panel would go on offering it, and a viewport lit by an environment is still "
 					"drawing it -- which config.json's environmentMap names unless a drop replaced "
 					"it.") :
 				editor::Localize(
 					"editor.asset_operations.delete_held_open_file",
 					{ asset },
-					"'{0}' is open in an editor panel.\n\nClose it there first: the Material "
+					"'{0}' is open in an editor panel.\n\nClose it there first: the Mesh "
 					"Editor's next Save would write it back, the Animation panel would go on "
 					"offering it, and a viewport lit by an environment is still drawing it -- "
 					"which config.json's environmentMap names unless a drop replaced it."));
@@ -442,12 +442,12 @@ AssetOperations::Rename(const QString& asset)
 					"editor.asset_operations.rename_held_open_directory",
 					{ asset },
 					"'{0}' holds an asset that is open in an editor panel.\n\nClose it there "
-					"first: the Material Editor's next Save would write the old name back, and "
+					"first: the Mesh Editor's next Save would write the old name back, and "
 					"the Animation panel would go on offering it.") :
 				editor::Localize(
 					"editor.asset_operations.rename_held_open_file",
 					{ asset },
-					"'{0}' is open in an editor panel.\n\nClose it there first: the Material "
+					"'{0}' is open in an editor panel.\n\nClose it there first: the Mesh "
 					"Editor's next Save would write the old name back, and the Animation panel "
 					"would go on offering it."));
 		return;

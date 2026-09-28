@@ -1,7 +1,7 @@
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-#include "Windows/MaterialEditor/material_graph.h"
-#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
-#include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include "Windows/MeshEditor/MaterialGraphModel.h"
+#include "Windows/MeshEditor/material_graph.h"
+#include "Windows/MeshEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MeshEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>

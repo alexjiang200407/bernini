@@ -292,7 +292,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 
 		bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 		bgl::ISceneView* view  = m_SceneView.Get();
-		// The same helper the material preview uses, so a thumbnail cannot be lit differently from
+		// The same helper the Mesh Editor's preview uses, so a thumbnail cannot be lit differently from
 		// the preview it was generated from.
 		m_Environment.configured = m_Desc.env;
 		if (!m_Environment.configured.environmentMap.empty())
@@ -1015,7 +1015,7 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 	if (relPath.empty())
 		throw std::runtime_error("material does not lie under the project's data root");
 
-	// The Material Editor previews on a sphere, so a material's thumbnail is the shape the user
+	// The Mesh Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
 

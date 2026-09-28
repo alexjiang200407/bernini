@@ -70,7 +70,7 @@ temporal_antialiasing,Temporal Antialiasing
 texture_moved_line,{0} -> {1}
 textures_moved_info,"Each held the same bytes as a file the extract wrote, so the materials routing at it were re-routed and the old file removed. Nothing is drawing anything new."
 textures_moved_text,Some textures moved to the name the current rule gives them.
-textures_superseded_info,"They are still on disk and nothing has been changed. A material routing at one is drawing what its source held at import -- re-route it in the Material Editor, or delete it once nothing does."
+textures_superseded_info,"They are still on disk and nothing has been changed. A material routing at one is drawing what its source held at import -- re-route it in the Mesh Editor, or delete it once nothing does."
 textures_superseded_text,Some textures are no longer produced by their source.
 tools_menu,Tools
 update_project_title,Update Project

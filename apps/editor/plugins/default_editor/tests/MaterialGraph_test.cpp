@@ -1,8 +1,8 @@
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-#include "Windows/MaterialEditor/MaterialGraphScene.h"
-#include "Windows/MaterialEditor/MaterialGraphView.h"
-#include "Windows/MaterialEditor/material_graph.h"
-#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MeshEditor/MaterialGraphModel.h"
+#include "Windows/MeshEditor/MaterialGraphScene.h"
+#include "Windows/MeshEditor/MaterialGraphView.h"
+#include "Windows/MeshEditor/material_graph.h"
+#include "Windows/MeshEditor/nodes/MaterialOutputNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
 
@@ -50,7 +50,7 @@ namespace
 	const editor::LanguageResolver c_Language;
 
 	/**
-	 * The registry the material editor ships, minus the graphics. TextureNode takes a null scene and a
+	 * The registry the Mesh Editor ships, minus the graphics. TextureNode takes a null scene and a
 	 * null preview cache on purpose -- that is what the editor itself passes when it runs without a
 	 * device, and it keeps every test in this file off the GPU.
 	 */
@@ -201,7 +201,7 @@ TEST_CASE("Switching the output type replaces the sink", "[materialgraph]")
 }
 
 // The sink glTF cannot describe, and therefore the one that only exists because an author picked it.
-// If it were not registered, SetOutputType would fail and the material editor would silently offer a
+// If it were not registered, SetOutputType would fail and the Mesh Editor would silently offer a
 // menu entry that does nothing.
 TEST_CASE("The hashed-alpha sink is reachable and reports its mode", "[materialgraph][hashedalpha]")
 {
