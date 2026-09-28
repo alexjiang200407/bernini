@@ -1,3 +1,4 @@
+#include <bgpu/GpuContext.h>
 #include <editor_sdk/BackgroundTask.h>
 
 #include "Render/Renderer.h"
@@ -347,10 +348,7 @@ TEST_CASE("The frame loop keeps drawing behind a loading screen", "[background][
 	// The promise the whole prepare/commit split rests on: one Renderer thread draws every viewport
 	// in the editor, so a load that reads and cooks on the loading screen's worker must leave that
 	// thread free. If this ever fails, every panel freezes the moment any of them loads anything.
-	auto opts             = bgl::GraphicsOptions();
-	opts.enableDebugLayer = false;
-
-	auto renderer = Renderer(opts, bgl::SceneDesc());
+	auto renderer = Renderer(bgpu::GpuContextDesc(), bgl::GraphicsOptions(), bgl::SceneDesc());
 
 	auto frames = std::atomic<int>(0);
 

@@ -14,8 +14,8 @@
 #include "util/util.h"
 #include <algorithm>
 #include <array>
-#include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
+#include <bgpu/SlangErrorChecker.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -77,7 +77,7 @@ namespace bgl
 		CachedProgram
 		CompileProgram(const MeshletPipelineDesc& desc)
 		{
-			SlangErrorChecker errChecker;
+			bgpu::SlangErrorChecker errChecker;
 
 			slang::ISession*                               session = nullptr;
 			std::vector<slang::IComponentType*>            components;

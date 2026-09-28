@@ -16,6 +16,7 @@
 #include "types/Format.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
@@ -41,12 +42,12 @@ TEST_CASE(
 {
 	constexpr uint32_t c_Capacity = 16;
 
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -182,12 +183,12 @@ TEST_CASE(
 // came back rather than only that an assertion fired.
 TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture][compute]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -324,12 +325,12 @@ TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
 		{ 255, 255, 0, 255 },
 	} };
 
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

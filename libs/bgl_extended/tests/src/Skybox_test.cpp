@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -20,11 +21,11 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	constexpr uint32_t c_Width  = 200;
 	constexpr uint32_t c_Height = 150;
 
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();

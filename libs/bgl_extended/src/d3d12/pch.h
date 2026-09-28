@@ -15,4 +15,4 @@ namespace wrl = Microsoft::WRL;
 #include <slang-com-ptr.h>
 #include <slang.h>
 
-#include <bgl_common/SlangErrorChecker.h>
+#include <bgpu/SlangErrorChecker.h>

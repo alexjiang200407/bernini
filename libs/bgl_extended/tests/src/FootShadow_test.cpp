@@ -3,6 +3,7 @@
 #include "util/GoldenImage.h"
 #include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/Animation.h>
@@ -216,12 +217,12 @@ namespace
 	FootScene
 	MakeFootScene(float rightLift, bool plantFeet, const bgl::FootPlantDesc& legs = MakeLegs())
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
 
 		auto result = FootScene();
-		result.gfx  = bgl::CreateGraphics(opts);
+		result.gfx  = bgl::test::CreateGraphics(opts);
 		REQUIRE(result.gfx != nullptr);
 
 		auto sceneDesc                        = bgl::SceneDesc();

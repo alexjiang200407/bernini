@@ -1,5 +1,6 @@
 #include "CountingFileSystem.h"
 #include "StoreAt.h"
+#include "util/TestGraphics.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
@@ -39,12 +40,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = false;
-		opts.shaderCacheDir   = "shadercache";
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = false;
+		opts.graphics.shaderCacheDir  = "shadercache";
 		return opts;
 	}
 
@@ -201,7 +202,7 @@ namespace
 		std::optional<game::AssetManager> assets;
 
 		explicit Fixture(const char* name, game::AssetManagerOptions withOptions = {}) :
-			root(name), gfx(bgl::CreateGraphics(HeadlessOptions())), options(withOptions)
+			root(name), gfx(bgl::test::CreateGraphics(HeadlessOptions())), options(withOptions)
 		{
 			scene = gfx->CreateScene(AssetSceneDesc());
 			view  = gfx->CreateSceneView(scene, 16);
@@ -792,7 +793,7 @@ TEST_CASE("AssetManager keeps its scene alive", "[gamelib][assets]")
 	const DataRoot root("bernini_am_lifetime");
 	WriteTexture(root.path / "Textures" / "a.ktx2");
 
-	auto gfx    = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx    = bgl::test::CreateGraphics(HeadlessOptions());
 	auto assets = std::optional<game::AssetManager>();
 
 	{

@@ -17,6 +17,7 @@
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
@@ -38,12 +39,12 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// Must match HistogramInstances.slang's [numthreads].
 	constexpr uint32_t c_ThreadsPerGroup = 256;
 
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

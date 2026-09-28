@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
@@ -31,12 +32,12 @@ namespace
 		return half - half * (1.0f / (c_CameraDist - 1.0f)) / c_TanHalfFov;
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -77,7 +78,7 @@ namespace
 
 TEST_CASE("Selection outline contours the selected instance", "[selection][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -184,7 +185,7 @@ TEST_CASE(
 	"A selection outgrowing its list capacity survives the growth frame",
 	"[selection][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -249,7 +250,7 @@ TEST_CASE(
 
 TEST_CASE("The outline keeps its share of the frame as the resolution drops", "[selection][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto sceneDesc                        = bgl::SceneDesc();

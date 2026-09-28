@@ -1,6 +1,7 @@
 #include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/Camera.h>
@@ -34,11 +35,11 @@ namespace
 	bgl::GraphicsRef
 	MakeGraphics()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
 
-		auto gfx = bgl::CreateGraphics(opts);
+		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 		return gfx;
 	}

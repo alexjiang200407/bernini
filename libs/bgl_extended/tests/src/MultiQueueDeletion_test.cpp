@@ -4,6 +4,7 @@
 #include "resource/Texture.h"
 #include "types/Format.h"
 #include "types/QueueType.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
@@ -11,12 +12,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -36,7 +37,7 @@ namespace
 // enough to reclaim its descriptor slot.
 TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager][multiqueue]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

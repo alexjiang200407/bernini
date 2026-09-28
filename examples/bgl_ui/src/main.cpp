@@ -10,6 +10,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
@@ -65,10 +66,12 @@ main(int argc, char** argv)
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		auto ctxDesc = bgpu::GpuContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts             = bgl::GraphicsOptions{};
+		ctxDesc.enableDebugLayer = true;
+
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		// The window's frame draws only the UI, so it accumulates nothing: TAA off, and a frame
 		// with no Draw is legal.

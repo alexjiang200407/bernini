@@ -1,4 +1,5 @@
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <bgl/Camera.h>
@@ -62,10 +63,10 @@ namespace
 
 TEST_CASE("what blob-shadow discs behind and ahead of the camera cost Forward", "[.blobshadowcost]")
 {
-	auto opts           = bgl::GraphicsOptions();
-	opts.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto opts                    = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();

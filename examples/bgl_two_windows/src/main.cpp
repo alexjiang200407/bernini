@@ -1,6 +1,7 @@
 #include <DemoWindow.h>
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
+#include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <stdexcept>
 
@@ -27,9 +28,10 @@ main(int, char**)
 		// starve the pump and paint the window "(Not Responding)". A demo runs at speed: the debug
 		// layer stays on to catch API misuse, but GPU validation, the PIX capturer and per-frame
 		// trace logging are off.
+		auto ctxDesc             = bgpu::GpuContextDesc();
 		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
-		gfxOpts.logLevel         = bgl::GraphicsOptions::LogLevel::kWarn;
+		ctxDesc.enableDebugLayer = true;
+		ctxDesc.logLevel         = bgpu::LogLevel::kWarn;
 		// Without this, every launch recompiles all pass shaders through the Slang front-end -- the
 		// several-second startup. The cache persists compiled DXIL + driver PSOs across runs, so only
 		// the first launch pays it.
@@ -38,7 +40,7 @@ main(int, char**)
 		constexpr uint32_t c_Width  = 800;
 		constexpr uint32_t c_Height = 600;
 
-		auto gfx = bgl::CreateGraphics(gfxOpts);
+		auto gfx = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc();
 		targetDesc.width    = static_cast<int>(c_Width);

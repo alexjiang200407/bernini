@@ -1,3 +1,4 @@
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
@@ -13,12 +14,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -47,7 +48,7 @@ namespace
 
 TEST_CASE("SceneError on misuse", "[error][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(CubeSceneDesc());
@@ -85,7 +86,7 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 
 TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(CubeSceneDesc());
@@ -162,7 +163,7 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 
 TEST_CASE("Capacity is a starting point, not a limit", "[error][scene][capacity]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	SECTION("A view placed past initialInstances grows instead of throwing")
@@ -210,7 +211,7 @@ TEST_CASE("Capacity is a starting point, not a limit", "[error][scene][capacity]
 
 TEST_CASE("GraphicsError on frame protocol misuse", "[error][graphics]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = gfx->CreateRenderTarget(HeadlessTargetDesc());

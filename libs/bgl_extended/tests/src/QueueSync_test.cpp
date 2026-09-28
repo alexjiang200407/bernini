@@ -10,6 +10,7 @@
 #include "types/Format.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
@@ -37,12 +38,12 @@ namespace
 
 		QueueFixture()
 		{
-			auto opts                     = bgl::GraphicsOptions();
-			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-			opts.enableDebugLayer         = true;
-			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			auto opts                             = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.enableDebugLayer         = true;
+			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-			gfx = bgl::CreateGraphics(opts);
+			gfx = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -240,12 +241,12 @@ TEST_CASE_METHOD(
 // ResourceManagerDesc, so a small limit here is the whole test.
 TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = false;
-	opts.maxRtvs          = 4;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = false;
+	opts.graphics.maxRtvs         = 4;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -265,7 +266,7 @@ TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager
 	rtvDesc.format = bgl::Format::RGBA8_UNORM;
 
 	std::vector<bgl::RtvHandle> rtvs;
-	for (uint32_t i = 0; i < opts.maxRtvs; ++i)
+	for (uint32_t i = 0; i < opts.graphics.maxRtvs; ++i)
 	{
 		const bgl::RtvHandle rtv = rm->CreateRtv(tex, rtvDesc);
 		CHECK_FALSE(rtv.IsNull());

@@ -7,6 +7,7 @@
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -55,13 +56,15 @@ public:
 	using ViewportId = uint64_t;
 
 	/**
-	 * Builds the Graphics and the Scene on the render thread. `gfxOpts.onPipelineProgress` is
-	 * called from *that* thread, so a sink that touches widgets has to marshal.
+	 * Builds the GPU context, the Graphics and the Scene on the render thread. The context is the
+	 * process's device, created here because the editor is the application and this is the thread
+	 * its GPU work lives on.
 	 *
-	 * @throws whatever bgl::CreateGraphics throws, on the calling thread, with the render thread
-	 *         already stopped.
+	 * @throws whatever bgpu::CreateGpuContext or bgl::CreateGraphics throws, on the calling thread,
+	 *         with the render thread already stopped.
 	 */
 	Renderer(
+		const bgpu::GpuContextDesc& contextDesc,
 		const bgl::GraphicsOptions& gfxOpts,
 		const bgl::SceneDesc&       sceneDesc,
 		RendererWait                wait = RendererWait::kBlock);
@@ -147,8 +150,9 @@ private:
 	std::vector<Viewport> m_Viewports;
 	ViewportId            m_NextViewportId = 1;
 
-	bgl::GraphicsRef m_Graphics;
-	bgl::SceneRef    m_Scene;
+	bgpu::GpuContextRef m_GpuContext;
+	bgl::GraphicsRef    m_Graphics;
+	bgl::SceneRef       m_Scene;
 };
 
 /**

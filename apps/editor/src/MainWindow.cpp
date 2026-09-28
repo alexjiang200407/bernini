@@ -52,6 +52,7 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <core/settings/Settings.h>
@@ -141,14 +142,24 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 
 		const auto gfxSettings = settings["graphics"];
 
-		auto gfxOpts             = bgl::GraphicsOptions();
-		gfxOpts.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
-		gfxOpts.enableGPUValidationLayer =
+		// The device and its debug layer are the process's: the renderer creates them on its thread
+		// and lends the context to anything else that runs work on the device.
+		auto ctxDesc             = bgpu::GpuContextDesc();
+		ctxDesc.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
+		ctxDesc.enableGPUValidationLayer =
 			gfxSettings["enableGPUBasedValidation"].GetOrDefault(false);
-		gfxOpts.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
-		gfxOpts.strictError    = gfxSettings["strictError"].GetOrDefault(false);
-		gfxOpts.logLevel       = static_cast<bgl::GraphicsOptions::LogLevel>(
-			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(gfxOpts.logLevel)));
+		ctxDesc.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
+		ctxDesc.strictError    = gfxSettings["strictError"].GetOrDefault(false);
+		ctxDesc.logLevel       = static_cast<bgpu::LogLevel>(
+			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(ctxDesc.logLevel)));
+
+		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are
+		// generated from what was there then, so a project with other shaders is opened by
+		// restarting into it -- see AskHowToOpen.
+		ctxDesc.clientShaderDir = editor::ShadersDirectoryOf(project.GetProjectFile());
+		m_SurfaceShaderDir      = ctxDesc.clientShaderDir;
+
+		auto gfxOpts          = bgl::GraphicsOptions();
 		gfxOpts.maxCbvSrvUavs = gfxSettings["maxCbvSrvUavs"].GetOrDefault(gfxOpts.maxCbvSrvUavs);
 		gfxOpts.maxBuffers    = gfxSettings["maxBuffers"].GetOrDefault(gfxOpts.maxBuffers);
 		gfxOpts.maxSrvs       = gfxSettings["maxSrvs"].GetOrDefault(gfxOpts.maxSrvs);
@@ -158,12 +169,6 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
-
-		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are
-		// generated from what was there then, so a project with other shaders is opened by
-		// restarting into it -- see AskHowToOpen.
-		gfxOpts.surfaceShaderDir = editor::ShadersDirectoryOf(project.GetProjectFile());
-		m_SurfaceShaderDir       = gfxOpts.surfaceShaderDir;
 
 		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
@@ -198,6 +203,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		// screen saying so is on this thread. Nothing of this window is shown yet, so the events
 		// that run are the screen's own.
 		m_Renderer = std::make_unique<Renderer>(
+			ctxDesc,
 			gfxOpts,
 			sceneDesc,
 			m_StartupProgress ? RendererWait::kPumpEventLoop : RendererWait::kBlock);

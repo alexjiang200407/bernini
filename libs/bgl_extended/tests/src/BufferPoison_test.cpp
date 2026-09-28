@@ -11,6 +11,7 @@
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
@@ -33,12 +34,12 @@ namespace
 
 		PoisonFixture()
 		{
-			auto opts                     = bgl::GraphicsOptions();
-			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-			opts.enableDebugLayer         = true;
-			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			auto opts                             = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.enableDebugLayer         = true;
+			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-			gfx = bgl::CreateGraphics(opts);
+			gfx = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto* gfxBase = gfx->As<bgl::GraphicsBase>();

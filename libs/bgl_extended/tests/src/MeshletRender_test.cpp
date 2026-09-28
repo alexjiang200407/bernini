@@ -14,6 +14,7 @@
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
@@ -28,13 +29,13 @@
 // back, and checks every texel is white. Exercises the meshlet pipeline, the render encoder, and
 TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -144,13 +145,13 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 // binding in either stage shows up as a wrong output channel. Verifies mesh-shader uniform binding.
 TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -259,12 +260,12 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 // get right, and what reopening a pass per draw would hide. Backend-agnostic.
 TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniforms", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -374,13 +375,13 @@ TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniform
 // corrupt a channel.
 TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -490,13 +491,13 @@ TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[mesh
 // the count and relies on the zero grid, which is exactly the contract's precondition.
 TEST_CASE("A count-gated indirect dispatch draws only what the count admits", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -672,13 +673,13 @@ TEST_CASE("A count-gated indirect dispatch draws only what the count admits", "[
 #if defined(RENDERER_BACKEND_DX12)
 TEST_CASE("A zero count suppresses a non-zero grid on D3D12", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -817,12 +818,12 @@ TEST_CASE("A zero count suppresses a non-zero grid on D3D12", "[meshlet]")
 // a grid of 0 is a count of 0, which draws nothing.
 TEST_CASE("Dispatch args serve as their own count buffer on D3D12", "[meshlet]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

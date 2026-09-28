@@ -6,6 +6,7 @@
 #include "resource/Srv.h"
 #include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
@@ -33,14 +34,14 @@ namespace
 
 TEST_CASE("Uniforms", "[uniforms]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
-	opts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
+	opts.context.logLevel                 = bgpu::LogLevel::kTrace;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 
 	REQUIRE(gfx != nullptr);
 
@@ -303,12 +304,12 @@ TEST_CASE("Uniforms", "[uniforms]")
 // separates them, so a shader rename fails loudly instead of silently binding nothing.
 TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto device = gfx->As<bgl::GraphicsBase>()->GetDevice();
@@ -348,12 +349,12 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 
 TEST_CASE("An optional uniform write skips a member the shader does not declare", "[uniforms]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto device = gfx->As<bgl::GraphicsBase>()->GetDevice();

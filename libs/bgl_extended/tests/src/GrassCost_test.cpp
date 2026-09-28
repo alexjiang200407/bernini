@@ -1,4 +1,5 @@
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <array>
@@ -132,9 +133,9 @@ namespace
 
 TEST_CASE("what a street's verge of grass costs the grass pass at 4K", "[.grasscost]")
 {
-	auto opts           = bgl::GraphicsOptions();
-	opts.shaderCacheDir = bgl::test::ShaderCacheDir();
-	auto gfx            = bgl::CreateGraphics(opts);
+	auto opts                    = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto gfx                     = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc        = bgl::RenderTargetDesc();

@@ -6,6 +6,10 @@
 #include <core/hash.h>
 #include <string_view>
 
+#include <string>
+
+#include <bgpu/GpuContext.h>
+
 namespace bgl
 {
 	using namespace shader_cache;
@@ -81,13 +85,15 @@ namespace bgl
 	}
 
 	ShaderCache::ShaderCache(
+		bgpu::GpuContextRef             context,
 		ID3D12Device*                   device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
 		const std::vector<std::string>& searchPaths,
 		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)),
-		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion))
+		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion)),
+		m_Context(std::move(context))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
@@ -125,12 +131,6 @@ namespace bgl
 			m_PsoLibraryBlob.clear();
 			device1->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&m_PsoLibrary));
 		}
-	}
-
-	void
-	ShaderCache::FoldSource(std::string_view name, std::string_view source) noexcept
-	{
-		m_SourceSalt = shader_cache::FoldSource(m_SourceSalt, name, source);
 	}
 
 	ShaderCache::~ShaderCache()
@@ -183,7 +183,9 @@ namespace bgl
 	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
 	{
 		// Qualified: the member of the same name would otherwise recurse.
-		return shader_cache::ComputeKey(m_SourceSalt, std::move(moduleEntries));
+		return shader_cache::ComputeKey(
+			m_SourceSalt ^ m_Context->GetSourceSalt(),
+			std::move(moduleEntries));
 	}
 
 	bool

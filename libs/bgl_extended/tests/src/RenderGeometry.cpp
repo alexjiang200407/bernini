@@ -7,6 +7,7 @@
 #include "types/QueueType.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -18,12 +19,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
-	auto gfx                      = bgl::CreateGraphics(opts);
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
+	auto gfx                              = bgl::test::CreateGraphics(opts);
 
 	REQUIRE(gfx != nullptr);
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -409,12 +410,12 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
-	auto gfx                      = bgl::CreateGraphics(opts);
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
+	auto gfx                              = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

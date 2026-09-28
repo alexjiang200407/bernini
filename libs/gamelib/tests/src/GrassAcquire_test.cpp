@@ -1,6 +1,7 @@
 #include "ImportUnitGroup.h"
 #include "PointsGltf.h"
 #include "util/RigFixture.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
@@ -28,12 +29,12 @@ namespace
 	constexpr std::string_view c_LookKey     = "Authored/Grass/verge.bgrass";
 	constexpr std::string_view c_MaterialKey = "Authored/Materials/green.bmaterial";
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = true;
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = true;
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		return opts;
 	}
 
@@ -84,7 +85,7 @@ namespace
 	Counts
 	CountAcquire(const fs::path& dataRoot)
 	{
-		auto gfx = bgl::CreateGraphics(HeadlessOptions());
+		auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 		REQUIRE(gfx != nullptr);
 		auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -127,7 +128,7 @@ TEST_CASE("A cached mesh observes a sidecar rebind on reacquire", "[grass][acqui
 {
 	const game::test::DataRoot root("bernini_grass_rebind_cached");
 	ImportStreet(root.path, c_MaterialKey);
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto       scene    = gfx->CreateScene(bgl::SceneDesc());
 	auto       assets   = game::AssetManager(scene, root.path);
@@ -163,7 +164,7 @@ TEST_CASE("A grass patch holds its look until released", "[grass][acquire]")
 	const game::test::DataRoot root("bernini_grass_patch");
 	ImportStreet(root.path, c_MaterialKey);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -189,8 +190,9 @@ namespace
 	struct Held
 	{
 		explicit Held(const fs::path& dataRoot) :
-			gfx(bgl::CreateGraphics(HeadlessOptions())), scene(gfx->CreateScene(bgl::SceneDesc())),
-			assets(scene, dataRoot), green(assets.AcquireMaterial(c_MaterialKey)),
+			gfx(bgl::test::CreateGraphics(HeadlessOptions())),
+			scene(gfx->CreateScene(bgl::SceneDesc())), assets(scene, dataRoot),
+			green(assets.AcquireMaterial(c_MaterialKey)),
 			red(assets.AcquireMaterial(c_OtherMaterialKey))
 		{}
 

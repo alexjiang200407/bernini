@@ -1,7 +1,20 @@
 #pragma once
 
+#include <exception>
+#include <fmt/base.h>
 #include <format>
+#include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <utility>
+
+// A breakpoint only under a debug build: __debugbreak() in a shipping build raises a breakpoint
+// exception that crashes the process whether or not a debugger is attached.
+#if defined(_MSC_VER) && !defined(NDEBUG)
+#	define CORE_DEBUG_BREAK() __debugbreak()
+#else
+#	define CORE_DEBUG_BREAK() ((void)0)
+#endif
+
 namespace core
 {
 	/**
@@ -30,4 +43,46 @@ namespace core
 		throw std::runtime_error(std::vformat(msg.get(), std::make_format_args(args...)));
 	}
 
+	// The engine's checks, reporting through the process's log before they stop: an internal
+	// invariant a caller cannot cause, which throw_runtime_error above is not for.
+	template <typename... Args>
+	void
+	ensure(bool condition, fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		if (!condition)
+		{
+			spdlog::error(msg, std::forward<Args>(args)...);
+			CORE_DEBUG_BREAK();
+			std::terminate();
+		}
+	}
+
+	template <typename... Args>
+	[[noreturn]] void
+	fatal(fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		spdlog::critical(msg, std::forward<Args>(args)...);
+		CORE_DEBUG_BREAK();
+		std::terminate();
+	}
+
+	// A path that is declared but not yet built -- a backend mid-port, a feature slice not landed.
+	// Same effect as fatal; the distinct name marks intent at the call site (it *will* be built,
+	// as opposed to a genuine invariant violation).
+	template <typename... Args>
+	[[noreturn]] void
+	unimplemented(fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		spdlog::critical(msg, std::forward<Args>(args)...);
+		CORE_DEBUG_BREAK();
+		std::terminate();
+	}
+
+	template <typename... Args>
+	void
+	error(fmt::format_string<Args...> msg, Args&&... args) noexcept
+	{
+		spdlog::error(msg, std::forward<Args>(args)...);
+		CORE_DEBUG_BREAK();
+	}
 }

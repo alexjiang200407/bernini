@@ -1,6 +1,7 @@
 // bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: autorelease pools are the Metal backend's problem alone.
 #include "types/QueueType.h"
+#include "util/TestGraphics.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
@@ -25,12 +26,12 @@ namespace
 
 TEST_CASE("Flush leaves no command buffer in the enclosing pool", "[teardown]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

@@ -10,6 +10,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
+#include <bgpu/GpuContext.h>
 #include <core/log/log.h>
 #include <memory>
 #include <span>
@@ -25,7 +26,7 @@ namespace bgl
 	class Graphics : public core::RefCounter<GraphicsBase>
 	{
 	public:
-		Graphics(const GraphicsOptions&);
+		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts);
 		~Graphics() noexcept;
 
 		Graphics(const Graphics&) noexcept = delete;
@@ -186,24 +187,9 @@ namespace bgl
 		}
 
 	private:
-		// Forwards debug-layer / GPU-based-validation messages to the spdlog log.
-		static void CALLBACK
-		LogD3D12Message(
-			D3D12_MESSAGE_CATEGORY category,
-			D3D12_MESSAGE_SEVERITY severity,
-			D3D12_MESSAGE_ID       id,
-			LPCSTR                 description,
-			void*                  context);
-
-	private:
 		GraphicsOptions m_Opts;
 
 		DeviceRef m_Device;
-
-		wrl::ComPtr<ID3D12Debug1>     m_DebugController;
-		wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
-		wrl::ComPtr<ID3D12InfoQueue1> m_D3D12InfoQueue;
-		DWORD                         m_MessageCallbackCookie = 0;
 
 		ResourceManagerRef m_ResourceManager;
 
@@ -220,64 +206,10 @@ namespace bgl
 
 namespace bgl
 {
-	Graphics::Graphics(const GraphicsOptions& opts) : m_Opts(opts)
+	Graphics::Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 	{
-		{
-			core::logging::init_file_logger("bgl.log", static_cast<int>(opts.logLevel));
-
-			logger::info("BGL initialized successfully.");
-		}
-
-		if (m_Opts.enablePixDebug)
-		{
-			LoadLibraryA("WinPixGpuCapturer.dll");
-		}
-
-		if (m_Opts.enableDebugLayer)
-		{
-			D3D12GetDebugInterface(IID_PPV_ARGS(&m_DebugController)) >> d3d12ErrChecker;
-			m_DebugController->EnableDebugLayer();
-			if (m_Opts.enableGPUValidationLayer)
-			{
-				m_DebugController->SetEnableGPUBasedValidation(TRUE);
-			}
-
-			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_DxgiInfoQueue)) >> d3d12ErrChecker;
-
-			m_DxgiInfoQueue->SetBreakOnSeverity(
-				DXGI_DEBUG_ALL,
-				DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR,
-				TRUE);
-
-			m_DxgiInfoQueue->SetBreakOnSeverity(
-				DXGI_DEBUG_ALL,
-				DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION,
-				TRUE);
-		}
-
-		wrl::ComPtr<ID3D12Device> m_D3D12Device;
-
-		D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_D3D12Device)) >>
-			d3d12ErrChecker;
-
-		auto device = core::SharedRef<Device>::Make(
-			m_D3D12Device,
-			m_Opts.shaderCacheDir,
-			m_Opts.surfaceShaderDir,
-			m_Opts.enableGPUValidationLayer);
-		m_Device = device;
-
-		// Route debug-layer and GPU-based-validation messages (which otherwise only
-		// reach an attached debugger) into the spdlog log.
-		if (m_Opts.enableDebugLayer && SUCCEEDED(m_D3D12Device.As(&m_D3D12InfoQueue)))
-		{
-			m_D3D12InfoQueue->RegisterMessageCallback(
-				&Graphics::LogD3D12Message,
-				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
-				this,
-				&m_MessageCallbackCookie) >>
-				d3d12ErrChecker;
-		}
+		auto device = core::SharedRef<Device>::Make(std::move(context), m_Opts.shaderCacheDir);
+		m_Device    = device;
 
 		{
 			auto resourceManagerDesc               = ResourceManagerDesc();
@@ -296,7 +228,8 @@ namespace bgl
 
 		// Before the context: it builds every pipeline, and a slot's pipelines compile against
 		// whatever module this bound to that slot.
-		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
+		m_SurfaceTypes =
+			RegisterSurfaces(*m_Device, device->GetGpuContext().GetDesc().clientShaderDir);
 
 		m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 		m_Context         = std::make_unique<RenderContext>(
@@ -304,7 +237,7 @@ namespace bgl
 			m_ResourceManager,
 			m_DrawBucketTable,
 			m_SurfaceTypes,
-			m_Opts.enableDebugLayer);
+			device->GetGpuContext().GetDesc().enableDebugLayer);
 
 		// The always-on set is built by the RenderContext above; the per-bucket kernels are built by
 		// the first Draw that demands each, and that path drops the sessions again after every
@@ -319,63 +252,11 @@ namespace bgl
 		m_Context.reset();
 		m_ResourceManager.Reset();
 		m_Device.Reset();
-
-		m_DxgiInfoQueue.Reset();
-		m_DebugController.Reset();
-
-		if (m_D3D12InfoQueue && m_MessageCallbackCookie != 0)
-		{
-			m_D3D12InfoQueue->UnregisterMessageCallback(m_MessageCallbackCookie);
-		}
-		m_D3D12InfoQueue.Reset();
-
-		if (m_Opts.enableDebugLayer)
-		{
-			wrl::ComPtr<IDXGIDebug1> dxgiDebug;
-			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)) >> d3d12ErrChecker;
-			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
-		}
-	}
-
-	void CALLBACK
-	Graphics::LogD3D12Message(
-		D3D12_MESSAGE_CATEGORY /*category*/,
-		D3D12_MESSAGE_SEVERITY severity,
-		D3D12_MESSAGE_ID /*id*/,
-		LPCSTR description,
-		void*  context)
-	{
-		bool severe = false;
-		switch (severity)
-		{
-		case D3D12_MESSAGE_SEVERITY_CORRUPTION:
-		case D3D12_MESSAGE_SEVERITY_ERROR:
-			logger::error("[D3D12] {}", description);
-			severe = true;
-			break;
-		case D3D12_MESSAGE_SEVERITY_WARNING:
-			logger::warn("[D3D12] {}", description);
-			severe = true;
-			break;
-		case D3D12_MESSAGE_SEVERITY_INFO:
-			logger::info("[D3D12] {}", description);
-			break;
-		case D3D12_MESSAGE_SEVERITY_MESSAGE:
-		default:
-			logger::debug("[D3D12] {}", description);
-			break;
-		}
-
-		const auto* self = static_cast<const Graphics*>(context);
-		if (severe && self != nullptr && self->m_Opts.strictError)
-		{
-			gfatal("[D3D12] strict error: {}", description);
-		}
 	}
 
 	GraphicsRef
-	CreateGraphics(const GraphicsOptions& opts)
+	CreateGraphics(core::SharedRef<bgpu::GpuContext> context, const GraphicsOptions& opts)
 	{
-		return core::SharedRef<Graphics>::Make(opts);
+		return core::SharedRef<Graphics>::Make(std::move(context), opts);
 	}
 }

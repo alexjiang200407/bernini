@@ -9,6 +9,7 @@
 #include <assetlib_structs/Node.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -99,10 +100,10 @@ namespace
 
 		Fixture()
 		{
-			auto opts             = bgl::GraphicsOptions();
-			opts.enableDebugLayer = true;
+			auto ctxDesc             = bgpu::GpuContextDesc();
+			ctxDesc.enableDebugLayer = true;
 
-			renderer.emplace(opts, MakeSceneDesc());
+			renderer.emplace(ctxDesc, bgl::GraphicsOptions(), MakeSceneDesc());
 
 			// The editor shares one manager over its one scene, so a material loaded twice is one
 			// upload and one reference count however it is drawn.

@@ -10,6 +10,7 @@
 #include "types/Barrier.h"
 #include "types/QueueType.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib/skinning.h>
@@ -199,11 +200,11 @@ namespace
 
 TEST_CASE("a rig's bone anim table holds every frame of every clip", "[skinned][rigframes][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = dynamic_cast<bgl::GraphicsBase*>(gfx.Get());
@@ -286,11 +287,11 @@ TEST_CASE(
 	"a scene pays for the fill pass only on the frame that fills",
 	"[skinned][rigframes][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -334,11 +335,11 @@ TEST_CASE(
 
 TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][rigframes][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = dynamic_cast<bgl::GraphicsBase*>(gfx.Get());
@@ -412,10 +413,10 @@ TEST_CASE("what a dense rig's table costs to stand up", "[.rigtiming]")
 	constexpr uint32_t c_Bones  = 663;
 	constexpr uint32_t c_Frames = 2254;
 
-	auto opts           = bgl::GraphicsOptions();
-	opts.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto opts                    = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();

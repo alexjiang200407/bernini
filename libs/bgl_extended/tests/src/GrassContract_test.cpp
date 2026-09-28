@@ -1,3 +1,4 @@
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <array>
@@ -35,12 +36,12 @@ namespace
 {
 	constexpr uint32_t c_GrassSlot = 1;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -136,7 +137,7 @@ namespace
 
 TEST_CASE("a grass look takes updates until DeleteGrass", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -155,7 +156,7 @@ TEST_CASE("a grass look takes updates until DeleteGrass", "[grass][contract]")
 
 TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -214,7 +215,7 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 
 TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -238,7 +239,7 @@ TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
 
 TEST_CASE("attaching grass again releases the looks the geom held", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -260,7 +261,7 @@ TEST_CASE("attaching grass again releases the looks the geom held", "[grass][con
 
 TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -301,7 +302,7 @@ TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
 
 TEST_CASE("AttachGrass refuses what it cannot bind, and changes nothing", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -341,7 +342,7 @@ TEST_CASE("AttachGrass refuses what it cannot bind, and changes nothing", "[gras
 
 TEST_CASE("AttachGrass refuses grass ranges the file cannot back", "[grass][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 
@@ -397,7 +398,7 @@ TEST_CASE("AttachGrass refuses grass ranges the file cannot back", "[grass][cont
 
 TEST_CASE("SetWind refuses a wind no pass could evaluate", "[grass][wind]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 1);

@@ -7,11 +7,11 @@
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
-#include "slang/SlangSessions.h"
 #include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
@@ -62,13 +62,18 @@ void main()
 
 	// Brings up a Graphics on `opts`, builds `program` as a compute kernel, dispatches it once and
 	// returns the one uint it wrote. `configure` runs on the device before the kernel compiles.
+	//
+	// Each probe is its own GPU context: a source module registered through `configure` lives
+	// with the context, not the renderer, so a probe sharing the suite's would see the last probe's.
 	uint32_t
 	ProbeValue(
-		const bgl::GraphicsOptions&               opts,
+		const bgl::test::GraphicsSetup&           opts,
 		const std::string&                        program,
 		const std::function<void(bgl::IDevice&)>& configure = {})
 	{
-		auto gfx = bgl::CreateGraphics(opts);
+		bgl::test::ReleaseGpuContext();
+
+		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
 		auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -130,13 +135,13 @@ void main()
 		return value;
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	ProbeOptions()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 }
@@ -157,11 +162,11 @@ TEST_CASE(
 	WriteText(dir / "CSClientProbe.slang", c_ProbeProgram);
 	WriteText(dir / "ClientProbe.slang", ProbeModule(7));
 
-	auto opts             = ProbeOptions();
-	opts.surfaceShaderDir = dir;
+	auto opts                    = ProbeOptions();
+	opts.context.clientShaderDir = dir;
 	// The salt folds each file's path, and the temp directory is fresh per run, so a cache shared
 	// with the suite would gain a generation no later run could hit. This one dies with the dir.
-	opts.shaderCacheDir = dir / "shadercache";
+	opts.graphics.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSClientProbe") == 7u);
 
@@ -185,8 +190,8 @@ TEST_CASE(
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts           = ProbeOptions();
-	opts.shaderCacheDir = dir / "shadercache";
+	auto opts                    = ProbeOptions();
+	opts.graphics.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 
@@ -208,8 +213,8 @@ TEST_CASE("A program loaded from source on demand shadows its file", "[slang][co
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts           = ProbeOptions();
-	opts.shaderCacheDir = dir / "shadercache";
+	auto opts                    = ProbeOptions();
+	opts.graphics.shaderCacheDir = dir / "shadercache";
 
 	constexpr std::string_view c_OnDemand = R"(import lib.types.ComputeBuffer;
 

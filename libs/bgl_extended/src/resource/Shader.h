@@ -1,6 +1,6 @@
 #pragma once
 
-#include "slang/SlangSessions.h"
+#include <bgpu/GpuContext.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -55,17 +55,14 @@ namespace bgl
 
 	using ShaderRef = core::SharedRef<IShader>;
 
-	class SlangSessions;
-
 	/**
-	 * The one IShader: a module name and an entry point, resolved through whichever Slang session
-	 * belongs to the thread that compiles.
+	 * The one IShader: a module name and an entry point, resolved through whichever of the device
+	 * context's Slang sessions belongs to the thread that compiles.
 	 */
 	class Shader final : public core::RefCounter<IShader>
 	{
 	public:
-		/** @pre `sessions` outlives the shader; the device that owns both guarantees it. */
-		Shader(ShaderDesc desc, SlangSessions* sessions);
+		Shader(ShaderDesc desc, bgpu::GpuContextRef context);
 		~Shader() noexcept override { logger::trace("~Shader"); }
 		Shader(const Shader&)     = delete;
 		Shader(Shader&&) noexcept = delete;
@@ -93,7 +90,7 @@ namespace bgl
 		}
 
 	private:
-		ShaderDesc     m_Desc;
-		SlangSessions* m_Sessions = nullptr;
+		ShaderDesc          m_Desc;
+		bgpu::GpuContextRef m_Context;
 	};
 }

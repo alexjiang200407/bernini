@@ -5,6 +5,7 @@
 #include "pipeline/PipelineBatch.h"
 #include "types/Format.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include <array>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_message.hpp>
@@ -49,12 +50,12 @@ namespace
 	void
 	BuildTestKernels(const fs::path& cacheDir, uint32_t threads)
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = cacheDir;
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = cacheDir;
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-		auto gfx = bgl::CreateGraphics(opts);
+		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
 		auto* device = gfx->As<bgl::GraphicsBase>()->GetDevice();

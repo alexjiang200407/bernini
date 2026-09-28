@@ -1,16 +1,9 @@
 #pragma once
-#include <core/str/str.h>
+#include <bgpu/d3d12/D3d12ErrorChecker.h>
 
 namespace bgl
 {
-	struct D3d12ErrorChecker
-	{};
-
-	inline constexpr D3d12ErrorChecker d3d12ErrChecker;
-
-	std::wstring
-	GetErrorDescription(HRESULT hr);
-
-	void
-	operator>>(HRESULT hr, D3d12ErrorChecker);
+	// `hr >> d3d12ErrChecker` reads the same in the renderer's backend as in bgpu, where the checker
+	// lives because the device is created there.
+	using bgpu::d3d12ErrChecker;
 }

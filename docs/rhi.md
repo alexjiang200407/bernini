@@ -186,8 +186,8 @@ doc and a header disagree, trust the header, then fix this doc.
 
 * **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
   is **not** an `I*` interface — what crosses the boundary is `GraphicsOptions::shaderCacheDir`
-  (empty ⇒ disabled) and `surfaceShaderDir`, whose files join the salt, like the descriptor-heap
-  capacities. The
+  (empty ⇒ disabled) and the GPU context's `clientShaderDir`, whose files join the salt, like
+  the descriptor-heap capacities. The
   backend owns its two layers (a program cache of DXIL + reflection, and an
   `ID3D12PipelineLibrary`); to keep reflection cacheable and backend-agnostic it is decoupled from
   the live Slang object into a serializable `ReflectedLayout` POD. See
@@ -236,7 +236,8 @@ doc and a header disagree, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    CG["CreateGraphics(GraphicsOptions)"] --> IG[IGraphics]
+    DC["bgpu::CreateGpuContext(desc)"] --> CG["CreateGraphics(context, GraphicsOptions)"]
+    CG --> IG[IGraphics]
     IG -- "GetDevice()" --> DEV["IDevice (sole factory)"]
 
     IG -- owns --> RT[RenderTarget]
@@ -271,7 +272,8 @@ flowchart TD
 * **Pipeline creation is free-threaded.** `CreateShader`, `CreateComputePipeline`,
   `CreateMeshletPipeline` and the kernel builders may run concurrently; the renderer builds its own
   set that way through `PipelineBatch`. A `slang::IModule` belongs to the session of the thread
-  that loaded it and never crosses threads.
+  that loaded it and never crosses threads. The sessions are the GPU context's, shared with every
+  other owner of the device ([bgpu.md](bgpu.md)).
 * **One recorder per command list**, between `Open` and `Close`. Never share an open list.
 * **Fences are the only sync primitive.** `ExecuteCommandList` returns a monotonic fence value.
   CPU waits (`WaitForFenceCPUBlocking`, `IsFenceComplete`) and GPU-side waits
@@ -408,8 +410,8 @@ Everything else is self-explanatory from the header.
 * **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
   defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
   `GetSlangModule()`, which only happens when a PSO must actually compile (a shader-cache miss). The
-  module source is resolved through the device's Slang session search paths (`./shaders/src`,
-  `./shaders/tests`, then `GraphicsOptions::surfaceShaderDir` when the client names one), so run
+  module source is resolved through the GPU context's Slang session search paths (`./shaders/src`,
+  `./shaders/tests`, then the context's `clientShaderDir` when the client names one), so run
   binaries with cwd set to their output dir (see project scripts) — or through
   `IDevice::AddSourceModule`, a module given as text under a name that shadows any file of that name
   for every compile after it. The

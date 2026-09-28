@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/BMesh.h>
@@ -114,9 +115,9 @@ namespace
 
 		SplitScene()
 		{
-			auto opts           = bgl::GraphicsOptions();
-			opts.shaderCacheDir = bgl::test::ShaderCacheDir();
-			gfx                 = bgl::CreateGraphics(opts);
+			auto opts                    = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
+			gfx                          = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			scene = gfx->CreateScene(bgl::SceneDesc());

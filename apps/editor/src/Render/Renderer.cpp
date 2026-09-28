@@ -1,6 +1,7 @@
 #include "Render/Renderer.h"
 #include <bgl/IGraphics.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 
 #include <QEventLoop>
 #include <QThread>
@@ -21,6 +22,7 @@
 #include <utility>
 
 Renderer::Renderer(
+	const bgpu::GpuContextDesc& contextDesc,
 	const bgl::GraphicsOptions& gfxOpts,
 	const bgl::SceneDesc&       sceneDesc,
 	RendererWait                wait)
@@ -44,8 +46,9 @@ Renderer::Renderer(
 			core::profiling::name_this_thread("bgl-render");
 			ZoneScopedN("editor create graphics");
 
-			m_Graphics = bgl::CreateGraphics(gfxOpts);
-			m_Scene    = m_Graphics->CreateScene(sceneDesc);
+			m_GpuContext = bgpu::CreateGpuContext(contextDesc);
+			m_Graphics   = bgl::CreateGraphics(m_GpuContext, gfxOpts);
+			m_Scene      = m_Graphics->CreateScene(sceneDesc);
 
 			// Parented to this, so it belongs to the render thread and is destroyed from it.
 			m_FrameTimer = new QTimer(this);
@@ -64,8 +67,9 @@ Renderer::Renderer(
 			delete m_FrameTimer;
 			m_FrameTimer = nullptr;
 
-			m_Scene    = nullptr;
-			m_Graphics = nullptr;
+			m_Scene      = nullptr;
+			m_Graphics   = nullptr;
+			m_GpuContext = nullptr;
 
 			failure = std::current_exception();
 		}
@@ -130,8 +134,9 @@ Renderer::~Renderer()
 		m_FrameTimer = nullptr;
 
 		m_Viewports.clear();
-		m_Scene    = nullptr;
-		m_Graphics = nullptr;
+		m_Scene      = nullptr;
+		m_Graphics   = nullptr;
+		m_GpuContext = nullptr;
 	});
 
 	StopThread();

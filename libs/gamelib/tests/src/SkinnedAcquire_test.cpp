@@ -9,6 +9,7 @@
 #include "util/GoldenImage.h"
 #include "util/RigFixture.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/Node.h>
 #include <bgl/GeomType.h>
@@ -35,12 +36,12 @@ namespace
 	using game::test::WriteLoopingClips;
 	using game::test::WriteRig;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = true;
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = true;
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		return opts;
 	}
 
@@ -150,7 +151,7 @@ TEST_CASE(
 	const auto archive  = std::make_shared<assetlib::PakFile>(root.path / "Data.bpak");
 	const auto counting = std::make_shared<assetlib::test::CountingFileSystem>(*archive);
 	CHECK_FALSE(archive->Exists("Authored/Meshes/rig.glb"));
-	auto       gfx    = bgl::CreateGraphics(HeadlessOptions());
+	auto       gfx    = bgl::test::CreateGraphics(HeadlessOptions());
 	auto       scene  = gfx->CreateScene(bgl::SceneDesc());
 	auto       assets = game::AssetManager(scene, assetlib::AssetStore(root.path, counting));
 	const auto mesh =
@@ -170,7 +171,7 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 	DataRoot root("bernini_skinned_acquire");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -259,7 +260,7 @@ TEST_CASE("a clip set cooked against a since-changed rig is refused", "[skinned]
 	WriteRig(root.path);
 	StaleTheClips(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -279,7 +280,7 @@ TEST_CASE("a mesh cooked against a since-changed rig is refused", "[skinned][acq
 	WriteRig(root.path);
 	StaleTheMesh(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -302,7 +303,7 @@ TEST_CASE("a rig that has grown a bone still acquires", "[skinned][acquire][rema
 	WriteRig(root.path);
 	AppendBoneToRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -352,7 +353,7 @@ TEST_CASE(
 		game::test::CopyRigMesh(root.path);
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -380,7 +381,7 @@ TEST_CASE("a grown rig still refuses a pairing with no bone names", "[skinned][a
 	ForgetTheBoneNames(root.path);
 	AppendBoneToRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -397,7 +398,7 @@ TEST_CASE("a mesh and a clip set that were never a pair are refused", "[skinned]
 	WriteRig(root.path);
 	CookTheMeshAgainstAnotherRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -419,7 +420,7 @@ TEST_CASE("a skinned acquire that cannot stand leaves nothing behind", "[skinned
 	// after the acquire has already taken its material, which is the unwind under test.
 	WriteRig(root.path, true);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -441,7 +442,7 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 	DataRoot root("bernini_skinned_acquire_bounds");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -508,7 +509,7 @@ TEST_CASE(
 		animations,
 		"Derived/Animations/rig.glb-0000000000000001.banim");
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -538,7 +539,7 @@ TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][a
 		game::test::CopyRigMesh(root.path);
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -572,7 +573,7 @@ TEST_CASE("a manager torn down over a surviving scene leaves it usable", "[skinn
 	DataRoot root("bernini_skinned_acquire_teardown");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -610,7 +611,7 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 		game::test::CopyRigMesh(root.path);
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -735,7 +736,7 @@ TEST_CASE("a rig with no avatar acquires as before", "[skinned][acquire][skinned
 	DataRoot root("bernini_skinned_acquire_no_avatar");
 	WriteLegRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -751,7 +752,7 @@ TEST_CASE("a rig with an avatar hands bgl its legs", "[skinned][acquire][skinned
 	DataRoot root("bernini_skinned_acquire_avatar");
 	WriteLegRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -806,7 +807,7 @@ TEST_CASE(
 		store.Save(animations, "Derived/Animations/leg.glb-0000000000000001.banim");
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
@@ -825,7 +826,7 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 	WriteRig(root.path);
 	WriteLoopingClips(root.path, "Derived/Animations/loco.glb-0000000000000001.banim");
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
 	auto assets = game::AssetManager(scene, root.path);
@@ -987,7 +988,7 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 		game::test::CopyRigMesh(root.path);
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
 	auto assets = game::AssetManager(scene, root.path);
@@ -1071,7 +1072,7 @@ TEST_CASE(
 		game::test::CopyRigMesh(root.path);
 	}
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene  = gfx->CreateScene(bgl::SceneDesc());
 	auto assets = game::AssetManager(scene, root.path);

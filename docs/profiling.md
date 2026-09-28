@@ -43,7 +43,7 @@ diagnosed rather than a slow one.
 
 **Nothing is written to disk by the application, ever.** There is no Tracy log and no output
 directory: the client holds the run in memory and serves it on TCP 8086, and a `.tracy` file exists
-only because you asked for one at a path you chose. (`editor.log` / `bgl.log` beside the binary are
+only because you asked for one at a path you chose. (`editor.log` / `bgpu.log` beside the binary are
 the *other* channel — spdlog and Qt, see [gfx_debug.md](gfx_debug.md) — and share nothing with this.)
 
 The tools are not on `PATH`. vcpkg stages them per build directory:

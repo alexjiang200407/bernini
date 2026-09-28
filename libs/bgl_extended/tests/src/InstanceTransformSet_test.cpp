@@ -1,5 +1,6 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/GeomHandle.h>
@@ -22,12 +23,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -80,7 +81,7 @@ namespace
 
 		Fixture()
 		{
-			gfx = bgl::CreateGraphics(HeadlessOptions());
+			gfx = bgl::test::CreateGraphics(HeadlessOptions());
 			REQUIRE(gfx != nullptr);
 
 			scene = gfx->CreateScene(TestSceneDesc());

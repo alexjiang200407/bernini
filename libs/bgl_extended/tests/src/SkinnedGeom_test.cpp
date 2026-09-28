@@ -1,5 +1,6 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
@@ -52,12 +53,12 @@ namespace
 	const auto c_AnyPose =
 		assetlib::Bounds{ glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(1.0f, 1.0f, 1.0f) };
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -288,7 +289,7 @@ namespace
 
 TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -412,7 +413,7 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 
 TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -531,7 +532,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -705,7 +706,7 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 TEST_CASE("AddRig refuses a rig the pose pass could not walk", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -759,7 +760,7 @@ TEST_CASE("AddRig refuses a rig the pose pass could not walk", "[skinned]")
 
 TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -844,7 +845,7 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 
 TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -913,7 +914,7 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 
 TEST_CASE("skinned geoms share one rig, and it outlives them", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -954,7 +955,7 @@ TEST_CASE("skinned geoms share one rig, and it outlives them", "[skinned]")
 
 TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinned][culling]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1001,7 +1002,7 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 
 TEST_CASE("AddRig uploads a rig's legs and their plant weights", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1064,7 +1065,7 @@ TEST_CASE("AddRig uploads a rig's legs and their plant weights", "[skinned]")
 
 TEST_CASE("a rig with no legs uploads exactly what it did before", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1092,7 +1093,7 @@ TEST_CASE("a rig with no legs uploads exactly what it did before", "[skinned]")
 
 TEST_CASE("AddRig refuses a leg the pose pass could not solve", "[skinned]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1165,7 +1166,7 @@ TEST_CASE("AddRig refuses a leg the pose pass could not solve", "[skinned]")
 // first, in clip order, so a slot naming a clip means what it did before blend spaces existed.
 TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[skinned][blend]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1228,7 +1229,7 @@ TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[sk
 
 TEST_CASE("AddRig takes a blend space sample whose clip does not loop", "[skinned][blend]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1245,7 +1246,7 @@ TEST_CASE("AddRig takes a blend space sample whose clip does not loop", "[skinne
 
 TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[skinned][blend]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1317,7 +1318,7 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 
 TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinned][blend]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
@@ -1436,7 +1437,7 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 // it. Pinned here because the editor got this wrong and the symptom was a mesh that vanished.
 TEST_CASE("A blend space is reached through the record, not through the spawn", "[skinned][blend]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());

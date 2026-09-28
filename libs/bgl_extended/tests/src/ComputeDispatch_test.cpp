@@ -10,6 +10,7 @@
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_test_macros.hpp>
@@ -21,13 +22,13 @@
 // gpuAddress translation at dispatch). Backend-agnostic -- runs on D3D12 and Metal.
 TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -106,13 +107,13 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 // alignment-dependent offset, exercising the layout recompute a single-field cbuffer does not.
 TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

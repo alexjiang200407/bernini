@@ -1,23 +1,23 @@
 #include "resource/Shader.h"
-#include "slang/SlangSessions.h"
 #include <bgl_common/gassert.h>
+#include <bgpu/GpuContext.h>
 #include <slang.h>
 #include <utility>
 
 namespace bgl
 {
-	Shader::Shader(ShaderDesc desc, SlangSessions* sessions) :
-		m_Desc(std::move(desc)), m_Sessions(sessions)
+	Shader::Shader(ShaderDesc desc, bgpu::GpuContextRef context) :
+		m_Desc(std::move(desc)), m_Context(std::move(context))
 	{
 		gassert(
 			m_Desc.slangModuleName.empty() == false,
 			"Shader must have a valid Slang module name");
-		gassert(sessions != nullptr, "Slang sessions cannot be null");
+		gassert(m_Context != nullptr, "GPU context cannot be null");
 	}
 
 	slang::IModule*
 	Shader::GetSlangModule() const noexcept
 	{
-		return m_Sessions->LoadModule(m_Desc.slangModuleName);
+		return m_Context->LoadModule(m_Desc.slangModuleName);
 	}
 }

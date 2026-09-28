@@ -18,6 +18,7 @@
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
@@ -124,10 +125,12 @@ main(int argc, char** argv)
 			wnd.emplace(opts);
 		}
 
-		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		auto ctxDesc = bgpu::GpuContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts             = bgl::GraphicsOptions{};
+		ctxDesc.enableDebugLayer = true;
+
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

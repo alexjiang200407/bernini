@@ -1,6 +1,7 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -94,11 +95,11 @@ TEST_CASE(
 	"Translucent panes composite back-to-front regardless of creation order",
 	"[transparent][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -196,11 +197,11 @@ TEST_CASE(
 	"Transmission decides whether a blend material's alpha dims its reflection",
 	"[transparent][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -328,11 +329,11 @@ TEST_CASE(
 // discriminator were wrong the loose render would read the other material buffer entirely.
 TEST_CASE("A loose blend material renders the same as the baked one", "[transparent][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();

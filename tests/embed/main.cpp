@@ -1,13 +1,15 @@
 #include <assetlib/AssetStore.h>
 #include <bgl/IGraphics.h>
+#include <bgpu/GpuContext.h>
 #include <gamelib/AssetManager.h>
 
 #include <cstdio>
 #include <filesystem>
 
 /**
- * One translation unit outside the engine, including the public headers of the three libraries a
- * game links, run from the directory it was built into.
+ * One translation unit outside the engine, including the public headers of the libraries a game
+ * links -- the GPU context's among them, which reaches it through the renderer's interface --
+ * run from the directory it was built into.
  *
  * It stands nothing up. What is under test is that these headers parse, that the link line
  * resolves from a build the engine did not configure, that the renderer's library loads beside the
@@ -17,6 +19,7 @@
 int
 main()
 {
+	static_assert(sizeof(bgpu::GpuContextDesc) > 0);
 	static_assert(sizeof(bgl::GraphicsOptions) > 0);
 	static_assert(sizeof(assetlib::AssetStore) > 0);
 	static_assert(sizeof(game::AssetManager) > 0);

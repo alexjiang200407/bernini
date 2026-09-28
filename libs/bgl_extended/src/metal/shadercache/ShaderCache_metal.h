@@ -5,6 +5,7 @@
 #include "pipeline/MetalPipelineReflection.h"
 #include <array>
 #include <bgl_common/ReflectedLayout.h>
+#include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -62,6 +63,7 @@ namespace bgl
 		// when GPU validation is on. An archive is written by an uninstrumented run, and Metal
 		// crashes inside newBinaryArchive loading one into a validating device.
 		ShaderCache(
+			bgpu::GpuContextRef             context,
 			MTL::Device*                    device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
@@ -69,10 +71,6 @@ namespace bgl
 			bool                            usePipelineLibrary);
 
 		~ShaderCache();
-
-		/** A module compiled from text joins the salt the way a file on a search path does. */
-		void
-		FoldSource(std::string_view name, std::string_view source) noexcept;
 
 		ShaderCache(const ShaderCache&) = delete;
 
@@ -113,6 +111,10 @@ namespace bgl
 	private:
 		std::filesystem::path m_CacheDir;
 		uint64_t              m_SourceSalt = 0;
+
+		// Every key mixes in the context's fold of its source modules, read at key time so it follows
+		// a text any owner changed.
+		bgpu::GpuContextRef m_Context;
 
 		NS::SharedPtr<MTL::BinaryArchive> m_Archive;
 		std::mutex                        m_ArchiveMutex;

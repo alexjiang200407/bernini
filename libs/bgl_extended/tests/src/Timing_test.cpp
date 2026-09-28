@@ -11,6 +11,7 @@
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <array>
@@ -36,13 +37,13 @@
 // buffer to the encoder the dispatch opens.
 TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.enablePixDebug           = true;
+	auto opts                             = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer         = true;
+	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.context.enablePixDebug           = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -157,10 +158,10 @@ namespace
 
 		explicit TimedScene(bool taa = true)
 		{
-			auto opts             = bgl::GraphicsOptions();
-			opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-			opts.enableDebugLayer = true;
-			gfx                   = bgl::CreateGraphics(opts);
+			auto opts                     = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+			opts.context.enableDebugLayer = true;
+			gfx                           = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto targetDesc       = bgl::RenderTargetDesc();

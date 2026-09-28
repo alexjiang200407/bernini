@@ -1,6 +1,10 @@
-#include "D3d12ErrorChecker.h"
+#include <bgpu/d3d12/D3d12ErrorChecker.h>
+#include <core/str/str.h>
+#include <cstdlib>
+#include <spdlog/spdlog.h>
+#include <string>
 
-namespace bgl
+namespace bgpu
 {
 	std::wstring
 	GetErrorDescription(HRESULT hr)
@@ -35,7 +39,7 @@ namespace bgl
 		if (!FAILED(hr))
 			return;
 
-		logger::error("DirectX 12 Error: {}", core::str::wide_to_string(GetErrorDescription(hr)));
+		spdlog::error("DirectX 12 Error: {}", core::str::wide_to_string(GetErrorDescription(hr)));
 
 		std::abort();
 	}

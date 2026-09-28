@@ -1,6 +1,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/LodMesh.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/BMesh.h>
@@ -35,12 +36,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -72,7 +73,7 @@ namespace
 
 TEST_CASE("every level of a mesh uploads into its geom, level-major", "[lod][geom]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(LodSceneDesc());
@@ -153,7 +154,7 @@ TEST_CASE("every level of a mesh uploads into its geom, level-major", "[lod][geo
 
 TEST_CASE("a mesh without levels uploads as one, never dropped", "[lod][geom]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto  sceneHandle = gfx->CreateScene(LodSceneDesc());
 	auto* scene       = sceneHandle->As<bgl::Scene>();

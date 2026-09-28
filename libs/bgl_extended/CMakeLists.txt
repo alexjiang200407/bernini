@@ -52,6 +52,7 @@ target_link_libraries(bgl_extended_objects
 	PUBLIC
 		bgl
 		bgl_common
+		bgpu
 		core
 		assetlib_structs
 		slang::slang
@@ -308,8 +309,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${Stb_INCLUDE_DIR}
 	)
-
-	target_include_directories(bgl_extended_tests SYSTEM PRIVATE ${BGL_METALCPP_INCLUDE_DIR})
 
 	target_force_include(bgl_extended_tests
 		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"

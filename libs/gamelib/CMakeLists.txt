@@ -94,6 +94,7 @@ if (BUILD_TESTS)
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/GoldenImage.cpp
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestEnvironment.cpp
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestOptions.cpp
+		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestGraphics.cpp
 	)
 
 	add_executable(gamelib_tests

@@ -19,9 +19,9 @@ and is a target of its own; nothing here is part of it.
 
 ## bgl_d3d12
 
-- Static RHI implementation library that is linked with d3d12 runtime. All code that use d3d12 API must be located in this subsystem
+- Static RHI implementation library that is linked with d3d12 runtime. All code that uses the d3d12 API is located here, except the device's creation and its debug layer, which are `bgpu`'s (`libs/bgpu/src/d3d12`)
 - PCH is `./libs/bgl_extended/src/d3d12/pch.h` Don't `#include` the headers in here.
-- To handle d3d12 HRESULT error returns `D3D12CreateDevice(...) >> d3d12ErrChecker;` d3d12ErrChecker located in libs/bgl_extended/src/d3d12/D3d12ErrorChecker.h and is part of the PCH.h so don't `#include` it.
+- To handle d3d12 HRESULT error returns `D3D12CreateDevice(...) >> d3d12ErrChecker;` d3d12ErrChecker is `bgpu::d3d12ErrChecker` from `bgpu/d3d12/D3d12ErrorChecker.h`, shared with `bgpu`, and is part of the PCH.h so don't `#include` it.
 - Doesn't have an include directory, all headers are included.
 - Implementation files (.h and .cpp) should have a _d3d12 suffix.
     e.g. We have IDevice class for API agnostic device, the Device_d3d12.cpp will be the class representing the d3d12 device class.
@@ -35,17 +35,19 @@ and is a target of its own; nothing here is part of it.
 
 ## bgl_metal
 
-- Static RHI implementation library linked against Metal. All code that uses the Metal API must be
-  located in this subsystem. Selected by `RENDERER_BACKEND=METAL`, and exactly one backend is built
-  per binary.
+- Static RHI implementation library linked against Metal. All code that uses the Metal API is
+  located here, except the device's creation, which is `bgpu`'s
+  (`libs/bgpu/src/metal`). Selected by `RENDERER_BACKEND=METAL`, and exactly one backend
+  is built per binary.
 - PCH is `./libs/bgl_extended/src/metal/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_metal` suffix, as the d3d12 ones take `_d3d12`.
 - Doesn't have an include directory; all headers are included.
 - Metal is reached through **metal-cpp**, Apple's header-only C++ interface. It is not on vcpkg, so
-  `./src/metal/CMakeLists.txt` pulls it with `FetchContent` at a pinned commit.
-- `MetalImpl.cpp` is the one TU that defines metal-cpp's `*_PRIVATE_IMPLEMENTATION` macros, and so
-  compiles with `SKIP_PRECOMPILE_HEADERS` — a PCH would include the headers first and the symbol
-  definitions would be skipped.
+  `libs/bgpu/CMakeLists.txt` pulls it with `FetchContent` at a pinned commit and carries
+  the headers on its public include path.
+- metal-cpp's out-of-line symbols are emitted once per process by `bgpu`'s
+  `MetalImpl.cpp`, which is why nothing here may define the `*_PRIVATE_IMPLEMENTATION` macros; the
+  headers come from `bgpu`'s public include path.
 - Error handling: Metal signals failure by returning nil and fills its `NSError` only *sometimes*,
   so a call can fail with no diagnosis. `MetalErrorChecker` (in the PCH, don't `#include` it) holds
   the error so a call site reads like its D3D12 counterpart:
@@ -58,9 +60,11 @@ and is a target of its own; nothing here is part of it.
   [Slang Shaders](../../docs/slang_shaders.md).
 - **A scope that creates an autoreleased Metal object owns the pool it drains into.** Most Metal
   factories autorelease — `commandBuffer()`, `nextDrawable()` — and the pool the object lands in is
-  whichever one on this thread was pushed last. `Graphics` holds one for its whole lifetime as a net
-  for strays, and that net drains *before* the device, because a Metal object outliving the device it
-  references deallocs into a purged one and segfaults. Anything creating an autoreleased object
+  whichever one on this thread was pushed last. `Graphics` holds a share of the thread's one
+  long-lived net for strays (`AutoreleaseNet_metal.h`: pools are a stack, so two renderers on one
+  thread cannot each hold a pool for their whole lives), and that net drains *before*
+  the device, because a Metal object outliving the device it references deallocs into a purged one
+  and segfaults. Anything creating an autoreleased object
   therefore scopes its own `NS::AutoreleasePool` — `CommandList::Open`..`Close`,
   `RenderTarget::PresentToLayer`, `CommandQueue::Flush` — rather than letting it reach that net.
   Committing a command buffer before the pool drains is safe: the driver holds its own reference
@@ -125,19 +129,21 @@ and is a target of its own; nothing here is part of it.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
-- Slang sessions are per thread (`src/slang/SlangSessions.h`): a thread's first compile creates
-  its own global session and session, and they are dropped after every pipeline batch — the
-  start-up build's in `CreateGraphics`, a demand build's in `EnsureDrawBucketPipelinesExist` — because each
-  global session's core module is a few hundred megabytes resident. Nothing
-  may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
-  module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a
-  module as text under a name, shadowing a file of that name and joining the cache salt; it drops
-  the live sessions to do it, so it runs before the batch, never during. `RegisterSurfaces`
-  (`src/gfx/surface_registry.h`) is its one caller: it reflects every surface in
-  `GraphicsOptions::surfaceShaderDir` first and binds them all afterwards, because a binding drops
-  the sessions the next reflection would have used.
+- Slang sessions are the GPU context's (`libs/bgpu`, [bgpu.md](../../docs/bgpu.md))
+  and per thread: a thread's first compile creates its own global session and session, and they
+  are dropped after every pipeline batch — the start-up build's in `CreateGraphics`, a demand
+  build's in `EnsureDrawBucketPipelinesExist` — because each global session's core module is a few
+  hundred megabytes resident. The drop reaches every owner of the context, so nothing, in this
+  renderer or beside it, may retain a `slang::` object past pipeline construction, or the release
+  reclaims nothing; and a module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a
+  module as text under a name, shadowing a file of that name for every owner of the context and
+  joining the context's source salt, which every owner's cache keys mix in; a new or changed text
+  drops the live sessions, so it runs before the batch, never during. `RegisterSurfaces`
+  (`src/gfx/surface_registry.h`) is its one caller: it reflects every surface in the device
+  context's `clientShaderDir` first and binds them all afterwards, because a binding drops the
+  sessions the next reflection would have used.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
-  executable, then from `GraphicsOptions::surfaceShaderDir`, the one directory a client adds: its
+  executable, then from the GPU context's `clientShaderDir`, the one directory a client adds: its
   files are in the cache salt like the engine's, and a program imports its modules by name the same
   way. Three trees are staged into the engine's: the contract `libs/bgl/shaders/src` (`bgl/`) by
   `bgl_copy_contract_shaders`, `libs/bgl_common/shaders/src` (`idl/`, `lib/anim/`, `lib/math/`,

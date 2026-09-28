@@ -5,6 +5,7 @@
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <bgl/Camera.h>
@@ -203,13 +204,13 @@ namespace
 		return sceneDesc;
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	TestOptions()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 
@@ -256,7 +257,7 @@ namespace
 		bool               resetLastHistory    = false,
 		float              sharpness           = 0.0f)
 	{
-		auto gfx = bgl::CreateGraphics(TestOptions());
+		auto gfx = bgl::test::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc                   = bgl::RenderTargetDesc();
@@ -385,7 +386,7 @@ namespace
 	void
 	RenderPan(const std::string& path, bool taaEnabled, bool panning)
 	{
-		auto gfx = bgl::CreateGraphics(TestOptions());
+		auto gfx = bgl::test::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
@@ -806,7 +807,7 @@ TEST_CASE("The first TAA frame is the scene colour whole", "[taa][render]")
 // discarded rather than resumed across frames that were never rendered.
 TEST_CASE("Toggling temporal AA at runtime turns the resolve off and on", "[taa][render]")
 {
-	auto gfx = bgl::CreateGraphics(TestOptions());
+	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();
@@ -870,11 +871,11 @@ TEST_CASE("Toggling temporal AA at runtime turns the resolve off and on", "[taa]
 // resolves, so it is a caller error rather than a no-op.
 TEST_CASE("Enabling temporal AA on a target without it is an error", "[taa][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -903,7 +904,7 @@ TEST_CASE(
 	"A material edit lands whole rather than fading in over the frames after it",
 	"[taa][render]")
 {
-	auto gfx = bgl::CreateGraphics(TestOptions());
+	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();
@@ -1155,7 +1156,7 @@ TEST_CASE(
 	const std::string shared = "assets/golden/taa_targets_shared.got.png";
 
 	const auto render = [&](const std::string& path, bool secondTarget) {
-		auto gfx = bgl::CreateGraphics(TestOptions());
+		auto gfx = bgl::test::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();
@@ -1203,7 +1204,7 @@ TEST_CASE(
 // coincidence, and that a scale moves the render grid and nothing else.
 TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][render]")
 {
-	auto gfx = bgl::CreateGraphics(TestOptions());
+	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();
@@ -1528,7 +1529,7 @@ TEST_CASE(
 {
 	constexpr int c_FramesAtHalfScale = static_cast<int>(bgl::c_JitterSequenceLength);
 
-	auto gfx = bgl::CreateGraphics(TestOptions());
+	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(QuadSceneDesc());
@@ -1947,7 +1948,7 @@ TEST_CASE(
 
 	SECTION("a width that is not a positive number is the caller's error")
 	{
-		auto gfx = bgl::CreateGraphics(TestOptions());
+		auto gfx = bgl::test::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc                   = bgl::RenderTargetDesc();
@@ -1973,7 +1974,7 @@ TEST_CASE(
 
 TEST_CASE("The sharpness is full by default and bounded to zero through one", "[taa]")
 {
-	auto gfx = bgl::CreateGraphics(TestOptions());
+	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();

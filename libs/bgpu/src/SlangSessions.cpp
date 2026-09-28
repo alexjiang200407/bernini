@@ -1,8 +1,9 @@
-#include "slang/SlangSessions.h"
+#include "SlangSessions.h"
 #include <algorithm>
-#include <bgl_common/SlangErrorChecker.h>
-#include <bgl_common/gassert.h>
+#include <bgpu/SlangErrorChecker.h>
 #include <core/err/util.h>
+#include <core/hash.h>
+#include <cstdint>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -14,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	std::string
 	SlangModulePath(std::string_view moduleName)
@@ -26,6 +27,14 @@ namespace bgl
 
 	namespace
 	{
+		// One module's contribution to the source salt: name and text, XOR-combined with the rest so the
+		// order modules arrive in does not matter, and so a replaced text can be unfolded.
+		uint64_t
+		FoldOf(std::string_view name, std::string_view source) noexcept
+		{
+			return core::hash_string(source, core::hash_string(name, core::hash_seed()));
+		}
+
 		// Every other loader here reports a diagnostic through SlangErrorChecker, which ends in
 		// gfatal -- right for the engine's own shaders, where a diagnostic is a bug. These two load
 		// text the client wrote, where it is a message to hand back.
@@ -98,7 +107,7 @@ namespace bgl
 			Slang::ComPtr<slang::ISession> session;
 			SlangErrorChecker              errChecker;
 			global->createSession(sessionDesc, session.writeRef()) >> errChecker;
-			gassert(session != nullptr, "Failed to create Slang session");
+			core::ensure(session != nullptr, "Failed to create Slang session");
 
 			// Loaded under the path form, which is what an import of a dotted name looks up:
 			// registered as `game.probe` the text is never found and the file wins. The second
@@ -119,7 +128,7 @@ namespace bgl
 					sourceModule.source.c_str(),
 					moduleChecker.WriteDiagnosticBlob());
 				moduleChecker.ReportError();
-				gassert(
+				core::ensure(
 					loaded != nullptr,
 					"Failed to load Slang module '{}' from source",
 					sourceModule.name);
@@ -145,7 +154,7 @@ namespace bgl
 		// the load of the core module -- the one step here worth running several of at once.
 		ThreadSessions mine;
 		slang::createGlobalSession(mine.global.writeRef());
-		gassert(mine.global != nullptr, "Failed to create Slang global session");
+		core::ensure(mine.global != nullptr, "Failed to create Slang global session");
 
 		mine.session = CreateSession(mine.global.get(), desc, desc.target);
 
@@ -190,15 +199,18 @@ namespace bgl
 			return slangModule;
 		}
 
-		// The pointer stays valid: the list only grows under AddSourceModule, whose @pre rules out
-		// a compile in flight.
+		// The pointer stays valid: the list is written only under AddSourceModule, whose @pre rules
+		// out a compile in flight.
 		slang::IModule* slangModule = session->loadModuleFromSourceString(
 			path.c_str(),
 			(path + ".slang").c_str(),
 			onDemand->source.c_str(),
 			errChecker.WriteDiagnosticBlob());
 		errChecker.ReportError();
-		gassert(slangModule != nullptr, "Failed to load Slang module '{}' from source", moduleName);
+		core::ensure(
+			slangModule != nullptr,
+			"Failed to load Slang module '{}' from source",
+			moduleName);
 
 		const auto held = std::lock_guard(m_Mutex);
 		m_ByThread.at(std::this_thread::get_id())
@@ -206,10 +218,9 @@ namespace bgl
 		return slangModule;
 	}
 
-	std::optional<ReflectedSurface>
-	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
+	slang::IModule*
+	SlangSessions::LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic)
 	{
-		// DXIL whatever this device draws with -- see ReflectSurface in SurfaceReflection.h for why.
 		// For its side effect: this thread's entry, and the global session the one below is made
 		// from, exist once it returns.
 		static_cast<void>(ForThisThread());
@@ -224,17 +235,7 @@ namespace bgl
 			session = mine.scalarLayout.get();
 		}
 
-		std::string     diagnostic;
-		slang::IModule* slangModule = LoadReporting(session, moduleName, diagnostic);
-		if (slangModule == nullptr)
-		{
-			core::throw_runtime_error(
-				"surface '{}': its module did not compile\n{}",
-				surfaceName,
-				diagnostic);
-		}
-
-		return bgl::ReflectSurface(slangModule, surfaceName);
+		return LoadReporting(session, moduleName, diagnostic);
 	}
 
 	void
@@ -248,7 +249,34 @@ namespace bgl
 	SlangSessions::AddSourceModule(SlangSourceModule sourceModule) noexcept
 	{
 		const auto held = std::lock_guard(m_Mutex);
-		m_Desc.sourceModules.push_back(std::move(sourceModule));
+
+		const auto found =
+			std::ranges::find_if(m_Desc.sourceModules, [&](const SlangSourceModule& candidate) {
+				return candidate.name == sourceModule.name;
+			});
+		if (found == m_Desc.sourceModules.end())
+		{
+			m_SourceSalt ^= FoldOf(sourceModule.name, sourceModule.source);
+			m_Desc.sourceModules.push_back(std::move(sourceModule));
+		}
+		else
+		{
+			// A second owner registering what the first did -- two renderers on one context bind the
+			// same surfaces -- keeps every session; a different text is the one that drops them. The
+			// fold is an XOR, so the old text is unfolded rather than folded twice.
+			if (found->source == sourceModule.source && found->imported == sourceModule.imported)
+				return;
+			m_SourceSalt ^= FoldOf(found->name, found->source);
+			m_SourceSalt ^= FoldOf(sourceModule.name, sourceModule.source);
+			*found = std::move(sourceModule);
+		}
 		m_ByThread.clear();
+	}
+
+	uint64_t
+	SlangSessions::GetSourceSalt() const noexcept
+	{
+		const auto held = std::lock_guard(m_Mutex);
+		return m_SourceSalt;
 	}
 }

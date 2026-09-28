@@ -2,6 +2,7 @@
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <exception>
 
@@ -22,10 +23,12 @@ main()
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto gfxOpts     = bgl::GraphicsOptions{};
-		gfxOpts.logLevel = bgl::GraphicsOptions::LogLevel::kInfo;
+		auto ctxDesc = bgpu::GpuContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts     = bgl::GraphicsOptions{};
+		ctxDesc.logLevel = bgpu::LogLevel::kInfo;
+
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;

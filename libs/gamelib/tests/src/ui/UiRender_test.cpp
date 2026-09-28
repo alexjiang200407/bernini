@@ -9,6 +9,7 @@
 
 #include "ui/UiTree.h"
 #include "util/GoldenImage.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/VkFormat.h>
@@ -42,10 +43,10 @@ namespace
 	{
 		// The suite's shape: the debug layer on, GPU-based validation left to the bgl_extended
 		// suite, which is where --gpu-validation is plumbed.
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
-		return bgl::CreateGraphics(opts);
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
+		return bgl::test::CreateGraphics(opts);
 	}
 
 	bgl::RenderTargetRef

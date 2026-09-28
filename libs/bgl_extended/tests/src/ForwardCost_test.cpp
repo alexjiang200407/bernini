@@ -1,4 +1,5 @@
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <assetlib_structs/ImageData.h>
@@ -81,10 +82,10 @@ namespace
 	{
 		const glm::mat4 roll =
 			glm::rotate(glm::mat4(1.0f), glm::radians(rollDegrees), glm::vec3(0.0f, 0.0f, 1.0f));
-		auto opts           = bgl::GraphicsOptions();
-		opts.shaderCacheDir = bgl::test::ShaderCacheDir();
+		auto opts                    = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
 
-		auto gfx = bgl::CreateGraphics(opts);
+		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc       = bgl::RenderTargetDesc();

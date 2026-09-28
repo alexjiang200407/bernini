@@ -28,6 +28,7 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -187,8 +188,10 @@ main(int argc, char** argv)
 			                         .title  = "bernini - blob shadow decal" });
 		}
 
+		auto ctxDesc = bgpu::GpuContextDesc();
+
 		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		ctxDesc.enableDebugLayer = true;
 
 		// A project's materials may shade through its own surfaces, and those are registered only
 		// at creation.
@@ -196,10 +199,10 @@ main(int argc, char** argv)
 		{
 			const auto surfaceDir = std::filesystem::path(project) / "Authored" / "Shaders";
 			if (std::filesystem::is_directory(surfaceDir))
-				gfxOpts.surfaceShaderDir = surfaceDir;
+				ctxDesc.clientShaderDir = surfaceDir;
 		}
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc       = bgl::RenderTargetDesc{};
 		targetDesc.width      = static_cast<int>(width);

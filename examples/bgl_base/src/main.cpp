@@ -6,6 +6,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -95,14 +96,16 @@ main(int argc, char** argv)
 		if (!headless)
 			wnd.emplace(windowOpts);
 
+		auto ctxDesc = bgpu::GpuContextDesc();
+
 		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer         = true;
-		gfxOpts.enableGPUValidationLayer = false;
-		gfxOpts.enablePixDebug           = true;
-		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+		ctxDesc.enableDebugLayer         = true;
+		ctxDesc.enableGPUValidationLayer = false;
+		ctxDesc.enablePixDebug           = true;
+		ctxDesc.logLevel                 = bgpu::LogLevel::kTrace;
 		gfxOpts.shaderCacheDir           = "shadercache";
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

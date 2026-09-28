@@ -4,9 +4,9 @@
 #include <core/ref/SharedRef.h>
 
 #include "device/Device.h"
-#include "slang/SlangSessions.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
+#include <bgpu/GpuContext.h>
 
 #include <core/ref/RefCounter.h>
 #include <cstdint>
@@ -27,24 +27,27 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(
-			MTL::Device*                 device,
-			const std::filesystem::path& shaderCacheDir,
-			const std::filesystem::path& surfaceShaderDir,
-			bool                         usePipelineLibrary);
+		/**
+		 * The RHI device over the context's Metal device, compiling through the context's sessions.
+		 * `shaderCacheDir` empty disables the cache.
+		 */
+		Device(const bgpu::GpuContextRef& context, const std::filesystem::path& shaderCacheDir);
 
 		// Out of line: m_ShaderCache holds an incomplete type here.
 		~Device() override;
 
-		/** Drops every thread's Slang session; see SlangSessions::ReleaseAll for the contract. */
+		/** Drops every thread's Slang session; the context's ReleaseSlangSessions is the contract. */
 		void
 		ReleaseSlangSession() noexcept override;
 
-		void
-		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
+		[[nodiscard]] bgpu::GpuContext&
+		GetGpuContext() const noexcept override
+		{
+			return *m_Context;
+		}
 
-		[[nodiscard]] std::optional<ReflectedSurface>
-		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
+		void
+		AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept override;
 
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept
@@ -95,9 +98,8 @@ namespace bgl
 			const noexcept override;
 
 	private:
-		NS::SharedPtr<MTL::Device> m_Device;
-		// Shaders resolve their modules through it, and CreateShader is const.
-		mutable SlangSessions        m_Slang;
+		bgpu::GpuContextRef          m_Context;
+		NS::SharedPtr<MTL::Device>   m_Device;
 		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};
 }

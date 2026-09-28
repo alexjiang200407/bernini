@@ -22,6 +22,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/WindDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -129,16 +130,18 @@ main(int argc, char** argv)
 			wnd.emplace(opts);
 		}
 
+		auto ctxDesc = bgpu::GpuContextDesc();
+
 		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		ctxDesc.enableDebugLayer = true;
 
 		// The look's material may shade through a surface the project authors, and surfaces are
 		// registered only at creation.
 		const auto surfaceDir = std::filesystem::path(project) / "Authored" / "Shaders";
 		if (std::filesystem::is_directory(surfaceDir))
-			gfxOpts.surfaceShaderDir = surfaceDir;
+			ctxDesc.clientShaderDir = surfaceDir;
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

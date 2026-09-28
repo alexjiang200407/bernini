@@ -17,7 +17,9 @@
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
 #include "types/QueueType.h"
-#include <bgl_common/SlangErrorChecker.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/SlangErrorChecker.h>
+#include <bgpu/d3d12/native_device.h>
 #include <core/ref/SharedRef.h>
 #include <filesystem>
 #include <string>
@@ -42,46 +44,34 @@ namespace bgl
 	}
 
 	Device::Device(
-		wrl::ComPtr<ID3D12Device>    device,
-		const std::filesystem::path& shaderCacheDir,
-		const std::filesystem::path& surfaceShaderDir,
-		bool                         gpuValidation) :
-		m_Device(std::move(device)),
-		m_Slang(
-			SlangSessionDesc{ .target      = SLANG_DXIL,
-	                          .searchPaths = ShaderSearchPaths(surfaceShaderDir) })
+		const bgpu::GpuContextRef&   context,
+		const std::filesystem::path& shaderCacheDir) :
+		m_Context(context), m_Device(bgpu::GetD3d12Device(*context))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
 
 		if (!shaderCacheDir.empty())
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
+				m_Context,
 				m_Device.Get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
-				m_Slang.GetSearchPaths(),
-				!gpuValidation);
+				m_Context->GetShaderSearchPaths(),
+				!m_Context->GpuValidationActive());
 		}
 	}
 
 	void
-	Device::AddSourceModule(const SlangSourceModule& sourceModule) noexcept
+	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
-		m_Slang.AddSourceModule(sourceModule);
-		if (m_ShaderCache)
-			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
-	}
-
-	std::optional<ReflectedSurface>
-	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
-	{
-		return m_Slang.ReflectSurface(moduleName, surfaceName);
+		m_Context->AddSourceModule(sourceModule);
 	}
 
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
-		m_Slang.ReleaseAll();
+		m_Context->ReleaseSlangSessions();
 	}
 
 	Device::~Device() noexcept { logger::trace("~Device"); }
@@ -122,7 +112,7 @@ namespace bgl
 	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), &m_Slang);
+		return core::SharedRef<Shader>::Make(std::move(desc), m_Context);
 	}
 
 	MeshletPipelineRef

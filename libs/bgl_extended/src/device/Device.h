@@ -4,6 +4,7 @@
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/file/file.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
@@ -24,7 +25,6 @@ namespace bgl
 	class ICommandQueue;
 	class ITimestampHeap;
 	struct ShaderDesc;
-	struct SlangSourceModule;
 	struct ReflectedSurface;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
@@ -54,22 +54,30 @@ namespace bgl
 
 		/**
 		 * A module compiled from text under a name, shadowing a file of that name on the search
-		 * path for every compile after this one. Folded into the shader cache's salt.
+		 * path for every compile after this one, in every owner of the GPU context. A name maps
+		 * to one text: the same text again changes nothing, a new one replaces the old and drops the
+		 * sessions. The shader cache's keys follow it through the context's source salt.
 		 *
-		 * @pre no compile is in flight, and no slang:: object is held -- the sessions are dropped.
+		 * @pre no compile is in flight, and no slang:: object is held by any owner, when the text is
+		 *      new or changed.
 		 */
 		virtual void
-		AddSourceModule(const SlangSourceModule& sourceModule) noexcept = 0;
+		AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept = 0;
 
 		/**
 		 * Drops every thread's Slang session -- a few hundred resident megabytes apiece once a
 		 * cold-cache compile has stood one up. Call after each pipeline batch is built; the next
-		 * compile recreates what it needs.
+		 * compile recreates what it needs. The sessions are the GPU context's, so the drop reaches
+		 * every owner of that context.
 		 *
-		 * @pre no compile is in flight, and no slang:: object is held.
+		 * @pre no compile is in flight, and no slang:: object is held, by any owner of the context.
 		 */
 		virtual void
 		ReleaseSlangSession() noexcept = 0;
+
+		/** The GPU context this device draws on and compiles through. */
+		[[nodiscard]] virtual bgpu::GpuContext&
+		GetGpuContext() const noexcept = 0;
 
 		/**
 		 * The surface a game's module declares, read through this device's compiler and so at the
@@ -81,8 +89,8 @@ namespace bgl
 		 * @throws std::runtime_error if the module does not compile, or imports the contract and
 		 *         declares no single surface.
 		 */
-		[[nodiscard]] virtual std::optional<ReflectedSurface>
-		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) = 0;
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) const;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

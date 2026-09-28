@@ -11,6 +11,7 @@
 #include "util/HalfFloat.h"
 #include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
 #include <algorithm>
@@ -112,12 +113,12 @@ namespace
 			uint32_t w          = c_Width,
 			uint32_t h          = c_Height) : width(w), height(h)
 		{
-			auto opts                     = bgl::GraphicsOptions();
-			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-			opts.enableDebugLayer         = true;
-			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			auto opts                             = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.enableDebugLayer         = true;
+			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-			gfx = bgl::CreateGraphics(opts);
+			gfx = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto targetDesc       = bgl::RenderTargetDesc();

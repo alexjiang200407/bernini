@@ -33,12 +33,12 @@ thread, so it has no counter to share.
 decision, `BERNINI_RENDERER_LIBRARY_TYPE`, and `bgl_extended` and `core_process` are both built as
 it says:
 
-| Build | `bgl_extended` | `core_process` |
-|---|---|---|
-| default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` |
-| `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` |
-| `BERNINI_EDITOR_SDK` on — a top-level build with Qt, by default | `SHARED` | `SHARED` |
-| `RENDERER_BACKEND=NONE` | not built | `STATIC` |
+| Build | `bgl_extended` | `bgpu` | `core_process` |
+|---|---|---|---|
+| default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` | `STATIC` |
+| `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` | `SHARED` |
+| `BERNINI_EDITOR_SDK` on — a top-level build with Qt, by default | `SHARED` | `SHARED` | `SHARED` |
+| `RENDERER_BACKEND=NONE` | not built | the compiler alone, `STATIC` | `STATIC` |
 
 The default is the game that ships as one binary. The editor SDK implies the shared renderer:
 its plugins are DLLs that reach the renderer through shared `gamelib`, and the editor links the
@@ -46,9 +46,10 @@ renderer as well, so a static one would be linked into two binaries. A static `c
 anything shared would be two copies again, so it is derived and is never an option of its own.
 `BERNINI_SHARED_RENDERER` with `RENDERER_BACKEND=NONE` is a configure error.
 
-The rule is not the renderer's alone: any engine library that holds process-wide GPU state — the
-device, the Slang session, or a later target that shares them — is built as the renderer is and
-lands in the same binary it does.
+The rule is not the renderer's alone: any engine library that holds process-wide GPU state is built
+as the renderer is and lands in the same binary it does. `bgpu` is the one that holds the
+device and the Slang sessions themselves ([bgpu.md](bgpu.md)); its
+`BGPU_API` follows the same pattern.
 
 `BGL_API` follows `CORE_PROCESS_API`: it exports and imports only under `BGL_SHARED`, which
 `bgl`'s interface carries when the renderer is shared, and is empty otherwise.

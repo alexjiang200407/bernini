@@ -9,6 +9,11 @@ find_dependency(Tracy CONFIG REQUIRED)
 find_dependency(cpptrace CONFIG REQUIRED)
 find_dependency(nlohmann_json CONFIG REQUIRED)
 find_dependency(RmlUi CONFIG REQUIRED)
+# bgl's contract names bgpu's GPU context, whose header includes Slang's, and on D3D12 DirectX-Headers'.
+find_dependency(slang CONFIG REQUIRED)
+if (WIN32)
+    find_dependency(directx-headers CONFIG REQUIRED)
+endif()
 
 if (APPLE AND TARGET WrapOpenGL::WrapOpenGL)
     get_target_property(_bernini_sdk_wrapgl WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)

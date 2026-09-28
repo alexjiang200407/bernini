@@ -1,5 +1,6 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
@@ -22,12 +23,12 @@ namespace
 	bgl::GraphicsRef
 	MakeGraphics()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-		opts.enablePixDebug           = true;
-		return bgl::CreateGraphics(opts);
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.context.enablePixDebug           = true;
+		return bgl::test::CreateGraphics(opts);
 	}
 
 	bgl::RenderTargetRef

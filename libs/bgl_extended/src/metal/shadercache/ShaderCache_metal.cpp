@@ -24,6 +24,10 @@
 #include <utility>
 #include <vector>
 
+#include <string>
+
+#include <bgpu/GpuContext.h>
+
 namespace bgl
 {
 	using namespace shader_cache;
@@ -147,13 +151,15 @@ namespace bgl
 	}
 
 	ShaderCache::ShaderCache(
+		bgpu::GpuContextRef             context,
 		MTL::Device*                    device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,
 		const std::vector<std::string>& searchPaths,
 		bool                            usePipelineLibrary) :
 		m_CacheDir(std::move(cacheDir)),
-		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, c_CacheFormatVersion))
+		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, c_CacheFormatVersion)),
+		m_Context(std::move(context))
 	{
 		std::error_code ec;
 		std::filesystem::create_directories(m_CacheDir, ec);
@@ -188,12 +194,6 @@ namespace bgl
 				"Metal binary archive unavailable, driver pipelines will not be cached: {}",
 				GetErrorDescription(error));
 		}
-	}
-
-	void
-	ShaderCache::FoldSource(std::string_view name, std::string_view source) noexcept
-	{
-		m_SourceSalt = shader_cache::FoldSource(m_SourceSalt, name, source);
 	}
 
 	ShaderCache::~ShaderCache()
@@ -249,7 +249,9 @@ namespace bgl
 	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
 	{
 		// Qualified: the member of the same name would otherwise recurse.
-		return shader_cache::ComputeKey(m_SourceSalt, std::move(moduleEntries));
+		return shader_cache::ComputeKey(
+			m_SourceSalt ^ m_Context->GetSourceSalt(),
+			std::move(moduleEntries));
 	}
 
 	bool
