@@ -576,6 +576,14 @@ RenderTargetWindow::SetTaaSharpness(float sharpness)
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetTaaSharpness(m_TaaSharpness); });
 }
 
+uint32_t
+RenderTargetWindow::GetRenderHeight() const noexcept
+{
+	// Resize and SetRenderScale change it inside a blocking Invoke, so the GUI thread never reads
+	// it mid-change.
+	return m_RenderTarget != nullptr ? m_RenderTarget->GetRenderHeight() : 0;
+}
+
 void
 RenderTargetWindow::SetRenderingEnabled(bool enabled)
 {

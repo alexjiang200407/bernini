@@ -1608,6 +1608,25 @@ TEST_CASE(
 }
 
 TEST_CASE(
+	"A plugin viewport reports the rows it renders at, after the render scale",
+	"[mainwindow][render][materialplugin]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	auto*                preview = window.findChild<MaterialPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+
+	// Headless, so the target is the fixed offscreen size rather than the widget's.
+	const editor::IEditorViewport& viewport = *view;
+	CHECK(viewport.GetRenderHeight() == RenderTargetWindowDesc().headlessHeight);
+
+	view->SetRenderScale(0.5f);
+	CHECK(viewport.GetRenderHeight() == RenderTargetWindowDesc().headlessHeight / 2);
+}
+
+TEST_CASE(
 	"Material retains its configured project environment without an explicit data root",
 	"[mainwindow][render][materialplugin]")
 {
