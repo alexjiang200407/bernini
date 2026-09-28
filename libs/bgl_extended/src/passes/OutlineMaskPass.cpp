@@ -84,7 +84,11 @@ namespace bgl
 
 		desc.SetName("Outline Mask {}", draw.drawIdx)
 			.AddRenderTarget(c_OutlineMaskName)
-			.AddBufferRead(c_SelectedInstancesName, BarrierSyncFlag::kVertexShader);
+			.AddBufferRead(c_SelectedInstancesName, BarrierSyncFlag::kVertexShader)
+			.AddBufferArg(
+				c_InstanceLodName,
+				BarrierSyncFlag::kVertexShader,
+				BarrierAccessFlag::kUnorderedAccess);
 
 		for (const std::span<const SceneBuffer> bindings :
 		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),
@@ -157,9 +161,10 @@ namespace bgl
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;
-			// The mask binds no cull output, so it traces a placement's level 0 whatever the
-			// frame draws.
-			expansion["lodDrawMode"] = idl::LodDrawMode::kLevel0;
+			// The level the forward pass drew, so the contour hugs the geometry on screen. A
+			// dissolve's outgoing level is not traced: the selected list carries no outgoing entry.
+			expansion["instanceLod"] = resources.GetBuffer(c_InstanceLodName);
+			expansion["lodDrawMode"] = idl::LodDrawMode::kCurrent;
 		}
 
 		auto gfxState   = MeshletState();

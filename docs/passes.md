@@ -639,7 +639,7 @@ opaque, cutout and hashed program, built-in or generated for a game surface, has
 surface's own source does nothing for it, and a grass bucket has no second lane. How a draw reads
 the word is `ExpansionData.lodDrawMode` (`idl::LodDrawMode`): the bucket's own lane swaps at once, its dissolve lane
 dissolves, the depth-sorted list swaps at once (a blend has no depth to dither against), and the
-outline mask, which binds no cull output, traces level 0.
+outline mask swaps at once too, reading the same word, so a contour hugs the level on screen.
 
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered
