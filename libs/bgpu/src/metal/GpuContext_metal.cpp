@@ -1,16 +1,16 @@
 #include "ContextBase.h"
 #include "metal_cpp.h"
 #include <bgl_common/gassert.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/metal/native_device.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/platform/util.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
-#include <device_context/metal/native_device.h>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 
-namespace gpu
+namespace bgpu
 {
 	namespace
 	{
@@ -24,7 +24,7 @@ namespace gpu
 			Context&
 			operator=(Context&&) = delete;
 
-			explicit Context(const DeviceContextDesc& desc) : ContextBase(desc, SLANG_METAL)
+			explicit Context(const GpuContextDesc& desc) : ContextBase(desc, SLANG_METAL)
 			{
 				core::logging::init_file_logger("bgl.log", static_cast<int>(desc.logLevel));
 
@@ -47,7 +47,7 @@ namespace gpu
 				                  core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 			}
 
-			~Context() noexcept override { spdlog::trace("~DeviceContext"); }
+			~Context() noexcept override { spdlog::trace("~GpuContext"); }
 
 			bool
 			GpuValidationActive() const noexcept override
@@ -68,15 +68,15 @@ namespace gpu
 	}
 
 	MTL::Device*
-	GetMtlDevice(const DeviceContext& context) noexcept
+	GetMtlDevice(const GpuContext& context) noexcept
 	{
 		const auto* metal = dynamic_cast<const Context*>(&context);
-		bgl::gassert(metal != nullptr, "The device context is not a Metal one");
+		bgl::gassert(metal != nullptr, "The GPU context is not a Metal one");
 		return metal->GetDevice();
 	}
 
-	DeviceContextRef
-	CreateDeviceContext(const DeviceContextDesc& desc)
+	GpuContextRef
+	CreateGpuContext(const GpuContextDesc& desc)
 	{
 		return core::SharedRef<Context>::Make(desc);
 	}

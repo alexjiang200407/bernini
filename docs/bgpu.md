@@ -1,27 +1,27 @@
-# device_context — the process's GPU device, owned by no renderer
+# bgpu — the process's GPU device, owned by no renderer
 
 The process has one GPU device, and more than one library runs work on it: the renderer, and a
 library that runs its own compute beside the frame — the crowd simulation's, the first.
-`device_context` is that device as an object of its own, with the debug layer that must precede it
+`bgpu` is that device as an object of its own, with the debug layer that must precede it
 and the Slang sessions that compile for it: the application creates one and hands it to every owner.
 
 ```cpp
-auto desc             = gpu::DeviceContextDesc();
+auto desc             = bgpu::GpuContextDesc();
 desc.enableDebugLayer = true;
 desc.clientShaderDir  = projectShaders;                 // the client's modules, importable by name
 
-auto context  = gpu::CreateDeviceContext(desc);         // the device, the debug layer, bgl.log
+auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug layer, bgl.log
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 // a compute client is another: it takes the same context
 ```
 
 ## Design Choices
 
-* **The application owns the device; every library borrows it.** `gpu::DeviceContext` holds the
+* **The application owns the device; every library borrows it.** `bgpu::GpuContext` holds the
   one strong reference to the native device, so the device dies with the context's last holder.
   **One is live per process at a time**: D3D12 hands back one device per adapter however often it is
   asked, and enabling the debug layer once that device exists removes it, so a second context could
-  never be independent of the first. `CreateDeviceContext` refuses while one is live, on Metal too,
+  never be independent of the first. `CreateGpuContext` refuses while one is live, on Metal too,
   so a program is portable; another may follow once the last holder has dropped it.
   `IGraphics` neither creates nor lends a device: `bgl` stays a rendering contract, and a renderer
   that has no native device to offer — `bgl_wgpu`, should it exist — is not asked for one.
@@ -29,7 +29,7 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   layer, GPU-based validation, the DXGI and D3D12 info queues and the callback that routes their
   messages into the log, the PIX capturer load, Metal's validation-from-environment detection, the
   device itself, the `bgl.log` file, and the Slang sessions
-  ([src/SlangSessions.h](../libs/device_context/src/SlangSessions.h)) with their search paths. With
+  ([src/SlangSessions.h](../libs/bgpu/src/SlangSessions.h)) with their search paths. With
   the debug layer on, the context's destructor reports live objects, so a leak is attributed to
   whichever owner made it rather than to "the device".
 * **What deliberately does not.** Queues, allocators, resource managers, descriptor heaps,
@@ -40,13 +40,13 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   `Graphics`.
 * **The RHI is not here.** `IDevice`, `ICommandList`, `IResourceManager` and the rest are
   `bgl_extended`'s and assume its GPU-driven bar. An owner other than the renderer reaches the
-  device through the backend header — [d3d12/native_device.h](../libs/device_context/include/device_context/d3d12/native_device.h),
-  [metal/native_device.h](../libs/device_context/include/device_context/metal/native_device.h) —
+  device through the backend header — [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),
+  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h) —
   and drives the API itself.
 * **Built as the renderer is.** It holds process-wide GPU state, so `BERNINI_RENDERER_LIBRARY_TYPE`
   decides its kind exactly as it does `bgl_extended`'s and `core_process`'s
-  ([core_process.md § Linkage](core_process.md#linkage)). `DEVICE_CONTEXT_API` marks the few exports —
-  `CreateDeviceContext`, the two native-device accessors, the D3D12 error checker and
+  ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks the few exports —
+  `CreateGpuContext`, the two native-device accessors, the D3D12 error checker and
   `AutoreleaseNet`; everything else crosses the boundary through virtual calls. On Metal it is
   also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
   user in the process links.
@@ -55,14 +55,14 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 
 | Symbol | File | Role |
 |---|---|---|
-| `DeviceContextDesc`, `LogLevel` | [include/device_context/DeviceContext.h](../libs/device_context/include/device_context/DeviceContext.h) | The device-level options: `enableDebugLayer`, `enableGPUValidationLayer`, `enablePixDebug`, `strictError`, `logLevel`, `clientShaderDir` |
-| `DeviceContext` | same | The context: the desc, whether validation is running, and the Slang compiler — search paths, source modules, `LoadModule`, `ReflectSurface`, `ReleaseSlangSessions` |
+| `GpuContextDesc`, `LogLevel` | [include/bgpu/GpuContext.h](../libs/bgpu/include/bgpu/GpuContext.h) | The device-level options: `enableDebugLayer`, `enableGPUValidationLayer`, `enablePixDebug`, `strictError`, `logLevel`, `clientShaderDir` |
+| `GpuContext` | same | The context: the desc, whether validation is running, and the Slang compiler — search paths, source modules, `LoadModule`, `ReflectSurface`, `ReleaseSlangSessions` |
 | `SlangSourceModule` | same | A module given as text under an import name |
 | `GetSourceSalt` | same | The order-independent fold of every registered module, name and text; an owner's shader cache mixes it into each key |
-| `CreateDeviceContext` | same | The one factory, defined by the backend the build selected |
-| `GetD3d12Device`, `GetMtlDevice` | `include/device_context/{d3d12,metal}/native_device.h` | The native device behind a context, borrowed |
-| `c_D3d12ErrChecker` | [include/device_context/d3d12/D3d12ErrorChecker.h](../libs/device_context/include/device_context/d3d12/D3d12ErrorChecker.h) | `hr >> c_D3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
-| `AutoreleaseNet` | [include/device_context/metal/AutoreleaseNet.h](../libs/device_context/include/device_context/metal/AutoreleaseNet.h) | A share of the thread's one long-lived autorelease pool, so two owners on one thread die in either order |
+| `CreateGpuContext` | same | The one factory, defined by the backend the build selected |
+| `GetD3d12Device`, `GetMtlDevice` | `include/bgpu/{d3d12,metal}/native_device.h` | The native device behind a context, borrowed |
+| `c_D3d12ErrChecker` | [include/bgpu/d3d12/D3d12ErrorChecker.h](../libs/bgpu/include/bgpu/d3d12/D3d12ErrorChecker.h) | `hr >> c_D3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
+| `AutoreleaseNet` | [include/bgpu/metal/AutoreleaseNet.h](../libs/bgpu/include/bgpu/metal/AutoreleaseNet.h) | A share of the thread's one long-lived autorelease pool, so two owners on one thread die in either order |
 
 ## Threading & Synchronization
 
@@ -80,12 +80,12 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 * **Teardown.** Each owner drains the queues it created before dropping its context reference.
   Nothing flushes "the device": no owner has all of its queues.
 * **Metal autorelease pools are a per-thread stack**, so no owner holds a pool of its own for its
-  whole life: a long-lived owner holds a share of the thread's one net (`gpu::AutoreleaseNet`) and
+  whole life: a long-lived owner holds a share of the thread's one net (`bgpu::AutoreleaseNet`) and
   scopes a pool of its own around anything that autoreleases, as `bgl_metal` already does.
 
 ## Verification
 
-`device_context_tests`: one live context per process and its successor, the search-path order, a released session
+`bgpu_tests`: one live context per process and its successor, the search-path order, a released session
 recreated by the next load, a source module seen by a thread that never compiled, and validation
 asked for being validation active. `bgl_extended_tests` `[device]` covers the renderer as an owner:
 a renderer built on a context, a second renderer on the same context, two renderers binding one

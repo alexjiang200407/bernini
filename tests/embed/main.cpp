@@ -1,6 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <bgl/IGraphics.h>
-#include <device_context/DeviceContext.h>
+#include <bgpu/GpuContext.h>
 #include <gamelib/AssetManager.h>
 
 #include <cstdio>
@@ -8,7 +8,7 @@
 
 /**
  * One translation unit outside the engine, including the public headers of the libraries a game
- * links -- the device context's among them, which reaches it through the renderer's interface --
+ * links -- the GPU context's among them, which reaches it through the renderer's interface --
  * run from the directory it was built into.
  *
  * It stands nothing up. What is under test is that these headers parse, that the link line
@@ -19,7 +19,7 @@
 int
 main()
 {
-	static_assert(sizeof(gpu::DeviceContextDesc) > 0);
+	static_assert(sizeof(bgpu::GpuContextDesc) > 0);
 	static_assert(sizeof(bgl::GraphicsOptions) > 0);
 	static_assert(sizeof(assetlib::AssetStore) > 0);
 	static_assert(sizeof(game::AssetManager) > 0);

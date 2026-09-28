@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
 	std::string
 	SlangModulePath(std::string_view moduleName)

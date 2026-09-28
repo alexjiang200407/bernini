@@ -1,9 +1,9 @@
 #pragma once
 #include <bgl_common/SurfaceReflection.h>
+#include <bgpu/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
-#include <device_context/api.h>
 #include <filesystem>
 #include <optional>
 #include <slang.h>
@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
 	enum class LogLevel
 	{
@@ -24,7 +24,7 @@ namespace gpu
 		kOff,
 	};
 
-	struct DeviceContextDesc
+	struct GpuContextDesc
 	{
 		// D3D12's API validation layer, and the info-queue callback that routes its messages into
 		// the log. Metal's validators are environment variables the runtime reads before this
@@ -49,7 +49,7 @@ namespace gpu
 		std::filesystem::path clientShaderDir;
 
 		bool
-		operator==(const DeviceContextDesc&) const = default;
+		operator==(const GpuContextDesc&) const = default;
 	};
 
 	/**
@@ -78,22 +78,22 @@ namespace gpu
 	 *
 	 * The Slang sessions are per thread, created on a thread's first compile and dropped by
 	 * ReleaseSlangSessions, whose precondition is shared by every owner. A backend's native handle
-	 * is reached through that backend's header: device_context/d3d12/native_device.h,
-	 * device_context/metal/native_device.h.
+	 * is reached through that backend's header: bgpu/d3d12/native_device.h,
+	 * bgpu/metal/native_device.h.
 	 */
-	class DeviceContext : public core::Ref
+	class GpuContext : public core::Ref
 	{
 	public:
-		DeviceContext(const DeviceContext&) noexcept = delete;
-		DeviceContext(DeviceContext&&) noexcept      = delete;
+		GpuContext(const GpuContext&) noexcept = delete;
+		GpuContext(GpuContext&&) noexcept      = delete;
 
-		DeviceContext&
-		operator=(const DeviceContext&) noexcept = delete;
+		GpuContext&
+		operator=(const GpuContext&) noexcept = delete;
 
-		DeviceContext&
-		operator=(DeviceContext&&) noexcept = delete;
+		GpuContext&
+		operator=(GpuContext&&) noexcept = delete;
 
-		[[nodiscard]] virtual const DeviceContextDesc&
+		[[nodiscard]] virtual const GpuContextDesc&
 		GetDesc() const noexcept = 0;
 
 		/**
@@ -167,10 +167,10 @@ namespace gpu
 		ReleaseSlangSessions() noexcept = 0;
 
 	protected:
-		DeviceContext() noexcept = default;
+		GpuContext() noexcept = default;
 	};
 
-	using DeviceContextRef = core::SharedRef<DeviceContext>;
+	using GpuContextRef = core::SharedRef<GpuContext>;
 
 	/**
 	 * Creates the process's device: the debug layer and its message routing where the desc asks,
@@ -182,6 +182,6 @@ namespace gpu
 	 *
 	 * @throws std::runtime_error if no device can be created, or a context is already live.
 	 */
-	DEVICE_CONTEXT_API DeviceContextRef
-	CreateDeviceContext(const DeviceContextDesc& desc);
+	BGPU_API GpuContextRef
+	CreateGpuContext(const GpuContextDesc& desc);
 }

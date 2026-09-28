@@ -81,7 +81,7 @@ main(int argc, char* argv[])
 	const QString directory = QCoreApplication::applicationDirPath();
 
 	// Before the window, so a diagnostic from the renderer's construction has somewhere to go: the
-	// device context opens the log as it is created, and everything before that would otherwise
+	// GPU context opens the log as it is created, and everything before that would otherwise
 	// write to a stdout a GUI launch does not have. The context's own call then only applies its
 	// level.
 	//

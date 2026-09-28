@@ -38,7 +38,7 @@ disagrees, trust the header, then fix this doc.
   returns the one object everything else is minted from: render targets, scenes, scene views. It
   also *is* the submission context — `BeginFrame`/`Draw`/`EndFrame`, `Resize` and the capture family
   are methods on it, not on a separate object. The device it draws on is the application's
-  `gpu::DeviceContext` ([device_context.md](device_context.md)), created once per process and shared
+  `bgpu::GpuContext` ([bgpu.md](bgpu.md)), created once per process and shared
   with every other owner of the device; several renderers may sit on one.
 
 * **Interfaces are pure-virtual and intrusively refcounted, because bgl_extended is a DLL.** Every `I*` derives
@@ -176,7 +176,7 @@ disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The renderer's own: `shaderCacheDir`, `gpuCapturePath`, and every descriptor-heap/pool capacity. The device-level choices -- debug layers, log level, the client's Slang directory -- are the `gpu::DeviceContextDesc` the application creates the device from ([device_context.md](device_context.md)). |
+| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The renderer's own: `shaderCacheDir`, `gpuCapturePath`, and every descriptor-heap/pool capacity. The device-level choices -- debug layers, log level, the client's Slang directory -- are the `bgpu::GpuContextDesc` the application creates the device from ([bgpu.md](bgpu.md)). |
 | `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::GetSurfaceTypes()`. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
@@ -208,7 +208,7 @@ disagrees, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    DC["gpu::CreateDeviceContext(desc)"] --> CG["CreateGraphics(context, GraphicsOptions)"]
+    DC["bgpu::CreateGpuContext(desc)"] --> CG["CreateGraphics(context, GraphicsOptions)"]
     CG --> IG[IGraphics]
 
     IG -- "CreateRenderTarget(RenderTargetDesc)" --> RT["IRenderTarget (swapchain or headless)"]
@@ -272,7 +272,7 @@ flowchart TD
   texture wraps the target this frame is drawing to throws: a target's output is drawn on another
   target. Every other target a draw samples is retained through the frame, and the frame reads the
   slot it presented last — draw the preview target first, then the frame that shows it.
-* **`GetSurfaceTypes()`** — the surfaces read out of the device context's `clientShaderDir` at
+* **`GetSurfaceTypes()`** — the surfaces read out of the GPU context's `clientShaderDir` at
   construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
   one surface: its name is the file's stem, its shading is the one struct in it conforming to
   `ISurfaceSource`, and its slot is its position in filename order — so nothing outside the directory
@@ -505,10 +505,10 @@ flowchart TD
 
 ```cpp
 // The device is the process's, not the renderer's: created once and handed to every owner.
-auto ctxDesc            = gpu::DeviceContextDesc{};
+auto ctxDesc            = bgpu::GpuContextDesc{};
 ctxDesc.enableDebugLayer = true;
 ctxDesc.clientShaderDir  = projectShaders;  // the client's own modules, importable by name; empty for none
-auto context             = gpu::CreateDeviceContext(ctxDesc);
+auto context             = bgpu::CreateGpuContext(ctxDesc);
 
 auto gfxOpts           = bgl::GraphicsOptions{};
 gfxOpts.shaderCacheDir = "shadercache";  // empty disables it; cold start is seconds slower

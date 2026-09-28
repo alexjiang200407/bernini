@@ -39,7 +39,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
-	opts.context.logLevel                 = gpu::LogLevel::kTrace;
+	opts.context.logLevel                 = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 

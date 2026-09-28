@@ -161,19 +161,19 @@ public API is therefore the spdlog free functions:
 `logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl_extended sources
 call `logger::…` with no extra include.
 
-* **Log file:** one per process, named by whoever opens it first. The device context
-  ([DeviceContext_d3d12.cpp](libs/device_context/src/d3d12/DeviceContext_d3d12.cpp),
-  [DeviceContext_metal.cpp](libs/device_context/src/metal/DeviceContext_metal.cpp)) asks for `bgl.log`
+* **Log file:** one per process, named by whoever opens it first. The GPU context
+  ([GpuContext_d3d12.cpp](libs/bgpu/src/d3d12/GpuContext_d3d12.cpp),
+  [GpuContext_metal.cpp](libs/bgpu/src/metal/GpuContext_metal.cpp)) asks for `bgl.log`
   next to the binary, which is what `bgl_extended_tests` and the examples get; under the editor
   `main.cpp` has already asked for `editor.log`, so the context's call only applies its level.
   `core::logging::init_file_logger` ([log.h](libs/core/include/core/log/log.h)) is where that rule
   lives: **the first call wins the file, every call applies its level**. Every renderer on the
   context, and every other owner of the device, therefore shares one run's log — which is why the
   name is `bgl.log` and not the renderer's.
-* **Level & flush level** come from `DeviceContextDesc::logLevel`
-  ([DeviceContext.h](libs/device_context/include/device_context/DeviceContext.h), enum `kTrace … kOff`).
+* **Level & flush level** come from `GpuContextDesc::logLevel`
+  ([GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h), enum `kTrace … kOff`).
   **Default is `kError`** — to see the timeline of a run, pass `logLevel = kTrace` when calling
-  `gpu::CreateDeviceContext`.
+  `bgpu::CreateGpuContext`.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
   and your own `logger::` output interleave in one file.
 
@@ -258,9 +258,9 @@ same second do still collide.
 
 ## 5. D3D12 debug layer & GPU validation
 
-Runtime-toggled via `gpu::DeviceContextDesc` flags
-([DeviceContext.h](libs/device_context/include/device_context/DeviceContext.h)), applied when the
-device is created ([DeviceContext_d3d12.cpp](libs/device_context/src/d3d12/DeviceContext_d3d12.cpp)),
+Runtime-toggled via `bgpu::GpuContextDesc` flags
+([GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h)), applied when the
+device is created ([GpuContext_d3d12.cpp](libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)),
 before any renderer exists:
 
 * `enableDebugLayer` → `ID3D12Debug::EnableDebugLayer()`. Turns on D3D12 API validation and sets
@@ -268,7 +268,7 @@ before any renderer exists:
 * `enableGPUValidationLayer` → `SetEnableGPUBasedValidation(TRUE)`. **Only meaningful with
   `enableDebugLayer` on.**
 * `enablePixDebug` → loads `WinPixGpuCapturer.dll` for PIX captures. See [RHI](docs/rhi.md).
-* Validation messages are routed to `bgl.log` through the device context's callback registered on
+* Validation messages are routed to `bgl.log` through the GPU context's callback registered on
   `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error
   into `gfatal`.
 * When the context dies with the layer on it reports the live objects, so a leak is attributed to
@@ -283,7 +283,7 @@ editor reads them from its config.
 
 ## 6. Metal validation & frame capture
 
-Metal's validators are environment variables, not `DeviceContextDesc` flags, so they need no rebuild:
+Metal's validators are environment variables, not `GpuContextDesc` flags, so they need no rebuild:
 
 ```bash
 MTL_DEBUG_LAYER=1 MTL_DEBUG_LAYER_ERROR_MODE=assert MTL_SHADER_VALIDATION=1 ./bgl_extended_tests "<name>"
@@ -386,12 +386,12 @@ struct MyHandler : bgl::IGpuAssertionHandler
     }
 };
 
-gpu::DeviceContextDesc ctxDesc;
+bgpu::GpuContextDesc ctxDesc;
 ctxDesc.enableDebugLayer         = true;       // D3D12 validation into bgl.log
 ctxDesc.enableGPUValidationLayer = true;
-ctxDesc.logLevel                 = gpu::LogLevel::kTrace;  // full timeline
+ctxDesc.logLevel                 = bgpu::LogLevel::kTrace;  // full timeline
 
-auto gfx = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), bgl::GraphicsOptions());
+auto gfx = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), bgl::GraphicsOptions());
 
 MyHandler handler;                              // must outlive the frame-latency window
 gfx->SetGpuAssertionHandler(&handler);          // else a raise -> gfatal() crash

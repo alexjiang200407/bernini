@@ -21,9 +21,9 @@
 #include <string>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
-	class DeviceContext;
+	class GpuContext;
 }
 
 namespace bgl
@@ -243,7 +243,7 @@ namespace bgl
 		GetPassTimings(const RenderTargetRef& target) = 0;
 
 		/**
-		 * The surfaces registered from the device context's `clientShaderDir`, in slot order, each
+		 * The surfaces registered from the GPU context's `clientShaderDir`, in slot order, each
 		 * carrying the `MaterialType` its materials are created with.
 		 *
 		 * Fixed at construction: every pipeline that can draw one is built there, so a surface added
@@ -318,7 +318,7 @@ namespace bgl
 	 * @throws ApiError for a client shader directory that does not exist or holds an invalid surface.
 	 */
 	BGL_API GraphicsRef
-	CreateGraphics(core::SharedRef<gpu::DeviceContext> context, const GraphicsOptions& opts);
+	CreateGraphics(core::SharedRef<bgpu::GpuContext> context, const GraphicsOptions& opts);
 }
 
 template class BGL_API core::SharedRef<bgl::IGraphics>;

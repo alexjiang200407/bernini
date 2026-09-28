@@ -1,7 +1,7 @@
 #pragma once
-#include <device_context/api.h>
+#include <bgpu/api.h>
 
-namespace gpu
+namespace bgpu
 {
 	/**
 	 * A share of this thread's one long-lived autorelease pool: the net under every scoped pool,
@@ -15,7 +15,7 @@ namespace gpu
 	 *
 	 * @pre a share is released on the thread that acquired it, as any pool is.
 	 */
-	class DEVICE_CONTEXT_API AutoreleaseNet
+	class BGPU_API AutoreleaseNet
 	{
 	public:
 		AutoreleaseNet() noexcept;

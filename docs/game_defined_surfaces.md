@@ -93,7 +93,7 @@ Shaders live in the project at **`Authored/Shaders/`**
 person wrote them, no bake puts one back, and losing one loses work.
 
 They are the one asset category no codec reads. Slang opens them itself, so the renderer is handed
-a **host path** rather than a mount key — `gpu::DeviceContextDesc::clientShaderDir`, since the
+a **host path** rather than a mount key — `bgpu::GpuContextDesc::clientShaderDir`, since the
 directory is also a Slang search path for every owner of the device — and the directory is read by
 the `Graphics` constructor
 ([`surface_registry.cpp`](../libs/bgl_extended/src/gfx/surface_registry.cpp)). The consequences

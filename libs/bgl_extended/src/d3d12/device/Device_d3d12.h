@@ -1,7 +1,7 @@
 #pragma once
 #include "device/Device.h"
+#include <bgpu/GpuContext.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <filesystem>
 #include <string>
 
@@ -18,7 +18,7 @@ namespace bgl
 		 * The RHI device over the context's D3D12 device, compiling through the context's sessions.
 		 * `shaderCacheDir` empty disables the cache.
 		 */
-		Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir);
+		Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;
@@ -50,7 +50,7 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const noexcept override;
 
 		void
-		AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept override;
+		AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept override;
 
 		[[nodiscard]] std::optional<ReflectedSurface>
 		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
@@ -82,7 +82,7 @@ namespace bgl
 		void
 		ReleaseSlangSession() noexcept override;
 
-		[[nodiscard]] gpu::DeviceContext&
+		[[nodiscard]] bgpu::GpuContext&
 		GetContext() const noexcept
 		{
 			return *m_Context;
@@ -90,7 +90,7 @@ namespace bgl
 
 	private:
 		// Declared first: the device below is the context's, and the cache is built on both.
-		gpu::DeviceContextRef        m_Context;
+		bgpu::GpuContextRef          m_Context;
 		wrl::ComPtr<ID3D12Device>    m_Device;
 		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};

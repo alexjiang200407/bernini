@@ -89,7 +89,7 @@ TEST_CASE("Qt and spdlog write to the same place", "[log]")
 TEST_CASE("A Qt message survives the renderer's log level", "[log]")
 {
 	// The hazard, and the reason the routing writes through the sinks rather than the logger:
-	// init_file_logger applies gpu::DeviceContextDesc::logLevel, which is kError unless a config says
+	// init_file_logger applies bgpu::GpuContextDesc::logLevel, which is kError unless a config says
 	// otherwise. Routing through the logger would drop every editor diagnostic in a default build.
 	const auto captured = CapturedLog(spdlog::level::err);
 	editor::InstallQtLogRouting();

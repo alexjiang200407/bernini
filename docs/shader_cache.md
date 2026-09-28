@@ -51,8 +51,8 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Slang sessions are per thread, lazy, and dropped after every pipeline batch.** A global
   session and everything created from it are not thread-safe, but distinct global sessions may run
   in parallel (`slang.h`, `IGlobalSession`) — so
-  [SlangSessions](libs/device_context/src/SlangSessions.h) — the device context's, reached through
-  `gpu::DeviceContext::LoadModule` and shared by every owner of the device — hands each thread that
+  [SlangSessions](libs/bgpu/src/SlangSessions.h) — the GPU context's, reached through
+  `bgpu::GpuContext::LoadModule` and shared by every owner of the device — hands each thread that
   compiles a global session and a session of its own, created on that thread's first compile. Creating a global
   session loads Slang's core module, a few hundred megabytes that then stay resident, so none
   exists until a compile actually reaches it — which on a fully warm cache is never. The compile
@@ -78,7 +78,7 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Invalidation is coarse, content-based, and automatic.** A single salt folds the shader compiler
   version, the compile options (matrix layout, `BERNINI_GPU_DEBUG`), the cache format version, and a
   hash of the content of *every* shader source file under every search path — the client's
-  `DeviceContextDesc::clientShaderDir` included — chained through `core::hash_bytes`. It is
+  `GpuContextDesc::clientShaderDir` included — chained through `core::hash_bytes`. It is
   combined with the PSO's (module, entry-point) pairs to form each program key. Any change to any of those flips every key, so a
   stale entry is **missed and recompiled, never misread**. The pipeline library additionally
   self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
@@ -104,13 +104,13 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ShaderCache` (Metal) | [libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
 | `BuildPipelineLayout` | [libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
 | `CompileProgram` | [libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
-| `SlangSessions` | [libs/device_context/src/SlangSessions.h](libs/device_context/src/SlangSessions.h) | One global session + session per compiling thread, behind `gpu::DeviceContext`; created lazily, released after the renderer is built. |
+| `SlangSessions` | [libs/bgpu/src/SlangSessions.h](libs/bgpu/src/SlangSessions.h) | One global session + session per compiling thread, behind `bgpu::GpuContext`; created lazily, released after the renderer is built. |
 | `Shader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | The one `IShader` for both backends: a module name and entry point, loaded on the calling thread's session. |
 | `ReflectedLayout` | [libs/bgl_common/include/bgl_common/ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl_common/include/bgl_common/SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
 | `shaderCacheDir` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The RHI-visible surface: where the cache lives. |
-| `clientShaderDir` | [libs/device_context/include/device_context/DeviceContext.h](libs/device_context/include/device_context/DeviceContext.h) | The one client directory whose files join every owner's salt. |
+| `clientShaderDir` | [libs/bgpu/include/bgpu/GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h) | The one client directory whose files join every owner's salt. |
 
 ---
 
@@ -173,10 +173,10 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   module no `import` names (`SlangSourceModule::imported` false: every generated program) is not
   loaded up front but from its text the first time a shader names it, so a session parses only
   the programs it builds; that is also how the generated `programs.forward.Transparent` shadows
-  the shipped file. A name maps to one text per device context: the same text again changes
+  the shipped file. A name maps to one text per GPU context: the same text again changes
   nothing, a new one replaces the old and drops every live session, since a session that has already
   resolved the name keeps that answer. The context folds every registered name and text into a
-  source salt (`gpu::DeviceContext::GetSourceSalt`) that each owner's cache mixes into every key, so
+  source salt (`bgpu::GpuContext::GetSourceSalt`) that each owner's cache mixes into every key, so
   the program compiled against the file and the one compiled against the text never share a key,
   and a key follows a text another owner changed.
 
@@ -200,8 +200,8 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 
   **Metal's validation is turned on by the environment, not by a flag** —
   `MTL_SHADER_VALIDATION` / `METAL_DEVICE_WRAPPER_TYPE` are read by the Metal runtime before the
-  process gets a say. The device context therefore reads both variables as well as
-  `enableGPUValidationLayer` (`gpu::DeviceContext::GpuValidationActive`), or the flag would say
+  process gets a say. The GPU context therefore reads both variables as well as
+  `enableGPUValidationLayer` (`bgpu::GpuContext::GpuValidationActive`), or the flag would say
   "off" during a validating run.
 
 * **The cache is called from several threads at once.** The renderer builds its pipelines in
@@ -220,7 +220,7 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 ## Usage Sketch
 
 ```cpp
-auto context        = gpu::CreateDeviceContext(gpu::DeviceContextDesc());
+auto context        = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
 auto opts           = bgl::GraphicsOptions();
 opts.shaderCacheDir = "shadercache";   // relative to cwd; empty disables the cache
 auto gfx            = bgl::CreateGraphics(context, opts);

@@ -1,9 +1,9 @@
 #pragma once
 
+#include <bgpu/GpuContext.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -63,7 +63,7 @@ namespace bgl
 	{
 	public:
 		/** @pre `context` outlives the shader; the device that holds both guarantees it. */
-		Shader(ShaderDesc desc, gpu::DeviceContext* context);
+		Shader(ShaderDesc desc, bgpu::GpuContext* context);
 		~Shader() noexcept override { logger::trace("~Shader"); }
 		Shader(const Shader&)     = delete;
 		Shader(Shader&&) noexcept = delete;
@@ -91,7 +91,7 @@ namespace bgl
 		}
 
 	private:
-		ShaderDesc          m_Desc;
-		gpu::DeviceContext* m_Context = nullptr;
+		ShaderDesc        m_Desc;
+		bgpu::GpuContext* m_Context = nullptr;
 	};
 }

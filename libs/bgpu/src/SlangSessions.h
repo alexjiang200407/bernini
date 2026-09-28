@@ -1,9 +1,9 @@
 #pragma once
 
 #include <bgl_common/SurfaceReflection.h>
+#include <bgpu/GpuContext.h>
 #include <core/str/str.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 
 #include <filesystem>
 #include <mutex>
@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
 	/**
 	 * The module name as Slang's loader keys it: `/`-separated, not `.`-separated. `loadModule`

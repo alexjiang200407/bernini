@@ -10,8 +10,8 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
+#include <bgpu/GpuContext.h>
 #include <core/log/log.h>
-#include <device_context/DeviceContext.h>
 #include <memory>
 #include <span>
 #include <vector>
@@ -26,7 +26,7 @@ namespace bgl
 	class Graphics : public core::RefCounter<GraphicsBase>
 	{
 	public:
-		Graphics(gpu::DeviceContextRef context, const GraphicsOptions& opts);
+		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts);
 		~Graphics() noexcept;
 
 		Graphics(const Graphics&) noexcept = delete;
@@ -206,7 +206,7 @@ namespace bgl
 
 namespace bgl
 {
-	Graphics::Graphics(gpu::DeviceContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
+	Graphics::Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 	{
 		auto device = core::SharedRef<Device>::Make(std::move(context), m_Opts.shaderCacheDir);
 		m_Device    = device;
@@ -255,7 +255,7 @@ namespace bgl
 	}
 
 	GraphicsRef
-	CreateGraphics(core::SharedRef<gpu::DeviceContext> context, const GraphicsOptions& opts)
+	CreateGraphics(core::SharedRef<bgpu::GpuContext> context, const GraphicsOptions& opts)
 	{
 		return core::SharedRef<Graphics>::Make(std::move(context), opts);
 	}

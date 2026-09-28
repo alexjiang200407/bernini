@@ -11,7 +11,7 @@ namespace editor
 	 * crosses both.
 	 *
 	 * Writes through the sinks rather than through the logger, because that logger's level is the
-	 * *renderer's* -- `init_file_logger` applies `gpu::DeviceContextDesc::logLevel`, `kError` unless a
+	 * *renderer's* -- `init_file_logger` applies `bgpu::GpuContextDesc::logLevel`, `kError` unless a
 	 * config says otherwise -- and the editor's diagnostics are not renderer chatter for that knob
 	 * to silence. Each message is flushed for the same reason it cannot rely on `flush_on`.
 	 *

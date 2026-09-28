@@ -6,7 +6,7 @@
 #include "device/Device.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
-#include <device_context/DeviceContext.h>
+#include <bgpu/GpuContext.h>
 
 #include <core/ref/RefCounter.h>
 #include <cstdint>
@@ -31,7 +31,7 @@ namespace bgl
 		 * The RHI device over the context's Metal device, compiling through the context's sessions.
 		 * `shaderCacheDir` empty disables the cache.
 		 */
-		Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir);
+		Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir);
 
 		// Out of line: m_ShaderCache holds an incomplete type here.
 		~Device() override;
@@ -40,14 +40,14 @@ namespace bgl
 		void
 		ReleaseSlangSession() noexcept override;
 
-		[[nodiscard]] gpu::DeviceContext&
+		[[nodiscard]] bgpu::GpuContext&
 		GetContext() const noexcept
 		{
 			return *m_Context;
 		}
 
 		void
-		AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept override;
+		AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept override;
 
 		[[nodiscard]] std::optional<ReflectedSurface>
 		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
@@ -102,7 +102,7 @@ namespace bgl
 
 	private:
 		// Declared first: the device below is the context's, and the cache is built on both.
-		gpu::DeviceContextRef        m_Context;
+		bgpu::GpuContextRef          m_Context;
 		NS::SharedPtr<MTL::Device>   m_Device;
 		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};

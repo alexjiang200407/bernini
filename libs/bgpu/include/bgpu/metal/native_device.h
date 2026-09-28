@@ -1,19 +1,19 @@
 #pragma once
-#include <device_context/api.h>
+#include <bgpu/api.h>
 
 namespace MTL  // NOLINT(readability-identifier-naming): metal-cpp's own namespace
 {
 	class Device;
 }
 
-namespace gpu
+namespace bgpu
 {
-	class DeviceContext;
+	class GpuContext;
 
 	/**
 	 * The Metal device behind a context. Borrowed: the context holds the reference, and an owner
 	 * that needs the device past the context's life retains it.
 	 */
-	DEVICE_CONTEXT_API MTL::Device*
-					   GetMtlDevice(const DeviceContext& context) noexcept;
+	BGPU_API MTL::Device*
+			 GetMtlDevice(const GpuContext& context) noexcept;
 }

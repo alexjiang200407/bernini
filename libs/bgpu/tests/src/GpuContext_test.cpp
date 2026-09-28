@@ -1,6 +1,6 @@
+#include <bgpu/GpuContext.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <slang.h>
 #include <stdexcept>
 #include <string>
@@ -8,10 +8,10 @@
 
 namespace
 {
-	gpu::DeviceContextDesc
+	bgpu::GpuContextDesc
 	DebugDesc()
 	{
-		auto desc             = gpu::DeviceContextDesc();
+		auto desc             = bgpu::GpuContextDesc();
 		desc.enableDebugLayer = true;
 		return desc;
 	}
@@ -24,17 +24,17 @@ namespace
 // The premise of a shared context: the application creates one and hands it to every owner, and
 // D3D12 hands back one device per adapter, so a second live context could never be independent of
 // the first. The rule is portable: refused on Metal too, where two would work.
-TEST_CASE("One device context is live per process, and another may follow it", "[render][device]")
+TEST_CASE("One GPU context is live per process, and another may follow it", "[render][device]")
 {
-	auto first = gpu::CreateDeviceContext(DebugDesc());
+	auto first = bgpu::CreateGpuContext(DebugDesc());
 	REQUIRE(first != nullptr);
 
-	CHECK_THROWS_AS(gpu::CreateDeviceContext(DebugDesc()), std::runtime_error);
+	CHECK_THROWS_AS(bgpu::CreateGpuContext(DebugDesc()), std::runtime_error);
 
 	first = nullptr;
 
 	// The successor compiles: the sessions it creates are its own.
-	auto second = gpu::CreateDeviceContext(DebugDesc());
+	auto second = bgpu::CreateGpuContext(DebugDesc());
 	REQUIRE(second != nullptr);
 	CHECK(second->LoadModule(c_ContractModule) != nullptr);
 }
@@ -43,7 +43,7 @@ TEST_CASE("The search paths are the staged tree, then the client's directory", "
 {
 	SECTION("no client directory")
 	{
-		auto context = gpu::CreateDeviceContext(gpu::DeviceContextDesc());
+		auto context = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
 		REQUIRE(context->GetShaderSearchPaths().size() == 2);
 		CHECK(context->GetShaderSearchPaths().front() == "./shaders/src");
 		CHECK(context->GetShaderSearchPaths().back() == "./shaders/tests");
@@ -51,9 +51,9 @@ TEST_CASE("The search paths are the staged tree, then the client's directory", "
 
 	SECTION("a client directory comes last, so the engine's modules cannot be shadowed by a file")
 	{
-		auto desc            = gpu::DeviceContextDesc();
+		auto desc            = bgpu::GpuContextDesc();
 		desc.clientShaderDir = "client_shaders";
-		auto context         = gpu::CreateDeviceContext(desc);
+		auto context         = bgpu::CreateGpuContext(desc);
 		REQUIRE(context->GetShaderSearchPaths().size() == 3);
 		CHECK(context->GetShaderSearchPaths().back() == "client_shaders");
 	}
@@ -63,7 +63,7 @@ TEST_CASE("The search paths are the staged tree, then the client's directory", "
 // compile, or the same owner's next batch, must find a working compiler again.
 TEST_CASE("A released session is recreated by the next load", "[render][device]")
 {
-	auto context = gpu::CreateDeviceContext(DebugDesc());
+	auto context = bgpu::CreateGpuContext(DebugDesc());
 
 	REQUIRE(context->LoadModule(c_ContractModule) != nullptr);
 	context->ReleaseSlangSessions();
@@ -74,7 +74,7 @@ TEST_CASE("A released session is recreated by the next load", "[render][device]"
 // from -- so a thread that has never compiled sees a module registered before it started.
 TEST_CASE("A source module is loaded into every thread's session", "[render][device]")
 {
-	auto context = gpu::CreateDeviceContext(DebugDesc());
+	auto context = bgpu::CreateGpuContext(DebugDesc());
 
 	context->AddSourceModule(
 		{ .name = "probe.Shadowed", .source = "public float Shadowed() { return 1.0f; }" });
@@ -91,7 +91,7 @@ TEST_CASE("GPU validation asked for is GPU validation active", "[render][device]
 	auto desc                     = DebugDesc();
 	desc.enableGPUValidationLayer = true;
 
-	auto context = gpu::CreateDeviceContext(desc);
+	auto context = bgpu::CreateGpuContext(desc);
 	CHECK(context->GpuValidationActive());
 	CHECK(context->GetDesc().enableGPUValidationLayer);
 }
@@ -99,7 +99,7 @@ TEST_CASE("GPU validation asked for is GPU validation active", "[render][device]
 // What an owner's shader cache keys on: the fold moves with a new or changed text, and only then.
 TEST_CASE("The source salt follows the registered texts", "[render][device]")
 {
-	auto context = gpu::CreateDeviceContext(gpu::DeviceContextDesc());
+	auto context = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
 
 	const uint64_t bare = context->GetSourceSalt();
 
@@ -120,7 +120,7 @@ TEST_CASE("The source salt follows the registered texts", "[render][device]")
 	const uint64_t withAB = context->GetSourceSalt();
 
 	context    = nullptr;
-	auto other = gpu::CreateDeviceContext(gpu::DeviceContextDesc());
+	auto other = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
 	other->AddSourceModule({ .name = "probe.B", .source = "public float B() { return 1.0f; }" });
 	other->AddSourceModule({ .name = "probe.A", .source = "public float A() { return 2.0f; }" });
 	CHECK(other->GetSourceSalt() == withAB);

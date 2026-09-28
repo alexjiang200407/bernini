@@ -52,7 +52,7 @@ target_link_libraries(bgl_extended_objects
 	PUBLIC
 		bgl
 		bgl_common
-		device_context
+		bgpu
 		core
 		assetlib_structs
 		slang::slang

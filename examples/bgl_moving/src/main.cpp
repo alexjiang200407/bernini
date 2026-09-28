@@ -16,10 +16,10 @@
 #include <bgl/glm.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/math.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <exception>
 #include <gamelib/AssetManager.h>
 #include <iostream>
@@ -82,12 +82,12 @@ main(int argc, char** argv)
 			                         .title  = "bernini - moving instance" });
 		}
 
-		auto ctxDesc = gpu::DeviceContextDesc();
+		auto ctxDesc = bgpu::GpuContextDesc();
 
 		auto gfxOpts             = bgl::GraphicsOptions{};
 		ctxDesc.enableDebugLayer = true;
 
-		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc       = bgl::RenderTargetDesc{};
 		targetDesc.width      = static_cast<int>(width);

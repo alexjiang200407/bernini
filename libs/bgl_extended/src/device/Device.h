@@ -4,12 +4,12 @@
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/file/file.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -54,7 +54,7 @@ namespace bgl
 
 		/**
 		 * A module compiled from text under a name, shadowing a file of that name on the search
-		 * path for every compile after this one, in every owner of the device context. A name maps
+		 * path for every compile after this one, in every owner of the GPU context. A name maps
 		 * to one text: the same text again changes nothing, a new one replaces the old and drops the
 		 * sessions. The shader cache's keys follow it through the context's source salt.
 		 *
@@ -62,12 +62,12 @@ namespace bgl
 		 *      new or changed.
 		 */
 		virtual void
-		AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept = 0;
+		AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept = 0;
 
 		/**
 		 * Drops every thread's Slang session -- a few hundred resident megabytes apiece once a
 		 * cold-cache compile has stood one up. Call after each pipeline batch is built; the next
-		 * compile recreates what it needs. The sessions are the device context's, so the drop reaches
+		 * compile recreates what it needs. The sessions are the GPU context's, so the drop reaches
 		 * every owner of that context.
 		 *
 		 * @pre no compile is in flight, and no slang:: object is held, by any owner of the context.

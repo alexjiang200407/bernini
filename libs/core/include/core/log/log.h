@@ -8,7 +8,7 @@ namespace core::logging
 	 *
 	 * **The first call wins the file; every call applies its level.** A process with two callers
 	 * gets one log rather than the second one's -- the editor names the file before the renderer
-	 * exists, and bgl's own call then only sets the level `gpu::DeviceContextDesc::logLevel` asked for.
+	 * exists, and bgl's own call then only sets the level `bgpu::GpuContextDesc::logLevel` asked for.
 	 * Without that split a start-up timeline would straddle two files with two clocks.
 	 *
 	 * @param fileName Ignored after the first call.

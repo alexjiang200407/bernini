@@ -6,8 +6,8 @@
 #include <bgl/SkyboxDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -22,9 +22,9 @@ namespace headless
 	bgl::GraphicsRef
 	CreateHeadlessGraphics(const std::filesystem::path& dataRoot)
 	{
-		auto ctxDesc        = gpu::DeviceContextDesc();
+		auto ctxDesc        = bgpu::GpuContextDesc();
 		auto opts           = bgl::GraphicsOptions();
-		ctxDesc.logLevel    = gpu::LogLevel::kError;
+		ctxDesc.logLevel    = bgpu::LogLevel::kError;
 		opts.shaderCacheDir = "shadercache";
 		opts.maxTextures    = 512;
 		opts.maxSrvs        = 1024;
@@ -33,7 +33,7 @@ namespace headless
 		const auto surfaceDir = dataRoot / assetlib::c_ShadersDirectoryName;
 		if (std::filesystem::is_directory(surfaceDir))
 			ctxDesc.clientShaderDir = surfaceDir;
-		return bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), opts);
+		return bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), opts);
 	}
 
 	bgl::RenderTargetRef

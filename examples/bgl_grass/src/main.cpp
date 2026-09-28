@@ -22,11 +22,11 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/WindDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -130,7 +130,7 @@ main(int argc, char** argv)
 			wnd.emplace(opts);
 		}
 
-		auto ctxDesc = gpu::DeviceContextDesc();
+		auto ctxDesc = bgpu::GpuContextDesc();
 
 		auto gfxOpts             = bgl::GraphicsOptions{};
 		ctxDesc.enableDebugLayer = true;
@@ -141,7 +141,7 @@ main(int argc, char** argv)
 		if (std::filesystem::is_directory(surfaceDir))
 			ctxDesc.clientShaderDir = surfaceDir;
 
-		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

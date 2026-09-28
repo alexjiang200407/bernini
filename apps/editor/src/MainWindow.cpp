@@ -52,10 +52,10 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <core/settings/Settings.h>
-#include <device_context/DeviceContext.h>
 
 #include "util/editor_config.h"
 #include "util/editor_language.h"
@@ -144,13 +144,13 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 
 		// The device and its debug layer are the process's: the renderer creates them on its thread
 		// and lends the context to anything else that runs work on the device.
-		auto ctxDesc             = gpu::DeviceContextDesc();
+		auto ctxDesc             = bgpu::GpuContextDesc();
 		ctxDesc.enableDebugLayer = gfxSettings["enableDebugLayer"].GetOrDefault(false);
 		ctxDesc.enableGPUValidationLayer =
 			gfxSettings["enableGPUBasedValidation"].GetOrDefault(false);
 		ctxDesc.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
 		ctxDesc.strictError    = gfxSettings["strictError"].GetOrDefault(false);
-		ctxDesc.logLevel       = static_cast<gpu::LogLevel>(
+		ctxDesc.logLevel       = static_cast<bgpu::LogLevel>(
 			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(ctxDesc.logLevel)));
 
 		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are

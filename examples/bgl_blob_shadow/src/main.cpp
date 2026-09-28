@@ -28,13 +28,13 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <core/math.h>
 #include <cstddef>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -188,7 +188,7 @@ main(int argc, char** argv)
 			                         .title  = "bernini - blob shadow decal" });
 		}
 
-		auto ctxDesc = gpu::DeviceContextDesc();
+		auto ctxDesc = bgpu::GpuContextDesc();
 
 		auto gfxOpts             = bgl::GraphicsOptions{};
 		ctxDesc.enableDebugLayer = true;
@@ -202,7 +202,7 @@ main(int argc, char** argv)
 				ctxDesc.clientShaderDir = surfaceDir;
 		}
 
-		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc       = bgl::RenderTargetDesc{};
 		targetDesc.width      = static_cast<int>(width);

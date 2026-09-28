@@ -14,9 +14,9 @@
 #include <utility>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
-	class DeviceContext;
+	class GpuContext;
 }
 
 namespace bgl
@@ -67,7 +67,7 @@ namespace bgl
 		// when GPU validation is on. An archive is written by an uninstrumented run, and Metal
 		// crashes inside newBinaryArchive loading one into a validating device.
 		ShaderCache(
-			const gpu::DeviceContext&       context,
+			const bgpu::GpuContext&         context,
 			MTL::Device*                    device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
@@ -118,7 +118,7 @@ namespace bgl
 
 		// Every key mixes in the context's fold of its source modules, read at key time so it follows
 		// a text any owner changed.
-		const gpu::DeviceContext* m_Context = nullptr;
+		const bgpu::GpuContext* m_Context = nullptr;
 
 		NS::SharedPtr<MTL::BinaryArchive> m_Archive;
 		std::mutex                        m_ArchiveMutex;

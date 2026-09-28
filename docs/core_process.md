@@ -33,7 +33,7 @@ thread, so it has no counter to share.
 decision, `BERNINI_RENDERER_LIBRARY_TYPE`, and `bgl_extended` and `core_process` are both built as
 it says:
 
-| Build | `bgl_extended` | `device_context` | `core_process` |
+| Build | `bgl_extended` | `bgpu` | `core_process` |
 |---|---|---|---|
 | default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` | `STATIC` |
 | `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` | `SHARED` |
@@ -47,9 +47,9 @@ anything shared would be two copies again, so it is derived and is never an opti
 `BERNINI_SHARED_RENDERER` with `RENDERER_BACKEND=NONE` is a configure error.
 
 The rule is not the renderer's alone: any engine library that holds process-wide GPU state is built
-as the renderer is and lands in the same binary it does. `device_context` is the one that holds the
-device and the Slang sessions themselves ([device_context.md](device_context.md)); its
-`DEVICE_CONTEXT_API` follows the same pattern.
+as the renderer is and lands in the same binary it does. `bgpu` is the one that holds the
+device and the Slang sessions themselves ([bgpu.md](bgpu.md)); its
+`BGPU_API` follows the same pattern.
 
 `BGL_API` follows `CORE_PROCESS_API`: it exports and imports only under `BGL_SHARED`, which
 `bgl`'s interface carries when the renderer is shared, and is empty otherwise.

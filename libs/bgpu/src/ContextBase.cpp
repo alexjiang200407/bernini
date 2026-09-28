@@ -2,7 +2,7 @@
 #include <atomic>
 #include <core/err/util.h>
 
-namespace gpu
+namespace bgpu
 {
 	namespace
 	{
@@ -14,7 +14,7 @@ namespace gpu
 		if (g_Live.exchange(true))
 		{
 			core::throw_runtime_error(
-				"a device context is already live in this process: one device per process, handed "
+				"a GPU context is already live in this process: one device per process, handed "
 				"to every owner");
 		}
 	}

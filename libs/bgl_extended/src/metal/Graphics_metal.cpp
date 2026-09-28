@@ -13,10 +13,10 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/metal/AutoreleaseNet.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
-#include <device_context/metal/AutoreleaseNet.h>
 #include <span>
 #include <vector>
 
@@ -129,7 +129,7 @@ namespace bgl
 	class Graphics final : public core::RefCounter<GraphicsBase>
 	{
 	public:
-		Graphics(gpu::DeviceContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
+		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
 			core::SharedRef<Device> device =
 				core::SharedRef<Device>::Make(std::move(context), opts.shaderCacheDir);
@@ -326,7 +326,7 @@ namespace bgl
 		// Below the device: what the net holds are Metal objects that reference the device, so
 		// draining it once the device is released deallocs them into a purged one. A share rather
 		// than a pool of this object's own, so two owners on one thread die in either order.
-		gpu::AutoreleaseNet m_AutoreleaseNet;
+		bgpu::AutoreleaseNet m_AutoreleaseNet;
 
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
@@ -339,7 +339,7 @@ namespace bgl
 	};
 
 	BGL_API GraphicsRef
-	CreateGraphics(core::SharedRef<gpu::DeviceContext> context, const GraphicsOptions& opts)
+	CreateGraphics(core::SharedRef<bgpu::GpuContext> context, const GraphicsOptions& opts)
 	{
 		return core::SharedRef<Graphics>::Make(std::move(context), opts);
 	}

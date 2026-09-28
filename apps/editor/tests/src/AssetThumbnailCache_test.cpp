@@ -9,7 +9,7 @@
 #include <assetlib_structs/Node.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/SceneDesc.h>
-#include <device_context/DeviceContext.h>
+#include <bgpu/GpuContext.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -100,7 +100,7 @@ namespace
 
 		Fixture()
 		{
-			auto ctxDesc             = gpu::DeviceContextDesc();
+			auto ctxDesc             = bgpu::GpuContextDesc();
 			ctxDesc.enableDebugLayer = true;
 
 			renderer.emplace(ctxDesc, bgl::GraphicsOptions(), MakeSceneDesc());

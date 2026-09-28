@@ -37,7 +37,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto opts                     = bgl::test::GraphicsSetup();
 	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
-	opts.context.logLevel         = gpu::LogLevel::kTrace;
+	opts.context.logLevel         = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -195,7 +195,7 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 	auto opts                     = bgl::test::GraphicsSetup();
 	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
-	opts.context.logLevel         = gpu::LogLevel::kTrace;
+	opts.context.logLevel         = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

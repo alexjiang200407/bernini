@@ -63,7 +63,7 @@ void main()
 	// Brings up a Graphics on `opts`, builds `program` as a compute kernel, dispatches it once and
 	// returns the one uint it wrote. `configure` runs on the device before the kernel compiles.
 	//
-	// Each probe is its own device context: a source module registered through `configure` lives
+	// Each probe is its own GPU context: a source module registered through `configure` lives
 	// with the context, not the renderer, so a probe sharing the suite's would see the last probe's.
 	uint32_t
 	ProbeValue(
@@ -71,7 +71,7 @@ void main()
 		const std::string&                        program,
 		const std::function<void(bgl::IDevice&)>& configure = {})
 	{
-		bgl::test::ReleaseDeviceContext();
+		bgl::test::ReleaseGpuContext();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

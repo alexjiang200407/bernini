@@ -1,8 +1,8 @@
 #include "Render/Renderer.h"
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <core/containers/fixed_buffer.h>
-#include <device_context/DeviceContext.h>
 #include <editor_sdk/environment.h>
 
 #include <assetlib_structs/ImageData.h>
@@ -52,7 +52,7 @@ namespace
 
 		Fixture()
 		{
-			auto ctxDesc             = gpu::DeviceContextDesc();
+			auto ctxDesc             = bgpu::GpuContextDesc();
 			ctxDesc.enableDebugLayer = true;
 
 			renderer.emplace(ctxDesc, bgl::GraphicsOptions(), MakeSceneDesc());

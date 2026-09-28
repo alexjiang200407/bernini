@@ -18,9 +18,9 @@
 #include "shadercache/ShaderCache_d3d12.h"
 #include "types/QueueType.h"
 #include <bgl_common/SlangErrorChecker.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/d3d12/native_device.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
-#include <device_context/d3d12/native_device.h>
 #include <filesystem>
 #include <string>
 
@@ -43,8 +43,8 @@ namespace bgl
 		}
 	}
 
-	Device::Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir) :
-		m_Context(std::move(context)), m_Device(gpu::GetD3d12Device(*m_Context))
+	Device::Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir) :
+		m_Context(std::move(context)), m_Device(bgpu::GetD3d12Device(*m_Context))
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
 
@@ -61,7 +61,7 @@ namespace bgl
 	}
 
 	void
-	Device::AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept
+	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
 		m_Context->AddSourceModule(sourceModule);
 	}

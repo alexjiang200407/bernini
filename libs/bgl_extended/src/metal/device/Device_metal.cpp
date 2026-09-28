@@ -13,9 +13,9 @@
 #include "resource/ResourceManager_metal.h"
 #include "shadercache/ShaderCache_metal.h"
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/metal/native_device.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
-#include <device_context/metal/native_device.h>
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
@@ -53,8 +53,8 @@ namespace bgl
 
 	Device::~Device() = default;
 
-	Device::Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir) :
-		m_Context(std::move(context)), m_Device(NS::RetainPtr(gpu::GetMtlDevice(*m_Context)))
+	Device::Device(bgpu::GpuContextRef context, const std::filesystem::path& shaderCacheDir) :
+		m_Context(std::move(context)), m_Device(NS::RetainPtr(bgpu::GetMtlDevice(*m_Context)))
 	{
 		if (!shaderCacheDir.empty())
 		{
@@ -69,7 +69,7 @@ namespace bgl
 	}
 
 	void
-	Device::AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept
+	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
 		m_Context->AddSourceModule(sourceModule);
 	}

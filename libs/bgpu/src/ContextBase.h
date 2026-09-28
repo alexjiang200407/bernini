@@ -1,9 +1,9 @@
 #pragma once
 #include "SlangSessions.h"
 #include <bgl_common/SurfaceReflection.h>
+#include <bgpu/GpuContext.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <optional>
 #include <slang.h>
 #include <string>
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace gpu
+namespace bgpu
 {
 	/**
 	 * The half of a context that is the same on every backend: the desc, the compiler, and the rule
@@ -22,7 +22,7 @@ namespace gpu
 	 * never be independent of the first, and its info-queue callback would double every message.
 	 * Metal would allow two; the rule holds there too, so a program that runs on Metal runs on D3D12.
 	 */
-	class ContextBase : public core::RefCounter<DeviceContext>
+	class ContextBase : public core::RefCounter<GpuContext>
 	{
 	public:
 		ContextBase(const ContextBase&) = delete;
@@ -33,14 +33,14 @@ namespace gpu
 		operator=(ContextBase&&) = delete;
 
 		/** @throws std::runtime_error if a context is already live in this process. */
-		ContextBase(DeviceContextDesc desc, SlangCompileTarget target) :
+		ContextBase(GpuContextDesc desc, SlangCompileTarget target) :
 			m_Desc(std::move(desc)),
 			m_Slang(
 				SlangSessionDesc{ .target      = target,
 		                          .searchPaths = ShaderSearchPaths(m_Desc.clientShaderDir) })
 		{}
 
-		const DeviceContextDesc&
+		const GpuContextDesc&
 		GetDesc() const noexcept override
 		{
 			return m_Desc;
@@ -96,8 +96,8 @@ namespace gpu
 			operator=(ProcessSlot&&) = delete;
 		};
 
-		ProcessSlot       m_Slot;
-		DeviceContextDesc m_Desc;
-		SlangSessions     m_Slang;
+		ProcessSlot    m_Slot;
+		GpuContextDesc m_Desc;
+		SlangSessions  m_Slang;
 	};
 }

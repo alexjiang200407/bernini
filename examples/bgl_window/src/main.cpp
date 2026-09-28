@@ -2,8 +2,8 @@
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <core/err/util.h>
-#include <device_context/DeviceContext.h>
 #include <exception>
 
 // A minimal window that attaches Graphics and draws a triangle every frame -- the smallest end-to-end
@@ -23,12 +23,12 @@ main()
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto ctxDesc = gpu::DeviceContextDesc();
+		auto ctxDesc = bgpu::GpuContextDesc();
 
 		auto gfxOpts     = bgl::GraphicsOptions{};
-		ctxDesc.logLevel = gpu::LogLevel::kInfo;
+		ctxDesc.logLevel = bgpu::LogLevel::kInfo;
 
-		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
+		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;

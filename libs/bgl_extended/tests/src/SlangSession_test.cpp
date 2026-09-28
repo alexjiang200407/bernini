@@ -13,10 +13,10 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/GpuContext.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -39,14 +39,14 @@ TEST_CASE("The free Slang build tag matches the global session's", "[slang]")
 // twice against one cache directory: the second pass is the load-bearing one, because a warm cache
 // means construction compiled nothing at all and the session being recreated here never existed.
 //
-// The sessions are the device context's and every owner shares them: between the renderer's drop
+// The sessions are the GPU context's and every owner shares them: between the renderer's drop
 // and its next compile a second owner compiles through them and drops them again, and the
 // renderer's kernel still builds.
 TEST_CASE(
 	"A compute kernel built after device creation recreates the Slang session",
 	"[compute][device]")
 {
-	auto ctxDesc                     = gpu::DeviceContextDesc();
+	auto ctxDesc                     = bgpu::GpuContextDesc();
 	ctxDesc.enableDebugLayer         = true;
 	ctxDesc.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -54,13 +54,13 @@ TEST_CASE(
 	gfxOpts.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 	// This case owns its context, so the suite's is let go first: one is live per process.
-	bgl::test::ReleaseDeviceContext();
+	bgl::test::ReleaseGpuContext();
 
 	for (int pass = 0; pass < 2; ++pass)
 	{
 		CAPTURE(pass);
 
-		auto context = gpu::CreateDeviceContext(ctxDesc);
+		auto context = bgpu::CreateGpuContext(ctxDesc);
 		auto gfx     = bgl::CreateGraphics(context, gfxOpts);
 		REQUIRE(gfx != nullptr);
 

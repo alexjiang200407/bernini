@@ -26,7 +26,7 @@
 
 #include <string>
 
-#include <device_context/DeviceContext.h>
+#include <bgpu/GpuContext.h>
 
 namespace bgl
 {
@@ -151,7 +151,7 @@ namespace bgl
 	}
 
 	ShaderCache::ShaderCache(
-		const gpu::DeviceContext&       context,
+		const bgpu::GpuContext&         context,
 		MTL::Device*                    device,
 		std::filesystem::path           cacheDir,
 		std::string_view                optionsSalt,

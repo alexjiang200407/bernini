@@ -21,29 +21,29 @@
 #include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
-#include <device_context/DeviceContext.h>
 #include <filesystem>
 #include <string>
 
-// The renderer as one owner of a device context among several. What these cases pin is the shape
+// The renderer as one owner of a GPU context among several. What these cases pin is the shape
 // the crowd simulation is built on: a context the application made, a renderer that borrows it, and
 // room beside the renderer for another owner of the same device.
 
 namespace
 {
 	// These cases own their context, so the suite's is let go first: one is live per process.
-	gpu::DeviceContextRef
+	bgpu::GpuContextRef
 	MakeContext(const std::filesystem::path& clientShaderDir = {})
 	{
-		bgl::test::ReleaseDeviceContext();
+		bgl::test::ReleaseGpuContext();
 
-		auto desc                     = gpu::DeviceContextDesc();
+		auto desc                     = bgpu::GpuContextDesc();
 		desc.enableDebugLayer         = true;
 		desc.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		desc.clientShaderDir          = clientShaderDir;
-		return gpu::CreateDeviceContext(desc);
+		return bgpu::CreateGpuContext(desc);
 	}
 
 	// Builds CSSourceProbe on the renderer's device, dispatches it once and returns the uint it wrote:
@@ -145,7 +145,7 @@ namespace
 	}
 }
 
-TEST_CASE("A device context outlives the renderer built on it", "[device]")
+TEST_CASE("A GPU context outlives the renderer built on it", "[device]")
 {
 	auto context = MakeContext();
 
@@ -165,7 +165,7 @@ TEST_CASE("A device context outlives the renderer built on it", "[device]")
 
 // Two owners at once, each with its own queue and pools on the one device. Two renderers stand in
 // for a renderer and a compute client: the isolation they need is the same.
-TEST_CASE("Two renderers share one device context at once", "[device]")
+TEST_CASE("Two renderers share one GPU context at once", "[device]")
 {
 	auto context = MakeContext();
 
@@ -192,7 +192,7 @@ TEST_CASE("Two renderers share one device context at once", "[device]")
 
 // The renderer holds its context: a caller that drops its own reference right after CreateGraphics
 // has not pulled the device out from under the frame.
-TEST_CASE("A renderer keeps its device context alive", "[device]")
+TEST_CASE("A renderer keeps its GPU context alive", "[device]")
 {
 	auto gfx = bgl::CreateGraphics(MakeContext(), RendererOptions());
 	REQUIRE(gfx != nullptr);

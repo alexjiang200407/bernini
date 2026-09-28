@@ -1,9 +1,9 @@
 #include "metal_cpp.h"
 #include <bgl_common/gassert.h>
+#include <bgpu/metal/AutoreleaseNet.h>
 #include <cstdint>
-#include <device_context/metal/AutoreleaseNet.h>
 
-namespace gpu
+namespace bgpu
 {
 	namespace
 	{

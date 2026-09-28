@@ -1,11 +1,11 @@
 #include "ContextBase.h"
 #include <bgl_common/gassert.h>
+#include <bgpu/GpuContext.h>
+#include <bgpu/d3d12/D3d12ErrorChecker.h>
+#include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
-#include <device_context/DeviceContext.h>
-#include <device_context/d3d12/D3d12ErrorChecker.h>
-#include <device_context/d3d12/native_device.h>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 
@@ -19,7 +19,7 @@
 
 namespace wrl = Microsoft::WRL;
 
-namespace gpu
+namespace bgpu
 {
 	namespace
 	{
@@ -33,7 +33,7 @@ namespace gpu
 			Context&
 			operator=(Context&&) = delete;
 
-			explicit Context(const DeviceContextDesc& desc) : ContextBase(desc, SLANG_DXIL)
+			explicit Context(const GpuContextDesc& desc) : ContextBase(desc, SLANG_DXIL)
 			{
 				core::logging::init_file_logger("bgl.log", static_cast<int>(desc.logLevel));
 
@@ -82,7 +82,7 @@ namespace gpu
 
 			~Context() noexcept override
 			{
-				spdlog::trace("~DeviceContext");
+				spdlog::trace("~GpuContext");
 
 				// Everything an owner made on the device is gone by the time its context reference
 				// drops, so whatever the report names is a leak, attributed to whoever made it.
@@ -158,15 +158,15 @@ namespace gpu
 	}
 
 	ID3D12Device*
-	GetD3d12Device(const DeviceContext& context) noexcept
+	GetD3d12Device(const GpuContext& context) noexcept
 	{
 		const auto* d3d12 = dynamic_cast<const Context*>(&context);
-		bgl::gassert(d3d12 != nullptr, "The device context is not a D3D12 one");
+		bgl::gassert(d3d12 != nullptr, "The GPU context is not a D3D12 one");
 		return d3d12->GetDevice();
 	}
 
-	DeviceContextRef
-	CreateDeviceContext(const DeviceContextDesc& desc)
+	GpuContextRef
+	CreateGpuContext(const GpuContextDesc& desc)
 	{
 		return core::SharedRef<Context>::Make(desc);
 	}

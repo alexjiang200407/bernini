@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <string_view>
 
-namespace gpu
+namespace bgpu
 {
-	class DeviceContext;
+	class GpuContext;
 }
 
 namespace bgl
@@ -47,7 +47,7 @@ namespace bgl
 		// layer; pass false when GPU-based validation is on. See the note on
 		// m_PsoLibrary.
 		ShaderCache(
-			const gpu::DeviceContext&       context,
+			const bgpu::GpuContext&         context,
 			ID3D12Device*                   device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
@@ -106,7 +106,7 @@ namespace bgl
 
 		// Every key mixes in the context's fold of its source modules, read at key time so it follows
 		// a text any owner changed.
-		const gpu::DeviceContext* m_Context = nullptr;
+		const bgpu::GpuContext* m_Context = nullptr;
 
 		// Null when GPU-based validation is on: that run exists to instrument every shader, and a
 		// PSO replayed out of the library was compiled without the instrumentation.
