@@ -1,0 +1,283 @@
+#pragma once
+
+#include <QtNodes/NodeDelegateModel>
+
+#include <array>
+#include <filesystem>
+#include <glm/vec4.hpp>
+
+#include <assetlib_structs/BMaterial.h>
+#include <editor_plugin_api/ILanguageResolver.h>
+#include <editor_plugin_api/localize.h>
+#include <memory>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+
+#include "Windows/MeshEditor/nodes/ChannelData.h"
+#include "Windows/MeshEditor/nodes/MaterialSinkNode.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+
+class QCheckBox;
+class QDoubleSpinBox;
+class QFormLayout;
+class QPushButton;
+
+class MaterialOutputNode : public MaterialSinkNode
+{
+	Q_OBJECT
+
+public:
+	static constexpr unsigned int c_ChannelCount = 9;
+	static constexpr unsigned int c_GroupCount   = 3;
+
+	// How many channels each group has in BMaterial::routes. Distinct from how many a node exposes.
+	static constexpr std::array<unsigned int, c_GroupCount> c_GroupChannels = { 4, 3, 2 };
+
+	// `language` must outlive the node.
+	explicit MaterialOutputNode(const editor::ILanguageResolver& language);
+
+	QString
+	caption() const override
+	{
+		return editor::Localize(
+			m_Language,
+			"bernini.material_nodes.material_output_caption",
+			"Material Output");
+	}
+
+	QString
+	name() const override
+	{
+		return QStringLiteral("MaterialOutput");
+	}
+
+	unsigned int
+	nPorts(QtNodes::PortType portType) const override;
+
+	QtNodes::NodeDataType
+	dataType(QtNodes::PortType, QtNodes::PortIndex port) const override;
+
+	std::shared_ptr<QtNodes::NodeData>
+	outData(QtNodes::PortIndex) override
+	{
+		return nullptr;
+	}
+
+	void
+	setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port) override;
+
+	QWidget*
+	embeddedWidget() override;
+
+	QJsonObject
+	save() const override;
+	void
+	load(const QJsonObject& json) override;
+
+	QString
+	portCaption(QtNodes::PortType, QtNodes::PortIndex port) const override;
+
+	/**
+	 * The input port a group's component connects to, honouring whether the group is split.
+	 *
+	 * Splitting a group shifts every later group's ports, so a caller that wires the board must ask
+	 * rather than hold literal indices. A collapsed group answers its one wide port for every
+	 * component.
+	 *
+	 * @param group A group index below c_GroupCount; out of range answers 0.
+	 */
+	[[nodiscard]] unsigned int
+	GroupPort(unsigned int group, unsigned int component) const;
+
+	bool
+	portCaptionVisible(QtNodes::PortType, QtNodes::PortIndex) const override
+	{
+		return true;
+	}
+
+	// The route wired into canonical channel `index`. A channel this node does not expose (the opaque
+	// node's base-color alpha) is never routed.
+	[[nodiscard]] ChannelData::Route
+	Route(unsigned int index) const;
+
+	// The alpha mode the material this sink compiles to is authored with; the sink type *is* the
+	// choice. Opaque here, overridden by the cutout and blend sinks.
+	[[nodiscard]] virtual assetlib::AlphaMode
+	GetAlphaMode() const noexcept
+	{
+		return assetlib::AlphaMode::kOpaque;
+	}
+
+	// Whether the material this node compiles to is a cutout, and the alpha it cuts at.
+	[[nodiscard]] virtual bool
+	IsAlphaTested() const noexcept
+	{
+		return false;
+	}
+
+	[[nodiscard]] virtual float
+	GetAlphaCutoff() const noexcept
+	{
+		return 0.5f;
+	}
+
+	// What base-color alpha means on this material: 0 coverage, 1 transmission. Only the blend sink
+	// offers the choice, and only a blended material reads it.
+	[[nodiscard]] virtual float
+	GetTransmission() const noexcept
+	{
+		return 0.0f;
+	}
+
+	// Whether the surface draws its back faces; glTF's doubleSided.
+	[[nodiscard]] bool
+	GetDoubleSided() const noexcept
+	{
+		return m_DoubleSided;
+	}
+
+	[[nodiscard]] glm::vec4
+	BaseColorFactor() const noexcept
+	{
+		return m_BaseColorFactor;
+	}
+
+	[[nodiscard]] float
+	MetallicFactor() const noexcept
+	{
+		return m_MetallicFactor;
+	}
+
+	[[nodiscard]] float
+	RoughnessFactor() const noexcept
+	{
+		return m_RoughnessFactor;
+	}
+
+	// glTF's KHR_materials_specular: the colour tints a dielectric's F0, the factor weights the whole
+	// specular lobe. Every sink carries them -- specular is not a property of the alpha mode.
+	[[nodiscard]] glm::vec3
+	GetSpecularColorFactor() const noexcept
+	{
+		return m_SpecularColorFactor;
+	}
+
+	[[nodiscard]] float
+	GetSpecularFactor() const noexcept
+	{
+		return m_SpecularFactor;
+	}
+
+	/**
+	 * The input the geometry occlusion map is wired into: after every group's ports, so a board saved
+	 * before it existed keeps every connection it had. A surface's sink has none -- a surface takes
+	 * the map through a slot of its own.
+	 */
+	[[nodiscard]] QtNodes::PortIndex
+	GeometryOcclusionPort() const
+	{
+		return static_cast<QtNodes::PortIndex>(GroupPortCount());
+	}
+
+	/** What is wired into GeometryOcclusionPort -- its file and its upload -- or an empty route. */
+	[[nodiscard]] ChannelData::Route
+	GeometryOcclusionRoute() const noexcept
+	{
+		return m_GeometryOcclusion != nullptr ? m_GeometryOcclusion->At(0) : ChannelData::Route{};
+	}
+
+	[[nodiscard]] bool
+	HasGeometryOcclusion() const noexcept
+	{
+		return m_GeometryOcclusion != nullptr;
+	}
+
+	// The PBR compile: kPbr, the factors, the layer keys, the nine routes and the geometry occlusion map.
+	// One implementation serves all four PBR-family sinks -- what differs between them is virtual.
+	void
+	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
+		const override;
+
+protected:
+	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout. `language` must
+	// outlive the node.
+	MaterialOutputNode(const editor::ILanguageResolver& language, unsigned int baseColorArity);
+
+	// Rows appended to the embedded form, after the factors. Nothing by default.
+	virtual void
+	AddExtraRows(QWidget* parent, QFormLayout* form);
+
+	// Read by the PBR-family sinks' own caption() and AddExtraRows() overrides.
+	const editor::ILanguageResolver& m_Language;
+
+private:
+	// The window a modal dialog must be parented to; never the embedded widget. See the definition.
+	[[nodiscard]] QWidget*
+	DialogOwner() const;
+
+	void
+	PickBaseColor();
+
+	void
+	PickSpecularColor();
+
+	void
+	RefreshColorSwatch();
+
+	void
+	RefreshSpecularSwatch();
+
+	void
+	SetGroupExpanded(unsigned int group, bool expanded);
+
+	// A group with more than one channel shows one wide port until it is split.
+	[[nodiscard]] bool
+	IsCollapsed(unsigned int group) const;
+
+	[[nodiscard]] unsigned int
+	GroupFirstPort(unsigned int group) const;
+
+	// The ports the channel groups take, which the geometry occlusion port follows.
+	[[nodiscard]] unsigned int
+	GroupPortCount() const;
+
+	struct PortRef
+	{
+		unsigned int group  = c_GroupCount;
+		unsigned int offset = 0;
+	};
+	[[nodiscard]] PortRef
+	ResolvePort(QtNodes::PortIndex port) const;
+
+	// First canonical channel of a group: 0, 4, 7.
+	[[nodiscard]] static unsigned int
+	GroupChannelOffset(unsigned int group);
+
+	// How many channels of each group this node exposes; only base color differs between the two.
+	std::array<unsigned int, c_GroupCount> m_GroupSizes = { 3, 3, 2 };
+	std::array<unsigned int, c_GroupCount> m_GroupPorts = { 1, 1, 1 };
+
+	std::array<std::shared_ptr<ChannelData>, c_GroupCount>   m_Bundles;
+	std::array<std::shared_ptr<ChannelData>, c_ChannelCount> m_Channels;
+	std::shared_ptr<ChannelData>                             m_GeometryOcclusion;
+
+	glm::vec4 m_BaseColorFactor     = glm::vec4(1.0f);
+	float     m_MetallicFactor      = 1.0f;
+	float     m_RoughnessFactor     = 0.2f;
+	glm::vec3 m_SpecularColorFactor = glm::vec3(1.0f);
+	float     m_SpecularFactor      = 1.0f;
+	bool      m_DoubleSided         = true;
+
+	QWidget*                             m_Widget              = nullptr;
+	QPushButton*                         m_ColorButton         = nullptr;
+	QDoubleSpinBox*                      m_Metallic            = nullptr;
+	QDoubleSpinBox*                      m_Roughness           = nullptr;
+	QPushButton*                         m_SpecularColorButton = nullptr;
+	QDoubleSpinBox*                      m_Specular            = nullptr;
+	std::array<QCheckBox*, c_GroupCount> m_ExpandBoxes         = {};
+	QCheckBox*                           m_DoubleSidedBox      = nullptr;
+};

@@ -60,7 +60,7 @@ namespace
 TEST_CASE("The window records the frames it is given", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 
 	window.AddFrames(Frames(1, 5));
 
@@ -70,7 +70,7 @@ TEST_CASE("The window records the frames it is given", "[gputiming]")
 TEST_CASE("A different viewport forgets the frames of the one before", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 	window.AddFrames(Frames(1, 5));
 
 	window.SetSource("Animation Editor");
@@ -83,10 +83,10 @@ TEST_CASE("A different viewport forgets the frames of the one before", "[gputimi
 TEST_CASE("The same viewport reported again keeps the history", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 	window.AddFrames(Frames(1, 5));
 
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 
 	CHECK(window.History().SampleCount() == 5);
 }
@@ -108,7 +108,7 @@ TEST_CASE("A window on screen asks for timing, and stops asking when it closes",
 TEST_CASE("An export writes every retained frame, and nothing else", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 	window.AddFrames(Frames(1, 30));
 
 	const QTemporaryDir directory;
@@ -209,7 +209,7 @@ TEST_CASE("An export with nothing recorded writes no files", "[gputiming]")
 TEST_CASE("Paused, the window records nothing until it resumes", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Material Editor");
+	window.SetSource("Mesh Editor");
 	window.AddFrames(Frames(1, 3));
 
 	// The button is what a person reaches for, and pausing is the only way a spike stays on screen

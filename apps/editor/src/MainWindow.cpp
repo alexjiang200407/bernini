@@ -170,7 +170,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
-		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
+		// The editor's one Scene. Every viewport (the Mesh Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
 		auto sceneDesc             = bgl::SceneDesc();
@@ -311,7 +311,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 
 		auto animSettings         = settings["animationEditor"];
 		defaultConfig.rigViewport = readViewport(animSettings);
-		// Falls back to the material editor's environment: both are asset previews wanting the
+		// Falls back to the Mesh Editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
 		defaultConfig.rigEnvironment.environmentMap = animSettings["environmentMap"].GetOrDefault(
@@ -1074,7 +1074,7 @@ MainWindow::RefreshTextures()
 			editor::Localize(
 				"editor.main_window.textures_superseded_info",
 				"They are still on disk and nothing has been changed. A material routing at one is "
-				"drawing what its source held at import -- re-route it in the Material Editor, or "
+				"drawing what its source held at import -- re-route it in the Mesh Editor, or "
 				"delete it once nothing does."));
 		left.setDetailedText(superseded.join('\n'));
 		left.exec();

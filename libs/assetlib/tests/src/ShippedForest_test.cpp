@@ -32,7 +32,7 @@ TEST_CASE("The shipped forest sky is a defocus chain, presented sharp", "[envmap
 	const auto store = AssetStore("assets/Data");
 	const auto env   = store.Load<BEnv>("Authored/Environments/forest.benv");
 
-	// The material preview asks for mip 3 of this chain; a single-mip sky makes that a no-op.
+	// The Mesh Editor's preview asks for mip 3 of this chain; a single-mip sky makes that a no-op.
 	const ResolvedEnvironment resolved = store.ResolveEnvironment(
 		std::filesystem::path("assets/Data/Authored/Environments/forest.benv"));
 	CHECK(resolved.maps.skybox.isCubemap);

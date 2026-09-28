@@ -1,10 +1,10 @@
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-#include "Windows/MaterialEditor/graph_compiler.h"
-#include "Windows/MaterialEditor/material_graph.h"
-#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
-#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
-#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
-#include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include "Windows/MeshEditor/MaterialGraphModel.h"
+#include "Windows/MeshEditor/graph_compiler.h"
+#include "Windows/MeshEditor/material_graph.h"
+#include "Windows/MeshEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MeshEditor/nodes/MaterialSinkNode.h"
+#include "Windows/MeshEditor/nodes/SurfaceOutputNode.h"
+#include "Windows/MeshEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>

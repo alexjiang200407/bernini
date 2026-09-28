@@ -1,5 +1,5 @@
 key,en
-builtin_plugin_description,"The Material, Animation and Blend Space editors built into this editor."
+builtin_plugin_description,"The Mesh, Animation and Blend Space editors built into this editor."
 builtin_plugin_name,Bernini Editors
 cannot_copy_file,Cannot copy plugin file: {0}
 cannot_create_copy_directory,Cannot create plugin copy directory: {0}

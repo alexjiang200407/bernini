@@ -13,9 +13,9 @@
 
 TEST_CASE("A viewport that has not reported yet says so", "[framestats]")
 {
-	const QString text = editor::FrameStatsText("Material Editor", std::nullopt);
+	const QString text = editor::FrameStatsText("Mesh Editor", std::nullopt);
 
-	CHECK(text.contains("Material Editor"));
+	CHECK(text.contains("Mesh Editor"));
 	CHECK(text.contains("measuring"));
 
 	// The distinguishing property: no figures at all, not zeroed ones.
@@ -28,9 +28,9 @@ TEST_CASE("A reported frame shows its three figures under the viewport's name", 
 	// Deliberately off the .x5 boundary: Qt::asprintf does its own double formatting and rounds
 	// half away from zero where libc rounds half to even, and this pins the readout, not that.
 	const auto    stats = editor::FrameStats{ .meanMs = 3.4, .maxMs = 12.5, .slowFrames = 7 };
-	const QString text  = editor::FrameStatsText("Material Editor", stats);
+	const QString text  = editor::FrameStatsText("Mesh Editor", stats);
 
-	CHECK(text.contains("Material Editor"));
+	CHECK(text.contains("Mesh Editor"));
 	CHECK(text.contains("3.4 ms"));
 	CHECK(text.contains("12.5 ms"));
 	CHECK(text.contains("7 over 20 ms"));
@@ -53,7 +53,7 @@ TEST_CASE("The viewport's name is what distinguishes one readout from another", 
 	const auto stats = editor::FrameStats{ .meanMs = 1.0, .maxMs = 2.0, .slowFrames = 0 };
 
 	CHECK(
-		editor::FrameStatsText("Material Editor", stats) !=
+		editor::FrameStatsText("Mesh Editor", stats) !=
 		editor::FrameStatsText("Animation Editor", stats));
 }
 

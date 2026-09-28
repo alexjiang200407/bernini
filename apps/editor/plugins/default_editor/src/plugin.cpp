@@ -1,7 +1,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
 #include "Windows/GrassEditor/GrassEditorWindow.h"
-#include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/MeshEditor/MeshEditorWindow.h"
 #include <assetlib/codecs.h>
 #include <default_editor/plugin.h>
 #include <editor_plugin_api/EditorPanel.h>
@@ -25,7 +25,7 @@ namespace editor::defaults
 			EditorPanel*
 			Create(IEditorHost& host, QWidget* parent) override
 			{
-				return new MaterialEditorWindow(
+				return new MeshEditorWindow(
 					host,
 					parent,
 					{ m_Config.materialViewport, m_Config.materialEnvironment });
@@ -94,7 +94,7 @@ namespace editor::defaults
 				registry.AddPanel(
 					PanelDesc()
 						.SetId("bernini.material")
-						.SetTitle({ "bernini.material", "title", "Material Editor" })
+						.SetTitle({ "bernini.material", "title", "Mesh Editor" })
 						.AddFactory<MaterialFactory>(m_Config));
 				registry.AddPanel(
 					PanelDesc()

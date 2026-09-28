@@ -324,7 +324,7 @@ TEST_CASE(
 
 // The transparent colour shader is shared by both material types and branches on a
 // per-instance discriminator. Every other transparent case here uses a baked PBR material, so the
-// loose branch -- the one the Material Editor's preview actually takes -- would otherwise be
+// loose branch -- the one the Mesh Editor's preview actually takes -- would otherwise be
 // exercised by nothing. Authoring the same material both ways must produce the same pixels; if the
 // discriminator were wrong the loose render would read the other material buffer entirely.
 TEST_CASE("A loose blend material renders the same as the baked one", "[transparent][render]")

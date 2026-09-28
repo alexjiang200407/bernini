@@ -38,6 +38,7 @@
 #include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/Viewport.h>
+#include <bgl/lod_select.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>

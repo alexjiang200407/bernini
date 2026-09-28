@@ -75,7 +75,7 @@ public:
 	/**
 	 * Composites the material at `asset` (data-root-relative) down to its baked triplet and rewrites it,
 	 * on the loading-screen worker. Reads the material off disk, so it bakes the routes last saved --
-	 * see the Material Editor's Save.
+	 * see the Mesh Editor's Save.
 	 */
 	void
 	Bake(const QString& asset);
@@ -99,7 +99,7 @@ public:
 Q_SIGNALS:
 	/**
 	 * A bake rewrote `asset` (data-root-relative) on disk. Anything showing what that file says -- the
-	 * Material Editor's properties panel -- has to re-read it; nothing here watches the filesystem.
+	 * Mesh Editor's properties panel -- has to re-read it; nothing here watches the filesystem.
 	 */
 	void
 	MaterialBaked(const QString& asset);

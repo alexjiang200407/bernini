@@ -179,6 +179,48 @@ TEST_CASE("a source's _LOD meshes fold into levels of their base, level-major", 
 	}
 }
 
+TEST_CASE("a cooked mesh answers for one level of one of its meshes", "[lod]")
+{
+	const Glb glb = MakeGlb(
+		"bernini_lod_query.glb",
+		{ { "Tree", { 8, 6 } }, { "Rock", { 4 } }, { "Tree_LOD1", { 4, 3 } } });
+	const BMesh cooked = toBMesh(loadFromGltf(glb.Path()));
+	REQUIRE(cooked.meshes.size() == 2);
+
+	const auto level1 = meshLodSubmeshes(cooked, 0, 1);
+	REQUIRE(level1.size() == 2);
+	CHECK(level1[0].vertexCount / 3 == 4);
+	CHECK(level1[1].vertexCount / 3 == 3);
+	CHECK(meshLodSubmeshes(cooked, 1, 0).size() == 1);
+
+	CHECK(meshLodMinPixels(cooked, 0) == std::vector<float>{ 160.0f, 0.0f });
+	CHECK(meshLodMinPixels(cooked, 1) == std::vector<float>{ 0.0f });
+
+	SECTION("a level or a mesh that is not there is nothing, not a throw")
+	{
+		CHECK(meshLodSubmeshes(cooked, 0, 2).empty());
+		CHECK(meshLodSubmeshes(cooked, 1, 1).empty());
+		CHECK(meshLodSubmeshes(cooked, 2, 0).empty());
+		CHECK(meshLodMinPixels(cooked, 2).empty());
+	}
+
+	SECTION("every mesh's level together is each one's")
+	{
+		const std::vector<Submesh> all = lodNSubmeshes(cooked, 1);
+		REQUIRE(all.size() == 2);
+		CHECK(all[0].vertexCount == level1[0].vertexCount);
+	}
+
+	SECTION("a container with no table is one level drawn at every size")
+	{
+		const Glb   crate = MakeGlb("bernini_lod_query_none.glb", { { "Crate", { 2 } } });
+		const BMesh plain = toBMesh(loadFromGltf(crate.Path()));
+		REQUIRE(plain.lods.empty());
+		CHECK(meshLodMinPixels(plain, 0) == std::vector<float>{ 0.0f });
+		CHECK(meshLodSubmeshes(plain, 0, 0).size() == 1);
+	}
+}
+
 TEST_CASE("a source with no levels cooks as it did before them", "[lod][gltf]")
 {
 	const Glb glb = MakeGlb("bernini_lod_none.glb", { { "Crate", { 2 } }, { "Barrel", { 3 } } });

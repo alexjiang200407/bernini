@@ -117,6 +117,9 @@ public:
 	void
 	SetRenderingEnabled(bool enabled) override;
 
+	[[nodiscard]] uint32_t
+	GetRenderHeight() const noexcept override;
+
 	void
 	Invoke(const editor::ViewportRenderWork& work) override;
 

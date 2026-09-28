@@ -333,9 +333,9 @@ to keep in agreement beyond the one below.
   not on every tick of a drag:
   `SetGround` moves the scene's temporal epoch, and a drag committing each tick would hold the
   preview unaccumulated for the whole gesture. The floor is one plane geom for the window's life in
-  the shared scene, like the material preview's sphere, and one placement in this view while a rig
+  the shared scene, like the Mesh Editor preview's sphere, and one placement in this view while a rig
   is shown; a placement does not move, so a slope change deletes and re-places it. The scene is
-  shared with the Material Editor's preview, and its ground with it, so the slope stands only while
+  shared with the Mesh Editor's preview, and its ground with it, so the slope stands only while
   the panel is on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
   brings the slope back. Inside the group, a **Blob shadow** checkbox (on by default) puts the
   engine's contact disc (`ISceneView::SetBlobShadow`) on one animated instance per placement transform.

@@ -138,7 +138,7 @@ main(int argc, char** argv)
 		// routes, or a material shared by several submeshes, is loaded once. Acquiring a mesh acquires
 		// the materials its submeshes name and the textures those materials name, so the whole tree
 		// comes in -- and goes out -- with one call. It honours each material's mode: a baked one
-		// samples its optimized triplet, a loose one samples the source routes the material editor
+		// samples its optimized triplet, a loose one samples the source routes the Mesh Editor
 		// authored.
 		auto assets = game::AssetManager(scene, dataRoot);
 

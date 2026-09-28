@@ -1,4 +1,4 @@
-#include "Windows/MaterialEditor/material_overrides.h"
+#include "Windows/MeshEditor/material_overrides.h"
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
 

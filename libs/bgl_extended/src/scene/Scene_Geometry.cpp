@@ -15,6 +15,7 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
+#include <bgl/lod_select.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/Meshlet.h>
@@ -160,14 +161,6 @@ namespace bgl
 			std::vector<uint32_t>     vertexMap;     // meshlet-local slot -> geometry vertex
 			std::vector<uint32_t>     localIndices;  // meshlet-local slots, 3 per triangle
 		};
-
-		// (center, radius) circumscribing the box, so it is conservative for whatever the box held.
-		glm::vec4
-		BoundingSphereOf(const glm::vec3& minBound, const glm::vec3& maxBound) noexcept
-		{
-			const glm::vec3 center = (minBound + maxBound) * 0.5f;
-			return glm::vec4(center, glm::distance(maxBound, center));
-		}
 
 		/**
 		 * Greedily packs `indices` into meshlets, in triangle order, filling each one until the next

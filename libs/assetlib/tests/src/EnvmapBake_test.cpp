@@ -489,7 +489,7 @@ TEST_CASE("sky mip roughness starts at zero and increases", "[envmap][sky]")
 	}
 
 	// The shipped `--skybox-blur 0.15` is about mip 3 of a 512 chain, which is what makes the
-	// material preview's default a like-for-like replacement rather than a new look.
+	// Mesh Editor preview's default a like-for-like replacement rather than a new look.
 	CHECK(skyMipRoughness(512, 3) == Catch::Approx(0.157f).margin(0.02f));
 }
 

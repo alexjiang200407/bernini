@@ -1,4 +1,4 @@
-# QtNodes (node-graph UI for the Material Editor). Vendored via FetchContent so it builds against
+# QtNodes (node-graph UI for the Mesh Editor). Vendored via FetchContent so it builds against
 # the Qt already resolved by find_package(Qt6) above -- NOT vcpkg's qtbase: the vcpkg nodeeditor
 # port would build all of Qt from source and collide with the system Qt. It builds a small
 # QtNodes.dll (~1 MB) into the shared runtime output dir, so it sits next to editor.exe with no

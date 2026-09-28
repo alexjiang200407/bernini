@@ -127,7 +127,7 @@ TEST_CASE(
 	"[localization]")
 {
 	TemporaryDirectory directory;
-	directory.Write("bernini.material.csv", "key,en,xx\ntitle,Material Editor,Materiau\n");
+	directory.Write("bernini.material.csv", "key,en,xx\ntitle,Mesh Editor,Materiau\n");
 
 	auto                            plugin = editor::defaults::CreatePlugin({});
 	editor::plugins::EditorRegistry registry;
@@ -136,11 +136,11 @@ TEST_CASE(
 	editor::LanguageResolver language;
 	RegisterAll(language, registry);
 	const editor::LocalizedText title = registry.FindPanel("bernini.material")->title;
-	CHECK(title.Resolve(language) == QString("Material Editor"));
+	CHECK(title.Resolve(language) == QString("Mesh Editor"));
 	language.SetLocale("xx");
 	CHECK(title.Resolve(language) == QString("Materiau"));
 	language.SetLocale("yy");
-	CHECK(title.Resolve(language) == QString("Material Editor"));
+	CHECK(title.Resolve(language) == QString("Mesh Editor"));
 }
 
 TEST_CASE("Every staged catalog registers", "[localization]")

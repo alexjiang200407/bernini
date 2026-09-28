@@ -220,17 +220,6 @@ namespace bgl
 		return state;
 	}
 
-	float
-	PixelsPerUnit(const Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept
-	{
-		const float yScale = glm::length(
-			glm::vec3(
-				unjitteredViewProj[0][1],
-				unjitteredViewProj[1][1],
-				unjitteredViewProj[2][1]));
-		return 0.5f * (viewport.maxY - viewport.minY) * yScale;
-	}
-
 	void
 	ResolveLodSelection(
 		idl::CullView&          cullView,

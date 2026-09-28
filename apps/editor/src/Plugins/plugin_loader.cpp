@@ -519,7 +519,7 @@ namespace editor::plugins
 			          .toStdString(),
 			      editor::Localize(
 					  "editor.plugins.builtin_plugin_description",
-					  "The Material, Animation and Blend Space editors built into this editor.")
+					  "The Mesh, Animation and Blend Space editors built into this editor.")
 			          .toStdString() });
 		}
 		for (std::size_t i = 0; i < m_Impl->editorPlugins.size(); ++i)

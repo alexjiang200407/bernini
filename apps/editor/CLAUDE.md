@@ -5,7 +5,7 @@ managing resources. It is also the offline asset-cook host — artists export gl
 editor imports it (via assetlib) and converts it into the game-ready format.
 
 - CMake targets: `editor_lib` (host), `editor` (just `main.cpp`), `editor_tests`.
-  `plugins/default_editor` owns Material, Animation, Blend Space and Grass and their authoring code; it
+  `plugins/default_editor` owns Mesh, Animation, Blend Space and Grass and their authoring code; it
   links only public engine/editor contracts and SDK helpers. The host creates all four through
   registered factories and routes document opens by the registered extension.
   Built **automatically only when Qt6 is found** — the root `CMakeLists.txt` probes
@@ -161,14 +161,14 @@ lives beside it, and the split is by responsibility rather than by line count:
   `import_pipeline` (the cook behind its loading screen) and `drop_import` (what a drop takes and
   what it runs) sit outside `Windows/` entirely, and the Content Explorer is one caller.
 - **A stateful job the window drives** becomes a collaborator type it owns —
-  `AssetOperations` for the Content Explorer's on-disk actions, `MaterialGraphSet` for the material
-  editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
+  `AssetOperations` for the Content Explorer's on-disk actions, `MaterialGraphSet` for the Mesh
+  Editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
   says so by signal rather than reaching for the view (`AssetOperations::DirectoryDeleted`); a
   collaborator that touched a model would just be the window again under another name.
-- **A panel that writes by itself compares before it writes.** The material editor marks a board
+- **A panel that writes by itself compares before it writes.** The Mesh Editor marks a board
   edited on anything that *might* have changed it — every model signal, and any click, key, wheel or
   focus loss on the board or the properties beside it — then skips a write whose compiled material
-  matches what was last written (`MaterialEditorWindow::MarkGraphEdited`). Deliberately over-eager,
+  matches what was last written (`MeshEditorWindow::MarkGraphEdited`). Deliberately over-eager,
   because the two failures are not symmetric: a missed trigger loses an edit with nothing on screen
   to say so, and an extra one costs a compile.
 
@@ -207,7 +207,7 @@ lives beside it, and the split is by responsibility rather than by line count:
   mode shows no context menu at all rather than a menu of items that decline, since an item that
   does nothing reads as a broken one.
 - **Widget assembly** goes to its own `*_ui` file — `main_window_ui`, `content_explorer_ui`,
-  `material_editor_ui` — which builds and connects nothing, and hands back a struct of the widgets
+  `mesh_editor_ui` — which builds and connects nothing, and hands back a struct of the widgets
   the window drives. The `connect` calls stay in the window, because what a widget *does* is
   behaviour. It is also what makes a layout testable without a graphics device: `BuildMainWindowUi`
   takes a bare `QMainWindow`, so the menu bar is pinned by `[menu]` cases that create no `Renderer`,
@@ -287,13 +287,13 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 A viewport no longer needs a window. `RenderTargetWindowDesc::headless` builds the target
 offscreen at an explicit extent, asking the widget for no `winId()` and taking neither
 `WA_PaintOnScreen` (which implies `WA_NativeWindow`) nor the null `paintEngine()` that goes with it.
-So `RenderTargetWindow`, `MaterialPreviewWindow`, `AnimationPreviewWindow` and
+So `RenderTargetWindow`, `MeshPreviewWindow`, `AnimationPreviewWindow` and
 `MainWindow` all stand in a test — see `MainWindow_test.cpp`, which builds a whole headless editor
 and pins its teardown order, its data-root propagation, and that every viewport it built is
 headless. A null `Renderer` **asserts**: no shipping path produces one, and four methods here
 dereference it unconditionally.
 
-Material integration tests create its registered panel through the real project host and compose
+Mesh Editor integration tests create its registered panel through the real project host and compose
 a headless viewport. A failing graphics device leaves through `main`, which reports it and exits.
 
 What *is* testable is a rule lifted clear of the window: `CachedMaterial` and

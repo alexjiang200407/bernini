@@ -167,7 +167,7 @@ AssetImporterDialog::AssetImporterDialog(
 				"Derive a material from each of the glTF's PBR materials and bind it to the "
 				"submeshes "
 				"cut from it. Each is routed at this import's textures and can be reopened in the "
-				"Material Editor.") :
+				"Mesh Editor.") :
 			editor::Localize(
 				"editor.asset_importer.import_pbr_materials_tip_unavailable",
 				"This file has no PBR material to derive one from."));

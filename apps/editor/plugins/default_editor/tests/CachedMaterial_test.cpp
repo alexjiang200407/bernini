@@ -1,5 +1,4 @@
-#include "Windows/MaterialEditor/CachedMaterial.h"
-#include "Windows/MaterialEditor/material_io.h"
+#include "Windows/MeshEditor/CachedMaterial.h"
 #include <assetlib_structs/BMaterial.h>
 
 #include <QTemporaryDir>
@@ -61,7 +60,7 @@ namespace
 	};
 }
 
-TEST_CASE("An unchanged material is not read twice", "[materialeditor]")
+TEST_CASE("An unchanged material is not read twice", "[mesheditor]")
 {
 	// Reading one parses the editor graph saved inside it, which is the bulk of the file and none of
 	// what the properties panel wants. The panel asks on every submesh selection.
@@ -81,7 +80,7 @@ TEST_CASE("An unchanged material is not read twice", "[materialeditor]")
 	REQUIRE(cached.Get(assetlib::AssetStore(sandbox.Root()), sandbox.Path())->name == "first");
 }
 
-TEST_CASE("A material rewritten on disk is read again", "[materialeditor]")
+TEST_CASE("A material rewritten on disk is read again", "[mesheditor]")
 {
 	// The editor is also the cook host: Bake rewrites the file under an open graph, and the panel is
 	// showing what it said before.
@@ -97,7 +96,7 @@ TEST_CASE("A material rewritten on disk is read again", "[materialeditor]")
 	REQUIRE(cached.Get(assetlib::AssetStore(sandbox.Root()), sandbox.Path())->name == "second");
 }
 
-TEST_CASE("Forgetting forces the next read", "[materialeditor]")
+TEST_CASE("Forgetting forces the next read", "[mesheditor]")
 {
 	// A stamp has millisecond resolution, so a save and the refresh behind it can land in the same
 	// one. Save forgets rather than trusting the clock to have moved.
@@ -116,7 +115,7 @@ TEST_CASE("Forgetting forces the next read", "[materialeditor]")
 	REQUIRE(cached.Get(assetlib::AssetStore(sandbox.Root()), sandbox.Path())->name == "second");
 }
 
-TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
+TEST_CASE("A different path is read even at the same stamp", "[mesheditor]")
 {
 	// Submeshes sharing a material share one graph, but selecting a submesh backed by another one
 	// asks the same cache about a different file.
@@ -138,7 +137,7 @@ TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
 			->name == "other");
 }
 
-TEST_CASE("A material that is not there yet reads as nothing", "[materialeditor]")
+TEST_CASE("A material that is not there yet reads as nothing", "[mesheditor]")
 {
 	// Save As sets the path before anything is written, and the panel refreshes in between.
 	const Sandbox  sandbox;
@@ -148,7 +147,7 @@ TEST_CASE("A material that is not there yet reads as nothing", "[materialeditor]
 	REQUIRE(cached.Get(assetlib::AssetStore(sandbox.Root()), "") == nullptr);
 }
 
-TEST_CASE("A material that appears later is picked up", "[materialeditor]")
+TEST_CASE("A material that appears later is picked up", "[mesheditor]")
 {
 	const Sandbox  sandbox;
 	CachedMaterial cached;
@@ -164,7 +163,7 @@ TEST_CASE("A material that appears later is picked up", "[materialeditor]")
 // A material drawn by a game's surface reaches the panel through the same read as every other one.
 // The editor authors PBR graphs and knows nothing about surfaces, so what it must do is open one
 // and say nothing about it -- not refuse it, and not show it as an unbaked PBR material.
-TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surface]")
+TEST_CASE("A surface material opens as a graphless one", "[mesheditor][surface]")
 {
 	const Sandbox sandbox;
 

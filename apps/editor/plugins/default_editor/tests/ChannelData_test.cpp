@@ -1,4 +1,4 @@
-#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MeshEditor/nodes/ChannelData.h"
 #include <QtNodes/internal/NodeData.hpp>
 
 #include "util/QtSupport.h"  // IWYU pragma: keep

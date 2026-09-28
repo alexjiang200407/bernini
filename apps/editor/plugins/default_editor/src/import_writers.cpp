@@ -2,8 +2,8 @@
 #include <assetlib/import_document.h>
 #include <default_editor/import_writers.h>
 
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-#include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MeshEditor/MaterialGraphModel.h"
+#include "Windows/MeshEditor/material_graph.h"
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/Mesh.h>

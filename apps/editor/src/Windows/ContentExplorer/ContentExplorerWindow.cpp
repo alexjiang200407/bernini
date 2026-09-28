@@ -373,7 +373,7 @@ ContentExplorerWindow::AttachModels()
 	// the folder does not have.
 	m_Ui.currentDirectory->setMovement(QListView::Static);
 
-	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Material Editor preview).
+	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Mesh Editor preview).
 	// QFileSystemModel supplies the file URLs; DragOnly keeps the views from accepting drops, so
 	// dropped mesh files still bubble up to this widget's dropEvent for import.
 	m_Ui.fileExplorer->setDragEnabled(true);

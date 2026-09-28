@@ -17,3 +17,7 @@ public enum LodLevel : uint32_t
 
 // Levels one mesh may carry, level 0 included: the length of every per-level table.
 public static const uint cMaxMeshLods = uint32_t(LodLevel::kCount);
+
+// Coming back to a finer level needs the placement's size to clear that level's floor by this
+// share, so a placement resting on a threshold does not switch every frame.
+public static const float cLodHysteresis = 0.15;

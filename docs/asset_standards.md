@@ -96,8 +96,8 @@ There are **two producers of textures**, and they compress differently:
   that did not touch it but says nothing about which map an artist meant. See
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
-  [libs/assetlib/src/material/material_bake.cpp](libs/assetlib/src/material/material_bake.cpp)) composites the material
-  editor's routed source textures into the triplet — or, for a surface material, into one packed map
+  [libs/assetlib/src/material/material_bake.cpp](libs/assetlib/src/material/material_bake.cpp)) composites the Mesh
+  Editor's routed source textures into the triplet — or, for a surface material, into one packed map
   per routed slot — and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
   transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
@@ -169,7 +169,7 @@ function of the *material*, not a constant:
 | `kMask` | `BC7_SRGB` | 8 bpp; carries alpha in an independent channel |
 | `kBlend`, `kHashed` | `BC7_SRGB` | as `kMask`; the alpha is composited rather than tested |
 
-**The alpha mode is authored, never inferred.** In the material editor, a graph ends in one of four
+**The alpha mode is authored, never inferred.** In the Mesh Editor, a graph ends in one of four
 sinks — **Material Output**, **Alpha Tested**, **Alpha Blend** or **Hashed Alpha** — and the alpha port
 exists on every one but the first, along with a cutoff on the two that have a threshold to author.
 
@@ -340,7 +340,7 @@ Authoring it:
 * **A set nothing samples is not carried.** Exporters emit degenerate ones — every vertex at one
   point — and a primitive whose material samples no map through `TEXCOORD_1` imports exactly as if
   it had none.
-* **In the material editor it is the PBR sink's last port, *Geometry Occlusion (UV1)***, on the opaque,
+* **In the Mesh Editor it is the PBR sink's last port, *Geometry Occlusion (UV1)***, on the opaque,
   cutout, hashed and blended sinks alike. A game surface's node has none: a surface shows the slots
   it declares, and takes this map through one of its own. Wire a texture's red into it; the map is sampled whole, so another
   channel's wire names the file and warns. It is last so a board saved before it existed keeps every
@@ -490,6 +490,13 @@ object meant to switch as one is one mesh with a primitive per material.
   list applies to every mesh of the source, so it is refused when a mesh has fewer levels than it
   names, and when it and the defaults after it would rise. Every re-import and regeneration takes
   the document's list, so the key a `.bmesh` records and the thresholds it holds agree.
+* **Looking at them.** The Mesh Editor's *Level of Detail* selector, above its submesh selector,
+  offers the levels of the mesh the selected submesh belongs to. *Auto* is the game's own choice and
+  names the level it draws (`Auto: LOD 1`), read with the cull's arithmetic
+  ([lod_select.h](libs/bgl/include/bgl/lod_select.h)) against the preview's first placement of that
+  mesh; a level pins every placement to it (`ISceneView::SetLodSelection`), which is how a coarse
+  level is inspected up close. The selection outline follows the level drawn. It reads the
+  thresholds and does not edit them.
 
 ### Grass points
 
@@ -533,6 +540,8 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   every level's entries, level-major, so a reader walking `submeshCount` from `firstSubmesh` sees
   level 0), and **material references by file path**. The thresholds are the import document's
   `lodMinPixels` parameter, one per level from 0, the last level's being the draw-nothing size.
+  One level of one mesh, and its thresholds, are `meshLodSubmeshes` and `meshLodMinPixels` in
+  [bmesh.h](libs/assetlib/include/assetlib/bmesh.h), so no reader restates the layout.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
@@ -590,7 +599,7 @@ A re-import preserves authored grass bindings. No standalone grass container is 
 
   * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
     roughness, metallic; normal X,Y) names a *source* texture and which of *its* RGBA channels to read.
-    This is what the material editor authors, and what `LoosePbrMaterial` samples directly with no bake.
+    This is what the Mesh Editor authors, and what `LoosePbrMaterial` samples directly with no bake.
   * **Optimized** — the baseColor / normal / orm triplet, plus the factors. The
     output of `bakeMaterial` (or of a glTF import), and what `PbrMaterial` consumes. A bake writes the
     maps into `<Data>/Derived/BakedTextures/`.
@@ -960,8 +969,8 @@ Ten rules, each of which is a way to get this wrong:
   other way to express it — which is right for a chrome surface and surprising on a transparent
   reflection layer, where it is the model's limit rather than the conversion's error.
 * **The graph *is* the material.** The import builds a `MaterialGraphModel` — a Texture node per map,
-  wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the material
-  editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
+  wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the Mesh
+  Editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
   and the material reopens as the graph that produced it rather than a blank one.
 * **Occlusion comes from the map the material names, not from ORM's red channel.** glTF specifies
   only `G` (roughness) and `B` (metalness) of `metallicRoughnessTexture`; `R` is unspecified, so

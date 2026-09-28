@@ -44,10 +44,10 @@ delete_folder_empty_with_cascade,"The folder is empty.
 This cannot be undone."
 delete_held_open_directory,"'{0}' holds an asset that is open in an editor panel.
 
-Close it there first: the Material Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
+Close it there first: the Mesh Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
 delete_held_open_file,"'{0}' is open in an editor panel.
 
-Close it there first: the Material Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
+Close it there first: the Mesh Editor's next Save would write it back, the Animation panel would go on offering it, and a viewport lit by an environment is still drawing it -- which config.json's environmentMap names unless a drop replaced it."
 delete_mesh_no_refs,"Nothing references it. The materials it uses are shared, and stay in place."
 delete_no_refs,Nothing references it. This cannot be undone.
 delete_refused,"'{0}' is referenced again, and was not deleted."
@@ -76,10 +76,10 @@ rename_failed_in_use,"'{0}' could not be renamed:
 It may be open in another program."
 rename_held_open_directory,"'{0}' holds an asset that is open in an editor panel.
 
-Close it there first: the Material Editor's next Save would write the old name back, and the Animation panel would go on offering it."
+Close it there first: the Mesh Editor's next Save would write the old name back, and the Animation panel would go on offering it."
 rename_held_open_file,"'{0}' is open in an editor panel.
 
-Close it there first: the Material Editor's next Save would write the old name back, and the Animation panel would go on offering it."
+Close it there first: the Mesh Editor's next Save would write the old name back, and the Animation panel would go on offering it."
 rename_output_held_open,"'{0}' was produced by it and is open in an editor panel.
 
 Close it there first: renaming moves it, and the panel would go on offering the old path."

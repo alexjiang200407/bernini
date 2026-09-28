@@ -207,7 +207,7 @@ converges to the bytes one created there does.
   camera, a transform, the exposure) stays out of it: reprojection already follows that, and an epoch that moved with it
   would leave a moving scene permanently unaccumulated. A rewrite that lands on the bytes already
   there still counts, since the entries are GPU-layout mirrors whose padding no comparison can
-  trust — a material editor rewriting on every keystroke pays one unaccumulated frame per rewrite,
+  trust — the Mesh Editor rewriting on every keystroke pays one unaccumulated frame per rewrite,
   which is a frame it was going to pay anyway for the edits that did change something.
 
   **Placing or deleting an instance counts too**, and that is what carries the Animation panel's

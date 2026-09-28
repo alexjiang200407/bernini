@@ -47,7 +47,7 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	// The same block the material preview takes, defaults included, so a thumbnail and the preview
+	// The same block the Mesh Editor's preview takes, defaults included, so a thumbnail and the preview
 	// it was generated from cannot stand against different backdrops.
 	editor::EnvironmentApplyDesc env;
 

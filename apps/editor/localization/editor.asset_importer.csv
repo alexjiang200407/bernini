@@ -11,7 +11,7 @@ import_document_needs_name,The import document needs a name.
 import_mesh,Import mesh
 import_mesh_tip,"Bring the geometry across. Off imports only the pieces below -- which is how a rig's clips arrive when the artist exported one file per animation, each carrying a copy of the mesh."
 import_pbr_materials,Import PBR materials
-import_pbr_materials_tip_available,Derive a material from each of the glTF's PBR materials and bind it to the submeshes cut from it. Each is routed at this import's textures and can be reopened in the Material Editor.
+import_pbr_materials_tip_available,Derive a material from each of the glTF's PBR materials and bind it to the submeshes cut from it. Each is routed at this import's textures and can be reopened in the Mesh Editor.
 import_pbr_materials_tip_unavailable,This file has no PBR material to derive one from.
 import_textures,Import textures
 import_textures_tip,Extract the mesh's textures into the project.

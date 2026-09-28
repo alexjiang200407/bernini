@@ -129,7 +129,7 @@ and every other checkout queues behind it.
 
 ## The editor's viewport is more saturated than the same frame anywhere else
 
-**Symptom.** On a Mac, the material editor's viewport reads more saturated than Blender's Material
+**Symptom.** On a Mac, the Mesh Editor's viewport reads more saturated than Blender's Material
 Preview of the same model under the same environment, reds first: fur binned by luma has more red
 at the same brightness and the same green and blue. Every headless measurement agrees with Blender
 — `ScreenshotPng` captures, the `[parity]` sphere, a flat grey at any albedo — and only the screen
@@ -148,7 +148,7 @@ macOS already treats an untagged sRGB-format layer as sRGB.
 do: `RenderTargetDesc::wnd` is the caller's layer, in the caller's window. After it the viewport's
 fur lands on Blender's to within 0.003 per channel in every luma bin.
 
-**Gates.** None a test can hold — the compositor is not in a headless run. Eyes: the material editor
+**Gates.** None a test can hold — the compositor is not in a headless run. Eyes: the Mesh Editor
 beside Blender's Material Preview on a P3 display, fur the same red.
 
 **If it comes back.** Check that the window's colour space is still set by hand -- a toolkit that
@@ -225,7 +225,7 @@ a rate near one suite run in twenty, and do not read a handful of clean runs as 
 
 ## Coming back to the editor finds the Material or Animation panel emptied
 
-**Symptom.** The Material Editor holds a mesh, its per-submesh graphs and some unsaved edits to
+**Symptom.** The Mesh Editor holds a mesh, its per-submesh graphs and some unsaved edits to
 them. Minimize the editor, restore it, and the panel is back to the default sphere with the graphs
 blank — the same for the Animation panel's rig. Nothing warns, no dialog asks, and the held-open
 assets have been released, so the Content Explorer will now delete a mesh the panel was showing a
@@ -281,7 +281,7 @@ stats. A healthy render rate does not establish that the GUI supplied a fresh an
 ## Scrolling a panel's properties column smears the main tab bar
 
 **Symptom.** Scroll the Animation panel's left column and a second copy of the window's tab strip —
-*Level Editor | Material Editor | Animation Editor* — appears below the real one, offset by roughly
+*Level Editor | Mesh Editor | Animation Editor* — appears below the real one, offset by roughly
 the scroll delta. The duplicate is stale pixels, not a live widget: it does not respond to clicks and
 the next full repaint of that region clears it. It shows up wherever a viewport shares a top-level
 with a scrolling column, so the Animation panel is where it was found rather than where it lives.
@@ -319,7 +319,7 @@ which is what caused this in the first place.
 
 **Symptom.** A closed mesh — a head, a body — set to the Alpha Blend layer with Double Sided on
 draws unshaded, flat-toned patches over its front: mouth and nostril interiors compositing over the
-face, moving with the camera. Reported first from the Material Editor's Layer controls, on a
+face, moving with the camera. Reported first from the Mesh Editor's Layer controls, on a
 material whose base colour carries no alpha channel at all.
 
 **Cause.** Not a defect, and not this feature's: the transparent phase sorts instances, never the

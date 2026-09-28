@@ -569,7 +569,7 @@ AnimationPreviewWindow::LoadMesh(
 	}
 
 	// This panel animates; a static mesh has nothing to animate, and silently previewing one
-	// reads as the panel being broken. The Material Editor's preview is the place to look at it.
+	// reads as the panel being broken. The Mesh Editor's preview is the place to look at it.
 	if (current.bindings.skeleton.empty())
 	{
 		QMessageBox::warning(

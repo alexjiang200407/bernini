@@ -3,6 +3,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <cstdint>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -30,6 +31,22 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::vector<Submesh>
 	lodNSubmeshes(const BMesh& mesh, uint32_t level);
+
+	/**
+	 * Level `level` of the submeshes of `mesh.meshes[meshIndex]`, in source order. Empty past the
+	 * mesh's levels, for a mesh that is not there, and for one whose range runs past the submeshes.
+	 */
+	[[nodiscard]] std::span<const Submesh>
+	meshLodSubmeshes(const BMesh& mesh, uint32_t meshIndex, uint32_t level) noexcept;
+
+	/**
+	 * Each level's `MeshLod::minPixels` for `mesh.meshes[meshIndex]`, from level 0 -- the sizes a
+	 * renderer chooses its level by. A single 0 for a one-level mesh in a container with no table,
+	 * which is drawn at every size. Empty for a mesh that is not there, or whose levels the table
+	 * does not hold.
+	 */
+	[[nodiscard]] std::vector<float>
+	meshLodMinPixels(const BMesh& mesh, uint32_t meshIndex);
 
 	/**
 	 * The file name AssetStore::WriteTextures gives each of an import's textures, parallel to

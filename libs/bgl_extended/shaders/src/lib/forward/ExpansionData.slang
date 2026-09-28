@@ -33,8 +33,7 @@ public struct ExpansionData
     public ComputeBuffer<CullStats> stats;
 
     // Each placement's level of detail as this draw's cull chose it, by MeshInstance entry, and
-    // whether this dispatch draws that level, dissolves it, or ignores it for level 0. Under
-    // LodDrawMode::kLevel0 the buffer is never read.
+    // whether this dispatch draws that level at once or dissolves it.
     public ComputeBuffer<InstanceLod> instanceLod;
     public LodDrawMode lodDrawMode;
 };

@@ -1,13 +1,24 @@
 #include "util/GoldenImage.h"
+#include "util/LodMesh.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
+#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
+#include <bgl/glm.h>
+#include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -25,11 +36,12 @@ namespace
 	constexpr float c_CameraDist = 4.0f;
 	constexpr float c_TanHalfFov = 0.57735f;
 
+	/** The column of the left edge of a square of `halfExtent` facing the camera at z = `z`. */
 	constexpr float
-	EdgeColumn(uint32_t size)
+	EdgeColumn(uint32_t size, float halfExtent = 1.0f, float z = 1.0f)
 	{
 		const float half = static_cast<float>(size) / 2.0f;
-		return half - half * (1.0f / (c_CameraDist - 1.0f)) / c_TanHalfFov;
+		return half - half * (halfExtent / (c_CameraDist - z)) / c_TanHalfFov;
 	}
 
 	bgl::test::GraphicsSetup
@@ -50,7 +62,7 @@ namespace
 	 * band. An un-outlined frame scores ~0.
 	 */
 	float
-	OutlineBandWidth(const std::string& path, uint32_t size)
+	OutlineBandWidth(const std::string& path, uint32_t size, float edgeColumn)
 	{
 		// Wide enough outside the edge to hold the widest band the shader will draw; only just
 		// inside it, because the cube's own r - b is not exactly zero and every column of it the
@@ -60,12 +72,48 @@ namespace
 		constexpr int c_ProbeWidth   = c_ProbeOutside + c_ProbeInside;
 		constexpr int c_ProbeRows    = 16;
 
-		const int x = static_cast<int>(EdgeColumn(size)) - c_ProbeOutside;
+		const int x = static_cast<int>(edgeColumn) - c_ProbeOutside;
 		const int y = static_cast<int>(size) / 2 - c_ProbeRows / 2;
 
 		const auto probe = bgl::test::MeanColor(path, x, y, c_ProbeWidth, c_ProbeRows);
 
 		return (probe.r - probe.b) * static_cast<float>(c_ProbeWidth);
+	}
+
+	float
+	OutlineBandWidth(const std::string& path, uint32_t size)
+	{
+		return OutlineBandWidth(path, size, EdgeColumn(size));
+	}
+
+	/**
+	 * Two levels of one square facing +z: level 0 of half extent 1 at z = 1, level 1 of half
+	 * extent 0.5 at z = 0.5, so the two silhouettes' left edges sit far apart on screen.
+	 */
+	assetlib::BMesh
+	TwoSquares()
+	{
+		const std::array<bgl::test::EntrySpec, 2> levels = { {
+			{ 2, glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f) },
+			{ 2, glm::vec3(-0.5f, -0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f) },
+		} };
+		auto mesh = bgl::test::MakeLodMesh(levels, 1, { 10.0f, 0.0f });
+
+		for (const assetlib::Submesh& submesh : mesh.submeshes)
+		{
+			const glm::vec3                lo      = submesh.aabbMin;
+			const glm::vec3                hi      = submesh.aabbMax;
+			const std::array<glm::vec3, 6> corners = {
+				glm::vec3(lo.x, lo.y, hi.z), glm::vec3(hi.x, lo.y, hi.z),
+				glm::vec3(hi.x, hi.y, hi.z), glm::vec3(lo.x, lo.y, hi.z),
+				glm::vec3(hi.x, hi.y, hi.z), glm::vec3(lo.x, hi.y, hi.z),
+			};
+			std::memcpy(
+				mesh.vertexData.data() + submesh.vertexByteOffset,
+				corners.data(),
+				sizeof(corners));
+		}
+		return mesh;
 	}
 
 	bgl::test::Rgba
@@ -246,6 +294,68 @@ TEST_CASE(
 	CHECK(band > 0.5f);
 
 	std::remove(grownPath.c_str());
+}
+
+TEST_CASE("The outline contours the level of detail the view draws", "[selection][render][lod]")
+{
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Size);
+	targetDesc.height   = static_cast<int>(c_Size);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 40000;
+	sceneDesc.initialIndices              = 1000;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	auto       geom     = scene->AddStaticMeshGeom(TwoSquares(), 0, std::array{ material });
+	REQUIRE(geom.IsValid());
+
+	auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	view->SetSubmeshSelected(instance, 0, true);
+
+	// Up close level 0 would draw; pinning level 1 is what the Mesh Editor's selector does.
+	auto selection        = bgl::LodSelectionDesc();
+	selection.forceLevel  = bgl::LodLevel::kLod1;
+	selection.fadeSeconds = 0.0f;
+	view->SetLodSelection(selection);
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, c_CameraDist),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
+
+	gfx->DrawFrame(target, job);
+	gfx->DrawFrame(target, job);
+
+	const std::string path = "assets/golden/selection_outline_lod.got.png";
+	gfx->ScreenshotPng(target, path);
+
+	const float drawn  = OutlineBandWidth(path, c_Size, EdgeColumn(c_Size, 0.5f, 0.5f));
+	const float level0 = OutlineBandWidth(path, c_Size, EdgeColumn(c_Size));
+	INFO("band at level 1's edge: " << drawn << " px, at level 0's: " << level0 << " px");
+	CHECK(drawn > 0.5f);
+	CHECK(level0 < 0.5f);
+
+	std::remove(path.c_str());
 }
 
 TEST_CASE("The outline keeps its share of the frame as the resolution drops", "[selection][render]")

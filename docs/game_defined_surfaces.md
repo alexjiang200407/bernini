@@ -295,7 +295,7 @@ Deliberate, and each is a decision rather than an omission:
   (`textures` above). Slot kinds are reflected and reported through
   `IGraphics::GetSurfaceTypes()`, but beyond choosing which slots offer routing they drive no
   format or colour-space rule yet.
-* **Editor UI is reflected, never authored twice.** A surface material opens in the Material
+* **Editor UI is reflected, never authored twice.** A surface material opens in the Mesh
   Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
   per value — the layer keys are edited in the properties panel beside the board, and Save writes
   the document from that board. The

@@ -184,5 +184,13 @@ namespace editor
 
 		virtual void
 		SetRenderingEnabled(bool enabled) = 0;
+
+		/**
+		 * The rows the geometry passes render at now: the window's physical height after the
+		 * render scale, which the host may change at any time. What a level of detail's pixel
+		 * thresholds are measured against. 0 before the viewport has a target.
+		 */
+		[[nodiscard]] virtual uint32_t
+		GetRenderHeight() const noexcept = 0;
 	};
 }

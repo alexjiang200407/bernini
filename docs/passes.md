@@ -443,7 +443,8 @@ It adds **four sub-passes**:
    It also chooses the placement's **level of detail** (`lib/culling/lod_select.slang`): the
    diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
    `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
-   going finer, and a change dissolved over the view's `fadeSeconds`. The choice is one word per
+   going finer, and a change dissolved over the view's `fadeSeconds`. Its C++ twin is
+   [bgl/lod_select.h](libs/bgl/include/bgl/lod_select.h). The choice is one word per
    placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
    from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
    the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries
@@ -638,7 +639,7 @@ opaque, cutout and hashed program, built-in or generated for a game surface, has
 surface's own source does nothing for it, and a grass bucket has no second lane. How a draw reads
 the word is `ExpansionData.lodDrawMode` (`idl::LodDrawMode`): the bucket's own lane swaps at once, its dissolve lane
 dissolves, the depth-sorted list swaps at once (a blend has no depth to dither against), and the
-outline mask, which binds no cull output, traces level 0.
+outline mask swaps at once too, reading the same word, so a contour hugs the level on screen.
 
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered

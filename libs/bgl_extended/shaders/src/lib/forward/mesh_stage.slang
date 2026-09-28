@@ -100,11 +100,6 @@ public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
     LodDraw draw;
     draw.submeshEntry = geom.submeshes.EntryLod0(instance.submeshIndex);
     draw.dissolve = 1.0;
-    if (expansionData.lodDrawMode == LodDrawMode::kLevel0)
-    {
-        return draw;
-    }
-
     let word = expansionData.instanceLod[instance.meshInstance.GetOffset()];
     if (word.Unset())
     {
