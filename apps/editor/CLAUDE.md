@@ -40,7 +40,7 @@ Two things the licence does **not** cover, because both leak out of the app:
 messages into its sinks with `InstallQtLogRouting` (`src/util/qt_logging.h`). Order is the whole
 point: the GPU context opens the log as it is created, and the first caller names the file, so
 naming it here is what puts the renderer's lines, assetlib's and the editor's own `qWarning` in one
-`editor.log` on one clock instead of two files. There is no `bgl.log` under the editor.
+`editor.log` on one clock instead of two files. There is no `bgpu.log` under the editor.
 
 `main.cpp` then decides the project **before** anything renders, because the project decides which
 surfaces the renderer compiles. `editor::OpenStartupProject` (`src/Startup/startup_project.h`) opens

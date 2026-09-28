@@ -26,7 +26,7 @@ namespace bgpu
 
 			explicit Context(const GpuContextDesc& desc) : ContextBase(desc, SLANG_METAL)
 			{
-				core::logging::init_file_logger("bgl.log", static_cast<int>(desc.logLevel));
+				core::logging::init_file_logger("bgpu.log", static_cast<int>(desc.logLevel));
 
 				// The device's name is autoreleased, so the scope that reads it owns a pool.
 				NS::SharedPtr<NS::AutoreleasePool> pool =

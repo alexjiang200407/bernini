@@ -16,7 +16,7 @@ namespace bgl
 		D3D12_QUERY_HEAP_DESC desc = {};
 		desc.Type                  = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 		desc.Count                 = capacity;
-		device->CreateQueryHeap(&desc, IID_PPV_ARGS(&m_Heap)) >> c_D3d12ErrChecker;
+		device->CreateQueryHeap(&desc, IID_PPV_ARGS(&m_Heap)) >> d3d12ErrChecker;
 		m_Heap->SetName(L"Timestamp Heap");
 
 		auto rbDesc      = ReadbackBufferDesc();

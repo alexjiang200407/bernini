@@ -5,6 +5,6 @@ namespace bgl
 	void
 	CommandAllocator::ResetAllocator() noexcept
 	{
-		m_CommandAllocator->Reset() >> c_D3d12ErrChecker;
+		m_CommandAllocator->Reset() >> d3d12ErrChecker;
 	}
 }

@@ -13,7 +13,7 @@ namespace bgl
 		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
 
 		wrl::ComPtr<ID3D12Device10> device10;
-		device->QueryInterface(IID_PPV_ARGS(&device10)) >> c_D3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
 
 		gassert(desc.byteSize > 0, "Buffer byte size must be greater than zero");
 
@@ -53,7 +53,7 @@ namespace bgl
 			0,
 			nullptr,
 			IID_PPV_ARGS(&m_Buffer)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		std::wstring wName(desc.debugName.begin(), desc.debugName.end());
 		m_Buffer->SetName(wName.c_str());

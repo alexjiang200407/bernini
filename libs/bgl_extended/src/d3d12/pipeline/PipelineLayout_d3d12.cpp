@@ -169,14 +169,14 @@ namespace bgl::pipeline_util
 				D3D_ROOT_SIGNATURE_VERSION_1,
 				&sigBlob,
 				&errBlob) >>
-				c_D3d12ErrChecker;
+				d3d12ErrChecker;
 
 			device->CreateRootSignature(
 				0,
 				sigBlob->GetBufferPointer(),
 				sigBlob->GetBufferSize(),
 				IID_PPV_ARGS(&result.rootSignature)) >>
-				c_D3d12ErrChecker;
+				d3d12ErrChecker;
 
 			for (IShader* shader : shaders)
 			{

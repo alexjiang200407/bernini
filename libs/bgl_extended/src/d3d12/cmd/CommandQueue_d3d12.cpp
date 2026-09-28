@@ -13,11 +13,11 @@ namespace bgl
 		D3D12_COMMAND_QUEUE_DESC cqDesc = {};
 		cqDesc.Type                     = ConvertQueueType(type);
 		cqDesc.Flags                    = D3D12_COMMAND_QUEUE_FLAG_NONE;
-		device->CreateCommandQueue(&cqDesc, IID_PPV_ARGS(&m_CommandQueue)) >> c_D3d12ErrChecker;
+		device->CreateCommandQueue(&cqDesc, IID_PPV_ARGS(&m_CommandQueue)) >> d3d12ErrChecker;
 
-		device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)) >> c_D3d12ErrChecker;
+		device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_Fence)) >> d3d12ErrChecker;
 
-		m_Fence->Signal(m_LastCompletedFenceValue) >> c_D3d12ErrChecker;
+		m_Fence->Signal(m_LastCompletedFenceValue) >> d3d12ErrChecker;
 		m_FenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
 
 		gassert(m_FenceEvent != nullptr, "Failed to create fence event");
@@ -58,7 +58,7 @@ namespace bgl
 
 		std::lock_guard<std::mutex> lockGuard(m_FenceMutex);
 		m_CommandQueue->Signal(m_Fence.Get(), m_NextFenceValue.load(std::memory_order_relaxed)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		return m_NextFenceValue.fetch_add(1, std::memory_order_relaxed);
 	}
@@ -81,14 +81,13 @@ namespace bgl
 	void
 	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
-		m_CommandQueue->Wait(m_Fence.Get(), fenceValue) >> c_D3d12ErrChecker;
+		m_CommandQueue->Wait(m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
-		m_CommandQueue->Wait(cq->As<CommandQueue>()->m_Fence.Get(), fenceValue) >>
-			c_D3d12ErrChecker;
+		m_CommandQueue->Wait(cq->As<CommandQueue>()->m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 	}
 
 	void
@@ -169,7 +168,7 @@ namespace bgl
 		{
 			std::lock_guard<std::mutex> lockGuard(m_FenceMutex);
 			fenceValue = m_NextFenceValue++;
-			m_CommandQueue->Signal(m_Fence.Get(), fenceValue) >> c_D3d12ErrChecker;
+			m_CommandQueue->Signal(m_Fence.Get(), fenceValue) >> d3d12ErrChecker;
 		}
 
 		WaitForFenceCPUBlocking(fenceValue);

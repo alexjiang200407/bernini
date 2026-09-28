@@ -12,11 +12,12 @@
 
 namespace bgpu
 {
-	/** `hr >> c_D3d12ErrChecker` logs a failed HRESULT's system description and aborts. */
+	/** `hr >> d3d12ErrChecker` logs a failed HRESULT's system description and aborts. */
 	struct D3d12ErrorChecker
 	{};
 
-	inline constexpr D3d12ErrorChecker c_D3d12ErrChecker;
+	// Named for the call site it reads well at, `hr >> d3d12ErrChecker`, which the c_ prefix would not.
+	inline constexpr D3d12ErrorChecker d3d12ErrChecker;  // NOLINT(readability-identifier-naming)
 
 	BGPU_API std::wstring
 			 GetErrorDescription(HRESULT hr);

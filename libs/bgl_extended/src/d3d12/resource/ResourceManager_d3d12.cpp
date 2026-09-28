@@ -40,7 +40,7 @@ namespace bgl
 			rtvHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 			rtvHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 			m_Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RtvHeap)) >>
-				c_D3d12ErrChecker;
+				d3d12ErrChecker;
 		}
 
 		{
@@ -49,7 +49,7 @@ namespace bgl
 			dsvHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 			dsvHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 			m_Device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DsvHeap)) >>
-				c_D3d12ErrChecker;
+				d3d12ErrChecker;
 		}
 
 		{
@@ -58,7 +58,7 @@ namespace bgl
 			samplerHeapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
 			samplerHeapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 			m_Device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&m_SamplerHeap)) >>
-				c_D3d12ErrChecker;
+				d3d12ErrChecker;
 		}
 	}
 
@@ -971,7 +971,7 @@ namespace bgl
 		auto d3d12GfxCmdList = wrl::ComPtr<ID3D12GraphicsCommandList>();
 		cmdList->As<CommandList>()->GetD3D12CommandList()->QueryInterface(
 			IID_PPV_ARGS(&d3d12GfxCmdList)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		auto& rtv = GetRtv(handle);
 		d3d12GfxCmdList->ClearRenderTargetView(rtv.GetCpuHandle(), clearVal, 0, nullptr);
@@ -1082,7 +1082,7 @@ namespace bgl
 		auto d3d12GfxCmdList = wrl::ComPtr<ID3D12GraphicsCommandList>();
 		cmdList->As<CommandList>()->GetD3D12CommandList()->QueryInterface(
 			IID_PPV_ARGS(&d3d12GfxCmdList)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		D3D12_CLEAR_FLAGS flags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL;
 		auto&             dsv   = GetDsv(handle);

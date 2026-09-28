@@ -77,7 +77,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   device too. Tag GPU cases `[render]`; `[perf]` pins a scaling shape, never a wall-clock ceiling.
 - **Verify:** `just build`, then `just test` or the suites the change reaches (`just test editor
   gamelib`). Never two builds against one build dir at once. A run is not green until the logs
-  beside the executable have been read — `bgl.log`, and the newest `<exe>_crash_<stamp>.log`, since
+  beside the executable have been read — `bgpu.log`, and the newest `<exe>_crash_<stamp>.log`, since
   crash logs accumulate.
 - **Shaders, barriers or descriptors** also run `just run bgl_extended_tests -- --gpu-validation`
   before the PR: the only thing that catches a bad barrier.

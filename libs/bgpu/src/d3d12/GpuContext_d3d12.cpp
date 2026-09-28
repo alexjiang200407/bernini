@@ -35,19 +35,19 @@ namespace bgpu
 
 			explicit Context(const GpuContextDesc& desc) : ContextBase(desc, SLANG_DXIL)
 			{
-				core::logging::init_file_logger("bgl.log", static_cast<int>(desc.logLevel));
+				core::logging::init_file_logger("bgpu.log", static_cast<int>(desc.logLevel));
 
 				if (desc.enablePixDebug)
 					LoadLibraryA("WinPixGpuCapturer.dll");
 
 				if (desc.enableDebugLayer)
 				{
-					D3D12GetDebugInterface(IID_PPV_ARGS(&m_DebugController)) >> c_D3d12ErrChecker;
+					D3D12GetDebugInterface(IID_PPV_ARGS(&m_DebugController)) >> d3d12ErrChecker;
 					m_DebugController->EnableDebugLayer();
 					if (desc.enableGPUValidationLayer)
 						m_DebugController->SetEnableGPUBasedValidation(TRUE);
 
-					DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_DxgiInfoQueue)) >> c_D3d12ErrChecker;
+					DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_DxgiInfoQueue)) >> d3d12ErrChecker;
 					m_DxgiInfoQueue->SetBreakOnSeverity(
 						DXGI_DEBUG_ALL,
 						DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR,
@@ -76,7 +76,7 @@ namespace bgpu
 						D3D12_MESSAGE_CALLBACK_FLAG_NONE,
 						this,
 						&m_MessageCallbackCookie) >>
-						c_D3d12ErrChecker;
+						d3d12ErrChecker;
 				}
 			}
 

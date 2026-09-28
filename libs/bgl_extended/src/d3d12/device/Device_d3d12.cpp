@@ -139,7 +139,7 @@ namespace bgl
 		m_Device->CreateCommandAllocator(
 			ConvertQueueType(type),
 			IID_PPV_ARGS(&d3d12CmdAllocator)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		return core::SharedRef<CommandAllocator>::Make(std::move(d3d12CmdAllocator));
 	}

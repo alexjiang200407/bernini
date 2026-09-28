@@ -9,7 +9,7 @@ namespace bgl
 		gassert(desc.byteSize > 0, "Readback buffer size must be greater than zero");
 
 		wrl::ComPtr<ID3D12Device10> device10;
-		device->QueryInterface(IID_PPV_ARGS(&device10)) >> c_D3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
 
 		D3D12_HEAP_PROPERTIES heapProps = {};
 		heapProps.Type                  = D3D12_HEAP_TYPE_READBACK;
@@ -37,7 +37,7 @@ namespace bgl
 			0,
 			nullptr,
 			IID_PPV_ARGS(&m_Buffer)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
 		if (!desc.debugName.empty())
 		{
@@ -81,7 +81,7 @@ namespace bgl
 		{
 			// Read the whole buffer.
 			D3D12_RANGE readRange{ 0, static_cast<SIZE_T>(m_ByteSize) };
-			m_Buffer->Map(0, &readRange, &m_Mapped) >> c_D3d12ErrChecker;
+			m_Buffer->Map(0, &readRange, &m_Mapped) >> d3d12ErrChecker;
 		}
 		return m_Mapped;
 	}

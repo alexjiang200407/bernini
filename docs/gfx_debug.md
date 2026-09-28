@@ -52,8 +52,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 |---|---|
 | Shader produced wrong/impossible data (bad index, overflow) but didn't crash | **GPU assertion** via `dbg_raise` |
 | A pass reads a buffer element nobody wrote this frame, and the stale value looks plausible | **Buffer poisoning** (§7) |
-| D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgl.log` |
-| Silent wrong output, want a timeline of what the engine did | **`bgl.log`** (raise `logLevel` to `kTrace`) |
+| D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgpu.log` |
+| Silent wrong output, want a timeline of what the engine did | **`bgpu.log`** (raise `logLevel` to `kTrace`) |
 | Broken internal invariant should stop the process now | **`gassert`/`gfatal`** |
 | Need to *see* what a mesh, material or clip renders as, with no window | **`bgl_ai_viewer`** (§8) |
 | Process already crashed; need the stack | **`{exe}_crash_*.log`** (newest) |
@@ -153,7 +153,7 @@ flowchart TD
 
 ---
 
-## 2. Logging — `bgl.log`
+## 2. Logging — `bgpu.log`
 
 bgl_extended logging is **spdlog aliased into the `bgl` namespace**. In
 [libs/bgl_extended/src/pch.h](libs/bgl_extended/src/pch.h): `namespace bgl { namespace logger = spdlog; }`. The
@@ -163,13 +163,13 @@ call `logger::…` with no extra include.
 
 * **Log file:** one per process, named by whoever opens it first. The GPU context
   ([GpuContext_d3d12.cpp](libs/bgpu/src/d3d12/GpuContext_d3d12.cpp),
-  [GpuContext_metal.cpp](libs/bgpu/src/metal/GpuContext_metal.cpp)) asks for `bgl.log`
+  [GpuContext_metal.cpp](libs/bgpu/src/metal/GpuContext_metal.cpp)) asks for `bgpu.log`
   next to the binary, which is what `bgl_extended_tests` and the examples get; under the editor
   `main.cpp` has already asked for `editor.log`, so the context's call only applies its level.
   `core::logging::init_file_logger` ([log.h](libs/core/include/core/log/log.h)) is where that rule
   lives: **the first call wins the file, every call applies its level**. Every renderer on the
   context, and every other owner of the device, therefore shares one run's log — which is why the
-  name is `bgl.log` and not the renderer's.
+  name is `bgpu.log`, the device's, and not a renderer's.
 * **Level & flush level** come from `GpuContextDesc::logLevel`
   ([GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h), enum `kTrace … kOff`).
   **Default is `kError`** — to see the timeline of a run, pass `logLevel = kTrace` when calling
@@ -197,7 +197,7 @@ call `logger::…` with no extra include.
   why a duration was once written onto the line that reported it — that is now a Tracy zone, and the
   two logs are one.
 
-Per [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md): after running `bgl_extended_tests`, always read `bgl.log`
+Per [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md): after running `bgl_extended_tests`, always read `bgpu.log`
 for the warnings/errors/info the run emitted.
 
 ---
@@ -268,7 +268,7 @@ before any renderer exists:
 * `enableGPUValidationLayer` → `SetEnableGPUBasedValidation(TRUE)`. **Only meaningful with
   `enableDebugLayer` on.**
 * `enablePixDebug` → loads `WinPixGpuCapturer.dll` for PIX captures. See [RHI](docs/rhi.md).
-* Validation messages are routed to `bgl.log` through the GPU context's callback registered on
+* Validation messages are routed to `bgpu.log` through the GPU context's callback registered on
   `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error
   into `gfatal`.
 * When the context dies with the layer on it reports the live objects, so a leak is attributed to
@@ -387,7 +387,7 @@ struct MyHandler : bgl::IGpuAssertionHandler
 };
 
 bgpu::GpuContextDesc ctxDesc;
-ctxDesc.enableDebugLayer         = true;       // D3D12 validation into bgl.log
+ctxDesc.enableDebugLayer         = true;       // D3D12 validation into bgpu.log
 ctxDesc.enableGPUValidationLayer = true;
 ctxDesc.logLevel                 = bgpu::LogLevel::kTrace;  // full timeline
 

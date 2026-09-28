@@ -17,7 +17,7 @@ namespace bgl
 		heapDesc.Type                       = type;
 		heapDesc.NumDescriptors             = capacity;
 		heapDesc.Flags                      = flags;
-		device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_Heap)) >> c_D3d12ErrChecker;
+		device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_Heap)) >> d3d12ErrChecker;
 
 		m_HeapStart     = m_Heap->GetCPUDescriptorHandleForHeapStart();
 		m_IncrementSize = device->GetDescriptorHandleIncrementSize(type);

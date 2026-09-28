@@ -10,7 +10,7 @@ auto desc             = bgpu::GpuContextDesc();
 desc.enableDebugLayer = true;
 desc.clientShaderDir  = projectShaders;                 // the client's modules, importable by name
 
-auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug layer, bgl.log
+auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug layer, bgpu.log
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 // a compute client is another: it takes the same context
 ```
@@ -28,7 +28,7 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 * **What lives here is what must precede the device or be shared through it.** The D3D12 debug
   layer, GPU-based validation, the DXGI and D3D12 info queues and the callback that routes their
   messages into the log, the PIX capturer load, Metal's validation-from-environment detection, the
-  device itself, the `bgl.log` file, and the Slang sessions
+  device itself, the `bgpu.log` file, and the Slang sessions
   ([src/SlangSessions.h](../libs/bgpu/src/SlangSessions.h)) with their search paths. With
   the debug layer on, the context's destructor reports live objects, so a leak is attributed to
   whichever owner made it rather than to "the device".
@@ -61,7 +61,7 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 | `GetSourceSalt` | same | The order-independent fold of every registered module, name and text; an owner's shader cache mixes it into each key |
 | `CreateGpuContext` | same | The one factory, defined by the backend the build selected |
 | `GetD3d12Device`, `GetMtlDevice` | `include/bgpu/{d3d12,metal}/native_device.h` | The native device behind a context, borrowed |
-| `c_D3d12ErrChecker` | [include/bgpu/d3d12/D3d12ErrorChecker.h](../libs/bgpu/include/bgpu/d3d12/D3d12ErrorChecker.h) | `hr >> c_D3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
+| `d3d12ErrChecker` | [include/bgpu/d3d12/D3d12ErrorChecker.h](../libs/bgpu/include/bgpu/d3d12/D3d12ErrorChecker.h) | `hr >> d3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
 | `AutoreleaseNet` | [include/bgpu/metal/AutoreleaseNet.h](../libs/bgpu/include/bgpu/metal/AutoreleaseNet.h) | A share of the thread's one long-lived autorelease pool, so two owners on one thread die in either order |
 
 ## Threading & Synchronization

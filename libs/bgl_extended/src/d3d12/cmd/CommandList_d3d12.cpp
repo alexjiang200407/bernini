@@ -41,10 +41,10 @@ namespace bgl
 		gassert(d3d12CommandAllocator != nullptr, "D3D12 Command allocator cannot be null");
 
 		wrl::ComPtr<ID3D12Device> device;
-		d3d12CommandAllocator->GetDevice(IID_PPV_ARGS(&device)) >> c_D3d12ErrChecker;
+		d3d12CommandAllocator->GetDevice(IID_PPV_ARGS(&device)) >> d3d12ErrChecker;
 
 		wrl::ComPtr<ID3D12Device4> device4;
-		device->QueryInterface(IID_PPV_ARGS(&device4)) >> c_D3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device4)) >> d3d12ErrChecker;
 
 		auto d3d12CmdListType = ConvertQueueType(desc.type);
 
@@ -54,9 +54,9 @@ namespace bgl
 			d3d12CmdListType,
 			D3D12_COMMAND_LIST_FLAG_NONE,
 			IID_PPV_ARGS(&commandList)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 
-		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> c_D3d12ErrChecker;
+		commandList->QueryInterface(IID_PPV_ARGS(&m_CommandList)) >> d3d12ErrChecker;
 
 		D3D12_INDIRECT_ARGUMENT_DESC argDesc = {};
 		argDesc.Type                         = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
@@ -67,7 +67,7 @@ namespace bgl
 		sigDesc.pArgumentDescs               = &argDesc;
 
 		device->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(&m_MeshDispatchSig)) >>
-			c_D3d12ErrChecker;
+			d3d12ErrChecker;
 	}
 
 	void
@@ -278,7 +278,7 @@ namespace bgl
 
 		gassert(d3d12Allocator != nullptr, "Command Allocator cannot be null");
 
-		m_CommandList->Reset(d3d12Allocator, nullptr) >> c_D3d12ErrChecker;
+		m_CommandList->Reset(d3d12Allocator, nullptr) >> d3d12ErrChecker;
 		m_LastCompletedFence = cmdQueue->GetLastCompletedFence();
 		m_RecordingVersion   = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, false);
 
@@ -297,7 +297,7 @@ namespace bgl
 		gassert(m_Open, "Command list must be open before closing");
 
 		gassert(m_TimingHeap == nullptr, "Command list closed with a timed span open");
-		m_CommandList->Close() >> c_D3d12ErrChecker;
+		m_CommandList->Close() >> d3d12ErrChecker;
 		m_CurrentMeshletState.reset();
 		m_Open = false;
 	}

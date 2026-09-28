@@ -14,7 +14,7 @@ namespace wrl = Microsoft::WRL;
 
 namespace bgl
 {
-	using bgpu::c_D3d12ErrChecker;
+	using bgpu::d3d12ErrChecker;
 }
 
 #include <slang-com-ptr.h>
