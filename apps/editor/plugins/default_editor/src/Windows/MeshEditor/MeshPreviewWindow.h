@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Windows/MeshEditor/lod_view.h"
+
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/OrbitCamera.h>
@@ -90,6 +92,7 @@ public:
 	{
 		bgl::MeshInstanceHandle handle;
 		uint32_t                geomIndex = 0;
+		glm::mat4               world     = glm::mat4(1.0f);
 	};
 
 	struct SubmeshTarget
@@ -181,6 +184,31 @@ public:
 	TakeDrop(const QMimeData* mime);
 
 	/**
+	 * The levels of detail of the mesh the selected submesh belongs to -- the first mesh's with
+	 * nothing selected -- or null for the default sphere, which has none to list.
+	 */
+	[[nodiscard]] const editor::MeshLods*
+	GetShownLods() const noexcept;
+
+	/**
+	 * What the cull draws of the shown mesh's first placement from the current camera. nullopt
+	 * with nothing listed, or before the view has a size. Remembers the level it read, since the
+	 * cull's hysteresis depends on the level it drew last.
+	 */
+	[[nodiscard]] std::optional<editor::LodReadout>
+	ReadShownLod();
+
+	/** Pins every placement to `level` (ISceneView::SetLodSelection), or chooses by size again. */
+	void
+	SetForcedLod(std::optional<uint32_t> level);
+
+	[[nodiscard]] std::optional<uint32_t>
+	GetForcedLod() const noexcept
+	{
+		return m_ForcedLod;
+	}
+
+	/**
 	 * Back to what the window opens as: the default sphere, lit by the configured environment.
 	 *
 	 * What leaving the panel does, so the next visit starts from the same place a fresh editor
@@ -199,6 +227,14 @@ Q_SIGNALS:
 	// The preview geometry changed, so its submeshes did too.
 	void
 	GeometryChanged();
+
+	// The mesh GetShownLods lists changed without the geometry changing: a selection on another.
+	void
+	ShownLodsChanged();
+
+	// The camera or the view moved, so the level a placement draws may have.
+	void
+	ViewChanged();
 
 	// A click landed on this selector index (-1: empty space). Not applied here: the editor's
 	// submesh selector owns the selection, and routing the pick through it keeps the two agreeing.
@@ -260,14 +296,18 @@ private:
 	void
 	ShowDefaultSphere();
 
-	std::vector<bgl::GeomHandle> m_Geoms;
-	std::vector<InstanceRef>     m_Instances;
-	std::vector<SubmeshRef>      m_SubmeshRefs;
-	bgl::MaterialHandle          m_DefaultMaterial;
-	QStringList                  m_SubmeshNames;
-	QStringList                  m_SubmeshMaterialPaths;
-	std::filesystem::path        m_MeshPath;  // empty for the default sphere
-	std::filesystem::path        m_DataRoot;  // empty until a project is opened
+	std::vector<bgl::GeomHandle>  m_Geoms;
+	std::vector<editor::MeshLods> m_GeomLods;  // parallel to m_Geoms
+	uint32_t                      m_ShownGeom = 0;
+	std::optional<uint32_t>       m_ForcedLod;
+	std::optional<uint32_t>       m_LastLod;
+	std::vector<InstanceRef>      m_Instances;
+	std::vector<SubmeshRef>       m_SubmeshRefs;
+	bgl::MaterialHandle           m_DefaultMaterial;
+	QStringList                   m_SubmeshNames;
+	QStringList                   m_SubmeshMaterialPaths;
+	std::filesystem::path         m_MeshPath;  // empty for the default sphere
+	std::filesystem::path         m_DataRoot;  // empty until a project is opened
 
 	// The configured environment is kept whole because a drop carries only a path and Reset has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

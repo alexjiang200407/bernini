@@ -25,10 +25,12 @@
 #include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <cstdint>
 #include <editor_plugin_api/EditorPanel.h>
@@ -72,6 +74,7 @@
 #include <QStringList>
 #include <QTabBar>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -88,6 +91,7 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <qcontainerfwd.h>
 #include <qlist.h>
 #include <qmainwindow.h>
@@ -169,6 +173,30 @@ namespace
 		{
 			const auto mesh = assetlib::toBMesh(assetlib::loadFromGltf("assets/suzanne.glb"));
 			const auto path = fs::path(temp.path().toStdString()) / "external.bmesh";
+			core::file::write_atomic(path, assetlib::AssetCodec<assetlib::BMesh>::Serialize(mesh));
+			return path;
+		}
+
+		// The same mesh as three levels of detail, drawn from 100, 20 and 0 pixels: level 0's
+		// submeshes repeated as levels 1 and 2, which draw identically and differ only by level.
+		[[nodiscard]] fs::path
+		ExternalLodMesh() const
+		{
+			auto mesh = assetlib::toBMesh(assetlib::loadFromGltf("assets/suzanne.glb"));
+			REQUIRE(mesh.meshes.size() == 1);
+			assetlib::Mesh& entry = mesh.meshes[0];
+			REQUIRE(entry.firstSubmesh + entry.submeshCount == mesh.submeshes.size());
+
+			const auto levelZero = std::vector<assetlib::Submesh>(
+				mesh.submeshes.begin() + entry.firstSubmesh,
+				mesh.submeshes.end());
+			for (int copy = 0; copy < 2; ++copy)
+				mesh.submeshes.insert(mesh.submeshes.end(), levelZero.begin(), levelZero.end());
+			entry.lodCount = 3;
+			entry.firstLod = 0;
+			mesh.lods      = { { 100.0f }, { 20.0f }, { 0.0f } };
+
+			const auto path = fs::path(temp.path().toStdString()) / "external_lods.bmesh";
 			core::file::write_atomic(path, assetlib::AssetCodec<assetlib::BMesh>::Serialize(mesh));
 			return path;
 		}
@@ -1605,6 +1633,66 @@ TEST_CASE(
 	QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, view->rect().center());
 	REQUIRE(picked.count() == 1);
 	CHECK(picked.front().front().toInt() == 0);
+}
+
+TEST_CASE(
+	"The Mesh Editor lists a mesh's levels of detail and pins the one chosen",
+	"[mainwindow][render][materialplugin][lod]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	auto* preview = window.findChild<MeshPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	auto* selector = window.findChild<QComboBox*>(QStringLiteral("LodSelector"));
+	auto* table    = window.findChild<QTableWidget*>(QStringLiteral("LodTable"));
+	auto* readout  = window.findChild<QLabel*>(QStringLiteral("LodReadout"));
+	REQUIRE(selector != nullptr);
+	REQUIRE(table != nullptr);
+	REQUIRE(readout != nullptr);
+
+	const auto forcedLevel = [view]() {
+		auto forced = std::optional<bgl::LodLevel>();
+		view->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& sceneView) {
+			forced = sceneView->GetLodSelection().forceLevel;
+		});
+		return forced;
+	};
+
+	preview->LoadMesh(editor.ExternalLodMesh());
+	REQUIRE(table->rowCount() == 3);
+	CHECK(selector->count() == 4);
+	CHECK(table->item(0, 2)->text() == QStringLiteral("100 px"));
+	CHECK(table->item(2, 2)->text() == QStringLiteral("any size"));
+
+	// Framed at three times its radius, the mesh spans far more than level 0's 100 pixels.
+	CHECK(readout->text().startsWith(QStringLiteral("Drawing LOD 0")));
+	CHECK_FALSE(forcedLevel().has_value());
+
+	selector->setCurrentIndex(3);
+	CHECK(forcedLevel() == bgl::LodLevel::kLod2);
+	CHECK(readout->text().startsWith(QStringLiteral("Pinned to LOD 2")));
+	CHECK(table->item(2, 0)->font().bold());
+	CHECK_FALSE(table->item(0, 0)->font().bold());
+
+	SECTION("Auto hands the choice back to the size on screen")
+	{
+		selector->setCurrentIndex(0);
+		CHECK_FALSE(forcedLevel().has_value());
+		CHECK(readout->text().startsWith(QStringLiteral("Drawing LOD 0")));
+	}
+
+	SECTION("Another mesh starts from Auto")
+	{
+		preview->LoadMesh(editor.ExternalMesh());
+		CHECK_FALSE(forcedLevel().has_value());
+		CHECK(table->rowCount() == 1);
+		CHECK(selector->currentIndex() == 0);
+	}
 }
 
 TEST_CASE(

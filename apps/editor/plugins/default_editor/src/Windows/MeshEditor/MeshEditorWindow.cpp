@@ -72,6 +72,7 @@
 #include <utility>
 #include <vector>
 
+#include "Windows/MeshEditor/LodBar.h"
 #include "Windows/MeshEditor/MaterialGraphModel.h"
 #include "Windows/MeshEditor/MaterialGraphScene.h"
 #include "Windows/MeshEditor/MaterialGraphView.h"
@@ -351,8 +352,30 @@ MeshEditorWindow::MeshEditorWindow(
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
 	QWidget* rightPanel = nullptr;
 	{
-		m_Preview  = new MeshPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
-		rightPanel = m_Preview;
+		// The bar sits under the preview rather than inside it, so the preview stays the size of
+		// the viewport its camera aspect and its picking are measured against.
+		rightPanel = new QWidget(splitter);
+		m_Preview  = new MeshPreviewWindow(m_Host, rightPanel, m_Desc.viewport, m_Desc.previewEnv);
+		m_LodBar   = new LodBar(m_Host.GetLanguageResolver(), rightPanel);
+
+		auto* rightLayout = new QVBoxLayout(rightPanel);
+		rightLayout->setContentsMargins(0, 0, 0, 0);
+		rightLayout->setSpacing(0);
+		rightLayout->addWidget(m_Preview, 1);
+		rightLayout->addWidget(m_LodBar);
+
+		connect(
+			m_Preview,
+			&MeshPreviewWindow::ShownLodsChanged,
+			this,
+			&MeshEditorWindow::RefreshLodBar);
+		connect(m_Preview, &MeshPreviewWindow::ViewChanged, this, [this]() {
+			m_LodBar->ShowReadout(m_Preview->ReadShownLod(), m_Preview->GetForcedLod().has_value());
+		});
+		connect(m_LodBar, &LodBar::ForcedLodChosen, this, [this](std::optional<uint32_t> level) {
+			m_Preview->SetForcedLod(level);
+			m_LodBar->ShowReadout(m_Preview->ReadShownLod(), level.has_value());
+		});
 
 		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
 		// reloading -- so what they hold unwritten is written while it is still theirs.
@@ -363,6 +386,7 @@ MeshEditorWindow::MeshEditorWindow(
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MeshPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
+			RefreshLodBar();
 			RefreshStage();
 		});
 
@@ -725,6 +749,16 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		m_SubmeshSelector->setCurrentIndex(0);
 
 	RefreshActions();
+}
+
+void
+MeshEditorWindow::RefreshLodBar()
+{
+	if (m_Preview == nullptr)
+		return;
+
+	m_LodBar->ShowLods(m_Preview->GetShownLods(), m_Preview->GetForcedLod());
+	m_LodBar->ShowReadout(m_Preview->ReadShownLod(), m_Preview->GetForcedLod().has_value());
 }
 
 void

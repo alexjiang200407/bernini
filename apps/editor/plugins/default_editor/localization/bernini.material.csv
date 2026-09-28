@@ -38,6 +38,20 @@ layer_label_hashed_alpha,Hashed Alpha
 layer_label_opaque,Opaque
 layer_row_label,Layer
 layer_selector_tooltip,"How this surface material's alpha is read: discarded below a cutoff (Alpha Tested), blended back-to-front (Alpha Blend), or stochastic coverage under temporal AA (Hashed Alpha)."
+lod_auto,Auto
+lod_drawn_always,any size
+lod_drawn_from,{0} px
+lod_drawn_from_column,Drawn From
+lod_label,Level of Detail
+lod_level,LOD {0}
+lod_level_column,Level
+lod_pixels,{0} px on screen
+lod_pixels_inside,fills the view
+lod_readout_auto,Drawing LOD {0}: {1}
+lod_readout_nothing,"Nothing drawn: {0}, under every level"
+lod_readout_pinned,Pinned to LOD {0}: {1}
+lod_selector_tooltip,"Auto draws the level the game would at this size on screen. A level pins it, however near or far the camera is."
+lod_triangles_column,Triangles
 load_mesh_failed,"Could not load '{0}':
 
 {1}"

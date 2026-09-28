@@ -22,6 +22,7 @@
 #include "Windows/MeshEditor/material_overrides.h"
 #include "Windows/MeshEditor/mesh_editor_ui.h"
 
+class LodBar;
 class TexturePreviewCache;
 
 class QAction;
@@ -305,12 +306,17 @@ private:
 	void
 	RefreshActions();
 
+	/** Lists the preview's shown levels in the bar under it, and what it draws now. */
+	void
+	RefreshLodBar();
+
 	editor::IEditorHost& m_Host;
 	MeshEditorWindowDesc m_Desc;
 
 	std::filesystem::path m_DataRoot;
 
 	MeshPreviewWindow* m_Preview = nullptr;
+	LodBar*            m_LodBar  = nullptr;
 
 	TexturePreviewCache* m_TexturePreviews = nullptr;
 

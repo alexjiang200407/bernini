@@ -1,5 +1,6 @@
 #include "MeshPreviewWindow.h"
 
+#include "Windows/MeshEditor/lod_view.h"
 #include "mesh_drop_import.h"
 #include <QEvent>
 #include <QVBoxLayout>
@@ -37,6 +38,10 @@
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
+#include <bgl/Viewport.h>
+#include <bgl/lod_select.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/localize.h>
@@ -173,9 +178,15 @@ MeshPreviewWindow::ClearGeometry()
 		}
 	});
 
+	if (m_ForcedLod.has_value())
+		SetForcedLod(std::nullopt);
+
 	m_Raycaster.Clear();
 	m_Instances.clear();
 	m_Geoms.clear();
+	m_GeomLods.clear();
+	m_ShownGeom = 0;
+	m_LastLod.reset();
 	m_SubmeshRefs.clear();
 	m_SubmeshNames.clear();
 	m_SubmeshMaterialPaths.clear();
@@ -205,6 +216,7 @@ MeshPreviewWindow::ShowDefaultSphere()
 	{
 		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 			m_Geoms.push_back(context.scene.AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
+			m_GeomLods.emplace_back();
 			m_Instances.push_back(
 				{ view->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
 
@@ -324,6 +336,7 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				if (inserted)
 				{
 					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, {}));
+					m_GeomLods.push_back(editor::LodsOf(mesh, node.mesh));
 					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
 
 					// Name each of this mesh's submeshes once, in the order the selector shows them.
@@ -355,7 +368,9 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 				const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 				m_Instances.push_back(
-					{ view->CreateStaticMeshInstance(m_Geoms[it->second], world), it->second });
+					{ view->CreateStaticMeshInstance(m_Geoms[it->second], world),
+				      it->second,
+				      world });
 				m_Raycaster.AddInstance(raycastGeoms[it->second], world);
 
 				bmesh::GrowBoundsForMesh(mesh, node.mesh, world, aabbMin, aabbMax);
@@ -447,6 +462,16 @@ MeshPreviewWindow::GetInstanceTargets(
 void
 MeshPreviewWindow::SetSelectedSubmesh(std::optional<uint32_t> submeshIndex)
 {
+	const uint32_t shown = submeshIndex.has_value() && *submeshIndex < m_SubmeshRefs.size() ?
+	                           m_SubmeshRefs[*submeshIndex].geomIndex :
+	                           0;
+	if (shown != m_ShownGeom)
+	{
+		m_ShownGeom = shown;
+		m_LastLod.reset();
+		Q_EMIT ShownLodsChanged();
+	}
+
 	m_Viewport->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& view) {
 		try
 		{
@@ -647,6 +672,54 @@ MeshPreviewWindow::UpdateCamera()
 
 	m_Camera = m_Orbit.GetCamera(aspect);
 	m_Viewport->SetCamera(m_Camera);
+	Q_EMIT ViewChanged();
+}
+
+const editor::MeshLods*
+MeshPreviewWindow::GetShownLods() const noexcept
+{
+	if (m_ShownGeom >= m_GeomLods.size() || m_GeomLods[m_ShownGeom].minPixels.empty())
+		return nullptr;
+	return &m_GeomLods[m_ShownGeom];
+}
+
+std::optional<editor::LodReadout>
+MeshPreviewWindow::ReadShownLod()
+{
+	const editor::MeshLods* lods       = GetShownLods();
+	const uint32_t          renderRows = m_Viewport->GetRenderHeight();
+	if (lods == nullptr || renderRows == 0)
+		return std::nullopt;
+
+	const auto placement = std::ranges::find(m_Instances, m_ShownGeom, &InstanceRef::geomIndex);
+	if (placement == m_Instances.end())
+		return std::nullopt;
+
+	const float pixelsPerUnit = bgl::PixelsPerUnit(
+		bgl::Viewport(1.0f, static_cast<float>(renderRows)),
+		m_Camera.GetViewProjection());
+	const editor::LodReadout readout = editor::ReadLod(
+		*lods,
+		placement->world,
+		m_Orbit.GetEyePosition(),
+		pixelsPerUnit,
+		bgl::LodSelectionDesc().pixelScale,
+		m_ForcedLod,
+		m_LastLod);
+	m_LastLod = readout.level;
+	return readout;
+}
+
+void
+MeshPreviewWindow::SetForcedLod(std::optional<uint32_t> level)
+{
+	m_ForcedLod = level;
+	m_Viewport->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& view) {
+		auto selection = view->GetLodSelection();
+		selection.forceLevel =
+			level.has_value() ? std::optional(static_cast<bgl::LodLevel>(*level)) : std::nullopt;
+		view->SetLodSelection(selection);
+	});
 }
 
 void
