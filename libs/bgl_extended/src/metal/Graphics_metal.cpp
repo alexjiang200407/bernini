@@ -1,3 +1,4 @@
+#include "AutoreleaseNet_metal.h"
 #include "MetalErrorChecker.h"
 #include "cmd/CommandQueue_metal.h"
 #include "device/Device_metal.h"
@@ -14,7 +15,6 @@
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
-#include <bgpu/metal/AutoreleaseNet.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -326,7 +326,7 @@ namespace bgl
 		// Below the device: what the net holds are Metal objects that reference the device, so
 		// draining it once the device is released deallocs them into a purged one. A share rather
 		// than a pool of this object's own, so two owners on one thread die in either order.
-		bgpu::AutoreleaseNet m_AutoreleaseNet;
+		AutoreleaseNet m_AutoreleaseNet;
 
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 

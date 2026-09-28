@@ -46,8 +46,8 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 * **Built as the renderer is.** It holds process-wide GPU state, so `BERNINI_RENDERER_LIBRARY_TYPE`
   decides its kind exactly as it does `bgl_extended`'s and `core_process`'s
   ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks the few exports —
-  `CreateGpuContext`, the two native-device accessors, the D3D12 error checker and
-  `AutoreleaseNet`; everything else crosses the boundary through virtual calls. On Metal it is
+  `CreateGpuContext`, the two native-device accessors, the D3D12 error checker and the Slang error
+  checker; everything else crosses the boundary through virtual calls. On Metal it is
   also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
   user in the process links.
 
@@ -63,7 +63,6 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 | `CreateGpuContext` | same | The one factory, defined by the backend the build selected |
 | `GetD3d12Device`, `GetMtlDevice` | `include/bgpu/{d3d12,metal}/native_device.h` | The native device behind a context, borrowed |
 | `d3d12ErrChecker` | [include/bgpu/d3d12/D3d12ErrorChecker.h](../libs/bgpu/include/bgpu/d3d12/D3d12ErrorChecker.h) | `hr >> d3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
-| `AutoreleaseNet` | [include/bgpu/metal/AutoreleaseNet.h](../libs/bgpu/include/bgpu/metal/AutoreleaseNet.h) | A share of the thread's one long-lived autorelease pool, so two owners on one thread die in either order |
 
 ## Threading & Synchronization
 
@@ -80,9 +79,10 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   and holds nothing across calls — and every other owner must.
 * **Teardown.** Each owner drains the queues it created before dropping its context reference.
   Nothing flushes "the device": no owner has all of its queues.
-* **Metal autorelease pools are a per-thread stack**, so no owner holds a pool of its own for its
-  whole life: a long-lived owner holds a share of the thread's one net (`bgpu::AutoreleaseNet`) and
-  scopes a pool of its own around anything that autoreleases, as `bgl_metal` already does.
+* **Metal autorelease pools are a per-thread stack**, so an owner scopes a pool around anything that
+  autoreleases and never holds one for its whole life: two long-lived pools on one thread can only
+  die in reverse order of creation. The renderer's long-lived net for strays is its own
+  (`bgl_metal`'s `AutoreleaseNet`), shared between the renderers on a thread; `bgpu` keeps no pool.
 
 ## Verification
 

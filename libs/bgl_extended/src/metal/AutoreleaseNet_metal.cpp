@@ -1,9 +1,8 @@
+#include "AutoreleaseNet_metal.h"
 #include "metal_cpp.h"
-#include <bgpu/metal/AutoreleaseNet.h>
-#include <core/err/util.h>
 #include <cstdint>
 
-namespace bgpu
+namespace bgl
 {
 	namespace
 	{
@@ -24,7 +23,7 @@ namespace bgpu
 
 	AutoreleaseNet::~AutoreleaseNet() noexcept
 	{
-		core::ensure(g_Net.shares > 0, "An autorelease net share was released on another thread");
+		gassert(g_Net.shares > 0, "An autorelease net share was released on another thread");
 		if (--g_Net.shares == 0)
 		{
 			g_Net.pool->release();

@@ -61,8 +61,8 @@ and is a target of its own; nothing here is part of it.
 - **A scope that creates an autoreleased Metal object owns the pool it drains into.** Most Metal
   factories autorelease — `commandBuffer()`, `nextDrawable()` — and the pool the object lands in is
   whichever one on this thread was pushed last. `Graphics` holds a share of the thread's one
-  long-lived net for strays (`bgpu::AutoreleaseNet`, from `bgpu`: pools are a stack, so two
-  owners on one thread cannot each hold a pool for their whole lives), and that net drains *before*
+  long-lived net for strays (`AutoreleaseNet_metal.h`: pools are a stack, so two renderers on one
+  thread cannot each hold a pool for their whole lives), and that net drains *before*
   the device, because a Metal object outliving the device it references deallocs into a purged one
   and segfaults. Anything creating an autoreleased object
   therefore scopes its own `NS::AutoreleasePool` — `CommandList::Open`..`Close`,
