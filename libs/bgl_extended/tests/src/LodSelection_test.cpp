@@ -1,10 +1,17 @@
 #include "util/TestOptions.h"
+#include "util/util.h"
+#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
+#include <bgl/Viewport.h>
 #include <bgl/error.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/CullView.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -112,4 +119,70 @@ TEST_CASE("a selection no cull could act on is refused, and the old one kept", "
 	}
 
 	CHECK(view->GetLodSelection().pixelScale == 2.0f);
+}
+
+TEST_CASE("a draw resolves the view's selection into the cull view it uploads", "[lod][culling]")
+{
+	const bgl::idl::CullView built = bgl::BuildCullView(glm::mat4(1.0f));
+	const auto               eye   = glm::vec3(1.0f, 2.0f, 3.0f);
+
+	SECTION("as authored")
+	{
+		auto view = built;
+		bgl::ResolveLodSelection(view, bgl::LodSelectionDesc(), eye, 540.0f, 0.03f);
+
+		CHECK(view.cameraPosAndPixelsPerUnit == glm::vec4(eye, 540.0f));
+		CHECK(view.lodPixelScale == 1.0f);
+		CHECK(view.lodForcedLevel == bgl::idl::cLodForceNone);
+		CHECK(view.lodFadeStep == Catch::Approx(0.03f / 0.15f));
+		CHECK(view.viewProj == built.viewProj);
+	}
+
+	SECTION("scaled, forced and swapped")
+	{
+		auto desc        = bgl::LodSelectionDesc();
+		desc.pixelScale  = 2.0f;
+		desc.forceLevel  = bgl::LodLevel::kLod3;
+		desc.fadeSeconds = 0.0f;
+
+		auto view = built;
+		bgl::ResolveLodSelection(view, desc, eye, 540.0f, 0.03f);
+
+		CHECK(view.lodPixelScale == 2.0f);
+		CHECK(view.lodForcedLevel == 3u);
+		CHECK(view.lodFadeStep == 1.0f);
+	}
+
+	SECTION("a clock that did not advance completes a dissolve at once")
+	{
+		auto view = built;
+		bgl::ResolveLodSelection(view, bgl::LodSelectionDesc(), eye, 540.0f, 0.0f);
+		CHECK(view.lodFadeStep == 1.0f);
+	}
+}
+
+TEST_CASE(
+	"a world unit spans the pixels the projection gives it at a distance of one",
+	"[lod][culling]")
+{
+	// A 90-degree vertical field of view puts a unit at distance one across half the height.
+	const glm::mat4 viewProj =
+		bgl::Camera()
+			.LookAt(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 100.0f)
+			.GetViewProjection();
+
+	CHECK(bgl::PixelsPerUnit(bgl::Viewport(1920.0f, 1080.0f), viewProj) == Catch::Approx(540.0f));
+
+	SECTION("turning the camera does not change it")
+	{
+		const glm::mat4 turned = bgl::Camera()
+		                             .LookAt(
+										 glm::vec3(4.0f, 1.0f, 2.0f),
+										 glm::vec3(-3.0f, 0.5f, 7.0f),
+										 glm::vec3(0.0f, 1.0f, 0.0f))
+		                             .Perspective(glm::radians(90.0f), 16.0f / 9.0f, 0.1f, 100.0f)
+		                             .GetViewProjection();
+		CHECK(bgl::PixelsPerUnit(bgl::Viewport(1920.0f, 1080.0f), turned) == Catch::Approx(540.0f));
+	}
 }

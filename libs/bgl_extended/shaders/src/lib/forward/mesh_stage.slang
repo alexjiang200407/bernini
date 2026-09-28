@@ -10,6 +10,9 @@
 
 import idl.Constants;
 import idl.Geom;
+import idl.InstanceLod;
+import idl.LodDrawMode;
+import idl.LodLevel;
 import idl.MeshInstance;
 import idl.Meshlet;
 import idl.MeshletGroup;
@@ -34,6 +37,9 @@ public struct MeshletContext
     public MeshInstance mesh;
     public Submesh submesh;
     public Meshlet meshlet;
+
+    // The level's dissolve code for every vertex the group emits; see DissolveVSOut.lodDissolve.
+    public float lodDissolve;
 
     // Whether this group's back-facing triangles are the mesh stage's to cull: the draw says its
     // pipeline draws both sides, and the material says it wants one. Decided once per group.
@@ -80,17 +86,58 @@ public uint3 CullBackface(MeshletContext ctx, uint3 tri)
     return area > 0.0 ? tri : uint3(tri.x, tri.x, tri.x);
 }
 
+// Which level a compacted entry draws, and its dissolve code: the level the draw's cull chose -- or,
+// for the entry tagged cOutgoingDrawBit, the level it is leaving -- as ExpansionData.lodDrawMode says to
+// read it.
+public struct LodDraw
+{
+    public uint submeshEntry;
+    public float dissolve;
+};
+
+public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
+{
+    LodDraw draw;
+    draw.submeshEntry = geom.submeshes.EntryLod0(instance.submeshIndex);
+    draw.dissolve = 1.0;
+    if (expansionData.lodDrawMode == LodDrawMode::kLevel0)
+    {
+        return draw;
+    }
+
+    let word = expansionData.instanceLod[instance.meshInstance.GetOffset()];
+    if (word.Unset())
+    {
+        return draw;
+    }
+
+    let outgoing = (compacted & cOutgoingDrawBit) != 0u;
+    let level = outgoing ? uint(word.OutgoingLevel()) : uint(word.Level());
+
+    // The draw-nothing tier has no geometry; an entry reaching it is the transparent list's, which
+    // swaps without a dissolve, and draws the coarsest level while it leaves.
+    draw.submeshEntry = geom.submeshes.Entry(LodLevel(min(level, geom.submeshes.lodCount - 1u)), instance.submeshIndex);
+    if (expansionData.lodDrawMode == LodDrawMode::kDissolve && word.Fading())
+    {
+        draw.dissolve = outgoing ? 1.0 + word.Fade() : word.Fade();
+    }
+    return draw;
+}
+
 // The instance this amplification group covers, and how many meshlets it dispatches. Each instance
-// is one submesh, so only that submesh's meshlets are dispatched.
+// is one submesh, so only that submesh's meshlets are dispatched -- at the level the entry draws.
 public uint ResolveDispatch(uint gid, out InstancedPayload payload)
 {
-    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
-    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let compacted = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(compacted & ~cOutgoingDrawBit);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
-    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
+    let lod = ResolveLod(compacted, instance, geom);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, lod.submeshEntry);
 
     payload.instance = instance;
+    payload.submeshEntry = lod.submeshEntry;
+    payload.lodDissolve = lod.dissolve;
 
     return submesh.GetMeshletCount();
 }
@@ -122,17 +169,20 @@ groupshared uint gSurvivorMask[cMaxCompactedGroups / 32];
 // group calls it.
 public uint CullMeshlets(uint gid, uint lane)
 {
-    uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
-    let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
+    let compacted = expansionData.compactedInstances[ResolveInstanceBase() + gid];
+    let instance = forwardData.instanceBuffer.Get(compacted & ~cOutgoingDrawBit);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
     let geom = forwardData.geomBuffer.Get(mesh.geom);
-    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
+    let lod = ResolveLod(compacted, instance, geom);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, lod.submeshEntry);
     let meshletCount = submesh.GetMeshletCount();
     let groupCount = MeshletGroupCount(meshletCount);
 
     if (lane == 0u)
     {
         gCulledPayload.instance = instance;
+        gCulledPayload.submeshEntry = lod.submeshEntry;
+        gCulledPayload.lodDissolve = lod.dissolve;
         gCulledPayload.meshletCount = meshletCount;
     }
 
@@ -187,7 +237,8 @@ public uint CullMeshlets(uint gid, uint lane)
     return survivors * cMeshletsPerGroup;
 }
 
-public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)
+// @pre submeshEntry is the level's place in the geom's range, as ResolveLod gave it.
+public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint submeshEntry, float lodDissolve, uint meshletIdx)
 {
     MeshletContext ctx;
     ctx.mesh = forwardData.meshBuffer.Get(instance.meshInstance);
@@ -201,7 +252,15 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint meshletIdx)
         instance.meshInstance.GetOffset()
     );
 
-    ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
+    dbg_assert(
+        submeshEntry < geom.submeshes.TotalCount(),
+        ErrorCode.kInvalidSubmeshIndex,
+        submeshEntry,
+        geom.submeshes.TotalCount(),
+        instance.meshInstance.GetOffset()
+    );
+    ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, submeshEntry);
+    ctx.lodDissolve = lodDissolve;
 
     dbg_assert(
         meshletIdx < ctx.submesh.GetMeshletCount(),

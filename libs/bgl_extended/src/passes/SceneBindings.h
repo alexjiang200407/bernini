@@ -99,13 +99,17 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
-	constexpr std::array<SceneBuffer, 2> c_ExpansionBuffers = {
+	constexpr std::array<SceneBuffer, 3> c_ExpansionBuffers = {
 		{ { c_CompactedInstancesName,
 		    "compactedInstances",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_DrawBucketPrefixSumName,
 		    "drawBucketPrefixSum",
+		    BarrierAccessFlag::kUnorderedAccess,
+		    BarrierSyncFlag::kVertexShader },
+		  { c_InstanceLodName,
+		    "instanceLod",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader } }
 	};

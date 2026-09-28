@@ -2,9 +2,11 @@
 #include "fg/FrameGraph.h"
 #include "resource/ResourceManager.h"
 #include "scene/scene_buffer_names.h"
+#include <algorithm>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <cstdint>
 #include <format>
@@ -15,11 +17,15 @@
 namespace bgl
 {
 	void
-	CullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
+	CullState::Init(
+		uint32_t           paddedInstances,
+		uint32_t           placements,
+		ResourceManagerRef resourceManager)
 	{
 		{
+			// Twice the slots: a placement fading between two levels draws both, one entry each.
 			auto desc         = ComputeBufferDesc();
-			desc.initialCount = paddedInstances;
+			desc.initialCount = paddedInstances * 2;
 			desc.debugName    = "Compacted Instances";
 			desc.SetElement<uint32_t>();
 
@@ -38,7 +44,7 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::cMaxDrawBuckets)
+				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Draw Bucket Prefix Sum");
 
 			m_DrawBucketPrefixSum.Init(std::move(desc), resourceManager);
@@ -47,11 +53,22 @@ namespace bgl
 		{
 			auto desc = ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::cMaxDrawBuckets)
+				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Compacted Dispatch Args");
 
 			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);
 		}
+
+		for (uint32_t i = 0; i < m_InstanceLod.size(); ++i)
+		{
+			auto desc         = ComputeBufferDesc();
+			desc.initialCount = std::max(placements, 1u);
+			desc.debugName    = i == 0 ? "Instance LOD A" : "Instance LOD B";
+			desc.SetElement<idl::InstanceLod>();
+
+			m_InstanceLod[i].Init(std::move(desc), resourceManager);
+		}
+		m_LodNeedsClear = true;
 
 		{
 			auto desc         = UploadBufferDesc();
@@ -63,15 +80,25 @@ namespace bgl
 	}
 
 	void
-	CullState::Resize(uint32_t paddedInstances)
+	CullState::Resize(uint32_t paddedInstances, uint32_t placements)
 	{
-		if (paddedInstances <= m_CompactedInstances.GetDesc().initialCount)
+		if (paddedInstances > m_InstanceVisibility.GetDesc().initialCount)
 		{
-			return;
+			m_CompactedInstances.Resize(paddedInstances * 2);
+			m_InstanceVisibility.Resize(paddedInstances);
 		}
 
-		m_CompactedInstances.Resize(paddedInstances);
-		m_InstanceVisibility.Resize(paddedInstances);
+		if (placements > m_InstanceLod[0].GetDesc().initialCount)
+		{
+			for (ComputeBuffer& words : m_InstanceLod) words.Resize(placements);
+			m_LodNeedsClear = true;
+		}
+	}
+
+	void
+	CullState::AdvanceLodHistory() noexcept
+	{
+		m_LodCurrent ^= 1u;
 	}
 
 	void
@@ -82,6 +109,7 @@ namespace bgl
 		m_DrawBucketPrefixSum.Release(deferred);
 		m_CompactedDispatchArgs.Release(deferred);
 		m_CullView.Release(deferred);
+		for (ComputeBuffer& words : m_InstanceLod) words.Release(deferred);
 	}
 
 	void
@@ -89,6 +117,7 @@ namespace bgl
 	{
 		m_CompactedInstances.Update(cmdList);
 		m_InstanceVisibility.Update(cmdList);
+		for (ComputeBuffer& words : m_InstanceLod) words.Update(cmdList);
 	}
 
 	void
@@ -110,5 +139,9 @@ namespace bgl
 		fg.ImportBuffer(c_DrawBucketPrefixSumName, m_DrawBucketPrefixSum.GetBufferHandle());
 		fg.ImportBuffer(c_CompactDispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
 		fg.ImportBuffer(c_CullViewName, m_CullView.GetBufferHandle());
+		fg.ImportBuffer(c_InstanceLodName, m_InstanceLod[m_LodCurrent].GetBufferHandle());
+		fg.ImportBuffer(
+			c_InstanceLodPreviousName,
+			m_InstanceLod[m_LodCurrent ^ 1u].GetBufferHandle());
 	}
 }

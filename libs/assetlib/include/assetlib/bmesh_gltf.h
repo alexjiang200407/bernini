@@ -29,6 +29,10 @@ namespace assetlib
 		/** kSkip for a caller after the geometry and rig alone -- the regeneration seam, which
 		    never re-extracts and must not pay an import's image decode on a load. */
 		GltfTextures textures = GltfTextures::kDecode;
+
+		/** The import document's `lodMinPixels`: each level's threshold, the cook's default past
+		    the list. */
+		std::vector<float> lodMinPixels = {};
 	};
 
 	/**
@@ -44,6 +48,15 @@ namespace assetlib
 	 * @return The imported document.
 	 * @throws std::runtime_error if the file cannot be read, is not valid glTF, or uses an
 	 *         unsupported feature (non-triangle primitives, sparse accessors, two skins, ...).
+	 * A mesh named `<base>_LOD<n>` is level n of mesh `<base>`, not a mesh of its own: its
+	 * submeshes follow the base's (see Mesh), each level takes `options.lodMinPixels[n]` or the
+	 * default, and its node names no mesh. docs/asset_standards.md § Levels of detail says what a
+	 * source owes the fold.
+	 *
+	 * @throws std::runtime_error as well for a level the fold refuses: one with no base, two meshes
+	 *         naming one level, a gap in the levels, more than c_MaxMeshLods, a level whose triangle
+	 *         primitives or skinning differ from its base's, a level carrying grass, or thresholds
+	 *         that do not fit the levels.
 	 * @throws Cancelled if `options.cancel` is signalled.
 	 */
 	[[nodiscard]] imp::BMeshImport

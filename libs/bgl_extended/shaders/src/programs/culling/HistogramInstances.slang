@@ -15,13 +15,13 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-groupshared Atomic<uint> gLocalHistogram[cMaxDrawBuckets];
+groupshared Atomic<uint> gLocalHistogram[cMaxDrawLanes];
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 {
-    for (uint i = localIdx; i < cMaxDrawBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxDrawLanes; i += cHistogramGroupSize)
     {
         gLocalHistogram[i].store(0u);
     }
@@ -29,7 +29,10 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     let instance = gUniforms.instanceBuffer[globalIdx];
 
-    if (!instance.meshInstance.Null() && gUniforms.visibility[globalIdx].visible != 0u)
+    // One entry per bit: a placement dissolving between two levels draws both.
+    let visibility = gUniforms.visibility[globalIdx];
+    let entries = countbits(visibility.visible & (cVisibleCurrentBit | cVisibleOutgoingBit));
+    if (!instance.meshInstance.Null() && entries != 0u)
     {
         let bucket = instance.drawBucket;
 
@@ -37,7 +40,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
         if (bucket < cMaxDrawBuckets)
         {
-            gLocalHistogram[bucket].add(1u);
+            gLocalHistogram[visibility.Lane(bucket)].add(entries);
         }
     }
 
@@ -45,7 +48,7 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
 
     // Skip the empty rows: every group flushing zero adds to the same 1 KB region is the
     // worst-contention case, not a free one.
-    for (uint i = localIdx; i < cMaxDrawBuckets; i += cHistogramGroupSize)
+    for (uint i = localIdx; i < cMaxDrawLanes; i += cHistogramGroupSize)
     {
         let count = gLocalHistogram[i].load();
         if (count != 0u)

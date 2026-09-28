@@ -277,6 +277,24 @@ namespace assetlib
 		return out;
 	}
 
+	std::vector<Submesh>
+	lodNSubmeshes(const BMesh& mesh, const uint32_t level)
+	{
+		if (mesh.meshes.empty())
+			return level == 0 ? mesh.submeshes : std::vector<Submesh>();
+
+		auto submeshes = std::vector<Submesh>();
+		for (const Mesh& entry : mesh.meshes)
+		{
+			if (level >= entry.lodCount)
+				continue;
+			const uint32_t first = entry.firstSubmesh + level * entry.submeshCount;
+			for (uint32_t s = 0; s < entry.submeshCount; ++s)
+				submeshes.push_back(mesh.submeshes[first + s]);
+		}
+		return submeshes;
+	}
+
 	uint64_t
 	geometrySignature(const BMesh& mesh) noexcept
 	{

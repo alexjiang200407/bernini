@@ -40,10 +40,26 @@ namespace bgl
 	};
 
 	/**
-	 * The one owner of every kernel feeding the forward pixel programs -- one per draw bucket, and
-	 * the shared blend kernel -- and of the uniforms and targets they all share. Attached to the
-	 * graph as one pass per ForwardPhase, each recorded by a phase it composes. The set is fixed and
-	 * ordered: the frame's order is RenderContext's, and Blob Shadows draws between two of them.
+	 * Which of a draw bucket's two lanes a dispatch draws (idl::cDissolveLane): the placements at
+	 * rest, or those dissolving between two levels of detail, through pipelines whose pixel programs
+	 * carry the dither. Only a mesh stage's bucket has the second; a grass blade never dissolves.
+	 */
+	enum class DrawLane : uint8_t
+	{
+		kAtRest,
+		kDissolve,
+	};
+
+	/** Whether the bucket's placements can dissolve, and so whether it owns a kDissolve kernel. */
+	[[nodiscard]] bool
+	DrawBucketDissolves(const DrawBucketDesc& desc) noexcept;
+
+	/**
+	 * The one owner of every kernel feeding the forward pixel programs -- one per lane of a
+	 * mesh-stage draw bucket, one per grass bucket, and the shared blend kernel -- and of the
+	 * uniforms and targets they all share. Attached to the graph as one pass per ForwardPhase, each
+	 * recorded by a phase it composes. The set is fixed and ordered: the frame's order is
+	 * RenderContext's, and Blob Shadows draws between two of them.
 	 */
 	class ForwardPhases
 	{
@@ -67,6 +83,10 @@ namespace bgl
 			{
 				kernel.Reset();
 			}
+			for (MeshletKernel& kernel : m_DissolveKernels)
+			{
+				kernel.Reset();
+			}
 			m_TransparentKernel.Reset();
 		}
 
@@ -74,8 +94,9 @@ namespace bgl
 		Init(const PassInitContext& ctx);
 
 		/**
-		 * Requests the kernels for the buckets set in `buckets` that are not already initialized;
-		 * they are live once `pipelines` is built. A bucket already initialized is left alone.
+		 * Requests the kernels for the buckets set in `buckets` that are not already initialized --
+		 * both lanes' where the bucket dissolves; they are live once `pipelines` is built. A bucket
+		 * already initialized is left alone.
 		 * @pre every set bit is an allocated, non-transparent bucket.
 		 */
 		void
@@ -114,13 +135,14 @@ namespace bgl
 		}
 
 		/**
-		 * The bucket's kernel with the uniforms every forward kernel shares bound for this draw, set
-		 * into `state` with the targets it declares -- colour, velocity and depth. Null, and `state`
-		 * untouched, while it is unbuilt.
+		 * The bucket's kernel for `lane` with the uniforms every forward kernel shares bound for this
+		 * draw, set into `state` with the targets it declares -- colour, velocity and depth. Null,
+		 * and `state` untouched, while it is unbuilt, and for a lane the bucket does not have.
 		 */
 		[[nodiscard]] MeshletKernel*
 		BindDrawBucketKernel(
 			uint32_t           bucket,
+			DrawLane           lane,
 			MeshletState&      state,
 			const DrawData&    draw,
 			const PassContext& resources);
@@ -150,8 +172,10 @@ namespace bgl
 		void
 		CheckKernelNames(std::span<const MeshletKernel> kernels) const;
 
-		// Indexed by bucket id, grown to the table's count as buckets are demanded.
+		// Indexed by bucket id, grown to the table's count as buckets are demanded; the dissolve
+		// lane's stays unbuilt for a bucket that does not dissolve.
 		std::vector<MeshletKernel> m_Kernels;
+		std::vector<MeshletKernel> m_DissolveKernels;
 
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
 		MeshletKernel m_TransparentKernel;

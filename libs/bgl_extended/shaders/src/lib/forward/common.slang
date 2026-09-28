@@ -5,6 +5,11 @@ import lib.math.motion_vector;
 public struct InstancedPayload
 {
     public SubmeshInstance instance;
+
+    // The place in the geom's submesh range of the level this entry draws, and its dissolve code
+    // (DissolveVSOut.lodDissolve).
+    public uint submeshEntry;
+    public float lodDissolve;
 }
 
 // The static tier's payload: its instance, its submesh's meshlet count, and which of its meshlet
@@ -13,6 +18,8 @@ public struct InstancedPayload
 public struct CulledPayload
 {
     public SubmeshInstance instance;
+    public uint submeshEntry;
+    public float lodDissolve;
     public uint meshletCount;
     public uint survivorMask[cMaxCompactedGroups / 32];
     public uint survivorsBefore[cMaxCompactedGroups / 64];
@@ -107,6 +114,59 @@ public struct ForwardVSOut
     // only the camera moved. Projected by the same math as prevClip, so a surface that did not move
     // carries the same value bit for bit.
     public float4 cameraPrevClip : CAMERAPREVCLIPPOSITION;
+};
+
+// What a draw bucket's dissolve pipelines rasterize: an ordinary material vertex (Surface()), and
+// its placement's share of the level this draw is -- in [0, 1) its current level keeps a pixel whose
+// dissolve hash is below it, in [1, 2) its outgoing level keeps one at or above it less 1: the
+// complement, so the two levels never both cover a pixel. Only a placement dissolving draws through
+// these pipelines, so one at rest carries no code and runs no discard. Flat rather than holding a
+// ForwardVSOut, because Metal refuses a mesh output with a nested struct.
+public struct DissolveVSOut
+{
+    public float4 position : SV_Position;
+    public float3 worldPos : POSITION;
+    public float3 normal : NORMAL;
+    public float2 uv : TEXCOORD;
+    public float2 uv1 : SECONDUV;
+    public float4 tangent : TANGENT;
+    public nointerpolation uint materialOffset : MATERIAL;
+    public float4 clip : CLIPPOSITION;
+    public float4 prevClip : PREVCLIPPOSITION;
+    public float4 cameraPrevClip : CAMERAPREVCLIPPOSITION;
+
+    public nointerpolation float lodDissolve : LODDISSOLVE;
+
+    public __init(ForwardVSOut surface, float lodDissolve)
+    {
+        position = surface.position;
+        worldPos = surface.worldPos;
+        normal = surface.normal;
+        uv = surface.uv;
+        uv1 = surface.uv1;
+        tangent = surface.tangent;
+        materialOffset = surface.materialOffset;
+        clip = surface.clip;
+        prevClip = surface.prevClip;
+        cameraPrevClip = surface.cameraPrevClip;
+        this.lodDissolve = lodDissolve;
+    }
+
+    public ForwardVSOut Surface()
+    {
+        ForwardVSOut surface;
+        surface.position = position;
+        surface.worldPos = worldPos;
+        surface.normal = normal;
+        surface.uv = uv;
+        surface.uv1 = uv1;
+        surface.tangent = tangent;
+        surface.materialOffset = materialOffset;
+        surface.clip = clip;
+        surface.prevClip = prevClip;
+        surface.cameraPrevClip = cameraPrevClip;
+        return surface;
+    }
 };
 
 // Colour plus the screen-space velocity MRT slot. The transparent pipelines bind one render target

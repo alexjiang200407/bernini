@@ -42,6 +42,10 @@ namespace bgl
 
 		glm::vec3 cameraPos{ 0.0f };
 
+		// What one world unit spans on the render grid at a distance of one, in pixels: what grass
+		// thins by and a placement's level of detail is chosen by (bgl::PixelsPerUnit).
+		float pixelsPerUnit = 0.0f;
+
 		// The frustum planes the cull dispatch tests against, derived from viewProj.
 		idl::CullView cullView{};
 

@@ -249,7 +249,8 @@ converges to the bytes one created there does.
   Zero means unavailable: multi-draw frames, depths beyond the half-float range, hashed coverage
   and transparent overlays use that fallback. Scene alpha explicitly marks reliable opaque
   coverage; it is not inferred from material opacity. Built-in and game-defined hashed paths write
-  zero, and transparent blending clears destination alpha. Any unavailable historical tap leaves
+  zero, as does every fragment of a placement dissolving between two levels of detail, and
+  transparent blending clears destination alpha. Any unavailable historical tap leaves
   colour clipping in charge. This avoids treating a stochastic discard as a departing surface,
   which made the earlier unrestricted depth experiment flicker.
 

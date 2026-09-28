@@ -25,6 +25,7 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
+#include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
@@ -46,6 +47,7 @@
 #include <bgl_common/idl/GrassChunk.h>
 #include <bgl_common/idl/GrassClump.h>
 #include <bgl_common/idl/GrassLook.h>
+#include <bgl_common/idl/LodSubmeshRange.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
@@ -99,7 +101,16 @@ namespace bgl
 	 */
 	struct GeomRecord
 	{
-		idl::RangeWithCount submeshes;
+		// Every level's submeshes, level-major; see idl::LodSubmeshRange. `submeshes.submeshCount`
+		// is one level's -- a placement's SubmeshInstances -- and TotalCount() the range's.
+		idl::LodSubmeshRange submeshes;
+
+		// Local space, enclosing level 0: what a placement's size on screen is measured from.
+		glm::vec4 boundingSphere = glm::vec4(0.0f);
+
+		// Each level's threshold, idl::Geom::lodMinPixels; zero past the geom's levels, and a
+		// single-level geom's zero entry is "never dropped".
+		std::array<float, cMaxMeshLods> lodMinPixels{};
 
 		// The geom's GPU record, which holds the same range for a placement to name rather than
 		// copy. Freed with the geom.
@@ -354,7 +365,7 @@ namespace bgl
 		// submesh count and the root its shading resolve indexes by; the range itself reaches the
 		// GPU on the Geom record, not on the placement.
 		// Only valid while the geom is alive; check IsGeomAlive first.
-		[[nodiscard]] const idl::RangeWithCount&
+		[[nodiscard]] const idl::LodSubmeshRange&
 		GetGeomSubmeshes(uint32_t index) const noexcept
 		{
 			return m_Geoms[index].submeshes;

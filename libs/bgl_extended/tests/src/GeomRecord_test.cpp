@@ -77,10 +77,10 @@ TEST_CASE("Every geom kind uploads a record naming its submeshes", "[geom]")
 	{
 		REQUIRE(geom.IsValid());
 
-		const bgl::idl::RangeWithCount& onCpu = scene->GetGeomSubmeshes(geom.handle.index);
-		const bgl::idl::Geom&           onGpu = RecordOf(scene, geom);
+		const bgl::idl::LodSubmeshRange& onCpu = scene->GetGeomSubmeshes(geom.handle.index);
+		const bgl::idl::Geom&            onGpu = RecordOf(scene, geom);
 
-		CHECK(onGpu.submeshes.submeshCount == onCpu.count);
+		CHECK(onGpu.submeshes.submeshCount == onCpu.submeshCount);
 		CHECK(onGpu.submeshes.range.offsetStart == onCpu.range.offsetStart);
 
 		// One level, so the whole range is that level's submeshes.

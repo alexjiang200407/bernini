@@ -66,6 +66,10 @@ namespace bgl
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;
 
+	// Each placement's level of detail: the word this frame's cull writes, and the one it read.
+	constexpr std::string_view c_InstanceLodName         = "scene.instanceLod"sv;
+	constexpr std::string_view c_InstanceLodPreviousName = "scene.instanceLodPrevious"sv;
+
 	constexpr std::string_view c_TransparentSortEntriesName = "scene.transparentSortEntries"sv;
 	constexpr std::string_view c_TransparentSortCountName   = "scene.transparentSortCount"sv;
 	constexpr std::string_view c_SortedTransparentInstancesName =

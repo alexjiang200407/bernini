@@ -300,7 +300,8 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	REQUIRE(geom.IsValid());
 
 	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
-	CHECK(scene->GetGeomSubmeshes(geom.handle.index).count == 2u);
+	CHECK(scene->GetGeomSubmeshes(geom.handle.index).submeshCount == 2u);
+	CHECK(scene->GetGeomSubmeshes(geom.handle.index).lodCount == 1u);
 
 	auto&          submeshBuffer = scene->GetSubmeshBuffer();
 	const uint32_t root          = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
@@ -345,7 +346,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	// non-overridden instance of this geom will bucket into.
 	const auto checkDefault =
 		[&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::MaterialType expected) {
-			const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
+			const bgl::idl::LodSubmeshRange& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
 			INFO("source submesh " << sourceIndex);
 			CHECK(
 				ShadedKind(

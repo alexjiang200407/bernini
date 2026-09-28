@@ -90,11 +90,12 @@ TEST_CASE(
 		instanceBuffer.Init(desc, resourceManager);
 	}
 
-	// The bucket each instance index carries, so a compacted index can be checked against the
-	// bucket it was filed under.
-	std::vector<uint32_t>                           bucketOf(c_ActiveCount);
-	std::vector<uint32_t>                           visibleOf(c_PaddedCount, 1u);
-	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedCount{};
+	// The lane each instance index belongs in, so a compacted index can be checked against the
+	// lane it was filed under. Every third instance of bucket 130 is dissolving, so it files under
+	// that bucket's dissolve lane, past the ceiling of bucket ids.
+	std::vector<uint32_t>                         bucketOf(c_ActiveCount);
+	std::vector<uint32_t>                         visibleOf(c_PaddedCount, 1u);
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedCount{};
 
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
@@ -107,9 +108,12 @@ TEST_CASE(
 		instance.drawBucket          = bucket;
 		instanceBuffer.Add(instance);
 
-		bucketOf[i]  = bucket;
-		visibleOf[i] = bucket == c_CulledBucket ? 0u : 1u;
-		expectedCount[bucket] += visibleOf[i];
+		const bool dissolving = bucket == 130u && i % 3u == 0u;
+		bucketOf[i]           = dissolving ? bucket + bgl::idl::cDissolveLane : bucket;
+		visibleOf[i] = bucket == c_CulledBucket ? 0u :
+		               dissolving ? bgl::idl::cVisibleCurrentBit | bgl::idl::cVisibleDissolvingBit :
+		                            bgl::idl::cVisibleCurrentBit;
+		expectedCount[bucketOf[i]] += visibleOf[i] != 0u ? 1u : 0u;
 	}
 	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
 	{
@@ -118,9 +122,9 @@ TEST_CASE(
 	}
 
 	// Exclusive base of each bucket -- where the compaction should have put it.
-	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedBase{};
-	uint32_t                                        running = 0;
-	for (uint32_t p = 0; p < bgl::idl::cMaxDrawBuckets; ++p)
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedBase{};
+	uint32_t                                      running = 0;
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
 	{
 		expectedBase[p] = running;
 		running += expectedCount[p];
@@ -137,9 +141,9 @@ TEST_CASE(
 	};
 
 	auto drawBucketPrefixSum =
-		makeCompute(uint32_t{}, bgl::idl::cMaxDrawBuckets, "Bucket Prefix Sum");
+		makeCompute(uint32_t{}, bgl::idl::cMaxDrawLanes, "Bucket Prefix Sum");
 	auto dispatchArgs =
-		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxDrawBuckets, "Compacted Dispatch Args");
+		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxDrawLanes, "Compacted Dispatch Args");
 	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
 
 	// The histogram and compaction gate on a per-instance visibility word the cull pass writes. This
@@ -190,7 +194,7 @@ TEST_CASE(
 					visibleOf.data(),
 					visibleOf.size() * sizeof(uint32_t));
 
-				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxDrawBuckets> seed{};
+				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxDrawLanes> seed{};
 				for (bgl::idl::DispatchArgs& args : seed)
 				{
 					args = { 0u, 1u, 1u };
@@ -279,12 +283,12 @@ TEST_CASE(
 	rbDesc.debugName = "Compacted Readback";
 	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
+	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(uint32_t);
 	rbDesc.debugName = "Prefix-Sum Readback";
 	auto rbPrefixSum = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	rbDesc.byteSize =
-		static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(bgl::idl::DispatchArgs);
+		static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(bgl::idl::DispatchArgs);
 	rbDesc.debugName = "Dispatch Args Readback";
 	auto rbArgs      = resourceManager->CreateReadbackBuffer(rbDesc);
 
@@ -329,14 +333,14 @@ TEST_CASE(
 	const auto* prefixSumOut =
 		static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
 	REQUIRE(prefixSumOut != nullptr);
-	for (uint32_t p = 0; p < bgl::idl::cMaxDrawBuckets; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
 	{
 		const uint32_t exclusive = (p == 0) ? 0u : prefixSumOut[p - 1];
 		CHECK(exclusive == expectedBase[p]);
 	}
 	// The scan is inclusive, so the last row carries the full total.
 	CHECK(
-		prefixSumOut[bgl::idl::cMaxDrawBuckets - 1] ==
+		prefixSumOut[bgl::idl::cMaxDrawLanes - 1] ==
 		std::accumulate(expectedCount.begin(), expectedCount.end(), 0u));
 	resourceManager->UnmapReadback(rbPrefixSum);
 
@@ -345,7 +349,7 @@ TEST_CASE(
 	// { 0, 1, 1 } seed.
 	const auto* argsOut = static_cast<const uint32_t*>(resourceManager->MapReadback(rbArgs));
 	REQUIRE(argsOut != nullptr);
-	for (uint32_t p = 0; p < bgl::idl::cMaxDrawBuckets; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
 	{
 		INFO("bucket " << p);
 		CHECK(argsOut[p * 3 + 0] == expectedCount[p]);
@@ -362,7 +366,7 @@ TEST_CASE(
 	// non-zero lands on top of an earlier one, so its slots hold foreign instances and its own are
 	// nowhere.
 	uint32_t misfiled = 0;
-	for (uint32_t p = 0; p < bgl::idl::cMaxDrawBuckets; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
 	{
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
@@ -380,7 +384,7 @@ TEST_CASE(
 	// Both sit in the right bucket, so the misfiled count above cannot see it. 4000 instances is 32
 	// groups of 128, the last one partial, so the runs actually have to abut.
 	std::vector<uint32_t> occurrences(c_ActiveCount, 0u);
-	for (uint32_t p = 0; p < bgl::idl::cMaxDrawBuckets; ++p)
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
 	{
 		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
 		{
@@ -396,7 +400,7 @@ TEST_CASE(
 	uint32_t notWrittenExactlyOnce = 0;
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
-		if (occurrences[i] != visibleOf[i])
+		if (occurrences[i] != (visibleOf[i] != 0u ? 1u : 0u))
 		{
 			++notWrittenExactlyOnce;
 		}

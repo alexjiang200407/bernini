@@ -1,13 +1,17 @@
 import idl.BaseTable;
 import idl.CullStats;
 import idl.CullView;
+import idl.InstanceLod;
+import idl.LodDrawMode;
 import lib.types.ComputeBuffer;
 import lib.types.UploadBuffer;
 
 // Which slice of the compacted instance list one dispatch covers.
 public struct ExpansionData
 {
-    public uint drawBucketIndex;
+    // The draw lane: the bucket's id for its placements at rest, or that plus cDissolveLane for
+    // those dissolving (idl DrawBucket).
+    public uint drawLane;
 
     // Where in `compactedInstances` this dispatch's instances start is a GPU value, so what the CPU
     // supplies is which table to read it out of.
@@ -27,6 +31,12 @@ public struct ExpansionData
 
     // Written only under BERNINI_GPU_DEBUG, so a release build drops the handle.
     public ComputeBuffer<CullStats> stats;
+
+    // Each placement's level of detail as this draw's cull chose it, by MeshInstance entry, and
+    // whether this dispatch draws that level, dissolves it, or ignores it for level 0. Under
+    // LodDrawMode::kLevel0 the buffer is never read.
+    public ComputeBuffer<InstanceLod> instanceLod;
+    public LodDrawMode lodDrawMode;
 };
 
 public ConstantBuffer<ExpansionData> expansionData;
@@ -40,5 +50,5 @@ public uint ResolveInstanceBase()
         return 0u;
     }
 
-    return (expansionData.drawBucketIndex == 0u) ? 0u : expansionData.drawBucketPrefixSum[expansionData.drawBucketIndex - 1u];
+    return (expansionData.drawLane == 0u) ? 0u : expansionData.drawBucketPrefixSum[expansionData.drawLane - 1u];
 }

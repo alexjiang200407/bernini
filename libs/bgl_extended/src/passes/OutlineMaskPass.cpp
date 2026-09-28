@@ -21,6 +21,7 @@
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
+#include <bgl_common/idl/LodDrawMode.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
 #include <cstdint>
@@ -152,10 +153,13 @@ namespace bgl
 			expansion["compactedInstances"]  = selected;
 			expansion["drawBucketPrefixSum"] = selected;
 			expansion["baseTable"]           = idl::BaseTable::kDepthSorted;
-			expansion["drawBucketIndex"]     = 0u;
+			expansion["drawLane"]            = 0u;
 			// The mask is the whole silhouette whichever way its triangles face, and this pass
 			// binds no material for the mesh stage to consult.
 			expansion["cullBackfaces"] = 0u;
+			// The mask binds no cull output, so it traces a placement's level 0 whatever the
+			// frame draws.
+			expansion["lodDrawMode"] = idl::LodDrawMode::kLevel0;
 		}
 
 		auto gfxState   = MeshletState();

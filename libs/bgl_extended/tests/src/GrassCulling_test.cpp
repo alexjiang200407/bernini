@@ -22,6 +22,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <array>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
@@ -226,10 +227,12 @@ namespace
 			draw.viewState.prevViewProj = viewProj;
 			draw.viewState.cullView     = bgl::BuildCullView(viewProj);
 			draw.viewState.cameraPos    = eye;
-			draw.targets.sceneColor     = targetBase->GetSceneColorRtv();
-			draw.targets.motionVector   = targetBase->GetMotionVectorRtv();
-			draw.targets.depth          = targetBase->GetDepthDsv();
-			draw.materialArena          = scene->GetMaterialBinding();
+			draw.viewState.pixelsPerUnit =
+				bgl::PixelsPerUnit(draw.viewState.viewport, draw.viewState.unjitteredViewProj);
+			draw.targets.sceneColor   = targetBase->GetSceneColorRtv();
+			draw.targets.motionVector = targetBase->GetMotionVectorRtv();
+			draw.targets.depth        = targetBase->GetDepthDsv();
+			draw.materialArena        = scene->GetMaterialBinding();
 			draw.samplers.anisoLinearWrap =
 				scene->GetSampler(bgl::Scene::StandardSampler::kAnisoLinearWrap);
 			draw.samplers.linearClamp =

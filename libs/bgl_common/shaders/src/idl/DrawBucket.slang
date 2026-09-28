@@ -4,9 +4,16 @@
 // index. Ids are handed out densely by the CPU's DrawBucketTable; nothing here derives one.
 
 // The capacity every count-sized structure is built to, so a grown bucket set changes no sizes:
-// the cull chain's buffers and groupshared arrays, and the prefix scan's single thread group --
-// which is the hard ceiling (util.cpp pins this under a thread group's 1024).
+// the cull chain's buffers and groupshared arrays, and the prefix scan's single thread group, at two
+// lanes a bucket (below).
 public static const uint32_t cMaxDrawBuckets = 256;
+
+// A draw lane is what the cull counts, compacts and dispatches by: every bucket owns two, its own id
+// for placements at rest and that id plus cDissolveLane for placements dissolving between levels of
+// detail, which draw through the bucket's dissolve pipelines. The prefix scan runs over every lane,
+// so cMaxDrawLanes is the ceiling util.cpp pins.
+public static const uint32_t cDissolveLane = cMaxDrawBuckets;
+public static const uint32_t cMaxDrawLanes = 2 * cMaxDrawBuckets;
 
 // The draw bucket of an instance that resolved none; no pass counts or draws it.
 public static const uint32_t cInvalidDrawBucket = uint32_t(-1);

@@ -287,7 +287,7 @@ namespace bgl
 			auto cullState = CullState();
 			try
 			{
-				cullState.Init(padded, m_ResourceManager);
+				cullState.Init(padded, m_MeshBuffer.Capacity(), m_ResourceManager);
 			}
 			catch (...)
 			{
@@ -307,7 +307,7 @@ namespace bgl
 
 		for (CullState& cullState : m_CullStates)
 		{
-			cullState.Resize(padded);
+			cullState.Resize(padded, m_MeshBuffer.Capacity());
 		}
 
 		m_TransparentSort.Resize(padded);
@@ -1044,7 +1044,7 @@ namespace bgl
 			// The geom's record is named, not copied. The range is still read once here for the
 			// submesh count and the root the shading resolve indexes by; deleting the geom out from
 			// under the placement leaves it reading whatever record lands in that slot next.
-			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
+			const idl::LodSubmeshRange submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
 			auto mesh = idl::MeshInstance();
 			mesh.geom = m_SceneRaw->GetGeomEntry(geom.handle.index);
@@ -1065,7 +1065,8 @@ namespace bgl
 			meta.animState   = animState;
 			meta.submeshRoot = submeshes.range.offsetStart;
 
-			const uint32_t submeshCount = submeshes.count;
+			// One level's: a placement draws each source submesh once, at whichever level.
+			const uint32_t submeshCount = submeshes.submeshCount;
 			meta.submeshInstances.reserve(submeshCount);
 			meta.overrides.assign(submeshCount, MaterialHandle{});
 			meta.selected.assign(submeshCount, 0);
@@ -1814,6 +1815,7 @@ namespace bgl
 		// same names without aliasing. The view's own imports stay outside, shared by all of them.
 		for (uint32_t cullIdx = 0; cullIdx < m_CullStates.size(); ++cullIdx)
 		{
+			m_CullStates[cullIdx].AdvanceLodHistory();
 			m_CullStates[cullIdx].ImportResources(fg, GetCullNamespace(cullIdx), resourceNames);
 		}
 

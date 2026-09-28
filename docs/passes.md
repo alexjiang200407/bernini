@@ -413,8 +413,9 @@ and blade by [Forward Grass](#forward-grass) -- and read by nothing on the CPU.
 
 The buffers it *writes* belong to the view being culled — `drawBucketPrefixSumBuffer` and
 `compactDispatchArgs` (sized `cMaxDrawBuckets`, the ceiling every count-sized structure is built
-to) and `cull.view` (one `CullView`: view-proj + frustum
-planes, rewritten each draw) live in the `CullState` for the frustum being culled and are imported
+to) and `cull.view` (one `CullView`: view-proj, frustum
+planes, the camera and the pixels a world unit spans, and the view's level-of-detail selection
+resolved by `bgl::ResolveLodSelection` -- rewritten each draw) live in the `CullState` for the frustum being culled and are imported
 under that frustum's scope. The pass reaches them through `DrawData::cullState` and names them by
 the same graph names as before, so N frustums of one view carry identical names without aliasing.
 Its four sub-pass names are keyed on `(drawIdx, cullIdx)`, since pass names are unique graph-wide
@@ -430,7 +431,7 @@ threads; past 1024 that scan has to be replaced first.
 It adds **four sub-passes**:
 
 1. **Clear** — zeroes `drawBucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
-   `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
+   `cull.view`, and seeds every lane's `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
    Y = Z = 1). The written buffers are declared copy-dest.
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
    bounding sphere (the placement's transform × the submesh's local sphere) and writes a per-instance
@@ -438,22 +439,39 @@ It adds **four sub-passes**:
    depth-key passes all gate on it, so a culled instance reaches no draw. A placement whose
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
-3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** instances per draw bucket into
+
+   It also chooses the placement's **level of detail** (`lib/culling/lod_select.slang`): the
+   diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
+   `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
+   going finer, and a change dissolved over the view's `fadeSeconds`. The choice is one word per
+   placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
+   from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
+   the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries
+   `cVisibleCurrentBit` for the level it draws, `cVisibleOutgoingBit` for the one a dissolve is
+   leaving and `cVisibleDissolvingBit` while either dissolves; a placement no one sees, and a forced
+   level, change at once.
+3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** entries per draw
+   **lane** -- two a bucket, its id for placements at rest and its id plus `cDissolveLane` for those
+   dissolving (`InstanceVisibility::Lane`); one entry per set level bit, so a dissolving placement
+   counts twice -- into
    `drawBucketPrefixSumBuffer`, then the scan rewrites that same buffer in place into **inclusive** prefix
    sums — each reader compensates by indexing one row down, with row 0 special-cased to a base of
-   zero. The scan is one thread group of `cMaxDrawBuckets` threads, which is why that constant is a
+   zero. The scan is one thread group of `cMaxDrawLanes` threads, which is why that constant is a
    hard ceiling. Both dispatches run **in this one pass** sharing the buffer as a UAV, so the graph inserts
    no barrier between them; the pass issues the one intra-pass UAV barrier itself — the sanctioned
    exception to "pass code must not barrier" (see the barrier caveat in
    [Frame Graph](docs/framegraph.md)). Skipped when the view's instance count is 0.
 4. **Compact Instances** — scatters each **visible** instance into `scene.compactedInstances` at its
-   draw bucket's prefix-sum offset and finalizes each draw bucket's dispatch args. Skipped when the instance count
+   draw lane's prefix-sum offset -- once per level bit, the outgoing level's entry tagged
+   `cOutgoingDrawBit`, which is why the list holds two entries a slot -- and finalizes each lane's
+   dispatch args. Skipped when the instance count
    is 0.
 
-* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`
-  (all read).
-* **Out:** `scene.instanceVisibility`, `scene.compactedInstances`, `drawBucketPrefixSumBuffer`,
-  `compactDispatchArgs` (and `cull.stats` in debug) — all UAV / indirect-args downstream.
+* **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.submeshBuffer`, `cull.view`,
+  `scene.instanceLodPrevious` (all read).
+* **Out:** `scene.instanceVisibility`, `scene.instanceLod`, `scene.compactedInstances`,
+  `drawBucketPrefixSumBuffer`, `compactDispatchArgs` (and `cull.stats` in debug) — all UAV /
+  indirect-args downstream.
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl_extended/src/passes/TransparentSortPass.cpp)
 
@@ -604,6 +622,24 @@ mesh-output loops are still written out per entry point — Slang's Metal backen
 function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMesh` is the third,
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
+**Levels of detail.** A compacted entry draws the level its placement's cull word names -- the
+level it is leaving, for an entry tagged `cOutgoingDrawBit` -- through the geom's
+`LodSubmeshRange::Entry`, resolved once per amplification group (`ResolveLod` in
+`lib/forward/mesh_stage.slang`). A placement dissolving between two levels draws through its
+bucket's **dissolve lane**: the cull tags it `cVisibleDissolvingBit`, the histogram and the
+compaction count and place its entries at the bucket's id plus `cDissolveLane`, and the bucketed
+phase dispatches that lane after the bucket's own through a second pipeline, `MSDissolve` and
+`PSDissolve`. Those entries alone carry the dissolve code (`DissolveVSOut`), discard against a
+screen-space hash both levels share (`lib/forward/lod_dissolve.slang`), so each pixel is covered by
+exactly one of them, and mark the fragment's scene alpha 0 as hashed alpha does, so the resolve
+accumulates it as coverage. A placement at rest runs neither the interpolant nor the discard, which
+in an opaque pipeline would cost the hidden-surface removal of every draw through it. Every
+opaque, cutout and hashed program, built-in or generated for a game surface, has both entries; a
+surface's own source does nothing for it, and a grass bucket has no second lane. How a draw reads
+the word is `ExpansionData.lodDrawMode` (`idl::LodDrawMode`): the bucket's own lane swaps at once, its dissolve lane
+dissolves, the depth-sorted list swaps at once (a blend has no depth to dither against), and the
+outline mask, which binds no cull output, traces level 0.
+
 The pixel shader varies per draw bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Assert`, and each registered
 surface's `GameSlotN` with its `_AlphaTest` and `_HashedAlpha` variants), and is chosen by material
@@ -624,7 +660,7 @@ material offset, and neither says which tier filled them.
 **Opaque and alpha-test** are draw-bucketed: per draw bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
 view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
-derive the pose from), `expansionData` (`drawBucketIndex` and the instance-list tables), `materialData`
+derive the pose from), `expansionData` (`drawLane` and the instance-list tables), `materialData`
 (samplers, IBL maps, the sun, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls `DispatchMeshIndirectCount`, whose grid comes from
 the `compactDispatchArgs` entry that `Compact Instances` produced -- and whose command count is the
@@ -655,7 +691,7 @@ pre-pass. That replaced an `occlude` flag which drew a blend material twice — 
 then a colour draw with `depthFunc == Equal` — and which could only ever resolve one layer.
 
 The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum` indexed by
-`drawBucketIndex - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
+`drawLane - 1` (the scan is inclusive; row 0's base is zero). `baseTable` picks between the two.
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene

@@ -94,7 +94,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(instance);
 	};
 
-	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedHistogram{};
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedHistogram{};
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
 		const uint32_t b = i % c_BucketCount;
@@ -107,21 +107,21 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
-	std::array<uint32_t, bgl::idl::cMaxDrawBuckets> expectedPrefixSum{};
-	uint32_t                                        running = 0;
-	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedPrefixSum{};
+	uint32_t                                      running = 0;
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawLanes; ++i)
 	{
 		running += expectedHistogram[i];
 		expectedPrefixSum[i] = running;  // inclusive scan
 	}
 
-	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxDrawBuckets threads and
+	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxDrawLanes threads and
 	// touches every element.
 	auto outBuffer = bgl::ComputeBuffer();
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::idl::cMaxDrawBuckets;
+		desc.initialCount = bgl::idl::cMaxDrawLanes;
 		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
@@ -160,7 +160,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto makeReadback = [&](const char* name) {
 		auto desc      = bgl::ReadbackBufferDesc();
-		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawBuckets) * sizeof(uint32_t);
+		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
 	};
@@ -258,7 +258,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	const auto* histogram = static_cast<const uint32_t*>(resourceManager->MapReadback(rbHistogram));
 	REQUIRE(histogram != nullptr);
 	// Every row of the ceiling: a bucket no instance names must be left at zero by the flush.
-	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawLanes; ++i)
 	{
 		CHECK(histogram[i] == expectedHistogram[i]);
 	}
@@ -268,11 +268,11 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	REQUIRE(prefixSum != nullptr);
 	// Inclusive over the whole ceiling, so the last row is the full total -- which is what lets
 	// any reader take it as "everything visible".
-	for (uint32_t i = 0; i < bgl::idl::cMaxDrawBuckets; ++i)
+	for (uint32_t i = 0; i < bgl::idl::cMaxDrawLanes; ++i)
 	{
 		CHECK(prefixSum[i] == expectedPrefixSum[i]);
 	}
-	CHECK(prefixSum[bgl::idl::cMaxDrawBuckets - 1] == c_ActiveCount);
+	CHECK(prefixSum[bgl::idl::cMaxDrawLanes - 1] == c_ActiveCount);
 	resourceManager->UnmapReadback(rbPrefixSum);
 
 	outBuffer.Release(false);

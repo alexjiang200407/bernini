@@ -6,6 +6,7 @@
 #include "Windows/MaterialEditor/material_graph.h"
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Mesh.h>
 
 #include <assetlib/AssetStore.h>
 #include <cstddef>
@@ -86,16 +87,16 @@ namespace editor
 				Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();
 		}
 
+		// A binding names every level of a submesh at once, so only level 0 is bound.
 		auto bindings = std::vector<assetlib::MaterialBinding>();
-		for (size_t i = 0; i < imported.submeshes.size(); ++i)
+		for (const assetlib::Submesh& submesh : assetlib::lodNSubmeshes(mesh, 0))
 		{
-			const uint32_t index = imported.submeshes[i].material;
+			const uint32_t index = submesh.material;
 			if (index >= relative.size() || relative[index].empty())
 				continue;
 
 			bindings.push_back(
-				{ std::string(mesh.stringPool.at(mesh.submeshes.at(i).nameOffset)),
-			      relative[index] });
+				{ std::string(mesh.stringPool.at(submesh.nameOffset)), relative[index] });
 		}
 		return bindings;
 	}

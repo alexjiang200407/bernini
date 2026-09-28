@@ -9,6 +9,7 @@
 #include "types/MeshletState.h"
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
+#include <bgl_common/idl/LodDrawMode.h>
 #include <string>
 
 namespace bgl
@@ -47,7 +48,9 @@ namespace bgl
 		{
 			(*expansionData)["compactedInstances"] =
 				resources.GetBuffer(c_SortedTransparentInstancesName);
-			(*expansionData)["baseTable"]     = idl::BaseTable::kDepthSorted;
+			(*expansionData)["baseTable"] = idl::BaseTable::kDepthSorted;
+			// A blended surface has no depth to dither against, so it swaps level at once.
+			(*expansionData)["lodDrawMode"]   = idl::LodDrawMode::kCurrent;
 			(*expansionData)["cullBackfaces"] = 1u;
 		}
 
