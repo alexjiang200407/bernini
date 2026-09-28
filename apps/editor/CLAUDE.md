@@ -38,7 +38,7 @@ Two things the licence does **not** cover, because both leak out of the app:
 
 `main.cpp` opens the log **first**, through `core::logging::init_file_logger`, and routes Qt's
 messages into its sinks with `InstallQtLogRouting` (`src/util/qt_logging.h`). Order is the whole
-point: bgl_extended opens the log from its `Graphics` constructor, and the first caller names the file, so
+point: the device context opens the log as it is created, and the first caller names the file, so
 naming it here is what puts the renderer's lines, assetlib's and the editor's own `qWarning` in one
 `editor.log` on one clock instead of two files. There is no `bgl.log` under the editor.
 

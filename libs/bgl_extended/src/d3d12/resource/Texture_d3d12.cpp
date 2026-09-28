@@ -70,7 +70,7 @@ namespace bgl
 		}
 
 		wrl::ComPtr<ID3D12Device10> device10;
-		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device10)) >> c_D3d12ErrChecker;
 		auto initialLayout = ConvertBarrierLayout(desc.initialLayout);
 
 		CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
@@ -85,7 +85,7 @@ namespace bgl
 			0,
 			nullptr,
 			IID_PPV_ARGS(&m_Texture)) >>
-			d3d12ErrChecker;
+			c_D3d12ErrChecker;
 
 		// The driver's size: a TextureDesc carries no byte count. A layout it cannot size answers
 		// the max of its type, and is charged as nothing rather than as everything.

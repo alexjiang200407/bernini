@@ -34,6 +34,7 @@
 #include <core/math.h>
 #include <cstddef>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -187,8 +188,10 @@ main(int argc, char** argv)
 			                         .title  = "bernini - blob shadow decal" });
 		}
 
+		auto ctxDesc = gpu::DeviceContextDesc();
+
 		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		ctxDesc.enableDebugLayer = true;
 
 		// A project's materials may shade through its own surfaces, and those are registered only
 		// at creation.
@@ -196,10 +199,10 @@ main(int argc, char** argv)
 		{
 			const auto surfaceDir = std::filesystem::path(project) / "Authored" / "Shaders";
 			if (std::filesystem::is_directory(surfaceDir))
-				gfxOpts.surfaceShaderDir = surfaceDir;
+				ctxDesc.clientShaderDir = surfaceDir;
 		}
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc       = bgl::RenderTargetDesc{};
 		targetDesc.width      = static_cast<int>(width);

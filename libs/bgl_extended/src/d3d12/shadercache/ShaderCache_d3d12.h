@@ -1,6 +1,13 @@
 #pragma once
 #include <bgl_common/ReflectedLayout.h>
 #include <core/type_traits.h>
+#include <cstdint>
+#include <string_view>
+
+namespace gpu
+{
+	class DeviceContext;
+}
 
 namespace bgl
 {
@@ -40,6 +47,7 @@ namespace bgl
 		// layer; pass false when GPU-based validation is on. See the note on
 		// m_PsoLibrary.
 		ShaderCache(
+			const gpu::DeviceContext&       context,
 			ID3D12Device*                   device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
@@ -47,10 +55,6 @@ namespace bgl
 			bool                            usePipelineLibrary);
 
 		~ShaderCache();
-
-		/** A module compiled from text joins the salt the way a file on a search path does. */
-		void
-		FoldSource(std::string_view name, std::string_view source) noexcept;
 
 		ShaderCache(const ShaderCache&) = delete;
 
@@ -99,6 +103,10 @@ namespace bgl
 	private:
 		std::filesystem::path m_CacheDir;
 		uint64_t              m_SourceSalt = 0;
+
+		// Every key mixes in the context's fold of its source modules, read at key time so it follows
+		// a text any owner changed.
+		const gpu::DeviceContext* m_Context = nullptr;
 
 		// Null when GPU-based validation is on: that run exists to instrument every shader, and a
 		// PSO replayed out of the library was compiled without the instrumentation.

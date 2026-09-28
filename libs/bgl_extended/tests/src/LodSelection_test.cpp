@@ -1,3 +1,4 @@
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/Camera.h>
@@ -22,19 +23,19 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 }
 
 TEST_CASE("a view starts drawing every mesh as authored", "[lod][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 4);
@@ -47,7 +48,7 @@ TEST_CASE("a view starts drawing every mesh as authored", "[lod][contract]")
 
 TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 4);
@@ -80,7 +81,7 @@ TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 
 TEST_CASE("a selection no cull could act on is refused, and the old one kept", "[lod][contract]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 4);

@@ -2,6 +2,8 @@
 
 #include <bgl_common/SurfaceReflection.h>
 #include <core/str/str.h>
+#include <cstdint>
+#include <device_context/DeviceContext.h>
 
 #include <filesystem>
 #include <mutex>
@@ -13,23 +15,9 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-namespace bgl
+
+namespace gpu
 {
-	/**
-	 * A module given as text rather than found on a search path. Loaded into every session under
-	 * `name` before anything else compiles, so an `import` of that name resolves to it, and a file
-	 * of the same name on a search path is shadowed. `name` is spelled as an import spells it --
-	 * `game.slot0`, `programs.forward.GameSlot0` -- and never as a path.
-	 */
-	struct SlangSourceModule
-	{
-		std::string name;
-		std::string source;
-
-		// False for a program nothing imports: loaded on its first LoadModule, not into every session.
-		bool imported = true;
-	};
-
 	/**
 	 * The module name as Slang's loader keys it: `/`-separated, not `.`-separated. `loadModule`
 	 * appends `.slang` to it and opens that, and an `import` of a dotted name looks a loaded module
@@ -62,7 +50,7 @@ namespace bgl
 	 * creates that thread's own global session and session, and a session is only ever used by
 	 * the thread it was created for. A global session loads Slang's core module, a few hundred
 	 * megabytes that stay resident -- which is why none exists until a compile reaches it, and why
-	 * the renderer drops them all as soon as its pipelines are built.
+	 * an owner drops them all as soon as its pipelines are built.
 	 */
 	class SlangSessions final
 	{
@@ -75,15 +63,21 @@ namespace bgl
 			return m_Desc.searchPaths;
 		}
 
+		/** The fold of every registered module, name and text, order-independent. */
+		[[nodiscard]] uint64_t
+		GetSourceSalt() const noexcept;
+
 		/**
-		 * Adds a module every session from now on loads from source before it compiles anything.
+		 * Adds a module every session from now on loads from source before it compiles anything. A
+		 * name maps to one text: registering a name again replaces the text, and registering the
+		 * same text again does nothing.
 		 *
-		 * Drops every existing session the way ReleaseAll does, since a session that has already
-		 * resolved the name to a file keeps that answer; the next compile on each thread recreates
-		 * its session with the module in place.
+		 * Drops every existing session the way ReleaseAll does when the text is new or changed,
+		 * since a session that has already resolved the name keeps that answer; the next compile on
+		 * each thread recreates its session with the module in place.
 		 *
 		 * @pre ReleaseAll's, and no compile in flight on any thread: a session being created reads
-		 *      the list this appends to.
+		 *      the list this writes.
 		 */
 		void
 		AddSourceModule(SlangSourceModule sourceModule) noexcept;
@@ -107,7 +101,7 @@ namespace bgl
 		 * @throws std::runtime_error if the module does not compile, or imports the contract and
 		 *         does not hold exactly one struct conforming to its ISurfaceSource.
 		 */
-		[[nodiscard]] std::optional<ReflectedSurface>
+		[[nodiscard]] std::optional<bgl::ReflectedSurface>
 		ReflectSurface(std::string_view moduleName, std::string_view surfaceName);
 
 		/**
@@ -155,8 +149,9 @@ namespace bgl
 		};
 
 		SlangSessionDesc m_Desc;
+		uint64_t         m_SourceSalt = 0;
 
-		std::mutex                                          m_Mutex;
+		mutable std::mutex                                  m_Mutex;
 		std::unordered_map<std::thread::id, ThreadSessions> m_ByThread;
 	};
 }

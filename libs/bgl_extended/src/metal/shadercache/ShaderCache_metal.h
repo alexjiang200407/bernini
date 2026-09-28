@@ -14,6 +14,11 @@
 #include <utility>
 #include <vector>
 
+namespace gpu
+{
+	class DeviceContext;
+}
+
 namespace bgl
 {
 	// One reflected constant buffer of a linked program: the Uniforms mirror plus the bindless
@@ -62,6 +67,7 @@ namespace bgl
 		// when GPU validation is on. An archive is written by an uninstrumented run, and Metal
 		// crashes inside newBinaryArchive loading one into a validating device.
 		ShaderCache(
+			const gpu::DeviceContext&       context,
 			MTL::Device*                    device,
 			std::filesystem::path           cacheDir,
 			std::string_view                optionsSalt,
@@ -69,10 +75,6 @@ namespace bgl
 			bool                            usePipelineLibrary);
 
 		~ShaderCache();
-
-		/** A module compiled from text joins the salt the way a file on a search path does. */
-		void
-		FoldSource(std::string_view name, std::string_view source) noexcept;
 
 		ShaderCache(const ShaderCache&) = delete;
 
@@ -113,6 +115,10 @@ namespace bgl
 	private:
 		std::filesystem::path m_CacheDir;
 		uint64_t              m_SourceSalt = 0;
+
+		// Every key mixes in the context's fold of its source modules, read at key time so it follows
+		// a text any owner changed.
+		const gpu::DeviceContext* m_Context = nullptr;
 
 		NS::SharedPtr<MTL::BinaryArchive> m_Archive;
 		std::mutex                        m_ArchiveMutex;

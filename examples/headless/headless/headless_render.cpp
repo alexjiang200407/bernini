@@ -7,6 +7,7 @@
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -21,8 +22,9 @@ namespace headless
 	bgl::GraphicsRef
 	CreateHeadlessGraphics(const std::filesystem::path& dataRoot)
 	{
+		auto ctxDesc        = gpu::DeviceContextDesc();
 		auto opts           = bgl::GraphicsOptions();
-		opts.logLevel       = bgl::GraphicsOptions::LogLevel::kError;
+		ctxDesc.logLevel    = gpu::LogLevel::kError;
 		opts.shaderCacheDir = "shadercache";
 		opts.maxTextures    = 512;
 		opts.maxSrvs        = 1024;
@@ -30,8 +32,8 @@ namespace headless
 
 		const auto surfaceDir = dataRoot / assetlib::c_ShadersDirectoryName;
 		if (std::filesystem::is_directory(surfaceDir))
-			opts.surfaceShaderDir = surfaceDir;
-		return bgl::CreateGraphics(opts);
+			ctxDesc.clientShaderDir = surfaceDir;
+		return bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), opts);
 	}
 
 	bgl::RenderTargetRef

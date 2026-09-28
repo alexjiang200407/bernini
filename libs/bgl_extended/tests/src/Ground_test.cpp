@@ -1,3 +1,4 @@
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -11,12 +12,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -31,7 +32,7 @@ namespace
 
 TEST_CASE("a scene stands on y = 0 until told otherwise", "[skinned][ground]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -43,7 +44,7 @@ TEST_CASE("a scene stands on y = 0 until told otherwise", "[skinned][ground]")
 
 TEST_CASE("SetGround keeps the point and normalises the normal", "[skinned][ground]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -58,7 +59,7 @@ TEST_CASE("SetGround keeps the point and normalises the normal", "[skinned][grou
 
 TEST_CASE("SetGround refuses a plane no height can be read under", "[skinned][ground]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());

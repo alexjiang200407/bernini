@@ -7,6 +7,7 @@
 #include "ImportUnitGroup.h"
 #include "SkinnedGltf.h"
 #include "util/RigFixture.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 
 #include <bgl/IGraphics.h>
@@ -21,12 +22,12 @@ namespace
 {
 	using game::test::DataRoot;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = true;
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = true;
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		return opts;
 	}
 
@@ -63,7 +64,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 	const std::filesystem::path banim =
 		root.path / "Derived/Animations/unit.glb-0000000000000001.banim";
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());

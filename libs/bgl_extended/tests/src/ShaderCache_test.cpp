@@ -1,6 +1,7 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include <algorithm>
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -24,11 +25,11 @@ namespace
 	void
 	RenderPbrSphere(const std::string& shaderCacheDir, const std::string& gotPath)
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = true;
-		opts.shaderCacheDir   = shaderCacheDir;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = true;
+		opts.graphics.shaderCacheDir  = shaderCacheDir;
 
-		auto gfx = bgl::CreateGraphics(opts);
+		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
 		auto targetDesc     = bgl::RenderTargetDesc();

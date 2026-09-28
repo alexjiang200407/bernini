@@ -3,7 +3,6 @@
 #include "device/Device.h"
 #include "gfx/DrawBucketTable.h"
 #include "passes/draw_bucket_config.h"
-#include "slang/SlangSessions.h"
 #include "util/util.h"
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
@@ -12,6 +11,7 @@
 #include <bgl_common/SurfaceReflection.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <core/log/log.h>
+#include <device_context/DeviceContext.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -138,7 +138,7 @@ namespace bgl
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
 		// program and a grass one -- the lit family where the surface owns its lighting. Named by the draw-bucket
 		// config, so the names generated here are the names the passes build.
-		std::vector<SlangSourceModule>
+		std::vector<gpu::SlangSourceModule>
 		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
 		{
 			const auto colour = [kind](LayerType layer) {
@@ -196,7 +196,7 @@ namespace bgl
 		if (!std::filesystem::is_directory(dir))
 		{
 			throw ApiError(
-				std::format("surfaceShaderDir '{}' is not a directory", dir.generic_string()));
+				std::format("clientShaderDir '{}' is not a directory", dir.generic_string()));
 		}
 
 		std::vector<SurfaceType> types;
@@ -239,7 +239,7 @@ namespace bgl
 			{
 				throw ApiError(
 					std::format(
-						"surfaceShaderDir '{}' holds more than {} surfaces, the most the "
+						"clientShaderDir '{}' holds more than {} surfaces, the most the "
 						"draw-bucket "
 						"ceiling can give a bucket each; '{}' is past the last",
 						dir.generic_string(),
@@ -260,7 +260,7 @@ namespace bgl
 				{ BindingModuleName(slot),
 			      BindingModuleSource(slot, types[slot].name, sourceTypes[slot]) });
 
-			for (const SlangSourceModule& program :
+			for (const gpu::SlangSourceModule& program :
 			     SurfacePrograms(slot, types[slot].kind, types[slot].shading))
 			{
 				device.AddSourceModule(program);

@@ -7,6 +7,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "types/QueueType.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/BMesh.h>
@@ -58,12 +59,12 @@ namespace
 		return material.IsValid() ? material.materialType : bgl::MaterialType::kNull;
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -162,7 +163,7 @@ namespace
 
 TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto sceneHandle = gfx->CreateScene(CubeSceneDesc());
@@ -282,7 +283,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 // the source and GPU submesh indices disagree and left the chunks sharing one vertexData range.
 TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(MeshletSceneDesc());
@@ -331,7 +332,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 // own -- a mesh half-textured along a triangle-aligned seam.
 TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][drawbucket][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(MeshletSceneDesc());
@@ -382,7 +383,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 TEST_CASE("SetSubmeshMaterial re-selects a submesh's bucket", "[material][drawbucket][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());
@@ -457,7 +458,7 @@ TEST_CASE(
 	"A live instance re-resolves its bucket after SetSubmeshMaterial",
 	"[material][drawbucket][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());
@@ -572,7 +573,7 @@ TEST_CASE(
 	"A material override changes one instance and not its siblings",
 	"[material][drawbucket][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(CubeSceneDesc());

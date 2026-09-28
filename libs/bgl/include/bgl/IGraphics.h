@@ -21,6 +21,11 @@
 #include <string>
 #include <vector>
 
+namespace gpu
+{
+	class DeviceContext;
+}
+
 namespace bgl
 {
 	class GraphicsError : public ApiError
@@ -47,34 +52,11 @@ namespace bgl
 
 	struct GraphicsOptions
 	{
-		enum class LogLevel
-		{
-			kTrace = 0,
-			kDebug,
-			kInfo,
-			kWarn,
-			kError,
-			kCritical,
-			kOff,
-		};
-
-		bool enableDebugLayer         = false;
-		bool enableGPUValidationLayer = false;
-		bool enablePixDebug           = false;
-		bool strictError              = false;
-
-		LogLevel logLevel = LogLevel::kError;
-
 		// Directory for the persistent shader cache. Empty disables caching.
 		//
 		// Under GPU validation only the driver-pipeline layer is dropped -- the generated code and
 		// reflection are identical either way, so they stay cached. See docs/shader_cache.md.
 		std::filesystem::path shaderCacheDir;
-
-		// A directory of the client's own Slang modules, searched after the engine's staged tree, so
-		// a program can import one by name. Every file under it is in the shader cache's salt. Read
-		// once, at construction: nothing rebuilds a pipeline after it. Empty means none.
-		std::filesystem::path surfaceShaderDir;
 
 		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.
 		// Needs MTL_CAPTURE_ENABLED=1 in the environment -- Metal refuses to capture without it, and
@@ -261,7 +243,7 @@ namespace bgl
 		GetPassTimings(const RenderTargetRef& target) = 0;
 
 		/**
-		 * The surfaces registered from `GraphicsOptions::surfaceShaderDir`, in slot order, each
+		 * The surfaces registered from the device context's `clientShaderDir`, in slot order, each
 		 * carrying the `MaterialType` its materials are created with.
 		 *
 		 * Fixed at construction: every pipeline that can draw one is built there, so a surface added
@@ -327,8 +309,16 @@ namespace bgl
 
 	using GraphicsRef = core::SharedRef<IGraphics>;
 
+	/**
+	 * The renderer on a device the application created and may share with other owners: the
+	 * renderer compiles through the context's Slang sessions and draws on its device, and holds the
+	 * context for as long as it lives. `opts` is the renderer's own -- its pools and its shader
+	 * cache; the device-level choices are the context's.
+	 *
+	 * @throws ApiError for a client shader directory that does not exist or holds an invalid surface.
+	 */
 	BGL_API GraphicsRef
-	CreateGraphics(const GraphicsOptions& opts);
+	CreateGraphics(core::SharedRef<gpu::DeviceContext> context, const GraphicsOptions& opts);
 }
 
 template class BGL_API core::SharedRef<bgl::IGraphics>;

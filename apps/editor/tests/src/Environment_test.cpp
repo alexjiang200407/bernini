@@ -2,6 +2,7 @@
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/containers/fixed_buffer.h>
+#include <device_context/DeviceContext.h>
 #include <editor_sdk/environment.h>
 
 #include <assetlib_structs/ImageData.h>
@@ -51,10 +52,10 @@ namespace
 
 		Fixture()
 		{
-			auto opts             = bgl::GraphicsOptions();
-			opts.enableDebugLayer = true;
+			auto ctxDesc             = gpu::DeviceContextDesc();
+			ctxDesc.enableDebugLayer = true;
 
-			renderer.emplace(opts, MakeSceneDesc());
+			renderer.emplace(ctxDesc, bgl::GraphicsOptions(), MakeSceneDesc());
 		}
 
 		[[nodiscard]] bgl::IScene*

@@ -7,6 +7,7 @@
 #include "scene/SceneView.h"
 #include "types/DrawBucketMask.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/Camera.h>
@@ -56,11 +57,11 @@ namespace
 
 TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline][demand][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -200,12 +201,12 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 {
 	// Surfaces registered, because a surface's programs exist only once it is: they are generated
 	// at registration, so a device with none has no game kind to build.
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
-	opts.surfaceShaderDir = "./shaders/tests/surfaces";
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
+	opts.context.clientShaderDir  = "./shaders/tests/surfaces";
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 	REQUIRE_FALSE(gfx->GetSurfaceTypes().empty());
 

@@ -21,6 +21,7 @@
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <exception>
 #include <format>
 #include <gamelib/AssetManager.h>
@@ -124,10 +125,12 @@ main(int argc, char** argv)
 			wnd.emplace(opts);
 		}
 
-		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		auto ctxDesc = gpu::DeviceContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts             = bgl::GraphicsOptions{};
+		ctxDesc.enableDebugLayer = true;
+
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

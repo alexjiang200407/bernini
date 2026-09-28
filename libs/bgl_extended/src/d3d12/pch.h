@@ -10,7 +10,12 @@ namespace wrl = Microsoft::WRL;
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#include "D3d12ErrorChecker.h"
+#include <device_context/d3d12/D3d12ErrorChecker.h>
+
+namespace bgl
+{
+	using gpu::c_D3d12ErrChecker;
+}
 
 #include <slang-com-ptr.h>
 #include <slang.h>

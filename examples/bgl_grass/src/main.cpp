@@ -26,6 +26,7 @@
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -129,16 +130,18 @@ main(int argc, char** argv)
 			wnd.emplace(opts);
 		}
 
+		auto ctxDesc = gpu::DeviceContextDesc();
+
 		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		ctxDesc.enableDebugLayer = true;
 
 		// The look's material may shade through a surface the project authors, and surfaces are
 		// registered only at creation.
 		const auto surfaceDir = std::filesystem::path(project) / "Authored" / "Shaders";
 		if (std::filesystem::is_directory(surfaceDir))
-			gfxOpts.surfaceShaderDir = surfaceDir;
+			ctxDesc.clientShaderDir = surfaceDir;
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

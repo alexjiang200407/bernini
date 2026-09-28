@@ -9,6 +9,7 @@
 #include "types/Barrier.h"
 #include "types/QueueType.h"
 #include "util/LodMesh.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
@@ -112,9 +113,9 @@ namespace
 
 		LodScene()
 		{
-			auto opts           = bgl::GraphicsOptions();
-			opts.shaderCacheDir = bgl::test::ShaderCacheDir();
-			gfx                 = bgl::CreateGraphics(opts);
+			auto opts                    = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
+			gfx                          = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto desc                        = bgl::SceneDesc();

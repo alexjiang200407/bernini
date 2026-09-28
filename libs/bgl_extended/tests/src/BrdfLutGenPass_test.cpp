@@ -12,6 +12,7 @@
 #include "types/Barrier.h"
 #include "types/QueueType.h"
 #include "util/HalfFloat.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -34,12 +35,12 @@ namespace
 {
 	constexpr uint32_t c_Dimension = 256;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -149,7 +150,7 @@ namespace
 // localize.
 TEST_CASE("The generated BRDF table satisfies the split-sum identities", "[brdflut][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	const std::vector<Texel> table = ReadTable(gfx.Get());
@@ -227,10 +228,10 @@ TEST_CASE("The generated BRDF table satisfies the split-sum identities", "[brdfl
 // through the engine's PBR is.
 TEST_CASE("The BRDF LUT is generated only when PBR shading is drawn", "[brdflut][lit][render]")
 {
-	auto opts             = HeadlessOptions();
-	opts.surfaceShaderDir = "./shaders/tests/surfaces";
+	auto opts                    = HeadlessOptions();
+	opts.context.clientShaderDir = "./shaders/tests/surfaces";
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

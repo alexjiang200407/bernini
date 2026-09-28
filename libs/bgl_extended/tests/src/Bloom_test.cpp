@@ -1,5 +1,6 @@
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -40,12 +41,12 @@ namespace
 		return half - half * (1.0f / (c_CameraDist - 1.0f)) / c_TanHalfFov;
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -91,7 +92,7 @@ namespace
 
 		explicit LitCube()
 		{
-			gfx = bgl::CreateGraphics(HeadlessOptions());
+			gfx = bgl::test::CreateGraphics(HeadlessOptions());
 			REQUIRE(gfx != nullptr);
 
 			auto targetDesc     = bgl::RenderTargetDesc();
@@ -176,7 +177,7 @@ TEST_CASE("Default bloom glows visibly on a scene lit at the engine's exposure",
 
 TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -313,10 +314,10 @@ TEST_CASE("An exhausted RTV pool skips bloom instead of failing the frame", "[bl
 {
 	// Room for the target's own attachments and the BRDF LUT, none for a whole chain -- the
 	// editor found this by enabling bloom on every viewport of a device sized without it.
-	auto opts    = HeadlessOptions();
-	opts.maxRtvs = 8;
+	auto opts             = HeadlessOptions();
+	opts.graphics.maxRtvs = 8;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -373,7 +374,7 @@ TEST_CASE("An exhausted RTV pool skips bloom instead of failing the frame", "[bl
 
 TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	// With TAA on, the chain reads the freshly resolved history rather than the scene colour --

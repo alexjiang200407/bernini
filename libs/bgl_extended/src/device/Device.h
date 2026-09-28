@@ -9,6 +9,7 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -24,7 +25,6 @@ namespace bgl
 	class ICommandQueue;
 	class ITimestampHeap;
 	struct ShaderDesc;
-	struct SlangSourceModule;
 	struct ReflectedSurface;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
@@ -54,19 +54,23 @@ namespace bgl
 
 		/**
 		 * A module compiled from text under a name, shadowing a file of that name on the search
-		 * path for every compile after this one. Folded into the shader cache's salt.
+		 * path for every compile after this one, in every owner of the device context. A name maps
+		 * to one text: the same text again changes nothing, a new one replaces the old and drops the
+		 * sessions. The shader cache's keys follow it through the context's source salt.
 		 *
-		 * @pre no compile is in flight, and no slang:: object is held -- the sessions are dropped.
+		 * @pre no compile is in flight, and no slang:: object is held by any owner, when the text is
+		 *      new or changed.
 		 */
 		virtual void
-		AddSourceModule(const SlangSourceModule& sourceModule) noexcept = 0;
+		AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept = 0;
 
 		/**
 		 * Drops every thread's Slang session -- a few hundred resident megabytes apiece once a
 		 * cold-cache compile has stood one up. Call after each pipeline batch is built; the next
-		 * compile recreates what it needs.
+		 * compile recreates what it needs. The sessions are the device context's, so the drop reaches
+		 * every owner of that context.
 		 *
-		 * @pre no compile is in flight, and no slang:: object is held.
+		 * @pre no compile is in flight, and no slang:: object is held, by any owner of the context.
 		 */
 		virtual void
 		ReleaseSlangSession() noexcept = 0;

@@ -1,6 +1,7 @@
 #include "StoreAt.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
@@ -122,13 +123,13 @@ struct RimSurface : ISurfaceSource
 		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	SurfaceOptions(const std::filesystem::path& shaderDir)
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = false;
-		opts.shaderCacheDir   = "shadercache";
-		opts.surfaceShaderDir = shaderDir;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = false;
+		opts.graphics.shaderCacheDir  = "shadercache";
+		opts.context.clientShaderDir  = shaderDir;
 		return opts;
 	}
 
@@ -159,7 +160,7 @@ TEST_CASE("A project's own surface draws the material that names it", "[gamelib]
 	WriteRimMaterial(root.path, "warm.bmaterial", glm::vec3(10.0f, 3.0f, 1.0f));
 	WriteRimMaterial(root.path, "cool.bmaterial", glm::vec3(1.0f, 3.0f, 10.0f));
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
 	REQUIRE(gfx != nullptr);
 
 	// Read off the game's own module, so the name the document writes is the file's stem.
@@ -240,7 +241,7 @@ TEST_CASE("A surface material refuses the PBR setters", "[gamelib][surface]")
 	ProjectRoot root("bernini_gamelib_surface_setters");
 	WriteRimMaterial(root.path, "warm.bmaterial", glm::vec3(10.0f, 3.0f, 1.0f));
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(SurfaceSceneDesc());
@@ -278,11 +279,11 @@ TEST_CASE("A material whose surface was never registered is refused", "[gamelib]
 	WriteRimMaterial(root.path, "warm.bmaterial", glm::vec3(10.0f, 3.0f, 1.0f));
 
 	// Everything the case above had, except the one line pointing at the project's shaders.
-	auto opts             = bgl::GraphicsOptions();
-	opts.enableDebugLayer = false;
-	opts.shaderCacheDir   = "shadercache";
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.context.enableDebugLayer = false;
+	opts.graphics.shaderCacheDir  = "shadercache";
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 	CHECK(gfx->GetSurfaceTypes().empty());
 
@@ -348,7 +349,7 @@ TEST_CASE("A routed slot draws through its routes when its bake is absent", "[ga
 
 	SaveAt(material, root.path / assetlib::c_MaterialsDirectoryName / "routed.bmaterial");
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
 	REQUIRE(gfx != nullptr);
 
 	auto scene  = gfx->CreateScene(SurfaceSceneDesc());
@@ -445,7 +446,7 @@ TEST_CASE("A lit surface material routes by its document's model", "[gamelib][su
 		assetlib::ShadingModel::kLitSurface,
 		"Rim");
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(root.Shaders()));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
 	REQUIRE(gfx != nullptr);
 	REQUIRE(gfx->GetSurfaceTypes().size() == 2u);
 

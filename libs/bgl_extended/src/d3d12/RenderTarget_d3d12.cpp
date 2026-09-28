@@ -81,20 +81,20 @@ namespace bgl
 
 		wrl::ComPtr<IDXGIFactory4> factory;
 		UINT                       factoryFlags = m_EnableDebug ? DXGI_CREATE_FACTORY_DEBUG : 0;
-		CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)) >> d3d12ErrChecker;
+		CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)) >> c_D3d12ErrChecker;
 
 		wrl::ComPtr<IDXGISwapChain1> swap;
 
 		auto d3d12CommandQueue = m_CommandQueue->As<CommandQueue>()->GetD3D12CommandQueue();
 		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
-			d3d12ErrChecker;
+			c_D3d12ErrChecker;
 
-		swap->QueryInterface(IID_PPV_ARGS(&m_SwapChain)) >> d3d12ErrChecker;
+		swap->QueryInterface(IID_PPV_ARGS(&m_SwapChain)) >> c_D3d12ErrChecker;
 		// NO_WINDOW_CHANGES stops DXGI hooking the window's message queue. Without it a Present issued
 		// from a thread other than the window's can deadlock against that queue, and bgl resizes the
 		// swapchain itself rather than letting DXGI respond to window changes.
 		factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER) >>
-			d3d12ErrChecker;
+			c_D3d12ErrChecker;
 
 		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
 	}
@@ -114,7 +114,7 @@ namespace bgl
 			for (UINT i = 0; i < c_SwapchainImageCount; i++)
 			{
 				wrl::ComPtr<ID3D12Resource> backBuffer;
-				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
+				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> c_D3d12ErrChecker;
 
 				m_BackBuffers[i].textureHandle =
 					m_ResourceManager->As<ResourceManager>()->CreateTexture(
@@ -360,7 +360,7 @@ namespace bgl
 
 		if (!m_Headless)
 		{
-			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+			m_SwapChain->Present(1, 0) >> c_D3d12ErrChecker;
 		}
 
 		// Recorded before advancing: a readback samples the frame that was just presented, not the
@@ -388,7 +388,7 @@ namespace bgl
 				height,
 				DXGI_FORMAT_B8G8R8A8_UNORM,
 				0) >>
-				d3d12ErrChecker;
+				c_D3d12ErrChecker;
 		}
 
 		RecreateRenderTargets();

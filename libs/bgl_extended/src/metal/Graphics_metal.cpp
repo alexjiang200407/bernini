@@ -15,6 +15,8 @@
 #include <bgl/types/SceneDesc.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
+#include <device_context/DeviceContext.h>
+#include <device_context/metal/AutoreleaseNet.h>
 #include <span>
 #include <vector>
 
@@ -127,33 +129,10 @@ namespace bgl
 	class Graphics final : public core::RefCounter<GraphicsBase>
 	{
 	public:
-		explicit Graphics(const GraphicsOptions& opts) : m_Opts(opts)
+		Graphics(gpu::DeviceContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			core::logging::init_file_logger("bgl.log", static_cast<int>(opts.logLevel));
-
-			m_Pool = NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
-
-			NS::SharedPtr<MTL::Device> mtlDevice =
-				NS::TransferPtr(MTL::CreateSystemDefaultDevice());
-			if (!mtlDevice)
-			{
-				core::throw_runtime_error("no Metal device available");
-			}
-
-			logger::info("Metal device: {}", mtlDevice->name()->utf8String());
-
-			// Metal's validation is switched on by the environment, not by us, so the option alone
-			// cannot say whether it is running. Either variable instruments shaders enough that a
-			// binary archive written without them no longer describes what the driver will run.
-			const bool gpuValidation = opts.enableGPUValidationLayer ||
-			                           core::env_var("MTL_SHADER_VALIDATION").has_value() ||
-			                           core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
-
-			core::SharedRef<Device> device = core::SharedRef<Device>::Make(
-				mtlDevice.get(),
-				opts.shaderCacheDir,
-				opts.surfaceShaderDir,
-				!gpuValidation);
+			core::SharedRef<Device> device =
+				core::SharedRef<Device>::Make(std::move(context), opts.shaderCacheDir);
 			m_Device = device;
 
 			auto rmDesc               = ResourceManagerDesc();
@@ -170,7 +149,8 @@ namespace bgl
 
 			// Before the context: it builds every pipeline, and a slot's pipelines compile against
 			// whatever module this bound to that slot.
-			m_SurfaceTypes = RegisterSurfaces(*m_Device, opts.surfaceShaderDir);
+			m_SurfaceTypes =
+				RegisterSurfaces(*m_Device, device->GetContext().GetDesc().clientShaderDir);
 
 			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 			m_Context         = std::make_unique<RenderContext>(
@@ -178,7 +158,7 @@ namespace bgl
 				m_ResourceManager,
 				m_DrawBucketTable,
 				m_SurfaceTypes,
-				opts.enableDebugLayer);
+				device->GetContext().GetDesc().enableDebugLayer);
 
 			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
 			// by the first Draw that demands each, and that path drops the sessions again after
@@ -343,9 +323,10 @@ namespace bgl
 		DeviceRef          m_Device;
 		ResourceManagerRef m_ResourceManager;
 
-		// Below the device: what it holds are Metal objects that reference the device, so draining
-		// it once the device is released deallocs them into a purged one.
-		NS::SharedPtr<NS::AutoreleasePool> m_Pool;
+		// Below the device: what the net holds are Metal objects that reference the device, so
+		// draining it once the device is released deallocs them into a purged one. A share rather
+		// than a pool of this object's own, so two owners on one thread die in either order.
+		gpu::AutoreleaseNet m_AutoreleaseNet;
 
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
@@ -358,8 +339,8 @@ namespace bgl
 	};
 
 	BGL_API GraphicsRef
-	CreateGraphics(const GraphicsOptions& opts)
+	CreateGraphics(core::SharedRef<gpu::DeviceContext> context, const GraphicsOptions& opts)
 	{
-		return core::SharedRef<Graphics>::Make(opts);
+		return core::SharedRef<Graphics>::Make(std::move(context), opts);
 	}
 }

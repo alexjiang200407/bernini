@@ -1,4 +1,5 @@
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
@@ -25,12 +26,12 @@ namespace
 {
 	constexpr uint32_t c_Size = 256;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
 		return opts;
 	}
 
@@ -144,7 +145,7 @@ namespace
 // thread has to produce the very pixels the fused path draws, or the two code paths have diverged.
 TEST_CASE("A mesh cooked on a worker draws what the direct path draws", "[scene][cook]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto rtDesc     = bgl::RenderTargetDesc();
@@ -197,7 +198,7 @@ TEST_CASE("A mesh cooked on a worker draws what the direct path draws", "[scene]
 
 TEST_CASE("A prepared mesh is single-spend", "[scene][cook]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(TriangleSceneDesc());

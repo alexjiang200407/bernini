@@ -1,4 +1,5 @@
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
@@ -26,14 +27,14 @@ using namespace bgl;
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	SurfaceOptions(const std::filesystem::path& dir)
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-		opts.surfaceShaderDir         = dir;
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.context.clientShaderDir          = dir;
 		return opts;
 	}
 
@@ -94,7 +95,7 @@ struct LitFillerSurface : ILitSurfaceSource
 // its draw buckets will ask for, in filename order.
 TEST_CASE("A surface directory fills slots in filename order", "[surface][registry]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions("./shaders/tests/surfaces"));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions("./shaders/tests/surfaces"));
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
@@ -150,7 +151,7 @@ TEST_CASE("More than four surfaces register, each a kind of its own", "[surface]
 	for (const char* name : { "B", "D", "F" })
 		WriteLitSurface(dir / (std::string(name) + ".slang"), c_TrivialLit);
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(dir));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(dir));
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
@@ -169,7 +170,7 @@ TEST_CASE("More than four surfaces register, each a kind of its own", "[surface]
 // is all of them until one is written.
 TEST_CASE("No surface directory registers nothing", "[surface][registry]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions({}));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions({}));
 	REQUIRE(gfx != nullptr);
 	CHECK(gfx->GetSurfaceTypes().empty());
 }
@@ -184,7 +185,7 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 	SECTION("a directory that is not there")
 	{
 		CHECK_THROWS_MATCHES(
-			bgl::CreateGraphics(SurfaceOptions("./shaders/tests/no_such_surfaces")),
+			bgl::test::CreateGraphics(SurfaceOptions("./shaders/tests/no_such_surfaces")),
 			ApiError,
 			MessageMatches(ContainsSubstring("is not a directory")));
 	}
@@ -198,7 +199,7 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 			WriteSurface(dir / std::format("S{:03}.slang", i), c_Trivial);
 
 		CHECK_THROWS_MATCHES(
-			bgl::CreateGraphics(SurfaceOptions(dir)),
+			bgl::test::CreateGraphics(SurfaceOptions(dir)),
 			ApiError,
 			MessageMatches(ContainsSubstring(
 				std::format("'S{:03}' is past the last", idl::cMaxDrawBuckets - 1))));
@@ -210,7 +211,7 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 		WriteSurface(dir / "Hollow.slang", "struct Lonely { float value; };\n");
 
 		CHECK_THROWS_MATCHES(
-			bgl::CreateGraphics(SurfaceOptions(dir)),
+			bgl::test::CreateGraphics(SurfaceOptions(dir)),
 			ApiError,
 			MessageMatches(
 				ContainsSubstring("no struct in the module conforms to ISurfaceSource")));
@@ -225,7 +226,7 @@ TEST_CASE("A surface directory the engine cannot register is refused", "[surface
 		WriteSurface(dir / "Broken.slang", "struct Half { float value\n");
 
 		CHECK_THROWS_MATCHES(
-			bgl::CreateGraphics(SurfaceOptions(dir)),
+			bgl::test::CreateGraphics(SurfaceOptions(dir)),
 			ApiError,
 			MessageMatches(ContainsSubstring("surface 'Broken': its module did not compile")));
 	}
@@ -251,7 +252,7 @@ TEST_CASE("A module beside the surfaces is not one of them", "[surface][registry
 
 	WriteSurface(dir / "Only.slang", c_Trivial);
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions(dir));
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(dir));
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();

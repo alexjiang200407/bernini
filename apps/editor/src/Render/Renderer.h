@@ -8,6 +8,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <exception>
 #include <functional>
 #include <qnamespace.h>
@@ -55,16 +56,18 @@ public:
 	using ViewportId = uint64_t;
 
 	/**
-	 * Builds the Graphics and the Scene on the render thread. `gfxOpts.onPipelineProgress` is
-	 * called from *that* thread, so a sink that touches widgets has to marshal.
+	 * Builds the device context, the Graphics and the Scene on the render thread. The context is the
+	 * process's device, created here because the editor is the application and this is the thread
+	 * its GPU work lives on.
 	 *
-	 * @throws whatever bgl::CreateGraphics throws, on the calling thread, with the render thread
-	 *         already stopped.
+	 * @throws whatever gpu::CreateDeviceContext or bgl::CreateGraphics throws, on the calling thread,
+	 *         with the render thread already stopped.
 	 */
 	Renderer(
-		const bgl::GraphicsOptions& gfxOpts,
-		const bgl::SceneDesc&       sceneDesc,
-		RendererWait                wait = RendererWait::kBlock);
+		const gpu::DeviceContextDesc& contextDesc,
+		const bgl::GraphicsOptions&   gfxOpts,
+		const bgl::SceneDesc&         sceneDesc,
+		RendererWait                  wait = RendererWait::kBlock);
 	~Renderer() override;
 
 	// Runs `fn` on the render thread. Returns immediately when cross-thread; runs inline when the
@@ -147,8 +150,9 @@ private:
 	std::vector<Viewport> m_Viewports;
 	ViewportId            m_NextViewportId = 1;
 
-	bgl::GraphicsRef m_Graphics;
-	bgl::SceneRef    m_Scene;
+	gpu::DeviceContextRef m_DeviceContext;
+	bgl::GraphicsRef      m_Graphics;
+	bgl::SceneRef         m_Scene;
 };
 
 /**

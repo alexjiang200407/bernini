@@ -13,6 +13,7 @@
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ui/UiRenderer.h>
 #include <gamelib/ui/UiRuntime.h>
@@ -65,10 +66,12 @@ main(int argc, char** argv)
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto gfxOpts             = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer = true;
+		auto ctxDesc = gpu::DeviceContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts             = bgl::GraphicsOptions{};
+		ctxDesc.enableDebugLayer = true;
+
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		// The window's frame draws only the UI, so it accumulates nothing: TAA off, and a frame
 		// with no Draw is legal.

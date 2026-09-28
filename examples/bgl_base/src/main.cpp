@@ -7,6 +7,7 @@
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <filesystem>
 #include <limits>
 #include <optional>
@@ -95,14 +96,16 @@ main(int argc, char** argv)
 		if (!headless)
 			wnd.emplace(windowOpts);
 
+		auto ctxDesc = gpu::DeviceContextDesc();
+
 		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer         = true;
-		gfxOpts.enableGPUValidationLayer = false;
-		gfxOpts.enablePixDebug           = true;
-		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+		ctxDesc.enableDebugLayer         = true;
+		ctxDesc.enableGPUValidationLayer = false;
+		ctxDesc.enablePixDebug           = true;
+		ctxDesc.logLevel                 = gpu::LogLevel::kTrace;
 		gfxOpts.shaderCacheDir           = "shadercache";
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(width);

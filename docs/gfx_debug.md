@@ -161,18 +161,19 @@ public API is therefore the spdlog free functions:
 `logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl_extended sources
 call `logger::…` with no extra include.
 
-* **Log file:** one per process, named by whoever opens it first. The `Graphics` constructor
-  ([Graphics_d3d12.cpp](libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp)) asks for `bgl.log` next to the
-  binary, which is what `bgl_extended_tests` and the examples get; under the editor `main.cpp` has already
-  asked for `editor.log`, so bgl_extended's call only applies its level. `core::logging::init_file_logger`
-  ([log.h](libs/core/include/core/log/log.h)) is where that rule lives: **the first call wins the
-  file, every call applies its level**. Several `Graphics` instances therefore share one run's log
-  rather than clobbering it — which is why the name is `bgl.log` and not the renderer's. A process
-  holding two renderers cannot give them a file each; whichever constructs first names it, and the
-  other's lines land there too.
-* **Level & flush level** come from `GraphicsOptions::logLevel`
-  ([IGraphics.h](libs/bgl/include/bgl/IGraphics.h), enum `kTrace … kOff`). **Default is `kError`**
-  — to see the timeline of a run, pass `logLevel = kTrace` when calling `CreateGraphics`.
+* **Log file:** one per process, named by whoever opens it first. The device context
+  ([DeviceContext_d3d12.cpp](libs/device_context/src/d3d12/DeviceContext_d3d12.cpp),
+  [DeviceContext_metal.cpp](libs/device_context/src/metal/DeviceContext_metal.cpp)) asks for `bgl.log`
+  next to the binary, which is what `bgl_extended_tests` and the examples get; under the editor
+  `main.cpp` has already asked for `editor.log`, so the context's call only applies its level.
+  `core::logging::init_file_logger` ([log.h](libs/core/include/core/log/log.h)) is where that rule
+  lives: **the first call wins the file, every call applies its level**. Every renderer on the
+  context, and every other owner of the device, therefore shares one run's log — which is why the
+  name is `bgl.log` and not the renderer's.
+* **Level & flush level** come from `DeviceContextDesc::logLevel`
+  ([DeviceContext.h](libs/device_context/include/device_context/DeviceContext.h), enum `kTrace … kOff`).
+  **Default is `kError`** — to see the timeline of a run, pass `logLevel = kTrace` when calling
+  `gpu::CreateDeviceContext`.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
   and your own `logger::` output interleave in one file.
 
@@ -257,17 +258,21 @@ same second do still collide.
 
 ## 5. D3D12 debug layer & GPU validation
 
-Runtime-toggled via `GraphicsOptions` flags
-([IGraphics.h](libs/bgl/include/bgl/IGraphics.h)), applied in the `Graphics` constructor
-([Graphics_d3d12.cpp](libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp)):
+Runtime-toggled via `gpu::DeviceContextDesc` flags
+([DeviceContext.h](libs/device_context/include/device_context/DeviceContext.h)), applied when the
+device is created ([DeviceContext_d3d12.cpp](libs/device_context/src/d3d12/DeviceContext_d3d12.cpp)),
+before any renderer exists:
 
 * `enableDebugLayer` → `ID3D12Debug::EnableDebugLayer()`. Turns on D3D12 API validation and sets
   break-on-severity for ERROR and CORRUPTION via `IDXGIInfoQueue`.
 * `enableGPUValidationLayer` → `SetEnableGPUBasedValidation(TRUE)`. **Only meaningful with
   `enableDebugLayer` on.**
 * `enablePixDebug` → loads `WinPixGpuCapturer.dll` for PIX captures. See [RHI](docs/rhi.md).
-* Validation messages are routed to `bgl.log` through the `Graphics::LogD3D12Message` callback
-  registered on `ID3D12InfoQueue1`, so they appear alongside your logging.
+* Validation messages are routed to `bgl.log` through the device context's callback registered on
+  `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error
+  into `gfatal`.
+* When the context dies with the layer on it reports the live objects, so a leak is attributed to
+  whichever owner of the device made it.
 
 This runtime layer is **independent** of the compile-time `BERNINI_GPU_DEBUG` GPU-assertion
 system in §1: one is a D3D12 API validator, the other is your shaders reporting logic errors.
@@ -278,7 +283,7 @@ editor reads them from its config.
 
 ## 6. Metal validation & frame capture
 
-Metal's validators are environment variables, not `GraphicsOptions` flags, so they need no rebuild:
+Metal's validators are environment variables, not `DeviceContextDesc` flags, so they need no rebuild:
 
 ```bash
 MTL_DEBUG_LAYER=1 MTL_DEBUG_LAYER_ERROR_MODE=assert MTL_SHADER_VALIDATION=1 ./bgl_extended_tests "<name>"
@@ -381,12 +386,12 @@ struct MyHandler : bgl::IGpuAssertionHandler
     }
 };
 
-bgl::GraphicsOptions opts;
-opts.enableDebugLayer         = true;          // D3D12 validation into bgl.log
-opts.enableGPUValidationLayer = true;
-opts.logLevel = bgl::GraphicsOptions::LogLevel::kTrace;  // full timeline
+gpu::DeviceContextDesc ctxDesc;
+ctxDesc.enableDebugLayer         = true;       // D3D12 validation into bgl.log
+ctxDesc.enableGPUValidationLayer = true;
+ctxDesc.logLevel                 = gpu::LogLevel::kTrace;  // full timeline
 
-auto gfx = bgl::CreateGraphics(opts);
+auto gfx = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), bgl::GraphicsOptions());
 
 MyHandler handler;                              // must outlive the frame-latency window
 gfx->SetGpuAssertionHandler(&handler);          // else a raise -> gfatal() crash

@@ -42,7 +42,7 @@ namespace bgl
 		gassert(device != nullptr, "Device pointer must not be null.");
 
 		wrl::ComPtr<ID3D12Device2> device2;
-		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device2)) >> c_D3d12ErrChecker;
 
 		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
 
@@ -150,7 +150,7 @@ namespace bgl
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{
 			device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
-				d3d12ErrChecker;
+				c_D3d12ErrChecker;
 
 			if (cache != nullptr)
 				cache->StorePipeline(identity, m_PipelineState.Get());

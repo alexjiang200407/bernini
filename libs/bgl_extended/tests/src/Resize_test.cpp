@@ -1,4 +1,5 @@
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
@@ -41,13 +42,13 @@ namespace
 		return { be32(header + 16), be32(header + 20) };
 	}
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 
@@ -107,7 +108,7 @@ namespace
 
 TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx, 16, 8);
@@ -143,7 +144,7 @@ TEST_CASE("Resize recreates the backbuffers", "[resize][graphics]")
 
 TEST_CASE("Resize with an existing static mesh instance", "[resize][graphics]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx, 32, 32);
@@ -169,7 +170,7 @@ TEST_CASE("Resize with an existing static mesh instance", "[resize][graphics]")
 
 TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx, 64, 64);
@@ -204,7 +205,7 @@ TEST_CASE("Resize after drawing a frame", "[resize][graphics]")
 
 TEST_CASE("Resize edge cases", "[resize][graphics]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx, 48, 48);

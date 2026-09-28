@@ -34,7 +34,8 @@ and portability.
 - **Instances are the unit of scale.** Thousands of units means per-instance data must be
   compact and GPU-resident; per-unit CPU updates are the enemy.
 - **RHI stays API-agnostic — among APIs with bindless resource access and mesh shaders.** All D3D12
-  lives in `bgl_d3d12`, all Metal in `bgl_metal`. Every feature added to `bgl_extended` must be expressible
+  lives in `bgl_d3d12`, all Metal in `bgl_metal` — except the device itself, which `device_context`
+  creates and every owner of GPU work shares. Every feature added to `bgl_extended` must be expressible
   without leaking backend types, so Vulkan stays viable. An API that clears that bar is a backend;
   one that does not is a second renderer above `bgl`'s public interface, not under the RHI. `bgl`
   names that interface and nothing else; a renderer under it is named for what it is built on, and

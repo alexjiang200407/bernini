@@ -2,6 +2,7 @@
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/GeomType.h>
@@ -40,14 +41,14 @@ using namespace bgl;
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	SurfaceOptions()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-		opts.surfaceShaderDir         = "./shaders/tests/surfaces";
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.context.clientShaderDir          = "./shaders/tests/surfaces";
 		return opts;
 	}
 
@@ -99,7 +100,7 @@ namespace
 // arena, a generic instantiated on a game's struct, and a row of its own.
 TEST_CASE("A surface material draws what the engine's own PBR path draws", "[surface][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -151,7 +152,7 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 // picks a different surface per record rather than per pipeline.
 TEST_CASE("Two surfaces draw side by side across three layers", "[surface][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -309,10 +310,10 @@ TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]
 		out << EmissiveSurface(colours[i]);
 	}
 
-	auto opts             = SurfaceOptions();
-	opts.surfaceShaderDir = dir;
+	auto opts                    = SurfaceOptions();
+	opts.context.clientShaderDir = dir;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 	REQUIRE(gfx->GetSurfaceTypes().size() == colours.size());
 
@@ -415,7 +416,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	using Catch::Matchers::ContainsSubstring;
 	using Catch::Matchers::MessageMatches;
 
-	auto gfx   = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx   = bgl::test::CreateGraphics(SurfaceOptions());
 	auto scene = gfx->CreateScene(SphereScene());
 
 	SECTION("a surface nothing registered")
@@ -562,7 +563,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 // alone and not a surface being disqualified.
 TEST_CASE("A surface declaring a carrier takes the hashed layer", "[surface][carrier][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(SphereScene());
@@ -590,7 +591,7 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 	using bgl::test::skinned_synth::AddQuadStaticGeom;
 	using bgl::test::skinned_synth::AddSlidingQuadGeom;
 
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -710,7 +711,7 @@ namespace
 // so a gather off the wrong channel or the wrong texture moves the frame.
 TEST_CASE("A routed data slot draws what its composited map draws", "[surface][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -792,7 +793,7 @@ TEST_CASE("A routed data slot draws what its composited map draws", "[surface][r
 // how the defect looked on double-sided hair cards.
 TEST_CASE("A double-sided surface shades its back face as its front", "[surface][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -866,7 +867,7 @@ TEST_CASE("A double-sided surface shades its back face as its front", "[surface]
 // which without an environment answers near black.
 TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -924,7 +925,7 @@ TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
 // through the PBR arm would come back lit by the environment it never asked for.
 TEST_CASE("A lit surface draws beside PBR across layers", "[surface][lit][render]")
 {
-	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();

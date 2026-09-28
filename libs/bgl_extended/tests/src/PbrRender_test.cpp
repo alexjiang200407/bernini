@@ -1,6 +1,7 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
@@ -33,12 +34,12 @@ namespace
 // PBR with Image Based Lighting
 TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
-	opts.logLevel         = bgl::GraphicsOptions::LogLevel::kTrace;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
+	opts.context.logLevel         = gpu::LogLevel::kTrace;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	DiagAssertionHandler handler;
@@ -123,11 +124,11 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
  */
 TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc     = bgl::RenderTargetDesc();
@@ -191,12 +192,12 @@ TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]"
 // golden. This is the "editor material with trivial routing == triplet material" equivalence check.
 TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
-	opts.logLevel         = bgl::GraphicsOptions::LogLevel::kTrace;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
+	opts.context.logLevel         = gpu::LogLevel::kTrace;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	DiagAssertionHandler handler;

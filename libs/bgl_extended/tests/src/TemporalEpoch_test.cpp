@@ -1,5 +1,6 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -16,12 +17,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -48,7 +49,7 @@ namespace
 
 TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[scene][taa]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(SmallSceneDesc());
@@ -142,7 +143,7 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 
 TEST_CASE("Moving the ground breaks the temporal continuity", "[scene][taa][ground]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(SmallSceneDesc());

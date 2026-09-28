@@ -1,3 +1,4 @@
+#include "util/TestGraphics.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
@@ -109,14 +110,14 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 	const auto projectRoot = std::filesystem::path(*checkout) / "test-project" / "Data";
 	const auto assetsRoot  = std::filesystem::path(*checkout) / "assets" / "Data";
 
-	auto opts             = bgl::GraphicsOptions();
-	opts.enableDebugLayer = false;
-	opts.shaderCacheDir   = "shadercache";
-	opts.maxTextures      = 512;
-	opts.maxSrvs          = 1024;
-	opts.maxCbvSrvUavs    = 4096;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.context.enableDebugLayer = false;
+	opts.graphics.shaderCacheDir  = "shadercache";
+	opts.graphics.maxTextures     = 512;
+	opts.graphics.maxSrvs         = 1024;
+	opts.graphics.maxCbvSrvUavs   = 4096;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc       = bgl::RenderTargetDesc();

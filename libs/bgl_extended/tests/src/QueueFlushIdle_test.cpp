@@ -6,6 +6,7 @@
 #include "cmd/CommandQueue.h"      // IWYU pragma: keep
 #include "resource/Buffer.h"
 #include "types/QueueType.h"
+#include "util/TestGraphics.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
@@ -32,11 +33,11 @@ namespace
 
 TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 {
-	auto opts             = bgl::GraphicsOptions();
-	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer = true;
+	auto opts                     = bgl::test::GraphicsSetup();
+	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.enableDebugLayer = true;
 
-	auto gfx = bgl::CreateGraphics(opts);
+	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

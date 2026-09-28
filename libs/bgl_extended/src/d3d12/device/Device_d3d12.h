@@ -1,7 +1,7 @@
 #pragma once
 #include "device/Device.h"
-#include "slang/SlangSessions.h"
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <filesystem>
 #include <string>
 
@@ -14,11 +14,11 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(
-			wrl::ComPtr<ID3D12Device>    device,
-			const std::filesystem::path& shaderCacheDir,
-			const std::filesystem::path& surfaceShaderDir,
-			bool                         gpuValidation);
+		/**
+		 * The RHI device over the context's D3D12 device, compiling through the context's sessions.
+		 * `shaderCacheDir` empty disables the cache.
+		 */
+		Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;
@@ -50,7 +50,7 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const noexcept override;
 
 		void
-		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
+		AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept override;
 
 		[[nodiscard]] std::optional<ReflectedSurface>
 		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
@@ -78,16 +78,20 @@ namespace bgl
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
 
-		/** Drops every thread's Slang session; see SlangSessions::ReleaseAll for the contract. */
+		/** Drops every thread's Slang session; the context's ReleaseSlangSessions is the contract. */
 		void
 		ReleaseSlangSession() noexcept override;
 
+		[[nodiscard]] gpu::DeviceContext&
+		GetContext() const noexcept
+		{
+			return *m_Context;
+		}
+
 	private:
-		wrl::ComPtr<ID3D12Device> m_Device;
-
-		// Shaders resolve their modules through it, and CreateShader is const.
-		mutable SlangSessions m_Slang;
-
+		// Declared first: the device below is the context's, and the cache is built on both.
+		gpu::DeviceContextRef        m_Context;
+		wrl::ComPtr<ID3D12Device>    m_Device;
 		std::unique_ptr<ShaderCache> m_ShaderCache;
 	};
 }

@@ -1,4 +1,5 @@
 #include "scene/Scene.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <assetlib_structs/BMesh.h>
@@ -16,12 +17,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -105,7 +106,7 @@ namespace
 
 TEST_CASE("A mesh larger than the scene's initial arenas still loads", "[scene][capacity][growth]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(TightInitialBudget());
@@ -176,7 +177,7 @@ TEST_CASE("A mesh past the DispatchMesh group cap is still refused", "[scene][ca
 	// Growth removed the arena budgets, but this limit is the hardware's: one DispatchMesh can launch
 	// at most 65535 groups, so a submesh past that cannot be drawn however much memory there is.
 	// Nothing should have quietly turned it into an allocation that succeeds.
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(TightInitialBudget());

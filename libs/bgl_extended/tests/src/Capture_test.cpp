@@ -1,4 +1,5 @@
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
@@ -17,13 +18,13 @@ namespace
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	CaptureOptions()
 	{
-		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer         = true;
-		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                             = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer         = true;
+		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 
@@ -87,7 +88,7 @@ namespace
 // last-presented backbuffer, and the blocking path is itself submit + wait + resolve.
 TEST_CASE("A split-phase capture resolves to the frame a blocking screenshot returns", "[capture]")
 {
-	auto gfx = bgl::CreateGraphics(CaptureOptions());
+	auto gfx = bgl::test::CreateGraphics(CaptureOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx);
@@ -119,7 +120,7 @@ TEST_CASE("A split-phase capture resolves to the frame a blocking screenshot ret
 
 TEST_CASE("Capture tickets are bounded, single-spend, and discardable", "[capture]")
 {
-	auto gfx = bgl::CreateGraphics(CaptureOptions());
+	auto gfx = bgl::test::CreateGraphics(CaptureOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto target = HeadlessTarget(gfx);

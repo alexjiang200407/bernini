@@ -14,13 +14,14 @@
 #include "shadercache/ShaderCache_metal.h"
 #include <bgl/IRenderTarget.h>
 #include <core/ref/SharedRef.h>
+#include <device_context/DeviceContext.h>
+#include <device_context/metal/native_device.h>
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
-#include "slang/SlangSessions.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <cstdint>
@@ -52,45 +53,37 @@ namespace bgl
 
 	Device::~Device() = default;
 
-	Device::Device(
-		MTL::Device*                 device,
-		const std::filesystem::path& shaderCacheDir,
-		const std::filesystem::path& surfaceShaderDir,
-		bool                         usePipelineLibrary) :
-		m_Device(NS::RetainPtr(device)),
-		m_Slang(
-			SlangSessionDesc{ .target      = SLANG_METAL,
-	                          .searchPaths = ShaderSearchPaths(surfaceShaderDir) })
+	Device::Device(gpu::DeviceContextRef context, const std::filesystem::path& shaderCacheDir) :
+		m_Context(std::move(context)), m_Device(NS::RetainPtr(gpu::GetMtlDevice(*m_Context)))
 	{
 		if (!shaderCacheDir.empty())
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
+				*m_Context,
 				m_Device.get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
-				m_Slang.GetSearchPaths(),
-				usePipelineLibrary);
+				m_Context->GetShaderSearchPaths(),
+				!m_Context->GpuValidationActive());
 		}
 	}
 
 	void
-	Device::AddSourceModule(const SlangSourceModule& sourceModule) noexcept
+	Device::AddSourceModule(const gpu::SlangSourceModule& sourceModule) noexcept
 	{
-		m_Slang.AddSourceModule(sourceModule);
-		if (m_ShaderCache)
-			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
+		m_Context->AddSourceModule(sourceModule);
 	}
 
 	std::optional<ReflectedSurface>
 	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
 	{
-		return m_Slang.ReflectSurface(moduleName, surfaceName);
+		return m_Context->ReflectSurface(moduleName, surfaceName);
 	}
 
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
-		m_Slang.ReleaseAll();
+		m_Context->ReleaseSlangSessions();
 	}
 
 	core::SharedRef<ICommandQueue>
@@ -203,7 +196,7 @@ namespace bgl
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), &m_Slang);
+		return core::SharedRef<Shader>::Make(std::move(desc), m_Context.Get());
 	}
 
 	core::SharedRef<IComputePipeline>

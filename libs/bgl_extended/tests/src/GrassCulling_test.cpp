@@ -21,6 +21,7 @@
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
@@ -121,11 +122,11 @@ namespace
 
 		Harness()
 		{
-			auto opts                     = bgl::GraphicsOptions();
-			opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-			opts.enableDebugLayer         = true;
-			opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-			gfx                           = bgl::CreateGraphics(opts);
+			auto opts                             = bgl::test::GraphicsSetup();
+			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.enableDebugLayer         = true;
+			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			gfx                                   = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			gfxBase         = gfx->As<bgl::GraphicsBase>();

@@ -6,6 +6,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl/RenderJob.h>
 #include <core/err/util.h>
+#include <device_context/DeviceContext.h>
 #include <stdexcept>
 #include <utility>
 
@@ -24,13 +25,15 @@ main(int, char**)
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto gfxOpts                     = bgl::GraphicsOptions{};
-		gfxOpts.enableDebugLayer         = true;
-		gfxOpts.enableGPUValidationLayer = false;
-		gfxOpts.enablePixDebug           = true;
-		gfxOpts.logLevel                 = bgl::GraphicsOptions::LogLevel::kTrace;
+		auto ctxDesc = gpu::DeviceContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts                     = bgl::GraphicsOptions{};
+		ctxDesc.enableDebugLayer         = true;
+		ctxDesc.enableGPUValidationLayer = false;
+		ctxDesc.enablePixDebug           = true;
+		ctxDesc.logLevel                 = gpu::LogLevel::kTrace;
+
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;

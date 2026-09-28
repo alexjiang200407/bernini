@@ -3,6 +3,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
+#include <device_context/DeviceContext.h>
 #include <exception>
 
 // A minimal window that attaches Graphics and draws a triangle every frame -- the smallest end-to-end
@@ -22,10 +23,12 @@ main()
 
 		auto wnd = demo::DemoWindow{ opts };
 
-		auto gfxOpts     = bgl::GraphicsOptions{};
-		gfxOpts.logLevel = bgl::GraphicsOptions::LogLevel::kInfo;
+		auto ctxDesc = gpu::DeviceContextDesc();
 
-		auto graphics = bgl::CreateGraphics(gfxOpts);
+		auto gfxOpts     = bgl::GraphicsOptions{};
+		ctxDesc.logLevel = gpu::LogLevel::kInfo;
+
+		auto graphics = bgl::CreateGraphics(gpu::CreateDeviceContext(ctxDesc), gfxOpts);
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = opts.width;

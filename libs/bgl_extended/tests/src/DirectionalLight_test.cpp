@@ -2,6 +2,7 @@
 #include "util/GoldenImage.h"
 #include "util/SyntheticCube.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/envmap.h>
 #include <bgl/Camera.h>
@@ -90,12 +91,12 @@ namespace
 	Probe
 	MakeProbe(bool blackEnvironment)
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
 
 		auto probe = Probe();
-		probe.gfx  = bgl::CreateGraphics(opts);
+		probe.gfx  = bgl::test::CreateGraphics(opts);
 		REQUIRE(probe.gfx != nullptr);
 
 		auto targetDesc     = bgl::RenderTargetDesc();

@@ -1,6 +1,7 @@
 #include "util/GoldenImage.h"
 #include "util/SyntheticCube.h"
 #include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/VertexPacking.h"
 #include <array>
@@ -194,13 +195,13 @@ namespace
 	Probe
 	MakeProbe(bool withUv1, Light light)
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
-		opts.surfaceShaderDir = "./shaders/tests/surfaces";
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
+		opts.context.clientShaderDir  = "./shaders/tests/surfaces";
 
 		auto probe = Probe();
-		probe.gfx  = bgl::CreateGraphics(opts);
+		probe.gfx  = bgl::test::CreateGraphics(opts);
 		REQUIRE(probe.gfx != nullptr);
 
 		auto targetDesc     = bgl::RenderTargetDesc();

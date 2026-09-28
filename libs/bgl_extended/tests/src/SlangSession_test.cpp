@@ -10,11 +10,13 @@
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <device_context/DeviceContext.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -32,23 +34,39 @@ TEST_CASE("The free Slang build tag matches the global session's", "[slang]")
 	CHECK(std::string(spGetBuildTagString()) == std::string(globalSession->getBuildTagString()));
 }
 
-// CreateGraphics drops the Slang session once it has built every renderer PSO, so a kernel created
+// CreateGraphics drops the Slang sessions once it has built every renderer PSO, so a kernel created
 // afterwards is the first thing to need a session again and must transparently get a new one. Run
 // twice against one cache directory: the second pass is the load-bearing one, because a warm cache
 // means construction compiled nothing at all and the session being recreated here never existed.
-TEST_CASE("A compute kernel built after device creation recreates the Slang session", "[compute]")
+//
+// The sessions are the device context's and every owner shares them: between the renderer's drop
+// and its next compile a second owner compiles through them and drops them again, and the
+// renderer's kernel still builds.
+TEST_CASE(
+	"A compute kernel built after device creation recreates the Slang session",
+	"[compute][device]")
 {
-	auto opts                     = bgl::GraphicsOptions();
-	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.enableDebugLayer         = true;
-	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto ctxDesc                     = gpu::DeviceContextDesc();
+	ctxDesc.enableDebugLayer         = true;
+	ctxDesc.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfxOpts           = bgl::GraphicsOptions();
+	gfxOpts.shaderCacheDir = bgl::test::ShaderCacheDir();
+
+	// This case owns its context, so the suite's is let go first: one is live per process.
+	bgl::test::ReleaseDeviceContext();
 
 	for (int pass = 0; pass < 2; ++pass)
 	{
 		CAPTURE(pass);
 
-		auto gfx = bgl::CreateGraphics(opts);
+		auto context = gpu::CreateDeviceContext(ctxDesc);
+		auto gfx     = bgl::CreateGraphics(context, gfxOpts);
 		REQUIRE(gfx != nullptr);
+
+		// The second owner.
+		REQUIRE(context->LoadModule("CSComputeBufferTest") != nullptr);
+		context->ReleaseSlangSessions();
 
 		auto gfxBase = gfx->As<bgl::GraphicsBase>();
 		REQUIRE(gfxBase != nullptr);

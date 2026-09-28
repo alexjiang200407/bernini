@@ -6,6 +6,7 @@
 #include "resource/Texture.h"
 #include "scene/Scene.h"
 #include "types/QueueType.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
@@ -21,12 +22,12 @@
 
 namespace
 {
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = false;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -61,7 +62,7 @@ namespace
 
 TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto  sceneHandle = gfx->CreateScene(MaterialSceneDesc());
@@ -149,7 +150,7 @@ TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][
 
 TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -215,7 +216,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 // pins), while an upload whose texture still lives must survive the same flush.
 TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][scene]")
 {
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto* gfxBase = gfx->As<bgl::GraphicsBase>();

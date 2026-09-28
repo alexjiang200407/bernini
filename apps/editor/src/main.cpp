@@ -80,9 +80,10 @@ main(int argc, char* argv[])
 
 	const QString directory = QCoreApplication::applicationDirPath();
 
-	// Before the window, so a diagnostic from the renderer's construction has somewhere to go: bgl
-	// opens the log from its Graphics constructor, and everything before that would otherwise write
-	// to a stdout a GUI launch does not have. bgl's own call then only applies its level.
+	// Before the window, so a diagnostic from the renderer's construction has somewhere to go: the
+	// device context opens the log as it is created, and everything before that would otherwise
+	// write to a stdout a GUI launch does not have. The context's own call then only applies its
+	// level.
 	//
 	// A log that will not open is inert rather than fatal -- there is nowhere to report a broken log
 	// to, since this is what reporting is.

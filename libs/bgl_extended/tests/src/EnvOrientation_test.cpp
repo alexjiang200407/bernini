@@ -1,6 +1,7 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
 #include "util/SyntheticCube.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
@@ -112,12 +113,12 @@ namespace
 	Probe
 	MakeProbe(glm::vec3 axis)
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.enableDebugLayer = true;
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.enableDebugLayer = true;
 
 		auto probe = Probe();
-		probe.gfx  = bgl::CreateGraphics(opts);
+		probe.gfx  = bgl::test::CreateGraphics(opts);
 		REQUIRE(probe.gfx != nullptr);
 
 		auto targetDesc     = bgl::RenderTargetDesc();

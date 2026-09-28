@@ -31,7 +31,7 @@ namespace bgl
 		gassert(desc.shader != nullptr, "Compute shader cannot be null");
 
 		wrl::ComPtr<ID3D12Device2> device2;
-		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
+		device->QueryInterface(IID_PPV_ARGS(&device2)) >> c_D3d12ErrChecker;
 
 		pipeline_util::PipelineLayout pipelineLayout =
 			pipeline_util::BuildPipelineLayout(device, cache, { desc.shader });
@@ -64,7 +64,7 @@ namespace bgl
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{
 			device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
-				d3d12ErrChecker;
+				c_D3d12ErrChecker;
 
 			if (cache != nullptr)
 				cache->StorePipeline(identity, m_PipelineState.Get());

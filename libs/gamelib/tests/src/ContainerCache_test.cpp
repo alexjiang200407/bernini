@@ -9,6 +9,7 @@
 #include <gamelib/AssetManager.h>
 
 #include "util/RigFixture.h"
+#include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/GeomHandle.h>
 
@@ -36,12 +37,12 @@ namespace
 	using game::test::DataRoot;
 	using game::test::WriteRig;
 
-	bgl::GraphicsOptions
+	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts             = bgl::GraphicsOptions();
-		opts.enableDebugLayer = true;
-		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		auto opts                     = bgl::test::GraphicsSetup();
+		opts.context.enableDebugLayer = true;
+		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		return opts;
 	}
 
@@ -140,7 +141,7 @@ TEST_CASE("The static door reads its mesh once too", "[static][acquire][cache]")
 	DataRoot root("bernini_container_cache_static");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -169,7 +170,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	DataRoot root("bernini_container_cache");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
@@ -280,7 +281,7 @@ TEST_CASE("A cached container is charged to its subsystem's memory tag", "[conta
 	DataRoot root("bernini_container_cache_tagged");
 	WriteRig(root.path);
 
-	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
