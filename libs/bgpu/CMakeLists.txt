@@ -48,7 +48,7 @@ target_include_directories(bgpu
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(bgpu PUBLIC core bgl_common slang::slang)
+target_link_libraries(bgpu PUBLIC core slang::slang)
 
 target_precompile_headers(bgpu
 	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h

@@ -204,11 +204,15 @@ for the warnings/errors/info the run emitted.
 
 ## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
 
-Defined in [libs/bgl_common/include/bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h),
-namespace `bgl`. It sits in `bgl_common` rather than in a renderer because every renderer needs it,
-and it carries the `bgl::logger` alias itself rather than taking one from a PCH -- so a source that
-reaches it through `libs/bgl_extended/src/pch.h` needs no include, and one outside that PCH's reach
-gets the whole family from the single line. All three log then break into the debugger on MSVC
+The family is `core`'s, beside the logger it reports through:
+[core/log/bassert.h](libs/core/include/core/log/bassert.h) defines `core::logging::bassert`,
+`bfatal`, `berror` and `bunimplemented`, with the macros `BDEBUG_BREAK` and `BWARN_ONCE`. Code
+outside the renderer, `bgpu` among it, calls those names. The renderer keeps its own, `g` for
+graphics: [bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h) defines `bgl::gassert`,
+`gfatal`, `gerror` and `gunimplemented` as forwards to the `b` originals, `GDEBUG_BREAK` and
+`GWARN_ONCE` as aliases of the macros, and the `bgl::logger` alias -- so a source that reaches it
+through `libs/bgl_extended/src/pch.h` needs no include, and one outside that PCH's reach gets the
+whole family from the single line. All three log then break into the debugger on MSVC
 (`__debugbreak`):
 
 * `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.

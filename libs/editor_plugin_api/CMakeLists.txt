@@ -25,6 +25,7 @@ if(BERNINI_EDITOR_SDK)
         "${BERNINI_ROOT}/libs/core/include/*.h"
         "${BERNINI_ROOT}/libs/assetlib_structs/include/*.h"
         "${BERNINI_ROOT}/libs/bgl/include/*.h"
+        "${BERNINI_ROOT}/libs/bgpu/include/*.h"
         "${BERNINI_ROOT}/libs/assetlib/include/*.h"
         "${BERNINI_ROOT}/libs/gamelib/include/*.h"
         "${BERNINI_ROOT}/libs/editor_plugin_api/include/*.h"
@@ -33,7 +34,8 @@ if(BERNINI_EDITOR_SDK)
         "Build-tree package directory for native editor plugins")
     file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
     export(TARGETS
-        core_process core assetlib_structs bgl assetlib assetlib_plugin_api gamelib editor_localize editor_plugin_api editor_sdk
+        core_process core assetlib_structs bgpu bgl assetlib assetlib_plugin_api gamelib editor_localize editor_plugin_api
+        editor_sdk
         NAMESPACE Bernini::
         FILE "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKTargets.cmake")
     configure_file(

@@ -11,6 +11,7 @@
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/GpuContext.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -20,11 +21,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-namespace bgpu
-{
-	class GpuContext;
-}
 
 namespace bgl
 {

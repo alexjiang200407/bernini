@@ -16,9 +16,10 @@ add_library(bgl INTERFACE)
 
 target_include_directories(bgl INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# The entire closure: core carries Ref/SharedRef/slot_handle, assetlib_structs the decoded PODs. glm
-# is reached through <core/glm.h>, and core links glm::glm PUBLIC, so it needs no entry of its own.
-target_link_libraries(bgl INTERFACE core assetlib_structs)
+# The entire closure: core carries Ref/SharedRef/slot_handle, assetlib_structs the decoded PODs, bgpu
+# the GPU context CreateGraphics takes. glm is reached through <core/glm.h>, and core links glm::glm
+# PUBLIC, so it needs no entry of its own. bgpu links core and Slang only, never back up here.
+target_link_libraries(bgl INTERFACE core assetlib_structs bgpu)
 
 # On the contract rather than the renderer: an SDK gamelib links the renderer's file, not its target
 # (libs/gamelib/CMakeLists.txt), so a definition on bgl_extended would never reach it.
