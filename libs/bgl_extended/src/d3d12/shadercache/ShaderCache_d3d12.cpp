@@ -81,7 +81,8 @@ namespace bgl
 			return program;
 		}
 
-		constexpr const char* kPipelineLibraryFile = "pipelines.psolib";
+		constexpr const char* c_PipelineLibraryFile     = "pipelines.psolib";
+		constexpr const char* c_PipelineLibraryLockFile = "pipelines.psolib.lock";
 	}
 
 	ShaderCache::ShaderCache(
@@ -101,11 +102,18 @@ namespace bgl
 		if (!usePipelineLibrary)
 			return;
 
+		// The library is replaced whole by whoever writes it last, so two writers on one directory
+		// -- the suite's four shards, or two renderers in one process -- would each discard the
+		// other's. One claims it and the rest run without a driver library, which costs PSO
+		// creation and nothing else: the program cache beside it is content-keyed and shared safely.
+		if (!ClaimPipelineLibrary())
+			return;
+
 		wrl::ComPtr<ID3D12Device1> device1;
 		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1))))
 			return;
 
-		const std::filesystem::path libPath = m_CacheDir / kPipelineLibraryFile;
+		const std::filesystem::path libPath = m_CacheDir / c_PipelineLibraryFile;
 		if (std::filesystem::exists(libPath, ec))
 		{
 			try
@@ -133,17 +141,47 @@ namespace bgl
 		}
 	}
 
+	bool
+	ShaderCache::ClaimPipelineLibrary()
+	{
+		const std::filesystem::path lockPath = m_CacheDir / c_PipelineLibraryLockFile;
+
+		// No sharing, so a second opener is refused rather than queued, and delete-on-close so the
+		// claim ends with the process however it ends.
+		const HANDLE lock = CreateFileW(
+			lockPath.wstring().c_str(),
+			GENERIC_WRITE,
+			0,
+			nullptr,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
+			nullptr);
+
+		if (lock == INVALID_HANDLE_VALUE)
+		{
+			logger::debug(
+				"Another writer holds {}; this device builds its pipelines without the driver "
+				"library",
+				lockPath.string());
+			return false;
+		}
+
+		m_PsoLibraryLock = lock;
+		return true;
+	}
 	ShaderCache::~ShaderCache()
 	{
-		if (!m_PsoLibrary || !m_PsoLibraryDirty)
-			return;
+		if (m_PsoLibrary && m_PsoLibraryDirty)
+		{
+			const SIZE_T           size = m_PsoLibrary->GetSerializedSize();
+			std::vector<std::byte> blob(size);
+			if (SUCCEEDED(m_PsoLibrary->Serialize(blob.data(), size)))
+				WriteFileAtomic(m_CacheDir / c_PipelineLibraryFile, blob);
+		}
 
-		const SIZE_T           size = m_PsoLibrary->GetSerializedSize();
-		std::vector<std::byte> blob(size);
-		if (FAILED(m_PsoLibrary->Serialize(blob.data(), size)))
-			return;
-
-		WriteFileAtomic(m_CacheDir / kPipelineLibraryFile, blob);
+		// After the write: the claim is what makes this process the file's one writer.
+		if (m_PsoLibraryLock != nullptr)
+			CloseHandle(m_PsoLibraryLock);
 	}
 
 	uint64_t

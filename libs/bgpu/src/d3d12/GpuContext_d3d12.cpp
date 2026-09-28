@@ -5,6 +5,7 @@
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
+#include <atomic>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 
@@ -22,6 +23,13 @@ namespace bgpu
 {
 	namespace
 	{
+		// Never cleared. SetEnableGPUBasedValidation sets it on the debug layer, which is the
+		// process's and not this controller's: every device created afterwards is instrumented,
+		// including one whose desc did not ask and one created after this context is gone. A
+		// successor that reports "off" while running instrumented would have its owners cache
+		// driver pipelines built without the instrumentation.
+		std::atomic<bool> g_GpuValidationActive = false;
+
 		class Context final : public ContextBase
 		{
 		public:
@@ -44,7 +52,10 @@ namespace bgpu
 					D3D12GetDebugInterface(IID_PPV_ARGS(&m_DebugController)) >> d3d12ErrChecker;
 					m_DebugController->EnableDebugLayer();
 					if (desc.enableGPUValidationLayer)
+					{
 						m_DebugController->SetEnableGPUBasedValidation(TRUE);
+						g_GpuValidationActive.store(true, std::memory_order_relaxed);
+					}
 
 					DXGIGetDebugInterface1(0, IID_PPV_ARGS(&m_DxgiInfoQueue)) >> d3d12ErrChecker;
 					m_DxgiInfoQueue->SetBreakOnSeverity(
@@ -104,7 +115,7 @@ namespace bgpu
 			bool
 			GpuValidationActive() const noexcept override
 			{
-				return GetDesc().enableGPUValidationLayer;
+				return g_GpuValidationActive.load(std::memory_order_relaxed);
 			}
 
 			[[nodiscard]] ID3D12Device*
