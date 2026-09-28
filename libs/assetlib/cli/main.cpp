@@ -921,6 +921,10 @@ main(int argc, char** argv)
 						std::cout << (preview ? "would rewrite  " : "rewrote        ") << relative
 								  << '\n';
 						break;
+					case assetlib::MigratedFile::Outcome::kDiscarded:
+						std::cout << (preview ? "would discard  " : "discarded      ") << relative
+								  << ": stale, and no import document owns it\n";
+						break;
 					case assetlib::MigratedFile::Outcome::kFailed:
 						std::cout << "cannot convert " << relative << ": " << file.message << '\n';
 						break;
@@ -938,10 +942,12 @@ main(int argc, char** argv)
 					std::cout << "no longer extracted, still on disk: " << superseded << '\n';
 
 				std::cout << std::format(
-					"{} unchanged, {} {}, {} cannot be converted\n",
+					"{} unchanged, {} {}, {} {}, {} cannot be converted\n",
 					report.Count(assetlib::MigratedFile::Outcome::kUnchanged),
 					report.Count(assetlib::MigratedFile::Outcome::kRewritten),
 					preview ? "to rewrite" : "rewritten",
+					report.Count(assetlib::MigratedFile::Outcome::kDiscarded),
+					preview ? "to discard" : "discarded",
 					report.Count(assetlib::MigratedFile::Outcome::kFailed));
 			};
 
@@ -958,9 +964,14 @@ main(int argc, char** argv)
 					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
 
 				const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
-				if (toRewrite == 0)
+				const auto toDiscard = preview.Count(assetlib::MigratedFile::Outcome::kDiscarded);
+				if (toRewrite == 0 && toDiscard == 0)
 					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
-				if (!confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+				if (!confirm(
+						std::format(
+							"Rewrite {} file(s) in place and discard {}?",
+							toRewrite,
+							toDiscard)))
 				{
 					spdlog::info("Left '{}' alone.", root.string());
 					return 0;

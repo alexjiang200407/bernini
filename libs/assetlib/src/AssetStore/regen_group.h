@@ -32,6 +32,16 @@ namespace assetlib
 	importGroup(const AssetStore& store, std::string_view sourceKey, ImportDocument&& document);
 
 	/**
+	 * Whether `key` is a `.bmesh`, `.bskel` or `.banim` on a writable store that is stale and that
+	 * no import document owns: cache no document gives the parameters to regenerate, so no
+	 * `LoadRegen*` form can read it and no reference to it can be known. Never for a read-only
+	 * store, whose `pack` made every key true, nor for a header that cannot be read: that is the
+	 * reader's failure to report, with its reason.
+	 */
+	[[nodiscard]] bool
+	isOrphanedGeometry(const AssetStore& store, std::string_view key) noexcept;
+
+	/**
 	 * The rigs one walk has resolved, so a rig several containers name is regenerated once rather
 	 * than once for each -- regenerating a stale one is a parse of its whole source, and a modular
 	 * unit is several meshes and a clip library on a single rig.

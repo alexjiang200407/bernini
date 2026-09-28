@@ -312,7 +312,8 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we
-  cannot see is an edge we would delete through.
+  cannot see is an edge we would delete through. The one exception is stale geometry no import
+  document owns: nothing can load it, so it holds nothing, and `migrate` discards it.
   Registered authored kinds contribute opaque field references through `IAssetKind::ReadReferences`;
   these edges participate in deletion and rename planning alongside built-in references.
 * **`planDeletion` on a directory** — a directory is held only by an edge reaching *into* it

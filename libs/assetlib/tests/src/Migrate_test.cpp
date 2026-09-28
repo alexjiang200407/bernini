@@ -40,6 +40,7 @@
 #include <iterator>
 #include <map>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -194,6 +195,118 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 		const auto report = AssetStore(project.root).Migrate(false);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
+	}
+}
+
+// The shape a re-import that renamed its outputs leaves behind: the old files still name the source,
+// whose document now claims only the new ones, and the bake token has moved on since they were
+// written. Nothing records the parameters they were cooked at, so they are cache nobody can read.
+TEST_CASE("migrate discards stale geometry no import document owns", "[migrate][orphan]")
+{
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_orphan_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
+	REQUIRE(AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kFailed) == 0);
+	const auto identity =
+		AssetStore(project.root).Load<ImportDocument>("Authored/Meshes/unit.bimport").identity;
+
+	const auto owned = std::array{ importOutputKey(identity, AssetType::kMesh),
+		                           importOutputKey(identity, AssetType::kSkeleton),
+		                           importOutputKey(identity, AssetType::kAnimation) };
+	const auto orphans =
+		std::array{ std::string("Derived/Meshes/unit.glb-952d395a7e24a405.bmesh"),
+		            std::string("Derived/Skeletons/unit.glb-952d395a7e24a405.bskel"),
+		            std::string("Derived/Animations/unit.glb-952d395a7e24a405.banim") };
+	for (size_t i = 0; i < orphans.size(); ++i)
+		std::filesystem::copy_file(project.root / owned[i], project.root / orphans[i]);
+
+	const auto discarded = [](const MigrateReport& report) {
+		auto names = std::vector<std::string>();
+		for (const MigratedFile& file : report.files)
+			if (file.outcome == MigratedFile::Outcome::kDiscarded)
+				names.push_back(file.path.filename().string());
+		std::ranges::sort(names);
+		return names;
+	};
+	const auto expected = std::vector<std::string>{ "unit.glb-952d395a7e24a405.banim",
+		                                            "unit.glb-952d395a7e24a405.bmesh",
+		                                            "unit.glb-952d395a7e24a405.bskel" };
+
+	SECTION("a current orphan still loads, so it is kept")
+	{
+		const auto report = AssetStore(project.root).Migrate(false);
+		CHECK(report.Count(MigratedFile::Outcome::kDiscarded) == 0);
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+		for (const std::string& orphan : orphans)
+			CHECK(std::filesystem::exists(project.root / orphan));
+	}
+
+	SECTION("stale")
+	{
+		for (const std::string& orphan : orphans)
+			test::TamperHeaderByte(project.root / orphan, test::c_TokenOffset);
+
+		SECTION("its references cannot be known, and the scan reads it as naming nothing")
+		{
+			REQUIRE_THROWS_WITH(
+				AssetStore(project.root).LoadRegenMeshRefs(orphans[0]),
+				ContainsSubstring("stale cache has no import document"));
+
+			const AssetRefGraph graph = AssetRefGraph::Scan(AssetStore(project.root));
+			CHECK(graph.ReferencesOf(orphans[0]).empty());
+			CHECK(graph.ReferencesOf(orphans[2]).empty());
+
+			// The owned mesh still holds its material: the prune's guard is untouched.
+			const auto holders = graph.ReferrersOf("Authored/Materials/red.bmaterial");
+			CHECK(std::ranges::any_of(holders, [&](const AssetRef& ref) {
+				return ref.referrer == owned[0];
+			}));
+		}
+
+		SECTION("a dry run names every one and removes none")
+		{
+			const auto report = AssetStore(project.root).Migrate(true);
+			CHECK(discarded(report) == expected);
+			CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+			for (const std::string& orphan : orphans)
+				CHECK(std::filesystem::exists(project.root / orphan));
+		}
+
+		SECTION("a real run removes them, leaves the group it owns, and the second run is settled")
+		{
+			const auto first = AssetStore(project.root).Migrate(false);
+			CHECK(discarded(first) == expected);
+			CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
+			for (const std::string& orphan : orphans)
+				CHECK_FALSE(std::filesystem::exists(project.root / orphan));
+			for (const std::string& output : owned)
+				CHECK(std::filesystem::exists(project.root / output));
+			CHECK(LoadAt<BMesh>(project.root / owned[0]).source.key == "Authored/Meshes/unit.glb");
+
+			const auto second = AssetStore(project.root).Migrate(false);
+			CHECK(second.Count(MigratedFile::Outcome::kDiscarded) == 0);
+			CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
+			CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
+		}
+	}
+
+	SECTION("a stale file its document owns is never discarded, even when it cannot regenerate")
+	{
+		for (const std::string& output : owned)
+			test::TamperHeaderByte(project.root / output, test::c_TokenOffset);
+		std::filesystem::remove(project.root / "Authored/Meshes/unit.glb");
+
+		const auto report = AssetStore(project.root).Migrate(false);
+		CHECK(report.Count(MigratedFile::Outcome::kDiscarded) == 0);
+		for (const std::string& output : owned)
+		{
+			INFO(output);
+			CHECK(std::filesystem::exists(project.root / output));
+			CHECK(std::ranges::any_of(report.files, [&](const MigratedFile& file) {
+				return file.path == project.root / output &&
+				       file.outcome == MigratedFile::Outcome::kFailed;
+			}));
+		}
 	}
 }
 
