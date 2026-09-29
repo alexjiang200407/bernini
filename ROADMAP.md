@@ -261,11 +261,12 @@ and portability.
     - [ ] Differential test harness — exact hash for integer and fixed-point state, epsilon comparison
       for float state, bisecting to the first diverging pass.
     - [ ] CPU path runs single-threaded for debugging and `parallel_for` for hero-tier production.
-  - [ ] Group orchestration interface — the one contract between CPU AI and GPU simulation.
-    - [ ] CPU → GPU per group: flow field index, formation shape/origin/facing, stance, engagement
-      rules, target group.
-    - [ ] GPU → CPU per group: **aggregate reduction only** — headcount, casualties, mean position and
-      facing, cohesion, melee contact fraction, morale, fatigue.
+  - [~] Group orchestration interface — the one contract between CPU AI and GPU simulation, declared
+    as `crowd::ICrowd` (`docs/crowdlib.md` § The crowd interface). Only a test fake implements it.
+    - [~] CPU → GPU per group: a goal, facing and formation are declared, and the flow field behind a
+      goal is the implementation's; stance, engagement rules and target group are left.
+    - [~] GPU → CPU per group: **aggregate reduction only** — agent count and mean position and facing
+      are declared; casualties, cohesion, melee contact fraction, morale and fatigue are left.
     - [ ] Group ID as a first-class per-unit field, reassigned by CPU-issued rewrite.
   - [ ] Navigation
     - [ ] Navmesh or nav-grid bake (offline).
