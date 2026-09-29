@@ -977,9 +977,10 @@ off, and the backbuffer's opaque alpha stays opaque.
   by `RenderContext`'s linear-clamp sampler.
 * **Out:** the backbuffer, one scissor rect per draw (the whole target when the draw sets none).
 * Vertices are 24 bytes, `{float2 position, float2 uv, uint color, uint reserved}`, defined in the
-  IDL (`idl.OverlayVertex`) the shader imports; `Overlay.cpp` asserts the public
-  `bgl::OverlayVertex` against the generated struct field by field. The order is the one where
-  Metal's natural device-struct layout and the scalar layout D3D12 reads agree.
+  IDL (`idl.OverlayVertex`) the shader imports, which is also a public module: the public
+  `bgl::OverlayVertex` is generated from it into `<bgl/OverlayVertex.h>`. The order is the one where
+  Metal's natural device-struct layout and the scalar layout D3D12 reads agree, which idlgen's
+  `--public` checks.
 
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl_extended/src/passes/PreparePresentPass.h)
 

@@ -7,6 +7,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/OverlayVertex.h>
 #include <bgl/TextureAssetHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>

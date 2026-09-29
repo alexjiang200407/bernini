@@ -10,8 +10,8 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/OverlayVertex.h>
 #include <bgl/TextureAssetHandle.h>
-#include <bgl_common/idl/OverlayVertex.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
@@ -24,14 +24,6 @@
 
 namespace bgl
 {
-	// The public vertex is what a client fills; the IDL struct is what the shader is generated
-	// from. One is memcpy'd into a buffer the other reads, so they must agree to the byte.
-	static_assert(sizeof(OverlayVertex) == sizeof(idl::OverlayVertex));
-	static_assert(offsetof(OverlayVertex, position) == offsetof(idl::OverlayVertex, position));
-	static_assert(offsetof(OverlayVertex, uv) == offsetof(idl::OverlayVertex, uv));
-	static_assert(offsetof(OverlayVertex, color) == offsetof(idl::OverlayVertex, color));
-	static_assert(offsetof(OverlayVertex, reserved) == offsetof(idl::OverlayVertex, reserved));
-
 	namespace
 	{
 		uint32_t

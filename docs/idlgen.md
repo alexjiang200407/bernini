@@ -76,18 +76,26 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   are on the include path, because a generated header includes its imports as siblings and four of
   those (`Entry`, `Range`, `RangeWithCount`, `RawEntry`) are hand-written.
 
-  **One public module is the exception and stays committed**, under
+  **The public modules are the exception and stay committed**, under
   [libs/bgl/include/bgl/](libs/bgl/include/bgl/): a consumer includes `<bgl/...>` without building
-  bgl. That is safe only while `IDL_PUBLIC_CPP_SOURCES` holds no structs — today it is `MaterialType`
-  and `MeshInstanceFlag`, enums with an explicit underlying type, which every backend lays out
-  identically.
+  bgl. That is safe only for what every backend lays out identically, so `--public` holds a struct
+  to it: MSL and the C/C++ rules must agree on its size and on every field offset, or idlgen refuses
+  it and names the field or the size that differs. A struct that passes is emitted with **no
+  `alignas`**, on Metal too. Its stride is the same on both backends, and the wider alignment MSL
+  gives a `float2` matters only to the GPU-side buffer, never to the CPU copy a public header
+  describes. With the `alignas`, the header would change with whichever backend built last.
 
-  A public *struct* a shader also reads therefore takes the `OverlayVertex` shape: the POD is
-  hand-written in `bgl` ([IOverlay.h](libs/bgl/include/bgl/IOverlay.h)), the IDL module
-  is internal and the shader imports it, and the renderer pins the two together with `sizeof` and
-  a per-field `offsetof` assert against the generated `bgl::idl` mirror
-  ([Overlay.cpp](libs/bgl_extended/src/overlay/Overlay.cpp)). The layout is still proven, just from the
-  side that can see both.
+  A struct that only an `alignas` would size correctly is refused, not padded. `{float2, uint}` is
+  12 bytes to C++ and 16 to MSL. Add the padding member yourself (`OverlayVertex`'s `reserved`).
+  Enums with an explicit underlying type (`MaterialType`, `MeshInstanceFlag`) pass by construction.
+
+  A public *struct* a shader also reads is written as a module in that list:
+  [OverlayVertex.slang](libs/bgl_common/shaders/src/idl/OverlayVertex.slang) is imported by the
+  overlay shader, and its generated `<bgl/OverlayVertex.h>` is the type a client fills. Its
+  contract is documented on the module, since that is the source. The generated struct has **no
+  default member initialisers**, so a brace list names every field, `reserved` included: one that
+  stops short is `-Wmissing-field-initializers`, an error in this build. Value-initialising
+  (`OverlayVertex()`, `std::vector<OverlayVertex>(n)`) zeroes every field, `color` included.
 
   The list is also what keeps renderer-shaped data off the public surface, which is the other half
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
@@ -119,6 +127,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | `--src-root <dir>` | Root the module's import path / namespace / output sub-path are relative to (required). |
 | `--cpp-out-dir <dir>` | Output root for the generated C++ header (required). |
 | `--namespace <ns>` | Base C++ namespace (default `bgl::idl`). |
+| `--metal-layout` | Lay structs out by MSL's rules (a Metal build's private headers). |
+| `--public` | The header is committed: refuse a struct whose size or offsets differ by backend, and emit no `alignas`. |
 | `-I,--include <dir>` | Extra search dir for `import`ed Slang modules (repeatable). |
 
 ### Files & build wiring
