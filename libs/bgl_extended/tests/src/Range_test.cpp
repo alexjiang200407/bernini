@@ -22,11 +22,11 @@
 
 TEST_CASE("RangeBuffer", "[range][scene]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 

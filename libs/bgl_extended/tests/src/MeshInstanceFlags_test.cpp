@@ -53,9 +53,9 @@ namespace
 
 TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstanceflags][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

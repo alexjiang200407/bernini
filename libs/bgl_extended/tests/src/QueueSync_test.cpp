@@ -38,10 +38,10 @@ namespace
 
 		QueueFixture()
 		{
-			auto opts                             = bgl::test::GraphicsSetup();
-			opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-			opts.context.enableDebugLayer         = true;
-			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			auto opts                                = bgl::test::GraphicsSetup();
+			opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+			opts.gpuContext.enableDebugLayer         = true;
+			opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 			gfx = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
@@ -241,10 +241,10 @@ TEST_CASE_METHOD(
 // ResourceManagerDesc, so a small limit here is the whole test.
 TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = false;
-	opts.graphics.maxRtvs         = 4;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = false;
+	opts.graphics.maxRtvs            = 4;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

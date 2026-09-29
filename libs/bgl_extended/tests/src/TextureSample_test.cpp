@@ -42,10 +42,10 @@ TEST_CASE(
 {
 	constexpr uint32_t c_Capacity = 16;
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -183,10 +183,10 @@ TEST_CASE(
 // came back rather than only that an assertion fired.
 TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture][compute]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -325,10 +325,10 @@ TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
 		{ 255, 255, 0, 255 },
 	} };
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

@@ -67,10 +67,10 @@ namespace
 	std::vector<glm::vec4>
 	ProjectOnGpu(const glm::mat4& viewProj, const std::vector<Box>& boxes)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

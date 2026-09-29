@@ -152,10 +152,10 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 {
 	constexpr uint32_t c_Capacity = 16;
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -281,10 +281,10 @@ namespace
 // crash. The assertion is read back a few frames after it fires, so we pump frames.
 TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][render]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -349,10 +349,10 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 {
 	constexpr uint32_t c_Capacity = 16;
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

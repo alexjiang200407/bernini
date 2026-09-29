@@ -91,10 +91,10 @@ namespace
 
 TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[culling][scene]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

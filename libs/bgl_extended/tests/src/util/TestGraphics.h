@@ -12,13 +12,13 @@ namespace bgl::test
 	 */
 	struct GraphicsSetup
 	{
-		bgpu::GpuContextDesc context;
+		bgpu::GpuContextDesc gpuContext;
 		bgl::GraphicsOptions graphics;
 	};
 
 	/**
 	 * A renderer on the suite's GPU context. The suite is one process with one device, as any
-	 * application is: the first call creates the context from `opts.context`, later calls with the
+	 * application is: the first call creates the context from `opts.gpuContext`, later calls with the
 	 * same desc share it -- which is how a case holds two renderers at once -- and a different desc
 	 * replaces it once no renderer holds the old one.
 	 *

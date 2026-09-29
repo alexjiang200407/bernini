@@ -25,9 +25,9 @@ namespace
 	void
 	RenderPbrSphere(const std::string& shaderCacheDir, const std::string& gotPath)
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.context.enableDebugLayer = true;
-		opts.context.shaderCacheDir   = shaderCacheDir;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.enableDebugLayer = true;
+		opts.gpuContext.shaderCacheDir   = shaderCacheDir;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

@@ -43,9 +43,9 @@ namespace
 	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.context.enableDebugLayer = false;
-		opts.context.shaderCacheDir   = "shadercache";
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.enableDebugLayer = false;
+		opts.gpuContext.shaderCacheDir   = "shadercache";
 		return opts;
 	}
 

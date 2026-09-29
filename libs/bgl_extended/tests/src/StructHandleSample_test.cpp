@@ -41,10 +41,10 @@ TEST_CASE(
 	"A texture handle stored in a struct buffer resolves to the sampled texel",
 	"[texture][compute][bindless]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

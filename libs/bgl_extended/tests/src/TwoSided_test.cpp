@@ -38,9 +38,9 @@ namespace
 	bgl::test::Rgba
 	RenderFacing(const std::string& path, const FacingCase& facing)
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer = true;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

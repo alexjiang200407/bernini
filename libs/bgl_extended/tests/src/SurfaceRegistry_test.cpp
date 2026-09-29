@@ -30,11 +30,11 @@ namespace
 	bgl::test::GraphicsSetup
 	SurfaceOptions(const std::filesystem::path& dir)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-		opts.context.clientShaderDir          = dir;
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.gpuContext.clientShaderDir          = dir;
 		return opts;
 	}
 

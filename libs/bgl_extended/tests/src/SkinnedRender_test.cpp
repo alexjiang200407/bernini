@@ -259,9 +259,9 @@ TEST_CASE(
 	"a skinned mesh at bind pose draws exactly what the static path draws",
 	"[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -347,9 +347,9 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 	// there to be walked.
 	constexpr uint32_t c_DeepBones = 300;
 
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -460,9 +460,9 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 
 TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -524,9 +524,9 @@ TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[s
 
 TEST_CASE("a vertex bound to no bone keeps its bind pose", "[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -591,9 +591,9 @@ TEST_CASE(
 	"an animating skinned mesh writes motion vectors and a held one does not",
 	"[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -682,9 +682,9 @@ TEST_CASE(
  */
 TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -804,9 +804,9 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
  */
 TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -885,9 +885,9 @@ TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection]
 
 TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -1030,9 +1030,9 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 // the bit -- a renormalized sum can differ from its input by an ulp.
 TEST_CASE("a clip blended with itself draws what the clip draws", "[skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -1125,8 +1125,8 @@ TEST_CASE("what a crowd costs on each pose source", "[.posetiming]")
 	// sources measure the same -- which says more about the fixture than about the tier.
 	constexpr uint32_t c_CrowdBones = 64;
 
-	auto opts                   = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto opts                      = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

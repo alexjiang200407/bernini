@@ -161,9 +161,9 @@ TEST_CASE(
 	"A unit passing beneath a caster takes none of its shadow",
 	"[blobshadow][skinned][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

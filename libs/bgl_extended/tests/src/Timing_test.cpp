@@ -37,11 +37,11 @@
 // buffer to the encoder the dispatch opens.
 TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -158,10 +158,10 @@ namespace
 
 		explicit TimedScene(bool taa = true)
 		{
-			auto opts                     = bgl::test::GraphicsSetup();
-			opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-			opts.context.enableDebugLayer = true;
-			gfx                           = bgl::test::CreateGraphics(opts);
+			auto opts                        = bgl::test::GraphicsSetup();
+			opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+			opts.gpuContext.enableDebugLayer = true;
+			gfx                              = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto targetDesc       = bgl::RenderTargetDesc();

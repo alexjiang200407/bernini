@@ -34,11 +34,11 @@ namespace bgl::test
 	bgl::GraphicsRef
 	CreateGraphics(const GraphicsSetup& opts)
 	{
-		if (g_Context == nullptr || !(g_Desc == opts.context))
+		if (g_Context == nullptr || !(g_Desc == opts.gpuContext))
 		{
 			g_Context = nullptr;
-			g_Context = bgpu::CreateGpuContext(opts.context);
-			g_Desc    = opts.context;
+			g_Context = bgpu::CreateGpuContext(opts.gpuContext);
+			g_Desc    = opts.gpuContext;
 		}
 		return bgl::CreateGraphics(g_Context, opts.graphics);
 	}

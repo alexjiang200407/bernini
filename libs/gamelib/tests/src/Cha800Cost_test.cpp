@@ -110,12 +110,12 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 	const auto projectRoot = std::filesystem::path(*checkout) / "test-project" / "Data";
 	const auto assetsRoot  = std::filesystem::path(*checkout) / "assets" / "Data";
 
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.enableDebugLayer = false;
-	opts.context.shaderCacheDir   = "shadercache";
-	opts.graphics.maxTextures     = 512;
-	opts.graphics.maxSrvs         = 1024;
-	opts.graphics.maxCbvSrvUavs   = 4096;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.enableDebugLayer = false;
+	opts.gpuContext.shaderCacheDir   = "shadercache";
+	opts.graphics.maxTextures        = 512;
+	opts.graphics.maxSrvs            = 1024;
+	opts.graphics.maxCbvSrvUavs      = 4096;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

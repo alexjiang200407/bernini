@@ -127,10 +127,10 @@ struct RimSurface : ISurfaceSource
 	bgl::test::GraphicsSetup
 	SurfaceOptions(const std::filesystem::path& shaderDir)
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.context.enableDebugLayer = false;
-		opts.context.shaderCacheDir   = "shadercache";
-		opts.context.clientShaderDir  = shaderDir;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.enableDebugLayer = false;
+		opts.gpuContext.shaderCacheDir   = "shadercache";
+		opts.gpuContext.clientShaderDir  = shaderDir;
 		return opts;
 	}
 
@@ -280,9 +280,9 @@ TEST_CASE("A material whose surface was never registered is refused", "[gamelib]
 	WriteRimMaterial(root.path, "warm.bmaterial", glm::vec3(10.0f, 3.0f, 1.0f));
 
 	// Everything the case above had, except the one line pointing at the project's shaders.
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.enableDebugLayer = false;
-	opts.context.shaderCacheDir   = "shadercache";
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.enableDebugLayer = false;
+	opts.gpuContext.shaderCacheDir   = "shadercache";
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

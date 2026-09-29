@@ -34,10 +34,10 @@ namespace
 // PBR with Image Based Lighting
 TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
-	opts.context.logLevel         = bgpu::LogLevel::kTrace;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.logLevel         = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -124,9 +124,9 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
  */
 TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -192,10 +192,10 @@ TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]"
 // golden. This is the "editor material with trivial routing == triplet material" equivalence check.
 TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
-	opts.context.logLevel         = bgpu::LogLevel::kTrace;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.logLevel         = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

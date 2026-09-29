@@ -190,9 +190,9 @@ namespace
 	void
 	Shoot(EnvMaps maps, const std::string& path)
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer = true;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

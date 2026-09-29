@@ -207,10 +207,10 @@ namespace
 	bgl::test::GraphicsSetup
 	TestOptions()
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 
@@ -871,9 +871,9 @@ TEST_CASE("Toggling temporal AA at runtime turns the resolve off and on", "[taa]
 // resolves, so it is a caller error rather than a no-op.
 TEST_CASE("Enabling temporal AA on a target without it is an error", "[taa][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

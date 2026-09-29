@@ -82,8 +82,8 @@ namespace
 	{
 		const glm::mat4 roll =
 			glm::rotate(glm::mat4(1.0f), glm::radians(rollDegrees), glm::vec3(0.0f, 0.0f, 1.0f));
-		auto opts                   = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir = bgl::test::ShaderCacheDir();
+		auto opts                      = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

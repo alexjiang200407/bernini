@@ -138,10 +138,10 @@ void main()
 	bgl::test::GraphicsSetup
 	ProbeOptions()
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
 	}
 }
@@ -162,11 +162,11 @@ TEST_CASE(
 	WriteText(dir / "CSClientProbe.slang", c_ProbeProgram);
 	WriteText(dir / "ClientProbe.slang", ProbeModule(7));
 
-	auto opts                    = ProbeOptions();
-	opts.context.clientShaderDir = dir;
+	auto opts                       = ProbeOptions();
+	opts.gpuContext.clientShaderDir = dir;
 	// The salt folds each file's path, and the temp directory is fresh per run, so a cache shared
 	// with the suite would gain a generation no later run could hit. This one dies with the dir.
-	opts.context.shaderCacheDir = dir / "shadercache";
+	opts.gpuContext.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSClientProbe") == 7u);
 
@@ -190,8 +190,8 @@ TEST_CASE(
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts                   = ProbeOptions();
-	opts.context.shaderCacheDir = dir / "shadercache";
+	auto opts                      = ProbeOptions();
+	opts.gpuContext.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 
@@ -213,8 +213,8 @@ TEST_CASE("A program loaded from source on demand shadows its file", "[slang][co
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts                   = ProbeOptions();
-	opts.context.shaderCacheDir = dir / "shadercache";
+	auto opts                      = ProbeOptions();
+	opts.gpuContext.shaderCacheDir = dir / "shadercache";
 
 	constexpr std::string_view c_OnDemand = R"(import lib.types.ComputeBuffer;
 
