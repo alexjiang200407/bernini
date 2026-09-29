@@ -29,6 +29,13 @@ they apply. See [docs/ai-coding.md](docs/ai-coding.md).
 - The source files are globbed. Just place source files where other sources are located.
 - Uses vcpkg with manifest mode
 
+## Look for it before writing it
+
+The duplicate is never called the same thing, so before writing a helper, search the **API
+catalog** for what it would do: `build/api/*.md`, one line per public symbol with the first sentence
+of its doc comment, refreshed by every `just build`. Whole words, every hit, and as well as the
+code search below, never instead of it — [docs/api_catalog.md](./docs/api_catalog.md).
+
 ## Read the code with clangd, not with grep
 
 This is a C++ codebase with a language server available, and it answers the questions grep only
@@ -149,6 +156,12 @@ Which directories are `lower_case` and which are `PascalCase`, why the boundary 
 rather than a judgement call, and how `just tidy` enforces it. Then the other check it runs —
 include hygiene, how a subsystem switches it on for itself, and what `--fix` will and will not do
 for you.
+
+**[API catalog](./docs/api_catalog.md)**
+
+Every public symbol, generated into `build/api/` by every build: a line per symbol for an agent to
+grep before writing a helper, and a page for a person to browse. How to search it so it finds
+what is there, how it is parsed and refreshed, and what it does not list.
 
 **[bgpu](./docs/bgpu.md)**
 
@@ -393,13 +406,14 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 ```bash
 just                              # list the recipes
 just init                         # set this machine up and write scripts/config.json (see below)
-just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run, --time, --jobs, --no-jobserver
+just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run, --time, --jobs, --no-jobserver, --no-api
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir; --no-build, --no-lock
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build, --no-lock
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
 just format <files...>            # clang-format in place (--check to verify only)
 just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
 just idl                          # regenerate the IDL C++ headers
+just api                          # refresh the API catalog in build/api/ (every build does too); --force
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately
@@ -408,7 +422,7 @@ just count                        # count source files and lines by language and
 Opening, watching and answering pull requests is not a recipe here: it is the workspace's PR
 tooling. See [docs/ai-coding.md](./docs/ai-coding.md).
 
-`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`run` → `exec_target.py`, `test` → `run_tests.py`, `tidy` → `tidy.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
+`just` is a convenience layer, not the contract. It is a **soft** requirement (`pip install -r scripts/requirements.txt`), so if it isn't installed, call the script directly — `python scripts/build.py <target>` is exactly what `just build <target>` runs, and every recipe maps to a script of the obvious name (`api` → `api.py`, `run` → `exec_target.py`, `test` → `run_tests.py`, `tidy` → `tidy.py`, `idl` → `gen_idl.py`, `targets` → `get_targets.py`, `exes` → `find_executables.py`, `count` → `count_source.py`).
 
 ## Tests
 

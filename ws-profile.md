@@ -46,7 +46,8 @@ naming domains, comments. This file does not restate them; it says how a flow ap
 The lenses this repo makes worth asking, beyond the flow's own roots:
 
 - **Does it already exist?** Grep `core` and the subsystem by *behaviour*, not by name (the table in
-  § Precheck). The duplicate is never called the same thing.
+  § Precheck), and the API catalog, `build/api/*.md` ([docs/api_catalog.md](docs/api_catalog.md)).
+  The duplicate is never called the same thing.
 - **Which layer owns it?** A request that needs a layering violation is a wrong request — find the
   seam (`gamelib`, `bgl_common`, `assetlib` for a question about a container) and say so.
 - **Which Guiding Constraint does it touch?** GPU-driven by default, one dominant light, instances
@@ -113,7 +114,9 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
 
 ### Has this already been written?
 
-Before accepting any new helper, grep `core` for what it does — by behaviour. A hand-rolled
+Before accepting any new helper, grep `core` for what it does — by behaviour — and the API catalog
+(`grep -iwE '<what it does>' build/api/*.md`, every hit), which lists every library's public
+symbols where the table below lists `core`'s alone. A hand-rolled
 `(x + a - 1) & ~(a - 1)`, a bespoke `throw std::runtime_error(std::format(...))`, a local
 fixed-capacity vector, an ad-hoc FNV — each is a finding, and the fix is the call that already
 exists. The second implementation of a pattern three files away in the same subsystem is the same
