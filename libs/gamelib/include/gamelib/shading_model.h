@@ -11,8 +11,18 @@ namespace game
 	[[nodiscard]] constexpr assetlib::ShadingModel
 	ToShadingModel(bgl::SurfaceShading shading) noexcept
 	{
-		return shading == bgl::SurfaceShading::kLit ? assetlib::ShadingModel::kLitSurface :
-		                                              assetlib::ShadingModel::kPbrSurface;
+		switch (shading)
+		{
+		case bgl::SurfaceShading::kPbrSurface:
+			break;
+		case bgl::SurfaceShading::kLit:
+			return assetlib::ShadingModel::kLitSurface;
+		case bgl::SurfaceShading::kToonCharacter:
+			return assetlib::ShadingModel::kToonCharacterSurface;
+		case bgl::SurfaceShading::kToonEnvironment:
+			return assetlib::ShadingModel::kToonEnvironmentSurface;
+		}
+		return assetlib::ShadingModel::kPbrSurface;
 	}
 
 	/**
@@ -24,7 +34,19 @@ namespace game
 	[[nodiscard]] constexpr bgl::SurfaceShading
 	ToSurfaceShading(assetlib::ShadingModel model) noexcept
 	{
-		return model == assetlib::ShadingModel::kLitSurface ? bgl::SurfaceShading::kLit :
-		                                                      bgl::SurfaceShading::kPbrSurface;
+		switch (model)
+		{
+		case assetlib::ShadingModel::kLitSurface:
+			return bgl::SurfaceShading::kLit;
+		case assetlib::ShadingModel::kToonCharacterSurface:
+			return bgl::SurfaceShading::kToonCharacter;
+		case assetlib::ShadingModel::kToonEnvironmentSurface:
+			return bgl::SurfaceShading::kToonEnvironment;
+		case assetlib::ShadingModel::kPbr:
+		case assetlib::ShadingModel::kPbrSurface:
+		case assetlib::ShadingModel::kCount:
+			break;
+		}
+		return bgl::SurfaceShading::kPbrSurface;
 	}
 }

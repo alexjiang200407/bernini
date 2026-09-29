@@ -1,6 +1,7 @@
 #include "TexturedGltf.h"
 #include <algorithm>
 #include <array>
+#include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -1011,4 +1012,47 @@ TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surfa
 	CHECK(restored.surface.values[0].name == "bands");
 	REQUIRE(restored.surface.textures.size() == 1u);
 	CHECK(restored.surface.textures[0].name == "base");
+}
+
+// Each toon model is its own contract expectation, so each name survives a round trip as itself:
+// a character material read back as an environment one would be lit by the other model.
+TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surface][toon]")
+{
+	auto        model = ShadingModel::kToonCharacterSurface;
+	std::string name;
+
+	SECTION("character")
+	{
+		model = ShadingModel::kToonCharacterSurface;
+		name  = "toonCharacterSurface";
+	}
+
+	SECTION("environment")
+	{
+		model = ShadingModel::kToonEnvironmentSurface;
+		name  = "toonEnvironmentSurface";
+	}
+
+	BMaterial mat;
+	mat.name             = "flat";
+	mat.shadingModel     = model;
+	mat.surface.name     = "Flat";
+	mat.surface.values   = { { "baseColorFactor", { 1.0f, 0.5f, 0.25f, 1.0f } } };
+	mat.surface.textures = { { "baseColor", "Derived/BakedTextures/flat_base.ktx2" } };
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find(std::format("\"shadingModel\": \"{}\"", name)) != std::string::npos);
+	CHECK(out.find("\"surface\": \"Flat\"") != std::string::npos);
+
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
+
+	REQUIRE(restored.shadingModel == model);
+	CHECK(isSurfaceModel(restored.shadingModel));
+	CHECK(restored.surface.name == "Flat");
+	REQUIRE(restored.surface.values.size() == 1u);
+	CHECK(restored.surface.values[0].name == "baseColorFactor");
+	REQUIRE(restored.surface.textures.size() == 1u);
+	CHECK(restored.surface.textures[0].name == "baseColor");
 }

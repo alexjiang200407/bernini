@@ -57,6 +57,10 @@ namespace assetlib
 				return "pbrSurface";
 			case ShadingModel::kLitSurface:
 				return "litSurface";
+			case ShadingModel::kToonCharacterSurface:
+				return "toonCharacterSurface";
+			case ShadingModel::kToonEnvironmentSurface:
+				return "toonEnvironmentSurface";
 			case ShadingModel::kCount:
 				break;
 			}
@@ -490,6 +494,8 @@ namespace assetlib
 
 		case ShadingModel::kPbrSurface:
 		case ShadingModel::kLitSurface:
+		case ShadingModel::kToonCharacterSurface:
+		case ShadingModel::kToonEnvironmentSurface:
 			describeSurface(out, material.surface, fileSystem);
 			break;
 

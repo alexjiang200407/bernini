@@ -528,3 +528,121 @@ struct IntSurface : ISurfaceSource
 				ContainsSubstring("'level' is not a float or a float vector")));
 	}
 }
+
+namespace
+{
+	// Every contract, imported beside the surface, so a lookup of the ones it does not conform to
+	// resolves -- and so the toon modules are shown not to clash with the others.
+	constexpr std::string_view c_AllContracts = R"(import bgl.MaterialReader;
+import bgl.PbrSurface;
+import bgl.SurfaceSource;
+import bgl.SurfaceLight;
+import bgl.LitSurfaceSource;
+import bgl.ToonCharacterSurface;
+import bgl.ToonEnvironmentSurface;
+)";
+
+	// A game's character and environment surfaces, as the test project writes them: base colour
+	// through a colour slot, each on its own toon contract.
+	constexpr std::string_view c_ToonCharacter = R"(
+
+struct FlatParams
+{
+    [Color]
+    [Default(1.0, 1.0, 1.0, 1.0)]
+    float4 baseColorFactor;
+
+    ColorSlot baseColor;
+};
+
+struct FlatCharacter : IToonCharacterSurfaceSource
+{
+    typealias MaterialParams = FlatParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
+    }
+
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        ToonCharacterSurface surface = ToonCharacterSurface();
+        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        return surface;
+    }
+};
+)";
+
+	constexpr std::string_view c_ToonEnvironment = R"(
+
+struct FlatParams
+{
+    [Color]
+    [Default(1.0, 1.0, 1.0, 1.0)]
+    float4 baseColorFactor;
+
+    ColorSlot baseColor;
+};
+
+struct FlatEnvironment : IToonEnvironmentSurfaceSource
+{
+    typealias MaterialParams = FlatParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
+    }
+
+    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        ToonEnvironmentSurface surface = ToonEnvironmentSurface();
+        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        return surface;
+    }
+};
+)";
+
+	bool
+	Conforms(slang::IModule* module, const char* structName, const char* interfaceName)
+	{
+		slang::ProgramLayout*  layout = module->getLayout();
+		slang::TypeReflection* type   = layout->findTypeByName(structName);
+		slang::TypeReflection* iface  = layout->findTypeByName(interfaceName);
+		REQUIRE(type != nullptr);
+		REQUIRE(iface != nullptr);
+		return layout->isSubType(type, iface);
+	}
+}
+
+// The toon contracts compile as a game writes against them, and are two contracts rather than one
+// under two names: a character surface is not an environment surface, and neither is a PBR or a lit
+// one. What this cannot show is registration: which shading ReflectSurface reports a toon surface
+// under, and that it draws.
+TEST_CASE(
+	"A toon surface conforms to its own model's contract alone",
+	"[surface][reflection][toon]")
+{
+	Session session;
+
+	SECTION("character")
+	{
+		slang::IModule* module = session.Load(
+			"ToonCharacterFlat",
+			std::string(c_AllContracts) + std::string(c_ToonCharacter));
+		CHECK(Conforms(module, "FlatCharacter", "IToonCharacterSurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatCharacter", "IToonEnvironmentSurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatCharacter", "ISurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatCharacter", "ILitSurfaceSource"));
+	}
+
+	SECTION("environment")
+	{
+		slang::IModule* module = session.Load(
+			"ToonEnvironmentFlat",
+			std::string(c_AllContracts) + std::string(c_ToonEnvironment));
+		CHECK(Conforms(module, "FlatEnvironment", "IToonEnvironmentSurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatEnvironment", "IToonCharacterSurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatEnvironment", "ISurfaceSource"));
+		CHECK_FALSE(Conforms(module, "FlatEnvironment", "ILitSurfaceSource"));
+	}
+}

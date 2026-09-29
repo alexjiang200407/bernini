@@ -39,12 +39,16 @@ namespace bgl
 	/**
 	 * Which contract the surface's module conforms to. `kPbrSurface` supplies the material half of
 	 * the engine's PBR lighting (`ISurfaceSource`); `kLit` owns its lighting and returns radiance
-	 * (`ILitSurfaceSource`).
+	 * (`ILitSurfaceSource`); `kToonCharacter` and `kToonEnvironment` supply the material half of
+	 * the engine's toon lighting for a character (`IToonCharacterSurfaceSource`) or an environment
+	 * (`IToonEnvironmentSurfaceSource`), two models that are lit apart.
 	 */
 	enum class SurfaceShading : uint8_t
 	{
 		kPbrSurface,
 		kLit,
+		kToonCharacter,
+		kToonEnvironment,
 	};
 
 	/**
