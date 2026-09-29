@@ -44,10 +44,7 @@ namespace crowd
 
 			core::throw_runtime_error("Kernel declares no parameter '{}'", name);
 		}
-	}
 
-	namespace
-	{
 		// Bump formatVersion when the encoding below changes: it is in every key, so an entry in the
 		// old layout is missed rather than misread.
 		constexpr auto c_Owner = bgpu::ProgramCacheOwner{ .tag = "crowd", .formatVersion = 1 };
