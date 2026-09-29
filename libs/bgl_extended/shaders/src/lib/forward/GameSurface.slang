@@ -3,6 +3,8 @@ import bgl.MaterialReader;
 import bgl.PbrSurface;
 import bgl.SurfaceLight;
 import bgl.SurfaceSource;
+import bgl.ToonCharacterSurface;
+import bgl.ToonEnvironmentSurface;
 import idl.GameSurfaceRecord;
 import idl.IMaterial;
 import idl.RawEntry;
@@ -313,6 +315,29 @@ public struct NullLitSurface : ILitSurfaceSource
     public static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, NullLitSurfaceParams params)
     {
         return float4(0.5, 0.5, 0.5, 1.0);
+    }
+}
+
+// The toon contracts' null surfaces, which the build validates the toon adapters' shapes against
+// (programs/forward/GameSurfaceShapes.slang). Nothing draws them.
+public struct NullToonCharacterSurface : IToonCharacterSurfaceSource
+{
+    public typealias MaterialParams = NullSurfaceParams;
+
+    public static float Coverage<R : IMaterialReader>(R reader, NullSurfaceParams params) { return 1.0; }
+
+    public static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, NullSurfaceParams params) { return ToonCharacterSurface(); }
+}
+
+public struct NullToonEnvironmentSurface : IToonEnvironmentSurfaceSource
+{
+    public typealias MaterialParams = NullSurfaceParams;
+
+    public static float Coverage<R : IMaterialReader>(R reader, NullSurfaceParams params) { return 1.0; }
+
+    public static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, NullSurfaceParams params)
+    {
+        return ToonEnvironmentSurface();
     }
 }
 

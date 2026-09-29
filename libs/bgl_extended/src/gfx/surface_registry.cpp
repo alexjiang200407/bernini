@@ -54,14 +54,49 @@ namespace bgl
 			return std::format("game.slot{}", slot);
 		}
 
-		std::string
-		BindingModuleSource(uint32_t slot, const std::string& module, const std::string& sourceType)
+		// Every contract but ISurfaceSource draws through the lit programs: a toon surface does so
+		// as its model's adapter (lib.math.ToonShading), whose Shade is the engine's toon lighting.
+		bool
+		DrawsLitPrograms(SurfaceShading shading) noexcept
 		{
+			switch (shading)
+			{
+			case SurfaceShading::kPbrSurface:
+				return false;
+			case SurfaceShading::kLit:
+			case SurfaceShading::kToonCharacter:
+			case SurfaceShading::kToonEnvironment:
+				return true;
+			}
+			return false;
+		}
+
+		std::string
+		BindingModuleSource(
+			uint32_t           slot,
+			const std::string& module,
+			const std::string& sourceType,
+			SurfaceShading     shading)
+		{
+			std::string bound = sourceType;
+			switch (shading)
+			{
+			case SurfaceShading::kPbrSurface:
+			case SurfaceShading::kLit:
+				break;
+			case SurfaceShading::kToonCharacter:
+				bound = std::format("ToonCharacterLit<{}>", sourceType);
+				break;
+			case SurfaceShading::kToonEnvironment:
+				bound = std::format("ToonEnvironmentLit<{}>", sourceType);
+				break;
+			}
+
 			return std::format(
-				"import {};\npublic typealias Slot{}Surface = {};\n",
+				"import {};\nimport lib.math.ToonShading;\npublic typealias Slot{}Surface = {};\n",
 				module,
 				slot,
-				sourceType);
+				bound);
 		}
 
 		// A registered surface's programs, generated rather than shipped because a program has to
@@ -117,8 +152,8 @@ namespace bgl
 					"materialData.{}<Slot{}Surface>(input, "
 					"isFrontFace);\n",
 					static_cast<uint32_t>(types[slot].kind),
-					types[slot].shading == SurfaceShading::kLit ? "ShadeGameLitBlended" :
-																  "ShadeGameBlended",
+					DrawsLitPrograms(types[slot].shading) ? "ShadeGameLitBlended" :
+															"ShadeGameBlended",
 					slot);
 			}
 
@@ -146,7 +181,7 @@ namespace bgl
 				return DrawBucketPixelSrc(
 					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
 			};
-			const bool lit = shading == SurfaceShading::kLit;
+			const bool lit = DrawsLitPrograms(shading);
 
 			// Entry programs nothing imports, so each loads only when a draw bucket builds it.
 			return {
@@ -259,7 +294,11 @@ namespace bgl
 		{
 			device.AddSourceModule(
 				{ BindingModuleName(slot),
-			      BindingModuleSource(slot, types[slot].name, sourceTypes[slot]) });
+			      BindingModuleSource(
+					  slot,
+					  types[slot].name,
+					  sourceTypes[slot],
+					  types[slot].shading) });
 
 			for (const bgpu::SlangSourceModule& program :
 			     SurfacePrograms(slot, types[slot].kind, types[slot].shading))
