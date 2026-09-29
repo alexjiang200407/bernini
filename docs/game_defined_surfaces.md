@@ -82,6 +82,32 @@ through lit programs of its own, and the engine's PBR never runs for it. Nothing
 contract's answer after it returns: geometry AO baked on a second UV set is the surface's to take,
 like any other map (below).
 
+## Toon surfaces
+
+The toon path is two more contracts, one per model, because characters and environments are lit
+apart — in cel animation they are different artists' work, and the two are expected to diverge:
+
+| Contract | Module | `Evaluate` returns | Document model |
+|---|---|---|---|
+| `IToonCharacterSurfaceSource` | `bgl.ToonCharacterSurface` | `ToonCharacterSurface` | `toonCharacterSurface` |
+| `IToonEnvironmentSurfaceSource` | `bgl.ToonEnvironmentSurface` | `ToonEnvironmentSurface` | `toonEnvironmentSurface` |
+
+Each is `ISurfaceSource`'s shape — a parameter struct under the same rules, `Coverage`, and an
+`Evaluate` returning the model's material half — and the engine owns the lighting, as it does for
+PBR. A character surface is not tied to skinned geometry: the model is the material's, not the
+mesh's.
+
+**The look is not designed yet.** Both material halves hold a `baseColor` alone, and both models
+draw it flat: `lib.math.ToonShading`'s `ShadeToonCharacter` and `ShadeToonEnvironment` return it
+as pre-exposure radiance, reading nothing of the light, so exposure and tonemapping still apply
+after it as for every surface.
+
+**A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
+adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in
+`lib.math.ToonShading` — which conforms to `ILitSurfaceSource` with the model's lighting as its
+`Shade`. So the record, the reader, every layer, grass and the blend arm are the lit contract's,
+and a toon model adds no program family; its lighting is the one function to change.
+
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque
 layer, and a **hashed** layer calls it *twice* — see § Hashed alpha below.
@@ -226,9 +252,8 @@ material's half of it, the `PbrSurface` its `Evaluate` returns — **`litSurface
 `ILitSurfaceSource`, whose `Shade` is the whole lighting, and **`toonCharacterSurface`** and
 **`toonEnvironmentSurface`** for one on `IToonCharacterSurfaceSource` or
 `IToonEnvironmentSurfaceSource` (`bgl.ToonCharacterSurface`, `bgl.ToonEnvironmentSurface`),
-which supply the material's half of the engine's toon lighting — two models, lit apart. The toon
-models are declared but not yet registered: a surface on either contract is not reflected as
-one, so a toon document is refused at `CreateSurfaceMaterial` today. The document's model is its contract
+which supply the material's half of the engine's toon lighting — two models, lit apart
+(§ Toon surfaces). The document's model is its contract
 *expectation*: `CreateSurfaceMaterial` refuses a named surface that conforms to the other one, so
 a surface that changes contract fails loud instead of silently changing what every material drawn
 by it means. Everything else in the document — the surface name, `parameters`, `textures`, the

@@ -276,7 +276,9 @@ flowchart TD
 * **`GetSurfaceTypes()`** — the surfaces read out of the GPU context's `clientShaderDir` at
   construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
   one surface: its name is the file's stem, its shading is the one struct in it conforming to
-  `ISurfaceSource`, and its slot is its position in filename order — so nothing outside the directory
+  a surface contract — `ISurfaceSource`, `ILitSurfaceSource`, or either toon model's
+  ([Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces), and `SurfaceType::shading`
+  says which — and its slot is its position in filename order — so nothing outside the directory
   names a file, and a file added later does not renumber the ones before it. Anything else there is
   the game's own code: the same directory is its module search path, so a shared header beside the
   surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.

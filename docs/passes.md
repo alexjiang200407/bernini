@@ -653,7 +653,7 @@ programs, and the shared blend program's arm for it, are generated when it regis
 into [lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)
 on the surface its slot's `game.slotN` binding aliases — the engine-lit family for a surface on
 `ISurfaceSource`, the lit family (`ShadeGameLit*`, which never calls `ShadeSurface`) for one on
-`ILitSurfaceSource` -- see
+`ILitSurfaceSource` or either toon contract, a toon surface bound as its model's adapter -- see
 [Game-Defined Surfaces](docs/game_defined_surfaces.md). The
 two tiers' draw buckets differ only in their geometry stage: a pixel shader reads a `ForwardVSOut` and a
 material offset, and neither says which tier filled them.

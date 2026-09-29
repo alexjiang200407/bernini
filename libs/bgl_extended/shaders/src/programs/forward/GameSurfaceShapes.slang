@@ -4,6 +4,7 @@ import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
 import lib.forward.common;
 import lib.forward.grass_vertex;
+import lib.math.ToonShading;
 
 // Every program surface_registry.cpp generates for a registered surface, instantiated on the null
 // surface. The generated ones exist only at runtime, so this is what puts the shapes through the
@@ -81,6 +82,10 @@ float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_
         return materialData.ShadeGameBlended<NullSurface>(input, isFrontFace);
     case 5u:
         return materialData.ShadeGameLitBlended<NullLitSurface>(input, isFrontFace);
+    case 6u:
+        return materialData.ShadeGameLitBlended<ToonCharacterLit<NullToonCharacterSurface> >(input, isFrontFace);
+    case 7u:
+        return materialData.ShadeGameLitBlended<ToonEnvironmentLit<NullToonEnvironmentSurface> >(input, isFrontFace);
     default:
         return materialData.ShadeBlendedEngineKind(input, isFrontFace);
     }
@@ -97,4 +102,30 @@ ForwardPSOut PSGrass(GrassVSOut input)
 ForwardPSOut PSGrassLit(GrassVSOut input)
 {
     return materialData.GameLitGrassProgram<NullLitSurface>(input);
+}
+
+// A toon surface is bound as its model's adapter over the game's type, and draws through the lit
+// programs above; these put the adapter itself through the same validation, per model.
+[shader("pixel")]
+ForwardPSOut PSToonCharacterOpaque(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameLitOpaqueProgram<ToonCharacterLit<NullToonCharacterSurface> >(input, isFrontFace);
+}
+
+[shader("pixel")]
+ForwardPSOut PSToonEnvironmentOpaque(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameLitOpaqueProgram<ToonEnvironmentLit<NullToonEnvironmentSurface> >(input, isFrontFace);
+}
+
+[shader("pixel")]
+ForwardPSOut PSGrassToonCharacter(GrassVSOut input)
+{
+    return materialData.GameLitGrassProgram<ToonCharacterLit<NullToonCharacterSurface> >(input);
+}
+
+[shader("pixel")]
+ForwardPSOut PSGrassToonEnvironment(GrassVSOut input)
+{
+    return materialData.GameLitGrassProgram<ToonEnvironmentLit<NullToonEnvironmentSurface> >(input);
 }

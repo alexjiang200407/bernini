@@ -646,3 +646,98 @@ TEST_CASE(
 		CHECK_FALSE(Conforms(module, "FlatEnvironment", "ILitSurfaceSource"));
 	}
 }
+
+// Registration's half of the toon contracts: each reflects under its own shading, with its
+// parameters laid out exactly as a PBR or lit surface's are, since the record is the same record.
+TEST_CASE("A toon surface reflects under its own model", "[surface][reflection][toon]")
+{
+	Session session;
+
+	SECTION("character")
+	{
+		const std::optional<ReflectedSurface> reflected = ReflectSurface(
+			session.Load(
+				"ToonCharacterFlat",
+				std::string(c_AllContracts) + std::string(c_ToonCharacter)),
+			"ToonCharacterFlat");
+		REQUIRE(reflected.has_value());
+		CHECK(reflected->sourceTypeName == "FlatCharacter");
+		CHECK(reflected->type.shading == SurfaceShading::kToonCharacter);
+		REQUIRE(reflected->type.params.values.size() == 1u);
+		CHECK(reflected->type.params.values[0].name == "baseColorFactor");
+		CHECK(reflected->type.params.values[0].isColor);
+		REQUIRE(reflected->type.params.textures.size() == 1u);
+		CHECK(reflected->type.params.textures[0].name == "baseColor");
+	}
+
+	SECTION("environment")
+	{
+		const std::optional<ReflectedSurface> reflected = ReflectSurface(
+			session.Load(
+				"ToonEnvironmentFlat",
+				std::string(c_AllContracts) + std::string(c_ToonEnvironment)),
+			"ToonEnvironmentFlat");
+		REQUIRE(reflected.has_value());
+		CHECK(reflected->sourceTypeName == "FlatEnvironment");
+		CHECK(reflected->type.shading == SurfaceShading::kToonEnvironment);
+	}
+}
+
+TEST_CASE("A toon surface is held to one contract", "[surface][reflection][toon]")
+{
+	using Catch::Matchers::ContainsSubstring;
+
+	Session session;
+
+	// Two toon contracts cannot meet on one struct -- their Evaluates differ by return type alone,
+	// which Slang refuses -- but a toon and a lit one can, having no member in common but Coverage.
+	SECTION("one struct conforms to a toon model and to the lit contract")
+	{
+		const std::string body =
+			std::string(c_AllContracts) + R"(struct BothParams { float value; };
+
+struct Both : ILitSurfaceSource, IToonCharacterSurfaceSource
+{
+    typealias MaterialParams = BothParams;
+    static float Coverage<R : IMaterialReader>(R reader, BothParams params) { return 1.0; }
+    static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, BothParams params) { return float4(0.0); }
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, BothParams params) { return ToonCharacterSurface(); }
+};
+)";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Both", body), "Both"),
+			std::runtime_error,
+			Catch::Matchers::MessageMatches(ContainsSubstring(
+				"conforms to ILitSurfaceSource and IToonCharacterSurfaceSource; a surface owns one "
+				"contract")));
+	}
+
+	SECTION("a character surface and an environment surface in one file")
+	{
+		std::string body = std::string(c_AllContracts) + std::string(c_ToonCharacter);
+		body += R"(
+struct AlsoEnvironment : IToonEnvironmentSurfaceSource
+{
+    typealias MaterialParams = FlatParams;
+    static float Coverage<R : IMaterialReader>(R reader, FlatParams params) { return 1.0; }
+    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params) { return ToonEnvironmentSurface(); }
+};
+)";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Pair", body), "Pair"),
+			std::runtime_error,
+			Catch::Matchers::MessageMatches(
+				ContainsSubstring("both conform to a surface contract")));
+	}
+
+	SECTION("nothing conforms to any contract it imported")
+	{
+		const std::string body = std::string(c_AllContracts) + "struct Nothing { float value; };\n";
+		CHECK_THROWS_MATCHES(
+			ReflectSurface(session.Load("Nothing", body), "Nothing"),
+			std::runtime_error,
+			Catch::Matchers::Message(
+				"surface 'Nothing': no struct in the module conforms to ISurfaceSource, "
+				"ILitSurfaceSource, IToonCharacterSurfaceSource or IToonEnvironmentSurfaceSource"));
+	}
+}

@@ -6,7 +6,9 @@
 #include <bgl_common/idl/GameSurfaceRecord.h>
 
 #include <algorithm>
+#include <array>
 #include <core/err/util.h>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <slang-com-ptr.h>
@@ -20,19 +22,37 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr const char* c_SurfaceInterface    = "ISurfaceSource";
-		constexpr const char* c_LitSurfaceInterface = "ILitSurfaceSource";
+		struct Contract
+		{
+			const char*    interfaceName;
+			SurfaceShading shading;
+		};
+
+		constexpr std::array<Contract, 4> c_Contracts = { {
+			{ "ISurfaceSource", SurfaceShading::kPbrSurface },
+			{ "ILitSurfaceSource", SurfaceShading::kLit },
+			{ "IToonCharacterSurfaceSource", SurfaceShading::kToonCharacter },
+			{ "IToonEnvironmentSurfaceSource", SurfaceShading::kToonEnvironment },
+		} };
 
 		struct FoundSurface
 		{
 			slang::TypeReflection* type;
-			SurfaceShading         shading;
+			const Contract*        contract;
 		};
 
-		const char*
-		InterfaceName(SurfaceShading shading) noexcept
+		// "A", "A or B", "A, B or C": the contracts a module imported, as a refusal names them.
+		std::string
+		EitherOf(const std::vector<const char*>& names)
 		{
-			return shading == SurfaceShading::kLit ? c_LitSurfaceInterface : c_SurfaceInterface;
+			std::string joined;
+			for (size_t i = 0; i < names.size(); ++i)
+			{
+				if (i > 0)
+					joined += i + 1 == names.size() ? " or " : ", ";
+				joined += names[i];
+			}
+			return joined;
 		}
 
 		std::optional<FoundSurface>
@@ -42,11 +62,17 @@ namespace bgl
 			std::string_view      surfaceName)
 		{
 			// Null when the module never imported that contract, which is how a module that is not
-			// a surface at all says so: neither interface resolves, and there is nothing to hold
-			// the module to.
-			slang::TypeReflection* pbrIface = layout->findTypeByName(c_SurfaceInterface);
-			slang::TypeReflection* litIface = layout->findTypeByName(c_LitSurfaceInterface);
-			if (pbrIface == nullptr && litIface == nullptr)
+			// a surface at all says so: no interface resolves, and there is nothing to hold the
+			// module to.
+			std::array<slang::TypeReflection*, c_Contracts.size()> ifaces{};
+			std::vector<const char*>                               imported;
+			for (size_t i = 0; i < c_Contracts.size(); ++i)
+			{
+				ifaces[i] = layout->findTypeByName(c_Contracts[i].interfaceName);
+				if (ifaces[i] != nullptr)
+					imported.emplace_back(c_Contracts[i].interfaceName);
+			}
+			if (imported.empty())
 				return std::nullopt;
 
 			std::vector<slang::DeclReflection*> structs;
@@ -57,23 +83,26 @@ namespace bgl
 			{
 				slang::TypeReflection* type = decl->getType();
 
-				const bool pbr = pbrIface != nullptr && layout->isSubType(type, pbrIface);
-				const bool lit = litIface != nullptr && layout->isSubType(type, litIface);
-				if (!pbr && !lit)
+				std::vector<const Contract*> conforms;
+				for (size_t i = 0; i < c_Contracts.size(); ++i)
+				{
+					if (ifaces[i] != nullptr && layout->isSubType(type, ifaces[i]))
+						conforms.emplace_back(&c_Contracts[i]);
+				}
+				if (conforms.empty())
 					continue;
 
-				if (pbr && lit)
+				if (conforms.size() > 1)
 				{
 					core::throw_runtime_error(
 						"surface '{}': '{}' conforms to {} and {}; a surface owns one contract",
 						surfaceName,
 						FullTypeName(type),
-						c_SurfaceInterface,
-						c_LitSurfaceInterface);
+						conforms[0]->interfaceName,
+						conforms[1]->interfaceName);
 				}
 
-				const SurfaceShading shading =
-					lit ? SurfaceShading::kLit : SurfaceShading::kPbrSurface;
+				const Contract* contract = conforms.front();
 				if (found.has_value())
 				{
 					core::throw_runtime_error(
@@ -81,21 +110,18 @@ namespace bgl
 						surfaceName,
 						FullTypeName(found->type),
 						FullTypeName(type),
-						found->shading == shading ? InterfaceName(shading) : "a surface contract");
+						found->contract == contract ? contract->interfaceName :
+													  "a surface contract");
 				}
-				found = FoundSurface{ type, shading };
+				found = FoundSurface{ type, contract };
 			}
 
 			if (!found.has_value())
 			{
-				const char* imported = pbrIface != nullptr && litIface != nullptr ?
-				                           "ISurfaceSource or ILitSurfaceSource" :
-				                       pbrIface != nullptr ? c_SurfaceInterface :
-				                                             c_LitSurfaceInterface;
 				core::throw_runtime_error(
 					"surface '{}': no struct in the module conforms to {}",
 					surfaceName,
-					imported);
+					EitherOf(imported));
 			}
 			return found;
 		}
@@ -251,7 +277,7 @@ namespace bgl
 
 		SurfaceType reflected;
 		reflected.name            = std::string(surfaceName);
-		reflected.shading         = found->shading;
+		reflected.shading         = found->contract->shading;
 		reflected.params.byteSize = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)
