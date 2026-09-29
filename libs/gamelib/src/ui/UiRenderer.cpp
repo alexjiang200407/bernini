@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -24,7 +25,6 @@
 #include <string_view>
 #include <tracy/Tracy.hpp>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -379,7 +379,7 @@ namespace game
 		Rml::TextureHandle
 		LoadTargetTexture(Rml::Vector2i& dimensions, const Rml::String& source)
 		{
-			const std::string name = source.substr(c_TargetScheme.size());
+			const std::string_view name = std::string_view(source).substr(c_TargetScheme.size());
 
 			const auto it = m_Targets.find(name);
 			if (it == m_Targets.end())
@@ -401,7 +401,7 @@ namespace game
 		HandleTable<bgl::OverlayTextureHandle>  m_Textures;
 		std::vector<bgl::OverlayDraw>           m_Draws;
 
-		std::unordered_map<std::string, bgl::RenderTargetRef> m_Targets;
+		core::str::unordered_str_map<bgl::RenderTargetRef> m_Targets;
 
 		bgl::OverlayRect m_Scissor;
 		glm::mat4        m_Transform{ 1.0f };

@@ -1,9 +1,10 @@
 #pragma once
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/err/util.h>
 #include <core/ref/SharedRef.h>
-#include <string>
-#include <unordered_map>
+#include <core/str/str.h>
+#include <string_view>
 
 namespace bgl
 {
@@ -19,13 +20,16 @@ namespace bgl
 		ComputeKernel&
 		operator=(ComputeKernel&&) noexcept = default;
 
-		core::SharedRef<IComputePipeline>         pipeline;
-		std::unordered_map<std::string, Uniforms> uniforms;
+		core::SharedRef<IComputePipeline>      pipeline;
+		core::str::unordered_str_map<Uniforms> uniforms;
 
 		Uniforms&
-		operator[](const std::string& cbuffer)
+		operator[](std::string_view cbuffer)
 		{
-			return uniforms.at(cbuffer);
+			const auto it = uniforms.find(cbuffer);
+			if (it == uniforms.end())
+				core::throw_runtime_error("the kernel declares no constant buffer '{}'", cbuffer);
+			return it->second;
 		}
 
 		void

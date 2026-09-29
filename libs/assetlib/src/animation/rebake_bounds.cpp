@@ -11,6 +11,7 @@
 
 #include "animation/plant_bake.h"
 
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -100,8 +101,8 @@ namespace assetlib
 		// Loaded once and kept for the run: a rig's meshes are consulted by every one of its clip
 		// sets, and re-reading megabytes of vertex data per `.banim` would make even the dry run
 		// cost minutes. A project's meshes fit in memory the way its textures would not.
-		auto skeletons = std::unordered_map<std::string, Skeleton>();
-		auto meshes    = std::unordered_map<std::string, BMesh>();
+		auto skeletons = core::str::unordered_str_map<Skeleton>();
+		auto meshes    = core::str::unordered_str_map<BMesh>();
 
 		// Plain loads, not the regeneration seam: a retrofit stamps boxes onto the bytes a
 		// project actually holds, and a stale group is migrate's job -- a foreign token here
@@ -121,7 +122,7 @@ namespace assetlib
 
 		// posedBoundsSignature hashes a mesh's whole vertex blob, so it too is computed once per
 		// (mesh, rig) pair rather than once per clip set.
-		auto       signatures  = std::unordered_map<std::string, uint64_t>();
+		auto       signatures  = core::str::unordered_str_map<uint64_t>();
 		const auto signatureAt = [&](const std::string& meshPath, const std::string& rigPath) {
 			const std::string key = meshPath + '\n' + rigPath;
 			const auto        it  = signatures.find(key);

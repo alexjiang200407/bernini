@@ -12,6 +12,7 @@
 
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -24,7 +25,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -758,8 +758,8 @@ namespace assetlib
 			uint64_t                        hash;
 		};
 
-		std::mutex                                  g_HashCacheMutex;
-		std::unordered_map<std::string, HashedFile> g_HashCache;
+		std::mutex                               g_HashCacheMutex;
+		core::str::unordered_str_map<HashedFile> g_HashCache;
 	}
 
 	SourceStamp

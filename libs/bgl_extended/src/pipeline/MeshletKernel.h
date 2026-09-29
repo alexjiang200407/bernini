@@ -2,6 +2,7 @@
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
 #include <algorithm>
+#include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <core/str/str.h>
 #include <span>
@@ -29,9 +30,12 @@ namespace bgl
 		core::str::unordered_str_map<Uniforms> uniforms;
 
 		Uniforms&
-		operator[](const std::string& cbuffer)
+		operator[](std::string_view cbuffer)
 		{
-			return uniforms.at(cbuffer);
+			const auto it = uniforms.find(cbuffer);
+			if (it == uniforms.end())
+				core::throw_runtime_error("the kernel declares no constant buffer '{}'", cbuffer);
+			return it->second;
 		}
 
 		[[nodiscard]]
