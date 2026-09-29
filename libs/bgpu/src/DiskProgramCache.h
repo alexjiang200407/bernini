@@ -24,6 +24,15 @@ namespace bgpu
 
 		~DiskProgramCache() noexcept = default;
 
+		DiskProgramCache(const DiskProgramCache&) = delete;
+		DiskProgramCache(DiskProgramCache&&)      = delete;
+
+		DiskProgramCache&
+		operator=(const DiskProgramCache&) = delete;
+
+		DiskProgramCache&
+		operator=(DiskProgramCache&&) = delete;
+
 		[[nodiscard]] const std::filesystem::path&
 		GetDirectory() const noexcept override
 		{
