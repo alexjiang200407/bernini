@@ -20,6 +20,11 @@ namespace bgl
 		// device memory.
 		uint32_t    initialCount = 64;
 		std::string debugName;
+
+		// The handle shaders are given is a UAV rather than an SRV. For a list the CPU writes that is
+		// bound where a shader declares a ComputeBuffer it only reads: the descriptor's type must
+		// match the declaration, or the read is undefined.
+		bool unorderedAccessView = false;
 	};
 
 	/**
@@ -67,7 +72,7 @@ namespace bgl
 				m_Desc.debugName,
 				sizeof(T),
 				m_Desc.initialCount,
-				false);
+				m_Desc.unorderedAccessView);
 
 			m_Values.reserve(m_Desc.initialCount);
 		}

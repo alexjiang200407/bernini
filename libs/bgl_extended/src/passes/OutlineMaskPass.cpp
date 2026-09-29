@@ -84,7 +84,10 @@ namespace bgl
 
 		desc.SetName("Outline Mask {}", draw.drawIdx)
 			.AddRenderTarget(c_OutlineMaskName)
-			.AddBufferRead(c_SelectedInstancesName, BarrierSyncFlag::kVertexShader)
+			.AddBufferArg(
+				c_SelectedInstancesName,
+				BarrierSyncFlag::kVertexShader,
+				BarrierAccessFlag::kUnorderedAccess)
 			.AddBufferArg(
 				c_InstanceLodName,
 				BarrierSyncFlag::kVertexShader,

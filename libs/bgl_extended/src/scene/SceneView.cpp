@@ -269,8 +269,10 @@ namespace bgl
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
 		{
-			auto desc      = UploadBufferDesc();
-			desc.debugName = "Selected Instances";
+			// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
+			auto desc                = UploadBufferDesc();
+			desc.debugName           = "Selected Instances";
+			desc.unorderedAccessView = true;
 
 			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);
 		}
