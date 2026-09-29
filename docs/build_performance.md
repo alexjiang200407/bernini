@@ -72,10 +72,6 @@ is `PRIVATE` while assetlib's public headers are compiled by `gamelib`, `editor_
 `assetlib_cli` without it, and `MetalImpl.cpp` and `MetalSurface_mac.mm` carry
 `SKIP_PRECOMPILE_HEADERS ON` because Objective-C++ cannot consume a C++ PCH.
 
-The exception is a name a PCH *defines* rather than includes, which no `#include` could reach:
-`libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every bgl_extended source logs through
-([docs/gfx_debug.md](gfx_debug.md)). That is why `MetalImpl.cpp`, which skips the PCH, does not log.
-
 MSVC editor SDK builds disable the PCH for `core`, `assetlib` and `gamelib`. CMake's automatic DLL
 export scan otherwise mistakes MSVC's `__@@_PchSym` bookkeeping records for an export named `__`;
 the scan reaches `core` through the static archive as well as the two DLLs' own object files.
@@ -128,7 +124,7 @@ find build/<preset> -name 'cmake_pch.hxx.pch' -exec ls -lh {} \;
 ### What cannot come out of one
 
 `libs/bgl_extended/src/pch.h` is load-bearing, not an optimisation. bgl_extended's internal headers are written
-against it: `ViewportState.h` uses `gassert`, `Shader.h` uses `slang`, `Srv.h` uses
+against it: `ViewportState.h` uses `core::ensure`, `Shader.h` uses `slang`, `Srv.h` uses
 `DescriptorHandle`, and none of them includes what it uses. So every target
 that compiles bgl_extended's internals — `bgl_extended_objects`, `bgl_metal`, `bgl_extended_tests` — must carry that header,
 however it reaches them. `bgl_extended_tests` gets it by `target_force_include`; removing it there to make

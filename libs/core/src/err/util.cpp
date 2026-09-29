@@ -264,7 +264,7 @@ namespace core
 		crash_signal_action(int signal, siginfo_t* info, void* context)
 		{
 			// si_addr shares a union with the sender's pid, and only a hardware fault fills it in. A
-			// raised signal -- SIGABRT out of gassert, which is the common way in here -- would
+			// raised signal -- SIGABRT out of core::ensure, which is the common way in here -- would
 			// otherwise report those bits as an address.
 			const bool addressed = info != nullptr && (signal == SIGSEGV || signal == SIGBUS ||
 			                                           signal == SIGILL || signal == SIGFPE);

@@ -79,7 +79,7 @@ namespace bgl
 		};
 
 		TaaResolvePass() = default;
-		~TaaResolvePass() noexcept { logger::trace("~TaaResolvePass"); }
+		~TaaResolvePass() noexcept { spdlog::trace("~TaaResolvePass"); }
 
 		TaaResolvePass(const TaaResolvePass&) noexcept = delete;
 		TaaResolvePass(TaaResolvePass&&) noexcept      = delete;

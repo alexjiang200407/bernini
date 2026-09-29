@@ -1,7 +1,7 @@
 #pragma once
 
 #include <array>
-#include <cassert>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -28,7 +28,10 @@ namespace core
 
 		static_vector() : base(), m_CurrentSize(0) {}
 
-		static_vector(size_t size) : base(), m_CurrentSize(size) { assert(size <= max_elements); }
+		static_vector(size_t size) : base(), m_CurrentSize(size)
+		{
+			core::ensure(size <= max_elements, "size <= max_elements");
+		}
 
 		static_vector(std::initializer_list<T> il) : m_CurrentSize(0)
 		{
@@ -40,14 +43,14 @@ namespace core
 		reference
 		operator[](size_type pos)
 		{
-			assert(pos < m_CurrentSize);
+			core::ensure(pos < m_CurrentSize, "pos < m_CurrentSize");
 			return base::operator[](pos);
 		}
 
 		const_reference
 		operator[](size_type pos) const
 		{
-			assert(pos < m_CurrentSize);
+			core::ensure(pos < m_CurrentSize, "pos < m_CurrentSize");
 			return base::operator[](pos);
 		}
 
@@ -121,7 +124,7 @@ namespace core
 		void
 		push_back(const T& value) noexcept
 		{
-			assert(m_CurrentSize < max_elements);
+			core::ensure(m_CurrentSize < max_elements, "m_CurrentSize < max_elements");
 			*(data() + m_CurrentSize) = value;
 			m_CurrentSize++;
 		}
@@ -129,7 +132,7 @@ namespace core
 		void
 		push_back(T&& value) noexcept
 		{
-			assert(m_CurrentSize < max_elements);
+			core::ensure(m_CurrentSize < max_elements, "m_CurrentSize < max_elements");
 			*(data() + m_CurrentSize) = std::move(value);
 			m_CurrentSize++;
 		}
@@ -137,14 +140,14 @@ namespace core
 		void
 		pop_back() noexcept
 		{
-			assert(m_CurrentSize > 0);
+			core::ensure(m_CurrentSize > 0, "m_CurrentSize > 0");
 			m_CurrentSize--;
 		}
 
 		void
 		resize(size_type newSize) noexcept
 		{
-			assert(newSize <= max_elements);
+			core::ensure(newSize <= max_elements, "newSize <= max_elements");
 
 			if (m_CurrentSize > newSize)
 			{
@@ -161,7 +164,7 @@ namespace core
 		reference
 		emplace_back() noexcept
 		{
-			assert(m_CurrentSize < max_elements);
+			core::ensure(m_CurrentSize < max_elements, "m_CurrentSize < max_elements");
 			++m_CurrentSize;
 			back() = T{};
 			return back();

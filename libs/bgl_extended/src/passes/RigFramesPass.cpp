@@ -7,7 +7,7 @@
 #include "scene/SceneView.h"
 #include "types/Barrier.h"
 #include "uniforms/Uniforms.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <span>
 #include <spdlog/spdlog.h>
 
@@ -16,7 +16,7 @@ namespace bgl
 	void
 	RigFramesPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		ctx.pipelines->Add(
 			m_PoseRigFrames,
@@ -28,7 +28,7 @@ namespace bgl
 	void
 	RigFramesPass::Release()
 	{
-		logger::trace("RigFramesPass::Release");
+		spdlog::trace("RigFramesPass::Release");
 		m_PoseRigFrames.Reset();
 	}
 
@@ -36,10 +36,10 @@ namespace bgl
 	RigFramesPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
 		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "RigFramesPass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "RigFramesPass requires a bgl::SceneView");
 
 		auto* scene = view->GetScene()->As<Scene>();
-		gassert(scene != nullptr, "RigFramesPass requires a bgl::Scene");
+		core::ensure(scene != nullptr, "RigFramesPass requires a bgl::Scene");
 
 		// Attached only on a frame that has a table to fill, which is almost none of them. The pass
 		// writes `scene.boneAnimTables`, which the scene imports, so the frame graph would keep it as
@@ -65,15 +65,15 @@ namespace bgl
 	RigFramesPass::Execute(const PassContext& ctx, const DrawData& draw)
 	{
 		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "RigFramesPass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "RigFramesPass requires a bgl::SceneView");
 
 		auto* scene = view->GetScene()->As<Scene>();
-		gassert(scene != nullptr, "RigFramesPass requires a bgl::Scene");
+		core::ensure(scene != nullptr, "RigFramesPass requires a bgl::Scene");
 
 		// AttachToFrameGraph asked the same question and did not add this pass on an empty answer;
 		// nothing between the two can spawn an instance.
 		const std::span<const Scene::RigFill> fills = scene->PendingRigFills();
-		gassert(!fills.empty(), "Pose Rig Frames was attached with no rig to fill");
+		core::ensure(!fills.empty(), "Pose Rig Frames was attached with no rig to fill");
 
 		Uniforms& uniforms         = m_PoseRigFrames["gUniforms"];
 		uniforms["rigs"]           = ctx.GetBuffer("scene.rigBuffer");

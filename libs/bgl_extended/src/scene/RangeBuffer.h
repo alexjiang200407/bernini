@@ -4,7 +4,6 @@
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
 #include <algorithm>
-#include <bgl_common/gassert.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/multi_slot_vector.h>
 #include <core/err/util.h>
@@ -184,9 +183,11 @@ namespace bgl
 		void
 		Init(RangeBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialCount > 0, "RangeBuffer must have a positive initial count");
-			gassert(desc.blockSize > 0, "Block size must be greater than zero");
-			gassert(resourceManager != nullptr, "RangeBuffer requires a valid ResourceManager");
+			core::ensure(desc.initialCount > 0, "RangeBuffer must have a positive initial count");
+			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
+			core::ensure(
+				resourceManager != nullptr,
+				"RangeBuffer requires a valid ResourceManager");
 
 			m_Desc = std::move(desc);
 
@@ -240,8 +241,8 @@ namespace bgl
 		core::multi_slot_handle
 		Add(std::span<const T> elem)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				elem.size() < std::numeric_limits<uint32_t>::max(),
 				"Element count exceeds uint32_t limits");
 
@@ -266,22 +267,22 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
 		[[nodiscard]] core::multi_slot_handle
 		AllocateRange(uint32_t count)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(count > 0, "AllocateRange requires a positive count");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(count > 0, "AllocateRange requires a positive count");
 
 			auto handle = TryAllocateSlots(count);
 			if (handle.is_null())
@@ -330,13 +331,13 @@ namespace bgl
 		void
 		Set(core::multi_slot_handle handle, uint32_t relativeIndex, T value)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
 
 			uint32_t physicalIndex = handle.index + relativeIndex;
-			gassert(
+			core::ensure(
 				m_Data.valid(physicalIndex),
 				"Attempting to access an unallocated or erased element slot");
 
@@ -351,8 +352,8 @@ namespace bgl
 		void
 		SetAtIndex(uint32_t index, T value)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(m_Data.valid(index), "SetAtIndex on an inactive element slot");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(m_Data.valid(index), "SetAtIndex on an inactive element slot");
 			MarkRangeDirty(index, 1);
 			m_Data[index] = std::move(value);
 		}
@@ -360,7 +361,7 @@ namespace bgl
 		void
 		Erase(core::multi_slot_handle handle)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			MarkRangeDirty(handle.index, handle.count);
 			m_Data.erase(handle);
 		}
@@ -371,8 +372,8 @@ namespace bgl
 		void
 		EraseByIndex(uint32_t rootIndex)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"EraseByIndex on an index with no live range");
 			Erase(m_Data.handle_at(rootIndex));
@@ -383,8 +384,8 @@ namespace bgl
 		MetaAt(uint32_t rootIndex) noexcept
 			requires(!std::is_void_v<M>)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
 			return m_Metadata[rootIndex];
@@ -395,8 +396,8 @@ namespace bgl
 		MetaAt(uint32_t rootIndex) const noexcept
 			requires(!std::is_void_v<M>)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
 			return m_Metadata[rootIndex];
@@ -405,8 +406,8 @@ namespace bgl
 		[[nodiscard]] const T&
 		Get(core::multi_slot_handle handle, uint32_t relativeIndex) const
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
 			uint32_t physicalIndex = handle.index + relativeIndex;
@@ -418,8 +419,8 @@ namespace bgl
 		[[nodiscard]] core::multi_slot_handle
 		HandleAt(uint32_t rootIndex) const
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(IsIndexValid(rootIndex), "HandleAt on an index with no live range");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(IsIndexValid(rootIndex), "HandleAt on an index with no live range");
 			return m_Data.handle_at(rootIndex);
 		}
 
@@ -435,8 +436,8 @@ namespace bgl
 		[[nodiscard]] std::span<std::byte>
 		MutableRangeBytes(core::multi_slot_handle handle)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(IsValid(handle), "MutableRangeBytes on a range that is not live");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(IsValid(handle), "MutableRangeBytes on a range that is not live");
 
 			MarkRangeDirty(handle.index, handle.count);
 
@@ -448,17 +449,17 @@ namespace bgl
 		[[nodiscard]] const T&
 		AtIndex(uint32_t index) const
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(m_Data.valid(index), "AtIndex on an inactive element slot");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(m_Data.valid(index), "AtIndex on an inactive element slot");
 			return m_Data[index];
 		}
 
 		void
 		Update(ICommandList* cmdList)
 		{
-			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
-			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
-			gassert(cmdList->IsOpen(), "ICommandList must be open to update RangeBuffer");
+			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
+			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update RangeBuffer");
 
 			// Before the dirty regions, never after: the forward copy would overwrite them.
 			m_Storage.FlushGrowth(cmdList);
@@ -533,7 +534,7 @@ namespace bgl
 		ReserveNullRange()
 		{
 			const core::multi_slot_handle handle = m_Data.allocate_slots(1);
-			gassert(handle.index == 0, "The null range must own the first element");
+			core::ensure(handle.index == 0, "The null range must own the first element");
 			MarkRangeDirty(handle.index, handle.count);
 		}
 
@@ -605,7 +606,7 @@ namespace bgl
 			const auto [startBlock, endBlock] =
 				FindDirtyBlocks(startIdx, count, sizeof(T), m_Desc.blockSize);
 
-			gassert(
+			core::ensure(
 				endBlock < m_DirtyBlocks.size(),
 				"Dirty tracking index spans out of block limits");
 

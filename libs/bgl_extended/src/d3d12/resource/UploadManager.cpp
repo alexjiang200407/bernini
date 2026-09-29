@@ -1,6 +1,7 @@
 #include "resource/UploadManager.h"
 #include "cmd/Version.h"
 #include "types/QueueType.h"
+#include <core/err/util.h>
 #include <core/math.h>
 
 namespace bgl
@@ -22,7 +23,7 @@ namespace bgl
 		m_Device(std::move(device)), m_DefaultChunkSize(defaultChunkSize),
 		m_MemoryLimit(memoryLimit), m_IsScratchBuffer(isScratchBuffer)
 	{
-		gassert(m_Device.Get() != nullptr, "Device cannot be null");
+		core::ensure(m_Device.Get() != nullptr, "Device cannot be null");
 	}
 
 	bool
@@ -37,7 +38,7 @@ namespace bgl
 		uint64_t                     currentVersion,
 		uint32_t                     alignment)
 	{
-		gassert(
+		core::ensure(
 			!m_IsScratchBuffer || pCommandList,
 			"Scratch allocations need a command list, upload ones don't");
 

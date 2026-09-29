@@ -1,5 +1,6 @@
 #include "resource/Buffer_d3d12.h"
 #include "ResourceManager_d3d12.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -9,13 +10,13 @@ namespace bgl
 		uint32_t              descriptorIndex,
 		const BufferDesc&     desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(descriptorHeap != nullptr, "Descriptor heap cannot be null");
 
 		wrl::ComPtr<ID3D12Device10> device10;
 		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
 
-		gassert(desc.byteSize > 0, "Buffer byte size must be greater than zero");
+		core::ensure(desc.byteSize > 0, "Buffer byte size must be greater than zero");
 
 		const uint32_t descriptorSize =
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);

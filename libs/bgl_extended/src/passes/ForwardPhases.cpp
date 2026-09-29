@@ -27,8 +27,8 @@
 #include "uniforms/Uniforms.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -173,16 +173,16 @@ namespace bgl
 	void
 	ForwardPhases::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		gassert(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
+		core::ensure(ctx.drawBucketTable != nullptr, "The pass keys its kernels by draw bucket");
 		m_DrawBucketTable = ctx.drawBucketTable;
 	}
 
 	void
 	ForwardPhases::AddDrawBucketKernels(const PassInitContext& ctx, const DrawBucketMask& demanded)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		const uint32_t count = m_DrawBucketTable->Count();
 		if (m_Kernels.size() < count)
@@ -195,7 +195,7 @@ namespace bgl
 		{
 			if (demanded.test(bucket) && !m_Kernels[bucket].pipeline.IsInitialized())
 			{
-				gassert(
+				core::ensure(
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
 				const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
@@ -215,7 +215,7 @@ namespace bgl
 	void
 	ForwardPhases::AddTransparentKernel(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		if (!m_TransparentKernel.pipeline.IsInitialized())
 		{
@@ -275,7 +275,7 @@ namespace bgl
 		case ForwardPhase::kTransparent:
 			return m_Transparent;
 		}
-		gfatal("An unknown forward phase");
+		core::fatal("An unknown forward phase");
 	}
 
 	void

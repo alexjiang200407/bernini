@@ -4,7 +4,7 @@
 #include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/type_traits.h>
 #include <cstdint>
 #include <cstring>
@@ -55,8 +55,10 @@ namespace bgl
 		void
 		Init(UploadBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialCount > 0, "UploadBuffer must have a positive initial count");
-			gassert(resourceManager != nullptr, "UploadBuffer requires a valid ResourceManager");
+			core::ensure(desc.initialCount > 0, "UploadBuffer must have a positive initial count");
+			core::ensure(
+				resourceManager != nullptr,
+				"UploadBuffer requires a valid ResourceManager");
 
 			m_Desc = std::move(desc);
 
@@ -87,7 +89,7 @@ namespace bgl
 		void
 		Assign(std::span<const T> values)
 		{
-			gassert(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 
 			// Empty short-circuits before the memcmp: two empty spans may both be null, which
 			// memcmp's nonnull contract forbids.
@@ -134,8 +136,8 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList)
 		{
-			gassert(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
-			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
+			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
+			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
 
 			m_Storage.FlushGrowth(cmdList);
 
@@ -160,14 +162,14 @@ namespace bgl
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			gassert(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
 		[[nodiscard]] DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			gassert(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 

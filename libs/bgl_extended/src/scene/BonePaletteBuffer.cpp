@@ -1,7 +1,6 @@
 #include "scene/BonePaletteBuffer.h"
 #include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
-#include <bgl_common/gassert.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/err/util.h>
 #include <cstdint>
@@ -39,8 +38,8 @@ namespace bgl
 	core::multi_slot_handle
 	BonePaletteBuffer::Allocate(uint32_t float4Count)
 	{
-		gassert(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
-		gassert(float4Count > 0, "BonePaletteBuffer::Allocate requires a positive count");
+		core::ensure(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
+		core::ensure(float4Count > 0, "BonePaletteBuffer::Allocate requires a positive count");
 
 		// allocate_slots throws when nothing fits rather than returning null, and "does not fit" is
 		// the ordinary case that triggers a growth here, not an error.
@@ -82,7 +81,7 @@ namespace bgl
 	void
 	BonePaletteBuffer::Free(core::multi_slot_handle handle) noexcept
 	{
-		gassert(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
+		core::ensure(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
 		m_Offsets.erase(handle);
 	}
 }

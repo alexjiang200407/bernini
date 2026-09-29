@@ -3,7 +3,9 @@
 #include "resource/Rtv_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
+#include <core/err/util.h>
 #include <core/math.h>
+#include <spdlog/spdlog.h>
 
 // clang-format off
 #pragma warning(push)
@@ -39,12 +41,12 @@ namespace bgl
 		ShaderCache*               cache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(device != nullptr, "Device pointer must not be null.");
+		core::ensure(device != nullptr, "Device pointer must not be null.");
 
 		wrl::ComPtr<ID3D12Device2> device2;
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
 
-		gassert(desc.meshShader != nullptr, "Mesh shader cannot be null");
+		core::ensure(desc.meshShader != nullptr, "Mesh shader cannot be null");
 
 		pipeline_util::PipelineLayout pipelineLayout = pipeline_util::BuildPipelineLayout(
 			device,
@@ -61,7 +63,7 @@ namespace bgl
 			}
 
 			auto found = pipelineLayout.entryPointCode.find(shader->GetDesc().entryPointName);
-			gassert(
+			core::ensure(
 				found != pipelineLayout.entryPointCode.end(),
 				"Missing compiled bytecode for shader");
 
@@ -159,7 +161,7 @@ namespace bgl
 
 	MeshletPipeline::~MeshletPipeline() noexcept
 	{
-		logger::trace("~MeshletPipeline");
+		spdlog::trace("~MeshletPipeline");
 		m_PipelineState.Reset();
 		m_RootSignature.Reset();
 	}

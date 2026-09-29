@@ -2,6 +2,7 @@
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
 #include <bgl_common/SlangReflection.h>
+#include <core/err/util.h>
 
 namespace bgl::pipeline_util
 {
@@ -25,7 +26,7 @@ namespace bgl::pipeline_util
 		CachedProgram
 		CompileWithSlang(const std::vector<IShader*>& shaders)
 		{
-			gassert(!shaders.empty(), "A PSO needs at least one shader to compile");
+			core::ensure(!shaders.empty(), "A PSO needs at least one shader to compile");
 
 			bgpu::SlangErrorChecker                        errChecker;
 			slang::ISession*                               session = nullptr;
@@ -36,7 +37,7 @@ namespace bgl::pipeline_util
 			for (IShader* shader : shaders)
 			{
 				slang::IModule* module = shader->GetSlangModule();
-				gassert(module != nullptr, "Shader module cannot be null");
+				core::ensure(module != nullptr, "Shader module cannot be null");
 
 				// Read off the module so that reaching this function is what creates a session on
 				// this thread, and a cache hit never does.
@@ -49,7 +50,7 @@ namespace bgl::pipeline_util
 				module->findEntryPointByName(
 					shader->GetDesc().entryPointName.c_str(),
 					entryPoint.writeRef());
-				gassert(entryPoint != nullptr, "Failed to find entry point in module");
+				core::ensure(entryPoint != nullptr, "Failed to find entry point in module");
 
 				components.emplace_back(entryPoint.get());
 				entryPoints.emplace_back(std::move(entryPoint));
@@ -62,7 +63,7 @@ namespace bgl::pipeline_util
 				program.writeRef(),
 				errChecker.WriteDiagnosticBlob()) >>
 				errChecker;
-			gassert(program != nullptr, "Failed to compose shader modules");
+			core::ensure(program != nullptr, "Failed to compose shader modules");
 
 			Slang::ComPtr<slang::IComponentType> linkedProgram;
 			program->link(linkedProgram.writeRef(), errChecker.WriteDiagnosticBlob()) >> errChecker;
@@ -85,7 +86,7 @@ namespace bgl::pipeline_util
 				const std::string& entryName = shader->GetDesc().entryPointName;
 
 				auto found = entryPointIndexByName.find(entryName);
-				gassert(
+				core::ensure(
 					found != entryPointIndexByName.end(),
 					"Entry point missing from linked program");
 
@@ -96,7 +97,7 @@ namespace bgl::pipeline_util
 					code.writeRef(),
 					errChecker.WriteDiagnosticBlob()) >>
 					errChecker;
-				gassert(code != nullptr, "Failed to generate entry point bytecode");
+				core::ensure(code != nullptr, "Failed to generate entry point bytecode");
 
 				const auto* bytes = static_cast<const std::byte*>(code->getBufferPointer());
 				result.entryPointDxil.emplace_back(
@@ -140,7 +141,7 @@ namespace bgl::pipeline_util
 
 			for (const CachedCbuffer& cbuffer : program.cbuffers)
 			{
-				gassert(
+				core::ensure(
 					cbuffer.rootParamIndex == rootParams.size(),
 					"Cached cbuffer root parameter order is inconsistent");
 
@@ -186,7 +187,7 @@ namespace bgl::pipeline_util
 					program.entryPointDxil.begin(),
 					program.entryPointDxil.end(),
 					[&](const auto& e) { return e.first == entryName; });
-				gassert(
+				core::ensure(
 					found != program.entryPointDxil.end(),
 					"Cached program is missing bytecode for a shader");
 
@@ -203,7 +204,7 @@ namespace bgl::pipeline_util
 		const ShaderCache*              cache,
 		std::initializer_list<IShader*> shaders)
 	{
-		gassert(device != nullptr, "Device pointer must not be null.");
+		core::ensure(device != nullptr, "Device pointer must not be null.");
 
 		const std::vector<IShader*> ordered = OrderedShaders(shaders);
 

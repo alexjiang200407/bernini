@@ -3,7 +3,7 @@
 #include "uniforms/Uniforms.h"
 #include <algorithm>
 #include <bgl_common/UniformsBase.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <span>
 #include <string>
 #include <string_view>
@@ -52,6 +52,6 @@ namespace bgl
 			joined += name;
 		}
 
-		gfatal("{} binds '{}' members no PSO declares: {}", m_Binder, cbuffer, joined);
+		core::fatal("{} binds '{}' members no PSO declares: {}", m_Binder, cbuffer, joined);
 	}
 }

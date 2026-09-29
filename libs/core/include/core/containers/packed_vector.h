@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cassert>
+#include <core/err/util.h>
 #include <cstdint>
 #include <stdexcept>
 namespace core
@@ -91,7 +91,7 @@ namespace core
 		uint32_t
 		erase(uint32_t index)
 		{
-			assert(index < m_Count && "erase index out of range");
+			core::ensure(index < m_Count, "erase index out of range");
 
 			const uint32_t last  = m_Count - 1;
 			uint32_t       moved = invalid_index;
@@ -115,14 +115,14 @@ namespace core
 		[[nodiscard]] T&
 		operator[](uint32_t index)
 		{
-			assert(index < m_Count);
+			core::ensure(index < m_Count, "index < m_Count");
 			return m_Data[index];
 		}
 
 		[[nodiscard]] const T&
 		operator[](uint32_t index) const
 		{
-			assert(index < m_Count);
+			core::ensure(index < m_Count, "index < m_Count");
 			return m_Data[index];
 		}
 

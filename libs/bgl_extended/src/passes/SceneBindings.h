@@ -5,7 +5,7 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <array>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <span>
 #include <string_view>
 
@@ -149,7 +149,7 @@ namespace bgl
 			auto uniform = uniforms[binding.uniformKey];
 			if (!uniform.IsValid())
 			{
-				gfatal(
+				core::fatal(
 					"{} key doesn't exist in uniforms. Most likely an error",
 					binding.uniformKey);
 			}

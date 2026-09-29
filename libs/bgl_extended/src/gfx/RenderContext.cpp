@@ -40,11 +40,11 @@
 #include <bgl/Viewport.h>
 #include <bgl/lod_select.h>
 #include <bgl_common/Frustum.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/jitter.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
+#include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>
 #include <cstdint>
@@ -280,7 +280,7 @@ namespace bgl
 
 	RenderContext::~RenderContext() noexcept
 	{
-		logger::trace("~RenderContext");
+		spdlog::trace("~RenderContext");
 
 		// Idle the GPU so nothing in flight still references what the passes and the debug ring are
 		// about to release, then drop this queue from the resource manager's timeline set -- it has
@@ -372,7 +372,7 @@ namespace bgl
 		m_CommandQueue->WaitForFenceCPUBlocking(m_DebugReadbackFence[index]);
 
 		const void* mapped = m_ResourceManager->MapReadback(m_DebugReadbacks[index]);
-		gassert(mapped != nullptr, "Failed to map GPU debug readback");
+		core::ensure(mapped != nullptr, "Failed to map GPU debug readback");
 
 		const auto report = InspectDebugReadback(mapped, c_DebugBufferCapacity);
 		m_ResourceManager->UnmapReadback(m_DebugReadbacks[index]);
@@ -417,7 +417,7 @@ namespace bgl
 
 		if (m_GpuAssertionHandler != nullptr)
 		{
-			logger::error("{}", msg);
+			spdlog::error("{}", msg);
 
 			std::vector<uint32_t> errcodes;
 			errcodes.reserve(report->records.size());
@@ -435,7 +435,7 @@ namespace bgl
 			return;
 		}
 
-		gfatal("{}", msg);
+		core::fatal("{}", msg);
 	}
 #endif
 
@@ -526,7 +526,7 @@ namespace bgl
 		}
 
 		m_ActiveTarget = target->As<RenderTargetBase>();
-		gassert(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
+		core::ensure(m_ActiveTarget != nullptr, "BeginFrame requires a valid RenderTarget");
 
 		RenderTargetBase& rt    = *m_ActiveTarget;
 		const uint32_t    index = rt.GetFrameIndex();
@@ -676,11 +676,11 @@ namespace bgl
 		// whose kernel still does not exist after the build that was meant to make it.
 		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
 		{
-			gassert(
+			core::ensure(
 				!missing.test(bucket) || m_Forward.DrawBucketInitialized(bucket),
 				"EnsureDrawBucketPipelinesExist left a demanded draw bucket uninitialized");
 		}
-		gassert(
+		core::ensure(
 			!transparent.any() || m_Forward.TransparentInitialized(),
 			"EnsureDrawBucketPipelinesExist left the shared blend kernel uninitialized");
 	}
@@ -946,7 +946,7 @@ namespace bgl
 		}
 
 		auto* overlay = job.overlay->As<Overlay>();
-		gassert(overlay != nullptr, "An IOverlay this graphics did not create");
+		core::ensure(overlay != nullptr, "An IOverlay this graphics did not create");
 
 		// Every draw is checked before any is queued, so a bad one leaves the frame as it was.
 		for (const OverlayDraw& draw : job.draws)
@@ -1541,7 +1541,9 @@ namespace bgl
 		m_CommandQueue->WaitForFenceCPUBlocking(FindCapture(ticket).fence);
 
 		auto image = TryResolveCapture(ticket);
-		gassert(image.has_value(), "Capture fence completed but the resolve returned no image");
+		core::ensure(
+			image.has_value(),
+			"Capture fence completed but the resolve returned no image");
 		return std::move(*image);
 	}
 

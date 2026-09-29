@@ -1,6 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include "constants/constants.h"
 #include "convert_metal.h"
@@ -21,8 +21,8 @@ namespace bgl
 
 		Texture(MTL::Device* device, const TextureDesc& desc) : m_Desc(desc)
 		{
-			gassert(desc.width > 0 && desc.height > 0, "Texture requires non-zero dimensions");
-			gassert(desc.format != Format::UNKNOWN, "Texture requires a valid format");
+			core::ensure(desc.width > 0 && desc.height > 0, "Texture requires non-zero dimensions");
+			core::ensure(desc.format != Format::UNKNOWN, "Texture requires a valid format");
 
 			NS::SharedPtr<MTL::TextureDescriptor> td =
 				NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
@@ -44,10 +44,10 @@ namespace bgl
 				td->setDepth(desc.depth);
 				break;
 			case TextureDimension::kTextureCube:
-				gassert(desc.arraySize == c_CubeFaceCount, "A cube map has exactly six faces");
+				core::ensure(desc.arraySize == c_CubeFaceCount, "A cube map has exactly six faces");
 				break;
 			case TextureDimension::kTextureCubeArray:
-				gassert(
+				core::ensure(
 					desc.arraySize % c_CubeFaceCount == 0,
 					"A cube-map array's slice count must be a multiple of six");
 				td->setArrayLength(desc.arraySize / c_CubeFaceCount);
@@ -67,7 +67,7 @@ namespace bgl
 			td->setUsage(usage);
 
 			m_Texture = NS::TransferPtr(device->newTexture(td.get()));
-			gassert(m_Texture.get() != nullptr, "Metal texture allocation failed");
+			core::ensure(m_Texture.get() != nullptr, "Metal texture allocation failed");
 
 			// The driver's size: a TextureDesc carries no byte count.
 			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, m_Texture->allocatedSize());

@@ -3,12 +3,14 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
 #include "convert_d3d12.h"
+#include <core/err/util.h>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
 	CommandQueue::CommandQueue(QueueType type, ID3D12Device* device) : m_Type(type)
 	{
-		gassert(device != nullptr, "Device cannot be null");
+		core::ensure(device != nullptr, "Device cannot be null");
 
 		D3D12_COMMAND_QUEUE_DESC cqDesc = {};
 		cqDesc.Type                     = ConvertQueueType(type);
@@ -20,7 +22,7 @@ namespace bgl
 		m_Fence->Signal(m_LastCompletedFenceValue) >> d3d12ErrChecker;
 		m_FenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
 
-		gassert(m_FenceEvent != nullptr, "Failed to create fence event");
+		core::ensure(m_FenceEvent != nullptr, "Failed to create fence event");
 	}
 
 	double
@@ -36,7 +38,7 @@ namespace bgl
 
 	CommandQueue::~CommandQueue() noexcept
 	{
-		logger::trace("~CommandQueue");
+		spdlog::trace("~CommandQueue");
 		if (m_FenceEvent)
 			CloseHandle(m_FenceEvent);
 	}
@@ -44,8 +46,8 @@ namespace bgl
 	uint64_t
 	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept
 	{
-		gassert(commandList != nullptr, "Command list is not initialized.");
-		gassert(
+		core::ensure(commandList != nullptr, "Command list is not initialized.");
+		core::ensure(
 			commandList->GetType() == m_Type,
 			"Command list type must match command queue type");
 
@@ -115,7 +117,7 @@ namespace bgl
 			const HRESULT hr = m_Fence->SetEventOnCompletion(fenceValue, m_FenceEvent);
 			if (FAILED(hr))
 			{
-				logger::error(
+				spdlog::error(
 					"CommandQueue: SetEventOnCompletion failed (0x{:08X}); polling fence {}",
 					static_cast<uint32_t>(hr),
 					fenceValue);
@@ -142,7 +144,7 @@ namespace bgl
 				waitedMs += c_SliceMs;
 				if (waitedMs >= nextComplaintMs)
 				{
-					logger::error(
+					spdlog::error(
 						"CommandQueue: waited {}s for fence value {} (completed {}); the queue "
 						"looks wedged",
 						waitedMs / 1000,

@@ -12,7 +12,6 @@
 #include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/VertexLayout.h>
 
-#include <cassert>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/hash.h>
@@ -229,7 +228,9 @@ namespace assetlib
 
 				// decodeInfluences refused an out-of-range joint against the bone count; this holds
 				// only while that is the same count the pose was built for.
-				assert(vertex.joints[i] < skinning.size());
+				core::ensure(
+					vertex.joints[i] < skinning.size(),
+					"vertex.joints[i] < skinning.size()");
 
 				skinned += vertex.weights[i] *
 				           glm::vec3(skinning[vertex.joints[i]] * glm::vec4(vertex.position, 1.0f));

@@ -14,6 +14,7 @@
 #include <core/log/log.h>
 #include <memory>
 #include <span>
+#include <spdlog/spdlog.h>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -247,7 +248,7 @@ namespace bgl
 
 	Graphics::~Graphics() noexcept
 	{
-		logger::trace("~Graphics");
+		spdlog::trace("~Graphics");
 
 		m_Context.reset();
 		m_ResourceManager.Reset();

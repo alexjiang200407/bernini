@@ -1,7 +1,7 @@
 #include "types/vk_format.h"
 #include "types/Format.h"
 #include <assetlib_structs/VkFormat.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 
 namespace bgl
@@ -75,7 +75,7 @@ namespace bgl
 
 		case VkFormat::UNDEFINED:
 		default:
-			gfatal("FromVkFormat unsupported format: {}", static_cast<uint32_t>(vkFormat));
+			core::fatal("FromVkFormat unsupported format: {}", static_cast<uint32_t>(vkFormat));
 		}
 	}
 }

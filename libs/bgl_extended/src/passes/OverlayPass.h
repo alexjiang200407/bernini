@@ -56,7 +56,7 @@ namespace bgl
 		};
 
 		OverlayPass() = default;
-		~OverlayPass() noexcept { logger::trace("~OverlayPass"); }
+		~OverlayPass() noexcept { spdlog::trace("~OverlayPass"); }
 
 		OverlayPass(const OverlayPass&) noexcept = delete;
 		OverlayPass(OverlayPass&&) noexcept      = delete;

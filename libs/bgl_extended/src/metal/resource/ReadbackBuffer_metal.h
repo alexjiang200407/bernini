@@ -1,6 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include "resource/Readback.h"
 
@@ -19,7 +19,7 @@ namespace bgl
 		{
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModeShared));
-			gassert(m_Buffer.get() != nullptr, "Metal readback buffer allocation failed");
+			core::ensure(m_Buffer.get() != nullptr, "Metal readback buffer allocation failed");
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(

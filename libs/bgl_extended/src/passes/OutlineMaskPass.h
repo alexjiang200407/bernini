@@ -26,7 +26,7 @@ namespace bgl
 	{
 	public:
 		OutlineMaskPass() = default;
-		~OutlineMaskPass() noexcept { logger::trace("~OutlineMaskPass"); }
+		~OutlineMaskPass() noexcept { spdlog::trace("~OutlineMaskPass"); }
 
 		OutlineMaskPass(const OutlineMaskPass&) noexcept = delete;
 		OutlineMaskPass(OutlineMaskPass&&) noexcept      = delete;

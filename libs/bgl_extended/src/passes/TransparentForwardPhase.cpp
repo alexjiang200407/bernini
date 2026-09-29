@@ -7,9 +7,9 @@
 #include "scene/scene_buffer_names.h"
 #include "types/Barrier.h"
 #include "types/MeshletState.h"
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <core/err/util.h>
 #include <string>
 
 namespace bgl
@@ -35,7 +35,7 @@ namespace bgl
 		const PassContext& resources) const
 	{
 		ICommandList* cmd = resources.GetCommandList();
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
 		MeshletKernel* kernel = kernels.BindTransparentKernel(state, draw, resources);

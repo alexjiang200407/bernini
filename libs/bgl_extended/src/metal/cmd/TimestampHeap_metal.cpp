@@ -1,7 +1,7 @@
 #include "cmd/TimestampHeap_metal.h"
 
 #include "cmd/TimestampHeap.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -14,13 +14,13 @@ namespace bgl
 		NS::SharedPtr<MTL::CounterSampleBuffer> buffer,
 		uint32_t capacity) noexcept : m_Buffer(std::move(buffer)), m_Capacity(capacity)
 	{
-		gassert(m_Buffer.get() != nullptr, "A timestamp heap needs a counter sample buffer");
+		core::ensure(m_Buffer.get() != nullptr, "A timestamp heap needs a counter sample buffer");
 	}
 
 	void
 	TimestampHeap::Read(uint32_t first, std::span<uint64_t> out) const noexcept
 	{
-		gassert(first + out.size() <= m_Capacity, "Timestamp read outside the heap");
+		core::ensure(first + out.size() <= m_Capacity, "Timestamp read outside the heap");
 
 		for (uint64_t& v : out)
 		{

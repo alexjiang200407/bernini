@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <memory>
 #include <slang.h>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -105,7 +106,7 @@ namespace bgl
 		const auto  warnOnce = [](const char* why) {
 			if (!g_Warned)
 			{
-				logger::warn("CreateTimestampHeap: {}; no pass will be timed", why);
+				spdlog::warn("CreateTimestampHeap: {}; no pass will be timed", why);
 				g_Warned = true;
 			}
 		};
@@ -146,7 +147,7 @@ namespace bgl
 		auto       buffer = NS::TransferPtr(m_Device->newCounterSampleBuffer(desc.get(), &error));
 		if (buffer.get() == nullptr)
 		{
-			logger::warn(
+			spdlog::warn(
 				"CreateTimestampHeap: newCounterSampleBuffer failed: {}",
 				error != nullptr && error->localizedDescription() != nullptr ?
 					error->localizedDescription()->utf8String() :

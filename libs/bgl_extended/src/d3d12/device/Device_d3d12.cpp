@@ -20,8 +20,10 @@
 #include <bgpu/GpuContext.h>
 #include <bgpu/SlangErrorChecker.h>
 #include <bgpu/d3d12/native_device.h>
+#include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <filesystem>
+#include <spdlog/spdlog.h>
 #include <string>
 
 namespace bgl
@@ -48,7 +50,7 @@ namespace bgl
 		const std::filesystem::path& shaderCacheDir) :
 		m_Context(context), m_Device(bgpu::GetD3d12Device(*context))
 	{
-		gassert(m_Device != nullptr, "D3D12 device cannot be null");
+		core::ensure(m_Device != nullptr, "D3D12 device cannot be null");
 
 		if (!shaderCacheDir.empty())
 		{
@@ -74,7 +76,7 @@ namespace bgl
 		m_Context->ReleaseSlangSessions();
 	}
 
-	Device::~Device() noexcept { logger::trace("~Device"); }
+	Device::~Device() noexcept { spdlog::trace("~Device"); }
 
 	CommandListRef
 	Device::CreateCommandList(
@@ -156,7 +158,7 @@ namespace bgl
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
-		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+		core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);
 	}
 
@@ -164,7 +166,7 @@ namespace bgl
 	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
-		gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+		core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);
 	}
 }

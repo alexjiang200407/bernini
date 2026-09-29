@@ -1,6 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MetalPipelineReflection.h"
@@ -38,7 +38,7 @@ namespace bgl
 		GetUniformLayoutEntry(std::string_view name) const noexcept override
 		{
 			auto it = m_UniformLayoutEntries.find(name);
-			gassert(it != m_UniformLayoutEntries.end(), "Unknown uniform buffer name");
+			core::ensure(it != m_UniformLayoutEntries.end(), "Unknown uniform buffer name");
 			return it->second;
 		}
 
@@ -69,7 +69,7 @@ namespace bgl
 		GetHandleOffsets(std::string_view name) const noexcept
 		{
 			auto it = m_HandleOffsets.find(name);
-			gassert(it != m_HandleOffsets.end(), "Unknown uniform buffer name");
+			core::ensure(it != m_HandleOffsets.end(), "Unknown uniform buffer name");
 			return it->second;
 		}
 

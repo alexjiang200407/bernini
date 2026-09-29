@@ -10,8 +10,8 @@ namespace bgl
 		uint32_t                    capacity,
 		D3D12_DESCRIPTOR_HEAP_FLAGS flags) : m_Capacity(capacity), m_Allocated(capacity, false)
 	{
-		gassert(device != nullptr, "DescriptorAllocator requires a device");
-		gassert(capacity > 0, "DescriptorAllocator requires a non-zero capacity");
+		core::ensure(device != nullptr, "DescriptorAllocator requires a device");
+		core::ensure(capacity > 0, "DescriptorAllocator requires a non-zero capacity");
 
 		D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
 		heapDesc.Type                       = type;
@@ -26,7 +26,9 @@ namespace bgl
 		// c_UnboundDescriptorIndex is never handed out, so a zero-filled uniform mirror addresses a
 		// descriptor no resource occupies rather than the first one allocated. Marked allocated so
 		// Free would assert rather than release it into the free list.
-		gassert(capacity > c_UnboundDescriptorIndex, "The heap must have room for the sentinel");
+		core::ensure(
+			capacity > c_UnboundDescriptorIndex,
+			"The heap must have room for the sentinel");
 		m_NextUntouched                       = c_UnboundDescriptorIndex + 1;
 		m_Allocated[c_UnboundDescriptorIndex] = true;
 	}
@@ -57,8 +59,10 @@ namespace bgl
 	void
 	DescriptorAllocator::Free(uint32_t index) noexcept
 	{
-		gassert(index < m_Capacity, "DescriptorAllocator: index out of range");
-		gassert(m_Allocated[index], "DescriptorAllocator: freeing an index that is not allocated");
+		core::ensure(index < m_Capacity, "DescriptorAllocator: index out of range");
+		core::ensure(
+			m_Allocated[index],
+			"DescriptorAllocator: freeing an index that is not allocated");
 
 		m_Allocated[index] = false;
 		m_FreeIndices.push_back(index);
@@ -67,7 +71,7 @@ namespace bgl
 	D3D12_CPU_DESCRIPTOR_HANDLE
 	DescriptorAllocator::GetCpuHandle(uint32_t index) const noexcept
 	{
-		gassert(index < m_Capacity, "DescriptorAllocator: index out of range");
+		core::ensure(index < m_Capacity, "DescriptorAllocator: index out of range");
 		return { m_HeapStart.ptr + static_cast<SIZE_T>(index) * m_IncrementSize };
 	}
 }

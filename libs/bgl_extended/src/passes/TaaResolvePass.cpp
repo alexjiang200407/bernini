@@ -16,8 +16,8 @@
 #include "types/RenderState.h"
 #include <algorithm>
 #include <array>
-#include <bgl_common/gassert.h>
 #include <cmath>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <string>
 #include <string_view>
@@ -51,7 +51,7 @@ namespace bgl
 	void
 	TaaResolvePass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
@@ -102,14 +102,14 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "TaaResolve pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "TaaResolve pipeline must be initialized");
 
 		const auto outputSize = glm::vec2(
 			args.viewport.maxX - args.viewport.minX,
 			args.viewport.maxY - args.viewport.minY);
 
-		gassert(
+		core::ensure(
 			args.renderSize.x > 0.0f && args.renderSize.y > 0.0f,
 			"TaaResolve needs a non-degenerate render size");
 
@@ -117,7 +117,7 @@ namespace bgl
 		// pixel's view depth, and in render texels, which is where the sample it moved landed.
 		const glm::vec2 jitterTexels = args.jitter * glm::vec2(0.5f, -0.5f) * args.renderSize;
 
-		gassert(
+		core::ensure(
 			args.reconstructionWidth > 0.0f,
 			"TaaResolve needs a positive reconstruction width");
 
@@ -154,7 +154,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("TaaResolve shader is missing its '{}' constant buffer", c_Cbuffer);
+			core::fatal("TaaResolve shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

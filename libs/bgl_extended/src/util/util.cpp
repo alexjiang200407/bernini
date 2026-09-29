@@ -11,12 +11,12 @@
 #include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <bgl/types/LodSelectionDesc.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -111,7 +111,7 @@ namespace bgl
 			return c_FormatInfo[0];  // UNKNOWN
 
 		const FormatInfo& info = c_FormatInfo[uint32_t(format)];
-		gassert(info.format == format, "Format mismatch");
+		core::ensure(info.format == format, "Format mismatch");
 
 		return info;
 	}

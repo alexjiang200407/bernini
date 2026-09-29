@@ -28,7 +28,7 @@ namespace bgl
 	{
 	public:
 		TonemapLut() = default;
-		~TonemapLut() noexcept { logger::trace("~TonemapLut"); }
+		~TonemapLut() noexcept { spdlog::trace("~TonemapLut"); }
 		TonemapLut(const TonemapLut&) noexcept = delete;
 		TonemapLut(TonemapLut&&) noexcept      = delete;
 		TonemapLut&

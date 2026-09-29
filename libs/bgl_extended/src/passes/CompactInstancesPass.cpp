@@ -12,12 +12,12 @@
 #include "uniforms/Uniforms.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -28,7 +28,7 @@ namespace bgl
 	void
 	CompactInstancesPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device pointer is null");
+		core::ensure(ctx.device != nullptr, "Device pointer is null");
 
 		ctx.pipelines->Add(
 			m_CullInstances,
@@ -65,7 +65,7 @@ namespace bgl
 	void
 	CompactInstancesPass::Release(bool deferred)
 	{
-		logger::trace("CompactInstancesPass::Release");
+		spdlog::trace("CompactInstancesPass::Release");
 
 		m_CullInstances.Reset();
 		m_Histogram.Reset();
@@ -133,7 +133,7 @@ namespace bgl
 	{
 		auto cmd = ctx.GetCommandList();
 
-		gassert(draw.cullState != nullptr, "Compact pass requires the draw's cull state");
+		core::ensure(draw.cullState != nullptr, "Compact pass requires the draw's cull state");
 
 		draw.cullState->GetDrawBucketPrefixSum().Clear(cmd);
 		m_CullStats.Clear(cmd);

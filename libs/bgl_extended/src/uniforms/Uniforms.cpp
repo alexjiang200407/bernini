@@ -3,6 +3,7 @@
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/UniformLayoutEntry.h"
 #include <bgl_common/UniformsBase.h>
+#include <core/err/util.h>
 #include <string_view>
 #include <utility>
 
@@ -14,7 +15,7 @@ namespace bgl
 		UniformLayoutEntry
 		EntryOf(Pipeline const* pipeline, std::string_view cbufferName)
 		{
-			gassert(pipeline != nullptr, "Pipeline pointer cannot be null");
+			core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
 			return pipeline->GetUniformLayoutEntry(cbufferName);
 		}
 	}

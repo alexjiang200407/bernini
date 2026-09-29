@@ -27,7 +27,7 @@ namespace bgl
 	{
 	public:
 		SkinnedPosePass() = default;
-		~SkinnedPosePass() noexcept { logger::trace("~SkinnedPosePass"); }
+		~SkinnedPosePass() noexcept { spdlog::trace("~SkinnedPosePass"); }
 
 		SkinnedPosePass(const SkinnedPosePass&) noexcept = delete;
 		SkinnedPosePass(SkinnedPosePass&&) noexcept      = delete;

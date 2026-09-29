@@ -26,7 +26,7 @@ namespace bgl
 	{
 	public:
 		TransparentSortPass() = default;
-		~TransparentSortPass() noexcept { logger::trace("~TransparentSortPass"); }
+		~TransparentSortPass() noexcept { spdlog::trace("~TransparentSortPass"); }
 
 		TransparentSortPass(const TransparentSortPass&) noexcept = delete;
 		TransparentSortPass(TransparentSortPass&&) noexcept      = delete;

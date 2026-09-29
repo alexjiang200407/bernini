@@ -1,8 +1,7 @@
 #include "texture/texture_encoding.h"
 
 #include <assetlib/image_io.h>
-
-#include <cassert>
+#include <core/err/util.h>
 
 namespace assetlib
 {
@@ -33,7 +32,6 @@ namespace assetlib
 		case TextureRole::kCount:
 			break;
 		}
-		assert(false && "assetlib::textureEncoding: not a role");
-		return { "none", Ktx2Compression::kNone };
+		core::fatal("assetlib::textureEncoding: not a role");
 	}
 }

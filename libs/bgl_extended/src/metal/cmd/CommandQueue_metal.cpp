@@ -4,7 +4,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 
 namespace bgl
@@ -49,7 +49,7 @@ namespace bgl
 				const auto* info = static_cast<MTL::CommandBufferEncoderInfo*>(infos->object(i));
 				const NS::String* label = info->label();
 
-				gerror(
+				core::error(
 					"  encoder '{}': {}",
 					label != nullptr ? label->utf8String() : "unlabelled",
 					EncoderErrorStateName(info->errorState()));
@@ -67,7 +67,7 @@ namespace bgl
 					return;
 
 				const NS::Error* error = completed->error();
-				gerror("Metal command buffer failed: {}", GetErrorDescription(error));
+				core::error("Metal command buffer failed: {}", GetErrorDescription(error));
 				LogEncoderInfo(error);
 			});
 		}
@@ -88,7 +88,7 @@ namespace bgl
 		auto* cmdBuffer = m_Queue->commandBuffer();
 #endif
 
-		gassert(cmdBuffer != nullptr, "Metal command buffer creation failed");
+		core::ensure(cmdBuffer != nullptr, "Metal command buffer creation failed");
 
 		LogOnFailure(cmdBuffer);
 		return cmdBuffer;
@@ -98,8 +98,8 @@ namespace bgl
 		m_Queue(NS::TransferPtr(device->newCommandQueue())),
 		m_Event(NS::TransferPtr(device->newSharedEvent()))
 	{
-		gassert(m_Queue.get() != nullptr, "Metal command queue creation failed");
-		gassert(m_Event.get() != nullptr, "Metal shared event creation failed");
+		core::ensure(m_Queue.get() != nullptr, "Metal command queue creation failed");
+		core::ensure(m_Event.get() != nullptr, "Metal shared event creation failed");
 
 		device->sampleTimestamps(&m_CpuBase, &m_GpuBase);
 	}
@@ -139,10 +139,10 @@ namespace bgl
 	uint64_t
 	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept
 	{
-		gassert(commandList != nullptr, "Command list is not initialized.");
+		core::ensure(commandList != nullptr, "Command list is not initialized.");
 
 		auto* cmdBuffer = commandList->As<CommandList>()->GetCommandBuffer();
-		gassert(cmdBuffer != nullptr, "Command list was not opened before execution");
+		core::ensure(cmdBuffer != nullptr, "Command list was not opened before execution");
 
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
 		cmdBuffer->commit();
@@ -210,7 +210,7 @@ namespace bgl
 	void
 	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
-		gassert(
+		core::ensure(
 			m_ListsBuilding == 0,
 			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
 			"already building on this queue, and a wait cannot reach a command buffer already "
@@ -222,8 +222,8 @@ namespace bgl
 	void
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
-		gassert(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
-		gassert(
+		core::ensure(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
+		core::ensure(
 			m_ListsBuilding == 0,
 			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
 			"already building on this queue, and a wait cannot reach a command buffer already "
@@ -235,7 +235,7 @@ namespace bgl
 	void
 	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept
 	{
-		gassert(otherQueue != nullptr, "InsertWaitForQueue requires a non-null queue");
+		core::ensure(otherQueue != nullptr, "InsertWaitForQueue requires a non-null queue");
 		// Everything submitted so far: the next value has not been signalled yet.
 		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
 	}

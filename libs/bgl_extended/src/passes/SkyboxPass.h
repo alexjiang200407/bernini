@@ -16,7 +16,7 @@ namespace bgl
 	{
 	public:
 		SkyboxPass() = default;
-		~SkyboxPass() noexcept { logger::trace("~SkyboxPass"); }
+		~SkyboxPass() noexcept { spdlog::trace("~SkyboxPass"); }
 
 		SkyboxPass(const SkyboxPass&) noexcept = delete;
 		SkyboxPass(SkyboxPass&&) noexcept      = delete;

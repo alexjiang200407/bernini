@@ -30,7 +30,6 @@
 #include <bgl/types/FootIKDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/WindDesc.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/GrassChunkRef.h>
@@ -41,6 +40,7 @@
 #include <bgl_common/idl/idl.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
+#include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -314,7 +314,7 @@ namespace bgl
 		[[nodiscard]] CullState&
 		GetCullState(uint32_t cullIdx) noexcept
 		{
-			gassert(cullIdx < m_CullStates.size(), "cull index is out of range");
+			core::ensure(cullIdx < m_CullStates.size(), "cull index is out of range");
 			return m_CullStates[cullIdx];
 		}
 

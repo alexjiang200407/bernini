@@ -35,7 +35,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **The debug-buffer decode is a pure function**, split out of the orchestration so the crash
   path is unit-testable without terminating the process
   ([DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h), `InspectDebugReadback`).
-* **CPU error handling splits by blame.** Internal invariant violations use `gassert`/`gfatal`
+* **CPU error handling splits by blame.** Internal invariant violations use `core::ensure`/`core::fatal`
   (log + `__debugbreak` + `std::terminate`); problems caused by the *caller* (code linking bgl_extended)
   throw `GraphicsError`/`ApiError` so the caller can handle them. See
   [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md).
@@ -54,7 +54,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | A pass reads a buffer element nobody wrote this frame, and the stale value looks plausible | **Buffer poisoning** (§7) |
 | D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgpu.log` |
 | Silent wrong output, want a timeline of what the engine did | **`bgpu.log`** (raise `logLevel` to `kTrace`) |
-| Broken internal invariant should stop the process now | **`gassert`/`gfatal`** |
+| Broken internal invariant should stop the process now | **`core::ensure`/`core::fatal`** |
 | Need to *see* what a mesh, material or clip renders as, with no window | **`bgl_ai_viewer`** (§8) |
 | Process already crashed; need the stack | **`{exe}_crash_*.log`** (newest) |
 
@@ -63,7 +63,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 ## 1. GPU Debug Buffers via `dbg_raise`
 
 A GPU→CPU assertion channel. A shader detects a bad condition and calls `dbg_raise`; the engine
-reads the buffer back a few frames later and either crashes (`gfatal`) or forwards a report to a
+reads the buffer back a few frames later and either crashes (`core::fatal`) or forwards a report to a
 registered handler.
 
 **Shader side** — [libs/bgl_extended/shaders/src/lib/debug/dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang):
@@ -109,7 +109,7 @@ flowchart TD
     Ctx -- "EndFrame: copy to readback ring" --> Ring["Readback ring (c_SwapchainImageCount deep)"]
     Ring -- "map, N frames later" --> Inspect["InspectDebugReadback()"]
     Inspect -- "DebugReport" --> Decide{"handler set?"}
-    Decide -- "no" --> Crash["gfatal() -> terminate"]
+    Decide -- "no" --> Crash["core::fatal() -> terminate"]
     Decide -- "yes" --> Handler["IGpuAssertionHandler::OnGpuAssertion"]
 ```
 
@@ -155,11 +155,8 @@ flowchart TD
 
 ## 2. Logging — `bgpu.log`
 
-bgl_extended logging is **spdlog aliased into the `bgl` namespace**. In
-[libs/bgl_extended/src/pch.h](libs/bgl_extended/src/pch.h): `namespace bgl { namespace logger = spdlog; }`. The
-public API is therefore the spdlog free functions:
-`logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl_extended sources
-call `logger::…` with no extra include.
+bgl_extended logging is **spdlog's free functions**, called by their own name:
+`spdlog::trace/debug/info/warn/error/critical(fmt, args...)`, from `<spdlog/spdlog.h>`.
 
 * **Log file:** one per process, named by whoever opens it first. The GPU context
   ([GpuContext_d3d12.cpp](libs/bgpu/src/d3d12/GpuContext_d3d12.cpp),
@@ -175,7 +172,7 @@ call `logger::…` with no extra include.
   **Default is `kError`** — to see the timeline of a run, pass `logLevel = kTrace` when calling
   `bgpu::CreateGpuContext`.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
-  and your own `logger::` output interleave in one file.
+  and your own `spdlog::` output interleave in one file.
 
 * **Cook and load timings are not in this log at all — they are Tracy zones.** A glTF parse, a
   tangent pass, a posed-bounds bake, a prefilter and a whole-project bounds rebake each
@@ -202,32 +199,28 @@ for the warnings/errors/info the run emitted.
 
 ---
 
-## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
+## 3. CPU-side assertions — `core::ensure` / `fatal` / `error`
 
 The family is `core`'s error handling, beside `throw_runtime_error` in
 [core/err/util.h](libs/core/include/core/err/util.h): `core::ensure`, `fatal`, `error` and
 `unimplemented`, reporting through the process's log. The check is `ensure` because `assert` is
 `<cassert>`'s macro, which would expand any call of that name before the compiler saw its namespace.
-Code outside the renderer, `bgpu` among it, calls those names. The renderer keeps its own, `g` for
-graphics: [bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h) defines
-`bgl::gassert`, `gfatal`, `gerror` and `gunimplemented` as forwards to core's, and the `bgl::logger`
-alias -- so a source that reaches it through `libs/bgl_extended/src/pch.h` needs no include, and one
-outside that PCH's reach gets the whole family from the single line. All three log then break into
-the debugger on MSVC (`__debugbreak`):
+Every library, the renderer included, calls those names; the C `assert` macro is not used. All
+three log then break into the debugger on MSVC (`__debugbreak`):
 
-* `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.
+* `core::ensure(condition, fmt, args...)` — on failure: `spdlog::error`, break, `std::terminate`.
   Use for internal invariants.
-* `gfatal(fmt, args...)` `[[noreturn]]` — `logger::critical`, break, `std::terminate`. This is
+* `core::fatal(fmt, args...)` `[[noreturn]]` — `spdlog::critical`, break, `std::terminate`. This is
   the GPU-assertion crash path.
-* `gerror(fmt, args...)` — `logger::error` + break, but **does not terminate** (execution
+* `core::error(fmt, args...)` — `spdlog::error` + break, but **does not terminate** (execution
   continues).
 
 **Contracts / gotchas:**
-* **Blame split:** `gassert` is for bgl_extended's *own* broken invariants. For bad input from the caller
+* **Blame split:** `core::ensure` is for bgl_extended's *own* broken invariants. For bad input from the caller
   (code that links bgl_extended), throw `GraphicsError`/`ApiError`
   ([IGraphics.h](libs/bgl/include/bgl/IGraphics.h)) so the caller can catch it.
 * **Not compiled out in Release.** These are function templates with no `NDEBUG` guard —
-  `gassert`/`gfatal` still `terminate` on failure in every config. Don't put
+  `core::ensure`/`core::fatal` still `terminate` on failure in every config. Don't put
   side-effecting expressions in the condition expecting them to vanish.
 * **`__debugbreak` is MSVC-only.** On other compilers there is no breakpoint, only the
   log + terminate.
@@ -243,7 +236,7 @@ A post-mortem stack trace, provided by **core** (not bgl_extended):
 every app and test entry point calls first thing (e.g.
 [libs/assetlib/tests/src/main.cpp](libs/assetlib/tests/src/main.cpp)). On a fatal signal it writes
 `./{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — a `cpptrace` stack trace — then leaves through `_Exit`.
-Because `gassert`/`gfatal` call `std::terminate` → `SIGABRT`, a CPU assert failure lands here.
+Because `core::ensure`/`core::fatal` call `std::terminate` → `SIGABRT`, a CPU assert failure lands here.
 After any crash, look for the newest `{exe_stem}_crash_*.log` (and other `.log` files) in the
 failing executable's directory.
 
@@ -273,7 +266,7 @@ before any renderer exists:
 * `enablePixDebug` → loads `WinPixGpuCapturer.dll` for PIX captures. See [RHI](docs/rhi.md).
 * Validation messages are routed to `bgpu.log` through the GPU context's callback registered on
   `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error
-  into `gfatal`.
+  into `core::fatal`.
 * When the context dies with the layer on it reports the live objects, so a leak is attributed to
   whichever owner of the device made it.
 
@@ -383,9 +376,9 @@ struct MyHandler : bgl::IGpuAssertionHandler
 {
     void OnGpuAssertion(const bgl::GpuAssertionReport& r) noexcept override
     {
-        bgl::logger::error("GPU raised {} assertion(s), overflow={}", r.raisedCount, r.overflow);
+        spdlog::error("GPU raised {} assertion(s), overflow={}", r.raisedCount, r.overflow);
         for (uint32_t i = 0; i < r.errcodeCount; ++i)
-            bgl::logger::error("  errcode {}", r.errcodes[i]);
+            spdlog::error("  errcode {}", r.errcodes[i]);
     }
 };
 
@@ -397,7 +390,7 @@ ctxDesc.logLevel                 = bgpu::LogLevel::kTrace;  // full timeline
 auto gfx = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), bgl::GraphicsOptions());
 
 MyHandler handler;                              // must outlive the frame-latency window
-gfx->SetGpuAssertionHandler(&handler);          // else a raise -> gfatal() crash
+gfx->SetGpuAssertionHandler(&handler);          // else a raise -> core::fatal() crash
 
 // ... render frames; dbg_raise() in shaders now routes to handler ...
 

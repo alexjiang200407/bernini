@@ -19,13 +19,13 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/RawTextureHandle.h>
 #include <core/containers/slot_handle.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -142,7 +142,7 @@ namespace bgl
 		// an engine bug and not a caller's -- and one that would otherwise be a heap write rather
 		// than a wrong pixel.
 		const auto writeParam = [&payload](uint32_t byteOffset, const void* src, size_t bytes) {
-			gassert(
+			core::ensure(
 				sizeof(idl::GameSurfaceRecord) + byteOffset + bytes <= payload.size(),
 				"A surface field at {} spans {} bytes, past the block reflection measured",
 				byteOffset,

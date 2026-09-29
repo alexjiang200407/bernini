@@ -13,6 +13,7 @@
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "uniforms/Uniforms.h"
+#include <core/err/util.h>
 #include <core/math.h>
 
 #if defined(USE_PIX) && defined(_WIN32)
@@ -32,13 +33,13 @@ namespace bgl
 			0,
 			false)
 	{
-		gassert(commandAllocator != nullptr, "Command allocator cannot be null");
-		gassert(m_ResourceManager != nullptr, "Resource manager cannot be null");
+		core::ensure(commandAllocator != nullptr, "Command allocator cannot be null");
+		core::ensure(m_ResourceManager != nullptr, "Resource manager cannot be null");
 
 		auto d3d12CommandAllocator =
 			commandAllocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
 
-		gassert(d3d12CommandAllocator != nullptr, "D3D12 Command allocator cannot be null");
+		core::ensure(d3d12CommandAllocator != nullptr, "D3D12 Command allocator cannot be null");
 
 		wrl::ComPtr<ID3D12Device> device;
 		d3d12CommandAllocator->GetDevice(IID_PPV_ARGS(&device)) >> d3d12ErrChecker;
@@ -94,7 +95,7 @@ namespace bgl
 			m_RecordingVersion,
 			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
-		gassert(success, "Failed to suballocate buffer");
+		core::ensure(success, "Failed to suballocate buffer");
 
 		memcpy(cpuVA, data, byteSize);
 
@@ -147,7 +148,7 @@ namespace bgl
 			m_RecordingVersion,
 			D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
-		gassert(success, "Failed to suballocate texture upload");
+		core::ensure(success, "Failed to suballocate texture upload");
 
 		// Copy each subresource into its padded footprint (RowPitch >= source pitch).
 		for (uint32_t i = 0; i < numSubresources; ++i)
@@ -201,10 +202,10 @@ namespace bgl
 		const auto& dstBuffer = m_ResourceManager->GetBuffer(dst);
 		const auto& srcBuffer = m_ResourceManager->GetBuffer(src);
 
-		gassert(
+		core::ensure(
 			dstOffset + byteSize <= dstBuffer.GetDesc().byteSize,
 			"CopyBuffer destination range exceeds the buffer");
-		gassert(
+		core::ensure(
 			srcOffset + byteSize <= srcBuffer.GetDesc().byteSize,
 			"CopyBuffer source range exceeds the buffer");
 
@@ -225,7 +226,7 @@ namespace bgl
 
 		const uint64_t byteSize = desc.byteSize;
 
-		gassert(
+		core::ensure(
 			readback.GetByteSize() >= byteSize,
 			"Readback buffer is too small for the source buffer");
 
@@ -266,17 +267,17 @@ namespace bgl
 	void
 	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator* allocator) noexcept
 	{
-		gassert(!m_Open, "Command list is already open");
-		gassert(cmdQueue != nullptr, "Command queue cannot be null");
-		gassert(allocator != nullptr, "Command allocator cannot be null");
-		gassert(
+		core::ensure(!m_Open, "Command list is already open");
+		core::ensure(cmdQueue != nullptr, "Command queue cannot be null");
+		core::ensure(allocator != nullptr, "Command allocator cannot be null");
+		core::ensure(
 			m_BoundQueue == nullptr || m_BoundQueue == cmdQueue,
 			"A command list must always be opened with the queue that first opened it");
 		m_BoundQueue = cmdQueue;
 
 		auto* d3d12Allocator = allocator->As<CommandAllocator>()->GetD3D12CommandAllocator();
 
-		gassert(d3d12Allocator != nullptr, "Command Allocator cannot be null");
+		core::ensure(d3d12Allocator != nullptr, "Command Allocator cannot be null");
 
 		m_CommandList->Reset(d3d12Allocator, nullptr) >> d3d12ErrChecker;
 		m_LastCompletedFence = cmdQueue->GetLastCompletedFence();
@@ -294,9 +295,9 @@ namespace bgl
 	void
 	CommandList::Close() noexcept
 	{
-		gassert(m_Open, "Command list must be open before closing");
+		core::ensure(m_Open, "Command list must be open before closing");
 
-		gassert(m_TimingHeap == nullptr, "Command list closed with a timed span open");
+		core::ensure(m_TimingHeap == nullptr, "Command list closed with a timed span open");
 		m_CommandList->Close() >> d3d12ErrChecker;
 		m_CurrentMeshletState.reset();
 		m_Open = false;
@@ -326,9 +327,9 @@ namespace bgl
 	void
 	CommandList::BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept
 	{
-		gassert(m_Open, "BeginTiming on a closed command list");
-		gassert(m_TimingHeap == nullptr, "BeginTiming while a timed span is open");
-		gassert(
+		core::ensure(m_Open, "BeginTiming on a closed command list");
+		core::ensure(m_TimingHeap == nullptr, "BeginTiming while a timed span is open");
+		core::ensure(
 			startSlot < heap.GetCapacity() && endSlot < heap.GetCapacity(),
 			"BeginTiming slot outside the heap");
 
@@ -340,7 +341,7 @@ namespace bgl
 	bool
 	CommandList::EndTiming() noexcept
 	{
-		gassert(m_TimingHeap != nullptr, "EndTiming without a timed span open");
+		core::ensure(m_TimingHeap != nullptr, "EndTiming without a timed span open");
 
 		m_CommandList->EndQuery(m_TimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, m_TimingEndSlot);
 		m_TimingHeap = nullptr;
@@ -350,8 +351,8 @@ namespace bgl
 	void
 	CommandList::ResolveTimestamps(ITimestampHeap& heap, uint32_t first, uint32_t count) noexcept
 	{
-		gassert(m_Open, "ResolveTimestamps on a closed command list");
-		gassert(first + count <= heap.GetCapacity(), "ResolveTimestamps outside the heap");
+		core::ensure(m_Open, "ResolveTimestamps on a closed command list");
+		core::ensure(first + count <= heap.GetCapacity(), "ResolveTimestamps outside the heap");
 
 		if (count == 0)
 		{
@@ -448,7 +449,9 @@ namespace bgl
 		std::span<const BufferHandle>      handles,
 		std::span<const BufferBarrierDesc> barriers) noexcept
 	{
-		gassert(handles.size() == barriers.size(), "Barrier handle/desc spans must match in size");
+		core::ensure(
+			handles.size() == barriers.size(),
+			"Barrier handle/desc spans must match in size");
 		if (handles.empty())
 		{
 			return;
@@ -476,7 +479,9 @@ namespace bgl
 		std::span<const TextureHandle>      handles,
 		std::span<const TextureBarrierDesc> barriers) noexcept
 	{
-		gassert(handles.size() == barriers.size(), "Barrier handle/desc spans must match in size");
+		core::ensure(
+			handles.size() == barriers.size(),
+			"Barrier handle/desc spans must match in size");
 		if (handles.empty())
 		{
 			return;
@@ -505,7 +510,7 @@ namespace bgl
 		auto& rtv           = m_ResourceManager->GetRtv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
 
-		gassert(m_ResourceManager->ValidRtvHandle(handle), "RTV has invalid texture handle");
+		core::ensure(m_ResourceManager->ValidRtvHandle(handle), "RTV has invalid texture handle");
 		Barrier(textureHandle, barrier);
 	}
 
@@ -515,7 +520,7 @@ namespace bgl
 		auto& rtv           = m_ResourceManager->GetDsv(handle);
 		auto  textureHandle = rtv.GetTextureHandle();
 
-		gassert(m_ResourceManager->ValidDsvHandle(handle), "DSV has invalid texture handle");
+		core::ensure(m_ResourceManager->ValidDsvHandle(handle), "DSV has invalid texture handle");
 		Barrier(textureHandle, barrier);
 	}
 
@@ -528,8 +533,10 @@ namespace bgl
 	void
 	CommandList::ApplyMeshletState() noexcept
 	{
-		gassert(m_CurrentMeshletState.has_value(), "Graphics state must be set before drawing");
-		gassert(
+		core::ensure(
+			m_CurrentMeshletState.has_value(),
+			"Graphics state must be set before drawing");
+		core::ensure(
 			m_CurrentMeshletState->kernel != nullptr &&
 				m_CurrentMeshletState->kernel->pipeline.IsInitialized(),
 			"Meshlet kernel must be set in graphics state");
@@ -651,7 +658,7 @@ namespace bgl
 		}
 		else
 		{
-			gassert(
+			core::ensure(
 				false,
 				"Device/Driver does not support Mesh Shading (DirectX 12 Agility SDK / Feature "
 				"Level 12_2 required)");
@@ -663,7 +670,7 @@ namespace bgl
 	{
 		ApplyMeshletState();
 
-		gassert(
+		core::ensure(
 			!m_CurrentMeshletState->indirectArgs.IsNull(),
 			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
 
@@ -675,10 +682,10 @@ namespace bgl
 	{
 		ApplyMeshletState();
 
-		gassert(
+		core::ensure(
 			!m_CurrentMeshletState->indirectArgs.IsNull(),
 			"MeshletState.indirectArgs must be set for DispatchMeshIndirectCount");
-		gassert(
+		core::ensure(
 			!m_CurrentMeshletState->commandCounts.IsNull(),
 			"MeshletState.commandCounts must be set for DispatchMeshIndirectCount");
 
@@ -728,8 +735,10 @@ namespace bgl
 		uint32_t threadGroupCountY,
 		uint32_t threadGroupCountZ) noexcept
 	{
-		gassert(m_CurrentComputeState.has_value(), "Compute state must be set before dispatch");
-		gassert(
+		core::ensure(
+			m_CurrentComputeState.has_value(),
+			"Compute state must be set before dispatch");
+		core::ensure(
 			m_CurrentComputeState->kernel != nullptr &&
 				m_CurrentComputeState->kernel->pipeline.IsInitialized(),
 			"Compute kernel must be set in compute state");
@@ -792,7 +801,7 @@ namespace bgl
 			m_RecordingVersion,
 			D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
-		gassert(success, "Failed to suballocate constant buffer");
+		core::ensure(success, "Failed to suballocate constant buffer");
 
 		memcpy(cpuVA, data, size);
 
@@ -819,7 +828,7 @@ namespace bgl
 	void
 	CommandList::SubmitChunks(ICommandQueue* cmdQueue) noexcept
 	{
-		gassert(cmdQueue != nullptr, "Command queue cannot be null");
+		core::ensure(cmdQueue != nullptr, "Command queue cannot be null");
 
 		auto submittedVersion = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, true);
 		m_UploadManager.SubmitChunks(m_RecordingVersion, submittedVersion);

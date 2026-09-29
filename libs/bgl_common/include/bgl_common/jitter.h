@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <core/math.h>
 #include <cstdint>
@@ -32,7 +32,9 @@ namespace bgl
 		uint32_t outputWidth,
 		uint32_t outputHeight) noexcept
 	{
-		gassert(renderWidth > 0 && renderHeight > 0, "Jitter needs a non-degenerate render size");
+		core::ensure(
+			renderWidth > 0 && renderHeight > 0,
+			"Jitter needs a non-degenerate render size");
 
 		// div_ceil is already 1 wherever the render grid is the denser of the two, so the
 		// oversampled case needs no branch of its own.
@@ -83,8 +85,8 @@ namespace bgl
 		float    height,
 		uint32_t sequenceLength = c_JitterSequenceLength) noexcept
 	{
-		gassert(width > 0.0f && height > 0.0f, "Jitter needs a non-degenerate viewport");
-		gassert(sequenceLength > 0, "Jitter needs a non-empty sequence");
+		core::ensure(width > 0.0f && height > 0.0f, "Jitter needs a non-degenerate viewport");
+		core::ensure(sequenceLength > 0, "Jitter needs a non-empty sequence");
 
 		// The sequence is 1-based: term 0 of every radical inverse is 0, which would spend one frame
 		// in eight on no jitter at all.

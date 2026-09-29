@@ -3,7 +3,7 @@
 #include <assetlib/image_io.h>
 
 #include <algorithm>
-#include <cassert>
+#include <core/err/util.h>
 #include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
@@ -72,7 +72,9 @@ namespace assetlib
 	std::string
 	bakedMapContentName(std::string_view group, std::string_view key)
 	{
-		assert(group.find('_') == std::string_view::npos);
+		core::ensure(
+			group.find('_') == std::string_view::npos,
+			"group.find('_') == std::string_view::npos");
 
 		return std::format("{}_{:016x}", group, core::hash_string(key, core::hash_seed()));
 	}

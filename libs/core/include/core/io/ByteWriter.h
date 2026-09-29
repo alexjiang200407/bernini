@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-#include <cassert>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <core/type_traits.h>
 #include <cstddef>
@@ -52,7 +52,9 @@ namespace core::io
 		void
 		PatchPod(size_t offset, const T& value)
 		{
-			assert(offset + sizeof(T) <= m_Buffer.size());
+			core::ensure(
+				offset + sizeof(T) <= m_Buffer.size(),
+				"offset + sizeof(T) <= m_Buffer.size()");
 			const auto* first = reinterpret_cast<const std::byte*>(&value);
 			std::copy_n(first, sizeof(T), m_Buffer.begin() + static_cast<ptrdiff_t>(offset));
 		}

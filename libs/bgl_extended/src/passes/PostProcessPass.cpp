@@ -17,8 +17,8 @@
 #include "types/RenderState.h"
 #include <array>
 #include <bgl/IRenderTarget.h>
-#include <bgl_common/gassert.h>
 #include <cmath>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <string>
 #include <string_view>
@@ -78,7 +78,7 @@ namespace bgl
 	void
 	PostProcessPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
@@ -136,8 +136,8 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "PostProcess pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "PostProcess pipeline must be initialized");
 
 		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
@@ -186,7 +186,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("PostProcess shader is missing its '{}' constant buffer", c_Cbuffer);
+			core::fatal("PostProcess shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

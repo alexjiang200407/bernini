@@ -8,7 +8,7 @@
 #include "types/Barrier.h"
 #include "uniforms/Uniforms.h"
 #include <bgl/types/GroundPlaneDesc.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
 
@@ -17,7 +17,7 @@ namespace bgl
 	void
 	SkinnedPosePass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		ctx.pipelines->Add(
 			m_PoseSkinned,
@@ -29,7 +29,7 @@ namespace bgl
 	void
 	SkinnedPosePass::Release()
 	{
-		logger::trace("SkinnedPosePass::Release");
+		spdlog::trace("SkinnedPosePass::Release");
 		m_PoseSkinned.Reset();
 	}
 
@@ -59,7 +59,7 @@ namespace bgl
 	SkinnedPosePass::Execute(const PassContext& ctx, const DrawData& draw)
 	{
 		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "SkinnedPosePass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "SkinnedPosePass requires a bgl::SceneView");
 
 		const uint32_t posed = view->GetPosedInstanceCount();
 		if (posed == 0)

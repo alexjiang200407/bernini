@@ -4,8 +4,8 @@
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include <array>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <utility>
 
@@ -98,8 +98,8 @@ namespace bgl
 		void
 		Reset(ICommandList* cmd) const noexcept
 		{
-			gassert(cmd != nullptr, "Command list cannot be null");
-			gassert(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
+			core::ensure(cmd != nullptr, "Command list cannot be null");
+			core::ensure(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
 
 			const std::array<uint32_t, c_HeaderWords> header = { 0u, 0u, m_Capacity, 0u };
 			cmd->WriteBuffer(m_Buffer.GetBufferHandle(), header.data(), sizeof(header));

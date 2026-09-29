@@ -1,6 +1,7 @@
 #pragma once
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/err/util.h>
 #include <core/str/str.h>
 
 namespace bgl
@@ -52,7 +53,7 @@ namespace bgl
 				return it->second;
 			}
 
-			gfatal("Uniform layout entry not found: {}", name);
+			core::fatal("Uniform layout entry not found: {}", name);
 		}
 
 		std::vector<std::string>

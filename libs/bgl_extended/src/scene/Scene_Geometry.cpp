@@ -16,7 +16,6 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
 #include <bgl/lod_select.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
@@ -441,7 +440,7 @@ namespace bgl
 
 		// Last, so nothing above can throw with the use already counted.
 		RigMeta* counted = FindRig(rig);
-		gassert(counted != nullptr, "the rig validated above went away mid-add");
+		core::ensure(counted != nullptr, "the rig validated above went away mid-add");
 		++counted->useCount;
 
 		base.geomType = GeomType::kSkinnedMesh;
@@ -999,7 +998,7 @@ namespace bgl
 		if (record.rig)
 		{
 			RigMeta* rig = FindRig(RigHandle{ record.rig });
-			gassert(rig != nullptr, "a live skinned geom names a rig that is already gone");
+			core::ensure(rig != nullptr, "a live skinned geom names a rig that is already gone");
 
 			if (rig != nullptr && rig->useCount > 0)
 			{

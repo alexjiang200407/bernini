@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cassert>
 #include <concepts>
+#include <core/err/util.h>
 #include <cstddef>
 #include <type_traits>
 namespace core
@@ -227,7 +227,7 @@ namespace core
 
 				// Attaching to the same object only works if duplicate references are being coalesced. Otherwise
 				// re-attaching will cause the pointer to be released and may cause a crash on a subsequent dereference.
-				assert(ref != 0 || m_Ptr != other);
+				core::ensure(ref != 0 || m_Ptr != other, "ref != 0 || m_Ptr != other");
 			}
 
 			m_Ptr = other;

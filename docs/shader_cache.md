@@ -225,7 +225,7 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   `Store` replaces the first with identical bytes.
 
 * **`GetSlangModule()` front-end-compiles on the calling thread's session.** @pre it may
-  front-end-compile on first call (the slow path) and `gfatal` on a shader error; it does nothing on
+  front-end-compile on first call (the slow path) and `core::fatal` on a shader error; it does nothing on
   a program-cache hit because it is never called.
 
 ---

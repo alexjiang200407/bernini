@@ -5,9 +5,9 @@
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
 #include <algorithm>
-#include <bgl_common/gassert.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
+#include <core/err/util.h>
 #include <core/type_traits.h>
 #include <cstddef>
 #include <cstdint>
@@ -66,9 +66,11 @@ namespace bgl
 		void
 		Init(EntryBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialCount > 0, "EntryBuffer must have a positive initial count");
-			gassert(desc.blockSize > 0, "Block size must be greater than zero");
-			gassert(resourceManager != nullptr, "EntryBuffer requires a valid ResourceManager");
+			core::ensure(desc.initialCount > 0, "EntryBuffer must have a positive initial count");
+			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
+			core::ensure(
+				resourceManager != nullptr,
+				"EntryBuffer requires a valid ResourceManager");
 
 			m_Desc = std::move(desc);
 
@@ -121,7 +123,7 @@ namespace bgl
 		core::slot_handle
 		EmplaceBack(Args&&... args)
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 
 			auto slot = m_Entries.try_allocate_and_emplace(std::forward<Args>(args)...);
 			if (slot.is_null())
@@ -146,7 +148,7 @@ namespace bgl
 		core::slot_handle
 		Add(T value)
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			auto slot = EmplaceBack();
 			Set(slot, std::move(value));
 			return slot;
@@ -155,8 +157,8 @@ namespace bgl
 		void
 		Set(core::slot_handle slot, T value) noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			MarkDirty(slot.index);
 			m_Entries[slot.index] = std::move(value);
 		}
@@ -164,32 +166,32 @@ namespace bgl
 		const T&
 		operator[](core::slot_handle slot) const noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			return m_Entries[slot.index];
 		}
 
 		const T&
 		AtIndex(uint32_t index) const noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.allocated(index), "AtIndex on an unallocated slot");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.allocated(index), "AtIndex on an unallocated slot");
 			return m_Entries[index];
 		}
 
 		void
 		Erase(core::slot_handle slot) noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			m_Entries.release_slot(slot.index);
 		}
 
 		void
 		EraseByIndex(uint32_t index) noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
 			m_Entries.release_slot(index);
 		}
 
@@ -198,8 +200,8 @@ namespace bgl
 		MetaAt(uint32_t index) noexcept
 			requires(!std::is_void_v<M>)
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
 
@@ -208,17 +210,17 @@ namespace bgl
 		MetaAt(uint32_t index) const noexcept
 			requires(!std::is_void_v<M>)
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(m_Entries.allocated(index), "MetaAt on an unallocated slot");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
 
 		void
 		Update(ICommandList* cmdList) noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
-			gassert(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
+			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
 
 			// Before the dirty regions, never after: the forward copy would overwrite them.
 			m_Storage.FlushGrowth(cmdList);
@@ -269,14 +271,14 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -316,7 +318,7 @@ namespace bgl
 		ReserveNullEntry()
 		{
 			const core::slot_handle slot = m_Entries.try_allocate_and_emplace();
-			gassert(slot.index == 0, "The null entry must own the first element");
+			core::ensure(slot.index == 0, "The null entry must own the first element");
 			MarkDirty(slot.index);
 		}
 
@@ -365,7 +367,9 @@ namespace bgl
 			const uint32_t startBlock = elementOffsetBytes / m_Desc.blockSize;
 			const uint32_t endBlock   = (elementOffsetBytes + sizeof(T) - 1) / m_Desc.blockSize;
 
-			gassert(endBlock < m_DirtyBlocks.size(), "Dirty tracking index out of block bounds");
+			core::ensure(
+				endBlock < m_DirtyBlocks.size(),
+				"Dirty tracking index out of block bounds");
 
 			for (uint32_t block = startBlock; block <= endBlock; ++block)
 			{
@@ -381,7 +385,7 @@ namespace bgl
 			uint32_t      endBlk,
 			uint32_t      totalBytes) noexcept
 		{
-			gassert(IsInitialized(), "EntryBuffer storage cannot be null");
+			core::ensure(IsInitialized(), "EntryBuffer storage cannot be null");
 
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;

@@ -1,6 +1,6 @@
 #include "gfx/DrawBucketTable.h"
 #include "util/util.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
 
@@ -30,12 +30,12 @@ namespace bgl
 		case GeomType::kCount:
 			break;
 		}
-		gfatal("A bucket's geometry kind is a drawable tier");
+		core::fatal("A bucket's geometry kind is a drawable tier");
 	}
 
 	DrawBucketTable::DrawBucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
 	{
-		gassert(
+		core::ensure(
 			ceiling >= 1 && ceiling <= idl::cMaxDrawBuckets,
 			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
 		m_Flags.assign(ceiling, 0u);
@@ -53,20 +53,20 @@ namespace bgl
 
 		if (material == MaterialType::kInvalid)
 		{
-			gfatal("A bucket's material kind is a real one");
+			core::fatal("A bucket's material kind is a real one");
 		}
 		if (layer == LayerType::kInvalid || layer == LayerType::kCount)
 		{
-			gfatal("A bucket's layer is a real one");
+			core::fatal("A bucket's layer is a real one");
 		}
 		if (geom == GeometryStage::kGrass && layer != LayerType::kOpaque)
 		{
-			gfatal("Grass is drawn opaque whatever its material's layer");
+			core::fatal("Grass is drawn opaque whatever its material's layer");
 		}
 		if (geom == GeometryStage::kSkinnedMesh && material != MaterialType::kPBR &&
 		    !GameSlot(material).has_value())
 		{
-			gfatal("Skinned geometry is only drawable with a kPBR or a game surface material");
+			core::fatal("Skinned geometry is only drawable with a kPBR or a game surface material");
 		}
 
 		const uint64_t key = PackKey(geom, material, layer);
@@ -79,7 +79,7 @@ namespace bgl
 		{
 			if (m_Refused.insert(key).second)
 			{
-				logger::error(
+				spdlog::error(
 					"Draw bucket ceiling ({}) reached: (geom {}, material {}, layer {}) draws "
 					"through the unlit fallback",
 					m_Ceiling,
@@ -112,14 +112,14 @@ namespace bgl
 	const DrawBucketDesc&
 	DrawBucketTable::Desc(const uint32_t bucket) const noexcept
 	{
-		gassert(bucket < Count(), "Desc takes an allocated bucket");
+		core::ensure(bucket < Count(), "Desc takes an allocated bucket");
 		return m_Descs[bucket];
 	}
 
 	bool
 	DrawBucketTable::Transparent(const uint32_t bucket) const noexcept
 	{
-		gassert(bucket < Count(), "Transparent takes an allocated bucket");
+		core::ensure(bucket < Count(), "Transparent takes an allocated bucket");
 		return (m_Flags[bucket] & static_cast<uint32_t>(idl::DrawBucketFlag::kTransparent)) != 0u;
 	}
 }

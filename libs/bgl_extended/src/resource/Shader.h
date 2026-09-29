@@ -63,7 +63,7 @@ namespace bgl
 	{
 	public:
 		Shader(ShaderDesc desc, bgpu::GpuContextRef context);
-		~Shader() noexcept override { logger::trace("~Shader"); }
+		~Shader() noexcept override { spdlog::trace("~Shader"); }
 		Shader(const Shader&)     = delete;
 		Shader(Shader&&) noexcept = delete;
 

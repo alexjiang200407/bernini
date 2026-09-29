@@ -1,7 +1,7 @@
 #include "postprocess/BloomChain.h"
 #include "types/Format.h"
 #include <algorithm>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <format>
 #include <spdlog/spdlog.h>
@@ -67,7 +67,7 @@ namespace bgl
 	void
 	BloomChain::Ensure(ResourceManagerRef resourceManager, uint32_t width, uint32_t height)
 	{
-		gassert(width > 0 && height > 0, "A bloom chain cannot be zero-sized");
+		core::ensure(width > 0 && height > 0, "A bloom chain cannot be zero-sized");
 
 		const bool sameSize = m_Width == width && m_Height == height;
 
@@ -131,7 +131,7 @@ namespace bgl
 		// error. A resize or a Retry is what asks again.
 		if (!created)
 		{
-			logger::error(
+			spdlog::error(
 				"Bloom chain for {}x{} could not be allocated; bloom is skipped until the target "
 				"resizes or bloom is re-enabled",
 				width,

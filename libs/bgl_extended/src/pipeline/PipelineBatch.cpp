@@ -2,7 +2,7 @@
 #include "device/Device.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/MeshletKernel.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include <algorithm>
 #include <chrono>
@@ -17,7 +17,7 @@ namespace bgl
 {
 	PipelineBatch::PipelineBatch(IDevice* device) noexcept : m_Device(device)
 	{
-		gassert(device != nullptr, "Device pointer is null");
+		core::ensure(device != nullptr, "Device pointer is null");
 	}
 
 	void
@@ -61,7 +61,7 @@ namespace bgl
 		m_ComputeRequests.clear();
 
 		const auto elapsed = std::chrono::steady_clock::now() - started;
-		logger::info(
+		spdlog::info(
 			"Built {} pipelines in {} ms",
 			count,
 			std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());

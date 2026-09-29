@@ -48,7 +48,7 @@ Local variables is less strict. West const.
 
 # Error handling
 
-For problems caused by poor internal logic inside shared or static library, use asserts
+For problems caused by poor internal logic inside shared or static library, use `core::ensure` (`core::fatal` for a path that must not be reached) from `core/err/util.h` — never the C `assert` macro
 
 For problems caused by the caller (invalid args), throw runtime error
 

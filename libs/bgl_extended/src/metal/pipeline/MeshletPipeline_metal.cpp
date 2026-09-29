@@ -14,7 +14,6 @@
 #include "util/util.h"
 #include <algorithm>
 #include <array>
-#include <bgl_common/gassert.h>
 #include <bgpu/SlangErrorChecker.h>
 
 #include <cstddef>
@@ -66,7 +65,7 @@ namespace bgl
 		}
 
 		auto state = NS::TransferPtr(device->newDepthStencilState(dsd.get()));
-		gassert(state.get() != nullptr, "Metal depth-stencil state creation failed");
+		core::ensure(state.get() != nullptr, "Metal depth-stencil state creation failed");
 		return state;
 	}
 
@@ -88,7 +87,7 @@ namespace bgl
 				if (shader == nullptr)
 					return;
 				slang::IModule* module = shader->GetSlangModule();
-				gassert(module != nullptr, "Shader module cannot be null");
+				core::ensure(module != nullptr, "Shader module cannot be null");
 
 				// Read off the module so that reaching this function is what creates a session on
 				// this thread, and a cache hit never does.
@@ -101,7 +100,7 @@ namespace bgl
 				module->findEntryPointByName(
 					shader->GetDesc().entryPointName.c_str(),
 					entryPoint.writeRef());
-				gassert(entryPoint != nullptr, "Failed to find meshlet entry point");
+				core::ensure(entryPoint != nullptr, "Failed to find meshlet entry point");
 				components.push_back(entryPoint.get());
 				entryPoints.push_back(std::move(entryPoint));
 			};
@@ -232,7 +231,7 @@ namespace bgl
 		ShaderCache*               shaderCache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(m_Desc.meshShader != nullptr, "Meshlet pipeline requires a mesh shader");
+		core::ensure(m_Desc.meshShader != nullptr, "Meshlet pipeline requires a mesh shader");
 
 		uint64_t      key = 0;
 		CachedProgram cached;
@@ -304,7 +303,9 @@ namespace bgl
 			lib.get() >> errChecker;
 			NS::SharedPtr<MTL::Function> fn =
 				NS::TransferPtr(lib->newFunction(ConvertString(stage.entryPoint)));
-			gassert(fn.get() != nullptr, "Meshlet stage library is missing its entry function");
+			core::ensure(
+				fn.get() != nullptr,
+				"Meshlet stage library is missing its entry function");
 			return fn;
 		};
 
@@ -326,7 +327,7 @@ namespace bgl
 				break;
 			case ShaderStage::kCompute:
 			case ShaderStage::kCount:
-				gfatal("A meshlet program cannot carry a compute stage");
+				core::fatal("A meshlet program cannot carry a compute stage");
 			}
 		}
 

@@ -1,10 +1,7 @@
-// `logger` is a namespace alias, which include-cleaner does not count as a use of the
-// header that declares it -- see bgl_common/gassert.h.
 #include <algorithm>
 #include <atomic>
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/UniformValueType.h>
-#include <bgl_common/gassert.h>  // IWYU pragma: keep
 #include <bgl_common/shadercache/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
@@ -104,7 +101,7 @@ namespace bgl::shader_cache
 		std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
 		if (!out)
 		{
-			logger::warn("Could not open cache file for writing: {}", tmp.string());
+			spdlog::warn("Could not open cache file for writing: {}", tmp.string());
 			return false;
 		}
 
@@ -117,7 +114,7 @@ namespace bgl::shader_cache
 		std::filesystem::rename(tmp, path, ec);
 		if (ec)
 		{
-			logger::warn("Could not commit cache file {}: {}", path.string(), ec.message());
+			spdlog::warn("Could not commit cache file {}: {}", path.string(), ec.message());
 			std::filesystem::remove(tmp, ec);
 			return false;
 		}

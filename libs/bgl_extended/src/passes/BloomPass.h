@@ -60,7 +60,7 @@ namespace bgl
 		};
 
 		BloomPass() = default;
-		~BloomPass() noexcept { logger::trace("~BloomPass"); }
+		~BloomPass() noexcept { spdlog::trace("~BloomPass"); }
 
 		BloomPass(const BloomPass&) noexcept = delete;
 		BloomPass(BloomPass&&) noexcept      = delete;

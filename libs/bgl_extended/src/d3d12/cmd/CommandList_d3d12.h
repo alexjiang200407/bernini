@@ -12,6 +12,7 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -25,7 +26,7 @@ namespace bgl
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,
 			ResourceManagerRef     resourceManager);
-		~CommandList() noexcept override { logger::trace("~CommandList"); }
+		~CommandList() noexcept override { spdlog::trace("~CommandList"); }
 
 		CommandList(const CommandList&) noexcept = delete;
 		CommandList(CommandList&&) noexcept      = delete;

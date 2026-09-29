@@ -1,12 +1,13 @@
 #include "resource/ReadbackBuffer_d3d12.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
 	ReadbackBuffer::ReadbackBuffer(ID3D12Device* device, const ReadbackBufferDesc& desc) :
 		m_ByteSize(desc.byteSize)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(desc.byteSize > 0, "Readback buffer size must be greater than zero");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(desc.byteSize > 0, "Readback buffer size must be greater than zero");
 
 		wrl::ComPtr<ID3D12Device10> device10;
 		device->QueryInterface(IID_PPV_ARGS(&device10)) >> d3d12ErrChecker;
@@ -75,7 +76,7 @@ namespace bgl
 	const void*
 	ReadbackBuffer::Map() noexcept
 	{
-		gassert(m_Buffer != nullptr, "Cannot map a null readback buffer");
+		core::ensure(m_Buffer != nullptr, "Cannot map a null readback buffer");
 
 		if (!m_Mapped)
 		{

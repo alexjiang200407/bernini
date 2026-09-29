@@ -1,8 +1,8 @@
 #pragma once
 #include <spdlog/sinks/basic_file_sink.h>
 
-// Carries bgl::logger and the gassert family, which nearly every source here names.
-#include <bgl_common/gassert.h>
+// Carries core's checks, which nearly every source here names.
+#include <core/err/util.h>
 
 #include <bgl/error.h>
 #include <bgl/glm.h>

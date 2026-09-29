@@ -190,7 +190,7 @@ namespace bgl
 
 		if (!m_Archive)
 		{
-			logger::warn(
+			spdlog::warn(
 				"Metal binary archive unavailable, driver pipelines will not be cached: {}",
 				GetErrorDescription(error));
 		}
@@ -218,7 +218,7 @@ namespace bgl
 		NS::Error* error = nullptr;
 		if (!m_Archive->serializeToURL(FileUrl(tmp), &error))
 		{
-			logger::warn(
+			spdlog::warn(
 				"Could not serialize the Metal binary archive: {}",
 				GetErrorDescription(error));
 			return;
@@ -227,7 +227,7 @@ namespace bgl
 		std::filesystem::rename(tmp, libPath, ec);
 		if (ec)
 		{
-			logger::warn("Could not commit {}: {}", libPath.string(), ec.message());
+			spdlog::warn("Could not commit {}: {}", libPath.string(), ec.message());
 			std::filesystem::remove(tmp, ec);
 		}
 	}
@@ -270,7 +270,7 @@ namespace bgl
 		}
 		catch (const std::exception& e)
 		{
-			logger::warn("Ignoring unreadable shader cache entry {}: {}", path.string(), e.what());
+			spdlog::warn("Ignoring unreadable shader cache entry {}: {}", path.string(), e.what());
 			return false;
 		}
 	}

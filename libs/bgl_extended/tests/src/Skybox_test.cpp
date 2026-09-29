@@ -12,7 +12,7 @@
 #include <cstdint>
 
 // SkyboxPass resolves its constant buffer by the name Slang reflection reports for the
-// shader global, and gfatal()s when the lookup misses. Renaming the ConstantBuffer in
+// shader global, and core::fatal()s when the lookup misses. Renaming the ConstantBuffer in
 // Skybox.slang without updating the lookup therefore terminates the process the first
 // time a skybox is drawn -- and no other test binds one, so nothing catches it. This
 // draws a frame with a skybox bound.

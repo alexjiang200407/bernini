@@ -2,7 +2,6 @@
 
 #include "Render/Renderer.h"
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
@@ -31,6 +30,7 @@
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
+#include <core/err/util.h>
 #include <stdexcept>
 
 namespace
@@ -186,7 +186,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// Every method here reaches the bgl objects through it, and MainWindow fills the desc in
 	// immediately after constructing the Renderer -- so a null one is a wiring mistake, not a state
 	// to degrade into.
-	assert(m_Desc.renderer != nullptr && "a viewport cannot stand without a Renderer");
+	core::ensure(m_Desc.renderer != nullptr, "a viewport cannot stand without a Renderer");
 
 	m_ResizeTimer = new QTimer(this);
 	m_ResizeTimer->setSingleShot(true);

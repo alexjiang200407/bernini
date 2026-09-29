@@ -27,7 +27,7 @@ namespace bgl
 	{
 	public:
 		RigFramesPass() = default;
-		~RigFramesPass() noexcept { logger::trace("~RigFramesPass"); }
+		~RigFramesPass() noexcept { spdlog::trace("~RigFramesPass"); }
 
 		RigFramesPass(const RigFramesPass&) noexcept = delete;
 		RigFramesPass(RigFramesPass&&) noexcept      = delete;

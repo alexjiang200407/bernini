@@ -18,7 +18,7 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include <array>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -49,7 +49,7 @@ namespace bgl
 	void
 	OverlayPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
@@ -98,7 +98,7 @@ namespace bgl
 		const Args&                  args,
 		std::span<const std::string> sources)
 	{
-		gassert(!args.draws.empty(), "An empty draw list attaches no overlay pass");
+		core::ensure(!args.draws.empty(), "An empty draw list attaches no overlay pass");
 
 		auto desc = PassDesc();
 
@@ -119,8 +119,8 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "Overlay pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "Overlay pipeline must be initialized");
 
 		for (const core::SharedRef<Overlay>& overlay : args.overlays)
 		{
@@ -130,7 +130,7 @@ namespace bgl
 		auto found = m_Kernel.FindUniforms(c_Cbuffer);
 		if (!found)
 		{
-			gfatal("Overlay shader is missing its '{}' constant buffer", c_Cbuffer);
+			core::fatal("Overlay shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto& uniforms = *found;

@@ -1,4 +1,5 @@
 #include "Dsv_d3d12.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -10,8 +11,8 @@ namespace bgl
 		const DsvDesc&        desc) :
 		m_Desc(desc), m_DescriptorIndex(descriptorIndex), m_TextureHandle(textureHandle)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(descriptorHeap != nullptr, "Descriptor heap cannot be null");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(descriptorHeap != nullptr, "Descriptor heap cannot be null");
 
 		const uint32_t descriptorSize =
 			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);

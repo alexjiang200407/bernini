@@ -8,6 +8,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
 #include <bgl/IGraphics.h>
+#include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl
@@ -80,42 +81,42 @@ namespace bgl
 		[[nodiscard]] uint64_t
 		GetFrameFence(uint32_t frameIndex) const noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_FenceValues[frameIndex];
 		}
 
 		void
 		SetFrameFence(uint32_t frameIndex, uint64_t fenceValue) noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			m_FenceValues[frameIndex] = fenceValue;
 		}
 
 		[[nodiscard]] ICommandAllocator*
 		GetFrameAllocator(uint32_t frameIndex) const noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_CommandAllocator[frameIndex].Get();
 		}
 
 		[[nodiscard]] TextureHandle
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].textureHandle;
 		}
 
 		[[nodiscard]] RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].rtvHandle;
 		}
 
 		[[nodiscard]] SrvHandle
 		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
 		{
-			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].srvHandle;
 		}
 
@@ -238,21 +239,21 @@ namespace bgl
 		[[nodiscard]] TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept override
 		{
-			gassert(index < 2, "History index out of range");
+			core::ensure(index < 2, "History index out of range");
 			return m_History[index].textureHandle;
 		}
 
 		[[nodiscard]] RtvHandle
 		GetHistoryRtv(uint32_t index) const noexcept override
 		{
-			gassert(index < 2, "History index out of range");
+			core::ensure(index < 2, "History index out of range");
 			return m_History[index].rtvHandle;
 		}
 
 		[[nodiscard]] SrvHandle
 		GetHistorySrv(uint32_t index) const noexcept override
 		{
-			gassert(index < 2, "History index out of range");
+			core::ensure(index < 2, "History index out of range");
 			return m_History[index].srvHandle;
 		}
 

@@ -22,7 +22,7 @@ namespace bgl
 	 *     library.get() >> errChecker;
 	 *
 	 * For the calls that take no error out-param -- most of them -- there is nothing to hold and a
-	 * `gassert` on the returned pointer is the whole check.
+	 * `core::ensure` on the returned pointer is the whole check.
 	 */
 	class MetalErrorChecker
 	{

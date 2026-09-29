@@ -11,10 +11,10 @@
 #include "scene/scene_buffer_names.h"
 #include "types/Barrier.h"
 #include "types/MeshletState.h"
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -49,7 +49,7 @@ namespace bgl
 		const PassContext& resources) const
 	{
 		ICommandList* cmd = resources.GetCommandList();
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const auto             dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 		const DrawBucketTable& table        = kernels.DrawBuckets();
