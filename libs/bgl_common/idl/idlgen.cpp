@@ -477,19 +477,48 @@ namespace
 		// only hold a struct that lays out identically on all of them. Nothing else would report
 		// this: a generated header's static_asserts come from the same layout as its struct, so
 		// they agree with themselves whichever target produced them.
-		if (isPublic && msl.size != info.size)
+		if (isPublic)
 		{
-			std::cerr << std::format(
-				"error: '{}' is {} bytes under MSL and {} under the C/C++ rules, so it cannot go "
-				"in a public header -- those are committed and shared by every backend. Move it to "
-				"IDL_CPP_SOURCES, or write it so both agree.\n",
-				type->getName(),
-				msl.size,
-				info.size);
-			std::exit(1);
+			for (size_t i = 0; i < mslOffsets.size(); ++i)
+			{
+				slang::VariableLayoutReflection* var =
+					tlayout->getFieldByIndex(static_cast<unsigned>(i));
+				if (mslOffsets[i] == var->getOffset())
+				{
+					continue;
+				}
+				std::cerr << std::format(
+					"error: '{}::{}' sits at {} under MSL but {} under the C/C++ rules, so '{}' "
+					"cannot go in a public header -- those are committed and shared by every "
+					"backend. Move it to IDL_CPP_SOURCES, or write it so both agree.\n",
+					type->getName(),
+					var->getName(),
+					mslOffsets[i],
+					var->getOffset(),
+					type->getName());
+				std::exit(1);
+			}
+			if (msl.size != info.size)
+			{
+				std::cerr << std::format(
+					"error: '{}' is {} bytes under MSL, which rounds it up to its {}-byte "
+					"alignment, "
+					"and {} under the C/C++ rules. Only an alignas would reconcile the two, and a "
+					"public header carries none -- it is committed and shared by every backend. "
+					"Pad it to a multiple of {} bytes, or move it to IDL_CPP_SOURCES.\n",
+					type->getName(),
+					msl.size,
+					msl.align,
+					info.size,
+					msl.align);
+				std::exit(1);
+			}
 		}
 
-		if (metalLayout)
+		// A public struct is the same size on every backend (checked above), so it gets no alignas:
+		// the extra alignment MSL wants belongs to a GPU buffer, never to the CPU copy a public
+		// header describes, and emitting it would make the committed header differ by backend.
+		if (metalLayout && !isPublic)
 		{
 			info.size = msl.size;
 			// Only where the target wants more than the members give on their own; otherwise sizeof
@@ -1098,8 +1127,8 @@ main(int argc, char** argv)
 	app.add_flag(
 		"--public",
 		isPublic,
-		"This header is committed and shared by every backend, so refuse a struct whose layout "
-		"is not the same on all of them");
+		"This header is committed and shared by every backend, so refuse a struct whose size or "
+		"field offsets are not the same on all of them, and emit it with no alignas");
 
 	CLI11_PARSE(app, argc, argv);
 

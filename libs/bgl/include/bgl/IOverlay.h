@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/OverlayVertex.h>
 #include <bgl/api.h>
 #include <bgl/glm.h>
 #include <core/containers/slot_handle.h>
@@ -13,25 +14,6 @@
 
 namespace bgl
 {
-	/**
-	 * One corner of an overlay triangle. `position` is in output pixels, origin top-left, y down.
-	 * `uv` addresses the draw's texture, (0,0) top-left. `color` is RGBA8 with red in the low
-	 * byte, sRGB-encoded and premultiplied by its alpha -- the form a UI library hands over.
-	 *
-	 * 24 bytes, laid out so a renderer reading it with natural 8-byte vector alignment sees the
-	 * same bytes as one reading it packed; `reserved` is the padding that makes the two agree.
-	 * The renderer asserts this against the struct its shaders are generated from.
-	 */
-	struct OverlayVertex
-	{
-		glm::vec2 position{ 0.0f };
-		glm::vec2 uv{ 0.0f };
-		uint32_t  color    = 0xFFFFFFFFu;
-		uint32_t  reserved = 0;
-	};
-
-	static_assert(sizeof(OverlayVertex) == 24);
-
 	// A handle names its overlay as well as its slot: every overlay numbers slots from zero, so the
 	// slot alone could not tell one overlay's geometry from another's.
 	//

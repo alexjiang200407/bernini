@@ -94,10 +94,10 @@ TEST_CASE("A document draws through the overlay", "[ui][render]")
 	{
 		auto                                    overlay = gfx->CreateOverlay();
 		const std::array<bgl::OverlayVertex, 4> quad    = { {
-			{ { 0.0f, 0.0f }, { 0.0f, 0.0f }, 0xFF00FF00u },
-			{ { 256.0f, 0.0f }, { 1.0f, 0.0f }, 0xFF00FF00u },
-			{ { 256.0f, 256.0f }, { 1.0f, 1.0f }, 0xFF00FF00u },
-			{ { 0.0f, 256.0f }, { 0.0f, 1.0f }, 0xFF00FF00u },
+			{ { 0.0f, 0.0f }, { 0.0f, 0.0f }, 0xFF00FF00u, 0 },
+			{ { 256.0f, 0.0f }, { 1.0f, 0.0f }, 0xFF00FF00u, 0 },
+			{ { 256.0f, 256.0f }, { 1.0f, 1.0f }, 0xFF00FF00u, 0 },
+			{ { 0.0f, 256.0f }, { 0.0f, 1.0f }, 0xFF00FF00u, 0 },
 		} };
 		const std::array<uint32_t, 6>           indices = { 0, 1, 2, 0, 2, 3 };
 
