@@ -6,9 +6,9 @@
 #include <assetlib/codecs.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <functional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -97,7 +97,7 @@ namespace assetlib
 			break;
 
 		case ShadingModel::kCount:
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::mapMaterialTextures: the material names an unknown shading model, so "
 				"the textures it references cannot be known");
 		}

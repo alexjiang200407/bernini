@@ -42,7 +42,6 @@
 #include <ranges>
 #include <set>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -515,7 +514,9 @@ namespace assetlib
 		errno = 0;
 		std::ofstream out(path);
 		if (!out)
-			throw std::runtime_error(fileErrorMessage("obj: cannot open file for writing", path));
+			core::throw_runtime_error(
+				"{}",
+				fileErrorMessage("obj: cannot open file for writing", path));
 
 		out << "# Bernini BMesh -> OBJ ("
 			<< (fromMeshlets ? "reconstructed from meshlets" : "raw index buffer") << ")\n";

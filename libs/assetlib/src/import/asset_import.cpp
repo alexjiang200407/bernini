@@ -619,20 +619,19 @@ namespace assetlib
 		const SourceRef&    source) const
 	{
 		if (animations.clips.empty())
-			throw std::runtime_error("this file carries no animation to import");
+			core::throw_runtime_error("this file carries no animation to import");
 
 		// The clips are per-bone samples addressed by index, so without the rig they were authored
 		// against there is nothing to say which bone each one drives.
 		if (skeleton.bones.empty())
-			throw std::runtime_error("this file carries no rig, so its clips address nothing");
+			core::throw_runtime_error("this file carries no rig, so its clips address nothing");
 
 		const std::filesystem::path rig = FindMatchingSkeleton(skeleton);
 		if (rig.empty())
 		{
-			throw std::runtime_error(
-				"no skeleton in this project matches this file's rig. Import one of these "
-				"files with the mesh turned on first, which writes the rig these clips "
-				"attach to.");
+			core::throw_runtime_error(
+				"no skeleton in this project matches this file's rig. Import one of these files "
+				"with the mesh turned on first, which writes the rig these clips attach to.");
 		}
 
 		AnimationSet clips = animations;

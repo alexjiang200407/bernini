@@ -20,6 +20,7 @@
 #include <QUrl>
 
 #include <catch2/catch_test_macros.hpp>
+#include <core/err/util.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
@@ -30,7 +31,6 @@
 #include <qlist.h>
 #include <qobject.h>
 #include <qstringliteral.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -60,22 +60,22 @@ namespace
 		void
 		InvokeRender(const editor::RenderWork&) override
 		{
-			throw std::runtime_error("Unexpected rendering");
+			core::throw_runtime_error("Unexpected rendering");
 		}
 		editor::IEditorViewport*
 		CreateViewport(QWidget*, const editor::ViewportDesc&) override
 		{
-			throw std::runtime_error("Unexpected viewport");
+			core::throw_runtime_error("Unexpected viewport");
 		}
 		void
 		ShowPanel(std::string_view) override
 		{
-			throw std::runtime_error("Unexpected panel");
+			core::throw_runtime_error("Unexpected panel");
 		}
 		void
 		OpenAsset(std::string_view) override
 		{
-			throw std::runtime_error("Unexpected asset dispatch");
+			core::throw_runtime_error("Unexpected asset dispatch");
 		}
 		std::string
 		ImportMeshSource(const std::filesystem::path& source) override
@@ -86,7 +86,7 @@ namespace
 		void
 		AssetChanged(std::string_view) override
 		{
-			throw std::runtime_error("Unexpected write");
+			core::throw_runtime_error("Unexpected write");
 		}
 
 	private:

@@ -2,6 +2,7 @@
 #include "util/editor_language.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
+#include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
 
 #include <assetlib_structs/Mesh.h>
@@ -53,7 +54,6 @@
 #include <qpixmap.h>
 #include <qtypes.h>
 #include <ratio>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -203,7 +203,7 @@ namespace
 						std::filesystem::path(m_Path.toStdWString())));
 
 					if (mesh->mesh.meshes.empty())
-						throw std::runtime_error("mesh contains no meshes");
+						core::throw_runtime_error("mesh contains no meshes");
 
 					cooked = std::make_shared<CookedMeshes>();
 					for (const assetlib::Node& node : mesh->mesh.nodes)
@@ -999,7 +999,7 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 	}
 
 	if (m_Geoms.empty())
-		throw std::runtime_error("no node references a mesh");
+		core::throw_runtime_error("no node references a mesh");
 
 	const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
 	const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
@@ -1013,7 +1013,7 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 	const std::string relPath =
 		shot.item.material.empty() ? ToRelative(shot.item.path) : shot.item.material;
 	if (relPath.empty())
-		throw std::runtime_error("material does not lie under the project's data root");
+		core::throw_runtime_error("material does not lie under the project's data root");
 
 	// The Mesh Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.

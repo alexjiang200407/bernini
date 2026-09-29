@@ -3,6 +3,7 @@
 #include "Render/Renderer.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/editor_language.h"
+#include <core/err/util.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 
 #include <assetlib/AssetStore.h>
@@ -11,7 +12,6 @@
 #include <gamelib/AssetManager.h>
 #include <memory>
 #include <qwidget.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -44,7 +44,7 @@ namespace editor::plugins
 	EditorHost::InvokeRender(const RenderWork& work)
 	{
 		if (m_Renderer == nullptr || m_Assets == nullptr)
-			throw std::runtime_error("Editor render services are unavailable");
+			core::throw_runtime_error("Editor render services are unavailable");
 		m_Renderer->Invoke([&] {
 			RenderContext context{ *m_Renderer->GetGraphics(), *m_Renderer->GetScene(), *m_Assets };
 			work(context);
@@ -55,9 +55,9 @@ namespace editor::plugins
 	EditorHost::CreateViewport(QWidget* parent, const ViewportDesc& desc)
 	{
 		if (parent == nullptr)
-			throw std::runtime_error("Editor viewport requires a parent");
+			core::throw_runtime_error("Editor viewport requires a parent");
 		if (m_Renderer == nullptr || m_Assets == nullptr)
-			throw std::runtime_error("Editor render services are unavailable");
+			core::throw_runtime_error("Editor render services are unavailable");
 		auto viewport = std::make_unique<RenderTargetWindow>(
 			parent,
 			RenderTargetWindowDesc{ .renderer               = m_Renderer,
@@ -79,7 +79,7 @@ namespace editor::plugins
 	EditorHost::ShowPanel(const std::string_view id)
 	{
 		if (!m_Dispatch.showPanel)
-			throw std::runtime_error("Editor panel dispatch is unavailable");
+			core::throw_runtime_error("Editor panel dispatch is unavailable");
 		m_Dispatch.showPanel(id);
 	}
 
@@ -87,7 +87,7 @@ namespace editor::plugins
 	EditorHost::OpenAsset(const std::string_view key)
 	{
 		if (!m_Dispatch.openAsset)
-			throw std::runtime_error("Editor asset dispatch is unavailable");
+			core::throw_runtime_error("Editor asset dispatch is unavailable");
 		m_Dispatch.openAsset(key);
 	}
 
@@ -95,7 +95,7 @@ namespace editor::plugins
 	EditorHost::ImportMeshSource(const std::filesystem::path& source)
 	{
 		if (!m_Dispatch.importMeshSource)
-			throw std::runtime_error("Editor import is unavailable");
+			core::throw_runtime_error("Editor import is unavailable");
 		return m_Dispatch.importMeshSource(source);
 	}
 
@@ -103,7 +103,7 @@ namespace editor::plugins
 	EditorHost::AssetChanged(const std::string_view key)
 	{
 		if (!m_Dispatch.assetChanged)
-			throw std::runtime_error("Editor asset-change dispatch is unavailable");
+			core::throw_runtime_error("Editor asset-change dispatch is unavailable");
 		m_Dispatch.assetChanged(key);
 	}
 }

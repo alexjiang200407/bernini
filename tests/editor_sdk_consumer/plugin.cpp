@@ -10,6 +10,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <atomic>
+#include <core/err/util.h>
 #include <core/profiling/memory.h>
 #include <cstddef>
 #include <cstdint>
@@ -160,7 +161,7 @@ namespace
 				OnAssetChanged(std::string_view key) override
 				{
 					if (property("throwOnChange").toBool())
-						throw std::runtime_error("fixture notification failed");
+						core::throw_runtime_error("fixture notification failed");
 					m_Last->setText(
 						QString::fromUtf8(key.data(), static_cast<qsizetype>(key.size())));
 					setProperty("notificationCount", property("notificationCount").toInt() + 1);
@@ -200,7 +201,7 @@ namespace
 		{
 			auto* child = new QWidget(parent);
 			child->setObjectName("sample.throwing_editor_child");
-			throw std::runtime_error("fixture editor failed");
+			core::throw_runtime_error("fixture editor failed");
 		}
 	};
 	class Plugin final : public editor::IEditorPlugin

@@ -2,11 +2,11 @@
 
 #include <assetlib/IAssetPlugin.h>
 #include <charconv>
+#include <core/err/util.h>
 #include <cstddef>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -19,10 +19,10 @@ namespace
 		auto document = nlohmann::json::parse(bytes.begin(), bytes.end());
 		if (!document.is_object() || !document.contains("references") ||
 		    !document.at("references").is_array())
-			throw std::runtime_error("A sample document requires a references array");
+			core::throw_runtime_error("A sample document requires a references array");
 		for (const auto& reference : document.at("references"))
 			if (!reference.is_string() || reference.get_ref<const std::string&>().empty())
-				throw std::runtime_error("A sample reference must be a nonempty mount key");
+				core::throw_runtime_error("A sample reference must be a nonempty mount key");
 		return document;
 	}
 
@@ -69,9 +69,9 @@ namespace
 				if (parsed.ec != std::errc{} || parsed.ptr != end ||
 				    index >= document.at("references").size() ||
 				    std::to_string(index) != replacement.field)
-					throw std::runtime_error("Unknown sample reference field");
+					core::throw_runtime_error("Unknown sample reference field");
 				if (replacement.target.empty())
-					throw std::runtime_error("A sample reference must be a nonempty mount key");
+					core::throw_runtime_error("A sample reference must be a nonempty mount key");
 				document.at("references").at(index) = replacement.target;
 			}
 			return Encode(document);

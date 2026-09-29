@@ -5,10 +5,10 @@
 
 #include <assetlib_structs/BMesh.h>
 
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <stdexcept>
 #include <tracy/Tracy.hpp>
 
 #include <glm/glm.hpp>
@@ -52,7 +52,7 @@ namespace assetlib
 				static_cast<size_t>(submesh.indexByteOffset) + submesh.indexCount * width;
 			if (end > mesh.indexData.size())
 			{
-				throw std::runtime_error(
+				core::throw_runtime_error(
 					"assetlib::generateTangents: a submesh's index range runs past the pool");
 			}
 
@@ -120,7 +120,7 @@ namespace assetlib
 				if (i0 >= submesh.vertexCount || i1 >= submesh.vertexCount ||
 				    i2 >= submesh.vertexCount)
 				{
-					throw std::runtime_error(
+					core::throw_runtime_error(
 						"assetlib::generateTangents: an index points outside its submesh");
 				}
 
@@ -238,7 +238,7 @@ namespace assetlib
 			                   static_cast<size_t>(submesh.vertexCount) * submesh.layout.stride;
 			if (end > mesh.vertexData.size())
 			{
-				throw std::runtime_error(
+				core::throw_runtime_error(
 					"assetlib::generateTangents: a submesh's vertex blob runs past the pool");
 			}
 

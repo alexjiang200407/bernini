@@ -1,7 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <stdexcept>
+#include <core/err/util.h>
 #include <string_view>
 
 namespace editor::detail
@@ -22,7 +22,7 @@ namespace editor::detail
 		{
 			const auto dot = context.find('.');
 			if (!IsKey(context.substr(0, dot)))
-				throw std::runtime_error("Invalid translation context");
+				core::throw_runtime_error("Invalid translation context");
 			if (dot == std::string_view::npos)
 				return;
 			context.remove_prefix(dot + 1);
@@ -37,6 +37,6 @@ namespace editor::detail
 		    !std::all_of(locale.begin(), locale.end(), [&](char c) {
 				return letter(c) || (c >= '0' && c <= '9') || c == '_' || c == '-';
 			}))
-			throw std::runtime_error("Invalid translation locale");
+			core::throw_runtime_error("Invalid translation locale");
 	}
 }

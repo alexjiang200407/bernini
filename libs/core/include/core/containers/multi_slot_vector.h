@@ -3,7 +3,6 @@
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 
 namespace core
 {
@@ -115,7 +114,7 @@ namespace core
 				uint32_t currentSize = static_cast<uint32_t>(m_Data.size());
 				if (m_MaxSlots != 0 && currentSize + count > m_MaxSlots)
 				{
-					throw std::runtime_error("multi_slot_vector: no free slots remaining");
+					core::throw_runtime_error("multi_slot_vector: no free slots remaining");
 				}
 
 				targetIndex = currentSize;

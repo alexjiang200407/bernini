@@ -12,7 +12,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -508,7 +507,7 @@ namespace bgl
 	{
 		if (!m_Compiled)
 		{
-			throw std::runtime_error("FrameGraph::Execute called before Compile");
+			core::throw_runtime_error("FrameGraph::Execute called before Compile");
 		}
 
 		for (const size_t p : m_Scheduler.Order())

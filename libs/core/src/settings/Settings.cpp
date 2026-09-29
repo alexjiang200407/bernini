@@ -1,3 +1,4 @@
+#include <core/err/util.h>
 #include <core/settings/Settings.h>
 #include <cstdint>
 #include <filesystem>
@@ -5,7 +6,6 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -190,8 +190,7 @@ namespace core
 		std::ifstream file(filepath);
 		if (!file.is_open())
 		{
-			throw std::runtime_error(
-				std::format("Settings: failed to open '{}'", filepath.string()));
+			core::throw_runtime_error("Settings: failed to open '{}'", filepath.string());
 		}
 
 		try
@@ -200,8 +199,10 @@ namespace core
 		}
 		catch (const nlohmann::json::parse_error& e)
 		{
-			throw std::runtime_error(
-				std::format("Settings: failed to parse '{}': {}", filepath.string(), e.what()));
+			core::throw_runtime_error(
+				"Settings: failed to parse '{}': {}",
+				filepath.string(),
+				e.what());
 		}
 	}
 

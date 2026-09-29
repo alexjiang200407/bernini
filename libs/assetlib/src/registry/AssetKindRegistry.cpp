@@ -3,7 +3,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/IAssetPlugin.h>
 #include <cctype>
-#include <stdexcept>
+#include <core/err/util.h>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -45,12 +45,12 @@ namespace assetlib
 	AssetKindRegistry::Add(AssetKindPtr kind)
 	{
 		if (!kind)
-			throw std::runtime_error("assetlib: cannot register a null asset kind");
+			core::throw_runtime_error("assetlib: cannot register a null asset kind");
 		const auto& desc = kind->GetDesc();
 		if (!validId(desc.id) || !validExtension(desc.extension))
-			throw std::runtime_error("assetlib: invalid asset kind descriptor");
+			core::throw_runtime_error("assetlib: invalid asset kind descriptor");
 		if (HasCollision(desc))
-			throw std::runtime_error("assetlib: asset kind descriptor collides");
+			core::throw_runtime_error("assetlib: asset kind descriptor collides");
 
 		const IAssetKind* added = kind.get();
 		m_Kinds.push_back(std::move(kind));
@@ -80,7 +80,7 @@ namespace assetlib
 		for (const AssetKindPtr& kind : other.m_Kinds)
 		{
 			if (kind == nullptr || HasCollision(kind->GetDesc()))
-				throw std::runtime_error("assetlib: asset kind descriptor collides");
+				core::throw_runtime_error("assetlib: asset kind descriptor collides");
 		}
 
 		auto byExtension = m_ByExtension;

@@ -1,3 +1,4 @@
+#include <core/err/util.h>
 #include <editor_plugin_api/translation_csv.h>
 
 #include "translation_validation.h"
@@ -8,7 +9,6 @@
 #include <editor_plugin_api/TranslationCatalog.h>
 #include <qtypes.h>
 #include <set>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -26,7 +26,7 @@ namespace
 		if (std::string_view(encoded.constData(), static_cast<std::size_t>(encoded.size())) !=
 		        csv ||
 		    csv.find('\0') != std::string_view::npos)
-			throw std::runtime_error("Translation CSV must be valid UTF-8 without NUL bytes");
+			core::throw_runtime_error("Translation CSV must be valid UTF-8 without NUL bytes");
 
 		std::vector<std::vector<std::string>> rows;
 		std::size_t                           position = 0;
@@ -61,7 +61,7 @@ namespace
 						}
 					}
 					if (!closed)
-						throw std::runtime_error("Unclosed translation CSV quote");
+						core::throw_runtime_error("Unclosed translation CSV quote");
 				}
 				else
 				{
@@ -69,7 +69,8 @@ namespace
 					       csv[position] != '\n')
 					{
 						if (csv[position] == '"')
-							throw std::runtime_error("Quote inside unquoted translation CSV field");
+							core::throw_runtime_error(
+								"Quote inside unquoted translation CSV field");
 						field += csv[position++];
 					}
 				}
@@ -86,7 +87,7 @@ namespace
 					++position;
 					break;
 				}
-				throw std::runtime_error("Invalid translation CSV field separator");
+				core::throw_runtime_error("Invalid translation CSV field separator");
 			}
 			rows.push_back(std::move(row));
 		}
@@ -102,14 +103,14 @@ namespace editor
 		detail::ValidateContext(context);
 		const auto rows = ReadRows(csv);
 		if (rows.empty() || rows.front().size() < 2 || rows.front().front() != "key")
-			throw std::runtime_error("Translation CSV requires key and locale columns");
+			core::throw_runtime_error("Translation CSV requires key and locale columns");
 		const auto&           header = rows.front();
 		std::set<std::string> locales;
 		for (std::size_t column = 1; column < header.size(); ++column)
 		{
 			detail::ValidateLocale(header[column]);
 			if (!locales.insert(header[column]).second)
-				throw std::runtime_error("Duplicate translation CSV locale");
+				core::throw_runtime_error("Duplicate translation CSV locale");
 		}
 		TranslationCatalog    catalog{ std::string(context), {} };
 		std::set<std::string> keys;
@@ -117,9 +118,9 @@ namespace editor
 		{
 			const auto& row = rows[index];
 			if (row.size() != header.size() || !detail::IsKey(row.front()))
-				throw std::runtime_error("Invalid translation CSV row or key");
+				core::throw_runtime_error("Invalid translation CSV row or key");
 			if (!keys.insert(row.front()).second)
-				throw std::runtime_error("Duplicate translation CSV key");
+				core::throw_runtime_error("Duplicate translation CSV key");
 			for (std::size_t column = 1; column < row.size(); ++column)
 			{
 				if (!row[column].empty())

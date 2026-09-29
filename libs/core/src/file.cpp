@@ -17,7 +17,6 @@
 #include <ios>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -37,14 +36,14 @@ namespace core::file
 		std::ifstream fileStream{ filePath, std::ios::binary | std::ios::ate };
 		if (!fileStream)
 		{
-			throw std::runtime_error("Failed to open file: " + filePath);
+			core::throw_runtime_error("Failed to open file: {}", filePath);
 		}
 		std::streamsize fileSize = fileStream.tellg();
 		fileStream.seekg(0, std::ios::beg);
 		std::vector<std::byte> buffer(static_cast<uint64_t>(fileSize));
 		if (!fileStream.read(reinterpret_cast<char*>(buffer.data()), fileSize))
 		{
-			throw std::runtime_error("Failed to open file: " + filePath);
+			core::throw_runtime_error("Failed to open file: {}", filePath);
 		}
 		return buffer;
 	}

@@ -1,13 +1,13 @@
 #include "util/fs_util.h"
 
 #include <cerrno>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <cstddef>
 #include <exception>
 #include <filesystem>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -23,8 +23,10 @@ namespace assetlib
 		std::filesystem::create_directories(dir, ec);
 
 		if (ec)
-			throw std::runtime_error(
-				"assetlib: cannot create directory '" + dir.string() + "': " + ec.message());
+			core::throw_runtime_error(
+				"assetlib: cannot create directory '{}': {}",
+				dir.string(),
+				ec.message());
 	}
 
 	std::optional<std::filesystem::file_time_type>
@@ -64,7 +66,7 @@ namespace assetlib
 		}
 		catch (const std::exception& error)
 		{
-			throw std::runtime_error(std::string(what) + ": " + error.what());
+			core::throw_runtime_error("{}: {}", what, error.what());
 		}
 	}
 }

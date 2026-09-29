@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cmath>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -17,7 +18,6 @@
 
 #include <core/glm.h>
 #include <core/math.h>
-#include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
@@ -140,11 +140,11 @@ namespace assetlib
 		readCubeMip0(const ImageData& source, const char* who)
 		{
 			if (!source.isCubemap)
-				throw std::runtime_error(std::string(who) + ": source is not a cube map");
+				core::throw_runtime_error("{}: source is not a cube map", who);
 			if (source.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-				throw std::runtime_error(std::string(who) + ": source must be R32G32B32A32_SFLOAT");
+				core::throw_runtime_error("{}: source must be R32G32B32A32_SFLOAT", who);
 			if (source.width != source.height || source.width == 0)
-				throw std::runtime_error(std::string(who) + ": source faces must be square");
+				core::throw_runtime_error("{}: source faces must be square", who);
 
 			CubeMip0 out;
 			out.size = source.width;
@@ -154,7 +154,7 @@ namespace assetlib
 				// Subresources are face-major, mip-minor; only mip 0 of each face is read.
 				const size_t index = static_cast<size_t>(face) * source.mipLevels;
 				if (index >= source.subresources.size())
-					throw std::runtime_error(std::string(who) + ": source is missing cube faces");
+					core::throw_runtime_error("{}: source is missing cube faces", who);
 
 				const std::byte* src = source.pixels.data() + source.subresources[index].offset;
 
@@ -396,9 +396,10 @@ namespace assetlib
 
 		float* data = stbi_loadf(path.string().c_str(), &width, &height, &channels, 4);
 		if (data == nullptr)
-			throw std::runtime_error(
-				"assetlib::loadRadianceHdr: cannot decode '" + path.string() +
-				"': " + stbi_failure_reason());
+			core::throw_runtime_error(
+				"assetlib::loadRadianceHdr: cannot decode '{}': {}",
+				path.string(),
+				stbi_failure_reason());
 
 		ImageData out;
 		out.width     = static_cast<uint32_t>(width);
@@ -422,12 +423,12 @@ namespace assetlib
 	equirectToCube(const ImageData& equirect, uint32_t faceSize)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::equirectToCube: faceSize must be > 0");
+			core::throw_runtime_error("assetlib::equirectToCube: faceSize must be > 0");
 		if (equirect.isCubemap || equirect.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::equirectToCube: source must be a 2D R32G32B32A32_SFLOAT image");
 		if (equirect.subresources.empty())
-			throw std::runtime_error("assetlib::equirectToCube: source has no pixels");
+			core::throw_runtime_error("assetlib::equirectToCube: source has no pixels");
 
 		const auto* src = reinterpret_cast<const float*>(
 			equirect.pixels.data() + equirect.subresources.front().offset);
@@ -508,7 +509,7 @@ namespace assetlib
 	irradianceSh(const ImageData& source, uint32_t faceSize)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::irradianceSh: faceSize must be > 0");
+			core::throw_runtime_error("assetlib::irradianceSh: faceSize must be > 0");
 
 		const CubeMip0 src = readCubeMip0(source, "assetlib::irradianceSh");
 
@@ -688,9 +689,9 @@ namespace assetlib
 		uint32_t         threads)
 	{
 		if (faceSize == 0)
-			throw std::runtime_error("assetlib::blurCube: faceSize must be > 0");
+			core::throw_runtime_error("assetlib::blurCube: faceSize must be > 0");
 		if (samples == 0)
-			throw std::runtime_error("assetlib::blurCube: samples must be > 0");
+			core::throw_runtime_error("assetlib::blurCube: samples must be > 0");
 
 		const CubePyramid pyramid(source);
 		ImageData         out = makeCubeImage(faceSize, 1);
@@ -722,11 +723,11 @@ namespace assetlib
 		uint32_t         threads)
 	{
 		if (faceSize == 0 || mipLevels == 0)
-			throw std::runtime_error("assetlib::skyChain: faceSize and mipLevels must be > 0");
+			core::throw_runtime_error("assetlib::skyChain: faceSize and mipLevels must be > 0");
 		if (samples == 0)
-			throw std::runtime_error("assetlib::skyChain: samples must be > 0");
+			core::throw_runtime_error("assetlib::skyChain: samples must be > 0");
 		if ((faceSize >> (mipLevels - 1)) == 0)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::skyChain: faceSize is too small for that many mips");
 
 		const CubePyramid pyramid(source);
@@ -816,12 +817,12 @@ namespace assetlib
 	prefilterRadiance(const ImageData& source, const PrefilterDesc& desc, PrefilterStats* stats)
 	{
 		if (desc.faceSize == 0 || desc.mipLevels == 0)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::prefilterRadiance: faceSize and mipLevels must be > 0");
 		if (desc.samples == 0)
-			throw std::runtime_error("assetlib::prefilterRadiance: samples must be > 0");
+			core::throw_runtime_error("assetlib::prefilterRadiance: samples must be > 0");
 		if ((desc.faceSize >> (desc.mipLevels - 1)) == 0)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::prefilterRadiance: faceSize is too small for that many mips");
 
 		ZoneScopedN("assetlib prefilter");

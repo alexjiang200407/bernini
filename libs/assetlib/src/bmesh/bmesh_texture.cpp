@@ -4,12 +4,12 @@
 #include <assetlib_structs/VkFormat.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <vector>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -111,7 +111,7 @@ namespace assetlib
 	{
 		const size_t expected = static_cast<size_t>(width) * height * 4;
 		if (rgba.size() < expected)
-			throw std::runtime_error("bmesh: RGBA buffer smaller than width*height*4");
+			core::throw_runtime_error("bmesh: RGBA buffer smaller than width*height*4");
 
 		ImageData out;
 		out.width     = width;
@@ -168,7 +168,7 @@ namespace assetlib
 					static_cast<int>(mh),
 					0,
 					STBIR_RGBA) == nullptr)
-				throw std::runtime_error("bmesh: mip resize failed");
+				core::throw_runtime_error("bmesh: mip resize failed");
 
 			// Downsample first, then restore the coverage the averaging just ate. Each level is
 			// corrected against *mip 0*, not against its parent, so the error cannot compound down the
@@ -198,7 +198,7 @@ namespace assetlib
 	{
 		const size_t texels = static_cast<size_t>(width) * height;
 		if (rgba.size() < texels * 4u)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"dilateColorIntoTransparent: buffer smaller than width*height*4");
 
 		// Multi-source BFS from every opaque texel. Each transparent texel it reaches takes the RGB of

@@ -114,13 +114,15 @@ namespace assetlib
 			// loadKTX2(kRgba8) decodes Basis sources and rejects block-compressed ones, so anything
 			// that reaches here should already be RGBA8. Anything else is a format we cannot composite.
 			if (!isRgba8(image.vkFormat))
-				throw std::runtime_error(
-					"assetlib::bakeMaterial: source '" + name +
-					"' decoded to an unexpected format (Vulkan format " +
-					std::to_string(static_cast<uint32_t>(image.vkFormat)) + ")");
+				core::throw_runtime_error(
+					"assetlib::bakeMaterial: source '{}' decoded to an unexpected format (Vulkan "
+					"format {})",
+					name,
+					static_cast<uint32_t>(image.vkFormat));
 			if (image.subresources.empty())
-				throw std::runtime_error(
-					"assetlib::bakeMaterial: source '" + name + "' has no image data");
+				core::throw_runtime_error(
+					"assetlib::bakeMaterial: source '{}' has no image data",
+					name);
 
 			const ImageSubresource& sub    = image.subresources.front();
 			const size_t            stride = static_cast<size_t>(image.width) * 4u;
@@ -164,7 +166,7 @@ namespace assetlib
 					0,
 					STBIR_RGBA) == nullptr)
 			{
-				throw std::runtime_error("assetlib::bakeMaterial: source resize failed");
+				core::throw_runtime_error("assetlib::bakeMaterial: source resize failed");
 			}
 			return out;
 		}
@@ -226,8 +228,9 @@ namespace assetlib
 
 				const SourceStamp stamp = stampOf(dataRoot / route.texture);
 				if (stamp.size == 0)
-					throw std::runtime_error(
-						"assetlib::bakeMaterial: source '" + route.texture + "' cannot be read");
+					core::throw_runtime_error(
+						"assetlib::bakeMaterial: source '{}' cannot be read",
+						route.texture);
 
 				stamps.emplace(route.texture, stamp);
 			}
@@ -748,10 +751,9 @@ namespace assetlib
 			if (hasRoutes && pbr.baseColorTexture.empty() && pbr.ormTexture.empty() &&
 			    pbr.normalTexture.empty())
 			{
-				throw std::runtime_error(
+				core::throw_runtime_error(
 					"assetlib::stripAuthoringData: the material has never been baked; stripping "
-					"its "
-					"routes would leave nothing to render");
+					"its routes would leave nothing to render");
 			}
 
 			if (!pbr.geometryOcclusionTexture.empty() && pbr.geometryOcclusionBakedTexture.empty())

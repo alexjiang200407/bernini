@@ -184,9 +184,9 @@ namespace assetlib
 
 			const auto& accessor = model.accessors[static_cast<size_t>(it->second)];
 			if (accessor.sparse.isSparse)
-				throw std::runtime_error("bmesh: sparse accessors are not supported");
+				core::throw_runtime_error("bmesh: sparse accessors are not supported");
 			if (!allowInteger && accessor.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
-				throw std::runtime_error("bmesh: only float vertex attributes are supported");
+				core::throw_runtime_error("bmesh: only float vertex attributes are supported");
 			if (accessor.bufferView < 0)
 				return {};
 
@@ -223,7 +223,7 @@ namespace assetlib
 
 			const auto& accessor = model.accessors[static_cast<size_t>(primitive.indices)];
 			if (accessor.sparse.isSparse)
-				throw std::runtime_error("bmesh: sparse index accessors are not supported");
+				core::throw_runtime_error("bmesh: sparse index accessors are not supported");
 
 			const auto&      view   = model.bufferViews[static_cast<size_t>(accessor.bufferView)];
 			const auto&      buffer = model.buffers[static_cast<size_t>(view.buffer)];
@@ -257,7 +257,7 @@ namespace assetlib
 					break;
 				}
 				default:
-					throw std::runtime_error("bmesh: unsupported index component type");
+					core::throw_runtime_error("bmesh: unsupported index component type");
 				}
 			}
 			return indices;
@@ -909,7 +909,7 @@ namespace assetlib
 			const AttributeView colors  = makeView(model, primitive, "COLOR_0", true);
 			const AttributeView heights = makeView(model, primitive, "_HEIGHT");
 			if (heights.Present() && heights.components != 1)
-				throw std::runtime_error("bmesh: a POINTS primitive's _HEIGHT must be a scalar");
+				core::throw_runtime_error("bmesh: a POINTS primitive's _HEIGHT must be a scalar");
 
 			auto clumps = std::vector<GrassClump>();
 			clumps.reserve(count);
@@ -918,7 +918,8 @@ namespace assetlib
 				auto clump     = GrassClump();
 				clump.position = positions.At<glm::vec3>(i);
 				if (!core::is_finite(clump.position))
-					throw std::runtime_error("bmesh: a POINTS primitive has a non-finite position");
+					core::throw_runtime_error(
+						"bmesh: a POINTS primitive has a non-finite position");
 
 				clump.normal = glm::vec3(0.0f, 1.0f, 0.0f);
 				if (normals.Present())
@@ -926,14 +927,14 @@ namespace assetlib
 					const glm::vec3 n      = normals.At<glm::vec3>(i);
 					const float     length = glm::length(n);
 					if (!core::is_finite(n) || !(length > 0.0f))
-						throw std::runtime_error(
+						core::throw_runtime_error(
 							"bmesh: a POINTS primitive has a zero or non-finite normal");
 					clump.normal = n / length;
 				}
 
 				clump.heightScale = heights.Present() ? heights.At<float>(i) : 1.0f;
 				if (!std::isfinite(clump.heightScale) || !(clump.heightScale > 0.0f))
-					throw std::runtime_error(
+					core::throw_runtime_error(
 						"bmesh: a POINTS primitive has a _HEIGHT that is not finite and positive");
 
 				clump.color = glm::u8vec4(255);
@@ -1520,8 +1521,10 @@ namespace assetlib
 			                    loader.LoadBinaryFromFile(&model, &error, &warning, path.string()) :
 			                    loader.LoadASCIIFromFile(&model, &error, &warning, path.string());
 			if (!ok)
-				throw std::runtime_error(
-					"bmesh: failed to load glTF '" + path.string() + "': " + error);
+				core::throw_runtime_error(
+					"bmesh: failed to load glTF '{}': {}",
+					path.string(),
+					error);
 		}
 	}
 
@@ -1840,7 +1843,7 @@ namespace assetlib
 				}
 
 				if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
-					throw std::runtime_error(
+					core::throw_runtime_error(
 						"bmesh: only triangle primitives, and point primitives for grass, are "
 						"supported");
 

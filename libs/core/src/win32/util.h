@@ -1,10 +1,10 @@
 #pragma once
 #include "WinAPI.h"
 #include <concepts>
+#include <core/err/util.h>
 #include <core/str/str.h>
 #include <exception>
 #include <functional>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -60,8 +60,9 @@ namespace core::win32
 			if (result == 0)
 			{
 				DWORD err = GetLastError();
-				throw std::runtime_error(
-					"Win32 API Error" + core::str::wide_to_string(get_error_description(err)));
+				core::throw_runtime_error(
+					"Win32 API Error{}",
+					core::str::wide_to_string(get_error_description(err)));
 			}
 		}
 		else if constexpr (std::is_pointer_v<T>)
@@ -69,8 +70,9 @@ namespace core::win32
 			if (result == nullptr)
 			{
 				DWORD err = GetLastError();
-				throw std::runtime_error(
-					"Win32 API Error" + core::str::wide_to_string(get_error_description(err)));
+				core::throw_runtime_error(
+					"Win32 API Error{}",
+					core::str::wide_to_string(get_error_description(err)));
 			}
 		}
 		else

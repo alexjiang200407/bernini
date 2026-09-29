@@ -7,9 +7,9 @@
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 #include <algorithm>
+#include <core/err/util.h>
 #include <functional>
 #include <set>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -36,7 +36,7 @@ namespace demo
 	{
 		if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
 		{
-			throw std::runtime_error(std::string("SDL_InitSubSystem failed: ") + SDL_GetError());
+			core::throw_runtime_error("SDL_InitSubSystem failed: {}", SDL_GetError());
 		}
 
 		SDL_WindowFlags flags = 0;
@@ -50,7 +50,7 @@ namespace demo
 		{
 			std::string err = SDL_GetError();
 			SDL_QuitSubSystem(SDL_INIT_VIDEO);
-			throw std::runtime_error("SDL_CreateWindow failed: " + err);
+			core::throw_runtime_error("SDL_CreateWindow failed: {}", err);
 		}
 
 		m_Id = SDL_GetWindowID(m_Window);

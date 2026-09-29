@@ -1,6 +1,7 @@
 #include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -9,7 +10,6 @@
 
 #include <assetlib_structs/BMesh.h>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -23,15 +23,15 @@ namespace game
 			const assetlib::VertexAttribute* position =
 				assetlib::findAttribute(submesh.layout, assetlib::VertexSemantic::kPosition);
 			if (position == nullptr || position->format != assetlib::VertexFormat::kFloat32x3)
-				throw std::runtime_error("Raycaster: a submesh has no float3 position attribute");
+				core::throw_runtime_error("Raycaster: a submesh has no float3 position attribute");
 
 			if (position->offset + sizeof(glm::vec3) > submesh.layout.stride)
-				throw std::runtime_error("Raycaster: a position attribute overruns its stride");
+				core::throw_runtime_error("Raycaster: a position attribute overruns its stride");
 
 			const size_t end = static_cast<size_t>(submesh.vertexByteOffset) +
 			                   static_cast<size_t>(submesh.vertexCount) * submesh.layout.stride;
 			if (end > mesh.vertexData.size())
-				throw std::runtime_error("Raycaster: a submesh's vertex blob runs past the pool");
+				core::throw_runtime_error("Raycaster: a submesh's vertex blob runs past the pool");
 
 			auto positions = std::vector<glm::vec3>(submesh.vertexCount);
 			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
@@ -54,7 +54,7 @@ namespace game
 			{
 				const size_t index = static_cast<size_t>(submesh.firstMeshlet) + m;
 				if (index >= mesh.meshlets.size())
-					throw std::runtime_error(
+					core::throw_runtime_error(
 						"Raycaster: a submesh's meshlet range runs past the pool");
 
 				const assetlib::Meshlet& meshlet = mesh.meshlets[index];
@@ -63,19 +63,19 @@ namespace game
 				if (static_cast<uint64_t>(meshlet.vertexOffset) + meshlet.vertexCount >
 				        mesh.meshletVertices.size() ||
 				    indexEnd > mesh.meshletTriangles.size())
-					throw std::runtime_error("Raycaster: a meshlet overflows its streams");
+					core::throw_runtime_error("Raycaster: a meshlet overflows its streams");
 
 				triangles.reserve(triangles.size() + meshlet.triangleCount * 3u);
 				for (uint32_t i = 0; i < meshlet.triangleCount * 3u; ++i)
 				{
 					const uint8_t local = mesh.meshletTriangles[meshlet.triangleOffset + i];
 					if (local >= meshlet.vertexCount)
-						throw std::runtime_error(
+						core::throw_runtime_error(
 							"Raycaster: a meshlet index points outside itself");
 
 					const uint32_t vertex = mesh.meshletVertices[meshlet.vertexOffset + local];
 					if (vertex >= submesh.vertexCount)
-						throw std::runtime_error(
+						core::throw_runtime_error(
 							"Raycaster: a meshlet vertex points outside its submesh");
 
 					triangles.push_back(vertex);
@@ -90,11 +90,11 @@ namespace game
 	Raycaster::AddMesh(const assetlib::BMesh& mesh, uint32_t meshIndex)
 	{
 		if (meshIndex >= mesh.meshes.size())
-			throw std::runtime_error("Raycaster::AddMesh: mesh index out of range");
+			core::throw_runtime_error("Raycaster::AddMesh: mesh index out of range");
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
 		if (static_cast<uint64_t>(entry.firstSubmesh) + entry.submeshCount > mesh.submeshes.size())
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"Raycaster::AddMesh: a mesh's submesh range runs past the pool");
 
 		auto geometry = Geometry();
@@ -124,7 +124,7 @@ namespace game
 	Raycaster::AddInstance(uint32_t geometry, const glm::mat4& transform)
 	{
 		if (geometry >= m_Geometries.size())
-			throw std::runtime_error("Raycaster::AddInstance: geometry index out of range");
+			core::throw_runtime_error("Raycaster::AddInstance: geometry index out of range");
 
 		m_Instances.push_back({ geometry, glm::inverse(transform) });
 		return static_cast<uint32_t>(m_Instances.size() - 1);

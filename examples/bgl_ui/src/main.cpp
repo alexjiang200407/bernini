@@ -12,6 +12,7 @@
 #include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgpu/GpuContext.h>
 #include <cmath>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
 #include <gamelib/AssetManager.h>
@@ -148,7 +149,7 @@ main(int argc, char** argv)
 
 		Rml::DataModelConstructor model = uiContext->Get().CreateDataModel("menu");
 		if (!model)
-			throw std::runtime_error("the UI data model could not be created");
+			core::throw_runtime_error("the UI data model could not be created");
 
 		model.Bind("plays", &plays);
 		model.Bind("frameMs", &frameMs);
