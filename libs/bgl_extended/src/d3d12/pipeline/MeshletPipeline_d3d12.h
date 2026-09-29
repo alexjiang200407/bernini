@@ -3,6 +3,11 @@
 #include "uniforms/Uniforms.h"
 #include <core/err/util.h>
 
+namespace bgpu
+{
+	class GpuContext;
+}
+
 namespace bgl
 {
 	class ShaderCache;
@@ -10,7 +15,10 @@ namespace bgl
 	class MeshletPipeline : public core::RefCounter<IMeshletPipeline>
 	{
 	public:
-		MeshletPipeline(ID3D12Device* device, ShaderCache* cache, const MeshletPipelineDesc& desc);
+		MeshletPipeline(
+			const bgpu::GpuContext&    context,
+			ShaderCache*               cache,
+			const MeshletPipelineDesc& desc);
 
 		~MeshletPipeline() noexcept override;
 

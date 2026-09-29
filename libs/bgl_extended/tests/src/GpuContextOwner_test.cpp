@@ -1,6 +1,14 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#if defined(RENDERER_BACKEND_DX12)
+#	include <directx/d3d12.h>
+#	include <wrl/client.h>
+
+namespace wrl = Microsoft::WRL;
+
+#	include "d3d12/pipeline/ComputePipeline_d3d12.h"
+#endif
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "resource/Buffer.h"
@@ -232,3 +240,40 @@ TEST_CASE("A source module registered again under its name replaces the text", "
 	device->AddSourceModule({ "game.probe", "public static const uint kProbeValue = 5u;\n" });
 	CHECK(ReadProbe(gfx) == 5u);
 }
+
+// bgl_extended_tests globs every .cpp whatever the backend, and the pipeline's native object is
+// D3D12's; Metal renderers build their own.
+#if defined(RENDERER_BACKEND_DX12)
+
+// A PSO is the device's, so a second renderer on the context gets the first one's object rather than
+// building its own -- and keeps getting it after the first is gone, since the context holds it. Under
+// GPU-based validation this is what stops every renderer repaying the debug layer's patching.
+TEST_CASE("Renderers on one context share their pipeline states", "[device][compute]")
+{
+	auto context = MakeContext();
+
+	const auto pipelineStateOf = [](const bgl::GraphicsRef& gfx) {
+		auto* device = gfx->As<bgl::GraphicsBase>()->GetDevice();
+		auto  kernel = device->CreateComputeKernel(
+			bgl::ComputePipelineDesc()
+				.SetShader(device->CreateShader("CSSourceProbe"))
+				.SetDebugName("CSSourceProbe"));
+		REQUIRE(kernel.pipeline != nullptr);
+		return kernel.pipeline->As<bgl::ComputePipeline>()->GetPipelineState();
+	};
+
+	auto first = bgl::CreateGraphics(context, bgl::GraphicsOptions());
+	REQUIRE(first != nullptr);
+	ID3D12PipelineState* const built = pipelineStateOf(first);
+
+	auto second = bgl::CreateGraphics(context, bgl::GraphicsOptions());
+	REQUIRE(second != nullptr);
+	CHECK(pipelineStateOf(second) == built);
+
+	first      = nullptr;
+	auto third = bgl::CreateGraphics(context, bgl::GraphicsOptions());
+	REQUIRE(third != nullptr);
+	CHECK(pipelineStateOf(third) == built);
+}
+
+#endif

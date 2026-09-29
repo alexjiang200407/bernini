@@ -44,9 +44,16 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   payload — so a torn or misplaced entry is a miss before any owner decodes it. The file salt is
   one walk of the shader tree per context, taken by the first key; the source modules fold in at
   every key, so a text another owner changed moves it ([shader_cache.md](shader_cache.md)).
+* **The D3D12 pipeline states every owner built.** `FindPipelineState` / `SharePipelineState` in
+  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h) hold PSOs for the
+  context's life, keyed by the root signature and the owner's identity for everything else. A PSO
+  is immutable and the device's, so a second renderer on the context reuses the first one's
+  instead of building its own. It matters most under GPU-based validation, which patches each new
+  PSO object on first use: that is most of a validated test suite's time, and without sharing it
+  is paid again by every case. Metal renderers still build their own.
 * **What deliberately does not.** Queues, allocators, resource managers, descriptor heaps,
-  timestamp heaps, pipelines: each owner creates its own on the shared device, which is what keeps
-  two owners isolated. The renderer's driver pipeline library — `pipelines.psolib`, the
+  timestamp heaps: each owner creates its own on the shared device, which is what keeps two owners
+  isolated. The renderer's driver pipeline library — `pipelines.psolib`, the
   `MTL::BinaryArchive` — is one of them: it needs the native device, is dropped under GPU
   validation, and is serialized whole, so one writer per directory holds it
   ([shader_cache.md](shader_cache.md)). Metal's `.gputrace` capture is frame-scoped and stays in `Graphics`.
@@ -58,7 +65,7 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 * **Built as the renderer is.** It holds process-wide GPU state, so `BERNINI_RENDERER_LIBRARY_TYPE`
   decides its kind exactly as it does `bgl_extended`'s and `core_process`'s
   ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks the few exports —
-  `CreateGpuContext`, the two native-device accessors, the D3D12 error checker and the Slang error
+  `CreateGpuContext`, the two native-device accessors, the D3D12 shared pipeline states, the D3D12 error checker and the Slang error
   checker; everything else crosses the boundary through virtual calls. On Metal it is
   also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
   user in the process links.

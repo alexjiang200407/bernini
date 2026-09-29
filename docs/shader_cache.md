@@ -143,14 +143,26 @@ flowchart TD
     STORE --> ROOT["root signature + Uniforms layout + DXIL"]
     LOAD --> ROOT
 
-    ROOT -- "PSO identity = hash(DXIL + render state)" --> PLIB{"pipeline library hit?"}
-    PLIB -- "yes" --> PSO["ID3D12PipelineState (no driver compile)"]
+    ROOT -- "PSO identity = hash(DXIL + render state)" --> SHARED{"context already holds it?"}
+    SHARED -- "yes" --> PSO["ID3D12PipelineState (no driver compile)"]
+    SHARED -- "no" --> PLIB{"pipeline library hit?"}
+    PLIB -- "yes" --> PSO
     PLIB -- "no" --> CREATE["CreatePipelineState -> StorePipeline"]
     CREATE --> PSO
+    PSO -- "SharePipelineState" --> SHARED
 ```
 
-Under GPU-based validation the `PLIB` layer is absent: no pipeline library exists, so every PSO
-takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
+The first layer is in memory and the GPU context's, not the renderer's: every PSO a renderer on
+the context built, kept until the context dies (`bgpu::FindPipelineState` /
+`SharePipelineState`). A second renderer on the same context reuses those objects instead of
+building its own. That is the only layer that saves anything under GPU-based validation: the
+debug layer patches each new PSO object on first use, so without sharing every test case repays
+the patching (tens of seconds a case). D3D12 only; Metal renderers build their own.
+
+Under GPU-based validation the `PLIB` layer is absent: no pipeline library exists, so a PSO the
+context does not already hold takes the `CreatePipelineState` path and none is stored (see Risky
+Contracts). A library built under validation would not help anyway: a PSO loaded from one is
+still a new object and is patched again.
 
 ---
 
