@@ -31,7 +31,9 @@ what catches it.
 
 ## How it is generated
 
-- **Every `just build` refreshes it** once the build succeeds. A library is re-parsed only when
+- **Every build refreshes it** once the build succeeds -- `just build`, and the build step of
+  `just run`, `test`, `coverage` and `idl`, which all go through `scripts/build.py` -- in a process
+  of its own, so a crash in libclang cannot fail a good build. A library is re-parsed only when
   one of its public headers changed (a digest per library, in `build/api/.stamp.json`); the others
   render from the symbols their last parse cached under `build/api/.symbols/`. `--no-api` skips
   it, and `just api` runs it alone (`--force` re-parses everything).

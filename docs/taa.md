@@ -97,7 +97,9 @@ over the render grid's own Nyquist — stays above 32 dB PSNR of the native conv
 raw upscale it replaces), and that a target returned to 1.0 by `IGraphics::SetRenderScale`
 converges to the bytes one created there does.
 
-**This document is a map, not a mirror.** The headers at each linked path are the source of truth.
+**This document is a map, not a mirror.** The headers are the source of truth, and the doc lists
+none of their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md).
 
 ---
 

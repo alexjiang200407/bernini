@@ -18,7 +18,9 @@ covers how they relate, how a source becomes them, and the authoring rules that 
 map arrives from somewhere else.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the non-obvious
-contracts — not full signatures. The header at each linked path is the source of truth; when this doc
+contracts — not full signatures. The headers are the source of truth, and the doc lists none of
+their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md); when this doc
 disagrees, trust the header, then fix this doc.
 
 ---

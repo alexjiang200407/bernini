@@ -18,7 +18,9 @@ This is the layer bgl_extended is built *on*. For the surface an application lin
 
 **This document is a map, not a mirror.** It captures the design choices, the object topology,
 the synchronization model, and the *non-obvious* method contracts. It deliberately does **not**
-reproduce full signatures — the header at each linked path is the source of truth. When this
+reproduce full signatures — the headers are the source of truth, and the doc lists none of their
+symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md). When this
 doc and a header disagree, trust the header, then fix this doc.
 
 ---

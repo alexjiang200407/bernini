@@ -6,7 +6,9 @@ is consumed by a separately configured plugin project. The editor loads the loca
 by its startup project before that project's store opens. Runtime kinds already participate in the
 store, graph, rename, migrate and pack paths. The editor validates and owns presentation
 contributions in the same process session, then creates one host for each open project.
-The headers at the linked paths are the source of truth; when this map disagrees, trust the header
+The headers are the source of truth, and the doc lists none of their symbols: find a type with
+clangd's `workspaceSymbol`, or a public one in the [API catalog](docs/api_catalog.md); when this map
+disagrees, trust the header
 and fix the map.
 
 ## Design choices
@@ -53,39 +55,11 @@ and fix the map.
   Qt/editor, embedded games and `RENDERER_BACKEND=NONE` keep assetlib and gamelib static and produce
   no package.
 
-## Interface index
-
-| Contract | Header | Role |
-|---|---|---|
-| `IAssetPlugin`, `IAssetKindRegistry`, `IAssetKind` | [IAssetPlugin.h](libs/assetlib/include/assetlib/IAssetPlugin.h) | Qt-free authored-kind registration and document operations |
-| `IEditorPlugin` | [IEditorPlugin.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorPlugin.h) | Register editor contributions at startup |
-| Descriptor constants | [PluginDescriptor.h](libs/editor_plugin_api/include/editor_plugin_api/PluginDescriptor.h) | Descriptor filename and schema version |
-| `IEditorPanelFactory`, `IAssetEditorFactory` | [IEditorPanelFactory.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorPanelFactory.h), [IAssetEditorFactory.h](libs/editor_plugin_api/include/editor_plugin_api/IAssetEditorFactory.h) | Owned deferred factories for project widgets |
-| `IEditorAction` | [IEditorAction.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorAction.h) | Owned action with enablement and invocation |
-| `IEditorImporter`, `IThumbnailProvider` | [IEditorImporter.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorImporter.h), [IThumbnailProvider.h](libs/editor_plugin_api/include/editor_plugin_api/IThumbnailProvider.h) | Owned import and thumbnail behavior |
-| `IEditorRegistry` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Own deferred panel, editor, action, importer and thumbnail descriptors |
-| `LocalizedText` | [LocalizedText.h](libs/editor_plugin_api/include/editor_plugin_api/LocalizedText.h) | Deferred label lookup with fallback |
-| `Localize` | [localize.h](libs/editor_plugin_api/include/editor_plugin_api/localize.h) | Resolve a `context.key` now and fill its `{0}`, `{1}` from `TextArgs` |
-| `ILanguageResolver`, `LanguageResolver` | [ILanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/ILanguageResolver.h), [LanguageResolver.h](libs/editor_plugin_api/include/editor_plugin_api/LanguageResolver.h) | Borrowed lookup service and host-owned implementation |
-| `TranslationCatalog`, `ReadTranslationCsv` | [TranslationCatalog.h](libs/editor_plugin_api/include/editor_plugin_api/TranslationCatalog.h), [translation_csv.h](libs/editor_plugin_api/include/editor_plugin_api/translation_csv.h) | Module data and optional CSV ingestion |
-| `MenuDesc` | [IEditorRegistry.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorRegistry.h) | Stable menu identity and parent, separate from its label |
-| `EditorPanel`, `AssetEditorPanel` | [EditorPanel.h](libs/editor_plugin_api/include/editor_plugin_api/EditorPanel.h) | Project-scoped widgets, close veto, held assets and change notifications |
-| `IEditorHost` | [IEditorHost.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorHost.h) | Project store, render dispatch, editor navigation and the host's mesh import |
-| `IEditorViewport`, `RenderContext` | [IEditorViewport.h](libs/editor_plugin_api/include/editor_plugin_api/IEditorViewport.h) | Host presentation with access to its scene view on the render thread |
-| `Thumbnail`, `ThumbnailScene` | [Thumbnail.h](libs/editor_plugin_api/include/editor_plugin_api/Thumbnail.h) | No preview, CPU image, or a scene the host renders |
-| Loading-screen tasks | [BackgroundTask.h](../libs/editor_sdk/include/editor_sdk/BackgroundTask.h) | Scoped worker execution with GUI-thread progress and cooperative cancellation |
-| CPU preview caches | [TexturePreviewCache.h](../libs/editor_sdk/include/editor_sdk/TexturePreviewCache.h), [StampedPixmapCache.h](../libs/editor_sdk/include/editor_sdk/StampedPixmapCache.h) | Per-object decode and file-stamp cache state; no GPU ownership |
-| Asset UI helpers | [asset_paths.h](../libs/editor_sdk/include/editor_sdk/asset_paths.h), [source_mesh.h](../libs/editor_sdk/include/editor_sdk/source_mesh.h), [mime_files.h](../libs/editor_sdk/include/editor_sdk/mime_files.h), [mesh_drop.h](../libs/editor_sdk/include/editor_sdk/mesh_drop.h) | Path containment, imported-source lookup and Qt drag payloads |
-| Mesh placement | [BMeshUtil.h](../libs/editor_sdk/include/editor_sdk/BMeshUtil.h) | Node transforms and bounds, without renderer state |
-| Preview interaction | [OrbitCamera.h](../libs/editor_sdk/include/editor_sdk/OrbitCamera.h) | Orbit, pan and dolly camera policy |
-| Environment binding | [environment.h](../libs/editor_sdk/include/editor_sdk/environment.h) | Apply and release environment maps using a supplied store |
-| Mesh loading | [mesh_load.h](../libs/editor_sdk/include/editor_sdk/mesh_load.h) | Returns `RegenMesh`: geometry, owned bindings and the current `sourceKey` used for authoring after a move; external meshes use the codec directly and have no project bindings |
-| Material baking | [material_bake.h](../libs/editor_sdk/include/editor_sdk/material_bake.h) | Cancellable bake/save through the supplied store |
+## Ownership and registration
 
 Material and animation panels read material choices, registered looks and skeleton keys from the
 binding snapshot. Mesh thumbnails retain that snapshot alongside their cooked geometry and apply
 materials per submesh, so shared cooked material slots do not couple authored choices.
-| Default plugin | [plugin.h](../apps/editor/plugins/default_editor/include/default_editor/plugin.h) | Host-linked plugin and owned startup configuration; not part of the SDK package |
 
 Owning pointer aliases live beside their interfaces: `AssetKindPtr`, `AssetPluginPtr` and
 `EditorPluginPtr`. Each contribution interface also declares its owning `Ptr` alias, such as
@@ -99,8 +73,6 @@ constructible public implementation of the corresponding interface, expressed by
 such as `EditorPanelFactoryFor<T, Args...>` beside the interface. Replacing an object destroys
 its predecessor only after successful construction. Lvalue chains return the same descriptor;
 rvalue chains retain the rvalue category so a temporary transfers directly into registration.
-
-Recheck this table whenever the public files move.
 
 ## Topology
 

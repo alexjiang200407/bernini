@@ -7,7 +7,9 @@ does not drag in D3D12; the price is that nothing here can measure anything a GP
 draw. `gamelib` is the seam that links both.
 
 **This document is a map, not a mirror.** It captures the design choices, the topology and the
-non-obvious contracts — not signatures. The header at each linked path is the source of truth;
+non-obvious contracts — not signatures. The headers are the source of truth, and the doc lists none
+of their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md);
 when this doc disagrees, trust the header, then fix this doc.
 
 The Qt-free [IAssetPlugin contract](libs/assetlib/include/assetlib/IAssetPlugin.h) registers custom
