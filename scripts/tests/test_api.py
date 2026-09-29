@@ -58,6 +58,13 @@ namespace demo
 		int   m_Count = 0;
 	};
 
+	struct Options
+	{
+		// Whether back faces are drawn. On by default.
+		bool doubleSided = true;
+		static constexpr int c_Max = 8;
+	};
+
 	class Forward;
 
 	namespace detail
@@ -177,7 +184,9 @@ class TestExtraction:
     def test_the_public_surface_is_listed(self, tmp_path):
         by_name, _ = self.symbols(tmp_path)
         assert {'demo::round_up', 'demo::Window', 'demo::Window::Window', 'demo::Window::Mean',
-                'demo::c_Limit'} <= set(by_name)
+                'demo::c_Limit', 'demo::Options::doubleSided', 'demo::Options::c_Max'} <= set(by_name)
+        assert by_name['demo::Options::doubleSided']['kind'] == 'field'
+        assert by_name['demo::Options::doubleSided']['brief'] == 'Whether back faces are drawn.'
 
     def test_what_is_not_callable_from_outside_is_not(self, tmp_path):
         by_name, _ = self.symbols(tmp_path)

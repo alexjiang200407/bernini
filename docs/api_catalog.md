@@ -49,7 +49,8 @@ what catches it.
 ## What counts as public
 
 Everything a header under `libs/*/include/` declares at namespace scope, and the public members
-of the classes it defines, except:
+of the classes it defines -- methods, nested types, data members and static constants, since a
+descriptor's defaults and units are documented on its fields -- except:
 
 - a namespace named `detail`, `details`, `impl` or `internal`;
 - a forward declaration, an operator, a deleted member, a copy or move constructor.

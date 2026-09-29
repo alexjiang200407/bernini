@@ -436,6 +436,10 @@ class Extractor:
                 self._record(member, "constructor" if member.kind == K.CONSTRUCTOR else "method", parent)
             elif member.kind in (K.ENUM_DECL, K.TYPE_ALIAS_DECL, K.TYPEDEF_DECL) and member.spelling:
                 self._record(member, self.kind_names.get(member.kind, "type"), parent)
+            elif member.kind == K.FIELD_DECL and member.spelling:
+                self._record(member, "field", parent)
+            elif member.kind == K.VAR_DECL and member.spelling:
+                self._record(member, "constant", parent)
 
 
 def _is_copy_or_move(constructor, record):
