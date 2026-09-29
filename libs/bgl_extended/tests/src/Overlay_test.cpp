@@ -56,10 +56,10 @@ namespace
 	Quad(bgl::IOverlay& overlay, float x0, float y0, float x1, float y1, uint32_t color)
 	{
 		const std::array<bgl::OverlayVertex, 4> vertices = { {
-			{ { x0, y0 }, { 0.0f, 0.0f }, color },
-			{ { x1, y0 }, { 1.0f, 0.0f }, color },
-			{ { x1, y1 }, { 1.0f, 1.0f }, color },
-			{ { x0, y1 }, { 0.0f, 1.0f }, color },
+			{ { x0, y0 }, { 0.0f, 0.0f }, color, 0 },
+			{ { x1, y0 }, { 1.0f, 0.0f }, color, 0 },
+			{ { x1, y1 }, { 1.0f, 1.0f }, color, 0 },
+			{ { x0, y1 }, { 0.0f, 1.0f }, color, 0 },
 		} };
 		const std::array<uint32_t, 6>           indices  = { 0, 1, 2, 0, 2, 3 };
 
@@ -285,9 +285,9 @@ TEST_CASE("Overlay", "[overlay][render]")
 	SECTION("Geometry is validated before anything is allocated")
 	{
 		const std::array<bgl::OverlayVertex, 3> tri = { {
-			{ { 0.0f, 0.0f }, { 0.0f, 0.0f }, c_OpaqueRed },
-			{ { 1.0f, 0.0f }, { 1.0f, 0.0f }, c_OpaqueRed },
-			{ { 1.0f, 1.0f }, { 1.0f, 1.0f }, c_OpaqueRed },
+			{ { 0.0f, 0.0f }, { 0.0f, 0.0f }, c_OpaqueRed, 0 },
+			{ { 1.0f, 0.0f }, { 1.0f, 0.0f }, c_OpaqueRed, 0 },
+			{ { 1.0f, 1.0f }, { 1.0f, 1.0f }, c_OpaqueRed, 0 },
 		} };
 
 		const std::array<uint32_t, 3> outOfRange   = { 0, 1, 3 };

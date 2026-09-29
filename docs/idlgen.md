@@ -89,12 +89,13 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   12 bytes to C++ and 16 to MSL. Add the padding member yourself (`OverlayVertex`'s `reserved`).
   Enums with an explicit underlying type (`MaterialType`, `MeshInstanceFlag`) pass by construction.
 
-  A public *struct* a shader also reads therefore takes the `OverlayVertex` shape: the POD is
-  hand-written in `bgl` ([IOverlay.h](libs/bgl/include/bgl/IOverlay.h)), the IDL module
-  is internal and the shader imports it, and the renderer pins the two together with `sizeof` and
-  a per-field `offsetof` assert against the generated `bgl::idl` mirror
-  ([Overlay.cpp](libs/bgl_extended/src/overlay/Overlay.cpp)). The layout is still proven, just from the
-  side that can see both.
+  A public *struct* a shader also reads is written as a module in that list:
+  [OverlayVertex.slang](libs/bgl_common/shaders/src/idl/OverlayVertex.slang) is imported by the
+  overlay shader, and its generated `<bgl/OverlayVertex.h>` is the type a client fills. Its
+  contract is documented on the module, since that is the source. The generated struct has **no
+  default member initialisers**, so a brace list names every field, `reserved` included: one that
+  stops short is `-Wmissing-field-initializers`, an error in this build. Value-initialising
+  (`OverlayVertex()`, `std::vector<OverlayVertex>(n)`) zeroes every field, `color` included.
 
   The list is also what keeps renderer-shaped data off the public surface, which is the other half
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
