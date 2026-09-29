@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
@@ -9,19 +10,27 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
 #include <catch2/catch_test_macros.hpp>
+#include <core/platform/util.h>
 #include <crowdlib/HashFillJob.h>
 #include <cstdint>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
 #include <span>
 #include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include <vector>
 
 namespace
 {
 	bgpu::GpuContextRef
-	MakeContext()
+	MakeContext(const std::filesystem::path& shaderCacheDir = "shadercache")
 	{
 		auto desc             = bgpu::GpuContextDesc();
 		desc.enableDebugLayer = true;
-		desc.shaderCacheDir   = "shadercache";
+		desc.shaderCacheDir   = shaderCacheDir;
 		return bgpu::CreateGpuContext(desc);
 	}
 
@@ -156,4 +165,56 @@ TEST_CASE("A hash fill refuses misuse by throwing", "[render]")
 	// The refused calls left the first submission's result intact.
 	job->Wait();
 	CHECK(FirstMismatch(job->GetReadback(), 1) == c_Count);
+}
+
+// The kernel compiles once and is loaded after, on a context of its own each run as a process would
+// have. A warm run rewriting no entry is the proof it never reached Slang.
+TEST_CASE(
+	"A hash fill's kernel is compiled once and loaded from the program cache after",
+	"[render][shadercache]")
+{
+	namespace fs = std::filesystem;
+
+	const fs::path dir =
+		fs::temp_directory_path() / std::format("bernini_crowd_cache_{}", core::process_id());
+
+	std::error_code ec;
+	fs::remove_all(dir, ec);
+
+	auto entries = [&] {
+		std::vector<fs::path> files;
+		for (const auto& entry : fs::directory_iterator(dir))
+		{
+			if (entry.path().extension() == ".bsc")
+				files.push_back(entry.path());
+		}
+		std::ranges::sort(files);
+		return files;
+	};
+
+	auto mismatchAfterFill = [&](uint32_t seed) {
+		auto context = MakeContext(dir);
+		auto job     = crowd::CreateHashFillJob(context, { .count = c_Count });
+		job->Submit(seed);
+		job->Wait();
+		return FirstMismatch(job->GetReadback(), seed);
+	};
+
+	CHECK(mismatchAfterFill(7) == c_Count);
+	const std::vector<fs::path> cold = entries();
+	REQUIRE(cold.size() == 1);
+	const auto coldTime = fs::last_write_time(cold.front());
+
+	CHECK(mismatchAfterFill(11) == c_Count);
+	CHECK(entries() == cold);
+	CHECK((fs::last_write_time(cold.front()) == coldTime));
+
+	{
+		std::ofstream(cold.front(), std::ios::binary | std::ios::trunc) << "garbage";
+	}
+	CHECK(mismatchAfterFill(13) == c_Count);
+	CHECK(entries() == cold);
+	CHECK(fs::file_size(cold.front()) > std::string_view("garbage").size());
+
+	fs::remove_all(dir, ec);
 }

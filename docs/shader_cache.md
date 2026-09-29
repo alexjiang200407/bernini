@@ -26,7 +26,8 @@ when this doc disagrees, trust the source, then fix this doc.
   describes what the context's Slang sessions compile, so it is `bgpu`'s:
   [bgpu::ProgramCache](libs/bgpu/include/bgpu/ProgramCache.h) keys, stores and loads compiled
   programs for the renderer's backends and for any other owner that compiles through the sessions
-  ([bgpu.md](docs/bgpu.md)). It keeps bytes; each owner encodes its own entry, and a
+  ([bgpu.md](docs/bgpu.md)) — crowdlib's kernel beside the renderer's pipelines
+  ([crowdlib.md](docs/crowdlib.md)). It keeps bytes; each owner encodes its own entry, and a
   `ProgramCacheOwner` tag and format version in every key keep one owner from reading another's.
   The driver layer is not shared: it needs the native device and one writer per directory.
 
