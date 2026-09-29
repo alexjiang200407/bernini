@@ -175,7 +175,9 @@ owner keeps.
 
 The crowd simulation's library: compute on a second queue beside the renderer's frame, on the device
 the application's context owns. Why it links `bgpu` and not the RHI, what the async queue is on D3D12
-and on Metal, submit-then-poll with one submission in flight, and how its kernels compile and bind.
+and on Metal, a job's submit-then-poll with one submission in flight, and how its kernels compile and bind.
+Then `ICrowd`, the group-level interface a game drives the crowd through: why it never names an
+agent, why commands wait for a fixed tick, and how a backend proves it keeps the contract.
 
 **[core_process](./docs/core_process.md)**
 

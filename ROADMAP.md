@@ -261,12 +261,14 @@ and portability.
     - [ ] Differential test harness — exact hash for integer and fixed-point state, epsilon comparison
       for float state, bisecting to the first diverging pass.
     - [ ] CPU path runs single-threaded for debugging and `parallel_for` for hero-tier production.
-  - [ ] Group orchestration interface — the one contract between CPU AI and GPU simulation.
-    - [ ] CPU → GPU per group: flow field index, formation shape/origin/facing, stance, engagement
-      rules, target group.
-    - [ ] GPU → CPU per group: **aggregate reduction only** — headcount, casualties, mean position and
-      facing, cohesion, melee contact fraction, morale, fatigue.
-    - [ ] Group ID as a first-class per-unit field, reassigned by CPU-issued rewrite.
+  - [~] Group orchestration interface — the one contract between CPU AI and GPU simulation, declared
+    as `crowd::ICrowd` (`docs/crowdlib.md` § The crowd interface). Only a test fake implements it.
+    - [~] CPU → GPU per group: a goal, facing and formation are declared, and the flow field behind a
+      goal is the implementation's; stance, engagement rules and target group are left.
+    - [~] GPU → CPU per group: **aggregate reduction only** — agent count and mean position and facing
+      are declared; casualties, cohesion, melee contact fraction, morale and fatigue are left.
+    - [ ] Group ID as a first-class per-unit field. Units change group only when their group is split
+      or merged (`ICrowd::SplitGroup`, `MergeGroup`, declared), never by a per-unit rewrite.
   - [ ] Navigation
     - [ ] Navmesh or nav-grid bake (offline).
     - [ ] Flow field generation (GPU Eikonal/wavefront, one field per group destination).
@@ -278,8 +280,10 @@ and portability.
     and corpse placement, so it is its own node.
     - [ ] Per-cell agent cap with clamped writes and high-water reporting.
   - [ ] Simulation passes (shared source, compiled both ways)
-    - [ ] Velocity Planning
-      - [ ] Per-type kinematic limits — max speed, acceleration, turn rate.
+    - [ ] Velocity Planning — position-based, as GPU Zen 3 ch. 13 (Weiss, "Real-Time Simulation of
+      Massive Crowds") does it; its inputs are declared on `ICrowd` (`docs/crowdlib.md`).
+      - [~] Per-type kinematic limits — preferred and max speed are declared (`crowd::AgentType`);
+        acceleration and turn rate wait for mounts, since velocity blending is the smoothing.
       - [ ] Non-holonomic constraint for mounts — no strafing, minimum turn radius, speed-dependent
         turn rate.
     - [ ] Dynamic Constraints
@@ -287,7 +291,7 @@ and portability.
         - [ ] Melee Overlap
         - [ ] Ranged Overlap
         - [ ] Asymmetric mass — cavalry displaces infantry, as a mass term rather than a special case.
-      - [ ] Static Obstacles
+      - [ ] Static Obstacles — segments, declared as `ICrowd::SetObstacles`.
       - [ ] Long Range Interaction — anticipated collision, weighted much higher for mounts.
       - [ ] Group Locomotion
   - [ ] Cavalry / mounted units
