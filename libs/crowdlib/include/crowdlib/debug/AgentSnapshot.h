@@ -7,13 +7,13 @@
 namespace crowd::debug
 {
 	/** One agent: where it stands and the unit direction it faces, world (x, z). */
-	struct AgentSample
+	struct AgentReadback
 	{
 		glm::vec2 position = glm::vec2(0.0f);
 		glm::vec2 facing   = glm::vec2(0.0f, 1.0f);
 	};
 
-	static_assert(sizeof(AgentSample) == 16);
+	static_assert(sizeof(AgentReadback) == 16);
 
 	/** A group's agents in a snapshot: `agents[first, first + count)`, in formation-slot order. */
 	struct GroupAgents
@@ -30,8 +30,8 @@ namespace crowd::debug
 	 */
 	struct AgentSnapshot
 	{
-		uint64_t                     tick = 0;
-		std::span<const AgentSample> agents;
-		std::span<const GroupAgents> groups;
+		uint64_t                       tick = 0;
+		std::span<const AgentReadback> agents;
+		std::span<const GroupAgents>   groups;
 	};
 }

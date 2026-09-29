@@ -33,9 +33,9 @@ namespace crowd::test
 	/** Everything one tick measured: a report per group and, if the crowd keeps them, its agents. */
 	struct FakeTick
 	{
-		std::vector<FakeMeasurement>    measurements;
-		std::vector<debug::AgentSample> agents;
-		std::vector<debug::GroupAgents> groups;
+		std::vector<FakeMeasurement>      measurements;
+		std::vector<debug::AgentReadback> agents;
+		std::vector<debug::GroupAgents>   groups;
 	};
 
 	/**

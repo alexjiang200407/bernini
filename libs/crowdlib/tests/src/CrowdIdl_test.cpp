@@ -3,7 +3,7 @@
 // struct follows the backend, so that pin is here -- and a record written at its stride into a
 // buffer and read back is the same record, as a kernel's upload and a readback both rely on.
 #include "idl/Agent.h"
-#include "idl/AgentSample.h"
+#include "idl/AgentReadback.h"
 #include "idl/Constants.h"
 #include "idl/Group.h"
 #include "idl/GroupSum.h"
@@ -18,11 +18,12 @@
 #include <limits>
 #include <vector>
 
-static_assert(sizeof(crowd::debug::AgentSample) == sizeof(crowd::idl::AgentSample));
+static_assert(sizeof(crowd::debug::AgentReadback) == sizeof(crowd::idl::AgentReadback));
 static_assert(
-	offsetof(crowd::debug::AgentSample, position) == offsetof(crowd::idl::AgentSample, position));
+	offsetof(crowd::debug::AgentReadback, position) ==
+	offsetof(crowd::idl::AgentReadback, position));
 static_assert(
-	offsetof(crowd::debug::AgentSample, facing) == offsetof(crowd::idl::AgentSample, facing));
+	offsetof(crowd::debug::AgentReadback, facing) == offsetof(crowd::idl::AgentReadback, facing));
 
 namespace
 {
