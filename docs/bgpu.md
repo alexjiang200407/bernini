@@ -3,8 +3,9 @@
 The process has one GPU device, and more than one library runs work on it: the renderer, and a
 library that runs its own compute beside the frame — the crowd simulation's, the first
 ([crowdlib.md](crowdlib.md)).
-`bgpu` is that device as an object of its own, with the debug layer that must precede it
-and the Slang sessions that compile for it: the application creates one and hands it to every owner.
+`bgpu` is that device as an object of its own, with the debug layer that must precede it,
+the Slang sessions that compile for it and the cache of what they compiled: the application creates
+one and hands it to every owner.
 
 ```cpp
 auto desc             = bgpu::GpuContextDesc();
@@ -33,12 +34,22 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   ([src/SlangSessions.h](../libs/bgpu/src/SlangSessions.h)) with their search paths. With
   the debug layer on, the context's destructor reports live objects, so a leak is attributed to
   whichever owner made it rather than to "the device".
+* **The program cache is the context's, because the sessions are.** What a key must describe —
+  the compiler, the options every session is created with, every file under the search paths,
+  every registered source module — is all held here, so `ProgramCache` keys and stores what any
+  owner compiled, under `GpuContextDesc::shaderCacheDir`. The store keeps bytes: what an entry
+  holds is its owner's format, and a `ProgramCacheOwner` tag and version in every key keep one
+  owner from reading another's. It checks its own files — a header with the key and a hash of the
+  payload — so a torn or misplaced entry is a miss before any owner decodes it. The file salt is
+  one walk of the shader tree per context, taken by the first key; the source modules fold in at
+  every key, so a text another owner changed moves it ([shader_cache.md](shader_cache.md)).
 * **What deliberately does not.** Queues, allocators, resource managers, descriptor heaps,
   timestamp heaps, pipelines: each owner creates its own on the shared device, which is what keeps
-  two owners isolated. The renderer's shader cache stays the renderer's — its program layer stores
-  RHI-shaped blobs, and its salt and `pipelines.psolib` make a cache directory single-writer
-  ([shader_cache.md](shader_cache.md)). Metal's `.gputrace` capture is frame-scoped and stays in
-  `Graphics`.
+  two owners isolated. The renderer's shader cache is still the renderer's, configured by
+  `GraphicsOptions::shaderCacheDir` and keyed by its own salt ([shader_cache.md](shader_cache.md)).
+  Its driver pipeline library — `pipelines.psolib`, the `MTL::BinaryArchive` — needs the native
+  device, is dropped under GPU validation, and is serialized whole, so one writer per directory
+  holds it. Metal's `.gputrace` capture is frame-scoped and stays in `Graphics`.
 * **The RHI is not here.** `IDevice`, `ICommandList`, `IResourceManager` and the rest are
   `bgl_extended`'s and assume its GPU-driven bar. An owner other than the renderer reaches the
   device through the backend header — [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),
@@ -76,7 +87,10 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 
 `bgpu_tests`: one live context per process and its successor, the search-path order, a released session
 recreated by the next load, a source module seen by a thread that never compiled, and validation
-asked for being validation active. `bgl_extended_tests` `[device]` covers the renderer as an owner:
+asked for being validation active. `[shadercache]`: no directory, no cache; a program compiled on a
+miss and loaded on every later hit; two owners never sharing a key; a registered module moving
+every key; a key stable across contexts until a file under the search paths changes; a torn,
+altered or misplaced entry missed. `bgl_extended_tests` `[device]` covers the renderer as an owner:
 a renderer built on a context, a second renderer on the same context, two renderers binding one
 surface directory once, a source module re-registered under its name replacing the text with the
 cache key following, and a second owner compiling through the sessions the renderer dropped.

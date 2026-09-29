@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/ProgramCache.h>
 #include <bgpu/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -45,6 +46,10 @@ namespace bgpu
 		// a program can import one by name. Every file under it is in every owner's shader-cache
 		// salt. Empty means none.
 		std::filesystem::path clientShaderDir;
+
+		// Where every owner's compiled programs persist across runs (GpuContext::GetProgramCache),
+		// relative to the working directory. Empty disables the cache for every owner.
+		std::filesystem::path shaderCacheDir;
 
 		bool
 		operator==(const GpuContextDesc&) const = default;
@@ -132,6 +137,13 @@ namespace bgpu
 		 */
 		[[nodiscard]] virtual uint64_t
 		GetSourceSalt() const noexcept = 0;
+
+		/**
+		 * The store every owner keeps what it compiled in, keyed by what the sessions compile it
+		 * from. Null when the desc's `shaderCacheDir` is empty.
+		 */
+		[[nodiscard]] virtual const ProgramCache*
+		GetProgramCache() const noexcept = 0;
 
 		/**
 		 * The named module in the calling thread's session: a registered module nothing imports is

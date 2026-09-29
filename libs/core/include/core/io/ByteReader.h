@@ -2,8 +2,11 @@
 #include <algorithm>
 #include <core/type_traits.h>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace core::io
 {
@@ -37,6 +40,24 @@ namespace core::io
 			T          value;
 			std::copy_n(raw.data(), sizeof(T), reinterpret_cast<std::byte*>(&value));
 			return value;
+		}
+
+		/** What ByteWriter::WriteString wrote: a uint32 length, then the characters. */
+		[[nodiscard]] std::string
+		ReadString()
+		{
+			const auto size = ReadPod<uint32_t>();
+			const auto raw  = ReadBytes(size);
+			return std::string(reinterpret_cast<const char*>(raw.data()), raw.size());
+		}
+
+		/** What ByteWriter::WriteBlob wrote: a uint32 length, then the bytes. */
+		[[nodiscard]] std::vector<std::byte>
+		ReadBlob()
+		{
+			const auto size = ReadPod<uint32_t>();
+			const auto raw  = ReadBytes(size);
+			return std::vector<std::byte>(raw.begin(), raw.end());
 		}
 
 		void

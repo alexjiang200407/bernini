@@ -67,6 +67,14 @@ namespace bgpu
 		GetSourceSalt() const noexcept;
 
 		/**
+		 * Every setting a session is created with that changes the code it generates: the
+		 * compiler's build tag, the target, the profile, the matrix layout and the macros. Read
+		 * without creating a session.
+		 */
+		[[nodiscard]] std::string
+		GetOptionsSalt() const;
+
+		/**
 		 * Adds a module every session from now on loads from source before it compiles anything. A
 		 * name maps to one text: registering a name again replaces the text, and registering the
 		 * same text again does nothing.

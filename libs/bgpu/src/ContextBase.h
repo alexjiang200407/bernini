@@ -1,8 +1,11 @@
 #pragma once
+#include "DiskProgramCache.h"
 #include "SlangSessions.h"
 #include <bgpu/GpuContext.h>
+#include <bgpu/ProgramCache.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
+#include <memory>
 #include <slang.h>
 #include <string>
 #include <string_view>
@@ -36,7 +39,10 @@ namespace bgpu
 			m_Slang(
 				SlangSessionDesc{ .target      = target,
 		                          .searchPaths = ShaderSearchPaths(m_Desc.clientShaderDir) })
-		{}
+		{
+			if (!m_Desc.shaderCacheDir.empty())
+				m_ProgramCache = std::make_unique<DiskProgramCache>(m_Desc.shaderCacheDir, m_Slang);
+		}
 
 		const GpuContextDesc&
 		GetDesc() const noexcept override
@@ -60,6 +66,12 @@ namespace bgpu
 		GetSourceSalt() const noexcept override
 		{
 			return m_Slang.GetSourceSalt();
+		}
+
+		const ProgramCache*
+		GetProgramCache() const noexcept override
+		{
+			return m_ProgramCache.get();
 		}
 
 		slang::IModule*
@@ -97,5 +109,8 @@ namespace bgpu
 		ProcessSlot    m_Slot;
 		GpuContextDesc m_Desc;
 		SlangSessions  m_Slang;
+
+		// After the sessions it keys against, so it is destroyed before them.
+		std::unique_ptr<DiskProgramCache> m_ProgramCache;
 	};
 }

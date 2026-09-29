@@ -1,10 +1,12 @@
 #include "SlangSessions.h"
 #include <algorithm>
+#include <array>
 #include <bgpu/SlangErrorChecker.h>
 #include <core/err/util.h>
 #include <core/hash.h>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <mutex>
 #include <optional>
 #include <slang-com-ptr.h>
@@ -68,6 +70,20 @@ namespace bgpu
 
 	namespace
 	{
+		constexpr const char*           c_Profile      = "sm_6_6";
+		constexpr SlangMatrixLayoutMode c_MatrixLayout = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
+#if defined(BERNINI_GPU_DEBUG)
+		// Enables dbg_raise() bodies and the cull-stats counters in runtime-compiled shaders. Kept in
+		// lockstep with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in Release,
+		// so gDebug drops out of reflection and dbg_raise becomes a no-op.
+		constexpr auto c_Macros = std::to_array<slang::PreprocessorMacroDesc>({
+			{ "BERNINI_GPU_DEBUG", "1" },
+		});
+#else
+		constexpr auto c_Macros = std::array<slang::PreprocessorMacroDesc, 0>();
+#endif
+
 		// One session on `target`, with the desc's search paths and every source module loaded.
 		Slang::ComPtr<slang::ISession>
 		CreateSession(
@@ -79,7 +95,7 @@ namespace bgpu
 			slang::TargetDesc  targetDesc  = {};
 
 			targetDesc.format  = target;
-			targetDesc.profile = global->findProfile("sm_6_6");
+			targetDesc.profile = global->findProfile(c_Profile);
 
 			std::vector<const char*> searchPaths;
 			searchPaths.reserve(desc.searchPaths.size());
@@ -93,16 +109,10 @@ namespace bgpu
 			// Match the column-major convention the CPU side uploads matrices in (and that the
 			// offline slangc default used). The API's SessionDesc otherwise defaults to row-major,
 			// which would transpose viewProj / transforms and project geometry off screen.
-			sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+			sessionDesc.defaultMatrixLayoutMode = c_MatrixLayout;
 
-#if defined(BERNINI_GPU_DEBUG)
-			// Enables dbg_raise() bodies and the cull-stats counters in runtime-compiled shaders.
-			// Kept in lockstep with the offline slangc -D in cmake/compile_shader.cmake. Fully
-			// absent in Release, so gDebug drops out of reflection and dbg_raise becomes a no-op.
-			const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
-			sessionDesc.preprocessorMacros                = &debugMacro;
-			sessionDesc.preprocessorMacroCount            = 1;
-#endif
+			sessionDesc.preprocessorMacros     = c_Macros.data();
+			sessionDesc.preprocessorMacroCount = static_cast<SlangInt>(c_Macros.size());
 
 			Slang::ComPtr<slang::ISession> session;
 			SlangErrorChecker              errChecker;
@@ -278,5 +288,20 @@ namespace bgpu
 	{
 		const auto held = std::lock_guard(m_Mutex);
 		return m_SourceSalt;
+	}
+
+	std::string
+	SlangSessions::GetOptionsSalt() const
+	{
+		// The free function, not IGlobalSession::getBuildTagString: the same string, no session.
+		std::string salt = std::format(
+			"{}|target{}|{}|matrix{}",
+			spGetBuildTagString(),
+			static_cast<int>(m_Desc.target),
+			c_Profile,
+			static_cast<int>(c_MatrixLayout));
+		for (const slang::PreprocessorMacroDesc& macro : c_Macros)
+			salt += std::format("|{}={}", macro.name, macro.value);
+		return salt;
 	}
 }
