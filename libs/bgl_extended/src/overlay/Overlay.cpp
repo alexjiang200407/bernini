@@ -11,9 +11,9 @@
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/TextureAssetHandle.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/OverlayVertex.h>
 #include <core/containers/slot_handle.h>
+#include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>
 #include <cstdint>
@@ -46,7 +46,7 @@ namespace bgl
 		m_ResourceManager(std::move(resourceManager)), m_Id(NextOverlayId()),
 		m_Images(m_ResourceManager)
 	{
-		gassert(m_ResourceManager != nullptr, "Overlay requires a valid ResourceManager");
+		core::ensure(m_ResourceManager != nullptr, "Overlay requires a valid ResourceManager");
 	}
 
 	Overlay::~Overlay() noexcept
@@ -182,7 +182,7 @@ namespace bgl
 		}
 
 		auto* source = target->As<RenderTargetBase>();
-		gassert(source != nullptr, "An IRenderTarget this graphics did not create");
+		core::ensure(source != nullptr, "An IRenderTarget this graphics did not create");
 
 		if (!source->IsHeadless())
 		{
@@ -225,7 +225,7 @@ namespace bgl
 	const OverlayGeometry&
 	Overlay::GetGeometry(OverlayGeometryHandle geometry) const
 	{
-		gassert(ValidGeometry(geometry), "GetGeometry needs a live handle");
+		core::ensure(ValidGeometry(geometry), "GetGeometry needs a live handle");
 		return m_Geometry[geometry.slot];
 	}
 
@@ -246,7 +246,7 @@ namespace bgl
 			return white;
 		}
 
-		gassert(ValidTexture(texture), "GetTextureSrv needs a live handle");
+		core::ensure(ValidTexture(texture), "GetTextureSrv needs a live handle");
 		if (!ValidTexture(texture))
 		{
 			return white;
@@ -267,7 +267,7 @@ namespace bgl
 	RenderTargetBase*
 	Overlay::GetTextureTarget(OverlayTextureHandle texture) const noexcept
 	{
-		gassert(
+		core::ensure(
 			!texture.IsValid() || ValidTexture(texture),
 			"GetTextureTarget needs a live handle");
 		return ValidTexture(texture) ? m_Textures[texture.slot].target.Get() : nullptr;
@@ -276,7 +276,7 @@ namespace bgl
 	void
 	Overlay::Flush(ICommandList* cmdList)
 	{
-		gassert(cmdList != nullptr, "Flush requires a valid ICommandList");
+		core::ensure(cmdList != nullptr, "Flush requires a valid ICommandList");
 
 		if (!m_PendingGeometry.empty())
 		{

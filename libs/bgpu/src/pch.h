@@ -1,7 +1,7 @@
 #pragma once
 #include <spdlog/spdlog.h>  // IWYU pragma: keep
 
-// Carries the gassert family, which every source here checks through.
+// Carries core's checks, which every source here calls.
 #include <core/err/util.h>  // IWYU pragma: keep
 
 #include <slang-com-ptr.h>  // IWYU pragma: keep

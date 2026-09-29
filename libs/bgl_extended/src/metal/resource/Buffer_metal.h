@@ -1,7 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 #include "resource/Buffer.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include <bgl_common/MemoryTag.h>
 
@@ -18,7 +18,7 @@ namespace bgl
 		{
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
-			gassert(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
+			core::ensure(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
 
 			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 			if (!desc.debugName.empty())

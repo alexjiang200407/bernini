@@ -2,8 +2,8 @@
 #include "types/Rect.h"
 #include "types/Viewport.h"
 #include <bgl/Viewport.h>
-#include <bgl_common/gassert.h>
 #include <core/containers/static_vector.h>
+#include <core/err/util.h>
 #include <cstdint>
 
 namespace bgl
@@ -17,7 +17,7 @@ namespace bgl
 		ViewportState&
 		AddViewportAndScissorRect(const Viewport& viewport)
 		{
-			gassert(
+			core::ensure(
 				viewports.size() < c_MaxViewports,
 				"Viewports cannot exceeded {}",
 				c_MaxViewports);

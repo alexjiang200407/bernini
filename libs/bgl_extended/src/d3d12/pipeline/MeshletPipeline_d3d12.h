@@ -1,6 +1,7 @@
 #pragma once
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -51,7 +52,7 @@ namespace bgl
 				return found->second;
 			}
 
-			gfatal("Uniform buffer with name '{}' not found in pipeline.", name);
+			core::fatal("Uniform buffer with name '{}' not found in pipeline.", name);
 		}
 
 		std::vector<std::string>

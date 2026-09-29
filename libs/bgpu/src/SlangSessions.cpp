@@ -36,7 +36,7 @@ namespace bgpu
 		}
 
 		// Every other loader here reports a diagnostic through SlangErrorChecker, which ends in
-		// gfatal -- right for the engine's own shaders, where a diagnostic is a bug. These two load
+		// core::fatal -- right for the engine's own shaders, where a diagnostic is a bug. These two load
 		// text the client wrote, where it is a message to hand back.
 		slang::IModule*
 		LoadReporting(

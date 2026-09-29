@@ -8,7 +8,6 @@
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_metal.h"
 #include "uniforms/UniformLayoutEntry.h"
-#include <bgl_common/gassert.h>
 #include <bgpu/SlangErrorChecker.h>
 
 #include <cstddef>
@@ -32,7 +31,7 @@ namespace bgl
 			bgpu::SlangErrorChecker errChecker;
 
 			slang::IModule* module = shader->GetSlangModule();
-			gassert(module != nullptr, "Shader module cannot be null");
+			core::ensure(module != nullptr, "Shader module cannot be null");
 
 			// Read off the module so that reaching this function is what creates a session on this
 			// thread, and a cache hit never does.
@@ -40,7 +39,7 @@ namespace bgl
 
 			Slang::ComPtr<slang::IEntryPoint> entryPoint;
 			module->findEntryPointByName(entryName.c_str(), entryPoint.writeRef());
-			gassert(entryPoint != nullptr, "Failed to find entry point in module");
+			core::ensure(entryPoint != nullptr, "Failed to find entry point in module");
 
 			slang::IComponentType* components[] = { module, entryPoint.get() };
 
@@ -59,7 +58,7 @@ namespace bgl
 			linkedProgram
 					->getEntryPointCode(0, 0, code.writeRef(), errChecker.WriteDiagnosticBlob()) >>
 				errChecker;
-			gassert(code != nullptr, "Failed to generate MSL");
+			core::ensure(code != nullptr, "Failed to generate MSL");
 
 			slang::ProgramLayout* layout = linkedProgram->getLayout();
 
@@ -102,7 +101,7 @@ namespace bgl
 		ShaderCache*               shaderCache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(m_Desc.shader != nullptr, "Compute pipeline requires a shader");
+		core::ensure(m_Desc.shader != nullptr, "Compute pipeline requires a shader");
 
 		IShader*           shader    = m_Desc.shader.Get();
 		const std::string& entryName = shader->GetDesc().entryPointName;
@@ -123,7 +122,7 @@ namespace bgl
 				shaderCache->Store(key, cached);
 		}
 
-		gassert(cached.stages.size() == 1, "A compute program has exactly one stage");
+		core::ensure(cached.stages.size() == 1, "A compute program has exactly one stage");
 		const CachedStage& stage = cached.stages.front();
 
 		// One entry point, so this stage's [[buffer(N)]] indices are the whole pipeline's and the
@@ -158,10 +157,12 @@ namespace bgl
 		// Slang mangles the entry name in MSL (main -> main_0); a single-entry compute library exposes
 		// exactly one kernel function, so take it by name rather than guessing the mangled form.
 		NS::Array* names = library->functionNames();
-		gassert(names->count() == 1, "Compute library must expose exactly one kernel function");
+		core::ensure(
+			names->count() == 1,
+			"Compute library must expose exactly one kernel function");
 		NS::SharedPtr<MTL::Function> fn =
 			NS::TransferPtr(library->newFunction(static_cast<NS::String*>(names->object(0))));
-		gassert(fn.get() != nullptr, "Compute library is missing its kernel function");
+		core::ensure(fn.get() != nullptr, "Compute library is missing its kernel function");
 
 		NS::SharedPtr<MTL::ComputePipelineDescriptor> pd =
 			NS::TransferPtr(MTL::ComputePipelineDescriptor::alloc()->init());

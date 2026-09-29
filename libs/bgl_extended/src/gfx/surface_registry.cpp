@@ -20,6 +20,7 @@
 #include <format>
 #include <optional>
 #include <span>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -210,7 +211,7 @@ namespace bgl
 			// game's module search path, and what it calls its own files is its business.
 			if (!IsImportableName(stem))
 			{
-				logger::debug("surface directory: skipping '{}', not an importable name", stem);
+				spdlog::debug("surface directory: skipping '{}', not an importable name", stem);
 				continue;
 			}
 
@@ -230,7 +231,7 @@ namespace bgl
 			// shader directory, not a surface that failed to be one.
 			if (!reflected.has_value())
 			{
-				logger::debug("surface directory: '{}' declares no surface, skipping", stem);
+				spdlog::debug("surface directory: '{}' declares no surface, skipping", stem);
 				continue;
 			}
 
@@ -266,7 +267,7 @@ namespace bgl
 				device.AddSourceModule(program);
 			}
 
-			logger::info("surface '{}' registered into game slot {}", types[slot].name, slot);
+			spdlog::info("surface '{}' registered into game slot {}", types[slot].name, slot);
 		}
 
 		if (!types.empty())

@@ -16,7 +16,7 @@
 #include "types/ViewportState.h"
 #include <array>
 #include <bgl/Viewport.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <format>
 #include <string>
@@ -79,7 +79,7 @@ namespace bgl
 	void
 	BloomPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		ctx.pipelines->Add(m_DownsampleKernel, ScreenPipeline(ctx.device, "PSDownsample"));
 		ctx.pipelines->Add(m_UpsampleKernel, ScreenPipeline(ctx.device, "PSUpsample"));
@@ -97,7 +97,7 @@ namespace bgl
 	void
 	BloomPass::AttachToFrameGraph(FrameGraph& fg, const Args& args)
 	{
-		gassert(!args.levels.empty(), "A bloom chain must hold at least one level");
+		core::ensure(!args.levels.empty(), "A bloom chain must hold at least one level");
 
 		// Held on the pass rather than captured: a copy per lambda would clone the level vector
 		// and its strings into every pass of every frame. The execs run before the next attach,
@@ -148,8 +148,10 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_DownsampleKernel.pipeline.IsInitialized(), "Bloom pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(
+			m_DownsampleKernel.pipeline.IsInitialized(),
+			"Bloom pipeline must be initialized");
 
 		const LevelArgs& target = args.levels[level];
 
@@ -173,7 +175,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Bloom shader is missing its '{}' constant buffer", c_DownsampleCbuffer);
+			core::fatal("Bloom shader is missing its '{}' constant buffer", c_DownsampleCbuffer);
 		}
 
 		auto gfxState   = MeshletState();
@@ -192,8 +194,10 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_UpsampleKernel.pipeline.IsInitialized(), "Bloom pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(
+			m_UpsampleKernel.pipeline.IsInitialized(),
+			"Bloom pipeline must be initialized");
 
 		const LevelArgs& target = args.levels[level];
 		const LevelArgs& below  = args.levels[level + 1];
@@ -214,7 +218,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Bloom shader is missing its '{}' constant buffer", c_UpsampleCbuffer);
+			core::fatal("Bloom shader is missing its '{}' constant buffer", c_UpsampleCbuffer);
 		}
 
 		auto gfxState   = MeshletState();

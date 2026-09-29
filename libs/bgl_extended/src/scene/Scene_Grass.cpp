@@ -11,13 +11,13 @@
 #include <bgl/MaterialType.h>
 #include <bgl/glm.h>
 #include <bgl/types/GrassDesc.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GrassChunk.h>
 #include <bgl_common/idl/GrassClump.h>
 #include <bgl_common/idl/GrassLook.h>
 #include <cmath>
 #include <core/containers/multi_slot_handle.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <cstddef>
 #include <cstdint>
@@ -418,7 +418,7 @@ namespace bgl
 	{
 		for (const GrassFieldRecord& field : fields)
 		{
-			gassert(
+			core::ensure(
 				IsGrassAlive(field.look),
 				"a live geom binds a grass look that is already gone");
 			if (IsGrassAlive(field.look) && m_Grass[field.look.handle.index].useCount > 0)

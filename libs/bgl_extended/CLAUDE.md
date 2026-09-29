@@ -10,7 +10,7 @@ and is a target of its own; nothing here is part of it.
 - bgl_extended has its custom Render Hardware Interface (RHI). The interfaces are located `./libs/bgl_extended/src` but we define the polymorphic implementation elsewhere — `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any of the sources here.
 - Put all plain old data inside `./libs/bgl_extended/src/types`
 - PCH is `./libs/bgl_extended/src/pch.h`. Don't `#include` the headers in here.
-- Error Handling: For internal problems, use gassert. For caller (code that links to bgl_extended) problems, throw an exception so the caller can handle them
+- Error Handling: For internal problems, use `core::ensure`. For caller (code that links to bgl_extended) problems, throw an exception so the caller can handle them
 - CMake: `./CMakeLists.txt`
 - Verification: Check logs, bgl_extended_tests
 
@@ -51,7 +51,7 @@ and is a target of its own; nothing here is part of it.
 - Error handling: Metal signals failure by returning nil and fills its `NSError` only *sometimes*,
   so a call can fail with no diagnosis. `MetalErrorChecker` (in the PCH, don't `#include` it) holds
   the error so a call site reads like its D3D12 counterpart:
-  `library.get() >> errChecker;`. Where a call takes no error out-param — most of them — a `gassert`
+  `library.get() >> errChecker;`. Where a call takes no error out-param — most of them — a `core::ensure`
   on the returned pointer is the whole check.
 - **Shaders are compiled at runtime** from the staged Slang sources, to MSL via
   `newLibraryWithSource`. There is no build-time shader step on this backend: `./CMakeLists.txt`

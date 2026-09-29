@@ -5,7 +5,6 @@
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
 #include <algorithm>
-#include <bgl_common/gassert.h>
 #include <core/containers/packed_vector.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
@@ -64,10 +63,14 @@ namespace bgl
 		void
 		Init(PackedBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialCount > 0, "PackedBuffer must have a positive initial count");
-			gassert(desc.blockSize > 0, "Block size must be greater than zero");
-			gassert(desc.capacityAlignment > 0, "Capacity alignment must be greater than zero");
-			gassert(resourceManager != nullptr, "PackedBuffer requires a valid ResourceManager");
+			core::ensure(desc.initialCount > 0, "PackedBuffer must have a positive initial count");
+			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
+			core::ensure(
+				desc.capacityAlignment > 0,
+				"Capacity alignment must be greater than zero");
+			core::ensure(
+				resourceManager != nullptr,
+				"PackedBuffer requires a valid ResourceManager");
 
 			m_Desc              = std::move(desc);
 			m_Desc.initialCount = core::round_up(m_Desc.initialCount, m_Desc.capacityAlignment);
@@ -104,7 +107,7 @@ namespace bgl
 		Handle
 		EmplaceBack(Args&&... args)
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 
 			if (m_Entries.size() >= Capacity())
 			{
@@ -147,8 +150,8 @@ namespace bgl
 		void
 		Set(Handle handle, T value)
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			gassert(IsValid(handle), "Invalid PackedBuffer handle");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex   = m_HandleToIndex[handle.index];
 			m_Entries[denseIndex] = std::move(value);
@@ -158,8 +161,8 @@ namespace bgl
 		const T&
 		operator[](Handle handle) const
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			gassert(IsValid(handle), "Invalid PackedBuffer handle");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 			return m_Entries[m_HandleToIndex[handle.index]];
 		}
 
@@ -167,16 +170,16 @@ namespace bgl
 		[[nodiscard]] uint32_t
 		GetDenseIndex(Handle handle) const
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			gassert(IsValid(handle), "Invalid PackedBuffer handle");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 			return m_HandleToIndex[handle.index];
 		}
 
 		void
 		Erase(Handle handle)
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			gassert(IsValid(handle), "Invalid PackedBuffer handle");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex = m_HandleToIndex[handle.index];
 			uint32_t moved      = m_Entries.erase(denseIndex);
@@ -213,9 +216,9 @@ namespace bgl
 		void
 		Update(ICommandList* cmdList)
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-			gassert(cmdList != nullptr, "Update requires a valid ICommandList");
-			gassert(cmdList->IsOpen(), "ICommandList must be open to update PackedBuffer");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
+			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update PackedBuffer");
 
 			// Before the dirty regions, never after: the forward copy would overwrite them.
 			m_Storage.FlushGrowth(cmdList);
@@ -266,14 +269,14 @@ namespace bgl
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			gassert(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -349,7 +352,9 @@ namespace bgl
 			const uint32_t startBlock = elementOffsetBytes / m_Desc.blockSize;
 			const uint32_t endBlock   = (elementOffsetBytes + sizeof(T) - 1) / m_Desc.blockSize;
 
-			gassert(endBlock < m_DirtyBlocks.size(), "Dirty tracking index out of block bounds");
+			core::ensure(
+				endBlock < m_DirtyBlocks.size(),
+				"Dirty tracking index out of block bounds");
 
 			for (uint32_t block = startBlock; block <= endBlock; ++block)
 			{

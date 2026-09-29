@@ -210,7 +210,7 @@ namespace bgl
 		void
 		ResolvePassTimings(RenderTargetBase& rt, uint32_t index);
 #if defined(BERNINI_GPU_DEBUG)
-		// Maps the GPU-assertion readback for a completed frame slot and crashes via gfatal if any
+		// Maps the GPU-assertion readback for a completed frame slot and crashes via core::fatal if any
 		// dbg_raise() fired. No-op if the slot has no pending snapshot.
 		void
 		InspectDebugSlot(uint32_t index);

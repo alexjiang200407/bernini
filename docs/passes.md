@@ -700,7 +700,7 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
   `cull.stats` for [meshlet culling](#meshlet-culling), `sortedTransparentInstances` (Forward Transparent), and the
   one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
-  scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
+  scene-buffer key missing from a cbuffer that *is* declared is fatal (`core::fatal`); a missing
   `materialData` key is skipped silently.
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
 * **Skipped** when the view's instance count is 0.

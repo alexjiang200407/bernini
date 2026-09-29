@@ -8,9 +8,9 @@
 #include "scene/scene_buffer_names.h"
 #include "types/Barrier.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
@@ -20,7 +20,7 @@ namespace bgl
 	void
 	TransparentSortPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device pointer is null");
+		core::ensure(ctx.device != nullptr, "Device pointer is null");
 
 		ctx.pipelines->Add(
 			m_DepthKeys,
@@ -38,7 +38,7 @@ namespace bgl
 	void
 	TransparentSortPass::Release()
 	{
-		logger::trace("TransparentSortPass::Release");
+		spdlog::trace("TransparentSortPass::Release");
 
 		m_DepthKeys.Reset();
 		m_Sort.Reset();

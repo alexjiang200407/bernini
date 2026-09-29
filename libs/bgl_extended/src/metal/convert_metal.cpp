@@ -6,7 +6,7 @@
 #include "types/Format.h"
 #include "types/RasterState.h"
 #include "types/TextureDimension.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <string>
 
@@ -154,7 +154,7 @@ namespace bgl
 		case Format::BC7_UNORM_SRGB:
 			return MTL::PixelFormatBC7_RGBAUnorm_sRGB;
 		default:
-			gfatal("Metal backend: unsupported Format {}", static_cast<int>(format));
+			core::fatal("Metal backend: unsupported Format {}", static_cast<int>(format));
 		}
 	}
 
@@ -182,7 +182,9 @@ namespace bgl
 		case TextureDimension::kTexture3D:
 			return MTL::TextureType3D;
 		default:
-			gfatal("Metal backend: unsupported TextureDimension {}", static_cast<int>(dimension));
+			core::fatal(
+				"Metal backend: unsupported TextureDimension {}",
+				static_cast<int>(dimension));
 		}
 	}
 
@@ -243,7 +245,7 @@ namespace bgl
 		case BlendFactor::kInvSrc1Alpha:
 			return MTL::BlendFactorOneMinusSource1Alpha;
 		default:
-			gfatal("Metal backend: unsupported BlendFactor {}", static_cast<int>(factor));
+			core::fatal("Metal backend: unsupported BlendFactor {}", static_cast<int>(factor));
 		}
 	}
 
@@ -263,7 +265,7 @@ namespace bgl
 		case BlendOp::kMax:
 			return MTL::BlendOperationMax;
 		default:
-			gfatal("Metal backend: unsupported BlendOp {}", static_cast<int>(op));
+			core::fatal("Metal backend: unsupported BlendOp {}", static_cast<int>(op));
 		}
 	}
 
@@ -305,7 +307,7 @@ namespace bgl
 		case ComparisonFunc::kAlways:
 			return MTL::CompareFunctionAlways;
 		default:
-			gfatal("Metal backend: unsupported ComparisonFunc {}", static_cast<int>(func));
+			core::fatal("Metal backend: unsupported ComparisonFunc {}", static_cast<int>(func));
 		}
 	}
 
@@ -331,7 +333,7 @@ namespace bgl
 		case StencilOp::kDecrementAndWrap:
 			return MTL::StencilOperationDecrementWrap;
 		default:
-			gfatal("Metal backend: unsupported StencilOp {}", static_cast<int>(op));
+			core::fatal("Metal backend: unsupported StencilOp {}", static_cast<int>(op));
 		}
 	}
 
@@ -347,7 +349,7 @@ namespace bgl
 		case RasterCullMode::kBack:
 			return MTL::CullModeBack;
 		default:
-			gfatal("Metal backend: unsupported RasterCullMode {}", static_cast<int>(mode));
+			core::fatal("Metal backend: unsupported RasterCullMode {}", static_cast<int>(mode));
 		}
 	}
 
@@ -361,7 +363,7 @@ namespace bgl
 		case RasterFillMode::kWireframe:
 			return MTL::TriangleFillModeLines;
 		default:
-			gfatal("Metal backend: unsupported RasterFillMode {}", static_cast<int>(mode));
+			core::fatal("Metal backend: unsupported RasterFillMode {}", static_cast<int>(mode));
 		}
 	}
 
@@ -379,12 +381,12 @@ namespace bgl
 			return MTL::CompareFunctionLess;
 		case SamplerReductionType::kMinimum:
 		case SamplerReductionType::kMaximum:
-			gfatal(
+			core::fatal(
 				"Metal has no sampler filter reduction, so SamplerReductionType::k{} cannot "
 				"be expressed",
 				reduction == SamplerReductionType::kMinimum ? "Minimum" : "Maximum");
 		}
-		gfatal("Unhandled SamplerReductionType");
+		core::fatal("Unhandled SamplerReductionType");
 	}
 
 	MTL::SamplerAddressMode
@@ -403,7 +405,7 @@ namespace bgl
 		case SamplerAddressMode::kMirrorOnce:
 			return MTL::SamplerAddressModeMirrorClampToEdge;
 		}
-		gfatal("Unhandled SamplerAddressMode");
+		core::fatal("Unhandled SamplerAddressMode");
 	}
 
 	// Metal offers three fixed border colours rather than an arbitrary one, so the RHI's Color is

@@ -1,6 +1,8 @@
 #pragma once
 #include "D3d12ErrorChecker.h"
 #include "cmd/CommandAllocator.h"
+#include <core/err/util.h>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -9,7 +11,7 @@ namespace bgl
 	public:
 		CommandAllocator(const CommandAllocator&) noexcept = delete;
 		CommandAllocator(CommandAllocator&&) noexcept      = delete;
-		~CommandAllocator() noexcept override { logger::trace("~CommandAllocator"); }
+		~CommandAllocator() noexcept override { spdlog::trace("~CommandAllocator"); }
 
 		CommandAllocator&
 		operator=(const CommandAllocator&) noexcept = delete;
@@ -20,7 +22,7 @@ namespace bgl
 		CommandAllocator(wrl::ComPtr<ID3D12CommandAllocator> commandAllocator) :
 			m_CommandAllocator(std::move(commandAllocator))
 		{
-			gassert(m_CommandAllocator != nullptr, "Command allocator cannot be null");
+			core::ensure(m_CommandAllocator != nullptr, "Command allocator cannot be null");
 		}
 
 		ID3D12CommandAllocator*

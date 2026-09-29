@@ -9,6 +9,7 @@
 #include <string>
 
 #include <bgpu/GpuContext.h>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -159,7 +160,7 @@ namespace bgl
 
 		if (lock == INVALID_HANDLE_VALUE)
 		{
-			logger::debug(
+			spdlog::debug(
 				"Another writer holds {}; this device builds its pipelines without the driver "
 				"library",
 				lockPath.string());
@@ -242,7 +243,7 @@ namespace bgl
 		}
 		catch (const std::exception& e)
 		{
-			logger::warn("Ignoring unreadable shader cache entry {}: {}", path.string(), e.what());
+			spdlog::warn("Ignoring unreadable shader cache entry {}: {}", path.string(), e.what());
 			return false;
 		}
 	}

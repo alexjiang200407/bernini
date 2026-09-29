@@ -17,7 +17,7 @@
 #include "types/RenderState.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -44,7 +44,7 @@ namespace bgl
 	void
 	SkyboxPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
@@ -103,9 +103,11 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
-		gassert(draw.lighting.skybox.has_value(), "SkyboxPass executed without a valid skybox");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
+		core::ensure(
+			draw.lighting.skybox.has_value(),
+			"SkyboxPass executed without a valid skybox");
 
 		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
@@ -125,7 +127,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
+			core::fatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

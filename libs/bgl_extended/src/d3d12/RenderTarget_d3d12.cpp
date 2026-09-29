@@ -5,6 +5,7 @@
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "resource/ResourceManager_d3d12.h"
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -45,7 +46,7 @@ namespace bgl
 
 	RenderTarget::~RenderTarget() noexcept
 	{
-		logger::trace("~RenderTarget");
+		spdlog::trace("~RenderTarget");
 
 		// Idle the GPU so no in-flight frame still references the backbuffers we free.
 		m_CommandQueue->Flush();

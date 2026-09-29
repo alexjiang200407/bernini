@@ -1,5 +1,6 @@
 #include "AutoreleaseNet_metal.h"
 #include "metal_cpp.h"
+#include <core/err/util.h>
 #include <cstdint>
 
 namespace bgl
@@ -23,7 +24,7 @@ namespace bgl
 
 	AutoreleaseNet::~AutoreleaseNet() noexcept
 	{
-		gassert(g_Net.shares > 0, "An autorelease net share was released on another thread");
+		core::ensure(g_Net.shares > 0, "An autorelease net share was released on another thread");
 		if (--g_Net.shares == 0)
 		{
 			g_Net.pool->release();

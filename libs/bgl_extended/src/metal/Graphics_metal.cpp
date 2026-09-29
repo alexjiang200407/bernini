@@ -101,7 +101,7 @@ namespace bgl
 				MTL::CaptureManager::sharedCaptureManager()->stopCapture();
 				m_Active = false;
 				m_Done   = true;
-				logger::info("Metal frame capture written to {}", path);
+				spdlog::info("Metal frame capture written to {}", path);
 			}
 
 			[[nodiscard]] bool
@@ -165,7 +165,7 @@ namespace bgl
 			// every batch. This release covers the start-up build.
 			device->ReleaseSlangSession();
 
-			logger::info("BGL initialized successfully.");
+			spdlog::info("BGL initialized successfully.");
 		}
 
 		IDevice*

@@ -6,7 +6,6 @@
 #include "uniforms/DescriptorHandle.h"
 #include <RawEntry.h>
 #include <algorithm>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/RecordHeader.h>
@@ -97,8 +96,8 @@ namespace bgl
 		void
 		Init(RawBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
-			gassert(
+			core::ensure(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
+			core::ensure(
 				desc.nullRecordBytes >= idl::cRawPayloadOffset,
 				"The null record must cover at least a header");
 
@@ -145,11 +144,11 @@ namespace bgl
 		AddRecord(T tag, std::span<const std::byte> payload)
 			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
-			gassert(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
 
 			// ADR-6's invariant, and the one place the payload and the head's size meet: a record
 			// bigger than the null record makes a null dereference read the first live one.
-			gassert(
+			core::ensure(
 				idl::cRawPayloadOffset + payload.size() <= GetReservedBytes(),
 				"A record payload larger than the null record this arena reserved");
 
@@ -184,12 +183,12 @@ namespace bgl
 		void
 		SetRecordPayload(idl::RawEntry entry, std::span<const std::byte> payload)
 		{
-			gassert(IsOffsetValid(entry.byteOffset), "SetRecordPayload on a dead record");
+			core::ensure(IsOffsetValid(entry.byteOffset), "SetRecordPayload on a dead record");
 
 			const auto handle = m_Blocks.HandleAt(ToBlockIndex(entry.byteOffset));
 			const auto record = m_Blocks.MutableRangeBytes(handle);
 
-			gassert(
+			core::ensure(
 				idl::cRawPayloadOffset + payload.size() <= record.size(),
 				"A payload larger than the record it replaces");
 
@@ -205,8 +204,8 @@ namespace bgl
 		[[nodiscard]] idl::RawRange
 		AddBytes(std::span<const std::byte> bytes)
 		{
-			gassert(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
-			gassert(!bytes.empty(), "AddBytes requires a non-empty range");
+			core::ensure(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
+			core::ensure(!bytes.empty(), "AddBytes requires a non-empty range");
 
 			const auto handle = Allocate(MeasureRange(bytes));
 			const auto range  = m_Blocks.MutableRangeBytes(handle);
@@ -223,7 +222,7 @@ namespace bgl
 		GetTagAt(uint32_t byteOffset) const
 			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
-			gassert(IsOffsetValid(byteOffset), "GetTagAt on an offset with no live record");
+			core::ensure(IsOffsetValid(byteOffset), "GetTagAt on an offset with no live record");
 
 			auto header = idl::RecordHeader();
 			std::memcpy(&header, &m_Blocks.AtIndex(ToBlockIndex(byteOffset)), sizeof(header));
@@ -240,7 +239,9 @@ namespace bgl
 		[[nodiscard]] T
 		GetPayloadAt(uint32_t byteOffset) const
 		{
-			gassert(IsOffsetValid(byteOffset), "GetPayloadAt on an offset with no live record");
+			core::ensure(
+				IsOffsetValid(byteOffset),
+				"GetPayloadAt on an offset with no live record");
 
 			auto  payload = T();
 			auto* dst     = reinterpret_cast<std::byte*>(&payload);
@@ -286,7 +287,7 @@ namespace bgl
 		void
 		Erase(uint32_t byteOffset)
 		{
-			gassert(IsOffsetValid(byteOffset), "Erase on an offset with no live allocation");
+			core::ensure(IsOffsetValid(byteOffset), "Erase on an offset with no live allocation");
 			m_Blocks.EraseByIndex(ToBlockIndex(byteOffset));
 		}
 
@@ -400,7 +401,7 @@ namespace bgl
 			if (m_NullRecordBlocks > 1)
 			{
 				const auto handle = m_Blocks.AllocateRange(m_NullRecordBlocks - 1);
-				gassert(handle.index == 1, "The null record must own the head of the arena");
+				core::ensure(handle.index == 1, "The null record must own the head of the arena");
 			}
 		}
 

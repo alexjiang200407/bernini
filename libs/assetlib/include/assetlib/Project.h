@@ -1,7 +1,7 @@
 #pragma once
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
-#include <cassert>
+#include <core/err/util.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -115,8 +115,8 @@ namespace assetlib
 			// Create and Open both fill the store in before they hand a Project back, so this holds for
 			// every Project that exists. It is an invariant of those two functions rather than of the
 			// type, which is what the assert is for.
-			assert(
-				m_Store.has_value() &&
+			core::ensure(
+				m_Store.has_value(),
 				"a Project's store is built by Create or Open before it is handed out");
 			return *m_Store;
 		}

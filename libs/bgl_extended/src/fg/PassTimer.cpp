@@ -1,8 +1,9 @@
 #include "fg/PassTimer.h"
 #include "cmd/CommandList.h"
 #include "cmd/TimestampHeap.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
 
@@ -11,8 +12,8 @@ namespace bgl
 	void
 	PassTimer::Arm(ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept
 	{
-		gassert(!m_PassOpen, "PassTimer::Arm inside a pass");
-		gassert(
+		core::ensure(!m_PassOpen, "PassTimer::Arm inside a pass");
+		core::ensure(
 			firstSlot + 2 * maxPasses <= heap.GetCapacity(),
 			"PassTimer::Arm range outside the heap");
 
@@ -26,7 +27,7 @@ namespace bgl
 	void
 	PassTimer::Disarm() noexcept
 	{
-		gassert(!m_PassOpen, "PassTimer::Disarm inside a pass");
+		core::ensure(!m_PassOpen, "PassTimer::Disarm inside a pass");
 		m_Heap = nullptr;
 	}
 
@@ -36,8 +37,8 @@ namespace bgl
 		if (m_Heap == nullptr)
 			return;
 
-		gassert(!m_PassOpen, "PassTimer::BeginPass while a pass is open");
-		gassert(cmd != nullptr, "PassTimer::BeginPass needs a command list");
+		core::ensure(!m_PassOpen, "PassTimer::BeginPass while a pass is open");
+		core::ensure(cmd != nullptr, "PassTimer::BeginPass needs a command list");
 
 		Entry& entry = m_Entries.emplace_back();
 		entry.name   = std::string(name);
@@ -48,7 +49,7 @@ namespace bgl
 		{
 			if (!m_Overflowed)
 			{
-				logger::warn(
+				spdlog::warn(
 					"PassTimer: more than {} passes in a frame; '{}' and later are not timed",
 					(m_EndSlot - m_FirstSlot) / 2,
 					name);
@@ -69,7 +70,7 @@ namespace bgl
 		if (m_Heap == nullptr)
 			return;
 
-		gassert(m_PassOpen, "PassTimer::EndPass without a pass open");
+		core::ensure(m_PassOpen, "PassTimer::EndPass without a pass open");
 		m_PassOpen = false;
 
 		if (m_PassTimed)

@@ -13,7 +13,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
-#include <cassert>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -135,7 +135,7 @@ namespace assetlib
 	containerKindFor(AssetType type) noexcept
 	{
 		const auto it = std::ranges::find(c_Table, type, &ContainerKind::type);
-		assert(it != c_Table.end() && "the table is total over the container kinds");
+		core::ensure(it != c_Table.end(), "the table is total over the container kinds");
 		return *it;
 	}
 

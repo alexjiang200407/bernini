@@ -25,7 +25,7 @@ namespace bgl
 	{
 	public:
 		BlobShadowPass() = default;
-		~BlobShadowPass() noexcept { logger::trace("~BlobShadowPass"); }
+		~BlobShadowPass() noexcept { spdlog::trace("~BlobShadowPass"); }
 
 		BlobShadowPass(const BlobShadowPass&) noexcept = delete;
 		BlobShadowPass(BlobShadowPass&&) noexcept      = delete;

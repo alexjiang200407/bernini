@@ -65,7 +65,7 @@ namespace bgl
 	{
 	public:
 		ForwardPhases() = default;
-		~ForwardPhases() noexcept { logger::trace("~ForwardPhases"); }
+		~ForwardPhases() noexcept { spdlog::trace("~ForwardPhases"); }
 
 		ForwardPhases(const ForwardPhases&) noexcept = delete;
 		ForwardPhases(ForwardPhases&&) noexcept      = delete;

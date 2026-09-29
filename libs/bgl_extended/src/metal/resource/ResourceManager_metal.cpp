@@ -16,10 +16,10 @@
 #include "types/FormatInfo.h"
 #include "uniforms/DescriptorHandle.h"
 #include "util/util.h"
-#include <bgl_common/gassert.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
+#include <core/err/util.h>
 
 #include <algorithm>
 #include <core/math.h>
@@ -48,7 +48,7 @@ namespace bgl
 		ReserveUnboundSlot(core::slot_vector<T>& pool) noexcept
 		{
 			const core::slot_handle reserved = pool.allocate_slot();
-			gassert(
+			core::ensure(
 				reserved.index == c_UnboundDescriptorIndex,
 				"The unbound sentinel must be the first slot a pool hands out");
 		}
@@ -62,13 +62,13 @@ namespace bgl
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
 		// concurrent reader. Exhaustion returns a null handle instead, which every Create* reports.
-		gassert(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
-		gassert(desc.maxSrvs > 0, "maxSrvs must be greater than zero");
-		gassert(desc.maxTextures > 0, "maxTextures must be greater than zero");
-		gassert(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
-		gassert(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
-		gassert(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
-		gassert(desc.maxSamplers > 0, "maxSamplers must be greater than zero");
+		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
+		core::ensure(desc.maxSrvs > 0, "maxSrvs must be greater than zero");
+		core::ensure(desc.maxTextures > 0, "maxTextures must be greater than zero");
+		core::ensure(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
+		core::ensure(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
+		core::ensure(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
+		core::ensure(desc.maxSamplers > 0, "maxSamplers must be greater than zero");
 
 		// The three pools a bindless handle in a cbuffer resolves through -- an SRV carries its
 		// texture's slot, so reserving the texture pool covers it too.
@@ -85,7 +85,7 @@ namespace bgl
 		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
-			logger::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
+			spdlog::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
 			return BufferHandle{};
 		}
 		return BufferHandle{ slot, slot.index };
@@ -94,8 +94,8 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
 	{
-		gassert(desc.stride > 0, "StructuredBuffer requires a valid stride");
-		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
+		core::ensure(desc.stride > 0, "StructuredBuffer requires a valid stride");
+		core::ensure(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
@@ -108,9 +108,9 @@ namespace bgl
 	BufferHandle
 	ResourceManager::CreateRawBuffer(const RawViewDesc& desc) noexcept
 	{
-		gassert(desc.byteSize > 0, "A raw buffer requires a byte size");
-		gassert(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");
-		gassert(desc.byteSize <= c_MaxRawBufferBytes, "A raw view cannot address past 4 GiB");
+		core::ensure(desc.byteSize > 0, "A raw buffer requires a byte size");
+		core::ensure(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");
+		core::ensure(desc.byteSize <= c_MaxRawBufferBytes, "A raw view cannot address past 4 GiB");
 
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = desc.byteSize;
@@ -124,9 +124,9 @@ namespace bgl
 	BufferSrvHandle
 	ResourceManager::CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept
 	{
-		gassert(ValidBufferHandle(buffer), "CreateBufferSrv on an invalid buffer");
-		gassert(desc.stride > 0, "A structured view requires a stride");
-		gassert(
+		core::ensure(ValidBufferHandle(buffer), "CreateBufferSrv on an invalid buffer");
+		core::ensure(desc.stride > 0, "A structured view requires a stride");
+		core::ensure(
 			m_Buffers[buffer.slot].GetDesc().byteSize % desc.stride == 0,
 			"A structured view must divide the buffer it views");
 
@@ -139,7 +139,7 @@ namespace bgl
 		const auto slot = m_BufferSrvs.try_allocate_and_emplace(buffer.bindlessIndex);
 		if (slot.is_null())
 		{
-			logger::error("CreateBufferSrv '{}': buffer view pool exhausted", desc.debugName);
+			spdlog::error("CreateBufferSrv '{}': buffer view pool exhausted", desc.debugName);
 			return BufferSrvHandle{};
 		}
 
@@ -150,7 +150,7 @@ namespace bgl
 	ResourceManager::DestroyBufferSrv(BufferSrvHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidBufferSrvHandle(handle), "Cannot destroy invalid buffer view handle");
+		core::ensure(ValidBufferSrvHandle(handle), "Cannot destroy invalid buffer view handle");
 
 		// The view owns no allocation -- it names bytes the buffer owns -- so only its slot is
 		// gated, exactly as an SRV onto a texture is.
@@ -192,7 +192,7 @@ namespace bgl
 		const auto slot = m_Readbacks.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
-			logger::error("CreateReadbackBuffer '{}': readback pool exhausted", desc.debugName);
+			spdlog::error("CreateReadbackBuffer '{}': readback pool exhausted", desc.debugName);
 			return ReadbackBufferHandle{};
 		}
 		return ReadbackBufferHandle{ slot };
@@ -202,8 +202,8 @@ namespace bgl
 	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(queue != nullptr, "RegisterQueue requires a non-null queue");
-		gassert(
+		core::ensure(queue != nullptr, "RegisterQueue requires a non-null queue");
+		core::ensure(
 			m_RegisteredQueues.size() < c_MaxRegisteredQueues,
 			"More than c_MaxRegisteredQueues submission timelines registered");
 		m_RegisteredQueues.push_back(queue);
@@ -266,7 +266,7 @@ namespace bgl
 	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
+		core::ensure(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
 		if (deferred)
 		{
@@ -283,7 +283,7 @@ namespace bgl
 	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
+		core::ensure(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
 
 		if (deferred)
 		{
@@ -366,7 +366,7 @@ namespace bgl
 	BufferDesc
 	ResourceManager::GetBufferDesc(BufferHandle handle) const noexcept
 	{
-		gassert(ValidBufferHandle(handle), "GetBufferDesc on an invalid buffer handle");
+		core::ensure(ValidBufferHandle(handle), "GetBufferDesc on an invalid buffer handle");
 		return m_Buffers[handle.slot].GetDesc();
 	}
 
@@ -409,7 +409,7 @@ namespace bgl
 		const auto slot = m_Textures.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
-			logger::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
+			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
 			return TextureHandle{};
 		}
 		// A texture has no descriptor. CreateSrv is what makes one shader-visible.
@@ -419,13 +419,13 @@ namespace bgl
 	SrvHandle
 	ResourceManager::CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept
 	{
-		gassert(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
+		core::ensure(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		const auto                  slot = m_Srvs.try_allocate_and_emplace(desc, textureHandle);
 		if (slot.is_null())
 		{
-			logger::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
+			spdlog::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
 			return SrvHandle{};
 		}
 
@@ -444,13 +444,13 @@ namespace bgl
 	RtvHandle
 	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
-		gassert(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
+		core::ensure(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		const auto                  slot = m_Rtvs.try_allocate_and_emplace(desc, textureHandle);
 		if (slot.is_null())
 		{
-			logger::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
+			spdlog::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
 			return RtvHandle{};
 		}
 		return RtvHandle{ slot.index, slot.generation };
@@ -461,7 +461,7 @@ namespace bgl
 	{
 		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
+		core::ensure(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
 
 		if (deferred)
 		{
@@ -478,7 +478,7 @@ namespace bgl
 	ResourceManager::DestroySrv(SrvHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
+		core::ensure(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
 
 		// An SRV owns no allocation -- it is a view onto a texture -- so only its slot is gated.
 		if (deferred)
@@ -496,7 +496,7 @@ namespace bgl
 	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
+		core::ensure(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
 		// An RTV owns no allocation -- it is a view onto a texture -- so only its slot is gated.
 		if (deferred)
@@ -519,7 +519,7 @@ namespace bgl
 	TextureDesc
 	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
 	{
-		gassert(ValidTextureHandle(handle), "GetTextureDesc on an invalid texture handle");
+		core::ensure(ValidTextureHandle(handle), "GetTextureDesc on an invalid texture handle");
 		return m_Textures[handle.slot].GetDesc();
 	}
 
@@ -528,7 +528,7 @@ namespace bgl
 	{
 		// RtvHandle carries its own generation (it is not a slot_handle), so the raw-index lookup
 		// below can't check it -- validate explicitly, as GetTexture gets for free from slot_handle.
-		gassert(ValidRtvHandle(handle), "Invalid RTV handle");
+		core::ensure(ValidRtvHandle(handle), "Invalid RTV handle");
 		return m_Rtvs[handle.idx];
 	}
 
@@ -580,8 +580,10 @@ namespace bgl
 	void
 	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
-		gassert(ValidRtvHandle(handle), "ClearRtv on an invalid RTV handle");
-		gassert(cmdList != nullptr && cmdList->IsOpen(), "ClearRtv needs an open command list");
+		core::ensure(ValidRtvHandle(handle), "ClearRtv on an invalid RTV handle");
+		core::ensure(
+			cmdList != nullptr && cmdList->IsOpen(),
+			"ClearRtv needs an open command list");
 
 		MTL::Texture* texture = GetTexture(GetRtv(handle).GetTextureHandle()).GetMTLResource();
 		cmdList->As<CommandList>()->ClearRenderTarget(texture, clearVal);
@@ -595,7 +597,7 @@ namespace bgl
 		const auto slot = m_Samplers.try_allocate_and_emplace(m_Device, desc);
 		if (slot.is_null())
 		{
-			logger::error("CreateSampler: sampler pool exhausted");
+			spdlog::error("CreateSampler: sampler pool exhausted");
 			return SamplerHandle{};
 		}
 		return SamplerHandle{ slot.index, slot.generation, slot.index };
@@ -605,7 +607,7 @@ namespace bgl
 	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
+		core::ensure(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
 
 		if (deferred)
 		{
@@ -621,7 +623,7 @@ namespace bgl
 	const Sampler&
 	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
 	{
-		gassert(ValidSamplerHandle(handle), "Invalid sampler handle");
+		core::ensure(ValidSamplerHandle(handle), "Invalid sampler handle");
 		return m_Samplers[handle.idx];
 	}
 
@@ -635,13 +637,13 @@ namespace bgl
 	DsvHandle
 	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
-		gassert(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
+		core::ensure(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		const auto                  slot = m_Dsvs.try_allocate_and_emplace(desc, textureHandle);
 		if (slot.is_null())
 		{
-			logger::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);
+			spdlog::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);
 			return DsvHandle{};
 		}
 		return DsvHandle{ slot.index, slot.generation };
@@ -651,7 +653,7 @@ namespace bgl
 	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
+		core::ensure(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
 
 		// Like an RTV, a DSV owns no allocation -- it names a texture -- so only its slot is gated.
 		if (deferred)
@@ -668,7 +670,7 @@ namespace bgl
 	const Dsv&
 	ResourceManager::GetDsv(DsvHandle handle) const noexcept
 	{
-		gassert(ValidDsvHandle(handle), "Invalid DSV handle");
+		core::ensure(ValidDsvHandle(handle), "Invalid DSV handle");
 		return m_Dsvs[handle.idx];
 	}
 
@@ -692,8 +694,10 @@ namespace bgl
 		float         depth,
 		uint8_t       stencil) noexcept
 	{
-		gassert(ValidDsvHandle(handle), "ClearDsv on an invalid DSV handle");
-		gassert(cmdList != nullptr && cmdList->IsOpen(), "ClearDsv needs an open command list");
+		core::ensure(ValidDsvHandle(handle), "ClearDsv on an invalid DSV handle");
+		core::ensure(
+			cmdList != nullptr && cmdList->IsOpen(),
+			"ClearDsv needs an open command list");
 
 		MTL::Texture* texture = m_Textures[GetDsvTexture(handle).slot].GetMTLResource();
 		cmdList->As<CommandList>()->ClearDepthStencil(texture, depth, stencil);
@@ -720,7 +724,7 @@ namespace bgl
 	bool
 	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
 	{
-		gassert(ValidTextureHandle(handle), "IsTextureCube on an invalid texture handle");
+		core::ensure(ValidTextureHandle(handle), "IsTextureCube on an invalid texture handle");
 		const MTL::TextureType type = m_Textures[handle.slot].GetMTLResource()->textureType();
 		return type == MTL::TextureTypeCube || type == MTL::TextureTypeCubeArray;
 	}

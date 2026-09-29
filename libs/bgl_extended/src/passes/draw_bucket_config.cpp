@@ -4,7 +4,7 @@
 #include "util/util.h"
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <format>
 #include <string>
 #include <string_view>
@@ -40,7 +40,7 @@ namespace bgl
 			case MaterialType::kInvalid:
 				break;
 			}
-			gfatal("A draw bucket's material kind has no program stem");
+			core::fatal("A draw bucket's material kind has no program stem");
 		}
 
 		std::string_view
@@ -65,7 +65,9 @@ namespace bgl
 	std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc)
 	{
-		gassert(desc.layer != LayerType::kBlend, "A transparent draw bucket owns no pixel program");
+		core::ensure(
+			desc.layer != LayerType::kBlend,
+			"A transparent draw bucket owns no pixel program");
 
 		// A blade shades from what the grass stage builds, which no mesh's program reads.
 		if (desc.geom == GeometryStage::kGrass)
@@ -82,7 +84,9 @@ namespace bgl
 	std::string_view
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{
-		gassert(desc.layer != LayerType::kBlend, "A transparent bucket owns no geometry program");
+		core::ensure(
+			desc.layer != LayerType::kBlend,
+			"A transparent bucket owns no geometry program");
 		switch (desc.geom)
 		{
 		case GeometryStage::kStaticMesh:
@@ -92,7 +96,7 @@ namespace bgl
 		case GeometryStage::kGrass:
 			return "programs.forward.Grass"sv;
 		}
-		gfatal("An unknown geometry stage");
+		core::fatal("An unknown geometry stage");
 	}
 
 	uint32_t

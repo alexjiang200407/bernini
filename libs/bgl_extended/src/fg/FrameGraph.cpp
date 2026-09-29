@@ -7,7 +7,6 @@
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
-#include <bgl_common/gassert.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
 #include <cstddef>
@@ -291,7 +290,7 @@ namespace bgl
 	void
 	FrameGraph::Compile(IResourceManager* resourceManager)
 	{
-		gassert(resourceManager != nullptr, "ResourceManager cannot be null");
+		core::ensure(resourceManager != nullptr, "ResourceManager cannot be null");
 
 		for (const PassNode& pass : m_Passes)
 		{
@@ -383,7 +382,7 @@ namespace bgl
 			}
 
 			const size_t scheduledIndex = m_Scheduler.AddPass(std::move(scheduled));
-			gassert(
+			core::ensure(
 				scheduledIndex == p,
 				"DeriveBarriers and Execute index m_Passes with the scheduler's index, so the two "
 				"must stay in step");

@@ -8,7 +8,7 @@
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/UniformValueType.h>
 #include <bgl_common/UniformsBase.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <cstdint>
 #include <memory>
@@ -57,7 +57,7 @@ namespace bgl
 				// after it rather than just this one. Declare the field `uint` or `float` instead;
 				// lifting this needs a test that pins the emitted offsets against the GPU.
 				case UniformValueType::kBool:
-					gfatal(
+					core::fatal(
 						"A bool in a constant buffer is unsupported on Metal -- use uint or float");
 
 				default:

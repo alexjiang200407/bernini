@@ -195,7 +195,7 @@ namespace bgl
 			SceneDesc                         desc,
 			core::SharedRef<IResourceManager> resourceManager,
 			std::span<const SurfaceType>      surfaces);
-		~Scene() noexcept override { logger::trace("~Scene"); }
+		~Scene() noexcept override { spdlog::trace("~Scene"); }
 		Scene(const Scene&) noexcept = delete;
 		Scene(Scene&&) noexcept      = delete;
 

@@ -1,7 +1,7 @@
 #include "scene/ComputeBuffer.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <utility>
 
@@ -10,9 +10,9 @@ namespace bgl
 	void
 	ComputeBuffer::Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager)
 	{
-		gassert(desc.initialCount > 0, "ComputeBuffer must have a positive count");
-		gassert(desc.elementSize > 0, "ComputeBuffer element size must be greater than zero");
-		gassert(resourceManager != nullptr, "ResourceManager cannot be null");
+		core::ensure(desc.initialCount > 0, "ComputeBuffer must have a positive count");
+		core::ensure(desc.elementSize > 0, "ComputeBuffer element size must be greater than zero");
+		core::ensure(resourceManager != nullptr, "ResourceManager cannot be null");
 
 		m_Desc = std::move(desc);
 
@@ -27,7 +27,7 @@ namespace bgl
 	void
 	ComputeBuffer::Resize(uint32_t newCount)
 	{
-		gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+		core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 
 		m_Storage.Grow(newCount, false);
 		m_Desc.initialCount = m_Storage.GetCapacity();

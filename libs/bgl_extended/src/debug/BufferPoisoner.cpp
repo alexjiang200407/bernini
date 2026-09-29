@@ -2,10 +2,9 @@
 #include "cmd/CommandList.h"
 #include "resource/ResourceManager.h"
 #include "types/Barrier.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include <algorithm>
-#include <core/err/util.h>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -15,7 +14,9 @@ namespace bgl
 	void
 	BufferPoisoner::Init(ResourceManagerRef resourceManager)
 	{
-		gassert(resourceManager != nullptr, "BufferPoisoner::Init requires a resource manager");
+		core::ensure(
+			resourceManager != nullptr,
+			"BufferPoisoner::Init requires a resource manager");
 
 		m_ResourceManager = std::move(resourceManager);
 		m_PatternUploaded = false;
@@ -48,9 +49,9 @@ namespace bgl
 	void
 	BufferPoisoner::Poison(ICommandList* cmdList, BufferHandle buffer) noexcept
 	{
-		gassert(cmdList != nullptr, "BufferPoisoner::Poison requires a command list");
-		gassert(!m_Pattern.IsNull(), "BufferPoisoner::Poison before Init");
-		gassert(
+		core::ensure(cmdList != nullptr, "BufferPoisoner::Poison requires a command list");
+		core::ensure(!m_Pattern.IsNull(), "BufferPoisoner::Poison before Init");
+		core::ensure(
 			m_ResourceManager->ValidBufferHandle(buffer),
 			"BufferPoisoner::Poison on an invalid buffer handle");
 

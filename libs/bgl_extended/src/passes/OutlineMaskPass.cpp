@@ -19,9 +19,9 @@
 #include "types/RasterState.h"
 #include "types/RenderState.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <core/err/util.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
 #include <cstdint>
@@ -46,7 +46,7 @@ namespace bgl
 	void
 	OutlineMaskPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		auto pipelineDesc = MeshletPipelineDesc();
 
@@ -78,7 +78,7 @@ namespace bgl
 		const DrawData& draw,
 		uint32_t        selectedCount)
 	{
-		gassert(selectedCount > 0, "An empty selection attaches no mask pass");
+		core::ensure(selectedCount > 0, "An empty selection attaches no mask pass");
 
 		auto desc = PassDesc();
 
@@ -115,8 +115,10 @@ namespace bgl
 	{
 		ICommandList* cmd = resources.GetCommandList();
 
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "Outline mask pipeline must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(
+			m_Kernel.pipeline.IsInitialized(),
+			"Outline mask pipeline must be initialized");
 
 		if (auto foundForwardData = m_Kernel.FindUniforms("forwardData"))
 		{

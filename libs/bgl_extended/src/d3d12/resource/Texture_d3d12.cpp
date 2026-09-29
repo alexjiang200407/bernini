@@ -1,4 +1,5 @@
 #include "resource/Texture_d3d12.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -8,10 +9,10 @@ namespace bgl
 		uint32_t              descriptorIndex,
 		const TextureDesc&    desc) : m_Desc(desc)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(desc.width > 0, "Texture width must be greater than zero");
-		gassert(desc.height > 0, "Texture height must be greater than zero");
-		gassert(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(desc.width > 0, "Texture width must be greater than zero");
+		core::ensure(desc.height > 0, "Texture height must be greater than zero");
+		core::ensure(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
 
 		// RTV/DSV-only textures pass a null heap: they need no shader-visible
 		// descriptor, so no CPU handle is computed.
@@ -46,12 +47,12 @@ namespace bgl
 
 		if (desc.dimension == TextureDimension::kTexture3D)
 		{
-			gassert(desc.arraySize == 1, "3D Textures cannot have an array size!");
+			core::ensure(desc.arraySize == 1, "3D Textures cannot have an array size!");
 			textureDesc.DepthOrArraySize = static_cast<UINT16>(desc.depth);
 		}
 		else
 		{
-			gassert(desc.depth == 1, "2D/1D Textures cannot have a depth greater than 1!");
+			core::ensure(desc.depth == 1, "2D/1D Textures cannot have a depth greater than 1!");
 			textureDesc.DepthOrArraySize = static_cast<UINT16>(desc.arraySize);
 		}
 
@@ -106,10 +107,10 @@ namespace bgl
 		wrl::ComPtr<ID3D12Resource> texture,
 		const TextureDesc&          desc) : m_Desc(desc), m_Texture(std::move(texture))
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(desc.width > 0, "Texture width must be greater than zero");
-		gassert(desc.height > 0, "Texture height must be greater than zero");
-		gassert(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(desc.width > 0, "Texture width must be greater than zero");
+		core::ensure(desc.height > 0, "Texture height must be greater than zero");
+		core::ensure(desc.format != Format::UNKNOWN, "Texture format cannot be UNKNOWN");
 
 		// RTV/DSV-only textures pass a null heap: they need no shader-visible
 		// descriptor, so no CPU handle is computed.

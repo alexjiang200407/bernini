@@ -2,12 +2,13 @@
 #include "resource/Texture.h"
 #include "types/Color.h"
 #include "util/util.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
 #define HANDLE_INVALID_DXGI_FORMAT_CASE(dxgiFormat) \
 	case dxgiFormat:                                \
-		gfatal("Unsupported DXGI format: {}", #dxgiFormat)
+		core::fatal("Unsupported DXGI format: {}", #dxgiFormat)
 
 	Format
 	ConvertFormat(DXGI_FORMAT dxgiFormat)
@@ -240,7 +241,7 @@ namespace bgl
 			HANDLE_INVALID_DXGI_FORMAT_CASE(DXGI_FORMAT_R32G32B32_TYPELESS);
 			HANDLE_INVALID_DXGI_FORMAT_CASE(DXGI_FORMAT_R16G16B16A16_TYPELESS);
 		default:
-			gfatal("ConvertFormat Invalid format: {}", static_cast<int>(dxgiFormat));
+			core::fatal("ConvertFormat Invalid format: {}", static_cast<int>(dxgiFormat));
 		}
 	}
 
@@ -424,7 +425,7 @@ namespace bgl
 
 		case Format::COUNT:
 		default:
-			gfatal("ConvertFormat Invalid format: {}", static_cast<int>(bglFormat));
+			core::fatal("ConvertFormat Invalid format: {}", static_cast<int>(bglFormat));
 		}
 	}
 
@@ -503,7 +504,7 @@ namespace bgl
 
 		case TextureDimension::kUnknown:
 		default:
-			gfatal(
+			core::fatal(
 				"ConvertTextureDimension Invalid texture dimension: {}",
 				static_cast<int>(dimension));
 		}
@@ -543,7 +544,7 @@ namespace bgl
 
 		case TextureDimension::kUnknown:
 		default:
-			gfatal(
+			core::fatal(
 				"ConvertRTVDimension Invalid texture dimension: {}",
 				static_cast<int>(dimension));
 		}
@@ -581,7 +582,7 @@ namespace bgl
 		case TextureDimension::kTexture3D:
 		case TextureDimension::kUnknown:
 		default:
-			gfatal(
+			core::fatal(
 				"ConvertDSVDimension Invalid or unsupported depth texture dimension: {}",
 				static_cast<int>(dimension));
 		}
@@ -613,7 +614,7 @@ namespace bgl
 
 		case TextureDimension::kUnknown:
 		default:
-			gfatal(
+			core::fatal(
 				"ConvertSRVDimension Invalid texture dimension: {}",
 				static_cast<int>(dimension));
 		}
@@ -655,7 +656,7 @@ namespace bgl
 		case TextureDimension::kTexture2DMS:
 		case TextureDimension::kTexture2DMSArray:
 		default:
-			gfatal(
+			core::fatal(
 				"ConvertSrvDesc unsupported texture dimension: {}",
 				static_cast<int>(desc.dimension));
 		}
@@ -774,7 +775,7 @@ namespace bgl
 		case BarrierLayout::kCopyDest:
 			return D3D12_BARRIER_LAYOUT_COPY_DEST;
 		default:
-			gfatal("Unknown BarrierLayout enum passed to conversion utility.");
+			core::fatal("Unknown BarrierLayout enum passed to conversion utility.");
 		}
 	}
 
@@ -834,7 +835,7 @@ namespace bgl
 		case BlendFactor::kInvSrc1Alpha:
 			return D3D12_BLEND_INV_SRC1_ALPHA;
 		default:
-			gfatal("Unknown BlendFactor value");
+			core::fatal("Unknown BlendFactor value");
 		}
 	}
 
@@ -854,7 +855,7 @@ namespace bgl
 		case BlendOp::kMax:
 			return D3D12_BLEND_OP_MAX;
 		default:
-			gfatal("Unknown BlendOp value");
+			core::fatal("Unknown BlendOp value");
 		}
 	}
 
@@ -924,7 +925,7 @@ namespace bgl
 			outState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 			break;
 		default:
-			gfatal("Unknown RasterFillMode value");
+			core::fatal("Unknown RasterFillMode value");
 			break;
 		}
 
@@ -940,7 +941,7 @@ namespace bgl
 			outState.CullMode = D3D12_CULL_MODE_NONE;
 			break;
 		default:
-			gfatal("Unknown RasterCullMode value");
+			core::fatal("Unknown RasterCullMode value");
 			break;
 		}
 
@@ -981,7 +982,7 @@ namespace bgl
 		case StencilOp::kDecrementAndWrap:
 			return D3D12_STENCIL_OP_DECR;
 		default:
-			gfatal("Unknown StencilOp value");
+			core::fatal("Unknown StencilOp value");
 		}
 	}
 
@@ -1007,7 +1008,7 @@ namespace bgl
 		case ComparisonFunc::kAlways:
 			return D3D12_COMPARISON_FUNC_ALWAYS;
 		default:
-			gfatal("Unknown ComparisonFunc value");
+			core::fatal("Unknown ComparisonFunc value");
 		}
 	}
 
@@ -1019,7 +1020,7 @@ namespace bgl
 
 		if (formatInfo.hasDepth || formatInfo.hasStencil)
 		{
-			gassert(clearValue.IsDepthStencil(), "Clear Value depth stencil expected");
+			core::ensure(clearValue.IsDepthStencil(), "Clear Value depth stencil expected");
 
 			auto& depthStencil                   = clearValue.GetDepthStencil();
 			d3d12ClearValue.DepthStencil.Depth   = depthStencil.depth;
@@ -1027,7 +1028,7 @@ namespace bgl
 		}
 		else
 		{
-			gassert(clearValue.IsColor(), "Clear Value color expected");
+			core::ensure(clearValue.IsColor(), "Clear Value color expected");
 
 			auto& color              = clearValue.GetColor();
 			d3d12ClearValue.Color[0] = color.r;
@@ -1057,7 +1058,7 @@ namespace bgl
 		case SamplerAddressMode::kMirrorOnce:
 			return D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE;
 		}
-		gfatal("Unsupported sampler address mode: {}", static_cast<uint32_t>(mode));
+		core::fatal("Unsupported sampler address mode: {}", static_cast<uint32_t>(mode));
 	}
 
 	D3D12_SAMPLER_DESC
@@ -1079,7 +1080,7 @@ namespace bgl
 			reduction = D3D12_FILTER_REDUCTION_TYPE_MAXIMUM;
 			break;
 		default:
-			gfatal(
+			core::fatal(
 				"Unsupported sampler reduction type: {}",
 				static_cast<uint32_t>(desc.reductionType));
 		}

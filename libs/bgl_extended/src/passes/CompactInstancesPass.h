@@ -21,7 +21,7 @@ namespace bgl
 	{
 	public:
 		CompactInstancesPass() = default;
-		~CompactInstancesPass() noexcept { logger::trace("~CompactInstancesPass"); }
+		~CompactInstancesPass() noexcept { spdlog::trace("~CompactInstancesPass"); }
 
 		CompactInstancesPass(const CompactInstancesPass&) noexcept = delete;
 		CompactInstancesPass(CompactInstancesPass&&) noexcept      = delete;

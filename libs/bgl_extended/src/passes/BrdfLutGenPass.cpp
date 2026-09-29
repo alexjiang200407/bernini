@@ -1,7 +1,7 @@
 #include "passes/BrdfLutGenPass.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/Shader.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include "cmd/CommandList.h"
 #include "device/Device.h"
@@ -34,7 +34,7 @@ namespace bgl
 	void
 	BrdfLutGenPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		m_ResourceManager = ctx.resourceManager;
 
@@ -60,9 +60,9 @@ namespace bgl
 	void
 	BrdfLutGenPass::Generate(ICommandList* cmdList)
 	{
-		gassert(cmdList != nullptr, "Command list must be initialized");
-		gassert(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
-		gassert(!Generated(), "BRDF LUT is generated at most once");
+		core::ensure(cmdList != nullptr, "Command list must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
+		core::ensure(!Generated(), "BRDF LUT is generated at most once");
 
 		auto textureDesc      = TextureDesc();
 		textureDesc.format    = c_Format;

@@ -1,7 +1,7 @@
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/UniformValueType.h>
 #include <bgl_common/UniformsBase.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -274,7 +274,7 @@ namespace bgl
 
 	UniformsBase::UniformsBase(std::shared_ptr<const ReflectedLayout> layout, size_t size)
 	{
-		gassert(layout != nullptr, "A mirror needs a reflected layout");
+		core::ensure(layout != nullptr, "A mirror needs a reflected layout");
 
 		m_Size   = size;
 		m_Root   = BuildNode(*layout);
@@ -311,7 +311,7 @@ namespace bgl
 
 		case UniformType::kArray:
 		{
-			gassert(layout.element.size() == 1, "Array layout must carry one element type");
+			core::ensure(layout.element.size() == 1, "Array layout must carry one element type");
 
 			return std::make_unique<detail::UniformArrayNode>(
 				BuildNode(layout.element.front()),
@@ -324,7 +324,7 @@ namespace bgl
 
 		case UniformType::kNull:
 		default:
-			gfatal("Unsupported reflected layout kind in push constants");
+			core::fatal("Unsupported reflected layout kind in push constants");
 		}
 	}
 }

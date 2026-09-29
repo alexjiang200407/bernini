@@ -27,7 +27,7 @@ namespace bgl
 	{
 	public:
 		BrdfLutGenPass() = default;
-		~BrdfLutGenPass() noexcept { logger::trace("~BrdfLutGenPass"); }
+		~BrdfLutGenPass() noexcept { spdlog::trace("~BrdfLutGenPass"); }
 
 		BrdfLutGenPass(const BrdfLutGenPass&) noexcept = delete;
 		BrdfLutGenPass(BrdfLutGenPass&&) noexcept      = delete;

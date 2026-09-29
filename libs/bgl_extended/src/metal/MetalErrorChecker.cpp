@@ -1,6 +1,6 @@
 #include "MetalErrorChecker.h"
 
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <format>
 #include <string>
 
@@ -33,7 +33,7 @@ namespace bgl
 		{
 			if (!checker.ReportError())
 			{
-				gfatal("Metal operation failed with no diagnostics available.");
+				core::fatal("Metal operation failed with no diagnostics available.");
 			}
 		}
 	}
@@ -43,7 +43,7 @@ namespace bgl
 	{
 		if (m_Error != nullptr)
 		{
-			gfatal("Metal operation failed with error: {}", GetErrorDescription(m_Error));
+			core::fatal("Metal operation failed with error: {}", GetErrorDescription(m_Error));
 		}
 
 		return false;

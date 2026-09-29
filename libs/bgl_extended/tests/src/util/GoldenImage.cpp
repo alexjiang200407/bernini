@@ -19,10 +19,6 @@
 
 namespace bgl::test
 {
-	// Not taken from a PCH: this file is also compiled into suites whose PCH aliases logger in a
-	// different namespace.
-	namespace logger = spdlog;
-
 	bool
 	MatchesGolden(const std::string& expectedPath, const std::string& gotPath, float tolerance)
 	{
@@ -32,7 +28,7 @@ namespace bgl::test
 		// the expected reference once it is verified by eye.
 		if (!fs::exists(expectedPath))
 		{
-			logger::warn(
+			spdlog::warn(
 				"Golden image '{}' does not exist; captured output left at '{}'",
 				expectedPath,
 				gotPath);
@@ -45,7 +41,7 @@ namespace bgl::test
 		unsigned char* expected = stbi_load(expectedPath.c_str(), &expW, &expH, &expC, 4);
 		if (expected == nullptr)
 		{
-			logger::warn("Failed to load golden image '{}'", expectedPath);
+			spdlog::warn("Failed to load golden image '{}'", expectedPath);
 			return false;
 		}
 
@@ -53,7 +49,7 @@ namespace bgl::test
 		if (got == nullptr)
 		{
 			stbi_image_free(expected);
-			logger::warn("Failed to load captured image '{}'", gotPath);
+			spdlog::warn("Failed to load captured image '{}'", gotPath);
 			return false;
 		}
 
@@ -61,7 +57,7 @@ namespace bgl::test
 
 		if (expW != gotW || expH != gotH)
 		{
-			logger::warn(
+			spdlog::warn(
 				"Golden image mismatch '{}': dimensions differ; captured output left at '{}'",
 				expectedPath,
 				gotPath);
@@ -83,7 +79,7 @@ namespace bgl::test
 			const float mse = static_cast<float>(sum / static_cast<double>(count));
 			if (mse > tolerance)
 			{
-				logger::warn(
+				spdlog::warn(
 					"Golden image mismatch '{}': MSE {} exceeds tolerance {}; captured output left "
 					"at '{}'",
 					expectedPath,
@@ -152,7 +148,7 @@ namespace bgl::test
 		unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
 		if (pixels == nullptr)
 		{
-			logger::warn("AliasEnergy: failed to load '{}'", path);
+			spdlog::warn("AliasEnergy: failed to load '{}'", path);
 			return 0.0f;
 		}
 

@@ -28,8 +28,8 @@
 #include "util/util.h"
 #include <bgl/Viewport.h>
 #include <bgl_common/ReflectedLayout.h>
-#include <bgl_common/gassert.h>
 #include <core/containers/slot_handle.h>
+#include <core/err/util.h>
 
 #include <algorithm>
 #include <bgl_common/idl/DispatchArgs.h>
@@ -108,7 +108,7 @@ namespace bgl
 					native = rm->GetSamplerBySlotIndex(slotIndex)->gpuResourceID()._impl;
 					break;
 				case HandleKind::kNone:
-					gfatal("A collected handle slot carries no kind");
+					core::fatal("A collected handle slot carries no kind");
 				}
 				std::memcpy(result.bytes.data() + handle.offset, &native, sizeof(uint64_t));
 			}
@@ -122,7 +122,7 @@ namespace bgl
 		ResourceManagerRef resourceManager) :
 		m_Desc(desc), m_ResourceManager(std::move(resourceManager))
 	{
-		gassert(m_ResourceManager != nullptr, "Resource manager cannot be null");
+		core::ensure(m_ResourceManager != nullptr, "Resource manager cannot be null");
 		m_Device = m_ResourceManager->As<ResourceManager>()->GetMTLDevice();
 	}
 
@@ -296,8 +296,8 @@ namespace bgl
 	void
 	CommandList::Open(ICommandQueue* cmdQueue, ICommandAllocator*) noexcept
 	{
-		gassert(cmdQueue != nullptr, "Command queue cannot be null");
-		gassert(!m_Open, "Command list is already open");
+		core::ensure(cmdQueue != nullptr, "Command queue cannot be null");
+		core::ensure(!m_Open, "Command list is already open");
 
 		// One pool for the whole open scope: every encoder and temporary autoreleased between Open and
 		// Close drains here. The command buffer outlives the drain via its own retain (RetainPtr).
@@ -317,8 +317,8 @@ namespace bgl
 	void
 	CommandList::Close() noexcept
 	{
-		gassert(m_Open, "Command list is not open");
-		gassert(m_TimingBuffer == nullptr, "Command list closed with a timed span open");
+		core::ensure(m_Open, "Command list is not open");
+		core::ensure(m_TimingBuffer == nullptr, "Command list closed with a timed span open");
 		EndEncoder();
 		m_Open = false;
 		m_ScopePool.reset();
@@ -331,8 +331,10 @@ namespace bgl
 		size_t       gpuBufferOffset,
 		size_t       byteSize) noexcept
 	{
-		gassert(m_Open, "WriteBuffer on a closed command list");
-		gassert(m_ResourceManager->ValidBufferHandle(handle), "WriteBuffer on an invalid handle");
+		core::ensure(m_Open, "WriteBuffer on a closed command list");
+		core::ensure(
+			m_ResourceManager->ValidBufferHandle(handle),
+			"WriteBuffer on an invalid handle");
 
 		auto* dst = m_ResourceManager->GetBuffer(handle).GetMTLResource();
 
@@ -341,7 +343,7 @@ namespace bgl
 		// command buffer retains the staging buffer until it completes, so it needs no separate owner.
 		auto staging =
 			NS::TransferPtr(m_Device->newBuffer(data, byteSize, MTL::ResourceStorageModeShared));
-		gassert(staging.get() != nullptr, "Metal upload staging buffer allocation failed");
+		core::ensure(staging.get() != nullptr, "Metal upload staging buffer allocation failed");
 
 		GetBlitEncoder()->copyFromBuffer(staging.get(), 0, dst, gpuBufferOffset, byteSize);
 	}
@@ -354,9 +356,9 @@ namespace bgl
 		uint64_t     srcOffset,
 		uint64_t     byteSize) noexcept
 	{
-		gassert(m_Open, "CopyBuffer on a closed command list");
-		gassert(m_ResourceManager->ValidBufferHandle(src), "CopyBuffer: invalid source");
-		gassert(m_ResourceManager->ValidBufferHandle(dst), "CopyBuffer: invalid destination");
+		core::ensure(m_Open, "CopyBuffer on a closed command list");
+		core::ensure(m_ResourceManager->ValidBufferHandle(src), "CopyBuffer: invalid source");
+		core::ensure(m_ResourceManager->ValidBufferHandle(dst), "CopyBuffer: invalid destination");
 
 		auto* srcBuffer = m_ResourceManager->GetBuffer(src).GetMTLResource();
 		auto* dstBuffer = m_ResourceManager->GetBuffer(dst).GetMTLResource();
@@ -367,9 +369,11 @@ namespace bgl
 	void
 	CommandList::CopyBufferToReadback(ReadbackBufferHandle dst, BufferHandle src) noexcept
 	{
-		gassert(m_Open, "CopyBufferToReadback on a closed command list");
-		gassert(m_ResourceManager->ValidBufferHandle(src), "CopyBufferToReadback: invalid source");
-		gassert(
+		core::ensure(m_Open, "CopyBufferToReadback on a closed command list");
+		core::ensure(
+			m_ResourceManager->ValidBufferHandle(src),
+			"CopyBufferToReadback: invalid source");
+		core::ensure(
 			m_ResourceManager->ValidReadbackBufferHandle(dst),
 			"CopyBufferToReadback: invalid destination");
 
@@ -387,11 +391,11 @@ namespace bgl
 	void
 	CommandList::CopyTextureToReadback(ReadbackBufferHandle dst, TextureHandle src) noexcept
 	{
-		gassert(m_Open, "CopyTextureToReadback on a closed command list");
-		gassert(
+		core::ensure(m_Open, "CopyTextureToReadback on a closed command list");
+		core::ensure(
 			m_ResourceManager->ValidTextureHandle(src),
 			"CopyTextureToReadback: invalid source");
-		gassert(
+		core::ensure(
 			m_ResourceManager->ValidReadbackBufferHandle(dst),
 			"CopyTextureToReadback: invalid destination");
 
@@ -415,7 +419,7 @@ namespace bgl
 	void
 	CommandList::ClearRenderTarget(MTL::Texture* texture, const float clearVal[4]) noexcept
 	{
-		gassert(m_Open, "ClearRenderTarget on a closed command list");
+		core::ensure(m_Open, "ClearRenderTarget on a closed command list");
 		EndEncoder();
 
 		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
@@ -434,7 +438,7 @@ namespace bgl
 	void
 	CommandList::ClearDepthStencil(MTL::Texture* texture, float depth, uint8_t stencil) noexcept
 	{
-		gassert(m_Open, "ClearDepthStencil on a closed command list");
+		core::ensure(m_Open, "ClearDepthStencil on a closed command list");
 		EndEncoder();
 
 		MTL::RenderPassDescriptor* pass = MTL::RenderPassDescriptor::renderPassDescriptor();
@@ -464,8 +468,10 @@ namespace bgl
 		TextureHandle                           handle,
 		std::span<const TextureSubresourceData> subresources) noexcept
 	{
-		gassert(m_Open, "WriteTexture on a closed command list");
-		gassert(m_ResourceManager->ValidTextureHandle(handle), "WriteTexture on an invalid handle");
+		core::ensure(m_Open, "WriteTexture on a closed command list");
+		core::ensure(
+			m_ResourceManager->ValidTextureHandle(handle),
+			"WriteTexture on an invalid handle");
 
 		const Texture&     texture = m_ResourceManager->GetTexture(handle);
 		const TextureDesc& desc    = texture.GetDesc();
@@ -498,7 +504,7 @@ namespace bgl
 
 			auto staging = NS::TransferPtr(
 				m_Device->newBuffer(sub.data, byteSize, MTL::ResourceStorageModeShared));
-			gassert(
+			core::ensure(
 				staging.get() != nullptr,
 				"Metal texture upload staging buffer allocation failed");
 
@@ -531,9 +537,9 @@ namespace bgl
 	void
 	CommandList::BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept
 	{
-		gassert(m_Open, "BeginTiming on a closed command list");
-		gassert(m_TimingBuffer == nullptr, "BeginTiming while a timed span is open");
-		gassert(
+		core::ensure(m_Open, "BeginTiming on a closed command list");
+		core::ensure(m_TimingBuffer == nullptr, "BeginTiming while a timed span is open");
+		core::ensure(
 			startSlot < heap.GetCapacity() && endSlot < heap.GetCapacity(),
 			"BeginTiming slot outside the heap");
 
@@ -550,7 +556,7 @@ namespace bgl
 	bool
 	CommandList::EndTiming() noexcept
 	{
-		gassert(m_TimingBuffer != nullptr, "EndTiming without a timed span open");
+		core::ensure(m_TimingBuffer != nullptr, "EndTiming without a timed span open");
 
 		// The end sample is written where the last encoder ends, so it ends here rather than
 		// running on into the next span's work.
@@ -595,11 +601,11 @@ namespace bgl
 	CommandList::MeshletDraw
 	CommandList::BindMeshletDraw() noexcept
 	{
-		gassert(m_Open, "A meshlet draw needs an open command list");
-		gassert(m_MeshletState.kernel != nullptr, "A meshlet draw needs a meshlet state");
+		core::ensure(m_Open, "A meshlet draw needs an open command list");
+		core::ensure(m_MeshletState.kernel != nullptr, "A meshlet draw needs a meshlet state");
 
 		auto* pipeline = m_MeshletState.kernel->pipeline->As<MeshletPipeline>();
-		gassert(
+		core::ensure(
 			pipeline->GetMTLPipelineState() != nullptr,
 			"A mesh-only pipeline has no pixel shader, so it cannot draw");
 		auto* rm = m_ResourceManager->As<ResourceManager>();
@@ -697,7 +703,7 @@ namespace bgl
 	void
 	CommandList::DispatchMeshIndirect(uint32_t argIdx) noexcept
 	{
-		gassert(
+		core::ensure(
 			!m_MeshletState.indirectArgs.IsNull(),
 			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
 
@@ -716,7 +722,7 @@ namespace bgl
 	void
 	CommandList::DispatchMeshIndirectCount(uint32_t argIdx, uint32_t countIdx) noexcept
 	{
-		gassert(
+		core::ensure(
 			!m_MeshletState.commandCounts.IsNull(),
 			"MeshletState.commandCounts must be set for DispatchMeshIndirectCount");
 
@@ -753,8 +759,8 @@ namespace bgl
 	void
 	CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept
 	{
-		gassert(m_Open, "Dispatch on a closed command list");
-		gassert(m_ComputeState.kernel != nullptr, "Dispatch without a compute state");
+		core::ensure(m_Open, "Dispatch on a closed command list");
+		core::ensure(m_ComputeState.kernel != nullptr, "Dispatch without a compute state");
 
 		auto* pipeline = m_ComputeState.kernel->pipeline->As<ComputePipeline>();
 		auto* rm       = m_ResourceManager->As<ResourceManager>();

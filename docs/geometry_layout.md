@@ -346,7 +346,7 @@ green channel.
   range next), not a new hazard. The defaults ride on the `RangeBuffer` as `Meta`, so they are
   allocated and freed with the geometry; `Scene::GetSubmeshDefaultMaterial` checks `IsIndexValid`
   before the `Meta` accessor, so a range that was freed and not reused resolves to a null material
-  rather than tripping the accessor's `gassert`.
+  rather than tripping the accessor's `core::ensure`.
 * **`Update(cmdList)` must run the growth flush before the dirty-region uploads.** The forward copy
   writes the whole old extent, so a dirty region flushed ahead of it is overwritten by stale bytes.
   `RangeBuffer`/`EntryBuffer`/`PackedBuffer::Update` call `FlushGrowth` first for this reason.

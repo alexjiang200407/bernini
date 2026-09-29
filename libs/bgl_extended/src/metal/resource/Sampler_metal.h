@@ -1,6 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include "convert_metal.h"
 
@@ -45,7 +45,7 @@ namespace bgl
 			sd->setSupportArgumentBuffers(true);
 
 			m_Sampler = NS::TransferPtr(device->newSamplerState(sd.get()));
-			gassert(m_Sampler.get() != nullptr, "Metal sampler state creation failed");
+			core::ensure(m_Sampler.get() != nullptr, "Metal sampler state creation failed");
 		}
 
 		[[nodiscard]] MTL::SamplerState*

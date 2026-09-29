@@ -28,7 +28,6 @@
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/MeshInstanceFlags.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DrawBucket.h>
@@ -41,6 +40,7 @@
 #include <bgl_common/idl/SkinnedTableState.h>
 #include <cmath>
 #include <core/containers/static_vector.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>
@@ -154,10 +154,12 @@ namespace bgl
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
 		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
-		gassert(m_DrawBucketTable != nullptr, "SceneView requires the renderer's bucket table");
+		core::ensure(
+			m_DrawBucketTable != nullptr,
+			"SceneView requires the renderer's bucket table");
 
 		m_SceneRaw = m_Scene->As<Scene>();
-		gassert(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
+		core::ensure(m_SceneRaw != nullptr, "SceneView requires a valid Scene");
 
 		m_NamePrefix = std::format("v{}:", g_NextViewId.fetch_add(1));
 
@@ -340,7 +342,7 @@ namespace bgl
 		m_DrawBucketFlags.Release();
 		m_CurrentSelectedInstances.Release();
 
-		logger::trace("~SceneView");
+		spdlog::trace("~SceneView");
 	}
 
 	ViewMatrices
@@ -1612,7 +1614,7 @@ namespace bgl
 		const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
-		gassert(
+		core::ensure(
 			m_InstanceBuffer.IsValid(handle),
 			"Every submesh of a live placement has an instance");
 

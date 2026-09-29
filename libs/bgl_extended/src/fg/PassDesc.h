@@ -5,8 +5,8 @@
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
-#include <bgl_common/gassert.h>
 #include <core/containers/static_vector.h>
+#include <core/err/util.h>
 #include <core/str/str.h>
 #include <format>
 #include <functional>
@@ -281,8 +281,8 @@ namespace bgl
 		PassDesc&
 		SetName(std::string passName) noexcept
 		{
-			gassert(!passName.empty(), "PassDesc name cannot be empty");
-			gassert(
+			core::ensure(!passName.empty(), "PassDesc name cannot be empty");
+			core::ensure(
 				passName != "$",
 				"PassDesc name cannot be '$', which is reserved for the root pass");
 

@@ -79,7 +79,7 @@ namespace bgl
 		};
 
 		PostProcessPass() = default;
-		~PostProcessPass() noexcept { logger::trace("~PostProcessPass"); }
+		~PostProcessPass() noexcept { spdlog::trace("~PostProcessPass"); }
 
 		PostProcessPass(const PostProcessPass&) noexcept = delete;
 		PostProcessPass(PostProcessPass&&) noexcept      = delete;

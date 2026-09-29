@@ -1,4 +1,5 @@
 #include "resource/Sampler_d3d12.h"
+#include <core/err/util.h>
 
 namespace bgl
 {
@@ -8,8 +9,8 @@ namespace bgl
 		uint32_t              descriptorIndex,
 		const SamplerDesc&    desc) : m_Desc(desc), m_DescriptorIndex(descriptorIndex)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(samplerHeap != nullptr, "Sampler heap cannot be null");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(samplerHeap != nullptr, "Sampler heap cannot be null");
 
 		const uint32_t descriptorSize =
 			device->GetDescriptorHandleIncrementSize(samplerHeap->GetDesc().Type);

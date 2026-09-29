@@ -24,7 +24,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/Viewport.h>
 #include <bgl/types/GroundPlaneDesc.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
 #include <string>
@@ -52,7 +52,7 @@ namespace bgl
 	void
 	BlobShadowPass::Init(const PassInitContext& ctx)
 	{
-		gassert(ctx.device != nullptr, "Device must be initialized");
+		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
 		// The transparents' blend, but colour only with no depth attachment -- the depth is this
 		// pass's input -- and its own two-stage program: the discs are not instance-pipeline
@@ -103,7 +103,7 @@ namespace bgl
 	BlobShadowPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
 		const auto* view = draw.view->As<SceneView>();
-		gassert(view != nullptr, "BlobShadowPass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "BlobShadowPass requires a bgl::SceneView");
 
 		if (view->GetBlobShadowCount() == 0)
 		{
@@ -131,7 +131,7 @@ namespace bgl
 
 		const uint32_t blobs = view->GetBlobShadowCount();
 
-		gassert(m_Kernel.pipeline.IsInitialized(), "Blob shadow pipeline must be initialized");
+		core::ensure(m_Kernel.pipeline.IsInitialized(), "Blob shadow pipeline must be initialized");
 
 		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
@@ -156,7 +156,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Blob shadow shader is missing its '{}' constant buffer", c_Cbuffer);
+			core::fatal("Blob shadow shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		// Colour alone: the velocity buffer is not the decal's to write, and the depth is read.

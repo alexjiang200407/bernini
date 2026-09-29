@@ -1,6 +1,6 @@
 #include "resource/Shader.h"
-#include <bgl_common/gassert.h>
 #include <bgpu/GpuContext.h>
+#include <core/err/util.h>
 #include <slang.h>
 #include <utility>
 
@@ -9,10 +9,10 @@ namespace bgl
 	Shader::Shader(ShaderDesc desc, bgpu::GpuContextRef context) :
 		m_Desc(std::move(desc)), m_Context(std::move(context))
 	{
-		gassert(
+		core::ensure(
 			m_Desc.slangModuleName.empty() == false,
 			"Shader must have a valid Slang module name");
-		gassert(m_Context != nullptr, "GPU context cannot be null");
+		core::ensure(m_Context != nullptr, "GPU context cannot be null");
 	}
 
 	slang::IModule*

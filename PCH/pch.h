@@ -4,7 +4,6 @@
 #include <array>
 #include <atomic>
 #include <bitset>
-#include <cassert>
 #include <cerrno>
 #include <chrono>
 #include <concepts>

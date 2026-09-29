@@ -253,7 +253,7 @@ equivalent; the IDL layer proves its parity, this one asserts it, and only golde
 drift.
 
 **`bool` is rejected rather than guessed at.** Slang's MSL `bool` ABI is unverified and a wrong
-alignment displaces every member after the field, so `MetalAlign` calls `gfatal` on `kBool` instead of
+alignment displaces every member after the field, so `MetalAlign` calls `core::fatal` on `kBool` instead of
 falling through to its 4-byte default. @post a `bool` in a constant buffer aborts on Metal with a
 message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl_extended/shaders/src/programs/screen/TaaResolve.slang)
 does. Lifting it needs a test pinning the emitted offsets against the GPU.
@@ -273,7 +273,7 @@ MeshletKernel kernel = device->CreateMeshletKernel(desc);
 // Once per family, not per draw: a name no variant declares is a typo that binding cannot report.
 constexpr std::array c_Names     = { "viewProj"sv, "prevViewProj"sv };
 const Uniforms*      variants[]  = { kernel.FindUniforms("viewData") };
-gassert(FindUnknownMembers(variants, c_Names).empty(), "viewData binder names a missing member");
+core::ensure(FindUnknownMembers(variants, c_Names).empty(), "viewData binder names a missing member");
 
 kernel["viewData"]["viewProj"] = draw.viewState.viewProj;
 

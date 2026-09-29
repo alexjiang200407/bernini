@@ -3,7 +3,7 @@
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -55,7 +55,7 @@ namespace bgl
 		[[nodiscard]] const ComputeBufferDesc&
 		GetDesc() const noexcept
 		{
-			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return m_Desc;
 		}
 
@@ -64,7 +64,7 @@ namespace bgl
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -78,15 +78,15 @@ namespace bgl
 		[[nodiscard]] uint64_t
 		ByteSize() const noexcept
 		{
-			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return static_cast<uint64_t>(m_Desc.initialCount) * m_Desc.elementSize;
 		}
 
 		void
 		Clear(ICommandList* cmd) noexcept
 		{
-			gassert(cmd != nullptr, "Command list cannot be null");
-			gassert(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
+			core::ensure(cmd != nullptr, "Command list cannot be null");
+			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 
 			const auto zeros = std::vector<std::byte>(ByteSize(), std::byte{ 0 });
 			cmd->WriteBuffer(m_Storage.GetHandle(), zeros.data(), zeros.size());

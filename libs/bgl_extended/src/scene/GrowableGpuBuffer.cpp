@@ -3,10 +3,9 @@
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "types/Barrier.h"
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 
 #include <algorithm>
-#include <core/err/util.h>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -77,9 +76,11 @@ namespace bgl
 		bool               isUav,
 		bool               isRaw)
 	{
-		gassert(resourceManager != nullptr, "GrowableGpuBuffer requires a valid ResourceManager");
-		gassert(stride > 0, "GrowableGpuBuffer requires a positive stride");
-		gassert(capacity > 0, "GrowableGpuBuffer requires a positive capacity");
+		core::ensure(
+			resourceManager != nullptr,
+			"GrowableGpuBuffer requires a valid ResourceManager");
+		core::ensure(stride > 0, "GrowableGpuBuffer requires a positive stride");
+		core::ensure(capacity > 0, "GrowableGpuBuffer requires a positive capacity");
 
 		m_ResourceManager = std::move(resourceManager);
 		m_DebugName       = std::move(debugName);
@@ -105,7 +106,7 @@ namespace bgl
 	void
 	GrowableGpuBuffer::Grow(uint32_t newCapacity, bool preserveContents)
 	{
-		gassert(IsInitialized(), "GrowableGpuBuffer is uninitialized; call Init() first");
+		core::ensure(IsInitialized(), "GrowableGpuBuffer is uninitialized; call Init() first");
 
 		if (newCapacity <= m_Capacity)
 			return;
@@ -141,8 +142,8 @@ namespace bgl
 		if (m_Superseded.empty())
 			return;
 
-		gassert(cmdList != nullptr, "FlushGrowth requires a valid ICommandList");
-		gassert(cmdList->IsOpen(), "ICommandList must be open to flush a buffer growth");
+		core::ensure(cmdList != nullptr, "FlushGrowth requires a valid ICommandList");
+		core::ensure(cmdList->IsOpen(), "ICommandList must be open to flush a buffer growth");
 
 		if (m_CopyBytes > 0)
 		{

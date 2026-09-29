@@ -2,6 +2,7 @@
 #include "cmd/TimestampHeap.h"
 #include "resource/Readback.h"
 #include "resource/ReadbackBuffer_d3d12.h"
+#include <core/err/util.h>
 #include <cstdint>
 #include <cstring>
 #include <span>
@@ -10,8 +11,8 @@ namespace bgl
 {
 	TimestampHeap::TimestampHeap(ID3D12Device* device, uint32_t capacity) : m_Capacity(capacity)
 	{
-		gassert(device != nullptr, "Device cannot be null");
-		gassert(capacity > 0, "A timestamp heap needs at least one slot");
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(capacity > 0, "A timestamp heap needs at least one slot");
 
 		D3D12_QUERY_HEAP_DESC desc = {};
 		desc.Type                  = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
@@ -28,7 +29,7 @@ namespace bgl
 	void
 	TimestampHeap::Read(uint32_t first, std::span<uint64_t> out) const noexcept
 	{
-		gassert(first + out.size() <= m_Capacity, "Timestamp read outside the heap");
+		core::ensure(first + out.size() <= m_Capacity, "Timestamp read outside the heap");
 
 		if (out.empty())
 		{
@@ -36,7 +37,7 @@ namespace bgl
 		}
 
 		const auto* mapped = static_cast<const uint64_t*>(m_Readback.Map());
-		gassert(mapped != nullptr, "Failed to map the timestamp readback");
+		core::ensure(mapped != nullptr, "Failed to map the timestamp readback");
 		std::memcpy(out.data(), mapped + first, out.size() * sizeof(uint64_t));
 		m_Readback.Unmap();
 	}

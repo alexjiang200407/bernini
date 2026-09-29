@@ -17,8 +17,8 @@
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
 #include <bgl/types/WindDesc.h>
-#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
+#include <core/err/util.h>
 #include <core/math.h>
 #include <cstdint>
 #include <string_view>
@@ -71,7 +71,7 @@ namespace bgl
 		ViewOf(const DrawData& draw)
 		{
 			const auto* view = draw.view->As<SceneView>();
-			gassert(view != nullptr, "The grass phase requires a bgl::SceneView");
+			core::ensure(view != nullptr, "The grass phase requires a bgl::SceneView");
 			return *view;
 		}
 	}
@@ -100,7 +100,7 @@ namespace bgl
 		const PassContext& resources) const
 	{
 		ICommandList* cmd = resources.GetCommandList();
-		gassert(cmd != nullptr, "Pass commandlist must be initialized");
+		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const SceneView& view = ViewOf(draw);
 		const WindDesc&  wind = view.GetWind();
@@ -110,7 +110,7 @@ namespace bgl
 			MeshletKernel* kernel =
 				kernels
 					.BindDrawBucketKernel(batch.bucket, DrawLane::kAtRest, state, draw, resources);
-			gassert(
+			core::ensure(
 				kernel != nullptr,
 				"a grass batch's bucket was drawn before its kernel was built");
 			if (kernel == nullptr || batch.refCount == 0)
@@ -126,7 +126,7 @@ namespace bgl
 			auto found = kernel->FindUniforms(c_Cbuffer);
 			if (!found)
 			{
-				gfatal("Grass shader is missing its '{}' constant buffer", c_Cbuffer);
+				core::fatal("Grass shader is missing its '{}' constant buffer", c_Cbuffer);
 			}
 			auto& uniforms = *found;
 			BindSceneBuffers(uniforms, c_GrassBuffers, resources);

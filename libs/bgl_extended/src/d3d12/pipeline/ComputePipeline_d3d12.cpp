@@ -2,6 +2,8 @@
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
+#include <core/err/util.h>
+#include <spdlog/spdlog.h>
 
 // clang-format off
 #pragma warning(push)
@@ -27,8 +29,8 @@ namespace bgl
 		ShaderCache*               cache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
-		gassert(device != nullptr, "Device pointer must not be null.");
-		gassert(desc.shader != nullptr, "Compute shader cannot be null");
+		core::ensure(device != nullptr, "Device pointer must not be null.");
+		core::ensure(desc.shader != nullptr, "Compute shader cannot be null");
 
 		wrl::ComPtr<ID3D12Device2> device2;
 		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
@@ -40,7 +42,7 @@ namespace bgl
 		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
 
 		auto codeIt = pipelineLayout.entryPointCode.find(desc.shader->GetDesc().entryPointName);
-		gassert(
+		core::ensure(
 			codeIt != pipelineLayout.entryPointCode.end(),
 			"Missing compiled bytecode for compute shader");
 
@@ -73,7 +75,7 @@ namespace bgl
 
 	ComputePipeline::~ComputePipeline() noexcept
 	{
-		logger::trace("~ComputePipeline");
+		spdlog::trace("~ComputePipeline");
 		m_PipelineState.Reset();
 		m_RootSignature.Reset();
 	}

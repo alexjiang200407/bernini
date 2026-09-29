@@ -20,7 +20,6 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
-#include <cassert>
 #include <concepts>
 #include <core/str/str.h>
 #include <cstddef>
@@ -762,7 +761,7 @@ namespace game
 			Remap&&                                  remap)
 		{
 			const auto it = reads.find(path);
-			assert(it != reads.end() && "RemapCached before the container was read");
+			core::ensure(it != reads.end(), "RemapCached before the container was read");
 
 			if (!remap(it->second.value, skeleton))
 				return false;
@@ -1215,7 +1214,7 @@ namespace game
 
 		RigRecord& record = it->second;
 
-		assert(record.refCount > 0 && "AssetManager: rig reference count underflow");
+		core::ensure(record.refCount > 0, "AssetManager: rig reference count underflow");
 		if (--record.refCount > 0)
 			return;
 
@@ -1494,7 +1493,7 @@ namespace game
 
 		GeomRecord& record = it->second;
 
-		assert(record.refCount > 0 && "AssetManager: geom reference count underflow");
+		core::ensure(record.refCount > 0, "AssetManager: geom reference count underflow");
 		if (--record.refCount > 0)
 			return;
 
@@ -1665,7 +1664,7 @@ namespace game
 			return;
 
 		GrassRecord& record = it->second;
-		assert(record.refCount > 0 && "AssetManager: grass look reference count underflow");
+		core::ensure(record.refCount > 0, "AssetManager: grass look reference count underflow");
 		if (--record.refCount > 0)
 			return;
 
@@ -1696,7 +1695,7 @@ namespace game
 
 		MaterialRecord& record = it->second;
 
-		assert(record.refCount > 0 && "AssetManager: material reference count underflow");
+		core::ensure(record.refCount > 0, "AssetManager: material reference count underflow");
 		if (--record.refCount > 0)
 			return;
 
@@ -1724,7 +1723,7 @@ namespace game
 
 		TextureRecord& record = it->second;
 
-		assert(record.refCount > 0 && "AssetManager: texture reference count underflow");
+		core::ensure(record.refCount > 0, "AssetManager: texture reference count underflow");
 		if (--record.refCount > 0)
 			return;
 

@@ -7,7 +7,7 @@
 #include "types/Format.h"
 #include "types/TextureDimension.h"
 #include <bgl/IGraphics.h>
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
@@ -99,8 +99,8 @@ namespace bgl
 	void
 	TonemapLut::Upload(ICommandList* cmdList)
 	{
-		gassert(cmdList != nullptr, "Command list must be initialized");
-		gassert(!m_Pixels.empty(), "TonemapLut::Upload before Init, or twice");
+		core::ensure(cmdList != nullptr, "Command list must be initialized");
+		core::ensure(!m_Pixels.empty(), "TonemapLut::Upload before Init, or twice");
 
 		const uint64_t rowPitch = static_cast<uint64_t>(m_Size) * m_Size * c_BytesPerTexel;
 		const TextureSubresourceData subresource{ m_Pixels.data(), rowPitch, rowPitch * m_Size };

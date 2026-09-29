@@ -9,7 +9,7 @@
 
 // Exercises the caller-facing error contract of the exported interfaces:
 // IScene throws SceneError and IGraphics throws GraphicsError when the caller
-// misuses the API. Internal-logic failures (gassert/gfatal) are not exercised
+// misuses the API. Internal-logic failures (core::ensure/core::fatal) are not exercised
 // here because they intentionally terminate the process.
 
 namespace

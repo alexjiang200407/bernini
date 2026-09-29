@@ -262,7 +262,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 	}
 	CHECK(forward.TransparentInitialized());
 
-	// gfatal on a binder name no built variant declares, which with every bucket built is the
+	// core::fatal on a binder name no built variant declares, which with every bucket built is the
 	// original full check.
 	forward.CheckBindings();
 

@@ -2,7 +2,7 @@
 #include <bgl_common/SlangReflection.h>
 #include <bgl_common/UniformValueType.h>
 
-#include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <cstdint>
 #include <format>
 #include <slang-com-ptr.h>
@@ -20,7 +20,7 @@ namespace bgl
 
 		if (kind == slang::TypeReflection::Kind::Matrix)
 		{
-			gassert(
+			core::ensure(
 				type->getRowCount() == 4 && type->getColumnCount() == 4,
 				"Only float mat4x4 supported for now");
 			return UniformValueType::kMat4x4;
@@ -89,7 +89,7 @@ namespace bgl
 			}
 		}
 
-		gfatal("Unsupported scalar/vector type in push constants");
+		core::fatal("Unsupported scalar/vector type in push constants");
 	}
 
 	void
@@ -143,7 +143,7 @@ namespace bgl
 
 #define HANDLE_UNSUPPORTED_TYPE_KIND(kind) \
 	case kind:                             \
-		gfatal("Unsupported type kind in push constants: " #kind)
+		core::fatal("Unsupported type kind in push constants: " #kind)
 
 	ReflectedLayout
 	ReflectLayoutFromSlang(slang::TypeLayoutReflection* typeLayout)
@@ -239,7 +239,7 @@ namespace bgl
 			HANDLE_UNSUPPORTED_TYPE_KIND(Kind::TextureBuffer);
 
 		default:
-			gfatal("Unsupported type kind in push constants");
+			core::fatal("Unsupported type kind in push constants");
 		}
 	}
 }
