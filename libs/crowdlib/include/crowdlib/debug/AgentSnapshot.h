@@ -1,20 +1,11 @@
 #pragma once
-#include <core/glm.h>
 #include <crowdlib/GroupHandle.h>
+#include <crowdlib/debug/AgentReadback.h>
 #include <cstdint>
 #include <span>
 
 namespace crowd::debug
 {
-	/** One agent: where it stands and the unit direction it faces, world (x, z). */
-	struct AgentReadback
-	{
-		glm::vec2 position = glm::vec2(0.0f);
-		glm::vec2 facing   = glm::vec2(0.0f, 1.0f);
-	};
-
-	static_assert(sizeof(AgentReadback) == 16);
-
 	/** A group's agents in a snapshot: `agents[first, first + count)`, in formation-slot order. */
 	struct GroupAgents
 	{

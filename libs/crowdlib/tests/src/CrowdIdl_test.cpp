@@ -1,9 +1,7 @@
-// The crowd's IDL as the CPU sees it. idlgen already pins each generated struct to the layout its
-// module reflects; what it cannot see is the public debug record, hand-written because a generated
-// struct follows the backend, so that pin is here -- and a record written at its stride into a
-// buffer and read back is the same record, as a kernel's upload and a readback both rely on.
+// The crowd's IDL as the CPU sees it. idlgen pins each generated struct to the layout its module
+// reflects; this checks that a record written at its stride into a buffer and read back is the same
+// record, as a kernel's upload and a readback both rely on.
 #include "idl/Agent.h"
-#include "idl/AgentReadback.h"
 #include "idl/Constants.h"
 #include "idl/Group.h"
 #include "idl/GroupSum.h"
@@ -11,19 +9,11 @@
 #include "idl/TickParams.h"
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
-#include <crowdlib/debug/AgentSnapshot.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <vector>
-
-static_assert(sizeof(crowd::debug::AgentReadback) == sizeof(crowd::idl::AgentReadback));
-static_assert(
-	offsetof(crowd::debug::AgentReadback, position) ==
-	offsetof(crowd::idl::AgentReadback, position));
-static_assert(
-	offsetof(crowd::debug::AgentReadback, facing) == offsetof(crowd::idl::AgentReadback, facing));
 
 namespace
 {

@@ -93,7 +93,9 @@ each refuses; what follows is why it is shaped as it is.
   span of agents moved from one tick's layout to the next, a tick's parameters, a report row, a
   debug sample — are Slang modules under `shaders/src/crowd/idl/`, imported by the kernels as
   `crowd.idl.<Name>` and mirrored into C++ as `crowd::idl` by `bgpu_idlgen` ([idlgen.md](idlgen.md)).
-  Not the renderer's tree: its mirrors belong to `bgl`, which crowdlib does not link.
+  The debug record is public, so its module is generated with `--public` into the committed
+  `include/crowdlib/debug/AgentReadback.h`, `crowd::debug`, and has no private twin. Not the
+  renderer's tree: its mirrors belong to `bgl`, which crowdlib does not link.
 * **A formation has one CPU reference.** `SlotPosition` (`GroupOrders.h`) is where each slot of a
   group stands — ranks front to back, files from the facing's left, the block centred on the goal
   and each rank across the facing — and the kernels compute the same function, as
@@ -137,8 +139,7 @@ slot is reused, capacities and invalid descriptions refused (agent types, the so
 obstacles), a split and a merge conserving agents
 and refusing to empty a group or mix types, `Step` refused past `maxTicksInFlight`, and the debug
 readback refused unless asked for and holding every agent in its slot on its group's first tick.
-`[formation]` pins `SlotPosition`'s layout, and `[idl]` the public debug record against its IDL
-twin.
+`[formation]` pins `SlotPosition`'s layout, and `[idl]` the records' round trip through a buffer.
 
 `examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
 kernel runs on the async queue, the fence logged before and after each draw, and every readback's

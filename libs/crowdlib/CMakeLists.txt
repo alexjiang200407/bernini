@@ -49,6 +49,13 @@ target_include_directories(crowdlib
 set(CROWDLIB_IDL_SRC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/crowd/idl")
 set(CROWDLIB_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/crowdlib")
 
+# Public: namespace crowd::debug, emitted into include/crowdlib/debug and committed. --public refuses
+# a struct whose layout differs by backend, so every build writes the same bytes.
+set(CROWDLIB_IDL_PUBLIC_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/crowdlib/debug")
+set(CROWDLIB_IDL_PUBLIC_SOURCES
+	AgentReadback.slang
+)
+
 file(GLOB CROWDLIB_IDL_SOURCES CONFIGURE_DEPENDS "${CROWDLIB_IDL_SRC_ROOT}/*.slang")
 
 if(RENDERER_BACKEND STREQUAL "METAL")
@@ -60,7 +67,14 @@ endif()
 set(CROWDLIB_IDL_OUTPUTS "")
 foreach(src ${CROWDLIB_IDL_SOURCES})
 	get_filename_component(name "${src}" NAME_WE)
-	set(output "${CROWDLIB_IDL_OUT_ROOT}/idl/${name}.h")
+	get_filename_component(file "${src}" NAME)
+	if(file IN_LIST CROWDLIB_IDL_PUBLIC_SOURCES)
+		set(cpp_args --cpp-out-dir "${CROWDLIB_IDL_PUBLIC_OUT_DIR}" --namespace "crowd::debug" --public)
+		set(output "${CROWDLIB_IDL_PUBLIC_OUT_DIR}/${name}.h")
+	else()
+		set(cpp_args --cpp-out-dir "${CROWDLIB_IDL_OUT_ROOT}/idl" --namespace "crowd::idl")
+		set(output "${CROWDLIB_IDL_OUT_ROOT}/idl/${name}.h")
+	endif()
 
 	# A module's layout depends on every struct it embeds, so an imported sibling regenerates it,
 	# whether it is imported bare or as crowd.idl.<Name>.
@@ -79,9 +93,8 @@ foreach(src ${CROWDLIB_IDL_SOURCES})
 		OUTPUT  "${output}"
 		COMMAND bgpu_idlgen
 				--src-root "${CROWDLIB_IDL_SRC_ROOT}"
-				--cpp-out-dir "${CROWDLIB_IDL_OUT_ROOT}/idl"
-				--namespace "crowd::idl"
 				${CROWDLIB_IDL_LAYOUT_ARGS}
+				${cpp_args}
 				-I "${CROWDLIB_IDL_SRC_ROOT}"
 				"${src}"
 		DEPENDS bgpu_idlgen "${src}" ${import_deps}
