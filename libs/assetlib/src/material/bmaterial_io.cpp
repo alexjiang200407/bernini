@@ -76,11 +76,14 @@ namespace assetlib
 		// the route -- the map is whole, so there is no channel to name.
 		constexpr std::string_view c_OcclusionSourceKey = "geometryOcclusionSource";
 
-		constexpr std::array<std::string_view, 3> c_ShadingModelNames = { {
-			"pbr",
-			"pbrSurface",
-			"litSurface",
-		} };
+		constexpr std::array<std::string_view, static_cast<size_t>(ShadingModel::kCount)>
+			c_ShadingModelNames = { {
+				"pbr",
+				"pbrSurface",
+				"litSurface",
+				"toonCharacterSurface",
+				"toonEnvironmentSurface",
+			} };
 
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
 			"opaque",
@@ -701,6 +704,8 @@ namespace assetlib
 		case ShadingModel::kPbr:
 		case ShadingModel::kPbrSurface:
 		case ShadingModel::kLitSurface:
+		case ShadingModel::kToonCharacterSurface:
+		case ShadingModel::kToonEnvironmentSurface:
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:

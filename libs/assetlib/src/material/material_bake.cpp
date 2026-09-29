@@ -674,6 +674,8 @@ namespace assetlib
 			return;
 		case ShadingModel::kPbrSurface:
 		case ShadingModel::kLitSurface:
+		case ShadingModel::kToonCharacterSurface:
+		case ShadingModel::kToonEnvironmentSurface:
 			bakeSurface(material, desc, cancel);
 			return;
 		case ShadingModel::kCount:

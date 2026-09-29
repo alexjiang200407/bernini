@@ -27,13 +27,15 @@ namespace assetlib
 	/**
 	 * Whether the model's material half is a registered surface's declared parameters -- the
 	 * document carries a surface name, `parameters` and `textures` rather than the PBR triplet.
-	 * True for both surface contracts: which one only decides who lights the pixel, never what
+	 * True for every surface contract: which one only decides who lights the pixel, never what
 	 * the document holds.
 	 */
 	[[nodiscard]] inline constexpr bool
 	isSurfaceModel(ShadingModel model) noexcept
 	{
-		return model == ShadingModel::kPbrSurface || model == ShadingModel::kLitSurface;
+		return model == ShadingModel::kPbrSurface || model == ShadingModel::kLitSurface ||
+		       model == ShadingModel::kToonCharacterSurface ||
+		       model == ShadingModel::kToonEnvironmentSurface;
 	}
 
 	/**

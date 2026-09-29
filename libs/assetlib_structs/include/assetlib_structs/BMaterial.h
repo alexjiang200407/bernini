@@ -23,6 +23,11 @@ namespace assetlib
 		// textures -- and only the contract the named surface must conform to differs.
 		kLitSurface = 2,
 
+		// The engine's toon lighting over a material half the game computes, one model for
+		// characters and one for environments. The document shape is kPbrSurface's exactly.
+		kToonCharacterSurface   = 3,
+		kToonEnvironmentSurface = 4,
+
 		kCount,
 	};
 
