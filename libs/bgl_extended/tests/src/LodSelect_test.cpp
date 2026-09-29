@@ -114,9 +114,9 @@ namespace
 
 		LodScene()
 		{
-			auto opts                    = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
-			gfx                          = bgl::test::CreateGraphics(opts);
+			auto opts                      = bgl::test::GraphicsSetup();
+			opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
+			gfx                            = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			auto desc                        = bgl::SceneDesc();

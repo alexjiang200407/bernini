@@ -43,6 +43,7 @@ namespace
 		desc.enableDebugLayer         = true;
 		desc.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		desc.clientShaderDir          = clientShaderDir;
+		desc.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		return bgpu::CreateGpuContext(desc);
 	}
 
@@ -107,14 +108,6 @@ namespace
 		return value;
 	}
 
-	bgl::GraphicsOptions
-	RendererOptions()
-	{
-		auto opts           = bgl::GraphicsOptions();
-		opts.shaderCacheDir = bgl::test::ShaderCacheDir();
-		return opts;
-	}
-
 	// One headless frame of an empty scene: enough to put the renderer's queue, allocator and
 	// resource manager through a submission on the shared device.
 	void
@@ -150,7 +143,7 @@ TEST_CASE("A GPU context outlives the renderer built on it", "[device]")
 	auto context = MakeContext();
 
 	{
-		auto gfx = bgl::CreateGraphics(context, RendererOptions());
+		auto gfx = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 		REQUIRE(gfx != nullptr);
 		DrawOneFrame(gfx);
 	}
@@ -158,7 +151,7 @@ TEST_CASE("A GPU context outlives the renderer built on it", "[device]")
 	// The renderer drained and released everything it made; the device and the compiler stand.
 	CHECK(context->LoadModule("CSComputeBufferTest") != nullptr);
 
-	auto again = bgl::CreateGraphics(context, RendererOptions());
+	auto again = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(again != nullptr);
 	DrawOneFrame(again);
 }
@@ -169,8 +162,8 @@ TEST_CASE("Two renderers share one GPU context at once", "[device]")
 {
 	auto context = MakeContext();
 
-	auto first  = bgl::CreateGraphics(context, RendererOptions());
-	auto second = bgl::CreateGraphics(context, RendererOptions());
+	auto first  = bgl::CreateGraphics(context, bgl::GraphicsOptions());
+	auto second = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(first != nullptr);
 	REQUIRE(second != nullptr);
 
@@ -194,7 +187,7 @@ TEST_CASE("Two renderers share one GPU context at once", "[device]")
 // has not pulled the device out from under the frame.
 TEST_CASE("A renderer keeps its GPU context alive", "[device]")
 {
-	auto gfx = bgl::CreateGraphics(MakeContext(), RendererOptions());
+	auto gfx = bgl::CreateGraphics(MakeContext(), bgl::GraphicsOptions());
 	REQUIRE(gfx != nullptr);
 	DrawOneFrame(gfx);
 }
@@ -206,12 +199,12 @@ TEST_CASE("Two renderers on one context bind the same surfaces once", "[device]"
 {
 	auto context = MakeContext("./shaders/tests/surfaces");
 
-	auto first = bgl::CreateGraphics(context, RendererOptions());
+	auto first = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(first != nullptr);
 	const auto surfaces = first->GetSurfaceTypes().size();
 	REQUIRE(surfaces > 0);
 
-	auto second = bgl::CreateGraphics(context, RendererOptions());
+	auto second = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(second != nullptr);
 	CHECK(second->GetSurfaceTypes().size() == surfaces);
 
@@ -224,7 +217,7 @@ TEST_CASE("Two renderers on one context bind the same surfaces once", "[device]"
 TEST_CASE("A source module registered again under its name replaces the text", "[device][compute]")
 {
 	auto context = MakeContext();
-	auto gfx     = bgl::CreateGraphics(context, RendererOptions());
+	auto gfx     = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto* device = gfx->As<bgl::GraphicsBase>()->GetDevice();

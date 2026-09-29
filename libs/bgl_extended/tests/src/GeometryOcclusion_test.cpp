@@ -195,10 +195,10 @@ namespace
 	Probe
 	MakeProbe(bool withUv1, Light light)
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer = true;
-		opts.context.clientShaderDir  = "./shaders/tests/surfaces";
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
+		opts.gpuContext.clientShaderDir  = "./shaders/tests/surfaces";
 
 		auto probe = Probe();
 		probe.gfx  = bgl::test::CreateGraphics(opts);

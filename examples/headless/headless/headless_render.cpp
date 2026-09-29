@@ -22,13 +22,13 @@ namespace headless
 	bgl::GraphicsRef
 	CreateHeadlessGraphics(const std::filesystem::path& dataRoot)
 	{
-		auto ctxDesc        = bgpu::GpuContextDesc();
-		auto opts           = bgl::GraphicsOptions();
-		ctxDesc.logLevel    = bgpu::LogLevel::kError;
-		opts.shaderCacheDir = "shadercache";
-		opts.maxTextures    = 512;
-		opts.maxSrvs        = 1024;
-		opts.maxCbvSrvUavs  = 4096;
+		auto ctxDesc           = bgpu::GpuContextDesc();
+		auto opts              = bgl::GraphicsOptions();
+		ctxDesc.logLevel       = bgpu::LogLevel::kError;
+		ctxDesc.shaderCacheDir = "shadercache";
+		opts.maxTextures       = 512;
+		opts.maxSrvs           = 1024;
+		opts.maxCbvSrvUavs     = 4096;
 
 		const auto surfaceDir = dataRoot / assetlib::c_ShadersDirectoryName;
 		if (std::filesystem::is_directory(surfaceDir))

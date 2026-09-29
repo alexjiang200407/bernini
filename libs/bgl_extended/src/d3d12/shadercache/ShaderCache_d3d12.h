@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl_common/ReflectedLayout.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/ProgramCache.h>
 #include <core/type_traits.h>
 #include <cstdint>
 #include <string_view>
@@ -28,27 +29,18 @@ namespace bgl
 		std::vector<std::pair<std::string, std::vector<std::byte>>> entryPointDxil;
 	};
 
-	// Persistent, two-layer on-disk cache of compiled shaders: a program cache (DXIL +
-	// reflection) and an ID3D12PipelineLibrary of driver-compiled PSOs. See
-	// docs/shader_cache.md.
+	// The renderer's two-layer shader cache on D3D12: its programs (DXIL + reflection) in the
+	// context's program cache, and an ID3D12PipelineLibrary of driver-compiled PSOs in the same
+	// directory. See docs/shader_cache.md.
 	class ShaderCache
 	{
 	public:
-		// searchPaths are the session's shader source roots; every file under them
-		// contributes to the invalidation hash. optionsSalt captures the compiler
-		// version and compile options that affect codegen. device backs the pipeline
-		// library.
-		//
-		// usePipelineLibrary false keeps the program cache but drops the driver PSO
-		// layer; pass false when GPU-based validation is on. See the note on
+		// device backs the pipeline library. usePipelineLibrary false keeps the programs but drops
+		// the driver PSO layer; pass false when GPU-based validation is on. See the note on
 		// m_PsoLibrary.
-		ShaderCache(
-			bgpu::GpuContextRef             context,
-			ID3D12Device*                   device,
-			std::filesystem::path           cacheDir,
-			std::string_view                optionsSalt,
-			const std::vector<std::string>& searchPaths,
-			bool                            usePipelineLibrary);
+		//
+		// @pre context->GetProgramCache() is not null.
+		ShaderCache(bgpu::GpuContextRef context, ID3D12Device* device, bool usePipelineLibrary);
 
 		~ShaderCache();
 
@@ -97,12 +89,9 @@ namespace bgl
 		StorePipeline(uint64_t identity, ID3D12PipelineState* pipeline);
 
 	private:
-		std::filesystem::path m_CacheDir;
-		uint64_t              m_SourceSalt = 0;
-
-		// Every key mixes in the context's fold of its source modules, read at key time so it follows
-		// a text any owner changed.
-		bgpu::GpuContextRef m_Context;
+		// Held so the program cache below outlives this.
+		bgpu::GpuContextRef       m_Context;
+		const bgpu::ProgramCache& m_Programs;
 
 		// Null when GPU-based validation is on -- that run exists to instrument every shader, and a
 		// PSO replayed out of the library was compiled without the instrumentation -- and null when

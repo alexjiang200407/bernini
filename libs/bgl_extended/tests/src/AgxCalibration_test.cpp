@@ -46,9 +46,9 @@ namespace
 	bgl::GraphicsRef
 	MakeGraphics()
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer = true;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

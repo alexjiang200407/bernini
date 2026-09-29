@@ -35,38 +35,16 @@
 
 namespace bgl
 {
-	namespace
-	{
-		// Compile options that change generated code, folded into every cache key so a compiler
-		// upgrade or a debug/release switch never reuses stale binaries.
-		std::string
-		ShaderCacheSalt()
-		{
-			// The free function, not IGlobalSession::getBuildTagString: same string, no session.
-			std::string salt = spGetBuildTagString();
-			salt += "|metal|sm_6_6|column-major";
-#if defined(BERNINI_GPU_DEBUG)
-			salt += "|gpu-debug";
-#endif
-			return salt;
-		}
-	}
-
 	Device::~Device() = default;
 
-	Device::Device(
-		const bgpu::GpuContextRef&   context,
-		const std::filesystem::path& shaderCacheDir) :
+	Device::Device(const bgpu::GpuContextRef& context) :
 		m_Context(context), m_Device(NS::RetainPtr(bgpu::GetMtlDevice(*context)))
 	{
-		if (!shaderCacheDir.empty())
+		if (m_Context->GetProgramCache() != nullptr)
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
 				m_Context,
 				m_Device.get(),
-				shaderCacheDir,
-				ShaderCacheSalt(),
-				m_Context->GetShaderSearchPaths(),
 				!m_Context->GpuValidationActive());
 		}
 	}

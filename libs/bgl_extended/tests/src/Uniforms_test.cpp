@@ -34,12 +34,12 @@ namespace
 
 TEST_CASE("Uniforms", "[uniforms]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
-	opts.context.logLevel                 = bgpu::LogLevel::kTrace;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
+	opts.gpuContext.logLevel                 = bgpu::LogLevel::kTrace;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 
@@ -304,10 +304,10 @@ TEST_CASE("Uniforms", "[uniforms]")
 // separates them, so a shader rename fails loudly instead of silently binding nothing.
 TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -349,10 +349,10 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 
 TEST_CASE("An optional uniform write skips a member the shader does not declare", "[uniforms]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

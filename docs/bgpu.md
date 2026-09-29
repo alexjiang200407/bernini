@@ -11,6 +11,7 @@ one and hands it to every owner.
 auto desc             = bgpu::GpuContextDesc();
 desc.enableDebugLayer = true;
 desc.clientShaderDir  = projectShaders;                 // the client's modules, importable by name
+desc.shaderCacheDir   = "shadercache";                  // every owner's compiled shaders; empty: none
 
 auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug layer, bgpu.log
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
@@ -45,11 +46,10 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   every key, so a text another owner changed moves it ([shader_cache.md](shader_cache.md)).
 * **What deliberately does not.** Queues, allocators, resource managers, descriptor heaps,
   timestamp heaps, pipelines: each owner creates its own on the shared device, which is what keeps
-  two owners isolated. The renderer's shader cache is still the renderer's, configured by
-  `GraphicsOptions::shaderCacheDir` and keyed by its own salt ([shader_cache.md](shader_cache.md)).
-  Its driver pipeline library — `pipelines.psolib`, the `MTL::BinaryArchive` — needs the native
-  device, is dropped under GPU validation, and is serialized whole, so one writer per directory
-  holds it. Metal's `.gputrace` capture is frame-scoped and stays in `Graphics`.
+  two owners isolated. The renderer's driver pipeline library — `pipelines.psolib`, the
+  `MTL::BinaryArchive` — is one of them: it needs the native device, is dropped under GPU
+  validation, and is serialized whole, so one writer per directory holds it
+  ([shader_cache.md](shader_cache.md)). Metal's `.gputrace` capture is frame-scoped and stays in `Graphics`.
 * **The RHI is not here.** `IDevice`, `ICommandList`, `IResourceManager` and the rest are
   `bgl_extended`'s and assume its GPU-driven bar. An owner other than the renderer reaches the
   device through the backend header — [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),

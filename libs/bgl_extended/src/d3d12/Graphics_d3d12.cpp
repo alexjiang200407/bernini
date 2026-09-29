@@ -209,7 +209,7 @@ namespace bgl
 {
 	Graphics::Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 	{
-		auto device = core::SharedRef<Device>::Make(std::move(context), m_Opts.shaderCacheDir);
+		auto device = core::SharedRef<Device>::Make(std::move(context));
 		m_Device    = device;
 
 		{

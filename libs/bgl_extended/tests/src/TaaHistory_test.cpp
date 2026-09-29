@@ -23,11 +23,11 @@ TEST_CASE(
 	"Depth rejection distinguishes opaque disocclusion from uncertain history",
 	"[taa][render][taaghosting]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

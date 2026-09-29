@@ -38,9 +38,9 @@ namespace
 	bgl::test::GraphicsSetup
 	HeadlessOptions()
 	{
-		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer = false;
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = false;
 		return opts;
 	}
 
@@ -228,8 +228,8 @@ TEST_CASE("The generated BRDF table satisfies the split-sum identities", "[brdfl
 // through the engine's PBR is.
 TEST_CASE("The BRDF LUT is generated only when PBR shading is drawn", "[brdflut][lit][render]")
 {
-	auto opts                    = HeadlessOptions();
-	opts.context.clientShaderDir = "./shaders/tests/surfaces";
+	auto opts                       = HeadlessOptions();
+	opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

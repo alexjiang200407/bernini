@@ -200,9 +200,9 @@ namespace
 
 TEST_CASE("a rig's bone anim table holds every frame of every clip", "[skinned][rigframes][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -287,9 +287,9 @@ TEST_CASE(
 	"a scene pays for the fill pass only on the frame that fills",
 	"[skinned][rigframes][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -335,9 +335,9 @@ TEST_CASE(
 
 TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][rigframes][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -413,8 +413,8 @@ TEST_CASE("what a dense rig's table costs to stand up", "[.rigtiming]")
 	constexpr uint32_t c_Bones  = 663;
 	constexpr uint32_t c_Frames = 2254;
 
-	auto opts                    = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto opts                      = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

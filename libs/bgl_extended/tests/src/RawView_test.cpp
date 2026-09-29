@@ -51,10 +51,10 @@ namespace
  */
 TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][compute][bindless]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -232,10 +232,10 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
  */
 TEST_CASE("A compute shader stores into a raw buffer", "[raw][compute][bindless]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

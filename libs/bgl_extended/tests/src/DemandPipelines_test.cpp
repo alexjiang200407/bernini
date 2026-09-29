@@ -57,9 +57,9 @@ namespace
 
 TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline][demand][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -201,10 +201,10 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 {
 	// Surfaces registered, because a surface's programs exist only once it is: they are generated
 	// at registration, so a device with none has no game kind to build.
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
-	opts.context.clientShaderDir  = "./shaders/tests/surfaces";
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.clientShaderDir  = "./shaders/tests/surfaces";
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

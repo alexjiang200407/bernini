@@ -36,11 +36,11 @@ namespace
 
 		ReadbackFixture()
 		{
-			auto opts                             = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-			opts.context.enableDebugLayer         = true;
-			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-			opts.context.enablePixDebug           = true;
+			auto opts                                = bgl::test::GraphicsSetup();
+			opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+			opts.gpuContext.enableDebugLayer         = true;
+			opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+			opts.gpuContext.enablePixDebug           = true;
 
 			gfx = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);

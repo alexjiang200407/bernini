@@ -19,12 +19,12 @@ TEST_CASE("Geometry", "[geometry][render]")
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
-	auto gfx                              = bgl::test::CreateGraphics(opts);
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
+	auto gfx                                 = bgl::test::CreateGraphics(opts);
 
 	REQUIRE(gfx != nullptr);
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();
@@ -410,12 +410,12 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	constexpr uint32_t c_Width  = 600;
 	constexpr uint32_t c_Height = 800;
 
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
-	auto gfx                              = bgl::test::CreateGraphics(opts);
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
+	auto gfx                                 = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto gfxBase = gfx->As<bgl::GraphicsBase>();

@@ -33,9 +33,9 @@ main(int, char**)
 		ctxDesc.enableDebugLayer = true;
 		ctxDesc.logLevel         = bgpu::LogLevel::kWarn;
 		// Without this, every launch recompiles all pass shaders through the Slang front-end -- the
-		// several-second startup. The cache persists compiled DXIL + driver PSOs across runs, so only
+		// several-second startup. The cache persists compiled programs and driver PSOs across runs, so only
 		// the first launch pays it.
-		gfxOpts.shaderCacheDir = "shadercache";
+		ctxDesc.shaderCacheDir = "shadercache";
 
 		constexpr uint32_t c_Width  = 800;
 		constexpr uint32_t c_Height = 600;

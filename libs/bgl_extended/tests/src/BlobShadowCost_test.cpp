@@ -63,8 +63,8 @@ namespace
 
 TEST_CASE("what blob-shadow discs behind and ahead of the camera cost Forward", "[.blobshadowcost]")
 {
-	auto opts                    = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto opts                      = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

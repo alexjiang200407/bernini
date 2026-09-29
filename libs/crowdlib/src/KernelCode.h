@@ -25,11 +25,12 @@ namespace crowd
 	};
 
 	/**
-	 * Compiles `main` of `moduleName` through the context's sessions on the calling thread, and
-	 * reflects where `gParams` and `gOutput` are bound. Holds no slang:: object on return.
+	 * `main` of `moduleName` and where `gParams` and `gOutput` are bound: from the context's program
+	 * cache when it holds the kernel, otherwise compiled through the context's sessions on the
+	 * calling thread and stored there. Holds no slang:: object on return.
 	 */
 	[[nodiscard]] KernelCode
-	CompileKernel(bgpu::GpuContext& context, std::string_view moduleName);
+	LoadKernel(bgpu::GpuContext& context, std::string_view moduleName);
 
 	inline constexpr std::string_view c_HashFillModule = "crowd.CSHashFill";
 }

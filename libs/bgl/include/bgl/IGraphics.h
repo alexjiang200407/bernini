@@ -48,12 +48,6 @@ namespace bgl
 
 	struct GraphicsOptions
 	{
-		// Directory for the persistent shader cache. Empty disables caching.
-		//
-		// Under GPU validation only the driver-pipeline layer is dropped -- the generated code and
-		// reflection are identical either way, so they stay cached. See docs/shader_cache.md.
-		std::filesystem::path shaderCacheDir;
-
 		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.
 		// Needs MTL_CAPTURE_ENABLED=1 in the environment -- Metal refuses to capture without it, and
 		// the process must set it before it creates its device, so bgl cannot set it for you.

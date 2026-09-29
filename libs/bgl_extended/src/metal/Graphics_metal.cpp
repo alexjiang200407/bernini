@@ -131,9 +131,8 @@ namespace bgl
 	public:
 		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			core::SharedRef<Device> device =
-				core::SharedRef<Device>::Make(std::move(context), opts.shaderCacheDir);
-			m_Device = device;
+			core::SharedRef<Device> device = core::SharedRef<Device>::Make(std::move(context));
+			m_Device                       = device;
 
 			auto rmDesc               = ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;

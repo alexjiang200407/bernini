@@ -22,11 +22,11 @@
 // gpuAddress translation at dispatch). Backend-agnostic -- runs on D3D12 and Metal.
 TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -107,11 +107,11 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 // alignment-dependent offset, exercising the layout recompute a single-field cbuffer does not.
 TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute]")
 {
-	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer         = true;
-	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-	opts.context.enablePixDebug           = true;
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	opts.gpuContext.enablePixDebug           = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

@@ -472,11 +472,12 @@ flowchart TD
 auto ctxDesc            = bgpu::GpuContextDesc{};
 ctxDesc.enableDebugLayer = true;
 ctxDesc.clientShaderDir  = projectShaders;  // the client's own modules, importable by name; empty for none
+ctxDesc.shaderCacheDir   = "shadercache";   // every owner's compiled shaders; empty disables it, and a
+                                            // cold start is seconds slower
 auto context             = bgpu::CreateGpuContext(ctxDesc);
 
-auto gfxOpts           = bgl::GraphicsOptions{};
-gfxOpts.shaderCacheDir = "shadercache";  // empty disables it; cold start is seconds slower
-auto graphics          = bgl::CreateGraphics(context, gfxOpts);
+auto gfxOpts  = bgl::GraphicsOptions{};
+auto graphics = bgl::CreateGraphics(context, gfxOpts);
 
 auto targetDesc     = bgl::RenderTargetDesc{};
 targetDesc.width    = 800;

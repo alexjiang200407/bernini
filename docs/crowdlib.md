@@ -44,8 +44,11 @@ while (running)
   compiles it to DXIL once, as validation. Where each parameter is bound is read from reflection, not
   written into the shader: Metal counts a constant buffer and a structured buffer in one
   `[[buffer(N)]]` space, so a `register(b0)` and a `register(u0)` collide there. The D3D12 root
-  signature is two root parameters — root constants and a root UAV — with no descriptor heap. There
-  is no shader cache of its own.
+  signature is two root parameters — root constants and a root UAV — with no descriptor heap.
+* **The kernel is cached in the context's program cache.** `LoadKernel` keys it under the owner
+  tag `crowd`, and on a hit decodes the code and the two bindings without reaching a Slang session;
+  on a miss it compiles and stores. It skips the Slang front-end only: crowdlib keeps no driver
+  pipeline library, so Metal's MSL compile is paid every run ([shader_cache.md](shader_cache.md)).
 * **Built as the renderer is.** It shares the context's process-wide state, so
   `BERNINI_RENDERER_LIBRARY_TYPE` decides its kind as it does `bgpu`'s
   ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its one export. It
@@ -68,6 +71,8 @@ while (running)
 count that is not a multiple of the kernel's group, and a second seed replaces the first result; the
 job runs its queue while a renderer on the same context draws a cube, each polled and neither
 waiting; and a job destroyed mid-flight lets its context go, so the next context can be created.
+`[shadercache]`: the kernel stored once cold, loaded on a fresh context with no entry rewritten, and
+a torn entry compiled again.
 
 `examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
 kernel runs on the async queue, the fence logged before and after each draw, and every readback's

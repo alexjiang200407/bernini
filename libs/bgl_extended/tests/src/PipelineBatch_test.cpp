@@ -50,10 +50,10 @@ namespace
 	void
 	BuildTestKernels(const fs::path& cacheDir, uint32_t threads)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = cacheDir;
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = cacheDir;
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

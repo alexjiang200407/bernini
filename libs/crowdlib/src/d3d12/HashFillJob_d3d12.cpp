@@ -150,7 +150,7 @@ namespace crowd
 				if (m_Count == 0)
 					core::throw_runtime_error("A hash fill needs at least one element");
 
-				const KernelCode kernel = CompileKernel(*m_Context, c_HashFillModule);
+				const KernelCode kernel = LoadKernel(*m_Context, c_HashFillModule);
 				m_ThreadsPerGroup       = kernel.threadsPerGroup;
 
 				ID3D12Device* device = bgpu::GetD3d12Device(*m_Context);

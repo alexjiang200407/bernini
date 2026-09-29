@@ -133,9 +133,9 @@ namespace
 
 TEST_CASE("what a street's verge of grass costs the grass pass at 4K", "[.grasscost]")
 {
-	auto opts                    = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
-	auto gfx                     = bgl::test::CreateGraphics(opts);
+	auto opts                      = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir = bgl::test::ShaderCacheDir();
+	auto gfx                       = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
 
 	auto targetDesc        = bgl::RenderTargetDesc();

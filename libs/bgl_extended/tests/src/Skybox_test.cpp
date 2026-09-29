@@ -21,9 +21,9 @@ TEST_CASE("Skybox renders headlessly", "[skybox][render]")
 	constexpr uint32_t c_Width  = 200;
 	constexpr uint32_t c_Height = 150;
 
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

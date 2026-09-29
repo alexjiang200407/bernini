@@ -160,10 +160,10 @@ namespace
 	PatchScene
 	MakeGrazingScene(bgl::LayerType layer, float alpha, bool taaEnabled)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
@@ -255,10 +255,10 @@ namespace
 	PatchScene
 	MakePatchScene(bgl::LayerType layer, float alpha, bool taaEnabled, float planeSize = 12.0f)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
@@ -535,15 +535,15 @@ namespace
 		Frame               frame        = {},
 		CardMaterial        cardMaterial = CardMaterial::kPbr)
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
 		// Only for a surface card: registration is the Graphics constructor's and generates every
 		// surface's programs, which a PBR card has no reason to wait for.
 		if (cardMaterial == CardMaterial::kSurface)
-			opts.context.clientShaderDir = "./shaders/tests/surfaces";
+			opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);

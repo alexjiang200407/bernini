@@ -78,9 +78,9 @@ namespace
 
 TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][parity][render]")
 {
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
@@ -202,9 +202,9 @@ TEST_CASE(
 	constexpr float c_BlenderSunLeft  = 0.5128f;
 	constexpr float c_BlenderSunRight = 0.5129f;
 
-	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
-	opts.context.enableDebugLayer = true;
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

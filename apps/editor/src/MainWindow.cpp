@@ -168,7 +168,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		gfxOpts.maxTextures   = gfxSettings["maxTextures"].GetOrDefault(gfxOpts.maxTextures);
 
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
-			gfxOpts.shaderCacheDir = "shadercache";
+			ctxDesc.shaderCacheDir = "shadercache";
 
 		// The editor's one Scene. Every viewport (the Mesh Editor's model preview, the Animation
 		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials

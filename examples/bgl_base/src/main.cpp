@@ -103,7 +103,7 @@ main(int argc, char** argv)
 		ctxDesc.enableGPUValidationLayer = false;
 		ctxDesc.enablePixDebug           = true;
 		ctxDesc.logLevel                 = bgpu::LogLevel::kTrace;
-		gfxOpts.shaderCacheDir           = "shadercache";
+		ctxDesc.shaderCacheDir           = "shadercache";
 
 		auto graphics = bgl::CreateGraphics(bgpu::CreateGpuContext(ctxDesc), gfxOpts);
 

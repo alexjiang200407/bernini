@@ -44,11 +44,11 @@ namespace
 	bgl::test::GraphicsSetup
 	SurfaceOptions()
 	{
-		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
-		opts.context.enableDebugLayer         = true;
-		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-		opts.context.clientShaderDir          = "./shaders/tests/surfaces";
+		auto opts                                = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer         = true;
+		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.gpuContext.clientShaderDir          = "./shaders/tests/surfaces";
 		return opts;
 	}
 
@@ -310,8 +310,8 @@ TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]
 		out << EmissiveSurface(colours[i]);
 	}
 
-	auto opts                    = SurfaceOptions();
-	opts.context.clientShaderDir = dir;
+	auto opts                       = SurfaceOptions();
+	opts.gpuContext.clientShaderDir = dir;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);
