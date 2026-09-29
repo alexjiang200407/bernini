@@ -9,6 +9,7 @@ Usage:
     python scripts/build.py --config Release      # multi-config generators
     python scripts/build.py --configure           # force a configure, don't build
     python scripts/build.py --dry-run             # print the plan, don't run
+    python scripts/build.py --no-api              # skip the API catalog refresh (scripts/api.py)
 
 The configure step is skipped once the build dir has been configured: the generated
 buildsystem re-runs cmake on its own when a CMakeLists changes, and -- because every
@@ -174,6 +175,30 @@ def report_timing(binary_dir):
     build_timing.report(build_timing.summarise(invocations[-1]), top=15)
 
 
+def refresh_api_catalog(binary_dir):
+    """Re-parse the libraries whose public headers changed into build/api/ (scripts/api.py).
+
+    Never fatal, and never louder than a line: the build succeeded, and a catalog that could not be
+    refreshed -- no compile database under a Visual Studio generator, no libclang bindings -- only
+    means the next search of it is against the last one written.
+    """
+    import api
+
+    compile_db = os.path.join(binary_dir, "compile_commands.json") if binary_dir else None
+    try:
+        summary = api.refresh(api.default_libraries(), compile_db, api.DEFAULT_OUT,
+                              log=lambda message: print(message, file=sys.stderr))
+    except api.CatalogError as err:
+        print(f"note: API catalog not refreshed: {err}", file=sys.stderr)
+        return
+    except Exception as err:  # a parse that fails must not fail a good build
+        print(f"warning: API catalog not refreshed: {err}", file=sys.stderr)
+        return
+    if summary is not None:
+        total = sum(s["symbols"] for s in summary.values())
+        print(f"API catalog: {total} symbols -> {cfg.rel(os.path.join(api.DEFAULT_OUT, 'INDEX.md'))}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("target", nargs="?", help="Target to build (default: all).")
@@ -190,6 +215,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Print what would run without executing.")
     parser.add_argument("--time", action="store_true",
                         help="After the build, report where its time went (scripts/build_timing.py).")
+    parser.add_argument("--no-api", action="store_true",
+                        help="Do not refresh the API catalog (build/api/) after the build.")
     parser.add_argument("--no-jobserver", action="store_true",
                         help="Do not share this machine's job budget with the other checkouts' builds.")
     parser.add_argument("--jobs", type=int,
@@ -312,6 +339,9 @@ def main():
     # wall clock around `cmake --build` would count the configure and hide where the time went.
     if args.time and rc == 0:
         report_timing(binary_dir)
+
+    if rc == 0 and not args.no_api:
+        refresh_api_catalog(binary_dir)
 
     return rc
 

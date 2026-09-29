@@ -43,7 +43,8 @@ import time
 import util.cmake_tools as ct
 
 DEFAULT_OUT = os.path.join(ct.REPO_ROOT, "build", "api")
-STAMP = ".stamp"
+STAMP = ".stamp.json"
+CACHE = ".symbols"
 
 # Namespaces whose contents are public by the letter of the include rule but not meant to be called.
 PRIVATE_NAMESPACES = {"detail", "details", "impl", "internal"}
@@ -75,17 +76,19 @@ def public_headers(include_dir):
     return sorted(os.path.normpath(h) for h in headers)
 
 
-def headers_digest(libraries):
-    """Content hash of every public header and of this script: what a refresh depends on."""
-    digest = hashlib.sha256()
+def script_digest():
+    """Content hash of this script: a new one may write any line differently."""
     with open(os.path.abspath(__file__), "rb") as fh:
-        digest.update(fh.read())
-    for name, include in sorted(libraries.items()):
-        digest.update(name.encode())
-        for header in public_headers(include):
-            digest.update(os.path.relpath(header, include).replace("\\", "/").encode())
-            with open(header, "rb") as fh:
-                digest.update(fh.read())
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def library_digest(include_dir):
+    """Content hash of one library's public headers, their paths included."""
+    digest = hashlib.sha256()
+    for header in public_headers(include_dir):
+        digest.update(os.path.relpath(header, include_dir).replace("\\", "/").encode())
+        with open(header, "rb") as fh:
+            digest.update(fh.read())
     return digest.hexdigest()
 
 
@@ -626,44 +629,59 @@ def render_html(catalog, root, html_dir):
 
 # --- Driver ---------------------------------------------------------------------
 
-def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print):
-    """Parse every library and write the catalog into `out_dir`. Returns {name: summary}."""
-    entries = load_compile_db(compile_db)
-    if not entries:
-        raise CatalogError(f"{compile_db} is empty.")
+def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print, only=None):
+    """Parse the libraries named in `only` (default: all) and write the catalog into `out_dir`.
 
-    compiler = parse_flags(entries[0])[0]
-    library_file = find_libclang(compiler)
-    if library_file is None:
-        log("warning: no libclang found beside the build's compiler or in a known LLVM install; "
-            "using the pip wheel's, whose builtin headers may not match this standard library. "
-            "Set BERNINI_LIBCLANG to a toolchain's libclang to silence the parse errors that follow.")
-    cindex = load_cindex(library_file)
+    A library not parsed is rendered from the symbols its last parse cached under `out_dir`, since
+    a library's entries depend on its own headers alone. Returns {name: summary} for every library.
+    """
+    stale = sorted(libraries) if only is None else sorted(only)
+    catalog = {}
+    if stale:
+        entries = load_compile_db(compile_db)
+        if not entries:
+            raise CatalogError(f"{compile_db} is empty.")
 
-    catalog, summary = {}, {}
-    for name, include_dir in sorted(libraries.items()):
-        entry = entry_for(entries, include_dir)
-        if entry is None:
-            log(f"warning: {name}: no translation unit in {compile_db} names {include_dir}; skipped.")
-            continue
-        _, flags = parse_flags(entry)
-        symbols, errors = extract_library(cindex, include_dir, flags)
-        catalog[name] = symbols
-        summary[name] = {"symbols": len(symbols), "documented": sum(1 for s in symbols if s["doc"]),
-                         "errors": len(errors)}
-        if errors:
-            log(f"warning: {name}: {len(errors)} parse error(s), so its catalog may be incomplete; "
-                f"first: {errors[0]}")
+        compiler = parse_flags(entries[0])[0]
+        library_file = find_libclang(compiler)
+        if library_file is None:
+            log("warning: no libclang found beside the build's compiler or in a known LLVM install; "
+                "using the pip wheel's, whose builtin headers may not match this standard library. "
+                "Set BERNINI_LIBCLANG to a toolchain's libclang to silence the parse errors that follow.")
+        cindex = load_cindex(library_file)
 
+        for name in stale:
+            include_dir = libraries[name]
+            entry = entry_for(entries, include_dir)
+            if entry is None:
+                log(f"warning: {name}: no translation unit in {compile_db} names {include_dir}; skipped.")
+                continue
+            _, flags = parse_flags(entry)
+            symbols, errors = extract_library(cindex, include_dir, flags)
+            if errors:
+                log(f"warning: {name}: {len(errors)} parse error(s), so its catalog may be incomplete; "
+                    f"first: {errors[0]}")
+            catalog[name] = {"symbols": symbols, "errors": len(errors)}
+            _write_cache(out_dir, name, catalog[name])
+
+    for name in libraries:
+        if name not in catalog:
+            cached = _read_cache(out_dir, name)
+            if cached is not None:
+                catalog[name] = cached
+
+    summary = {name: {"symbols": len(c["symbols"]), "documented": sum(1 for s in c["symbols"] if s["doc"]),
+                      "errors": c["errors"]} for name, c in catalog.items()}
     html_dir = os.path.join(out_dir, "html")
     os.makedirs(html_dir, exist_ok=True)
-    for stale in glob.glob(os.path.join(out_dir, "*.md")):
-        os.remove(stale)
-    for name, symbols in catalog.items():
+    for old in glob.glob(os.path.join(out_dir, "*.md")):
+        os.remove(old)
+    for name, c in catalog.items():
         _write(os.path.join(out_dir, f"{name}.md"),
-               render_library_markdown(name, libraries[name], symbols, root))
+               render_library_markdown(name, libraries[name], c["symbols"], root))
     _write(os.path.join(out_dir, "INDEX.md"), render_index_markdown(summary, root))
-    _write(os.path.join(html_dir, "index.html"), render_html(catalog, root, html_dir))
+    _write(os.path.join(html_dir, "index.html"),
+           render_html({name: c["symbols"] for name, c in catalog.items()}, root, html_dir))
     return summary
 
 
@@ -672,22 +690,53 @@ def _write(path, text):
         fh.write(text)
 
 
-def read_stamp(out_dir):
+def _cache_path(out_dir, name):
+    return os.path.join(out_dir, CACHE, f"{name}.json")
+
+
+def _write_cache(out_dir, name, parsed):
+    os.makedirs(os.path.join(out_dir, CACHE), exist_ok=True)
+    _write(_cache_path(out_dir, name), json.dumps(parsed))
+
+
+def _read_cache(out_dir, name):
+    try:
+        with open(_cache_path(out_dir, name), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def read_stamps(out_dir):
     try:
         with open(os.path.join(out_dir, STAMP), encoding="utf-8") as fh:
-            return fh.read().strip()
-    except OSError:
-        return None
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
 
 
 def refresh(libraries, compile_db, out_dir, root=ct.REPO_ROOT, force=False, log=print):
-    """Regenerate when a public header changed since the last run. Returns the summary, or None
-    when the catalog was already current."""
-    digest = headers_digest(libraries)
-    if not force and digest == read_stamp(out_dir) and os.path.isfile(os.path.join(out_dir, "INDEX.md")):
+    """Re-parse each library whose public headers changed since the last run, and re-render.
+
+    Returns the summary, or None when the catalog was already current. A change to this script
+    re-parses everything, since it may change what any line says.
+    """
+    stamps = read_stamps(out_dir)
+    script = script_digest()
+    digests = {name: library_digest(include) for name, include in libraries.items()}
+    if force or stamps.get("script") != script:
+        stale = set(libraries)
+    else:
+        known = stamps.get("libraries", {})
+        stale = {name for name, digest in digests.items()
+                 if known.get(name) != digest or _read_cache(out_dir, name) is None}
+    removed = set(stamps.get("libraries", {})) - set(libraries)
+    if not stale and not removed and os.path.isfile(os.path.join(out_dir, "INDEX.md")):
         return None
-    summary = generate(libraries, compile_db, out_dir, root, log)
-    _write(os.path.join(out_dir, STAMP), digest + "\n")
+
+    summary = generate(libraries, compile_db, out_dir, root, log, only=stale)
+    _write(os.path.join(out_dir, STAMP),
+           json.dumps({"script": script, "libraries": {n: digests[n] for n in summary}}, indent=1) + "\n")
     return summary
 
 

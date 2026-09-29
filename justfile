@@ -66,6 +66,10 @@ targets *args:
 exes *args:
     @{{ python }} scripts/find_executables.py {{ args }}
 
+# Refresh the API catalog in build/api/: every public symbol, to grep or browse (--force re-parses all).
+api *args:
+    @{{ python }} scripts/api.py {{ args }}
+
 # Count source files and lines by language.
 count:
     @{{ python }} scripts/count_source.py

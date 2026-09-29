@@ -236,4 +236,31 @@ class TestGenerate:
 
     def test_a_missing_compile_database_says_how_to_get_one(self, tmp_path):
         with pytest.raises(api.CatalogError, match='just build'):
-            api.generate({}, os.path.join(str(tmp_path), 'nope.json'), str(tmp_path))
+            api.generate({'demo': str(tmp_path)}, os.path.join(str(tmp_path), 'nope.json'), str(tmp_path))
+
+    def test_only_the_library_whose_headers_changed_is_parsed_again(self, tmp_path, monkeypatch):
+        """A build refreshes the catalog after every header edit, so it pays for one library, not all."""
+        cindex_or_skip()
+        root, include, header, db = fixture_tree(tmp_path)
+        other = os.path.join(root, 'libs', 'other', 'include')
+        write(other, 'other/thing.h', 'namespace other { /** Does a thing. */ int thing(); }\n')
+        with open(db, encoding='utf-8') as fh:
+            entries = json.load(fh)
+        entries[0]['arguments'].insert(1, f'-I{other}')
+        with open(db, 'w', encoding='utf-8') as fh:
+            json.dump(entries, fh)
+        libraries = {'demo': include, 'other': other}
+        out = os.path.join(root, 'build', 'api')
+        api.refresh(libraries, db, out, root, log=lambda *_: None)
+
+        parsed = []
+        real = api.extract_library
+        monkeypatch.setattr(api, 'extract_library', lambda c, inc, f: parsed.append(inc) or real(c, inc, f))
+        with open(header, 'a', encoding='utf-8') as fh:
+            fh.write('namespace demo { int added(); }\n')
+        summary = api.refresh(libraries, db, out, root, log=lambda *_: None)
+
+        assert parsed == [include]
+        assert set(summary) == {'demo', 'other'}
+        with open(os.path.join(out, 'other.md'), encoding='utf-8') as fh:
+            assert '`other::thing`' in fh.read()

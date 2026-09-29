@@ -44,6 +44,7 @@ Usage:
 
 import argparse
 import getpass
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -261,6 +262,22 @@ def offer_wheel(label, purpose):
     if not shutil.which(label):
         print(f"note: {label} isn't on this shell's PATH; the scripts use the recorded path.")
     return found
+
+
+def offer_library(label, purpose):
+    """Offer to install the Python library `label` from its pinned wheel. Returns whether it is now
+    importable. offer_wheel's counterpart for a package with no executable to locate afterwards."""
+    requirement = pinned(label)
+    print(f"\n{label} was not found. {purpose}\n"
+          f"It ships as a prebuilt wheel, so this needs no compiler or LLVM install.")
+    if not confirm(f"install it now (pip install {requirement})?"):
+        return False
+    if not pip_install(requirement):
+        print(f"warning: installing {label} failed. Install it by hand with: "
+              f"pip install {requirement}", file=sys.stderr)
+        return False
+    importlib.invalidate_caches()
+    return True
 
 
 def package_manager():
@@ -822,6 +839,11 @@ def detect(preset, arch, install=True, with_vcpkg=True):
     # tool, so it is only offered here -- nothing about it reaches config.json.
     if install and interactive() and not find_installed("pytest"):
         offer_wheel("pytest", "`just test` runs the scripts/tests suite with it.")
+
+    # libclang's Python bindings parse the public headers into the API catalog (scripts/api.py).
+    # A library with no script to locate, so it is looked for by import rather than on PATH.
+    if install and interactive() and importlib.util.find_spec("clang") is None:
+        offer_library("libclang", "`just build` refreshes the API catalog in build/api/ with it.")
 
     if tools:
         data["tools"] = tools
