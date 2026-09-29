@@ -6,6 +6,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
+#include <chrono>
 #include <core/file/LooseFileSystem.h>
 
 #include "io/json_doc.h"
@@ -759,6 +760,11 @@ namespace assetlib
 
 		std::mutex                               g_HashCacheMutex;
 		core::str::unordered_str_map<HashedFile> g_HashCache;
+
+		// A file written this recently is not memoized: a rewrite of the same size inside one
+		// timestamp tick keeps its mtime, and the memo would answer the old hash. Two seconds covers
+		// the coarsest filesystem mtime (FAT's).
+		constexpr auto c_RacyWindow = std::chrono::seconds(2);
 	}
 
 	SourceStamp
@@ -789,6 +795,7 @@ namespace assetlib
 		if (!hash)
 			return {};
 
+		if (mtime < std::filesystem::file_time_type::clock::now() - c_RacyWindow)
 		{
 			const std::lock_guard lock(g_HashCacheMutex);
 			g_HashCache[key] = HashedFile{ size, mtime, *hash };
