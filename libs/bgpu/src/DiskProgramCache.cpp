@@ -27,8 +27,15 @@ namespace bgpu
 		// before the store checked its entries -- is a miss.
 		constexpr uint32_t c_EntryMagic = 0x32435342u;
 
+		/**
+		 * Every file under the search paths, except the cache's own directory: a client may put the
+		 * cache inside its shader directory, and what the cache writes is not source -- the
+		 * renderer's pipeline-library lock is held open exclusively, so reading it throws.
+		 */
 		std::vector<std::filesystem::path>
-		SourceFiles(const std::vector<std::string>& searchPaths)
+		SourceFiles(
+			const std::vector<std::string>& searchPaths,
+			const std::filesystem::path&    cacheDirectory)
 		{
 			namespace fs = std::filesystem;
 
@@ -43,7 +50,15 @@ namespace bgpu
 				     !ec && it != fs::recursive_directory_iterator();
 				     it.increment(ec))
 				{
-					if (it->is_regular_file(ec))
+					std::error_code entryEc;
+					if (it->is_directory(entryEc) &&
+					    fs::equivalent(it->path(), cacheDirectory, entryEc))
+					{
+						it.disable_recursion_pending();
+						continue;
+					}
+
+					if (it->is_regular_file(entryEc))
 						files.push_back(it->path());
 				}
 			}
@@ -74,7 +89,8 @@ namespace bgpu
 	{
 		std::call_once(m_ContextSaltOnce, [this] {
 			uint64_t salt = core::hash_string(m_Sessions.GetOptionsSalt(), core::hash_seed());
-			for (const std::filesystem::path& file : SourceFiles(m_Sessions.GetSearchPaths()))
+			for (const std::filesystem::path& file :
+			     SourceFiles(m_Sessions.GetSearchPaths(), m_Directory))
 			{
 				const std::string            path  = file.generic_string();
 				const std::vector<std::byte> bytes = core::file::read_file_bytes(path);
