@@ -151,6 +151,11 @@ flowchart TD
   one; neither reads it as "absent". A `.benv` naming only a sky resolves to null lighting handles, so
   binding them unconditionally is a crash rather than an unlit scene. Ask first — see `HasLighting` /
   `HasSky` below, and `editor::ApplyEnvironment`, which guards both.
+* **A view that was never given an environment is lit by black, not by nothing.** The renderer binds
+  a 1×1 black cube for the irradiance and prefilter maps, and a black BRDF LUT for a frame that
+  generated none (`BlackEnvironment`, [libs/bgl_extended/src/gfx/BlackEnvironment.h](libs/bgl_extended/src/gfx/BlackEnvironment.h)).
+  So a surface that samples the environment in a scene without one reads zero rather than an
+  invalid descriptor index, which is out of the heap and only happened to read as black.
 * The prefilter chain must be **7 mips**. `MAX_REFLECTION_LOD = 6` in
   [libs/bgl_common/shaders/src/lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang), and
   roughness is `mip / (mipLevels - 1)` — a different count silently remaps roughness rather than

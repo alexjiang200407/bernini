@@ -243,6 +243,7 @@ namespace bgl
 		m_OutlineMask.Init(passes);
 		m_TaaResolve.Init(passes);
 		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
+		m_BlackEnvironment.Init(m_ResourceManager);
 		pipelines.Build();
 
 		m_Forward.CheckBindings();
@@ -260,6 +261,7 @@ namespace bgl
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_TonemapLut.Upload(m_CommandList.Get());
+		m_BlackEnvironment.Upload(m_CommandList.Get());
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
@@ -314,6 +316,7 @@ namespace bgl
 		}
 		m_BrdfLut.Release();
 		m_TonemapLut.Release();
+		m_BlackEnvironment.Release();
 		m_CompactInstances.Release(false);
 		m_RigFrames.Release();
 		m_SkinnedPose.Release();
@@ -861,9 +864,10 @@ namespace bgl
 			draw.viewState.pixelsPerUnit,
 			job.time - prevCamera.time);
 
-		draw.lighting.env         = view->GetEnvironmentMap();
-		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
-		draw.lighting.exposure    = view->GetExposure();
+		auto env               = view->GetEnvironmentMap();
+		env.brdfLut            = m_BrdfLut.GetSrv();
+		draw.lighting.env      = m_BlackEnvironment.Complete(env);
+		draw.lighting.exposure = view->GetExposure();
 
 		const auto& sun            = view->GetDirectionalLight();
 		draw.lighting.sunDirection = sun.direction;

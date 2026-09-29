@@ -8,6 +8,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassTimer.h"
+#include "gfx/BlackEnvironment.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
@@ -308,6 +309,7 @@ namespace bgl
 
 		BrdfLutGenPass       m_BrdfLut;
 		TonemapLut           m_TonemapLut;
+		BlackEnvironment     m_BlackEnvironment;
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPhases        m_Forward;
 		BlobShadowPass       m_BlobShadows;
