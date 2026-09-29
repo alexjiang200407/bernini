@@ -23,7 +23,7 @@ namespace
 	constexpr auto c_Renderer = bgpu::ProgramCacheOwner{ .tag = "renderer", .formatVersion = 1 };
 	constexpr auto c_Compute  = bgpu::ProgramCacheOwner{ .tag = "compute", .formatVersion = 1 };
 
-	using ModuleEntries = std::vector<std::pair<std::string, std::string>>;
+	using ModuleEntries = std::vector<bgpu::ProgramEntryPoint>;
 
 	const ModuleEntries c_Program = {
 		{ "programs.forward.Opaque", "vsMain" },

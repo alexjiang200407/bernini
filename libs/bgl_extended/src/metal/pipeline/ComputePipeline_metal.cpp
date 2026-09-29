@@ -74,7 +74,8 @@ namespace bgl
 			stage.msl        = std::string(
 				static_cast<const char*>(code->getBufferPointer()),
 				code->getBufferSize());
-			for (const auto& [name, index] : bindings) stage.bindings.emplace_back(name, index);
+			for (const auto& [name, index] : bindings)
+				stage.bindings.push_back({ .name = name, .index = index });
 
 			SlangUInt threadGroup[3] = { 1, 1, 1 };
 			layout->getEntryPointByIndex(0)->getComputeThreadGroupSize(3, threadGroup);

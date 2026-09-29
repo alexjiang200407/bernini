@@ -5,7 +5,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace bgpu
@@ -19,6 +18,16 @@ namespace bgpu
 	{
 		std::string_view tag;
 		uint32_t         formatVersion = 0;
+	};
+
+	/** One shader of a program, by the module that declares it and its entry point's name. */
+	struct ProgramEntryPoint
+	{
+		std::string moduleName;
+		std::string entryPoint;
+
+		auto
+		operator<=>(const ProgramEntryPoint&) const = default;
 	};
 
 	/**
@@ -52,13 +61,12 @@ namespace bgpu
 		GetDirectory() const noexcept = 0;
 
 		/**
-		 * @param moduleEntries every (module, entry point) pair of the program, in any order.
+		 * @param moduleEntries every entry point of the program, in any order.
 		 * @throws std::runtime_error if a shader source cannot be read, until a key has succeeded.
 		 */
 		[[nodiscard]] virtual uint64_t
-		ComputeKey(
-			const ProgramCacheOwner&                         owner,
-			std::vector<std::pair<std::string, std::string>> moduleEntries) const = 0;
+		ComputeKey(const ProgramCacheOwner& owner, std::vector<ProgramEntryPoint> moduleEntries)
+			const = 0;
 
 		/**
 		 * The program stored under `key`, in the encoding its owner gave it. False on a miss, and on

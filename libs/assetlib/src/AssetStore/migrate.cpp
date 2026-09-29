@@ -34,6 +34,7 @@
 
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/str/str.h>
 
 #include <cstddef>
 #include <exception>
@@ -44,7 +45,6 @@
 #include <string_view>
 #include <system_error>
 #include <tracy/Tracy.hpp>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -244,12 +244,12 @@ namespace assetlib
 		 * predate them: a container's header names the source it came from, and a `.bmesh` or
 		 * `.banim` already stores the rig its indices address.
 		 */
-		std::unordered_map<std::string, SourceFacts>
+		core::str::unordered_str_map<SourceFacts>
 		factsFromDerived(const AssetStore& store, std::span<const std::filesystem::path> paths)
 		{
 			ZoneScopedN("assetlib migrate facts");
 
-			auto facts = std::unordered_map<std::string, SourceFacts>();
+			auto facts = core::str::unordered_str_map<SourceFacts>();
 
 			for (const std::filesystem::path& path : paths)
 			{
@@ -516,8 +516,8 @@ namespace assetlib
 					BMaterial material = Load<BMaterial>(key);
 					for (const auto& reference :
 					     mapMaterialTextures(material, [](const std::string& k) { return k; }))
-						if (!Exists(reference.first))
-							report.danglingTextures.push_back(key + ": " + reference.first);
+						if (!Exists(reference.key))
+							report.danglingTextures.push_back(key + ": " + reference.key);
 				}
 				catch (const std::exception&)
 				{

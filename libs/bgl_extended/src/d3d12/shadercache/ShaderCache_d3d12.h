@@ -20,13 +20,19 @@ namespace bgl
 		ReflectedLayout layout;
 	};
 
+	struct EntryPointDxil
+	{
+		std::string            entryPoint;
+		std::vector<std::byte> dxil;
+	};
+
 	// The full result of compiling one PSO's shader composition, in an API-neutral form
 	// (DXIL bytes + reflection). The slang compile path and the disk-cache load path
 	// both converge on this, so a single builder turns it into D3D12 objects.
 	struct CachedProgram
 	{
-		std::vector<CachedCbuffer>                                  cbuffers;
-		std::vector<std::pair<std::string, std::vector<std::byte>>> entryPointDxil;
+		std::vector<CachedCbuffer>  cbuffers;
+		std::vector<EntryPointDxil> entryPointDxil;
 	};
 
 	// The renderer's two-layer shader cache on D3D12: its programs (DXIL + reflection) in the
@@ -49,10 +55,10 @@ namespace bgl
 		ShaderCache&
 		operator=(const ShaderCache&) = delete;
 
-		// Stable key for a PSO's shader composition. moduleEntries must be the
-		// (module, entry-point) pairs of every shader in the PSO.
+		// Stable key for a PSO's shader composition. moduleEntries must be the entry point of
+		// every shader in the PSO.
 		[[nodiscard]] uint64_t
-		ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const;
+		ComputeKey(std::vector<bgpu::ProgramEntryPoint> moduleEntries) const;
 
 		// Reads and deserializes the cached program for key. Returns false on a miss
 		// or any read/parse error (the caller then recompiles).

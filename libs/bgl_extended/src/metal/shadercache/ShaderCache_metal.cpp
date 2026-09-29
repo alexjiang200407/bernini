@@ -132,7 +132,7 @@ namespace bgl
 				{
 					std::string    name  = reader.ReadString();
 					const uint32_t index = reader.ReadPod<uint32_t>();
-					stage.bindings.emplace_back(std::move(name), index);
+					stage.bindings.push_back({ .name = std::move(name), .index = index });
 				}
 
 				for (uint32_t& axis : stage.threadsPerThreadgroup)
@@ -240,7 +240,7 @@ namespace bgl
 	}
 
 	uint64_t
-	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
+	ShaderCache::ComputeKey(std::vector<bgpu::ProgramEntryPoint> moduleEntries) const
 	{
 		return m_Programs.ComputeKey(c_Owner, std::move(moduleEntries));
 	}

@@ -2,12 +2,17 @@
 #include <assetlib/asset_refs.h>
 #include <functional>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace assetlib
 {
 	struct BMaterial;
+
+	struct MaterialTextureRef
+	{
+		std::string key;
+		RefKind     kind;
+	};
 
 	/**
 	 * Applies `map` to every texture key `material` holds, and reports what it saw.
@@ -27,7 +32,7 @@ namespace assetlib
 	 * @param map Returns the key to store instead, or its argument to leave it alone.
 	 * @return Every key seen, with the kind holding it, in the order encountered.
 	 */
-	std::vector<std::pair<std::string, RefKind>>
+	std::vector<MaterialTextureRef>
 	mapMaterialTextures(
 		BMaterial&                                            material,
 		const std::function<std::string(const std::string&)>& map);

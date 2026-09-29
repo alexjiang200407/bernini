@@ -28,16 +28,23 @@ namespace bgl
 		std::vector<HandleSlot> handles;
 	};
 
+	// A named argument of a stage and the [[buffer(N)]] index it binds to.
+	struct StageBinding
+	{
+		std::string name;
+		uint32_t    index = 0;
+	};
+
 	// One compiled stage. Metal compiles each meshlet stage as its own program, so the MSL and the
 	// [[buffer(N)]] indices both belong to the stage rather than the pipeline -- see
 	// MeshletPipeline_metal.
 	struct CachedStage
 	{
-		ShaderStage                                   stage = ShaderStage::kCompute;
-		std::string                                   entryPoint;
-		std::string                                   msl;
-		std::vector<std::pair<std::string, uint32_t>> bindings;
-		std::array<uint32_t, 3>                       threadsPerThreadgroup{ 1, 1, 1 };
+		ShaderStage               stage = ShaderStage::kCompute;
+		std::string               entryPoint;
+		std::string               msl;
+		std::vector<StageBinding> bindings;
+		std::array<uint32_t, 3>   threadsPerThreadgroup{ 1, 1, 1 };
 	};
 
 	// The whole result of compiling one PSO's shader composition. The slang path and the disk-cache
@@ -71,10 +78,9 @@ namespace bgl
 		ShaderCache&
 		operator=(const ShaderCache&) = delete;
 
-		// Stable key for a PSO's shader composition, from the (module, entry-point) pairs of every
-		// shader in it.
+		// Stable key for a PSO's shader composition, from the entry point of every shader in it.
 		[[nodiscard]] uint64_t
-		ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const;
+		ComputeKey(std::vector<bgpu::ProgramEntryPoint> moduleEntries) const;
 
 		// False on a miss or any read/parse error, and then the caller recompiles.
 		[[nodiscard]] bool

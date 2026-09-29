@@ -77,7 +77,8 @@ namespace bgl
 			{
 				std::string            entry = reader.ReadString();
 				std::vector<std::byte> dxil  = reader.ReadBlob();
-				program.entryPointDxil.emplace_back(std::move(entry), std::move(dxil));
+				program.entryPointDxil.push_back(
+					{ .entryPoint = std::move(entry), .dxil = std::move(dxil) });
 			}
 
 			return program;
@@ -228,7 +229,7 @@ namespace bgl
 	}
 
 	uint64_t
-	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
+	ShaderCache::ComputeKey(std::vector<bgpu::ProgramEntryPoint> moduleEntries) const
 	{
 		return m_Programs.ComputeKey(c_Owner, std::move(moduleEntries));
 	}
