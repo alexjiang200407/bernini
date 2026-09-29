@@ -40,7 +40,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	constexpr uint32_t c_ThreadsPerGroup = 256;
 
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

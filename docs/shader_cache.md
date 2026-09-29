@@ -2,9 +2,9 @@
 
 Compiling shaders dominates startup and is otherwise paid on every launch: the Slang front-end
 parse alone is the majority of per-shader compile time, and the driver's DXIL→ISA compile is paid
-again on top. The shader cache is a persistent, backend-owned store that skips both. It is enabled
-by one knob, [GraphicsOptions::shaderCacheDir](libs/bgl/include/bgl/IGraphics.h) (empty ⇒ disabled),
-and is otherwise transparent — pipeline creation consults it with no change to any interface.
+again on top. The shader cache is a persistent store that skips both. It is enabled by one knob,
+[GpuContextDesc::shaderCacheDir](libs/bgpu/include/bgpu/GpuContext.h) (empty ⇒ disabled), and is
+otherwise transparent — pipeline creation consults it with no change to any interface.
 
 **This document is a map, not a mirror.** It captures the design choices, the data flow, and the
 non-obvious contracts — not full signatures. The source at each linked path is the source of truth;
@@ -15,11 +15,20 @@ when this doc disagrees, trust the source, then fix this doc.
 ## Design Choices
 
 * **The cache is configuration, not an RHI object.** It is an internal optimization, so it is
-  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). What crosses the RHI
-  boundary is `GraphicsOptions::shaderCacheDir` and, because its files are in the salt, the device
-  context's `clientShaderDir`, like the descriptor-heap capacities. The `Device` owns the cache and threads it through pipeline creation. A future Vulkan
-  backend reads the same directory and backs it with `VkPipelineCache`; the on-disk formats are the
-  backend's private business.
+  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). Nothing about it
+  crosses the RHI boundary: the directory is the GPU context's, beside its `clientShaderDir`, whose
+  files are in the salt. The `Device` builds a `ShaderCache` when the context has a program cache
+  and threads it through pipeline creation. A future Vulkan backend reads the same directory and
+  backs its driver layer with `VkPipelineCache`; what an entry holds is the backend's private
+  business.
+
+* **The program layer is the GPU context's, and every owner of the device shares it.** The salt
+  describes what the context's Slang sessions compile, so it is `bgpu`'s:
+  [bgpu::ProgramCache](libs/bgpu/include/bgpu/ProgramCache.h) keys, stores and loads compiled
+  programs for the renderer's backends and for any other owner that compiles through the sessions
+  ([bgpu.md](docs/bgpu.md)). It keeps bytes; each owner encodes its own entry, and a
+  `ProgramCacheOwner` tag and format version in every key keep one owner from reading another's.
+  The driver layer is not shared: it needs the native device and one writer per directory.
 
 * **Two layers, each skipping a different compile stage.** The *program cache* (`<dir>/*.bsc`)
   holds generated code + serialized reflection for one PSO's shader composition, skipping the entire
@@ -31,11 +40,12 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Both backends implement it; the entry contents differ.** D3D12 stores DXIL and a root parameter
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
-  `MTL::BinaryArchive`. The split is why the shared code
-  ([bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h)) is only the salt, the key, the
-  `ReflectedLayout` encoding and the atomic write, while each backend owns a `ShaderCache` of its
-  own. A cache directory is written by one backend and is not portable between them — the
-  salt differs, so the other backend misses every key rather than misreading one.
+  `MTL::BinaryArchive`. The split is why the renderer's shared code
+  ([bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h)) is only
+  the `ReflectedLayout` encoding, while each backend owns a `ShaderCache` of its own: its entry
+  encoding and its driver library. A cache directory is written by one backend and is not portable
+  between them — the target is in the salt and the backend is the owner tag, so the other backend
+  misses every key rather than misreading one.
 
 * **Metal caches per stage because it compiles per stage.** A meshlet PSO is three separate Slang
   links (object/mesh/fragment), each with its own MSL and its own buffer-index space, so a cache
@@ -76,11 +86,12 @@ when this doc disagrees, trust the source, then fix this doc.
   what makes reflection cacheable and why the pipeline no longer retains the linked Slang program.
 
 * **Invalidation is coarse, content-based, and automatic.** A single salt folds the shader compiler
-  version, the compile options (matrix layout, `BERNINI_GPU_DEBUG`), the cache format version, and a
-  hash of the content of *every* shader source file under every search path — the client's
-  `GpuContextDesc::clientShaderDir` included — chained through `core::hash_bytes`. It is
-  combined with the PSO's (module, entry-point) pairs to form each program key. Any change to any of those flips every key, so a
-  stale entry is **missed and recompiled, never misread**. The pipeline library additionally
+  version, the compile options (target, profile, matrix layout, the macros — `BERNINI_GPU_DEBUG`),
+  and a hash of the content of *every* shader source file under every search path — the client's
+  `GpuContextDesc::clientShaderDir` included — chained through `core::hash_bytes`, and taken once
+  per context. Each key adds the context's registered source modules, the owner's tag and format
+  version, and the PSO's (module, entry-point) pairs. Any change to any of those flips every key it
+  reaches, so a stale entry is **missed and recompiled, never misread**. The pipeline library additionally
   self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
   an archive from another GPU, and both fall back to an empty library.
 
@@ -98,9 +109,10 @@ when this doc disagrees, trust the source, then fix this doc.
 
 | Piece | File | Role |
 |---|---|---|
-| `shader_cache::` util | [libs/bgl_common/include/bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h) | Backend-agnostic core: salt, key, `ReflectedLayout` encoding, atomic write. |
+| `ProgramCache` | [libs/bgpu/include/bgpu/ProgramCache.h](libs/bgpu/include/bgpu/ProgramCache.h) | The GPU context's store: salt, key, the checked `.bsc` entries, the directory. Shared by every owner. |
+| `shader_cache::` util | [libs/bgl_common/include/bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h) | The `ReflectedLayout` encoding both backends' entries carry. |
 | `core::hash_bytes` | [libs/core/include/core/hash.h](libs/core/include/core/hash.h) | The FNV-1a chain the salt and every key are built from. |
-| `ShaderCache` (D3D12) | [libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h) | Owns both layers; keying, load/store, PSO identity hashing. |
+| `ShaderCache` (D3D12) | [libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h) | The entry encoding over the context's store, the pipeline library, PSO identity hashing. |
 | `ShaderCache` (Metal) | [libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
 | `BuildPipelineLayout` | [libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
 | `CompileProgram` | [libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
@@ -109,7 +121,7 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ReflectedLayout` | [libs/bgl_common/include/bgl_common/ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl_common/include/bgl_common/SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
-| `shaderCacheDir` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The RHI-visible surface: where the cache lives. |
+| `shaderCacheDir` | [libs/bgpu/include/bgpu/GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h) | Where the cache lives, for every owner of the context. |
 | `clientShaderDir` | [libs/bgpu/include/bgpu/GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h) | The one client directory whose files join every owner's salt. |
 
 ---
@@ -118,7 +130,8 @@ when this doc disagrees, trust the source, then fix this doc.
 
 ```mermaid
 flowchart TD
-    OPT["GraphicsOptions::shaderCacheDir"] --> DEV["Device owns ShaderCache"]
+    OPT["GpuContextDesc::shaderCacheDir"] --> PC["bgpu::ProgramCache (the context's)"]
+    PC --> DEV["Device owns ShaderCache"]
     DEV -- "per PSO" --> BPL["BuildPipelineLayout"]
 
     BPL -- "program key (source hash + entries)" --> HIT{".bsc hit?"}
@@ -153,9 +166,10 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   the previous generation is never read or deleted. The directory is disposable (delete it → a
   one-time recompile). There is currently no eviction.
 
-* **A corrupt or truncated `.bsc` is treated as a miss, not an error.** `TryLoad` deserializes
-  through a bounds-checked reader that throws on truncation; the throw is caught and the entry is
-  recompiled. Never assume a present file is valid.
+* **A corrupt or truncated `.bsc` is treated as a miss, not an error.** The context's store checks
+  every entry's header — magic, key, payload size and hash — before handing it back, and the
+  backend then decodes through a bounds-checked reader whose throw is caught too; either way the
+  entry is recompiled. Never assume a present file is valid.
 
 * **No Slang object may be held past pipeline construction.** A `slang::IModule` keeps its session
   alive, so one cached ref re-pins the core module and `ReleaseSlangSession` reclaims nothing. This
@@ -219,7 +233,7 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 
 * **The cache is called from several threads at once.** The renderer builds its pipelines in
   parallel, so `TryLoad`/`Store` run concurrently — safe because each key is its own file and
-  `WriteFileAtomic` renames a uniquely named temp into place — and the driver pipeline library
+  `core::file::write_atomic` renames a uniquely named temp into place — and the driver pipeline library
   (`ID3D12PipelineLibrary`, `MTL::BinaryArchive`) is reached only under the cache's own mutex. Two
   PSOs with the same shader composition may both miss and both compile on a cold run; the second
   `Store` replaces the first with identical bytes.
@@ -233,10 +247,10 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 ## Usage Sketch
 
 ```cpp
-auto context        = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
-auto opts           = bgl::GraphicsOptions();
-opts.shaderCacheDir = "shadercache";   // relative to cwd; empty disables the cache
-auto gfx            = bgl::CreateGraphics(context, opts);
+auto desc           = bgpu::GpuContextDesc();
+desc.shaderCacheDir = "shadercache";   // relative to cwd; empty disables the cache for every owner
+auto context        = bgpu::CreateGpuContext(desc);
+auto gfx            = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 // First run compiles and populates ./shadercache; later runs load it.
 ```
 

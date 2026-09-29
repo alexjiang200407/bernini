@@ -20,7 +20,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 	constexpr uint32_t c_Height = 800;
 
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -411,7 +411,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	constexpr uint32_t c_Height = 800;
 
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;

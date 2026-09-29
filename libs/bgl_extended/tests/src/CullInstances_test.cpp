@@ -60,7 +60,7 @@ namespace
 TEST_CASE("Instances outside the frustum are culled, those inside survive", "[culling][compute]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

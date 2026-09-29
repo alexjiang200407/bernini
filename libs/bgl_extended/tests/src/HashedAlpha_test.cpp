@@ -161,7 +161,7 @@ namespace
 	MakeGrazingScene(bgl::LayerType layer, float alpha, bool taaEnabled)
 	{
 		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer         = true;
 		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -256,7 +256,7 @@ namespace
 	MakePatchScene(bgl::LayerType layer, float alpha, bool taaEnabled, float planeSize = 12.0f)
 	{
 		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer         = true;
 		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -536,7 +536,7 @@ namespace
 		CardMaterial        cardMaterial = CardMaterial::kPbr)
 	{
 		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer         = true;
 		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

@@ -15,10 +15,10 @@ namespace bgl
 	{
 	public:
 		/**
-		 * The RHI device over the context's D3D12 device, compiling through the context's sessions.
-		 * `shaderCacheDir` empty disables the cache.
+		 * The RHI device over the context's D3D12 device, compiling through the context's sessions
+		 * and caching in its program cache, when it has one.
 		 */
-		Device(const bgpu::GpuContextRef& context, const std::filesystem::path& shaderCacheDir);
+		explicit Device(const bgpu::GpuContextRef& context);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;

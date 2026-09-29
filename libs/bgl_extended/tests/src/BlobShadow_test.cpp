@@ -63,7 +63,7 @@ namespace
 TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -241,7 +241,7 @@ TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][
 TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -556,7 +556,7 @@ TEST_CASE(
 	"[blobshadow][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);

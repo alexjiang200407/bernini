@@ -35,7 +35,7 @@ namespace
 TEST_CASE("Uniforms", "[uniforms]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -305,7 +305,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -350,7 +350,7 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 TEST_CASE("An optional uniform write skips a member the shader does not declare", "[uniforms]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

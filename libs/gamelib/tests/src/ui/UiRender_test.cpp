@@ -44,7 +44,7 @@ namespace
 		// The suite's shape: the debug layer on, GPU-based validation left to the bgl_extended
 		// suite, which is where --gpu-validation is plumbed.
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 		return bgl::test::CreateGraphics(opts);
 	}

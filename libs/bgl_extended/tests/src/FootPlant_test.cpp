@@ -288,7 +288,7 @@ namespace
 		const PoseOptions&          options = {})
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 
 		auto legScene = LegScene();
@@ -793,7 +793,7 @@ TEST_CASE(
 	constexpr uint32_t c_Height = 128;
 
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -883,7 +883,7 @@ TEST_CASE("a planted foot on a slope draws", "[skinned][pose][plant][render]")
 	constexpr uint32_t c_Height = 256;
 
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -1075,7 +1075,7 @@ namespace
 	PoseTwoLegs(const bgl::GroundPlaneDesc& ground)
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
@@ -1357,7 +1357,7 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 	auto gfx                      = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

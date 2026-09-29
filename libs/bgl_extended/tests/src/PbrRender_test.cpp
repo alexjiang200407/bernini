@@ -35,7 +35,7 @@ namespace
 TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 	opts.context.logLevel         = bgpu::LogLevel::kTrace;
 
@@ -125,7 +125,7 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -193,7 +193,7 @@ TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]"
 TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 	opts.context.logLevel         = bgpu::LogLevel::kTrace;
 

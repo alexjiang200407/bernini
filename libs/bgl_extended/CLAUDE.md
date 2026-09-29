@@ -126,8 +126,9 @@ and is a target of its own; nothing here is part of it.
   the draw buckets it uses and an unbuilt draw bucket's kernel is skipped by `Execute` as having nothing to
   draw. A new pass follows the `Init` shape — request in `Init`, read kernels only from `CheckBindings`
   or later — and pipeline creation stays safe from any thread.
-- A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
-  runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
+- A persistent shader cache (`bgpu::GpuContextDesc::shaderCacheDir`) short-circuits compilation
+  across runs: the programs in the GPU context's store, the driver pipelines in this renderer's
+  library beside them. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
 - Slang sessions are the GPU context's (`libs/bgpu`, [bgpu.md](../../docs/bgpu.md))
   and per thread: a thread's first compile creates its own global session and session, and they

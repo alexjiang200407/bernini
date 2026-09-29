@@ -129,7 +129,7 @@ struct RimSurface : ISurfaceSource
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
 		opts.context.enableDebugLayer = false;
-		opts.graphics.shaderCacheDir  = "shadercache";
+		opts.context.shaderCacheDir   = "shadercache";
 		opts.context.clientShaderDir  = shaderDir;
 		return opts;
 	}
@@ -282,7 +282,7 @@ TEST_CASE("A material whose surface was never registered is refused", "[gamelib]
 	// Everything the case above had, except the one line pointing at the project's shaders.
 	auto opts                     = bgl::test::GraphicsSetup();
 	opts.context.enableDebugLayer = false;
-	opts.graphics.shaderCacheDir  = "shadercache";
+	opts.context.shaderCacheDir   = "shadercache";
 
 	auto gfx = bgl::test::CreateGraphics(opts);
 	REQUIRE(gfx != nullptr);

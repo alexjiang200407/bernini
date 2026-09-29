@@ -15,7 +15,7 @@
 TEST_CASE("A freed descriptor is reused without aliasing a live one", "[resource][bindless]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

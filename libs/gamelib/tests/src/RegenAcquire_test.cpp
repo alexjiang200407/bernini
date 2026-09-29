@@ -27,7 +27,7 @@ namespace
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
 		opts.context.enableDebugLayer = true;
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		return opts;
 	}
 

@@ -218,7 +218,7 @@ namespace
 	MakeFootScene(float rightLift, bool plantFeet, const bgl::FootPlantDesc& legs = MakeLegs())
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 
 		auto result = FootScene();

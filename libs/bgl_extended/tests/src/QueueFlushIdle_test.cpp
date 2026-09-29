@@ -34,7 +34,7 @@ namespace
 TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);

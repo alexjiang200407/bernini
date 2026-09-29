@@ -414,7 +414,7 @@ namespace
 TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinned][pose][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -572,7 +572,7 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 	constexpr uint32_t c_DeepBones = 300;
 
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -675,7 +675,7 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinned][pose][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -1017,7 +1017,7 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose][render][blend]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);

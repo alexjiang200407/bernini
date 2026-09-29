@@ -73,7 +73,7 @@ TEST_CASE("A slot cannot be spelled as a descriptor", "[uniforms][bindless]")
 TEST_CASE("Uniforms write a handle's bindless index", "[uniforms][bindless]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;

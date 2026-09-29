@@ -114,7 +114,7 @@ namespace
 			uint32_t h          = c_Height) : width(w), height(h)
 		{
 			auto opts                             = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 			opts.context.enableDebugLayer         = true;
 			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

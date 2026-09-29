@@ -69,7 +69,7 @@ namespace
 TEST_CASE("An alpha-tested material cuts a hole in a plane", "[alphatest][render]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);
@@ -190,7 +190,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	constexpr float c_LeafHeight = 14.0f;
 
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = true;
 
 	auto gfx = bgl::test::CreateGraphics(opts);

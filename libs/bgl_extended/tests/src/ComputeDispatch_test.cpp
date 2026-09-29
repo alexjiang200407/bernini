@@ -23,7 +23,7 @@
 TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -108,7 +108,7 @@ TEST_CASE("Compute dispatch writes a bindless buffer", "[compute]")
 TEST_CASE("Compute dispatch resolves a handle at a non-zero cbuffer offset", "[compute]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;

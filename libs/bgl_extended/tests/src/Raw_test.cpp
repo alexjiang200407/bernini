@@ -64,7 +64,7 @@ namespace
 TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -183,7 +183,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 TEST_CASE("A range buffer refuses to grow past its byte ceiling", "[raw][scene]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -299,7 +299,7 @@ TEST_CASE("Growth stops at what a raw view can address", "[raw][scene]")
 TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

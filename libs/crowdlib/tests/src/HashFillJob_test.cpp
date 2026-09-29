@@ -21,6 +21,7 @@ namespace
 	{
 		auto desc             = bgpu::GpuContextDesc();
 		desc.enableDebugLayer = true;
+		desc.shaderCacheDir   = "shadercache";
 		return bgpu::CreateGpuContext(desc);
 	}
 
@@ -70,9 +71,7 @@ TEST_CASE("A hash fill runs on its own queue beside a renderer on the same conte
 {
 	auto context = MakeContext();
 
-	auto gfxOpts           = bgl::GraphicsOptions();
-	gfxOpts.shaderCacheDir = "shadercache";
-	auto gfx               = bgl::CreateGraphics(context, gfxOpts);
+	auto gfx = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 	REQUIRE(gfx != nullptr);
 
 	auto job = crowd::CreateHashFillJob(context, { .count = c_Count });

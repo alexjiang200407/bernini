@@ -186,14 +186,13 @@ doc and a header disagree, trust the header, then fix this doc.
   manager pool would break this bullet. A `core_tests` case pins `data()` across a full
   allocate/retire/reclaim cycle at capacity.
 
-* **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
-  is **not** an `I*` interface — what crosses the boundary is `GraphicsOptions::shaderCacheDir`
-  (empty ⇒ disabled) and the GPU context's `clientShaderDir`, whose files join the salt, like
-  the descriptor-heap capacities. The
-  backend owns its two layers (a program cache of DXIL + reflection, and an
-  `ID3D12PipelineLibrary`); to keep reflection cacheable and backend-agnostic it is decoupled from
-  the live Slang object into a serializable `ReflectedLayout` POD. See
-  [Shader Cache](docs/shader_cache.md).
+* **The shader cache is not an RHI object.** It is an internal optimization, so it is **not** an
+  `I*` interface. Nothing about it crosses the boundary: the directory is the GPU context's
+  `shaderCacheDir` (empty ⇒ disabled), and the programs are stored in the context's
+  `bgpu::ProgramCache`, keyed by a salt over the context's sources. The backend owns what an entry
+  holds (DXIL + reflection on D3D12, MSL stages on Metal) and its driver pipeline library; to keep
+  reflection cacheable and backend-agnostic it is decoupled from the live Slang object into a
+  serializable `ReflectedLayout` POD. See [Shader Cache](docs/shader_cache.md).
 
 ---
 

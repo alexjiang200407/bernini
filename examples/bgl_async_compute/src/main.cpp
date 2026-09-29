@@ -70,12 +70,11 @@ namespace
 		auto ctxDesc             = bgpu::GpuContextDesc();
 		ctxDesc.enableDebugLayer = true;
 		ctxDesc.logLevel         = bgpu::LogLevel::kInfo;
+		ctxDesc.shaderCacheDir   = "shadercache";
 		auto context             = bgpu::CreateGpuContext(ctxDesc);
 
-		auto gfxOpts           = bgl::GraphicsOptions{};
-		gfxOpts.shaderCacheDir = "shadercache";
-		auto graphics          = bgl::CreateGraphics(context, gfxOpts);
-		auto compute           = crowd::CreateHashFillJob(context, { .count = opts.count });
+		auto graphics = bgl::CreateGraphics(context, bgl::GraphicsOptions{});
+		auto compute  = crowd::CreateHashFillJob(context, { .count = opts.count });
 
 		auto targetDesc     = bgl::RenderTargetDesc{};
 		targetDesc.width    = static_cast<int>(opts.width);

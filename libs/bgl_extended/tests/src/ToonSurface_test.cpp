@@ -119,7 +119,7 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	ToonOptions()
 	{
 		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer         = true;
 		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		opts.context.clientShaderDir          = ToonSurfaceDir();

@@ -115,9 +115,9 @@ namespace
 
 		SplitScene()
 		{
-			auto opts                    = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir = bgl::test::ShaderCacheDir();
-			gfx                          = bgl::test::CreateGraphics(opts);
+			auto opts                   = bgl::test::GraphicsSetup();
+			opts.context.shaderCacheDir = bgl::test::ShaderCacheDir();
+			gfx                         = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
 			scene = gfx->CreateScene(bgl::SceneDesc());

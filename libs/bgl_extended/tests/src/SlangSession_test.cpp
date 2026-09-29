@@ -50,8 +50,7 @@ TEST_CASE(
 	ctxDesc.enableDebugLayer         = true;
 	ctxDesc.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
-	auto gfxOpts           = bgl::GraphicsOptions();
-	gfxOpts.shaderCacheDir = bgl::test::ShaderCacheDir();
+	ctxDesc.shaderCacheDir = bgl::test::ShaderCacheDir();
 
 	// This case owns its context, so the suite's is let go first: one is live per process.
 	bgl::test::ReleaseGpuContext();
@@ -61,7 +60,7 @@ TEST_CASE(
 		CAPTURE(pass);
 
 		auto context = bgpu::CreateGpuContext(ctxDesc);
-		auto gfx     = bgl::CreateGraphics(context, gfxOpts);
+		auto gfx     = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 		REQUIRE(gfx != nullptr);
 
 		// The second owner.

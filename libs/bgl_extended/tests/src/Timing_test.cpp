@@ -38,7 +38,7 @@
 TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -159,7 +159,7 @@ namespace
 		explicit TimedScene(bool taa = true)
 		{
 			auto opts                     = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+			opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 			opts.context.enableDebugLayer = true;
 			gfx                           = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);

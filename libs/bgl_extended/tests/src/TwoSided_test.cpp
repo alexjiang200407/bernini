@@ -39,7 +39,7 @@ namespace
 	RenderFacing(const std::string& path, const FacingCase& facing)
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 
 		auto gfx = bgl::test::CreateGraphics(opts);

@@ -13,13 +13,14 @@
 
 namespace bgl
 {
-	using namespace shader_cache;
+	using shader_cache::ReadLayout;
+	using shader_cache::WriteLayout;
 
 	namespace
 	{
-		// Bump when the on-disk format below changes; folded into every key so old
-		// files are missed rather than misread.
-		constexpr uint32_t kCacheFormatVersion = 1;
+		// Bump formatVersion when the encoding below changes: it is in every key, so an entry in the
+		// old layout is missed rather than misread.
+		constexpr auto c_Owner = bgpu::ProgramCacheOwner{ .tag = "bgl_d3d12", .formatVersion = 1 };
 
 		using core::io::ByteReader;
 		using core::io::ByteWriter;
@@ -32,7 +33,7 @@ namespace bgl
 			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.cbuffers.size()));
 			for (const CachedCbuffer& cbuffer : program.cbuffers)
 			{
-				WriteString(writer, cbuffer.name);
+				writer.WriteString(cbuffer.name);
 				writer.WritePod<uint32_t>(cbuffer.size);
 				writer.WritePod<uint32_t>(cbuffer.rootParamIndex);
 				writer.WritePod<uint32_t>(cbuffer.shaderRegister);
@@ -43,8 +44,8 @@ namespace bgl
 			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.entryPointDxil.size()));
 			for (const auto& [entry, dxil] : program.entryPointDxil)
 			{
-				WriteString(writer, entry);
-				WriteBlob(writer, dxil);
+				writer.WriteString(entry);
+				writer.WriteBlob(dxil);
 			}
 
 			return writer.Take();
@@ -61,7 +62,7 @@ namespace bgl
 			for (uint32_t i = 0; i < cbufferCount; ++i)
 			{
 				CachedCbuffer cbuffer;
-				cbuffer.name           = ReadString(reader);
+				cbuffer.name           = reader.ReadString();
 				cbuffer.size           = reader.ReadPod<uint32_t>();
 				cbuffer.rootParamIndex = reader.ReadPod<uint32_t>();
 				cbuffer.shaderRegister = reader.ReadPod<uint32_t>();
@@ -74,8 +75,8 @@ namespace bgl
 			program.entryPointDxil.reserve(entryCount);
 			for (uint32_t i = 0; i < entryCount; ++i)
 			{
-				std::string            entry = ReadString(reader);
-				std::vector<std::byte> dxil  = ReadBlob(reader);
+				std::string            entry = reader.ReadString();
+				std::vector<std::byte> dxil  = reader.ReadBlob();
 				program.entryPointDxil.emplace_back(std::move(entry), std::move(dxil));
 			}
 
@@ -87,19 +88,11 @@ namespace bgl
 	}
 
 	ShaderCache::ShaderCache(
-		bgpu::GpuContextRef             context,
-		ID3D12Device*                   device,
-		std::filesystem::path           cacheDir,
-		std::string_view                optionsSalt,
-		const std::vector<std::string>& searchPaths,
-		bool                            usePipelineLibrary) :
-		m_CacheDir(std::move(cacheDir)),
-		m_SourceSalt(ComputeSourceSalt(optionsSalt, searchPaths, kCacheFormatVersion)),
-		m_Context(std::move(context))
+		bgpu::GpuContextRef context,
+		ID3D12Device*       device,
+		bool                usePipelineLibrary) :
+		m_Context(std::move(context)), m_Programs(*m_Context->GetProgramCache())
 	{
-		std::error_code ec;
-		std::filesystem::create_directories(m_CacheDir, ec);
-
 		if (!usePipelineLibrary)
 			return;
 
@@ -114,7 +107,8 @@ namespace bgl
 		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1))))
 			return;
 
-		const std::filesystem::path libPath = m_CacheDir / c_PipelineLibraryFile;
+		const std::filesystem::path libPath = m_Programs.GetDirectory() / c_PipelineLibraryFile;
+		std::error_code             ec;
 		if (std::filesystem::exists(libPath, ec))
 		{
 			try
@@ -145,7 +139,8 @@ namespace bgl
 	bool
 	ShaderCache::ClaimPipelineLibrary()
 	{
-		const std::filesystem::path lockPath = m_CacheDir / c_PipelineLibraryLockFile;
+		const std::filesystem::path lockPath =
+			m_Programs.GetDirectory() / c_PipelineLibraryLockFile;
 
 		// No sharing, so a second opener is refused rather than queued, and delete-on-close so the
 		// claim ends with the process however it ends.
@@ -177,7 +172,21 @@ namespace bgl
 			const SIZE_T           size = m_PsoLibrary->GetSerializedSize();
 			std::vector<std::byte> blob(size);
 			if (SUCCEEDED(m_PsoLibrary->Serialize(blob.data(), size)))
-				WriteFileAtomic(m_CacheDir / c_PipelineLibraryFile, blob);
+			{
+				const std::filesystem::path libPath =
+					m_Programs.GetDirectory() / c_PipelineLibraryFile;
+				try
+				{
+					core::file::write_atomic(libPath, blob);
+				}
+				catch (const std::exception& e)
+				{
+					spdlog::warn(
+						"Could not write the pipeline library {}: {}",
+						libPath.string(),
+						e.what());
+				}
+			}
 		}
 
 		// After the write: the claim is what makes this process the file's one writer.
@@ -221,29 +230,24 @@ namespace bgl
 	uint64_t
 	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
 	{
-		// Qualified: the member of the same name would otherwise recurse.
-		return shader_cache::ComputeKey(
-			m_SourceSalt ^ m_Context->GetSourceSalt(),
-			std::move(moduleEntries));
+		return m_Programs.ComputeKey(c_Owner, std::move(moduleEntries));
 	}
 
 	bool
 	ShaderCache::TryLoad(uint64_t key, CachedProgram& out) const
 	{
-		const std::filesystem::path path = KeyPath(m_CacheDir, key);
-
-		std::error_code ec;
-		if (!std::filesystem::exists(path, ec))
+		std::vector<std::byte> bytes;
+		if (!m_Programs.TryLoadProgram(key, bytes))
 			return false;
 
 		try
 		{
-			out = Deserialize(core::file::read_file_bytes(path.string()));
+			out = Deserialize(bytes);
 			return true;
 		}
 		catch (const std::exception& e)
 		{
-			spdlog::warn("Ignoring unreadable shader cache entry {}: {}", path.string(), e.what());
+			spdlog::warn("Ignoring an undecodable shader cache entry {:016x}: {}", key, e.what());
 			return false;
 		}
 	}
@@ -251,7 +255,6 @@ namespace bgl
 	void
 	ShaderCache::Store(uint64_t key, const CachedProgram& program) const
 	{
-		const std::vector<std::byte> bytes = Serialize(program);
-		WriteFileAtomic(KeyPath(m_CacheDir, key), bytes);
+		m_Programs.StoreProgram(key, Serialize(program));
 	}
 }

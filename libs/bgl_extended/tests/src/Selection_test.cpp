@@ -17,7 +17,7 @@ namespace
 	HeadlessOptions()
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = false;
 		return opts;
 	}

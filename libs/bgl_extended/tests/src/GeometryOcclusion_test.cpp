@@ -196,7 +196,7 @@ namespace
 	MakeProbe(bool withUv1, Light light)
 	{
 		auto opts                     = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer = true;
 		opts.context.clientShaderDir  = "./shaders/tests/surfaces";
 

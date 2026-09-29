@@ -112,7 +112,7 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 
 	auto opts                     = bgl::test::GraphicsSetup();
 	opts.context.enableDebugLayer = false;
-	opts.graphics.shaderCacheDir  = "shadercache";
+	opts.context.shaderCacheDir   = "shadercache";
 	opts.graphics.maxTextures     = 512;
 	opts.graphics.maxSrvs         = 1024;
 	opts.graphics.maxCbvSrvUavs   = 4096;

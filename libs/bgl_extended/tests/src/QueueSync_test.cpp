@@ -39,7 +39,7 @@ namespace
 		QueueFixture()
 		{
 			auto opts                             = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+			opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 			opts.context.enableDebugLayer         = true;
 			opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -242,7 +242,7 @@ TEST_CASE_METHOD(
 TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager]")
 {
 	auto opts                     = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer = false;
 	opts.graphics.maxRtvs         = 4;
 

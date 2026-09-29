@@ -6,6 +6,7 @@
 #include <array>
 #include <bgl_common/ReflectedLayout.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/ProgramCache.h>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -48,27 +49,20 @@ namespace bgl
 	};
 
 	/**
-	 * Persistent, two-layer on-disk cache of compiled shaders: a program cache (MSL + reflection)
-	 * skipping the slang front-end, and an MTL::BinaryArchive of driver-compiled pipelines skipping
-	 * the MSL->GPU compile. See docs/shader_cache.md.
+	 * The renderer's two-layer shader cache on Metal: its programs (MSL + reflection) in the
+	 * context's program cache, skipping the slang front-end, and an MTL::BinaryArchive of
+	 * driver-compiled pipelines in the same directory, skipping the MSL->GPU compile. See
+	 * docs/shader_cache.md.
 	 */
 	class ShaderCache
 	{
 	public:
-		// searchPaths are the session's shader source roots; every file under them contributes to
-		// the invalidation hash. optionsSalt captures the compiler version and the compile options
-		// that affect codegen.
+		// usePipelineLibrary false keeps the programs but drops the binary archive; pass false when
+		// GPU validation is on. An archive is written by an uninstrumented run, and Metal crashes
+		// inside newBinaryArchive loading one into a validating device.
 		//
-		// usePipelineLibrary false keeps the program cache but drops the binary archive; pass false
-		// when GPU validation is on. An archive is written by an uninstrumented run, and Metal
-		// crashes inside newBinaryArchive loading one into a validating device.
-		ShaderCache(
-			bgpu::GpuContextRef             context,
-			MTL::Device*                    device,
-			std::filesystem::path           cacheDir,
-			std::string_view                optionsSalt,
-			const std::vector<std::string>& searchPaths,
-			bool                            usePipelineLibrary);
+		// @pre context->GetProgramCache() is not null.
+		ShaderCache(bgpu::GpuContextRef context, MTL::Device* device, bool usePipelineLibrary);
 
 		~ShaderCache();
 
@@ -109,12 +103,9 @@ namespace bgl
 		}
 
 	private:
-		std::filesystem::path m_CacheDir;
-		uint64_t              m_SourceSalt = 0;
-
-		// Every key mixes in the context's fold of its source modules, read at key time so it follows
-		// a text any owner changed.
-		bgpu::GpuContextRef m_Context;
+		// Held so the program cache below outlives this.
+		bgpu::GpuContextRef       m_Context;
+		const bgpu::ProgramCache& m_Programs;
 
 		NS::SharedPtr<MTL::BinaryArchive> m_Archive;
 		std::mutex                        m_ArchiveMutex;

@@ -117,7 +117,7 @@ namespace
 		GrassScene()
 		{
 			auto opts                     = bgl::test::GraphicsSetup();
-			opts.graphics.shaderCacheDir  = bgl::test::ShaderCacheDir();
+			opts.context.shaderCacheDir   = bgl::test::ShaderCacheDir();
 			opts.context.enableDebugLayer = true;
 			opts.context.clientShaderDir  = "./shaders/tests/surfaces";
 			gfx                           = bgl::test::CreateGraphics(opts);

@@ -30,7 +30,7 @@
 TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -146,7 +146,7 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -261,7 +261,7 @@ TEST_CASE("Meshlet pipeline binds uniforms to the mesh and fragment stages", "[m
 TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniforms", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 
@@ -376,7 +376,7 @@ TEST_CASE("Two meshlet draws to one target share a pass and rebind their uniform
 TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -492,7 +492,7 @@ TEST_CASE("Meshlet pipeline binds disjoint per-stage cbuffers correctly", "[mesh
 TEST_CASE("A count-gated indirect dispatch draws only what the count admits", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -674,7 +674,7 @@ TEST_CASE("A count-gated indirect dispatch draws only what the count admits", "[
 TEST_CASE("A zero count suppresses a non-zero grid on D3D12", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 	opts.context.enablePixDebug           = true;
@@ -819,7 +819,7 @@ TEST_CASE("A zero count suppresses a non-zero grid on D3D12", "[meshlet]")
 TEST_CASE("Dispatch args serve as their own count buffer on D3D12", "[meshlet]")
 {
 	auto opts                             = bgl::test::GraphicsSetup();
-	opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+	opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 	opts.context.enableDebugLayer         = true;
 	opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

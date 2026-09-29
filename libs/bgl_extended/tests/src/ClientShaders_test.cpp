@@ -139,7 +139,7 @@ void main()
 	ProbeOptions()
 	{
 		auto opts                             = bgl::test::GraphicsSetup();
-		opts.graphics.shaderCacheDir          = bgl::test::ShaderCacheDir();
+		opts.context.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.context.enableDebugLayer         = true;
 		opts.context.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 		return opts;
@@ -166,7 +166,7 @@ TEST_CASE(
 	opts.context.clientShaderDir = dir;
 	// The salt folds each file's path, and the temp directory is fresh per run, so a cache shared
 	// with the suite would gain a generation no later run could hit. This one dies with the dir.
-	opts.graphics.shaderCacheDir = dir / "shadercache";
+	opts.context.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSClientProbe") == 7u);
 
@@ -190,8 +190,8 @@ TEST_CASE(
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts                    = ProbeOptions();
-	opts.graphics.shaderCacheDir = dir / "shadercache";
+	auto opts                   = ProbeOptions();
+	opts.context.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 
@@ -213,8 +213,8 @@ TEST_CASE("A program loaded from source on demand shadows its file", "[slang][co
 	std::filesystem::remove_all(dir);
 	std::filesystem::create_directories(dir);
 
-	auto opts                    = ProbeOptions();
-	opts.graphics.shaderCacheDir = dir / "shadercache";
+	auto opts                   = ProbeOptions();
+	opts.context.shaderCacheDir = dir / "shadercache";
 
 	constexpr std::string_view c_OnDemand = R"(import lib.types.ComputeBuffer;
 
