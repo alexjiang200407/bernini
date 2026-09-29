@@ -178,25 +178,19 @@ def report_timing(binary_dir):
 def refresh_api_catalog(binary_dir):
     """Re-parse the libraries whose public headers changed into build/api/ (scripts/api.py).
 
-    Never fatal, and never louder than a line: the build succeeded, and a catalog that could not be
-    refreshed -- no compile database under a Visual Studio generator, no libclang bindings -- only
-    means the next search of it is against the last one written.
+    A process of its own, since libclang is native code and a crash in it must not turn a good build
+    red. Never fatal, whatever it exits with: a catalog that could not be refreshed -- no compile
+    database under a Visual Studio generator, no libclang bindings -- only means the next search of
+    it is against the last one written, and api.py has said why in one line.
     """
-    import api
-
-    compile_db = os.path.join(binary_dir, "compile_commands.json") if binary_dir else None
+    if not binary_dir:
+        return
+    command = [sys.executable, os.path.join(ct.REPO_ROOT, "scripts", "api.py"),
+               "--compile-db", os.path.join(binary_dir, "compile_commands.json"), "--quiet"]
     try:
-        summary = api.refresh(api.default_libraries(), compile_db, api.DEFAULT_OUT,
-                              log=lambda message: print(message, file=sys.stderr))
-    except api.CatalogError as err:
+        subprocess.run(command)
+    except OSError as err:
         print(f"note: API catalog not refreshed: {err}", file=sys.stderr)
-        return
-    except Exception as err:  # a parse that fails must not fail a good build
-        print(f"warning: API catalog not refreshed: {err}", file=sys.stderr)
-        return
-    if summary is not None:
-        total = sum(s["symbols"] for s in summary.values())
-        print(f"API catalog: {total} symbols -> {cfg.rel(os.path.join(api.DEFAULT_OUT, 'INDEX.md'))}")
 
 
 def main():

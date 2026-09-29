@@ -63,7 +63,13 @@ namespace demo
 		// Whether back faces are drawn. On by default.
 		bool doubleSided = true;
 		static constexpr int c_Max = 8;
+
+		template <typename T>
+		Options(T tag);
+		Options(const float&& scale);
 	};
+
+	int twice(auto value);
 
 	class Forward;
 
@@ -165,6 +171,12 @@ class TestDeclarationText:
         lines = ['template <typename T> // why', 'T twice(T v) noexcept', '{', '  return v * 2;', '}']
         assert api.declaration_text(lines, (1, 1), (5, 2)) == 'template <typename T> T twice(T v) noexcept'
 
+    def test_a_member_initializer_list_is_not_declaration(self):
+        lines = ['Arg(const std::integral auto v) : m_Value(v) {}']
+        assert api.declaration_text(lines, (1, 1), (1, 49)) == 'Arg(const std::integral auto v)'
+        lines = ['class Derived : public Base {']
+        assert api.declaration_text(lines, (1, 1), (1, 30)) == 'class Derived : public Base'
+
     def test_a_brace_inside_a_default_argument_does_not_end_it(self):
         lines = ['void f(Options o = Options{}, int n = 1);']
         assert api.declaration_text(lines, (1, 1), (1, 42)) == 'void f(Options o = Options{}, int n = 1)'
@@ -186,6 +198,8 @@ class TestExtraction:
         assert {'demo::round_up', 'demo::Window', 'demo::Window::Window', 'demo::Window::Mean',
                 'demo::c_Limit', 'demo::Options::doubleSided', 'demo::Options::c_Max'} <= set(by_name)
         assert by_name['demo::Options::doubleSided']['kind'] == 'field'
+        assert by_name['demo::Options::Options']['kind'] == 'constructor'
+        assert by_name['demo::twice']['declaration'] == 'int twice(auto value)'
         assert by_name['demo::Options::doubleSided']['brief'] == 'Whether back faces are drawn.'
 
     def test_what_is_not_callable_from_outside_is_not(self, tmp_path):
@@ -215,7 +229,8 @@ class TestGenerate:
         cindex_or_skip()
         root, include, _, db = fixture_tree(tmp_path)
         out = os.path.join(root, 'build', 'api')
-        summary = api.generate({'demo': include}, db, out, root, log=lambda *_: None)
+        summary, parsed = api.generate({'demo': include}, db, out, root, log=lambda *_: None)
+        assert parsed == {'demo'}
         assert summary['demo']['errors'] == 0
 
         with open(os.path.join(out, 'demo.md'), encoding='utf-8') as fh:
@@ -273,3 +288,55 @@ class TestGenerate:
         assert set(summary) == {'demo', 'other'}
         with open(os.path.join(out, 'other.md'), encoding='utf-8') as fh:
             assert '`other::thing`' in fh.read()
+
+    def test_a_library_that_could_not_be_parsed_is_tried_again(self, tmp_path):
+        """Stamped current while its old symbols stood in, it would stay stale until the next edit."""
+        cindex_or_skip()
+        root, include, header, db = fixture_tree(tmp_path)
+        out = os.path.join(root, 'build', 'api')
+        quiet = {'log': lambda *_: None}
+        api.refresh({'demo': include}, db, out, root, **quiet)
+
+        with open(db, encoding='utf-8') as fh:
+            entries = json.load(fh)
+        with open(db, 'w', encoding='utf-8') as fh:
+            json.dump([{'directory': root, 'file': '/elsewhere.cpp', 'arguments': ['c++', '-I/nowhere']}], fh)
+        with open(header, 'a', encoding='utf-8') as fh:
+            fh.write('namespace demo { int added(); }\n')
+        api.refresh({'demo': include}, db, out, root, **quiet)
+
+        with open(db, 'w', encoding='utf-8') as fh:
+            json.dump(entries, fh)
+        assert api.refresh({'demo': include}, db, out, root, **quiet) is not None
+        with open(os.path.join(out, 'demo.md'), encoding='utf-8') as fh:
+            assert '`demo::added`' in fh.read()
+
+    def test_nothing_the_catalog_did_not_write_is_deleted(self, tmp_path):
+        """`--out` is the caller's; a directory of hand-written Markdown must survive it."""
+        cindex_or_skip()
+        root, include, _, db = fixture_tree(tmp_path)
+        out = os.path.join(root, 'docs')
+        mine = write(out, 'guide.md', 'hand-written')
+        api.refresh({'demo': include}, db, out, root, log=lambda *_: None)
+        api.refresh({'demo': include}, db, out, root, force=True, log=lambda *_: None)
+        assert os.path.isfile(mine)
+
+    def test_a_removed_library_loses_its_file(self, tmp_path):
+        cindex_or_skip()
+        root, include, _, db = fixture_tree(tmp_path)
+        out = os.path.join(root, 'build', 'api')
+        api.refresh({'demo': include, 'twin': include}, db, out, root, log=lambda *_: None)
+        assert os.path.isfile(os.path.join(out, 'twin.md'))
+        assert api.refresh({'demo': include}, db, out, root, log=lambda *_: None) is not None
+        assert not os.path.exists(os.path.join(out, 'twin.md'))
+
+    def test_a_different_libclang_parses_everything_again(self, tmp_path, monkeypatch):
+        """A catalog the fallback library parsed, errors and all, must not outlive the right one."""
+        cindex_or_skip()
+        root, include, _, db = fixture_tree(tmp_path)
+        out = os.path.join(root, 'build', 'api')
+        api.refresh({'demo': include}, db, out, root, log=lambda *_: None)
+        real = api.find_libclang('clang++')
+        monkeypatch.setattr(api, 'find_libclang', lambda compiler: None if real else '/other/libclang')
+        monkeypatch.setattr(api, 'load_cindex', lambda library_file: pytest.importorskip('clang.cindex'))
+        assert api.refresh({'demo': include}, db, out, root, log=lambda *_: None) is not None

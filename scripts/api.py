@@ -179,6 +179,8 @@ def entry_for(entries, include_dir):
 
 
 def load_compile_db(path):
+    if not path:
+        raise CatalogError("the preset has no build dir, so there is no compile database to read.")
     try:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
@@ -207,7 +209,12 @@ def _libclang_beside(compiler):
                                   check=True).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return None
-    bin_dir = os.path.dirname(os.path.realpath(path))
+    return _libclang_in(os.path.dirname(os.path.realpath(path)))
+
+
+def _libclang_in(bin_dir):
+    """The libclang an LLVM install whose programs are in `bin_dir` ships, or None: beside them on
+    Windows, in the sibling `lib/` elsewhere."""
     for directory in (bin_dir, os.path.join(os.path.dirname(bin_dir), "lib")):
         for name in _libclang_names():
             candidate = os.path.join(directory, name)
@@ -232,11 +239,9 @@ def find_libclang(compiler):
         if found:
             return found
     for bin_dir in ct.llvm_bin_dirs():
-        for directory in (bin_dir, os.path.join(os.path.dirname(bin_dir), "lib")):
-            for name in _libclang_names():
-                candidate = os.path.join(directory, name)
-                if os.path.isfile(candidate):
-                    return candidate
+        found = _libclang_in(bin_dir)
+        if found:
+            return found
     return None
 
 
@@ -317,6 +322,10 @@ def declaration_text(lines, start, end):
         elif ch in "{;" and depth == 0:
             text = text[:i]
             break
+        elif (ch == ":" and depth == 0 and text[i + 1:i + 2] != ":" and text[i - 1:i] != ":"
+              and text[:i].rstrip().endswith(")")):
+            text = text[:i]  # a constructor's member initializer list
+            break
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"\s*=\s*$", "", text)
     if len(text) > DECLARATION_LIMIT:
@@ -374,15 +383,22 @@ class Extractor:
             return False
 
     def _record(self, cursor, kind, parent=None):
-        key = cursor.get_usr() or (cursor.location.file.name, cursor.location.line, cursor.spelling)
+        # A USR alone is not unique: two constrained constructor templates of one class can share it.
+        key = (cursor.get_usr(), cursor.location.file.name, cursor.location.line, cursor.spelling)
         if key in self._seen:
             return
         self._seen.add(key)
         path = os.path.normpath(cursor.location.file.name)
+        lines = self._file_lines(path)
         extent = cursor.extent
-        declaration = declaration_text(self._file_lines(path),
-                                       (extent.start.line, extent.start.column),
-                                       (extent.end.line, extent.end.column))
+        if extent.start.line:
+            span = (extent.start.line, extent.start.column), (extent.end.line, extent.end.column)
+        else:
+            # libclang gives an abbreviated function template (`f(std::integral auto v)`) no
+            # extent; the line its name is on holds the declaration.
+            line = cursor.location.line
+            span = (line, 1), (line, len(lines[line - 1]) + 1)
+        declaration = declaration_text(lines, *span)
         doc = clean_comment(cursor.raw_comment)
         self.symbols.append({
             "name": self._qualified(cursor),
@@ -431,9 +447,10 @@ class Extractor:
             elif member.kind in self.members:
                 if member.spelling.startswith("operator") or self._is_deleted(member):
                     continue
+                constructor = member.kind == K.CONSTRUCTOR or member.spelling == record.spelling
                 if member.kind == K.CONSTRUCTOR and _is_copy_or_move(member, record):
                     continue
-                self._record(member, "constructor" if member.kind == K.CONSTRUCTOR else "method", parent)
+                self._record(member, "constructor" if constructor else "method", parent)
             elif member.kind in (K.ENUM_DECL, K.TYPE_ALIAS_DECL, K.TYPEDEF_DECL) and member.spelling:
                 self._record(member, self.kind_names.get(member.kind, "type"), parent)
             elif member.kind == K.FIELD_DECL and member.spelling:
@@ -633,26 +650,33 @@ def render_html(catalog, root, html_dir):
 
 # --- Driver ---------------------------------------------------------------------
 
-def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print, only=None):
+def resolve_libclang(entries, log=print):
+    """The libclang file to parse `entries` with, or None for the wheel's bundled one (warned)."""
+    library_file = find_libclang(parse_flags(entries[0])[0])
+    if library_file is None:
+        log("warning: no libclang found beside the build's compiler or in a known LLVM install; "
+            "using the pip wheel's, whose builtin headers may not match this standard library. "
+            "Set BERNINI_LIBCLANG to a toolchain's libclang to silence the parse errors that follow.")
+    return library_file
+
+
+def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print, only=None, previous=()):
     """Parse the libraries named in `only` (default: all) and write the catalog into `out_dir`.
 
     A library not parsed is rendered from the symbols its last parse cached under `out_dir`, since
-    a library's entries depend on its own headers alone. Returns {name: summary} for every library.
+    a library's entries depend on its own headers alone. `previous` names the libraries the last
+    run wrote, so a library since removed loses its file; nothing else in `out_dir` is touched.
+
+    Returns (summary, parsed): {name: counts} for every library rendered, and the set actually
+    parsed this run -- which is what a refresh may stamp as current.
     """
     stale = sorted(libraries) if only is None else sorted(only)
-    catalog = {}
+    catalog, parsed = {}, set()
     if stale:
         entries = load_compile_db(compile_db)
         if not entries:
             raise CatalogError(f"{compile_db} is empty.")
-
-        compiler = parse_flags(entries[0])[0]
-        library_file = find_libclang(compiler)
-        if library_file is None:
-            log("warning: no libclang found beside the build's compiler or in a known LLVM install; "
-                "using the pip wheel's, whose builtin headers may not match this standard library. "
-                "Set BERNINI_LIBCLANG to a toolchain's libclang to silence the parse errors that follow.")
-        cindex = load_cindex(library_file)
+        cindex = load_cindex(resolve_libclang(entries, log))
 
         for name in stale:
             include_dir = libraries[name]
@@ -666,6 +690,7 @@ def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print, only=
                 log(f"warning: {name}: {len(errors)} parse error(s), so its catalog may be incomplete; "
                     f"first: {errors[0]}")
             catalog[name] = {"symbols": symbols, "errors": len(errors)}
+            parsed.add(name)
             _write_cache(out_dir, name, catalog[name])
 
     for name in libraries:
@@ -678,15 +703,17 @@ def generate(libraries, compile_db, out_dir, root=ct.REPO_ROOT, log=print, only=
                       "errors": c["errors"]} for name, c in catalog.items()}
     html_dir = os.path.join(out_dir, "html")
     os.makedirs(html_dir, exist_ok=True)
-    for old in glob.glob(os.path.join(out_dir, "*.md")):
-        os.remove(old)
+    for name in set(previous) - set(catalog):
+        for gone in (os.path.join(out_dir, f"{name}.md"), _cache_path(out_dir, name)):
+            if os.path.isfile(gone):
+                os.remove(gone)
     for name, c in catalog.items():
         _write(os.path.join(out_dir, f"{name}.md"),
                render_library_markdown(name, libraries[name], c["symbols"], root))
     _write(os.path.join(out_dir, "INDEX.md"), render_index_markdown(summary, root))
     _write(os.path.join(html_dir, "index.html"),
            render_html({name: c["symbols"] for name, c in catalog.items()}, root, html_dir))
-    return summary
+    return summary, parsed
 
 
 def _write(path, text):
@@ -722,30 +749,36 @@ def read_stamps(out_dir):
 def refresh(libraries, compile_db, out_dir, root=ct.REPO_ROOT, force=False, log=print):
     """Re-parse each library whose public headers changed since the last run, and re-render.
 
-    Returns the summary, or None when the catalog was already current. A change to this script
-    re-parses everything, since it may change what any line says.
+    Returns the summary, or None when the catalog was already current. A new script, or a
+    different libclang than the last parse used, re-parses everything: either can change what any
+    line says. A library that could not be parsed keeps its old digest, so the next run tries again.
     """
+    entries = load_compile_db(compile_db)
+    if not entries:
+        raise CatalogError(f"{compile_db} is empty.")
     stamps = read_stamps(out_dir)
-    script = script_digest()
+    known = stamps.get("libraries", {})
+    identity = {"script": script_digest(), "libclang": find_libclang(parse_flags(entries[0])[0]) or "bundled"}
     digests = {name: library_digest(include) for name, include in libraries.items()}
-    if force or stamps.get("script") != script:
+    if force or any(stamps.get(key) != value for key, value in identity.items()):
         stale = set(libraries)
     else:
-        known = stamps.get("libraries", {})
         stale = {name for name, digest in digests.items()
                  if known.get(name) != digest or _read_cache(out_dir, name) is None}
-    removed = set(stamps.get("libraries", {})) - set(libraries)
+    removed = set(known) - set(libraries)
     if not stale and not removed and os.path.isfile(os.path.join(out_dir, "INDEX.md")):
         return None
 
-    summary = generate(libraries, compile_db, out_dir, root, log, only=stale)
-    _write(os.path.join(out_dir, STAMP),
-           json.dumps({"script": script, "libraries": {n: digests[n] for n in summary}}, indent=1) + "\n")
+    summary, parsed = generate(libraries, compile_db, out_dir, root, log, only=stale, previous=known)
+    current = {name: digests[name] if name in parsed else known[name]
+               for name in summary if name in parsed or name in known}
+    _write(os.path.join(out_dir, STAMP), json.dumps({**identity, "libraries": current}, indent=1) + "\n")
     return summary
 
 
 def default_compile_db(preset=None):
     import util.config as cfg
+
     binary_dir = ct.binary_dir_of(cfg.preset(preset))
     return os.path.join(binary_dir, "compile_commands.json") if binary_dir else None
 
@@ -770,22 +803,24 @@ def main(argv=None):
                         help="A library and its public include dir (default: every libs/*/include).")
     parser.add_argument("--root", default=ct.REPO_ROOT, help="Paths in the catalog are relative to this.")
     parser.add_argument("--out", default=DEFAULT_OUT, help="Output directory (default: build/api).")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Say nothing when the catalog is current, and put an error as a note: "
+                             "what a build runs it with.")
     args = parser.parse_args(argv)
 
     try:
         libraries = _parse_libraries(args.library, args.root) if args.library else default_libraries(args.root)
         compile_db = args.compile_db or default_compile_db(args.preset)
-        if not compile_db:
-            raise CatalogError("the preset has no binaryDir, so there is no compile database to read.")
         started = time.monotonic()
         summary = refresh(libraries, compile_db, args.out, args.root, force=args.force)
     except CatalogError as err:
-        print(f"error: {err}", file=sys.stderr)
+        print(f"{'note: API catalog not refreshed' if args.quiet else 'error'}: {err}", file=sys.stderr)
         return 1
 
     out = os.path.relpath(args.out)
     if summary is None:
-        print(f"API catalog is current: {out}/INDEX.md")
+        if not args.quiet:
+            print(f"API catalog is current: {out}/INDEX.md")
         return 0
     total = sum(s["symbols"] for s in summary.values())
     documented = sum(s["documented"] for s in summary.values())
