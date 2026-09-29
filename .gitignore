@@ -26,6 +26,9 @@ __pycache__
 # Local, developer-specific editor config (like .env); seeded from config.example.json
 apps/editor/config.json
 
+# Throwaway worktrees an agent builds a branch in, e.g. the dev-gbv-check skill's.
+/.worktrees/
+
 # Per-developer Claude Code settings; the workspace links its shared map here.
 .claude/settings.local.json
 
