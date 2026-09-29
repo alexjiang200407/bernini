@@ -18,7 +18,9 @@ covers how they relate, how a source becomes them, and the authoring rules that 
 map arrives from somewhere else.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the non-obvious
-contracts — not full signatures. The header at each linked path is the source of truth; when this doc
+contracts — not full signatures. The headers are the source of truth, and the doc lists none of
+their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md); when this doc
 disagrees, trust the header, then fix this doc.
 
 ---
@@ -117,27 +119,6 @@ disagrees, trust the header, then fix this doc.
   surfaces never builds it
   ([libs/bgl_extended/src/passes/BrdfLutGenPass.cpp](libs/bgl_extended/src/passes/BrdfLutGenPass.cpp)) — so there is no file to ship, to
   configure, or to get out of step with the shader that samples it.
-
-## Interface Index
-
-### Containers
-
-| Type | File | Role |
-|---|---|---|
-| `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route; purely derived |
-| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair and the exposure they were measured at; purely derived |
-| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The authored document: paths to a `.bsky` and a `.benvl`, `skyMipLevel`, `skyRotationY`, `exposureOverride` |
-| `EnvMapRoute` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | source + baked + stamp, the same shape as a material's channel route |
-
-### Operations
-
-| Header | Role |
-|---|---|
-| [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
-| [env_import_parameters.h](libs/assetlib/include/assetlib/env_import_parameters.h) | `EnvironmentImportParameters`, the six numbers an import's pixels follow from, and `c_EnvSourceBakeToken` — apart from `envmap.h` because an import document holds them by value |
-| [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` — cook a route's source and encode it — and their staleness checks |
-| [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
-| [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
 
 ## Topology
 

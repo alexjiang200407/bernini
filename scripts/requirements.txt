@@ -33,3 +33,9 @@ clang-tidy==22.1.8
 # The runner behind `just test`'s scripts_tests suite -- the cases under scripts/tests. Pure
 # Python, so this one is a library rather than a tool with a path in config.json.
 pytest==8.3.5
+
+# `scripts/api.py` -- the API catalog -- parses the public headers with it. The Python bindings are
+# what is pinned; the library they load is the build toolchain's own where one is found, since its
+# builtin headers must match the standard library the compile flags name. The wheel's bundled copy is
+# only the fallback. A library rather than a tool, like pytest.
+libclang==18.1.1

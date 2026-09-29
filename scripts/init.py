@@ -44,6 +44,7 @@ Usage:
 
 import argparse
 import getpass
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -238,11 +239,12 @@ def find_installed(name):
     return None
 
 
-def offer_wheel(label, purpose):
+def offer_wheel(label, purpose, locate=True):
     """Offer to install `label` from its pinned wheel. Returns its path, or None.
 
     Declining is not a failure: everything installed here is also satisfiable by a copy
     that is already on the machine, which is what the caller falls back to asking for.
+    A library (`locate=False`) has no executable to find afterwards, so success is True.
     """
     requirement = pinned(label)
     print(f"\n{label} was not found. {purpose}\n"
@@ -253,6 +255,9 @@ def offer_wheel(label, purpose):
         print(f"warning: installing {label} failed. Install it by hand with: "
               f"pip install {requirement}", file=sys.stderr)
         return None
+    if not locate:
+        importlib.invalidate_caches()
+        return True
 
     found = find_installed(label)
     if not found:
@@ -822,6 +827,12 @@ def detect(preset, arch, install=True, with_vcpkg=True):
     # tool, so it is only offered here -- nothing about it reaches config.json.
     if install and interactive() and not find_installed("pytest"):
         offer_wheel("pytest", "`just test` runs the scripts/tests suite with it.")
+
+    # libclang's Python bindings parse the public headers into the API catalog (scripts/api.py).
+    # A library with no script to locate, so it is looked for by import rather than on PATH.
+    if install and interactive() and importlib.util.find_spec("clang") is None:
+        offer_wheel("libclang", "`just build` refreshes the API catalog in build/api/ with it.",
+                    locate=False)
 
     if tools:
         data["tools"] = tools

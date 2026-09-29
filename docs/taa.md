@@ -97,7 +97,9 @@ over the render grid's own Nyquist — stays above 32 dB PSNR of the native conv
 raw upscale it replaces), and that a target returned to 1.0 by `IGraphics::SetRenderScale`
 converges to the bytes one created there does.
 
-**This document is a map, not a mirror.** The headers at each linked path are the source of truth.
+**This document is a map, not a mirror.** The headers are the source of truth, and the doc lists
+none of their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md).
 
 ---
 
@@ -337,26 +339,6 @@ converges to the bytes one created there does.
   It runs only on a frame the resolve ran, because a raw scene colour on a coarser grid has no
   output-grid neighbourhood to sharpen. Measured on the M3 Pro at 3840×2160, scale 0.667,
   PostProcess goes 0.50 → 0.75 ms at sharpness 1. It costs nothing at 0 or at scale 1.
-
----
-
-## Interface Index
-
-| Type | File | Role |
-|---|---|---|
-| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
-| `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
-| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on an upscaled resolved image, live; 1 by default, zero is off. |
-| `Rcas` | [lib/math/rcas.slang](libs/bgl_common/shaders/src/lib/math/rcas.slang) | The sharpen itself, over one five-tap cross. |
-| `HaltonJitter` | [bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h) | The sub-pixel offset for a frame, in NDC. |
-| `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl_extended/src/passes/TaaResolvePass.h) | Binds the frame and writes the new history. |
-| `TaaResolve<I : IResolveInputs>` | [lib/math/taa.slang](libs/bgl_common/shaders/src/lib/math/taa.slang) | The resolve itself -- clamp, reprojection, blend -- generic over what it samples, so both renderers run one body. |
-| `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl_extended/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |
-| `SceneView::AdvanceTemporalEpoch` | [scene/SceneView.h](libs/bgl_extended/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
-| `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl_extended/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
-| `ViewData::jitter` / `prevJitter` | [lib/data/ViewData.slang](libs/bgl_common/shaders/src/lib/data/ViewData.slang) | What the mesh shader subtracts back out. |
-| History accessors | [gfx/RenderTargetBase.h](libs/bgl_extended/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
-| `RenderTargetWindow::SetRenderScale` | [RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | Drives a viewport at another display's pixel density, to reproduce the artifact. |
 
 ---
 

@@ -9,8 +9,9 @@ This is the **game's** UI. The editor's is Qt Widgets and always will be
 ([apps/editor/CLAUDE.md](apps/editor/CLAUDE.md) § UI).
 
 **This document is a map, not a mirror.** It captures the design choices, the layer boundaries and
-the non-obvious contracts — not full signatures. The header at each linked path is the source of
-truth; when this doc disagrees, trust the header, then fix this doc.
+the non-obvious contracts — not full signatures. The headers are the source of truth, and the doc
+lists none of their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the
+[API catalog](docs/api_catalog.md); when this doc disagrees, trust the header, then fix this doc.
 
 ---
 
@@ -83,23 +84,6 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 
 `bgl` never learns what a document is: the overlay takes pixel-space triangle lists and textures.
 That is what makes the renderer half reusable and the UI library half replaceable.
-
-## Interface Index
-
-| Interface | File | Role |
-|---|---|---|
-| `UiRuntime` | [libs/gamelib/include/gamelib/ui/UiRuntime.h](libs/gamelib/include/gamelib/ui/UiRuntime.h) | RmlUi's process-global lifetime, the system and file interfaces, the clock, font faces. One per process. |
-| `UiContext` | [libs/gamelib/include/gamelib/ui/UiRuntime.h](libs/gamelib/include/gamelib/ui/UiRuntime.h) | One context sized in pixels; hands out `Rml::Context&` and loads documents by mount key. |
-| `UiRenderer` | [libs/gamelib/include/gamelib/ui/UiRenderer.h](libs/gamelib/include/gamelib/ui/UiRenderer.h) | What RmlUi draws through: geometry becomes `bgl::OverlayDraw`s, textures become the overlay's. Registers `target://` sources. |
-| `IOverlay` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | The renderer-side surface: compiled triangle lists and straight-alpha textures, drawn after post-processing. Not UI-specific. |
-
-### Supporting types
-
-| Type | File | Role |
-|---|---|---|
-| `UiRuntimeOptions` | [libs/gamelib/include/gamelib/ui/UiRuntime.h](libs/gamelib/include/gamelib/ui/UiRuntime.h) | `scripting` (off by default) and the `lua_State` to add RmlUi's bindings to. |
-| `UiContextPtr` | [libs/gamelib/include/gamelib/ui/UiRuntime.h](libs/gamelib/include/gamelib/ui/UiRuntime.h) | `unique_ptr<UiContext>`; the runtime it came from must outlive it. |
-| `OverlayVertex`, `OverlayDraw`, `OverlayJob` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | A 24-byte pixel-space vertex; one draw with its texture, translation, optional transform and scissor; the job one `DrawOverlay` submits. |
 
 ## Topology
 

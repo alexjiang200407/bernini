@@ -27,7 +27,9 @@ an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compil
 only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
-contracts — not full signatures. The header at each linked path is the source of truth; when this doc
+contracts — not full signatures. The headers are the source of truth, and the doc lists none of
+their symbols: find a type with clangd's `workspaceSymbol`, or a public one in the [API
+catalog](docs/api_catalog.md); when this doc
 disagrees, trust the header, then fix this doc.
 
 ---
@@ -158,50 +160,6 @@ disagrees, trust the header, then fix this doc.
 * **GPU assertions are a Debug-build facility.** `dbg_raise` in shaders reaches
   [IGpuAssertionHandler](libs/bgl/include/bgl/IGpuAssertionHandler.h) only under `BERNINI_GPU_DEBUG`;
   in Release the handler is never invoked. See [Graphics Debug](docs/gfx_debug.md).
-
----
-
-## Interface Index
-
-| Interface | File | Role |
-|---|---|---|
-| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
-| `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
-| `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances and their transforms, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
-| `IOverlay` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Compiled 2D geometry and the textures it samples, drawn over a frame by `IGraphics::DrawOverlay`. Usable on any target the graphics draws. |
-| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default; `SetBloomEnabled` runs or stops bloom, off by default and needing no desc opt-in — the chain it renders through is allocated at the first frame that needs it — with `SetBloomSettings` sweeping intensity, threshold, soft knee and scatter as per-frame constants; `SetColorGradeEnabled` runs or stops the colour grade, off by default and allocating nothing, with `SetColorGradeSettings` setting white balance, an ASC CDL, contrast and a vignette as per-frame constants, all neutral by default; `SetGpuTimingEnabled` times every pass of a frame on the GPU, off by default, read back through `IGraphics::GetPassTimings`. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation, and `SetTaaSharpness` the contrast-adaptive sharpen of an upscaled resolved image, 1 by default and applied only below a render scale of 1. |
-| `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
-
-### Supporting types
-
-| Type | File | Role |
-|---|---|---|
-| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The renderer's own: `shaderCacheDir`, `gpuCapturePath`, and every descriptor-heap/pool capacity. The device-level choices -- debug layers, log level, the client's Slang directory -- are the `bgpu::GpuContextDesc` the application creates the device from ([bgpu.md](bgpu.md)). |
-| `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::GetSurfaceTypes()`. |
-| `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
-| `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
-| `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
-| `ChooseLevel`, `ProjectedDiameter` | [libs/bgl/include/bgl/lod_select.h](libs/bgl/include/bgl/lod_select.h) | The cull's level-of-detail size test on the CPU: pixels per unit, a mesh's level-0 sphere placed, its diameter on screen, and the level that earns with its hysteresis. |
-| `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
-| `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). `geometryOcclusionTexture` is geometry occlusion through the mesh's second UV set, multiplied into the material's own AO — see [Passes](docs/passes.md). A `SurfaceMaterialDesc` has none: a surface binds that map to a slot it declares and samples through `IMaterialReader::Uv1`. |
-| `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
-| `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
-| `DirectionalLightDesc` | [libs/bgl/include/bgl/types/DirectionalLightDesc.h](libs/bgl/include/bgl/types/DirectionalLightDesc.h) | The sun: the direction it **travels** (a midday sun is `(0, -1, 0)`), a colour, and an intensity in the irradiance map's units — so a sun and an environment at the same number light a facing surface equally. Casts no shadow. |
-| `BGrassFields`, `GrassField`, `GrassChunk`, `GrassClump` | [libs/assetlib_structs/include/assetlib_structs/BGrassFields.h](libs/assetlib_structs/include/assetlib_structs/BGrassFields.h), [Grass.h](libs/assetlib_structs/include/assetlib_structs/Grass.h) | The grass a mesh source grows, cooked beside its `.bmesh`: fields (one per POINTS primitive, naming the mesh it grows on and a look slot), chunks of at most `c_GrassClumpsPerChunk` clumps with a bound each, and the clumps — a point, a height scale, a ground normal and a colour. |
-| `GrassDesc` | [libs/bgl/include/bgl/types/GrassDesc.h](libs/bgl/include/bgl/types/GrassDesc.h) | A grass look: the material its blades shade through (drawn opaque whatever its layer; `kBlend` refused), the blade's shape and segment counts, blades per clump, how the field thins between `fadeStart` and `fadeEnd`, how stiffly it answers what bends it (the wind), and the geometry lighting terms — root occlusion, normal rounding, a 0–1 blend toward the ground normal near and far, and a translucency term an engine-lit material receives. No placement: the clumps come with the geom it is bound to. |
-| `WindDesc` | [libs/bgl/include/bgl/types/WindDesc.h](libs/bgl/include/bgl/types/WindDesc.h) | A view's wind: a horizontal direction, a steady strength, and a gust field's size, speed and strength. Calm by default. |
-| `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
-| `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `taaSharpness` (how hard an upscaled resolved image is sharpened, in [0, 1], 1 by default, zero off), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
-| `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport, time}`. Holds a **copy** of the camera. |
-| `OverlayVertex`, `OverlayDraw`, `OverlayJob`, `OverlayRect` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | A 24-byte pixel-space vertex; one draw of a geometry with its texture, translation, optional 4×4 transform and optional scissor; the overlay plus the draws one `DrawOverlay` submits; a pixel rectangle. |
-| `OverlayGeometryHandle`, `OverlayTextureHandle` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Value handles into an overlay's storage, valid only on the overlay that minted them. |
-| `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
-| `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
-| `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`; `followsView` attaches the environment to the camera, `opacity` and `backdrop` fade the backdrop without touching the lighting. |
-| `GeomHandle`, `GrassHandle`, `MaterialHandle`, `MeshInstanceHandle`, `RigHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [GrassHandle.h](libs/bgl/include/bgl/GrassHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [RigHandle.h](libs/bgl/include/bgl/RigHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
-| `GeomType`, `LayerType`, `MaterialType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h) | Classification enums. `MaterialType` is **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
-| `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
-| `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |
 
 ---
 

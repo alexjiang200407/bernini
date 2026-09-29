@@ -51,16 +51,6 @@ while (running)
   ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its one export. It
   is in the build-tree package; the editor does not link it.
 
-## Interface Index
-
-| Symbol | File | Role |
-|---|---|---|
-| `HashFillJob`, `HashFillDesc` | [include/crowdlib/HashFillJob.h](../libs/crowdlib/include/crowdlib/HashFillJob.h) | The async queue, its kernel and its readback: `Submit`, the two fences, `Wait`, `GetReadback` |
-| `CreateHashFillJob` | same | Builds all of it on a context's device |
-| `HashFillReference` | same | The CPU half of the kernel, what element `i` must read back as |
-| `CompileKernel` | [src/KernelCode.h](../libs/crowdlib/src/KernelCode.h) | A kernel through the context's sessions, with its reflected bindings |
-| `crowd.CSHashFill` | [shaders/src/crowd/CSHashFill.slang](../libs/crowdlib/shaders/src/crowd/CSHashFill.slang) | The kernel |
-
 ## Threading & Synchronization
 
 * **One thread**, like the renderer. A job compiles on the thread that creates it, which may create
