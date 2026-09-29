@@ -126,6 +126,7 @@ hang kills every shard and the crash logs blame innocent cases. Every process al
 - `rc=2 No tests ran` means a file whose cases are all Metal-only, for example `QueueFlushIdle_test` and `QueueFlushPool_test`.
 - `rc=4`, all skipped: `ShaderCache_test` skips itself because the driver pipeline layer is off under validation.
 - `GPU assertion(s) fired` in `DebugAssert_test`: that suite raises them on purpose.
+- `RTV pool exhausted` and `Bloom chain ... could not be allocated` in `Bloom_test` and `QueueSync_test`, and `Draw bucket ceiling (3) reached` in `DrawBucketTable_test`: cases that exhaust a pool or a ceiling on purpose. They are `[error]` log lines, not validation messages.
 - `[hashedalpha]` failures and `Metal-tuned bound not met on D3D12` warnings are known issues on master. Never fix them.
 - Only cases that set `enableGPUValidationLayer = bgl::test::GpuValidationEnabled()` are instrumented when their file runs alone. A fast, clean file may simply not have been validated.
 
