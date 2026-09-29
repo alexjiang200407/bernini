@@ -912,6 +912,8 @@ TEST_CASE(
 // moves it, and it only moves on a target that has an accumulation to integrate it.
 TEST_CASE("The hashed pattern changes between frames, but only under TAA", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string first  = "assets/golden/hashed_alpha_seed0.got.png";
 	const std::string second = "assets/golden/hashed_alpha_seed1.got.png";
 
@@ -986,6 +988,8 @@ TEST_CASE("Temporal AA resolves the hashed noise", "[hashedalpha][render]")
 // small multiple of it rather than to reach zero.
 TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const float opaque = ConsecutiveFrameDelta(
 		"assets/golden/hashed_alpha_still_opaque_a.got.png",
 		"assets/golden/hashed_alpha_still_opaque_b.got.png",
@@ -1023,6 +1027,8 @@ TEST_CASE("A converged hashed patch stops changing between frames", "[hashedalph
 // legitimately -- specular shift, jitter -- and that cost has to be read out of the hashed figure.
 TEST_CASE("A pan does not flicker a converged hashed patch", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const float opaque = PanningFrameDelta(
 		"assets/golden/hashed_alpha_pan_opaque_a.got.png",
 		"assets/golden/hashed_alpha_pan_opaque_b.got.png",
@@ -1063,6 +1069,8 @@ TEST_CASE("A pan does not flicker a converged hashed patch", "[hashedalpha][rend
 // 0.0024, parity with head-on. The bounds sit between the two states.
 TEST_CASE("A converged hashed surface stays still at grazing angles", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const float opaqueStill = GrazingFrameDelta(
 		"assets/golden/hashed_grazing_still_opaque_a.got.png",
 		"assets/golden/hashed_grazing_still_opaque_b.got.png",
@@ -1119,6 +1127,8 @@ TEST_CASE("A converged hashed surface stays still at grazing angles", "[hashedal
 // steepening needs.
 TEST_CASE("Hashed strands survive the plain mip chain", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const auto [plainDelta, plainMean] = StrandFlicker(
 		"assets/golden/hashed_strand_plain_a.got.png",
 		"assets/golden/hashed_strand_plain_b.got.png",
@@ -1161,6 +1171,8 @@ TEST_CASE("Hashed strands survive the plain mip chain", "[hashedalpha][render]")
 // That is what AliasEnergy measures.
 TEST_CASE("The hashed pattern stays per-pixel at grazing angles", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string grazing = "assets/golden/hashed_alpha_grazing.got.png";
 	const std::string flat    = "assets/golden/hashed_alpha_grazing_flat.got.png";
 
@@ -1197,6 +1209,8 @@ TEST_CASE("The hashed pattern stays per-pixel at grazing angles", "[hashedalpha]
 // two stochastic stills, which is the noise floor the TAA figures are read against.
 TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const SmearBands off = StrandSmear(
 		"assets/golden/strand_smear_off_still.got.png",
 		"assets/golden/strand_smear_off_panned.got.png",
@@ -1362,6 +1376,8 @@ TEST_CASE("A distant card samples the mip its footprint asks for", "[hashedalpha
 // rather than the accumulation it is supposed to reach into.
 TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	struct Rung
 	{
 		float       cameraZ;
@@ -1568,6 +1584,8 @@ TEST_CASE(
 // stays ahead of the alpha test's, so the sharpening's far-field work cannot silently vanish.
 TEST_CASE("Distant hashed strands stay visible features", "[hashedalpha][taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr float c_FarZ = 40.0f;
 
 	const float tanHalfFov = std::tan(glm::radians(30.0f));
@@ -1698,6 +1716,8 @@ TEST_CASE(
 	"A hashed card is measured across render resolutions",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const uint32_t size : c_SweepSizes)
 	{
 		const Frame frame{ size, size, 1.0f };
@@ -1718,6 +1738,8 @@ TEST_CASE(
 	"Each alpha layer is measured across render resolutions",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const bgl::LayerType layer :
 	     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
 	{
@@ -1743,6 +1765,8 @@ TEST_CASE(
 	"A hashed card is measured across render scales",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const float scale : { 1.0f, 0.5f })
 	{
 		const Frame frame{ c_Width, c_Height, 1.0f, scale };
@@ -1763,6 +1787,8 @@ TEST_CASE(
 	"A hashed card is measured at a fixed footprint",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const uint32_t size : c_SweepSizes)
 	{
 		const Frame frame{ size, size, static_cast<float>(size) / static_cast<float>(c_Height) };
@@ -1791,6 +1817,8 @@ TEST_CASE(
 	"A hashed smear is measured across render scales",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const float scale : { 1.0f, 0.5f })
 	{
 		const Frame frame{ c_Width, c_Height, 1.0f, scale };
@@ -1820,6 +1848,8 @@ TEST_CASE(
 	"A hashed smear is measured across reconstruction widths",
 	"[hashedalpha][taa][resolution][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	for (const float width : { 0.25f, 0.4f, 0.6f, 1.0f })
 	{
 		Frame frame{ c_Width, c_Height, 1.0f, 0.5f };

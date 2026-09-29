@@ -619,6 +619,8 @@ namespace
 // region and score near zero either way.
 TEST_CASE("A converged TAA frame has less edge aliasing than an unjittered one", "[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string off = "assets/golden/taa_off.got.png";
 	const std::string on  = "assets/golden/taa_converged.got.png";
 
@@ -683,6 +685,8 @@ TEST_CASE("A static scene converges to the unjittered image", "[taa][render]")
 // weight against one of them while blind to the other is how the branch got its two open complaints.
 TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string reference = "assets/golden/taa_ghost_reference.got.png";
 	const std::string panned    = "assets/golden/taa_ghost_panned.got.png";
 	const std::string still     = "assets/golden/taa_ghost_still.got.png";
@@ -721,6 +725,8 @@ TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]"
 // convergence noise is ghost.
 TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string still  = "assets/golden/taa_parallax_still.got.png";
 	const std::string panned = "assets/golden/taa_parallax_panned.got.png";
 
@@ -755,6 +761,8 @@ TEST_CASE("A pan leaves no ghost on the detail it uncovers", "[taa][render]")
 // converged frame is what the resolve considers finished, so the bound is a ratio to it.
 TEST_CASE("Fine detail survives the camera moving", "[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string still  = "assets/golden/taa_drift_still.got.png";
 	const std::string moving = "assets/golden/taa_drift_moving.got.png";
 
@@ -990,6 +998,8 @@ TEST_CASE(
 // render is a device creation.
 TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][skinned][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	using namespace bgl::test::skinned_synth;
 
 	const std::string held     = "assets/golden/taa_anim_held.got.png";
@@ -1204,6 +1214,8 @@ TEST_CASE(
 // coincidence, and that a scale moves the render grid and nothing else.
 TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	auto gfx = bgl::test::CreateGraphics(TestOptions());
 	REQUIRE(gfx != nullptr);
 
@@ -1350,6 +1362,8 @@ TEST_CASE(
 	"An upscaling resolve lands closer to the full-scale image than a stretch",
 	"[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string upscaled  = "assets/golden/taa_scale_half_off.got.png";
 	const std::string resolved  = "assets/golden/taa_scale_half_on.got.png";
 	const std::string reference = "assets/golden/taa_scale_full_on.got.png";
@@ -1582,6 +1596,8 @@ TEST_CASE(
 	"A two-thirds upscale of a static scene converges near the native render",
 	"[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr float c_TwoThirdsScale = 0.667f;
 	constexpr float c_MinPsnrDb      = 32.0f;
 
@@ -1639,6 +1655,8 @@ TEST_CASE(
 	"The sharpness adds detail to a resolved upscale, and nothing without one",
 	"[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr float c_TwoThirdsScale = 0.667f;
 	constexpr float c_FullSharpness  = 1.0f;
 
@@ -1742,6 +1760,8 @@ TEST_CASE(
 // can invent samples never taken. What is pinned either side is that accumulating is not a loss.
 TEST_CASE("An upscaling resolve holds the raw upscale's ground under drift", "[taa][render][truth]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr int   c_TruthScale = 4;
 	constexpr float c_HalfScale  = 0.5f;
 
@@ -1815,6 +1835,8 @@ TEST_CASE(
 	"A full-scale resolve still beats no antialiasing against the truth",
 	"[taa][render][truth]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	const std::string truth = "assets/golden/taa_truth_still.got.png";
 	const std::string raw   = "assets/golden/taa_truth_still_raw.got.png";
 	const std::string held  = "assets/golden/taa_truth_still_taa.got.png";
@@ -1865,6 +1887,8 @@ TEST_CASE(
 	"The reconstruction width sharpens an upscale and cannot touch scale 1.0",
 	"[taa][render]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr float c_HalfScale = 0.5f;
 
 	// Either side of the 0.4 the target ships with, and far enough apart that the difference is not
@@ -2034,6 +2058,8 @@ TEST_CASE("The sharpness is full by default and bounded to zero through one", "[
 // it there is nothing to reconstruct.
 TEST_CASE("The reconstruction width is measured against the truth", "[taa][render][truth]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	constexpr int   c_TruthScale = 4;
 	constexpr float c_HalfScale  = 0.5f;
 
@@ -2106,6 +2132,8 @@ TEST_CASE(
 	"A rapid camera move rejects an occluder on newly exposed fine detail",
 	"[taa][render][taaghosting]")
 {
+	bgl::test::SkipUnderGpuValidation();
+
 	auto populate = [](const bgl::SceneRef& scene, const bgl::SceneViewRef& view) {
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 		AddSlatWall(

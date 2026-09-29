@@ -34,4 +34,15 @@ namespace bgl::test
 	 */
 	[[nodiscard]] bool
 	GpuValidationActive() noexcept;
+
+	/**
+	 * Skips the calling case while GPU validation is active: for a case that only re-runs, with other
+	 * parameters, passes a kept case in its file already puts through the validator. Validation hunts
+	 * API misuse -- a barrier, a descriptor, a teardown order -- which a pass shows in its first
+	 * frames; it is not what measures a converged image, and paying its cost per sweep point is most
+	 * of a validated run. Keep every case that owns a distinct pass, configuration or resource
+	 * lifetime.
+	 */
+	void
+	SkipUnderGpuValidation();
 }

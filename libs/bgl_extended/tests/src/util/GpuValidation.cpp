@@ -1,5 +1,6 @@
 #include "util/GpuValidation.h"
 
+#include <catch2/catch_test_macros.hpp>
 #include <core/platform/util.h>
 
 namespace bgl::test
@@ -28,5 +29,12 @@ namespace bgl::test
 	{
 		return g_GpuValidation || core::env_var("MTL_SHADER_VALIDATION").has_value() ||
 		       core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
+	}
+
+	void
+	SkipUnderGpuValidation()
+	{
+		if (GpuValidationActive())
+			SKIP("a measurement sweep; its passes are validated by a kept case in this file");
 	}
 }
