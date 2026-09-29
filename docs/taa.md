@@ -340,26 +340,6 @@ converges to the bytes one created there does.
 
 ---
 
-## Interface Index
-
-| Type | File | Role |
-|---|---|---|
-| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
-| `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
-| `IRenderTarget::SetTaaSharpness` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The RCAS strength on an upscaled resolved image, live; 1 by default, zero is off. |
-| `Rcas` | [lib/math/rcas.slang](libs/bgl_common/shaders/src/lib/math/rcas.slang) | The sharpen itself, over one five-tap cross. |
-| `HaltonJitter` | [bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h) | The sub-pixel offset for a frame, in NDC. |
-| `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl_extended/src/passes/TaaResolvePass.h) | Binds the frame and writes the new history. |
-| `TaaResolve<I : IResolveInputs>` | [lib/math/taa.slang](libs/bgl_common/shaders/src/lib/math/taa.slang) | The resolve itself -- clamp, reprojection, blend -- generic over what it samples, so both renderers run one body. |
-| `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl_extended/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |
-| `SceneView::AdvanceTemporalEpoch` | [scene/SceneView.h](libs/bgl_extended/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
-| `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl_extended/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
-| `ViewData::jitter` / `prevJitter` | [lib/data/ViewData.slang](libs/bgl_common/shaders/src/lib/data/ViewData.slang) | What the mesh shader subtracts back out. |
-| History accessors | [gfx/RenderTargetBase.h](libs/bgl_extended/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
-| `RenderTargetWindow::SetRenderScale` | [RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | Drives a viewport at another display's pixel density, to reproduce the artifact. |
-
----
-
 ## Topology
 
 ```mermaid

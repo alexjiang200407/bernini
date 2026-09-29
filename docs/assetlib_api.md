@@ -177,17 +177,7 @@ acquisition with no source files present and no source reads.
   manager. A cached graph would not merely go stale — it would refuse a deletion while naming a
   blocker that had since been deleted from under it.
 
-## Interface Index
-
-| Type | File | Role |
-|---|---|---|
-| `AssetStore` | [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The project: the read mount and the writable root as one. Loads every container by key, answers staleness, describes against disk. |
-| `AssetKindRegistry` | [AssetKindRegistry.h](libs/assetlib/include/assetlib/AssetKindRegistry.h) | Project-owned custom authored kinds, propagated into stores and transactions. |
-| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: metadata including required plugin IDs, the scaffolded `Data/` tree, and the `AssetStore` over it. |
-| `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
-| `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
-
-### Containers — one table
+## Containers
 
 Every container this build reads or writes is one `AssetCodec<T>` specialization in
 [codecs.h](libs/assetlib/include/assetlib/codecs.h), listed in `AssetType` order: the extension, the
@@ -211,20 +201,6 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bblend` | The blend spaces authored against one clip set: each a named, ordered run of clips with the parameter each plays alone at. Names the `.banim` by a path it stores, so unlike a `.bavatar` it is an ordinary asset — renamed freely, and a rename of the clip set rewrites it (`RefKind::kBlendClips`). Clips are named, never indexed, and resolved where both name tables meet. Its struct is [blend.h](libs/assetlib/include/assetlib/blend.h). |
 | `.bgrass` | A grass look: the `.bmaterial` its blades shade through (a path it stores, `RefKind::kGrassMaterial`, so a rename of the material rewrites it) and the blade, clump, density, response, lighting and colour groups `bgl::GrassDesc` mirrors. A key it omits takes the default, and unknown keys are kept inside a group as well as at the top. Ranges are not checked on read: the renderer states them once, where it creates the look. Its struct is [BGrass.h](libs/assetlib_structs/include/assetlib_structs/BGrass.h). A look with no mesh under it is grown on `makeGrassPatch`'s square of clumps ([grass_patch.h](libs/assetlib/include/assetlib/grass_patch.h)), which is what a preview draws. |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
-
-### Operations
-
-| Concern | Header | Notes |
-|---|---|---|
-| Import from glTF | [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h), [asset_import.h](libs/assetlib/include/assetlib/asset_import.h) | Decode, then write the files an import produces — with a rollback for a cancelled one. |
-| Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet and the authored UV1 occlusion map down to a single-channel BC4 one — or, for a surface material, to one packed map per routed data slot. `AssetStore::ComposeSurfaceSlot` is that compositor; `LooseSurfaceSlots` says which slots a load draws through their routes instead ([docs/game_defined_surfaces.md](docs/game_defined_surfaces.md)), and `DrawsBakedGeometryOcclusion` whether the occlusion map drawn is the baked one. `bakedTextureKey` turns a recorded texture reference into the file drawn from — a `.ktx2` key as it is, a baked map's content name to the file its encoding is stored in — and every reader of a baked field goes through it. |
-| Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping BC7 / RGB9E5 maps. |
-| Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
-| Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack, 8-bit sRGB quantize. [docs/asset_standards.md](docs/asset_standards.md) |
-| Texture refresh | `AssetStore::WriteTextures` / `GetStaleImportedTextureSources` / `RefreshImportedTextures` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) | Extract an import's textures, and re-extract them when the source has moved -- the one part of a group the load-time seam skips. |
-| Produce a project | `AssetStore::Reimport` / `GetStaleGeometry` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [reimport.h](libs/assetlib/include/assetlib/reimport.h) | Write the outputs a source's `.bimport` names that are not on disk at all — the one operation that runs from the authored side, where everything else needs the derived file to already be there. [docs/asset_containers.md](docs/asset_containers.md) |
-| Describe, migrate, prune | `AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person, one overload per container; re-save at the current form; collect unreferenced bakes. |
-| Cancellation | [cancel.h](libs/assetlib/include/assetlib/cancel.h) | `std::stop_token`, polled at the encode that dominates each bake. |
 
 ## Topology
 

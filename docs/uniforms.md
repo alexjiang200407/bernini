@@ -89,30 +89,6 @@ doc disagrees, trust the header, then fix this doc.
 
 ---
 
-## Interface Index
-
-| Type | File | Role |
-|---|---|---|
-| `UniformsBase` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | One cbuffer's CPU mirror, shared by every renderer: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Knows values and descriptor indices, never what a descriptor names. Move-only. |
-| `UniformsBase::Accessor` / `ConstAccessor` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `AssignDescriptorIndex` as the one primitive a handle write reduces to, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
-| `UniformAssign<T>` / `UniformValueMap<T>` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | The two seams a renderer specialises: how one of its handle types is written, and which value type one of its types is stored as. |
-| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | This renderer's mirror: `UniformsBase` plus the D3D12 root parameter, built from a pipeline's `UniformLayoutEntry`. Its six `UniformAssign` specialisations are what make `uniforms["x"] = handle` compile. |
-| `FindUnknownMembers` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
-| `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
-
-### Supporting types
-
-| Type | File | Role |
-|---|---|---|
-| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
-| `UniformLayoutEntry` / `UniformLayoutMap` | [UniformLayoutEntry.h](libs/bgl_extended/src/uniforms/UniformLayoutEntry.h) | Shared layout + size + root parameter index, keyed by cbuffer name. |
-| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_common/include/bgl_common/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
-| `DescriptorHandle` | [DescriptorHandle.h](libs/bgl_extended/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
-| `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
-| `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl_extended/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |
-
----
-
 ## Topology
 
 ```mermaid

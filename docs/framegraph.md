@@ -136,29 +136,6 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 ---
 
-## Interface Index
-
-| Type | File | Role |
-|---|---|---|
-| `FrameGraph` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | The graph: import resources, add passes, register queues, `Compile` then `Execute`. |
-| `PassDesc` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Fluent builder for one pass: name, queue, attachments, buffer/texture args, `exec` callback, side-effect pin. |
-| `PassContext` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Handed to `exec`; resolves the pass's declared names to physical handles and exposes its command list/queue. |
-| `PassScheduler` | [bgl_common/PassScheduler.h](libs/bgl_common/include/bgl_common/PassScheduler.h) | The dependency edges, the culling and the execution order, over passes reduced to `{pinned, accesses}` with their names already resolved. Held privately by `FrameGraph`. |
-| `PassTimer` | [fg/PassTimer.h](libs/bgl_extended/src/fg/PassTimer.h) | Armed per frame over a slot range of an `ITimestampHeap`; `Execute` brackets each kept pass through it, and it is left holding the passes in execution order with the slots that time them. |
-
-### Supporting types (POD / helpers)
-
-| Type | File | Role |
-|---|---|---|
-| `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). A `BufferArg` also carries the poison flag. |
-| `BufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl_extended/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
-| `AccessState` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | `(sync, access, layout)` triple; the unit the graph merges and diffs to derive barriers. |
-| `PassBarriers` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | The buffer/texture handles + `*BarrierDesc`s derived for one pass; queryable via `BarriersFor`. |
-| `ResourceKind` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | `kBuffer` / `kTexture`; used to reject a resource imported as one kind but accessed as the other. |
-| Barrier vocabulary | [types/Barrier.h](libs/bgl_extended/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` the args are built from. |
-
----
-
 ## Topology
 
 ```mermaid

@@ -52,19 +52,6 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
   user in the process links.
 
-## Interface Index
-
-| Symbol | File | Role |
-|---|---|---|
-| `GpuContextDesc`, `LogLevel` | [include/bgpu/GpuContext.h](../libs/bgpu/include/bgpu/GpuContext.h) | The device-level options: `enableDebugLayer`, `enableGPUValidationLayer`, `enablePixDebug`, `strictError`, `logLevel`, `clientShaderDir` |
-| `GpuContext` | same | The context: the desc, whether validation is running, and the Slang compiler — search paths, source modules, `LoadModule`, `LoadScalarLayoutModule`, `ReleaseSlangSessions`. Surface reflection is the renderer's, on the module the scalar-layout load returns |
-| `SlangErrorChecker` | [include/bgpu/SlangErrorChecker.h](../libs/bgpu/include/bgpu/SlangErrorChecker.h) | `result >> checker`: the one Slang failure check, for every owner that compiles |
-| `SlangSourceModule` | same | A module given as text under an import name |
-| `GetSourceSalt` | same | The order-independent fold of every registered module, name and text; an owner's shader cache mixes it into each key |
-| `CreateGpuContext` | same | The one factory, defined by the backend the build selected |
-| `GetD3d12Device`, `GetMtlDevice` | `include/bgpu/{d3d12,metal}/native_device.h` | The native device behind a context, borrowed |
-| `d3d12ErrChecker` | [include/bgpu/d3d12/D3d12ErrorChecker.h](../libs/bgpu/include/bgpu/d3d12/D3d12ErrorChecker.h) | `hr >> d3d12ErrChecker`: the one HRESULT check, shared with `bgl_d3d12` |
-
 ## Threading & Synchronization
 
 * **Sessions are per thread.** A thread's first compile creates its own global session and session,
