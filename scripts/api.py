@@ -751,7 +751,8 @@ def refresh(libraries, compile_db, out_dir, root=ct.REPO_ROOT, force=False, log=
 
     Returns the summary, or None when the catalog was already current. A new script, or a
     different libclang than the last parse used, re-parses everything: either can change what any
-    line says. A library that could not be parsed keeps its old digest, so the next run tries again.
+    line says. A library that could not be parsed, or parsed with errors, keeps its old digest, so
+    the next run tries again.
     """
     entries = load_compile_db(compile_db)
     if not entries:
@@ -770,8 +771,10 @@ def refresh(libraries, compile_db, out_dir, root=ct.REPO_ROOT, force=False, log=
         return None
 
     summary, parsed = generate(libraries, compile_db, out_dir, root, log, only=stale, previous=known)
-    current = {name: digests[name] if name in parsed else known[name]
-               for name in summary if name in parsed or name in known}
+    # A parse with errors is not stamped either: a configure-only tree lacks the headers the build
+    # generates (bgl_common's idl/), and the first build must parse that library again.
+    current = {name: digests[name] if name in parsed and not summary[name]["errors"] else known[name]
+               for name in summary if (name in parsed and not summary[name]["errors"]) or name in known}
     _write(os.path.join(out_dir, STAMP), json.dumps({**identity, "libraries": current}, indent=1) + "\n")
     return summary
 
@@ -807,6 +810,9 @@ def main(argv=None):
                         help="Say nothing when the catalog is current, and put an error as a note: "
                              "what a build runs it with.")
     args = parser.parse_args(argv)
+    # The synthetic translation unit includes each header by path, and a relative one would resolve
+    # against the unit's own directory rather than the caller's.
+    args.root, args.out = os.path.abspath(args.root), os.path.abspath(args.out)
 
     try:
         libraries = _parse_libraries(args.library, args.root) if args.library else default_libraries(args.root)

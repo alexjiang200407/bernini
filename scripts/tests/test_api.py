@@ -311,6 +311,25 @@ class TestGenerate:
         with open(os.path.join(out, 'demo.md'), encoding='utf-8') as fh:
             assert '`demo::added`' in fh.read()
 
+    def test_a_parse_with_errors_is_tried_again(self, tmp_path):
+        """A configure-only tree lacks the generated headers; the first build must parse again."""
+        cindex_or_skip()
+        root, include, header, db = fixture_tree(tmp_path)
+        generated = os.path.join(root, 'build', 'generated')
+        with open(header, 'a', encoding='utf-8') as fh:
+            fh.write('#include "not_yet.h"\n')
+        with open(db, encoding='utf-8') as fh:
+            entries = json.load(fh)
+        entries[0]['arguments'].insert(1, f'-I{generated}')
+        with open(db, 'w', encoding='utf-8') as fh:
+            json.dump(entries, fh)
+        out = os.path.join(root, 'build', 'api')
+        quiet = {'log': lambda *_: None}
+        assert api.refresh({'demo': include}, db, out, root, **quiet)['demo']['errors'] == 1
+        write(generated, 'not_yet.h', 'namespace demo { int generated(); }\n')
+        assert api.refresh({'demo': include}, db, out, root, **quiet)['demo']['errors'] == 0
+        assert api.refresh({'demo': include}, db, out, root, **quiet) is None
+
     def test_nothing_the_catalog_did_not_write_is_deleted(self, tmp_path):
         """`--out` is the caller's; a directory of hand-written Markdown must survive it."""
         cindex_or_skip()
@@ -340,3 +359,16 @@ class TestGenerate:
         monkeypatch.setattr(api, 'find_libclang', lambda compiler: None if real else '/other/libclang')
         monkeypatch.setattr(api, 'load_cindex', lambda library_file: pytest.importorskip('clang.cindex'))
         assert api.refresh({'demo': include}, db, out, root, log=lambda *_: None) is not None
+
+
+class TestMain:
+    def test_a_relative_root_resolves_against_the_caller(self, tmp_path, monkeypatch):
+        """Each header is #included by path from a unit inside the include dir, not from the cwd."""
+        cindex_or_skip()
+        root, include, _, db = fixture_tree(tmp_path)
+        monkeypatch.chdir(os.path.dirname(root))
+        name = os.path.basename(root)
+        assert api.main(['--root', name, '--library', 'demo=libs/demo/include', '--compile-db', db,
+                         '--out', os.path.join(name, 'out'), '--quiet']) == 0
+        with open(os.path.join(root, 'out', 'demo.md'), encoding='utf-8') as fh:
+            assert '`demo::round_up`' in fh.read()
