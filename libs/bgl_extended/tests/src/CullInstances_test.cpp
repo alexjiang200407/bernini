@@ -12,6 +12,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "scene/UploadBuffer.h"
 #include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
@@ -189,7 +190,15 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		return buffer;
 	};
 
-	auto cullView   = makeCompute(bgl::idl::CullView{}, 1, "Cull View");
+	auto cullView = bgl::UploadBuffer<bgl::idl::CullView>();
+	{
+		auto desc         = bgl::UploadBufferDesc();
+		desc.initialCount = 1;
+		desc.debugName    = "Cull View";
+		cullView.Init(desc, resourceManager);
+	}
+	cullView.Assign(std::span(&cullViewData, 1));
+
 	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, padded, "Visibility");
 	auto stats      = makeCompute(bgl::idl::CullStats{}, 1, "Cull Stats");
 	// Every placement unchosen: the cull picks each one's level afresh.
@@ -237,10 +246,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				stats.Clear(cmd);
 				lodPrevious.Clear(cmd);
 				lodCurrent.Clear(cmd);
-				cmd->WriteBuffer(
-					cullView.GetBufferHandle(),
-					&cullViewData,
-					sizeof(bgl::idl::CullView));
+				cullView.Update(cmd);
 			}));
 
 	fg.AddPass(
@@ -250,7 +256,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.AddBufferRead("meshBuffer", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferRead("geomBuffer", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferRead("submeshBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("cullView", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("cullView", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferReadWrite("stats", bgl::BarrierSyncFlag::kComputeShader)
 			.AddBufferRead("lodPrevious", bgl::BarrierSyncFlag::kComputeShader)

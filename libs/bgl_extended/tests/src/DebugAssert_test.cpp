@@ -384,15 +384,21 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	// gDebug surviving into a shader that never mentions dbg_ itself.
 	REQUIRE(kernel.uniforms.contains("gDebug"));
 
-	const auto makeBuffer = [&](const char* name) {
-		auto desc = bgl::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName(name);
-		return resourceManager->CreateComputeBuffer(desc);
+	// Entry and Range buffers are read-only views; binding a UAV there is a descriptor type mismatch.
+	const auto makeReadOnly = [&](const char* name) {
+		auto desc = bgl::StructBufferDesc();
+		desc.SetElement<uint32_t>();
+		desc.elementCount = 4;
+		desc.debugName    = name;
+		return resourceManager->CreateStructBuffer(desc);
 	};
 
-	const bgl::BufferHandle entryBuf = makeBuffer("Null Deref Entries");
-	const bgl::BufferHandle rangeBuf = makeBuffer("Null Deref Ranges");
-	const bgl::BufferHandle outBuf   = makeBuffer("Null Deref Out");
+	const bgl::BufferHandle entryBuf = makeReadOnly("Null Deref Entries");
+	const bgl::BufferHandle rangeBuf = makeReadOnly("Null Deref Ranges");
+
+	auto outDesc = bgl::ComputeBufferDesc();
+	outDesc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName("Null Deref Out");
+	const bgl::BufferHandle outBuf = resourceManager->CreateComputeBuffer(outDesc);
 
 	kernel["gUniforms"]["entries"]["entryBuffer"] = entryBuf;
 	kernel["gUniforms"]["ranges"]["rangeBuffer"]  = rangeBuf;
