@@ -59,6 +59,12 @@ namespace crowd::test
 		void
 		SetOrders(GroupHandle group, const GroupOrders& orders) override;
 
+		GroupHandle
+		SplitGroup(GroupHandle group, uint32_t agentCount) override;
+
+		void
+		MergeGroup(GroupHandle from, GroupHandle into) override;
+
 		[[nodiscard]] bool
 		HasGroup(GroupHandle group) const noexcept override;
 

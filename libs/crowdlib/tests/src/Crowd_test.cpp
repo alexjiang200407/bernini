@@ -158,6 +158,7 @@ TEMPLATE_LIST_TEST_CASE(
 {
 	auto crowd = TestType::Create(MakeDesc());
 	auto group = crowd->CreateGroup(MakeGroup(10));
+	auto live  = crowd->CreateGroup(MakeGroup(10));
 	CompleteOneTick(*crowd);
 	crowd->DestroyGroup(group);
 
@@ -165,7 +166,11 @@ TEMPLATE_LIST_TEST_CASE(
 	CHECK_THROWS_AS(crowd->GetAgentCount(group), std::runtime_error);
 	CHECK_THROWS_AS(crowd->GetReport(group), std::runtime_error);
 	CHECK_THROWS_AS(crowd->SetOrders(group, MakeOrders()), std::runtime_error);
+	CHECK_THROWS_AS(crowd->SplitGroup(group, 1), std::runtime_error);
+	CHECK_THROWS_AS(crowd->MergeGroup(group, live), std::runtime_error);
+	CHECK_THROWS_AS(crowd->MergeGroup(live, group), std::runtime_error);
 	CHECK_THROWS_AS(crowd->DestroyGroup(group), std::runtime_error);
+	CHECK(crowd->GetAgentCount(live) == 10);
 }
 
 TEMPLATE_LIST_TEST_CASE(
@@ -277,4 +282,108 @@ TEST_CASE("Step is refused while maxTicksInFlight ticks are in flight", "[crowd]
 	crowd->CompleteTick();
 	CHECK(crowd->CanStep());
 	CHECK(crowd->Step() == 3);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A split divides a group's agents between it and a new group",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd    = TestType::Create(MakeDesc());
+	auto group    = crowd->CreateGroup(MakeGroup(100));
+	auto detached = crowd->SplitGroup(group, 30);
+
+	CHECK(detached != group);
+	CHECK(crowd->GetAgentCount(group) == 70);
+	CHECK(crowd->GetAgentCount(detached) == 30);
+	CHECK_FALSE(crowd->GetReport(detached).has_value());
+
+	CompleteOneTick(*crowd);
+	CHECK(crowd->GetReport(group)->agentCount == 70);
+	CHECK(crowd->GetReport(detached)->agentCount == 30);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A split that would leave a group empty is refused",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd = TestType::Create(MakeDesc());
+	auto group = crowd->CreateGroup(MakeGroup(100));
+
+	CHECK_THROWS_AS(crowd->SplitGroup(group, 0), std::runtime_error);
+	CHECK_THROWS_AS(crowd->SplitGroup(group, 100), std::runtime_error);
+	CHECK_THROWS_AS(crowd->SplitGroup(group, 101), std::runtime_error);
+	CHECK(crowd->GetAgentCount(group) == 100);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A split past maxGroups is refused and leaves the group whole",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd = TestType::Create(MakeDesc(1000, 1));
+	auto group = crowd->CreateGroup(MakeGroup(100));
+
+	CHECK_THROWS_AS(crowd->SplitGroup(group, 50), std::runtime_error);
+	CHECK(crowd->GetAgentCount(group) == 100);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A merge moves every agent into the target and releases the source",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd = TestType::Create(MakeDesc(1000, 2));
+	auto from  = crowd->CreateGroup(MakeGroup(40));
+	auto into  = crowd->CreateGroup(MakeGroup(60));
+	CompleteOneTick(*crowd);
+
+	crowd->MergeGroup(from, into);
+	CHECK(crowd->GetAgentCount(into) == 100);
+	CHECK_FALSE(crowd->HasGroup(from));
+	CHECK_THROWS_AS(crowd->GetReport(from), std::runtime_error);
+
+	// The released slot is room for another group.
+	CHECK(crowd->HasGroup(crowd->CreateGroup(MakeGroup(10))));
+
+	CompleteOneTick(*crowd);
+	CHECK(crowd->GetReport(into)->agentCount == 100);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A merge into itself or across agent types is refused",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd    = TestType::Create(MakeDesc());
+	auto infantry = crowd->CreateGroup(MakeGroup(40, 0));
+	auto horses   = crowd->CreateGroup(MakeGroup(10, 1));
+
+	CHECK_THROWS_AS(crowd->MergeGroup(infantry, infantry), std::runtime_error);
+	CHECK_THROWS_AS(crowd->MergeGroup(horses, infantry), std::runtime_error);
+	CHECK(crowd->HasGroup(horses));
+	CHECK(crowd->GetAgentCount(infantry) == 40);
+}
+
+TEMPLATE_LIST_TEST_CASE("A split merged back restores the group", "[crowd]", CrowdFactories)
+{
+	auto crowd    = TestType::Create(MakeDesc());
+	auto group    = crowd->CreateGroup(MakeGroup(100));
+	auto detached = crowd->SplitGroup(group, 25);
+	crowd->MergeGroup(detached, group);
+
+	CHECK(crowd->GetAgentCount(group) == 100);
+	CHECK_FALSE(crowd->HasGroup(detached));
+}
+
+TEST_CASE("A split group carries the source's orders", "[crowd][fake]")
+{
+	auto crowd = core::SharedRef<crowd::test::FakeCrowd>::Make(MakeDesc());
+	auto group = crowd->CreateGroup(MakeGroup(100));
+	crowd->SetOrders(group, MakeOrders(glm::vec2(12.0f, 3.0f)));
+	auto detached = crowd->SplitGroup(group, 10);
+	CompleteOneTick(*crowd);
+
+	CHECK(crowd->GetReport(detached)->meanPosition == glm::vec2(12.0f, 3.0f));
 }

@@ -57,6 +57,26 @@ namespace crowd
 		virtual void
 		SetOrders(GroupHandle group, const GroupOrders& orders) = 0;
 
+		/**
+		 * Detaches `agentCount` agents from the rear of the group's formation into a new group of
+		 * the same type, under a copy of the group's orders.
+		 *
+		 * @throws std::runtime_error for a handle this crowd does not hold, an `agentCount` that
+		 *         would leave either group empty, or a group past maxGroups.
+		 */
+		virtual GroupHandle
+		SplitGroup(GroupHandle group, uint32_t agentCount) = 0;
+
+		/**
+		 * Moves every agent of `from` to the rear of `into`'s formation, under `into`'s orders, and
+		 * releases `from`.
+		 *
+		 * @throws std::runtime_error for a handle this crowd does not hold, `from == into`, or
+		 *         groups of different agent types.
+		 */
+		virtual void
+		MergeGroup(GroupHandle from, GroupHandle into) = 0;
+
 		[[nodiscard]] virtual bool
 		HasGroup(GroupHandle group) const noexcept = 0;
 

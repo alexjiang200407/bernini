@@ -101,6 +101,48 @@ namespace crowd::test
 		GetGroup(group).orders = orders;
 	}
 
+	GroupHandle
+	FakeCrowd::SplitGroup(GroupHandle group, uint32_t agentCount)
+	{
+		auto& source = GetGroup(group);
+		if (agentCount == 0 || agentCount >= source.agentCount)
+		{
+			core::throw_runtime_error(
+				"Splitting {} of a group's {} agents would leave a group empty",
+				agentCount,
+				source.agentCount);
+		}
+
+		const auto detached = FakeGroup{ .agentType  = source.agentType,
+			                             .agentCount = agentCount,
+			                             .orders     = source.orders };
+		const auto slot     = m_Groups.try_allocate_and_emplace(detached);
+		if (slot.is_null())
+			core::throw_runtime_error("The crowd already holds its {} groups", m_Desc.maxGroups);
+
+		GetGroup(group).agentCount -= agentCount;
+		return GroupHandle{ .handle = slot };
+	}
+
+	void
+	FakeCrowd::MergeGroup(GroupHandle from, GroupHandle into)
+	{
+		if (from == into)
+			core::throw_runtime_error("A group cannot be merged into itself");
+		const auto& source = GetGroup(from);
+		auto&       target = GetGroup(into);
+		if (source.agentType != target.agentType)
+		{
+			core::throw_runtime_error(
+				"Agent types {} and {} cannot share a group",
+				source.agentType,
+				target.agentType);
+		}
+
+		target.agentCount += source.agentCount;
+		m_Groups.release_slot(from.handle);
+	}
+
 	bool
 	FakeCrowd::HasGroup(GroupHandle group) const noexcept
 	{

@@ -267,7 +267,8 @@ and portability.
       goal is the implementation's; stance, engagement rules and target group are left.
     - [~] GPU → CPU per group: **aggregate reduction only** — agent count and mean position and facing
       are declared; casualties, cohesion, melee contact fraction, morale and fatigue are left.
-    - [ ] Group ID as a first-class per-unit field, reassigned by CPU-issued rewrite.
+    - [ ] Group ID as a first-class per-unit field. Units change group only when their group is split
+      or merged (`ICrowd::SplitGroup`, `MergeGroup`, declared), never by a per-unit rewrite.
   - [ ] Navigation
     - [ ] Navmesh or nav-grid bake (offline).
     - [ ] Flow field generation (GPU Eikonal/wavefront, one field per group destination).
