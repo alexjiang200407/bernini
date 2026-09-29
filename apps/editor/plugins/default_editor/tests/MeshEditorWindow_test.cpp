@@ -353,6 +353,70 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[mesheditor]
 	CHECK(saved.extraJson.find("studio") != std::string::npos);
 }
 
+// A toon document opened on its own board saves back as its own model: the model is the
+// registered surface's contract, read off the sink, so a character material is never rewritten as
+// an environment one, nor demoted to either engine-lit model.
+TEST_CASE("A toon surface board saves its own model", "[mesheditor][surface][toon]")
+{
+	auto shading  = bgl::SurfaceShading::kToonCharacter;
+	auto expected = assetlib::ShadingModel::kToonCharacterSurface;
+
+	SECTION("character")
+	{
+		shading  = bgl::SurfaceShading::kToonCharacter;
+		expected = assetlib::ShadingModel::kToonCharacterSurface;
+	}
+
+	SECTION("environment")
+	{
+		shading  = bgl::SurfaceShading::kToonEnvironment;
+		expected = assetlib::ShadingModel::kToonEnvironmentSurface;
+	}
+
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/flat.bmaterial");
+
+	{
+		auto material           = assetlib::BMaterial();
+		material.name           = "flat";
+		material.shadingModel   = expected;
+		material.surface.name   = "Flat";
+		material.surface.values = { { "baseColorFactor", { 0.8f, 0.35f, 0.1f, 1.0f } } };
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/flat.bmaterial");
+	}
+
+	auto surface          = bgl::SurfaceType();
+	surface.name          = "Flat";
+	surface.shading       = shading;
+	auto factor           = bgl::SurfaceValue();
+	factor.name           = "baseColorFactor";
+	factor.type           = bgl::SurfaceValueType::kFloat4;
+	factor.defaultValue   = glm::vec4(1.0f);
+	factor.isColor        = true;
+	surface.params.values = { factor };
+
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/flat.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+	REQUIRE(qobject_cast<SurfaceOutputNode*>(model.OutputNode()) != nullptr);
+
+	const assetlib::BMaterial saved =
+		editor::BuildMaterial(model, path, assetlib::AssetStore(root));
+
+	CHECK(saved.shadingModel == expected);
+	CHECK(saved.surface.name == "Flat");
+	REQUIRE(saved.surface.values.size() == 1u);
+	CHECK(saved.surface.values[0].name == "baseColorFactor");
+	REQUIRE(saved.surface.values[0].value.size() == 4u);
+	CHECK(saved.surface.values[0].value[0] == Catch::Approx(0.8f));
+}
+
 TEST_CASE("A save keeps a routed slot's bake state", "[mesheditor][surface]")
 {
 	// The board authors the routes; the bake owns the stamps and the map. A save must carry the

@@ -30,6 +30,7 @@
 #include <fstream>
 #include <gamelib/AssetManager.h>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -502,4 +503,181 @@ TEST_CASE("A lit surface material routes by its document's model", "[gamelib][su
 		assets.AcquireMaterial("Authored/Materials/wrong_lit.bmaterial"),
 		bgl::SceneError,
 		MessageMatches(ContainsSubstring("surface 'Rim' is lit by the engine")));
+}
+
+namespace
+{
+	// The test project's two toon surfaces: base colour through a slot, times a factor.
+	constexpr const char* c_ToonCharacterSource = R"(import bgl.MaterialReader;
+import bgl.ToonCharacterSurface;
+
+struct FlatParams
+{
+    [Color]
+    [Default(1.0, 1.0, 1.0, 1.0)]
+    float4 baseColorFactor;
+
+    ColorSlot baseColor;
+};
+
+struct FlatCharacter : IToonCharacterSurfaceSource
+{
+    typealias MaterialParams = FlatParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatParams params) { return params.baseColorFactor.a; }
+
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        ToonCharacterSurface surface = ToonCharacterSurface();
+        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        return surface;
+    }
+};
+)";
+
+	constexpr const char* c_ToonEnvironmentSource = R"(import bgl.MaterialReader;
+import bgl.ToonEnvironmentSurface;
+
+struct FlatParams
+{
+    [Color]
+    [Default(1.0, 1.0, 1.0, 1.0)]
+    float4 baseColorFactor;
+
+    ColorSlot baseColor;
+};
+
+struct FlatEnvironment : IToonEnvironmentSurfaceSource
+{
+    typealias MaterialParams = FlatParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatParams params) { return params.baseColorFactor.a; }
+
+    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
+    {
+        ToonEnvironmentSurface surface = ToonEnvironmentSurface();
+        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        return surface;
+    }
+};
+)";
+
+	void
+	WriteToonMaterial(
+		const std::filesystem::path& root,
+		const char*                  file,
+		assetlib::ShadingModel       model,
+		const char*                  surface,
+		const std::vector<float>&    factor)
+	{
+		auto material           = assetlib::BMaterial();
+		material.name           = file;
+		material.shadingModel   = model;
+		material.surface.name   = surface;
+		material.surface.values = { { "baseColorFactor", factor } };
+
+		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
+	}
+}
+
+// The toon models from the document down: a document's factor reaches the screen flat, the two
+// models draw alike for one colour -- neither reads the light -- and a document naming the other
+// model is refused, naming both.
+TEST_CASE("A toon surface material draws from its document", "[gamelib][surface][toon]")
+{
+	using Catch::Matchers::ContainsSubstring;
+	using Catch::Matchers::MessageMatches;
+
+	ProjectRoot root("bernini_gamelib_toon_surface");
+	std::ofstream(root.Shaders() / "ToonCharacter.slang") << c_ToonCharacterSource;
+	std::ofstream(root.Shaders() / "ToonEnvironment.slang") << c_ToonEnvironmentSource;
+
+	const std::vector<float> orange = { 0.8f, 0.35f, 0.1f, 1.0f };
+	const std::vector<float> blue   = { 0.1f, 0.3f, 0.8f, 1.0f };
+	WriteToonMaterial(
+		root.path,
+		"character.bmaterial",
+		assetlib::ShadingModel::kToonCharacterSurface,
+		"ToonCharacter",
+		orange);
+	WriteToonMaterial(
+		root.path,
+		"environment.bmaterial",
+		assetlib::ShadingModel::kToonEnvironmentSurface,
+		"ToonEnvironment",
+		orange);
+	WriteToonMaterial(
+		root.path,
+		"character_blue.bmaterial",
+		assetlib::ShadingModel::kToonCharacterSurface,
+		"ToonCharacter",
+		blue);
+	WriteToonMaterial(
+		root.path,
+		"crossed.bmaterial",
+		assetlib::ShadingModel::kToonEnvironmentSurface,
+		"ToonCharacter",
+		orange);
+
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
+	REQUIRE(gfx != nullptr);
+	REQUIRE(gfx->GetSurfaceTypes().size() == 3u);
+
+	auto scene  = gfx->CreateScene(SurfaceSceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 100.0f);
+
+	// A fresh view and target per frame, so no two share temporal history.
+	const auto shoot = [&](const char* material, const char* png) {
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = 256;
+		targetDesc.height   = 256;
+		targetDesc.headless = true;
+		auto target         = gfx->CreateRenderTarget(targetDesc);
+		auto view           = gfx->CreateSceneView(scene, 8);
+
+		if (material != nullptr)
+		{
+			const bgl::MaterialHandle handle =
+				assets.AcquireMaterial(std::string("Authored/Materials/") + material);
+			REQUIRE(handle.IsValid());
+			view->CreateStaticMeshInstance(
+				scene->AddSphereGeom(24, 24, 3.0f, handle),
+				glm::mat4(1.0f));
+		}
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(256.0f, 256.0f);
+		for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+	};
+
+	const auto* emptyPng       = "assets/golden/gamelib_toon_empty.got.png";
+	const auto* characterPng   = "assets/golden/gamelib_toon_character.got.png";
+	const auto* environmentPng = "assets/golden/gamelib_toon_environment.got.png";
+	const auto* bluePng        = "assets/golden/gamelib_toon_character_blue.got.png";
+	shoot(nullptr, emptyPng);
+	shoot("character.bmaterial", characterPng);
+	shoot("environment.bmaterial", environmentPng);
+	shoot("character_blue.bmaterial", bluePng);
+
+	CHECK(bgl::test::FrameDelta(emptyPng, characterPng, 0, 0, 256, 256) > 1e-3f);
+	CHECK(bgl::test::FrameDelta(characterPng, environmentPng, 0, 0, 256, 256) < 1e-6f);
+	CHECK(bgl::test::FrameDelta(characterPng, bluePng, 0, 0, 256, 256) > 1e-3f);
+
+	CHECK_THROWS_MATCHES(
+		assets.AcquireMaterial("Authored/Materials/crossed.bmaterial"),
+		bgl::SceneError,
+		MessageMatches(ContainsSubstring(
+			"surface 'ToonCharacter' is toon-lit as a character (IToonCharacterSurfaceSource), but "
+			"the material expects one that is toon-lit as an environment")));
 }
