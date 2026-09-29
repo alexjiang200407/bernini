@@ -4,7 +4,9 @@
 #include <core/math.h>
 #include <core/type_traits.h>
 #include <cstddef>
+#include <cstdint>
 #include <span>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,6 +42,22 @@ namespace core::io
 		{
 			const auto* first = reinterpret_cast<const std::byte*>(values.data());
 			m_Buffer.insert(m_Buffer.end(), first, first + values.size_bytes());
+		}
+
+		/** A uint32 length, then the characters: what ByteReader::ReadString reads back. */
+		void
+		WriteString(std::string_view value)
+		{
+			WritePod<uint32_t>(static_cast<uint32_t>(value.size()));
+			WriteBytes(std::as_bytes(std::span<const char>(value.data(), value.size())));
+		}
+
+		/** A uint32 length, then the bytes: what ByteReader::ReadBlob reads back. */
+		void
+		WriteBlob(std::span<const std::byte> value)
+		{
+			WritePod<uint32_t>(static_cast<uint32_t>(value.size()));
+			WriteBytes(value);
 		}
 
 		void

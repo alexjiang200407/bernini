@@ -166,9 +166,10 @@ what is there, how it is parsed and refreshed, and what it does not list.
 **[bgpu](./docs/bgpu.md)**
 
 The process's GPU device and the compiler for it, owned by no renderer: what must precede the device
-or be shared through it (the debug layer, the Slang sessions), what deliberately is not (queues,
-pools, the shader cache), why the application creates it and hands it to every owner, and the
-lifetime and session rules every owner keeps.
+or be shared through it (the debug layer, the Slang sessions, the program cache every owner stores
+its compiled shaders in), what deliberately is not (queues, pools, the driver's pipeline cache), why
+the application creates it and hands it to every owner, and the lifetime and session rules every
+owner keeps.
 
 **[crowdlib](./docs/crowdlib.md)**
 
