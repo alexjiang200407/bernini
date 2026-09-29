@@ -220,14 +220,19 @@ cutoff is the thing being replaced.
 A material drawn by a surface says so, names it, and sets what it wants by name
 ([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)).
 
-The model names the contract, and there are two: **`pbrSurface`** for a surface on
+The model names the contract, and there are four: **`pbrSurface`** for a surface on
 `ISurfaceSource` — the lighting is the engine's PBR, and what the surface supplies is the
-material's half of it, the `PbrSurface` its `Evaluate` returns — and **`litSurface`** for one on
-`ILitSurfaceSource`, whose `Shade` is the whole lighting. The document's model is its contract
+material's half of it, the `PbrSurface` its `Evaluate` returns — **`litSurface`** for one on
+`ILitSurfaceSource`, whose `Shade` is the whole lighting, and **`toonCharacterSurface`** and
+**`toonEnvironmentSurface`** for one on `IToonCharacterSurfaceSource` or
+`IToonEnvironmentSurfaceSource` (`bgl.ToonCharacterSurface`, `bgl.ToonEnvironmentSurface`),
+which supply the material's half of the engine's toon lighting — two models, lit apart. The toon
+models are declared but not yet registered: a surface on either contract is not reflected as
+one, so a toon document is refused at `CreateSurfaceMaterial` today. The document's model is its contract
 *expectation*: `CreateSurfaceMaterial` refuses a named surface that conforms to the other one, so
 a surface that changes contract fails loud instead of silently changing what every material drawn
 by it means. Everything else in the document — the surface name, `parameters`, `textures`, the
-per-slot bakes — is identical under both models.
+per-slot bakes — is identical under every model.
 
 ```json
 {

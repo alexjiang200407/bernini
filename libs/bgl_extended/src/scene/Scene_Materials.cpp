@@ -110,8 +110,18 @@ namespace bgl
 		if (desc.shading.has_value() && *desc.shading != surface.shading)
 		{
 			const auto name = [](SurfaceShading shading) {
-				return shading == SurfaceShading::kLit ? "owns its lighting (ILitSurfaceSource)" :
-				                                         "is lit by the engine (ISurfaceSource)";
+				switch (shading)
+				{
+				case SurfaceShading::kPbrSurface:
+					break;
+				case SurfaceShading::kLit:
+					return "owns its lighting (ILitSurfaceSource)";
+				case SurfaceShading::kToonCharacter:
+					return "is toon-lit as a character (IToonCharacterSurfaceSource)";
+				case SurfaceShading::kToonEnvironment:
+					return "is toon-lit as an environment (IToonEnvironmentSurfaceSource)";
+				}
+				return "is lit by the engine (ISurfaceSource)";
 			};
 			throw SceneError(
 				std::format(

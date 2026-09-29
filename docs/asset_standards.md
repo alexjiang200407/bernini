@@ -634,9 +634,10 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   keys in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   rejects any model it has no path for rather than rendering it wrong. Each of those is a `switch` on
-  `shadingModel` with no `default`, so the compiler names every one of them. The three models today
-  are `pbr`, `pbrSurface` and `litSurface`; the surface pair share one document shape and one
-  renderer path, differing only in the contract the named surface must conform to
+  `shadingModel` with no `default`, so the compiler names every one of them. The models today are
+  `pbr` and the four surface models — `pbrSurface`, `litSurface`, `toonCharacterSurface` and
+  `toonEnvironmentSurface` — which share one document shape and one renderer path, differing only
+  in the contract the named surface must conform to
   ([docs/game_defined_surfaces.md](game_defined_surfaces.md) § The document).
 
   That is the offline half. The renderer's half lives in `bgl_extended`: a `MaterialType` enumerator and a
