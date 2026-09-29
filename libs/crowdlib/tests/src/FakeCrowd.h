@@ -8,6 +8,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/debug/AgentSnapshot.h>
 #include <cstdint>
 #include <deque>
 #include <optional>
@@ -29,9 +30,17 @@ namespace crowd::test
 		GroupReport report;
 	};
 
+	/** Everything one tick measured: a report per group and, if the crowd keeps them, its agents. */
+	struct FakeTick
+	{
+		std::vector<FakeMeasurement>    measurements;
+		std::vector<debug::AgentSample> agents;
+		std::vector<debug::GroupAgents> groups;
+	};
+
 	/**
 	 * ICrowd on the CPU, with no simulation: a tick measures every group standing at its orders'
-	 * goal, as if it had arrived at once. A tick completes only when the test completes it
+	 * goal, each agent in its slot, as if it had arrived at once. A tick completes only when the test completes it
 	 * (CompleteTick) or waits, which is what lets a case hold one in flight.
 	 */
 	class FakeCrowd final : public core::RefCounter<ICrowd>
@@ -91,7 +100,14 @@ namespace crowd::test
 		[[nodiscard]] std::optional<GroupReport>
 		GetReport(GroupHandle group) const override;
 
-		/** @throws std::runtime_error when no tick is in flight. */
+		[[nodiscard]] std::optional<debug::AgentSnapshot>
+		ReadDebugAgents() const override;
+
+		/**
+		 * Invalidates a snapshot ReadDebugAgents returned, as Wait does.
+		 *
+		 * @throws std::runtime_error when no tick is in flight.
+		 */
 		void
 		CompleteTick();
 
@@ -105,12 +121,12 @@ namespace crowd::test
 		[[nodiscard]] FakeGroup&
 		GetGroup(GroupHandle group);
 
-		CrowdDesc                                m_Desc;
-		core::slot_vector<FakeGroup>             m_Groups;
-		uint32_t                                 m_AgentCount    = 0;
-		uint64_t                                 m_SubmittedTick = 0;
-		std::deque<std::vector<FakeMeasurement>> m_InFlight;
-		std::vector<FakeMeasurement>             m_Completed;
-		std::vector<ObstacleSegment>             m_Obstacles;
+		CrowdDesc                    m_Desc;
+		core::slot_vector<FakeGroup> m_Groups;
+		uint32_t                     m_AgentCount    = 0;
+		uint64_t                     m_SubmittedTick = 0;
+		std::deque<FakeTick>         m_InFlight;
+		FakeTick                     m_Completed;
+		std::vector<ObstacleSegment> m_Obstacles;
 	};
 }
