@@ -89,11 +89,11 @@ namespace
 	{
 		const uint64_t         key = cache.ComputeKey(owner, moduleEntries);
 		std::vector<std::byte> bytes;
-		if (cache.TryLoad(key, bytes))
+		if (cache.TryLoadProgram(key, bytes))
 			return bytes;
 
 		bytes = compile();
-		cache.Store(key, bytes);
+		cache.StoreProgram(key, bytes);
 		return bytes;
 	}
 }
@@ -131,7 +131,8 @@ TEST_CASE("A program compiles on a miss and loads on every later hit", "[device]
 	CHECK(compiles == 1);
 
 	std::vector<std::byte> unused;
-	CHECK_FALSE(cache->TryLoad(cache->ComputeKey(c_Renderer, { { "never", "stored" } }), unused));
+	CHECK_FALSE(
+		cache->TryLoadProgram(cache->ComputeKey(c_Renderer, { { "never", "stored" } }), unused));
 }
 
 // What stops two owners on one context misreading each other: an entry is filed under its owner.
@@ -155,11 +156,11 @@ TEST_CASE("Two owners compiling the same program never share a key", "[device][s
 
 	SECTION("an entry one owner stored is a miss for the other")
 	{
-		cache.Store(key, Bytes("the renderer's layout"));
+		cache.StoreProgram(key, Bytes("the renderer's layout"));
 
 		std::vector<std::byte> bytes;
-		CHECK(cache.TryLoad(key, bytes));
-		CHECK_FALSE(cache.TryLoad(cache.ComputeKey(c_Compute, c_Program), bytes));
+		CHECK(cache.TryLoadProgram(key, bytes));
+		CHECK_FALSE(cache.TryLoadProgram(cache.ComputeKey(c_Compute, c_Program), bytes));
 	}
 }
 
@@ -226,16 +227,16 @@ TEST_CASE("A torn, altered or misplaced entry is a miss", "[device][shadercache]
 	const uint64_t other = cache.ComputeKey(c_Compute, c_Program);
 	const fs::path entry = scratch.path / std::format("{:016x}.bsc", key);
 
-	cache.Store(key, Bytes("a program the size of a few words"));
+	cache.StoreProgram(key, Bytes("a program the size of a few words"));
 	REQUIRE(fs::exists(entry));
 
 	std::vector<std::byte> bytes;
-	REQUIRE(cache.TryLoad(key, bytes));
+	REQUIRE(cache.TryLoadProgram(key, bytes));
 
 	SECTION("truncated")
 	{
 		fs::resize_file(entry, fs::file_size(entry) - 3);
-		CHECK_FALSE(cache.TryLoad(key, bytes));
+		CHECK_FALSE(cache.TryLoadProgram(key, bytes));
 	}
 
 	SECTION("a payload byte changed")
@@ -244,26 +245,26 @@ TEST_CASE("A torn, altered or misplaced entry is a miss", "[device][shadercache]
 		file.seekp(-1, std::ios::end);
 		file.put('!');
 		file.close();
-		CHECK_FALSE(cache.TryLoad(key, bytes));
+		CHECK_FALSE(cache.TryLoadProgram(key, bytes));
 	}
 
 	SECTION("garbage, as a pre-header entry would read")
 	{
 		WriteText(entry, "garbage");
-		CHECK_FALSE(cache.TryLoad(key, bytes));
+		CHECK_FALSE(cache.TryLoadProgram(key, bytes));
 	}
 
 	SECTION("filed under another key")
 	{
 		fs::copy_file(entry, scratch.path / std::format("{:016x}.bsc", other));
-		CHECK_FALSE(cache.TryLoad(other, bytes));
+		CHECK_FALSE(cache.TryLoadProgram(other, bytes));
 	}
 
 	SECTION("stored again, it loads again")
 	{
 		WriteText(entry, "garbage");
-		cache.Store(key, Bytes("a program the size of a few words"));
-		CHECK(cache.TryLoad(key, bytes));
+		cache.StoreProgram(key, Bytes("a program the size of a few words"));
+		CHECK(cache.TryLoadProgram(key, bytes));
 		CHECK(bytes == Bytes("a program the size of a few words"));
 	}
 }

@@ -111,7 +111,7 @@ namespace bgpu
 	}
 
 	bool
-	DiskProgramCache::TryLoad(uint64_t key, std::vector<std::byte>& out) const noexcept
+	DiskProgramCache::TryLoadProgram(uint64_t key, std::vector<std::byte>& program) const noexcept
 	{
 		const std::filesystem::path path = EntryPath(key);
 
@@ -136,7 +136,7 @@ namespace bgpu
 				return false;
 			}
 
-			out = std::move(payload);
+			program = std::move(payload);
 			return true;
 		}
 		catch (const std::exception& e)
@@ -147,7 +147,7 @@ namespace bgpu
 	}
 
 	void
-	DiskProgramCache::Store(uint64_t key, std::span<const std::byte> bytes) const noexcept
+	DiskProgramCache::StoreProgram(uint64_t key, std::span<const std::byte> program) const noexcept
 	{
 		const std::filesystem::path path = EntryPath(key);
 		try
@@ -156,8 +156,8 @@ namespace bgpu
 			writer.WritePod<uint32_t>(c_EntryMagic);
 			writer.WritePod<uint64_t>(key);
 			writer.WritePod<uint64_t>(
-				core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed()));
-			writer.WriteBlob(bytes);
+				core::hash_bytes(program.data(), program.size(), core::hash_seed()));
+			writer.WriteBlob(program);
 			core::file::write_atomic(path, writer.Take());
 		}
 		catch (const std::exception& e)

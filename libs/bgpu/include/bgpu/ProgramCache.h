@@ -61,16 +61,16 @@ namespace bgpu
 			std::vector<std::pair<std::string, std::string>> moduleEntries) const = 0;
 
 		/**
-		 * The bytes stored under `key`. False on a miss, and on an entry that is truncated, altered
-		 * or filed under another key: the store checks its own files, so an owner decodes only
-		 * bytes it stored.
+		 * The program stored under `key`, in the encoding its owner gave it. False on a miss, and on
+		 * an entry that is truncated, altered or filed under another key: the store checks its own
+		 * files, so an owner decodes only bytes it stored.
 		 */
 		[[nodiscard]] virtual bool
-		TryLoad(uint64_t key, std::vector<std::byte>& out) const noexcept = 0;
+		TryLoadProgram(uint64_t key, std::vector<std::byte>& program) const noexcept = 0;
 
 		/** A write that fails is logged, and the entry is compiled again next time. */
 		virtual void
-		Store(uint64_t key, std::span<const std::byte> bytes) const noexcept = 0;
+		StoreProgram(uint64_t key, std::span<const std::byte> program) const noexcept = 0;
 
 	protected:
 		ProgramCache() noexcept  = default;

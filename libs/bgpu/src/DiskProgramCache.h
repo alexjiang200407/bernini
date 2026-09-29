@@ -45,10 +45,10 @@ namespace bgpu
 			std::vector<std::pair<std::string, std::string>> moduleEntries) const override;
 
 		[[nodiscard]] bool
-		TryLoad(uint64_t key, std::vector<std::byte>& out) const noexcept override;
+		TryLoadProgram(uint64_t key, std::vector<std::byte>& program) const noexcept override;
 
 		void
-		Store(uint64_t key, std::span<const std::byte> bytes) const noexcept override;
+		StoreProgram(uint64_t key, std::span<const std::byte> program) const noexcept override;
 
 	private:
 		[[nodiscard]] std::filesystem::path
