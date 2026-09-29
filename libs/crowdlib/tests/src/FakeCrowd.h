@@ -7,9 +7,11 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
+#include <crowdlib/ObstacleSegment.h>
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace crowd::test
@@ -65,6 +67,9 @@ namespace crowd::test
 		void
 		MergeGroup(GroupHandle from, GroupHandle into) override;
 
+		void
+		SetObstacles(std::span<const ObstacleSegment> segments) override;
+
 		[[nodiscard]] bool
 		HasGroup(GroupHandle group) const noexcept override;
 
@@ -90,6 +95,9 @@ namespace crowd::test
 		void
 		CompleteTick();
 
+		[[nodiscard]] std::span<const ObstacleSegment>
+		GetObstacles() const noexcept;
+
 	private:
 		[[nodiscard]] const FakeGroup&
 		GetGroup(GroupHandle group) const;
@@ -103,5 +111,6 @@ namespace crowd::test
 		uint64_t                                 m_SubmittedTick = 0;
 		std::deque<std::vector<FakeMeasurement>> m_InFlight;
 		std::vector<FakeMeasurement>             m_Completed;
+		std::vector<ObstacleSegment>             m_Obstacles;
 	};
 }

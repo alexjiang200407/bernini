@@ -14,11 +14,14 @@
 #include <crowdlib/GroupHandle.h>
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/ICrowd.h>
+#include <crowdlib/ObstacleSegment.h>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -33,24 +36,21 @@ namespace
 
 	using CrowdFactories = std::tuple<FakeCrowdFactory>;
 
-	constexpr auto c_Infantry = crowd::AgentType{ .radius          = 0.3f,
-		                                          .maxSpeed        = 1.5f,
-		                                          .maxAcceleration = 3.0f,
-		                                          .maxTurnRate     = 3.14f,
-		                                          .mass            = 80.0f };
-	constexpr auto c_Horse    = crowd::AgentType{ .radius          = 0.8f,
-		                                          .maxSpeed        = 8.0f,
-		                                          .maxAcceleration = 4.0f,
-		                                          .maxTurnRate     = 1.5f,
-		                                          .mass            = 500.0f };
+	constexpr auto c_Infantry =
+		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
+	constexpr auto c_Horse = crowd::AgentType{ .radius         = 0.8f,
+		                                       .preferredSpeed = 4.0f,
+		                                       .maxSpeed       = 8.0f,
+		                                       .mass           = 500.0f };
 
 	crowd::CrowdDesc
 	MakeDesc(uint32_t maxAgents = 1000, uint32_t maxGroups = 8)
 	{
-		auto desc       = crowd::CrowdDesc();
-		desc.agentTypes = { c_Infantry, c_Horse };
-		desc.maxAgents  = maxAgents;
-		desc.maxGroups  = maxGroups;
+		auto desc                = crowd::CrowdDesc();
+		desc.agentTypes          = { c_Infantry, c_Horse };
+		desc.maxAgents           = maxAgents;
+		desc.maxGroups           = maxGroups;
+		desc.maxObstacleSegments = 4;
 		return desc;
 	}
 
@@ -85,7 +85,11 @@ TEMPLATE_LIST_TEST_CASE(
 {
 	auto desc = MakeDesc();
 	SECTION("no agent types") { desc.agentTypes.clear(); }
-	SECTION("an agent type with a zero field") { desc.agentTypes[1].maxTurnRate = 0.0f; }
+	SECTION("an agent type with a zero field") { desc.agentTypes[1].preferredSpeed = 0.0f; }
+	SECTION("an agent type that prefers to outrun its maximum")
+	{
+		desc.agentTypes[0].preferredSpeed = desc.agentTypes[0].maxSpeed * 2.0f;
+	}
 	SECTION("an agent type with a non-finite field")
 	{
 		desc.agentTypes[0].radius = std::numeric_limits<float>::infinity();
@@ -94,7 +98,29 @@ TEMPLATE_LIST_TEST_CASE(
 	SECTION("no room for a group") { desc.maxGroups = 0; }
 	SECTION("no tick in flight") { desc.maxTicksInFlight = 0; }
 	SECTION("a zero tick") { desc.tickSeconds = 0.0f; }
+	SECTION("a solver with no iterations") { desc.solver.iterations = 0; }
+	SECTION("a solver that keeps all of the last velocity") { desc.solver.velocityInertia = 1.0f; }
+	SECTION("a negative avoidance horizon") { desc.solver.avoidanceHorizon = -1.0f; }
+	SECTION("a stiffness above 1") { desc.solver.cohesionStiffness = 1.5f; }
+	SECTION("a non-finite stiffness")
+	{
+		desc.solver.avoidanceStiffness = std::numeric_limits<float>::quiet_NaN();
+	}
 	CHECK_THROWS_AS(TestType::Create(desc), std::runtime_error);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A crowd accepts the solver's bounds, with avoidance turned off",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto desc                      = MakeDesc();
+	desc.solver.iterations         = 1;
+	desc.solver.velocityInertia    = 0.0f;
+	desc.solver.avoidanceHorizon   = 0.0f;
+	desc.solver.avoidanceStiffness = 0.0f;
+	desc.solver.cohesionStiffness  = 1.0f;
+	CHECK_NOTHROW(TestType::Create(desc));
 }
 
 TEMPLATE_LIST_TEST_CASE(
@@ -231,7 +257,44 @@ TEMPLATE_LIST_TEST_CASE("A group the crowd cannot place is refused", "[crowd]", 
 	SECTION("a non-finite goal") { desc.orders.goal.x = std::numeric_limits<float>::quiet_NaN(); }
 	SECTION("a formation with no frontage") { desc.orders.formation.frontage = 0; }
 	SECTION("a formation with no spacing") { desc.orders.formation.spacing = 0.0f; }
+	SECTION("a zero pace") { desc.orders.pace = 0.0f; }
+	SECTION("a non-finite pace") { desc.orders.pace = std::numeric_limits<float>::infinity(); }
 	CHECK_THROWS_AS(crowd->CreateGroup(desc), std::runtime_error);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"Obstacles past maxObstacleSegments or with a non-finite end are refused",
+	"[crowd]",
+	CrowdFactories)
+{
+	auto crowd = TestType::Create(MakeDesc());
+	auto walls = std::vector<crowd::ObstacleSegment>(
+		4,
+		{ .from = glm::vec2(0.0f), .to = glm::vec2(10.0f, 0.0f) });
+	CHECK_NOTHROW(crowd->SetObstacles(walls));
+
+	walls.push_back({ .from = glm::vec2(5.0f), .to = glm::vec2(5.0f) });
+	CHECK_THROWS_AS(crowd->SetObstacles(walls), std::runtime_error);
+
+	walls.resize(1);
+	walls[0].to.y = std::numeric_limits<float>::quiet_NaN();
+	CHECK_THROWS_AS(crowd->SetObstacles(walls), std::runtime_error);
+
+	CHECK_NOTHROW(crowd->SetObstacles({}));
+}
+
+TEST_CASE("Refused obstacles leave the crowd's obstacles as they were", "[crowd][fake]")
+{
+	auto       crowd  = core::SharedRef<crowd::test::FakeCrowd>::Make(MakeDesc());
+	const auto pillar = crowd::ObstacleSegment{ .from = glm::vec2(3.0f), .to = glm::vec2(3.0f) };
+	crowd->SetObstacles(std::span(&pillar, 1));
+
+	auto bad   = crowd::ObstacleSegment{ .from = glm::vec2(0.0f), .to = glm::vec2(0.0f) };
+	bad.from.x = std::numeric_limits<float>::infinity();
+	CHECK_THROWS_AS(crowd->SetObstacles(std::span(&bad, 1)), std::runtime_error);
+
+	REQUIRE(crowd->GetObstacles().size() == 1);
+	CHECK(crowd->GetObstacles()[0].from == glm::vec2(3.0f));
 }
 
 TEST_CASE("Invalid orders leave a group's orders as they were", "[crowd][fake]")

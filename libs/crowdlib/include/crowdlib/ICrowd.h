@@ -6,8 +6,10 @@
 #include <crowdlib/GroupHandle.h>
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
+#include <crowdlib/ObstacleSegment.h>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace crowd
 {
@@ -76,6 +78,15 @@ namespace crowd
 		 */
 		virtual void
 		MergeGroup(GroupHandle from, GroupHandle into) = 0;
+
+		/**
+		 * Replaces every static obstacle with `segments`, copied.
+		 *
+		 * @throws std::runtime_error for more than maxObstacleSegments segments, or one with a
+		 *         non-finite end; the obstacles are then left as they were.
+		 */
+		virtual void
+		SetObstacles(std::span<const ObstacleSegment> segments) = 0;
 
 		[[nodiscard]] virtual bool
 		HasGroup(GroupHandle group) const noexcept = 0;

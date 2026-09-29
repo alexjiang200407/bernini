@@ -280,8 +280,10 @@ and portability.
     and corpse placement, so it is its own node.
     - [ ] Per-cell agent cap with clamped writes and high-water reporting.
   - [ ] Simulation passes (shared source, compiled both ways)
-    - [ ] Velocity Planning
-      - [ ] Per-type kinematic limits — max speed, acceleration, turn rate.
+    - [ ] Velocity Planning — position-based, as GPU Zen 3 ch. 13 (Weiss, "Real-Time Simulation of
+      Massive Crowds") does it; its inputs are declared on `ICrowd` (`docs/crowdlib.md`).
+      - [~] Per-type kinematic limits — preferred and max speed are declared (`crowd::AgentType`);
+        acceleration and turn rate wait for mounts, since velocity blending is the smoothing.
       - [ ] Non-holonomic constraint for mounts — no strafing, minimum turn radius, speed-dependent
         turn rate.
     - [ ] Dynamic Constraints
@@ -289,7 +291,7 @@ and portability.
         - [ ] Melee Overlap
         - [ ] Ranged Overlap
         - [ ] Asymmetric mass — cavalry displaces infantry, as a mass term rather than a special case.
-      - [ ] Static Obstacles
+      - [ ] Static Obstacles — segments, declared as `ICrowd::SetObstacles`.
       - [ ] Long Range Interaction — anticipated collision, weighted much higher for mounts.
       - [ ] Group Locomotion
   - [ ] Cavalry / mounted units

@@ -17,12 +17,14 @@ namespace crowd
 	/**
 	 * Where a group is to stand: its formation centred on `goal`, the front rank facing `facing`.
 	 * Both are on the ground plane, as world (x, z). `facing` need not be unit length, but its length
-	 * must be positive and finite.
+	 * must be positive and finite. Its agents walk there at `pace` times their type's preferred
+	 * speed, which must be positive and finite; their maximum speed still caps it.
 	 */
 	struct GroupOrders
 	{
 		glm::vec2 goal   = glm::vec2(0.0f);
 		glm::vec2 facing = glm::vec2(0.0f, 1.0f);
 		Formation formation;
+		float     pace = 1.0f;
 	};
 }

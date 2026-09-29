@@ -8,8 +8,11 @@
 #include <crowdlib/GroupHandle.h>
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
+#include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/SolverDesc.h>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -23,15 +26,44 @@ namespace crowd::test
 			return std::isfinite(value) && value > 0.0f;
 		}
 
+		bool
+		IsFinite(glm::vec2 value) noexcept
+		{
+			return std::isfinite(value.x) && std::isfinite(value.y);
+		}
+
+		bool
+		IsUnitInterval(float value) noexcept
+		{
+			return value >= 0.0f && value <= 1.0f;
+		}
+
+		void
+		ValidateSolver(const SolverDesc& solver)
+		{
+			if (solver.iterations == 0)
+				core::throw_runtime_error("A solver needs at least one iteration");
+			if (!(solver.velocityInertia >= 0.0f && solver.velocityInertia < 1.0f))
+				core::throw_runtime_error("A solver's velocity inertia must be in [0, 1)");
+			if (!std::isfinite(solver.avoidanceHorizon) || solver.avoidanceHorizon < 0.0f)
+				core::throw_runtime_error(
+					"A solver's avoidance horizon must be finite and not negative");
+			if (!IsUnitInterval(solver.avoidanceStiffness) ||
+			    !IsUnitInterval(solver.cohesionStiffness))
+				core::throw_runtime_error("A solver's stiffnesses must be in [0, 1]");
+		}
+
 		void
 		ValidateOrders(const GroupOrders& orders)
 		{
-			if (!std::isfinite(orders.goal.x) || !std::isfinite(orders.goal.y))
+			if (!IsFinite(orders.goal))
 				core::throw_runtime_error("A group's goal must be finite");
 			if (!IsPositive(glm::length(orders.facing)))
 				core::throw_runtime_error("A group's facing must be finite and not zero");
 			if (orders.formation.frontage == 0 || !IsPositive(orders.formation.spacing))
 				core::throw_runtime_error("A formation needs a positive frontage and spacing");
+			if (!IsPositive(orders.pace))
+				core::throw_runtime_error("A group's pace must be positive");
 		}
 	}
 
@@ -41,15 +73,17 @@ namespace crowd::test
 			core::throw_runtime_error("A crowd needs at least one agent type");
 		for (const auto& type : m_Desc.agentTypes)
 		{
-			if (!IsPositive(type.radius) || !IsPositive(type.maxSpeed) ||
-			    !IsPositive(type.maxAcceleration) || !IsPositive(type.maxTurnRate) ||
-			    !IsPositive(type.mass))
+			if (!IsPositive(type.radius) || !IsPositive(type.preferredSpeed) ||
+			    !IsPositive(type.maxSpeed) || !IsPositive(type.mass))
 				core::throw_runtime_error("Every field of an agent type must be positive");
+			if (type.preferredSpeed > type.maxSpeed)
+				core::throw_runtime_error("An agent type's preferred speed exceeds its maximum");
 		}
 		if (m_Desc.maxAgents == 0 || m_Desc.maxGroups == 0 || m_Desc.maxTicksInFlight == 0)
 			core::throw_runtime_error("A crowd's capacities must be positive");
 		if (!IsPositive(m_Desc.tickSeconds))
 			core::throw_runtime_error("A crowd's tick must be positive");
+		ValidateSolver(m_Desc.solver);
 
 		m_Groups.reset(m_Desc.maxGroups);
 	}
@@ -143,6 +177,24 @@ namespace crowd::test
 		m_Groups.release_slot(from.handle);
 	}
 
+	void
+	FakeCrowd::SetObstacles(std::span<const ObstacleSegment> segments)
+	{
+		if (segments.size() > m_Desc.maxObstacleSegments)
+		{
+			core::throw_runtime_error(
+				"{} obstacle segments exceed the crowd's {}",
+				segments.size(),
+				m_Desc.maxObstacleSegments);
+		}
+		for (const auto& segment : segments)
+		{
+			if (!IsFinite(segment.from) || !IsFinite(segment.to))
+				core::throw_runtime_error("An obstacle segment's ends must be finite");
+		}
+		m_Obstacles.assign(segments.begin(), segments.end());
+	}
+
 	bool
 	FakeCrowd::HasGroup(GroupHandle group) const noexcept
 	{
@@ -218,6 +270,12 @@ namespace crowd::test
 			core::throw_runtime_error("No tick is in flight");
 		m_Completed = std::move(m_InFlight.front());
 		m_InFlight.pop_front();
+	}
+
+	std::span<const ObstacleSegment>
+	FakeCrowd::GetObstacles() const noexcept
+	{
+		return m_Obstacles;
 	}
 
 	const FakeGroup&

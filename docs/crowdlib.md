@@ -65,6 +65,16 @@ each refuses; what follows is why it is shaped as it is.
   ground plane as world (x, z) — and reads back per-group aggregates (`GroupReport`). No call names
   an agent, writes one or reads one: per-agent CPU traffic is what `ROADMAP.md` § Guiding
   Constraints rules out. A group has one `AgentType`, its kinematics; a mixed force is several groups.
+* **The method is position-based**, GPU Zen 3 ch. 13 (Weiss, "Real-Time Simulation of Massive
+  Crowds"): agents are discs; each tick an agent blends its velocity toward its formation slot at
+  its type's `preferredSpeed` times its group's `pace`, predicts a position, and the solver projects
+  the constraints over it — overlap, weighted by `mass`; obstacles; anticipated collisions within
+  the avoidance horizon; the links that hold a formation at its `spacing` — before the velocity is
+  clamped to `maxSpeed`. The constraints and their order are the crowd's. A game tunes them
+  (`SolverDesc`) and cannot add its own, which would need a GPU plug-in model nothing asks for yet.
+* **Obstacles are segments**, replaced whole by `SetObstacles` and applied at the next `Step`. They
+  keep agents out, but an agent plans straight toward its slot, so it presses against a wall rather
+  than walking round it until a planner — the roadmap's flow fields — replaces the straight line.
 * **Agents change group only with their group.** `SplitGroup` detaches the rear of a formation into
   a new group under a copy of its orders, and `MergeGroup` joins one group to the rear of another of
   the same type and releases it. There is no per-agent reassignment, for the reason above.
@@ -109,7 +119,8 @@ waiting; and a job destroyed mid-flight lets its context go, so the next context
 `[shadercache]`: the kernel stored once cold, loaded on a fresh context with no entry rewritten, and
 a torn entry compiled again. `[crowd]`: `ICrowd`'s contract, against the fake — a group absent from
 every report until a tick that includes it completes, handles refused once released and after their
-slot is reused, capacities and invalid descriptions refused, a split and a merge conserving agents
+slot is reused, capacities and invalid descriptions refused (agent types, the solver, pace,
+obstacles), a split and a merge conserving agents
 and refusing to empty a group or mix types, and `Step` refused past `maxTicksInFlight`.
 
 `examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
