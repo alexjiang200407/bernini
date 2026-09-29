@@ -389,10 +389,18 @@ runs on past it. The stack is `CommandList::Barrier` under `FrameGraph::Execute`
 named case passes *with* the flag when it is the only case in the run — so it reads like an
 interaction between cases, and it is not.
 
-**Cause.** GPU-based validation patches every shader, and that case draws 48 frames (24 per `Shoot`,
-twice, because TAA has to converge). Instrumented, one of those submits takes longer than the
-display driver's TDR window and Windows removes the device. It is a cost limit, not a defect: there
-is nothing wrong with the frame.
+Any case that draws a static mesh through the renderer does it: `[capture]`, `[taa]`, `[resize]`,
+`[motionvectors]`, `[surface]` and more. With the suite sharded, one removal is a TDR, which resets the
+adapter, so every other shard dies with it and the failures look scattered.
+
+**Cause.** The static tier's mesh shaders (`MSMain` and `MSDissolve` in
+[StaticMesh.slang](../libs/bgl_extended/shaders/src/programs/forward/StaticMesh.slang)) returned
+early for a culled meshlet and then reached the backface cull's `GroupMemoryBarrierWithGroupSync`.
+`visible` is uniform across the group in practice, but a barrier after a return the compiler cannot
+prove uniform is undefined, and instrumented it deadlocks: the `Forward World` pass never finishes
+and TDR removes the device. Uninstrumented it happens to work, which is why it survived. Neither
+stage returns now; a culled meshlet's counts are zero, so its loops are empty and every thread
+reaches the barrier.
 
 **Why it looks order-dependent.** `SetEnableGPUBasedValidation` sets it on the *debug layer*, which
 is the process's, not the `ID3D12Debug1` that asked: every device created afterwards is instrumented,
@@ -406,17 +414,22 @@ cases:
 
 **Ruled out**, each by measurement: a stale driver pipeline library replayed into a validating device
 (it hangs the same with the cache directory emptied); a second device in the process (two cases that
-both decline validation pass under the flag); and the case itself (it hangs *alone* once edited to
-ask for validation). What is left is the instrumented frame's cost.
+both decline validation pass under the flag); and the instrumented frame's cost, which was the
+first explanation here: a single frame of one cube hung, and it stops hanging once the mesh shader
+is edited alone -- a constant pixel shader still hangs, and so does clamping every loop in the mesh
+stage to its constant maximum.
 
-**Gates.** None — the hang is the machine's TDR window against an instrumented frame, so a gate would
-pin the GPU rather than the code. `bgpu::GpuContext::GpuValidationActive`
-([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the half that *is*
-code: it answers for the process rather than reading the desc back, so a successor context
-cannot report "off" while running instrumented and have its owners cache driver pipelines built
-without the instrumentation.
+**Gates.** `bgl_extended_tests.exe "[capture]" --gpu-validation` hangs the device within one frame
+if the barrier is behind a return again, and the minimal repro above does too.
+`bgpu::GpuContext::GpuValidationActive`
+([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the scope half: it
+answers for the process rather than reading the desc back, so a successor context cannot report
+"off" while running instrumented and have its owners cache driver pipelines built without the
+instrumentation.
 
-**If it comes back.** It has not gone. Run GPU validation over a tag at a time rather than the whole
-suite, and read the log for the validation findings rather than the exit code. Raising the driver's
-`TdrDelay` lets a longer run finish, which is a machine setting and not something the tree can carry.
-Do not chase the predecessor case: it is only what turned instrumentation on.
+**If it comes back.** Find the pass first: submit and wait after every pass in `FrameGraph::Execute`
+and log its name, and the one that never returns is the one TDR killed -- fence waits on a removed
+device return at once, so trust the log's removal timestamp over any "ok" printed after it. Then
+look in that pass's shaders for a group barrier after a `return`, or a loop whose trip count is read
+from payload memory (the entry above). Shaders are compiled from `bin/shaders/src` at run time, so
+edit that copy and rerun one case to bisect without a rebuild; the next build overwrites it.
