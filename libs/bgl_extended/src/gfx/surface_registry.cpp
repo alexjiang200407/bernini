@@ -78,25 +78,35 @@ namespace bgl
 			const std::string& sourceType,
 			SurfaceShading     shading)
 		{
-			std::string bound = sourceType;
+			const char* adapter = nullptr;
 			switch (shading)
 			{
 			case SurfaceShading::kPbrSurface:
 			case SurfaceShading::kLit:
 				break;
 			case SurfaceShading::kToonCharacter:
-				bound = std::format("ToonCharacterLit<{}>", sourceType);
+				adapter = "ToonCharacterLit";
 				break;
 			case SurfaceShading::kToonEnvironment:
-				bound = std::format("ToonEnvironmentLit<{}>", sourceType);
+				adapter = "ToonEnvironmentLit";
 				break;
 			}
 
+			if (adapter == nullptr)
+			{
+				return std::format(
+					"import {};\npublic typealias Slot{}Surface = {};\n",
+					module,
+					slot,
+					sourceType);
+			}
 			return std::format(
-				"import {};\nimport lib.math.ToonShading;\npublic typealias Slot{}Surface = {};\n",
+				"import {};\nimport lib.math.ToonShading;\npublic typealias Slot{}Surface = "
+				"{}<{}>;\n",
 				module,
 				slot,
-				bound);
+				adapter,
+				sourceType);
 		}
 
 		// A registered surface's programs, generated rather than shipped because a program has to
