@@ -101,9 +101,10 @@ namespace assetlib
 						break;
 
 					case ShadingModel::kCount:
-						throw std::runtime_error(
-							"AssetStore::FindUnusedBakedTextures: the material '" + key +
-							"' names an unknown shading model, so its baked maps cannot be known");
+						core::throw_runtime_error(
+							"AssetStore::FindUnusedBakedTextures: the material '{}' names an "
+							"unknown shading model, so its baked maps cannot be known",
+							key);
 					}
 				}
 				else if (extension == c_SkyExtension)

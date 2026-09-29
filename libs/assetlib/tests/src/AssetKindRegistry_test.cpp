@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 #include <cstddef>
 #include <filesystem>
@@ -13,7 +14,6 @@
 #include <ios>
 #include <memory>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -188,7 +188,7 @@ TEST_CASE(
 		std::vector<assetlib::DocumentReference>
 		ReadReferences(std::span<const std::byte>) const override
 		{
-			throw std::runtime_error("not a document");
+			core::throw_runtime_error("not a document");
 		}
 	};
 

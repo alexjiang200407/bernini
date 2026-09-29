@@ -1,4 +1,5 @@
 #include "Plugins/EditorRegistry.h"
+#include <core/err/util.h>
 #include <editor_plugin_api/IEditorPlugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_plugin_api/LocalizedText.h>
@@ -8,7 +9,6 @@
 #include <cstddef>
 #include <editor_plugin_api/LanguageResolver.h>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,9 +57,9 @@ namespace editor::plugins
 		RequireId(const std::string_view id)
 		{
 			if (!IsId(id))
-				throw std::runtime_error("Invalid editor contribution ID");
+				core::throw_runtime_error("Invalid editor contribution ID");
 			if (id.starts_with("editor."))
-				throw std::runtime_error("Editor contribution ID is reserved");
+				core::throw_runtime_error("Editor contribution ID is reserved");
 		}
 
 		template <typename Desc>
@@ -68,7 +68,7 @@ namespace editor::plugins
 		{
 			RequireId(id);
 			if (std::ranges::any_of(values, [&](const Desc& value) { return value.id == id; }))
-				throw std::runtime_error("Editor contribution ID collides");
+				core::throw_runtime_error("Editor contribution ID collides");
 		}
 
 		void
@@ -82,16 +82,16 @@ namespace editor::plugins
 		RequireExtensions(const std::vector<std::string>& extensions)
 		{
 			if (extensions.empty())
-				throw std::runtime_error("Editor contribution requires an extension");
+				core::throw_runtime_error("Editor contribution requires an extension");
 			for (const std::string& extension : extensions)
 				if (!IsExtension(extension))
-					throw std::runtime_error("Invalid editor contribution extension");
+					core::throw_runtime_error("Invalid editor contribution extension");
 			for (std::size_t i = 0; i < extensions.size(); ++i)
 				if (std::find(
 						extensions.begin() + static_cast<std::ptrdiff_t>(i + 1),
 						extensions.end(),
 						extensions[i]) != extensions.end())
-					throw std::runtime_error("Duplicate editor contribution extension");
+					core::throw_runtime_error("Duplicate editor contribution extension");
 		}
 
 		template <typename Desc>
@@ -139,11 +139,11 @@ namespace editor::plugins
 		LanguageResolver validation;
 		validation.RegisterCatalog(catalog);
 		if (catalog.context.starts_with("editor."))
-			throw std::runtime_error("Translation context is reserved");
+			core::throw_runtime_error("Translation context is reserved");
 		if (std::ranges::any_of(m_Catalogs, [&](const TranslationCatalog& existing) {
 				return existing.context == catalog.context;
 			}))
-			throw std::runtime_error("Translation context already registered");
+			core::throw_runtime_error("Translation context already registered");
 		m_Catalogs.push_back(std::move(catalog));
 	}
 
@@ -157,7 +157,7 @@ namespace editor::plugins
 		    std::ranges::none_of(m_Menus, [&](const MenuDesc& menu) {
 				return menu.id == desc.parentId;
 			}))
-			throw std::runtime_error("Editor menu parent is not registered");
+			core::throw_runtime_error("Editor menu parent is not registered");
 		m_Menus.push_back(std::move(desc));
 	}
 
@@ -169,9 +169,9 @@ namespace editor::plugins
 		if (std::ranges::any_of(m_AssetEditors, [&](const AssetEditorDesc& value) {
 				return value.id == desc.id;
 			}))
-			throw std::runtime_error("Editor panel ID collides");
+			core::throw_runtime_error("Editor panel ID collides");
 		if (!desc.factory)
-			throw std::runtime_error("Editor panel factory is missing");
+			core::throw_runtime_error("Editor panel factory is missing");
 		m_Panels.push_back(std::move(desc));
 	}
 
@@ -183,13 +183,13 @@ namespace editor::plugins
 		if (std::ranges::any_of(m_Panels, [&](const PanelDesc& value) {
 				return value.id == desc.id;
 			}))
-			throw std::runtime_error("Editor panel ID collides");
+			core::throw_runtime_error("Editor panel ID collides");
 		if (!desc.factory)
-			throw std::runtime_error("Asset editor factory is missing");
+			core::throw_runtime_error("Asset editor factory is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)
 			if (FindAssetEditor(extension) != nullptr)
-				throw std::runtime_error("Asset editor extension collides");
+				core::throw_runtime_error("Asset editor extension collides");
 		m_AssetEditors.push_back(std::move(desc));
 	}
 
@@ -199,19 +199,19 @@ namespace editor::plugins
 		RequireUnique(desc.id, m_Actions);
 		RequireText(desc.title);
 		if (!desc.action)
-			throw std::runtime_error("Editor action is missing");
+			core::throw_runtime_error("Editor action is missing");
 		if (desc.extensions.empty())
 		{
 			if (desc.menuId != c_FileMenuId && desc.menuId != c_ToolsMenuId &&
 			    std::ranges::none_of(m_Menus, [&](const MenuDesc& menu) {
 					return menu.id == desc.menuId;
 				}))
-				throw std::runtime_error("Editor action menu is not registered");
+				core::throw_runtime_error("Editor action menu is not registered");
 		}
 		else
 		{
 			if (!desc.menuId.empty())
-				throw std::runtime_error("Content action cannot name a menu");
+				core::throw_runtime_error("Content action cannot name a menu");
 			RequireExtensions(desc.extensions);
 		}
 		m_Actions.push_back(std::move(desc));
@@ -222,14 +222,14 @@ namespace editor::plugins
 	{
 		RequireUnique(desc.id, m_Importers);
 		if (!desc.importer)
-			throw std::runtime_error("Editor importer is missing");
+			core::throw_runtime_error("Editor importer is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)
 		{
 			if (extension == ".glb" || extension == ".gltf" || extension == ".hdr")
-				throw std::runtime_error("Editor importer extension collides");
+				core::throw_runtime_error("Editor importer extension collides");
 			if (FindImporter(extension) != nullptr)
-				throw std::runtime_error("Editor importer extension collides");
+				core::throw_runtime_error("Editor importer extension collides");
 		}
 		m_Importers.push_back(std::move(desc));
 	}
@@ -239,14 +239,14 @@ namespace editor::plugins
 	{
 		RequireUnique(desc.id, m_ThumbnailProviders);
 		if (!desc.provider)
-			throw std::runtime_error("Thumbnail provider callback is missing");
+			core::throw_runtime_error("Thumbnail provider callback is missing");
 		RequireExtensions(desc.extensions);
 		for (const std::string& extension : desc.extensions)
 		{
 			if (extension == ".bmesh" || extension == ".bmaterial")
-				throw std::runtime_error("Thumbnail provider extension collides");
+				core::throw_runtime_error("Thumbnail provider extension collides");
 			if (FindThumbnailProvider(extension) != nullptr)
-				throw std::runtime_error("Thumbnail provider extension collides");
+				core::throw_runtime_error("Thumbnail provider extension collides");
 		}
 		m_ThumbnailProviders.push_back(std::move(desc));
 	}

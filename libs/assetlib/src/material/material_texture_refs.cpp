@@ -6,9 +6,9 @@
 #include <assetlib/codecs.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
+#include <core/err/util.h>
 #include <cstddef>
 #include <functional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -25,12 +25,12 @@ namespace assetlib
 			std::string&                                          key,
 			const RefKind                                         kind,
 			const std::function<std::string(const std::string&)>& map,
-			std::vector<std::pair<std::string, RefKind>>&         seen)
+			std::vector<MaterialTextureRef>&                      seen)
 		{
 			if (key.empty())
 				return;
 
-			seen.emplace_back(key, kind);
+			seen.push_back({ .key = key, .kind = kind });
 			key = map(key);
 		}
 
@@ -41,7 +41,7 @@ namespace assetlib
 		mapBaked(
 			std::string&                                          key,
 			const std::function<std::string(const std::string&)>& map,
-			std::vector<std::pair<std::string, RefKind>>&         seen)
+			std::vector<MaterialTextureRef>&                      seen)
 		{
 			if (key.empty() || key.ends_with(c_TextureExtension))
 			{
@@ -50,7 +50,7 @@ namespace assetlib
 			}
 
 			const std::string resolved = bakedTextureKey(key);
-			seen.emplace_back(resolved, RefKind::kBakedMap);
+			seen.push_back({ .key = resolved, .kind = RefKind::kBakedMap });
 
 			const std::string mapped = map(resolved);
 			if (mapped == resolved)
@@ -62,12 +62,12 @@ namespace assetlib
 		}
 	}
 
-	std::vector<std::pair<std::string, RefKind>>
+	std::vector<MaterialTextureRef>
 	mapMaterialTextures(
 		BMaterial&                                            material,
 		const std::function<std::string(const std::string&)>& map)
 	{
-		auto seen = std::vector<std::pair<std::string, RefKind>>();
+		auto seen = std::vector<MaterialTextureRef>();
 
 		switch (material.shadingModel)
 		{
@@ -97,7 +97,7 @@ namespace assetlib
 			break;
 
 		case ShadingModel::kCount:
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::mapMaterialTextures: the material names an unknown shading model, so "
 				"the textures it references cannot be known");
 		}
@@ -123,7 +123,7 @@ namespace assetlib
 				if (!key.ends_with(c_TextureExtension))
 					return;
 
-				seen.emplace_back(key, RefKind::kChannelRoute);
+				seen.push_back({ .key = key, .kind = RefKind::kChannelRoute });
 
 				std::string mapped = map(key);
 				if (mapped != key)

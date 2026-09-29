@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <core/err/util.h>
 #include <cstddef>
 #include <functional>
 #include <stdexcept>
@@ -176,7 +177,7 @@ namespace core
 		{
 			auto it = m_Index.find(key);
 			if (it != m_Index.end())
-				throw std::runtime_error("ordered_map::emplace - duplicate key");
+				core::throw_runtime_error("ordered_map::emplace - duplicate key");
 
 			size_type idx = m_Nodes.size();
 			m_Index.emplace(key, idx);
@@ -190,7 +191,7 @@ namespace core
 		{
 			auto it = m_Index.find(key);
 			if (it != m_Index.end())
-				throw std::runtime_error("ordered_map::emplace - duplicate key");
+				core::throw_runtime_error("ordered_map::emplace - duplicate key");
 
 			size_type idx = m_Nodes.size();
 			m_Index.emplace(std::move(key), idx);
@@ -206,7 +207,7 @@ namespace core
 		{
 			auto it = m_Index.find(key);
 			if (it != m_Index.end())
-				throw std::runtime_error("ordered_map::emplace - duplicate key");
+				core::throw_runtime_error("ordered_map::emplace - duplicate key");
 
 			size_type idx = m_Nodes.size();
 			m_Index.emplace(Key{ std::forward<K>(key) }, idx);

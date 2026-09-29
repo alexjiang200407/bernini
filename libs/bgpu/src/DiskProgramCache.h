@@ -40,9 +40,8 @@ namespace bgpu
 		}
 
 		[[nodiscard]] uint64_t
-		ComputeKey(
-			const ProgramCacheOwner&                         owner,
-			std::vector<std::pair<std::string, std::string>> moduleEntries) const override;
+		ComputeKey(const ProgramCacheOwner& owner, std::vector<ProgramEntryPoint> moduleEntries)
+			const override;
 
 		[[nodiscard]] bool
 		TryLoadProgram(uint64_t key, std::vector<std::byte>& program) const noexcept override;

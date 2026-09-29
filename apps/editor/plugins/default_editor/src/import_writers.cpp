@@ -1,5 +1,6 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
+#include <core/err/util.h>
 #include <default_editor/import_writers.h>
 
 #include "Windows/MeshEditor/MaterialGraphModel.h"
@@ -14,7 +15,6 @@
 #include <editor_plugin_api/LanguageResolver.h>
 #include <filesystem>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -37,7 +37,7 @@ namespace editor
 		// that are no longer at those indices.
 		if (stems.size() != imported.materials.size())
 		{
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"this file's materials changed while the import dialog was open; import it again");
 		}
 

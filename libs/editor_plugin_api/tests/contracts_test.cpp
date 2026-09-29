@@ -8,6 +8,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <catch2/catch_test_macros.hpp>
+#include <core/err/util.h>
 #include <cstddef>
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorAction.h>
@@ -28,7 +29,6 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -120,12 +120,12 @@ namespace
 		void
 		InvokeRender(const editor::RenderWork&) override
 		{
-			throw std::runtime_error("Unexpected rendering");
+			core::throw_runtime_error("Unexpected rendering");
 		}
 		editor::IEditorViewport*
 		CreateViewport(QWidget*, const editor::ViewportDesc&) override
 		{
-			throw std::runtime_error("Unexpected viewport");
+			core::throw_runtime_error("Unexpected viewport");
 		}
 		void
 		ShowPanel(std::string_view id) override
@@ -146,7 +146,7 @@ namespace
 		void
 		AssetChanged(std::string_view) override
 		{
-			throw std::runtime_error("Unexpected write");
+			core::throw_runtime_error("Unexpected write");
 		}
 	};
 
@@ -474,7 +474,7 @@ TEST_CASE(
 		explicit Factory(std::unique_ptr<std::string> value) : m_Value(std::move(value))
 		{
 			if (!m_Value)
-				throw std::runtime_error("Missing configuration");
+				core::throw_runtime_error("Missing configuration");
 		}
 		editor::EditorPanel*
 		Create(editor::IEditorHost&, QWidget*) override

@@ -86,7 +86,6 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
-#include <stdexcept>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
@@ -1577,7 +1576,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 				break;
 			}
 	if (desc == nullptr && assetDesc == nullptr)
-		throw std::runtime_error("Editor panel is not registered");
+		core::throw_runtime_error("Editor panel is not registered");
 	const auto& title = desc != nullptr ? desc->title : assetDesc->title;
 	auto        dockOwner =
 		std::make_unique<QDockWidget>(title.Resolve(m_EditorHost->GetLanguageResolver()), this);
@@ -1588,7 +1587,7 @@ MainWindow::ShowPluginPanel(const std::string_view id)
 	if (panel == nullptr || panel->parentWidget() != dock)
 	{
 		delete panel;
-		throw std::runtime_error("Editor panel factory returned an invalid widget");
+		core::throw_runtime_error("Editor panel factory returned an invalid widget");
 	}
 	dock->setWidget(panel);
 	dock->setTitleBarWidget(new QWidget(dock));

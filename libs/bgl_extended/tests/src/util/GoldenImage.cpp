@@ -1,11 +1,11 @@
 #include "util/GoldenImage.h"
 #include <algorithm>
 #include <cmath>
+#include <core/err/util.h>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <limits>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 
@@ -110,14 +110,16 @@ namespace bgl::test
 
 		unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
 		if (pixels == nullptr)
-			throw std::runtime_error("MeanColor: cannot read '" + path + "'");
+			core::throw_runtime_error("MeanColor: cannot read '{}'", path);
 
 		if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > width || y + h > height)
 		{
 			stbi_image_free(pixels);
-			throw std::runtime_error(
-				"MeanColor: the box falls outside '" + path + "' (" + std::to_string(width) + "x" +
-				std::to_string(height) + ")");
+			core::throw_runtime_error(
+				"MeanColor: the box falls outside '{}' ({}x{})",
+				path,
+				width,
+				height);
 		}
 
 		double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
@@ -184,13 +186,13 @@ namespace bgl::test
 		int            aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
 		unsigned char* a = stbi_load(pathA.c_str(), &aw, &ah, &ac, 4);
 		if (a == nullptr)
-			throw std::runtime_error("FrameDelta: cannot read '" + pathA + "'");
+			core::throw_runtime_error("FrameDelta: cannot read '{}'", pathA);
 
 		unsigned char* b = stbi_load(pathB.c_str(), &bw, &bh, &bc, 4);
 		if (b == nullptr)
 		{
 			stbi_image_free(a);
-			throw std::runtime_error("FrameDelta: cannot read '" + pathB + "'");
+			core::throw_runtime_error("FrameDelta: cannot read '{}'", pathB);
 		}
 
 		const bool sized  = aw == bw && ah == bh;
@@ -200,9 +202,10 @@ namespace bgl::test
 		{
 			stbi_image_free(a);
 			stbi_image_free(b);
-			throw std::runtime_error(
-				"FrameDelta: '" + pathA + "' and '" + pathB +
-				"' must be the same size and contain the box");
+			core::throw_runtime_error(
+				"FrameDelta: '{}' and '{}' must be the same size and contain the box",
+				pathA,
+				pathB);
 		}
 
 		double sum   = 0.0;
@@ -234,21 +237,23 @@ namespace bgl::test
 		int            aw = 0, ah = 0, ac = 0, bw = 0, bh = 0, bc = 0;
 		unsigned char* a = stbi_load(pathA.c_str(), &aw, &ah, &ac, 4);
 		if (a == nullptr)
-			throw std::runtime_error("MaxChannelDelta: cannot read '" + pathA + "'");
+			core::throw_runtime_error("MaxChannelDelta: cannot read '{}'", pathA);
 
 		unsigned char* b = stbi_load(pathB.c_str(), &bw, &bh, &bc, 4);
 		if (b == nullptr)
 		{
 			stbi_image_free(a);
-			throw std::runtime_error("MaxChannelDelta: cannot read '" + pathB + "'");
+			core::throw_runtime_error("MaxChannelDelta: cannot read '{}'", pathB);
 		}
 
 		if (aw != bw || ah != bh)
 		{
 			stbi_image_free(a);
 			stbi_image_free(b);
-			throw std::runtime_error(
-				"MaxChannelDelta: '" + pathA + "' and '" + pathB + "' differ in size");
+			core::throw_runtime_error(
+				"MaxChannelDelta: '{}' and '{}' differ in size",
+				pathA,
+				pathB);
 		}
 
 		int          largest = 0;
@@ -282,13 +287,13 @@ namespace bgl::test
 		int            cw = 0, ch = 0, cc = 0, tw = 0, th = 0, tc = 0;
 		unsigned char* candidate = stbi_load(path.c_str(), &cw, &ch, &cc, 4);
 		if (candidate == nullptr)
-			throw std::runtime_error("MeanAbsDiffToTruth: cannot read '" + path + "'");
+			core::throw_runtime_error("MeanAbsDiffToTruth: cannot read '{}'", path);
 
 		unsigned char* truth = stbi_load(truthPath.c_str(), &tw, &th, &tc, 4);
 		if (truth == nullptr)
 		{
 			stbi_image_free(candidate);
-			throw std::runtime_error("MeanAbsDiffToTruth: cannot read '" + truthPath + "'");
+			core::throw_runtime_error("MeanAbsDiffToTruth: cannot read '{}'", truthPath);
 		}
 
 		const bool scaled = factor > 0 && tw == cw * factor && th == ch * factor;
@@ -298,9 +303,11 @@ namespace bgl::test
 		{
 			stbi_image_free(candidate);
 			stbi_image_free(truth);
-			throw std::runtime_error(
-				"MeanAbsDiffToTruth: '" + truthPath + "' must be " + std::to_string(factor) +
-				"x '" + path + "' and contain the box");
+			core::throw_runtime_error(
+				"MeanAbsDiffToTruth: '{}' must be {}x '{}' and contain the box",
+				truthPath,
+				factor,
+				path);
 		}
 
 		double sum   = 0.0;
@@ -352,21 +359,23 @@ namespace bgl::test
 		int            pw = 0, ph = 0, pc = 0, rw = 0, rh = 0, rc = 0;
 		unsigned char* pixels = stbi_load(path.c_str(), &pw, &ph, &pc, 4);
 		if (pixels == nullptr)
-			throw std::runtime_error("BackgroundBleed: cannot read '" + path + "'");
+			core::throw_runtime_error("BackgroundBleed: cannot read '{}'", path);
 
 		unsigned char* reference = stbi_load(referencePath.c_str(), &rw, &rh, &rc, 4);
 		if (reference == nullptr)
 		{
 			stbi_image_free(pixels);
-			throw std::runtime_error("BackgroundBleed: cannot read '" + referencePath + "'");
+			core::throw_runtime_error("BackgroundBleed: cannot read '{}'", referencePath);
 		}
 
 		if (pw != rw || ph != rh)
 		{
 			stbi_image_free(pixels);
 			stbi_image_free(reference);
-			throw std::runtime_error(
-				"BackgroundBleed: '" + path + "' and '" + referencePath + "' differ in size");
+			core::throw_runtime_error(
+				"BackgroundBleed: '{}' and '{}' differ in size",
+				path,
+				referencePath);
 		}
 
 		const auto luma = [](const unsigned char* p, size_t i) {

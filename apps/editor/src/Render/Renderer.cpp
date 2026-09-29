@@ -8,6 +8,7 @@
 #include <QTimer>
 
 #include <atomic>
+#include <core/err/util.h>
 #include <core/profiling/thread_name.h>
 
 #include <exception>
@@ -17,7 +18,6 @@
 #include <qobject.h>
 #include <qobjectdefs.h>
 #include <qsemaphore.h>
-#include <stdexcept>
 #include <tracy/Tracy.hpp>
 #include <utility>
 
@@ -114,7 +114,7 @@ Renderer::Renderer(
 	if (!built.load(std::memory_order_acquire))
 	{
 		StopThread();
-		throw std::runtime_error(
+		core::throw_runtime_error(
 			"Renderer: the render thread stopped before it built the graphics");
 	}
 

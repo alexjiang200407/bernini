@@ -68,7 +68,6 @@
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -483,7 +482,7 @@ AnimationPreviewWindow::LoadMesh(
 					"Reading mesh..."));
 			current = editor::LoadMeshThroughSeam(m_Host.GetStore(), absolutePath);
 			if (mesh.meshes.empty())
-				throw std::runtime_error("mesh contains no meshes");
+				core::throw_runtime_error("mesh contains no meshes");
 
 			progress.Report(
 				0,
@@ -606,7 +605,7 @@ AnimationPreviewWindow::LoadMesh(
 		};
 
 		if (plan.animated.empty() && plan.statics.empty())
-			throw std::runtime_error("no node references a mesh");
+			core::throw_runtime_error("no node references a mesh");
 
 		// Behind a loading screen, because acquiring is where the seconds are: a character's worth of
 		// materials is a hundred-odd megabytes of texture to read and upload, and Invoke blocks its

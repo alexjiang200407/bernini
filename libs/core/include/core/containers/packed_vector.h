@@ -2,7 +2,6 @@
 
 #include <core/err/util.h>
 #include <cstdint>
-#include <stdexcept>
 namespace core
 {
 	template <typename T>
@@ -60,7 +59,7 @@ namespace core
 		{
 			if (m_Capacity != 0 && m_Count >= m_Capacity)
 			{
-				throw std::runtime_error("packed_vector: no free slots remaining");
+				core::throw_runtime_error("packed_vector: no free slots remaining");
 			}
 
 			uint32_t index = m_Count;

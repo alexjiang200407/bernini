@@ -60,7 +60,6 @@
 #include <optional>
 #include <span>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
@@ -661,11 +660,10 @@ namespace game
 
 		if (meshIndex >= mesh.meshes.size())
 		{
-			throw std::runtime_error(
-				std::format(
-					"AssetManager: mesh index {} out of range in '{}'",
-					meshIndex,
-					relPath));
+			core::throw_runtime_error(
+				"AssetManager: mesh index {} out of range in '{}'",
+				meshIndex,
+				relPath);
 		}
 
 		const assetlib::Mesh& entry = mesh.meshes[meshIndex];

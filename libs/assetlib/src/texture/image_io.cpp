@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cerrno>
 #include <cmath>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/math.h>
 #include <core/platform/util.h>
@@ -23,7 +24,6 @@
 
 #include <mutex>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -110,9 +110,9 @@ namespace assetlib
 				return { 4, 4, 16 };
 			case VkFormat::UNDEFINED:
 			default:
-				throw std::runtime_error(
-					"assetlib: no block info for Vulkan format " +
-					std::to_string(static_cast<uint32_t>(vk)));
+				core::throw_runtime_error(
+					"assetlib: no block info for Vulkan format {}",
+					static_cast<uint32_t>(vk));
 			}
 		}
 
@@ -129,7 +129,7 @@ namespace assetlib
 			if (fileError && errno != 0)
 				message += " (" + std::generic_category().message(errno) + ")";
 
-			throw std::runtime_error(message);
+			core::throw_runtime_error("{}", message);
 		}
 
 		// The libktx target for a block format. kNone / kBasisUASTC never reach here.
@@ -149,7 +149,7 @@ namespace assetlib
 			case Ktx2Compression::kNone:
 			case Ktx2Compression::kBasisUASTC:
 			default:
-				throw std::runtime_error("assetlib: not a block-compressed target");
+				core::throw_runtime_error("assetlib: not a block-compressed target");
 			}
 		}
 
@@ -296,10 +296,11 @@ namespace assetlib
 			// one, and guessing texels out of BC blocks is not this library's job.
 			const VkFormat vk = static_cast<VkFormat>(texture->vkFormat);
 			ktxTexture_Destroy(ktxTexture(texture));
-			throw std::runtime_error(
-				"assetlib::loadKTX2: cannot decode '" + path.string() +
-				"' to RGBA8: it is already block-compressed (Vulkan format " +
-				std::to_string(static_cast<uint32_t>(vk)) + ")");
+			core::throw_runtime_error(
+				"assetlib::loadKTX2: cannot decode '{}' to RGBA8: it is already block-compressed "
+				"(Vulkan format {})",
+				path.string(),
+				static_cast<uint32_t>(vk));
 		}
 
 		const BlockInfo block = blockInfo(static_cast<VkFormat>(texture->vkFormat));
@@ -454,10 +455,10 @@ namespace assetlib
 		{
 			// An HDR float map, or a block format written by some other tool: neither carries a
 			// Basis payload to transcode, and we have no block decoder.
-			throw std::runtime_error(
-				"assetlib::loadKTX2Preview: '" + path.string() +
-				"' has no CPU decode path for Vulkan format " +
-				std::to_string(static_cast<uint32_t>(stored)));
+			core::throw_runtime_error(
+				"assetlib::loadKTX2Preview: '{}' has no CPU decode path for Vulkan format {}",
+				path.string(),
+				static_cast<uint32_t>(stored));
 		}
 
 		ktxTexture*    base = ktxTexture(owner.tex);
@@ -512,7 +513,7 @@ namespace assetlib
 	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim)
 	{
 		if (maxDim == 0)
-			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+			core::throw_runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
 
 		Ktx2Owner owner;
 
@@ -535,7 +536,7 @@ namespace assetlib
 		uint32_t                       maxDim)
 	{
 		if (maxDim == 0)
-			throw std::runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
+			core::throw_runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
 
 		const std::vector<std::byte> bytes = fileSystem.Read(path);
 
@@ -590,7 +591,8 @@ namespace assetlib
 					if (index >= image.subresources.size())
 					{
 						ktxTexture_Destroy(base);
-						throw std::runtime_error("assetlib::writeKTX2: subresource count mismatch");
+						core::throw_runtime_error(
+							"assetlib::writeKTX2: subresource count mismatch");
 					}
 
 					const ImageSubresource& sub = image.subresources[index];
@@ -708,8 +710,7 @@ namespace assetlib
 		{
 			std::error_code ec;
 			std::filesystem::remove(tmp, ec);
-			throw std::runtime_error(
-				std::format("assetlib::writeKTX2: cannot flush '{}'", tmp.string()));
+			core::throw_runtime_error("assetlib::writeKTX2: cannot flush '{}'", tmp.string());
 		}
 
 		const std::error_code ec = core::file::commit_atomic(tmp, path);
@@ -717,11 +718,10 @@ namespace assetlib
 		{
 			std::error_code removeEc;
 			std::filesystem::remove(tmp, removeEc);
-			throw std::runtime_error(
-				std::format(
-					"assetlib::writeKTX2: cannot commit '{}': {}",
-					path.string(),
-					ec.message()));
+			core::throw_runtime_error(
+				"assetlib::writeKTX2: cannot commit '{}': {}",
+				path.string(),
+				ec.message());
 		}
 
 		// Durable bytes under a directory entry that is not durable is still a lost write, which
@@ -734,7 +734,7 @@ namespace assetlib
 	packRgb9e5(const ImageData& image)
 	{
 		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-			throw std::runtime_error("assetlib::packRgb9e5: source must be R32G32B32A32_SFLOAT");
+			core::throw_runtime_error("assetlib::packRgb9e5: source must be R32G32B32A32_SFLOAT");
 
 		// GL_EXT_texture_shared_exponent: 9 mantissa bits, exponent bias 15, 5-bit exponent.
 		constexpr int   c_Mantissa = 9;
@@ -820,7 +820,7 @@ namespace assetlib
 	unpackRgb9e5(const ImageData& image)
 	{
 		if (image.vkFormat != VkFormat::E5B9G9R9_UFLOAT_PACK32)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::unpackRgb9e5: source must be E5B9G9R9_UFLOAT_PACK32");
 
 		constexpr int c_Mantissa = 9;
@@ -879,7 +879,8 @@ namespace assetlib
 	quantizeSrgb8(const ImageData& image)
 	{
 		if (image.vkFormat != VkFormat::R32G32B32A32_SFLOAT)
-			throw std::runtime_error("assetlib::quantizeSrgb8: source must be R32G32B32A32_SFLOAT");
+			core::throw_runtime_error(
+				"assetlib::quantizeSrgb8: source must be R32G32B32A32_SFLOAT");
 
 		const auto encode = [](float linear) {
 			const float v = std::clamp(linear, 0.0f, 1.0f);

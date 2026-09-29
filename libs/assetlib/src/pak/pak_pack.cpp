@@ -17,13 +17,13 @@
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/hash.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -265,9 +265,9 @@ namespace assetlib
 			}
 
 		private:
-			const AssetStore&                                       m_Store;
-			RigResolver                                             m_Rigs;
-			std::unordered_map<std::string, std::vector<std::byte>> m_Bytes;
+			const AssetStore&                                    m_Store;
+			RigResolver                                          m_Rigs;
+			core::str::unordered_str_map<std::vector<std::byte>> m_Bytes;
 		};
 	}
 

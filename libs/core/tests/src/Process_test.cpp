@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/log/log.h>
 #include <core/profiling/memory.h>
@@ -8,7 +9,6 @@
 #include <spdlog/common.h>
 #include <spdlog/logger.h>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -51,7 +51,7 @@ namespace
 			auto* const symbol = dlsym(m_Handle, name);
 #endif
 			if (symbol == nullptr)
-				throw std::runtime_error(std::string("process fixture exports no ") + name);
+				core::throw_runtime_error("process fixture exports no {}", name);
 			return reinterpret_cast<Fn*>(symbol);
 		}
 
@@ -66,7 +66,7 @@ namespace
 			m_Handle = dlopen(CORE_PROCESS_FIXTURE, RTLD_NOW | RTLD_LOCAL);
 #endif
 			if (m_Handle == nullptr)
-				throw std::runtime_error("cannot load " CORE_PROCESS_FIXTURE);
+				core::throw_runtime_error("cannot load {}", CORE_PROCESS_FIXTURE);
 		}
 
 		void* m_Handle = nullptr;

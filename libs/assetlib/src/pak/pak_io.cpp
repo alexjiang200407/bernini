@@ -23,7 +23,6 @@
 #include <ios>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -93,7 +92,9 @@ namespace assetlib
 		errno = 0;
 		m_Out.open(m_Temp, std::ios::binary | std::ios::trunc);
 		if (!m_Out)
-			throw std::runtime_error(fileErrorMessage("bpak: cannot open for writing", m_Temp));
+			core::throw_runtime_error(
+				"{}",
+				fileErrorMessage("bpak: cannot open for writing", m_Temp));
 
 		// Patched by Finish, once the table's offsets are known.
 		const Header placeholder{};
@@ -137,7 +138,9 @@ namespace assetlib
 			static_cast<std::streamsize>(bytes.size()));
 
 		if (!m_Out)
-			throw std::runtime_error(fileErrorMessage("bpak: cannot write payload to", m_Temp));
+			core::throw_runtime_error(
+				"{}",
+				fileErrorMessage("bpak: cannot write payload to", m_Temp));
 
 		m_ByPath.emplace(path, static_cast<uint32_t>(m_Entries.size()));
 		m_Entries.push_back(PendingEntry{ std::move(path), m_Offset, bytes.size(), stamp });
@@ -210,7 +213,7 @@ namespace assetlib
 		m_Out.close();
 
 		if (!m_Out)
-			throw std::runtime_error(fileErrorMessage("bpak: cannot write", m_Temp));
+			core::throw_runtime_error("{}", fileErrorMessage("bpak: cannot write", m_Temp));
 
 		// The archive is the shipped artifact, not a cache entry that could simply miss, so the
 		// bytes reach the device before the name does.
@@ -352,11 +355,13 @@ namespace assetlib
 		errno = 0;
 		std::ifstream in(m_Path, std::ios::binary);
 		if (!in)
-			throw std::runtime_error(fileErrorMessage("bpak: cannot open for reading", m_Path));
+			core::throw_runtime_error(
+				"{}",
+				fileErrorMessage("bpak: cannot open for reading", m_Path));
 
 		in.seekg(static_cast<std::streamoff>(entry->offset + offset));
 		if (!in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(size)))
-			throw std::runtime_error(fileErrorMessage("bpak: failed to read", m_Path));
+			core::throw_runtime_error("{}", fileErrorMessage("bpak: failed to read", m_Path));
 
 		return out;
 	}

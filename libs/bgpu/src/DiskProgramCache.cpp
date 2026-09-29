@@ -88,8 +88,8 @@ namespace bgpu
 
 	uint64_t
 	DiskProgramCache::ComputeKey(
-		const ProgramCacheOwner&                         owner,
-		std::vector<std::pair<std::string, std::string>> moduleEntries) const
+		const ProgramCacheOwner&       owner,
+		std::vector<ProgramEntryPoint> moduleEntries) const
 	{
 		uint64_t key = core::hash_pod(m_Sessions.GetSourceSalt(), ContextSalt());
 		key          = core::hash_string(owner.tag, key);

@@ -12,6 +12,7 @@
 
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -20,11 +21,9 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -107,7 +106,7 @@ namespace assetlib
 			case AlphaMode::kHashed:
 				return c_AlphaModeNames[3];
 			}
-			throw std::runtime_error("bmaterial: unwritable alpha mode");
+			core::throw_runtime_error("bmaterial: unwritable alpha mode");
 		}
 
 		/** Writes `value` at `key`, or erases the key when the value is empty. */
@@ -709,7 +708,7 @@ namespace assetlib
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:
-			throw std::runtime_error("bmaterial: unwritable shading model");
+			core::throw_runtime_error("bmaterial: unwritable shading model");
 		}
 
 		json["name"] = material.name;
@@ -758,8 +757,8 @@ namespace assetlib
 			uint64_t                        hash;
 		};
 
-		std::mutex                                  g_HashCacheMutex;
-		std::unordered_map<std::string, HashedFile> g_HashCache;
+		std::mutex                               g_HashCacheMutex;
+		core::str::unordered_str_map<HashedFile> g_HashCache;
 	}
 
 	SourceStamp

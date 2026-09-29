@@ -210,7 +210,8 @@ namespace bgl
 				stage.msl        = std::string(
 					static_cast<const char*>(blob->getBufferPointer()),
 					blob->getBufferSize());
-				for (const auto& [name, index] : bindings) stage.bindings.emplace_back(name, index);
+				for (const auto& [name, index] : bindings)
+					stage.bindings.push_back({ .name = name, .index = index });
 				stage.threadsPerThreadgroup = threadGroupOf(stage.entryPoint);
 
 				cached.stages.push_back(std::move(stage));
@@ -238,15 +239,17 @@ namespace bgl
 		bool          hit = false;
 		if (shaderCache != nullptr)
 		{
-			std::vector<std::pair<std::string, std::string>> moduleEntries;
+			std::vector<bgpu::ProgramEntryPoint> moduleEntries;
 			for (const IShader* shader :
 			     { m_Desc.meshShader.Get(), m_Desc.pixelShader.Get(), m_Desc.ampShader.Get() })
 			{
 				if (shader != nullptr)
 				{
-					moduleEntries.emplace_back(
-						shader->GetDesc().slangModuleName,
-						shader->GetDesc().entryPointName);
+					moduleEntries.push_back(
+						{
+							.moduleName = shader->GetDesc().slangModuleName,
+							.entryPoint = shader->GetDesc().entryPointName,
+						});
 				}
 			}
 			key = shaderCache->ComputeKey(std::move(moduleEntries));

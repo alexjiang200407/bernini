@@ -5,7 +5,6 @@
 #include <assetlib/codecs.h>
 #include <editor_sdk/material_bake.h>
 #include <editor_sdk/mesh_load.h>
-#include <stdexcept>
 
 #include <QAction>
 #include <QCheckBox>
@@ -1774,7 +1773,7 @@ MeshEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& material
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
 		if (loaded.sourceKey.empty())
-			throw std::runtime_error("The mesh has no import document for material bindings");
+			core::throw_runtime_error("The mesh has no import document for material bindings");
 		m_Host.GetStore().RebindSubmeshInDocument(
 			loaded.sourceKey,
 			mesh.stringPool.at(mesh.submeshes.at(source).nameOffset),

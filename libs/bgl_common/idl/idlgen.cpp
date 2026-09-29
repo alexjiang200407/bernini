@@ -16,7 +16,6 @@
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -104,7 +103,7 @@ namespace
 	{
 		if (elem != ScalarType::Float32)
 		{
-			throw std::runtime_error("only float matrices are supported");
+			core::throw_runtime_error("only float matrices are supported");
 		}
 
 		// glm is column-major; glm::matCxR. Square matrices collapse to glm::matN.

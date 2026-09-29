@@ -1,9 +1,9 @@
 #include "win32/util.h"
+#include <core/err/util.h>
 #include <core/platform/util.h>
 #include <core/str/str.h>
 #include <cstdint>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
 
 namespace core::win32
@@ -40,8 +40,8 @@ namespace core::win32
 	{
 		if (FAILED(hr))
 		{
-			throw std::runtime_error(
-				"Win32 API Error: " +
+			core::throw_runtime_error(
+				"Win32 API Error: {}",
 				core::str::wide_to_string(get_error_description(static_cast<DWORD>(hr))));
 		}
 	}

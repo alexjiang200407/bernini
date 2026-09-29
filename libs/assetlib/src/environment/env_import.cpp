@@ -17,7 +17,6 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -129,22 +128,22 @@ namespace assetlib
 	AssetStore::ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel) const
 	{
 		if (!desc.sky && !desc.lighting && !desc.environment)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"AssetStore::ImportEnvironment: nothing was selected to write");
 
 		// A `.benv` composes what the other two produce, so on its own it would name nothing.
 		if (desc.environment && !desc.sky && !desc.lighting)
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"AssetStore::ImportEnvironment: an environment composes a sky or a lighting, so "
 				"one of them has to be written with it");
 
 		if (!std::filesystem::is_directory(GetDataRoot()))
-			throw std::runtime_error(
-				"AssetStore::ImportEnvironment: the data root '" + GetDataRoot().string() +
-				"' is not a directory");
+			core::throw_runtime_error(
+				"AssetStore::ImportEnvironment: the data root '{}' is not a directory",
+				GetDataRoot().string());
 
 		if (desc.name.empty())
-			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
+			core::throw_runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
 		const std::string extension = extensionOf(desc.source.generic_string());
 		if (extension != c_EnvSourceHdrExtension && extension != c_TextureExtension)

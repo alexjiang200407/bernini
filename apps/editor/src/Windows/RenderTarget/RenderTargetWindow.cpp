@@ -31,7 +31,6 @@
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <core/err/util.h>
-#include <stdexcept>
 
 namespace
 {
@@ -283,7 +282,7 @@ void
 RenderTargetWindow::Invoke(const editor::ViewportRenderWork& work)
 {
 	if (m_Desc.assets == nullptr)
-		throw std::runtime_error("Editor viewport asset service is unavailable");
+		core::throw_runtime_error("Editor viewport asset service is unavailable");
 	m_Desc.renderer->Invoke([&] {
 		editor::RenderContext context{ *m_Desc.renderer->GetGraphics(),
 			                           *m_Desc.renderer->GetScene(),

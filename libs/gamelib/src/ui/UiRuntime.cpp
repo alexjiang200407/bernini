@@ -13,7 +13,6 @@
 #include <core/err/util.h>
 #include <memory>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tracy/Tracy.hpp>
@@ -111,7 +110,7 @@ namespace game
 			Rml::SetFileInterface(nullptr);
 			Rml::SetSystemInterface(nullptr);
 			m_Interfaces.reset();
-			throw std::runtime_error("game::UiRuntime: Rml::Initialise failed");
+			core::throw_runtime_error("game::UiRuntime: Rml::Initialise failed");
 		}
 
 		if (m_Options.scripting)

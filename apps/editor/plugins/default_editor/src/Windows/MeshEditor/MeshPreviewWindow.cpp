@@ -4,6 +4,7 @@
 #include "mesh_drop_import.h"
 #include <QEvent>
 #include <QVBoxLayout>
+#include <core/err/util.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/mesh_load.h>
 
@@ -55,7 +56,6 @@
 #include <qtmetamacros.h>
 #include <qtypes.h>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -280,7 +280,7 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					"Reading mesh..."));
 			loaded = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
 			if (mesh.meshes.empty())
-				throw std::runtime_error("mesh contains no meshes");
+				core::throw_runtime_error("mesh contains no meshes");
 		});
 
 	if (!result.Completed())
@@ -377,7 +377,7 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			}
 
 			if (m_Geoms.empty())
-				throw std::runtime_error("no node references a mesh");
+				core::throw_runtime_error("no node references a mesh");
 
 			const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
 			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);

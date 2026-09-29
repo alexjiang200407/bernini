@@ -258,7 +258,7 @@ namespace assetlib
 				break;
 			}
 
-			throw std::runtime_error(
+			core::throw_runtime_error(
 				"assetlib::renameAsset: a referrer of no kind that stores references");
 		}
 
@@ -332,19 +332,22 @@ namespace assetlib
 					plan.subject.from);
 
 		if (plan.subject.from == plan.subject.to)
-			throw std::runtime_error(
-				"assetlib::planRename: '" + plan.subject.from + "' is already named that");
+			core::throw_runtime_error(
+				"assetlib::planRename: '{}' is already named that",
+				plan.subject.from);
 
 		if (isUnder(plan.subject.to, plan.subject.from))
-			throw std::runtime_error(
-				"assetlib::planRename: cannot move '" + plan.subject.from + "' inside itself");
+			core::throw_runtime_error(
+				"assetlib::planRename: cannot move '{}' inside itself",
+				plan.subject.from);
 
 		const std::filesystem::path fromPath = graph.DataRoot() / plan.subject.from;
 		const std::filesystem::path toPath   = graph.DataRoot() / plan.subject.to;
 
 		if (!std::filesystem::exists(fromPath))
-			throw std::runtime_error(
-				"assetlib::planRename: '" + plan.subject.from + "' does not exist");
+			core::throw_runtime_error(
+				"assetlib::planRename: '{}' does not exist",
+				plan.subject.from);
 
 		if (std::filesystem::is_directory(fromPath))
 		{
@@ -375,15 +378,17 @@ namespace assetlib
 			plan.assetType           = assetTypeFromExtension(plan.subject.from);
 			const IAssetKind* custom = graph.PluginKindForPath(plan.subject.from);
 			if (!plan.assetType && custom == nullptr)
-				throw std::runtime_error(
-					"assetlib::planRename: '" + plan.subject.from +
-					"' is not an asset this project stores anything about");
+				core::throw_runtime_error(
+					"assetlib::planRename: '{}' is not an asset this project stores anything about",
+					plan.subject.from);
 
 			const IAssetKind* targetCustom = graph.PluginKindForPath(plan.subject.to);
 			if (assetTypeFromExtension(plan.subject.to) != plan.assetType || targetCustom != custom)
-				throw std::runtime_error(
-					"assetlib::planRename: renaming '" + plan.subject.from + "' to '" +
-					plan.subject.to + "' would change what kind of asset it is");
+				core::throw_runtime_error(
+					"assetlib::planRename: renaming '{}' to '{}' would change what kind of asset "
+					"it is",
+					plan.subject.from,
+					plan.subject.to);
 
 			if (plan.assetType == AssetType::kImportDocument)
 			{
@@ -421,8 +426,7 @@ namespace assetlib
 		// filesystem, where the destination "exists" because it is the file being renamed.
 		std::error_code ec;
 		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec))
-			throw std::runtime_error(
-				"assetlib::planRename: '" + plan.subject.to + "' already exists");
+			core::throw_runtime_error("assetlib::planRename: '{}' already exists", plan.subject.to);
 
 		// The group's destinations are held to what the subject's is, so a caller that asks before
 		// confirming a rename is told here rather than after committing to it.
@@ -430,7 +434,7 @@ namespace assetlib
 			const std::filesystem::path was = graph.DataRoot() / move.from;
 			const std::filesystem::path now = graph.DataRoot() / move.to;
 			if (std::filesystem::exists(now) && !std::filesystem::equivalent(was, now, ec))
-				throw std::runtime_error("assetlib::planRename: '" + move.to + "' already exists");
+				core::throw_runtime_error("assetlib::planRename: '{}' already exists", move.to);
 		};
 
 		if (plan.source)
@@ -439,9 +443,9 @@ namespace assetlib
 		for (const RenameMove& move : plan.avatars) requireFree(move);
 
 		if (!std::filesystem::is_directory(toPath.parent_path()))
-			throw std::runtime_error(
-				"assetlib::planRename: the directory to rename '" + plan.subject.from +
-				"' into does not exist");
+			core::throw_runtime_error(
+				"assetlib::planRename: the directory to rename '{}' into does not exist",
+				plan.subject.from);
 
 		return plan;
 	}
@@ -529,9 +533,9 @@ namespace assetlib
 			                               nullptr :
 			                               plan.registry->FindByExtension(extensionOf(referrer));
 			if ((!type && custom == nullptr) || (type && *type == AssetType::kTexture))
-				throw std::runtime_error(
-					"assetlib::renameAsset: '" + referrer +
-					"' is not a container that stores references");
+				core::throw_runtime_error(
+					"assetlib::renameAsset: '{}' is not a container that stores references",
+					referrer);
 
 			auto file   = PendingReferrer();
 			file.path   = GetDataRoot() / referrer;

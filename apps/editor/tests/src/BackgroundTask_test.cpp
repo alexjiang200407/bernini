@@ -1,4 +1,5 @@
 #include <bgpu/GpuContext.h>
+#include <core/err/util.h>
 #include <editor_sdk/BackgroundTask.h>
 
 #include "Render/Renderer.h"
@@ -85,7 +86,7 @@ TEST_CASE("Work that throws fails with the exception's message", "[background]")
 	// exception must not be flattened into a generic "import failed".
 	const background::TaskResult result =
 		background::RunWithLoadingScreen(nullptr, "Working", [](background::Progress&) {
-			throw std::runtime_error("cannot overwrite 'a.bmesh'");
+			core::throw_runtime_error("cannot overwrite 'a.bmesh'");
 		});
 
 	REQUIRE(result.Failed());

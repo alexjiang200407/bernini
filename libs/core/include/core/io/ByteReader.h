@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <core/err/util.h>
 #include <core/type_traits.h>
 #include <cstddef>
 #include <cstdint>
@@ -26,7 +27,7 @@ namespace core::io
 		ReadBytes(size_t count)
 		{
 			if (count > Remaining())
-				throw std::runtime_error("byte stream: unexpected end of stream");
+				core::throw_runtime_error("byte stream: unexpected end of stream");
 			const auto out = m_Bytes.subspan(m_Cursor, count);
 			m_Cursor += count;
 			return out;
@@ -64,7 +65,7 @@ namespace core::io
 		Seek(size_t offset)
 		{
 			if (offset > m_Bytes.size())
-				throw std::runtime_error("byte stream: seek out of range");
+				core::throw_runtime_error("byte stream: seek out of range");
 			m_Cursor = offset;
 		}
 

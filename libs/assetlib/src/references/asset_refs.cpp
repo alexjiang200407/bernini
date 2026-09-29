@@ -27,7 +27,6 @@
 #include <optional>
 #include <ranges>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -89,9 +88,11 @@ namespace assetlib
 				// exception: nothing can load it, so nothing it names is in use through it.
 				if (isOrphanedGeometry(store, referrer))
 					return;
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the mesh '" + referrer +
-					"', so the assets it references cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the mesh '{}', so the assets it "
+					"references cannot be known: {}",
+					referrer,
+					e.what());
 			}
 
 			for (const std::string& material : refs.materials)
@@ -116,9 +117,11 @@ namespace assetlib
 			{
 				if (isOrphanedGeometry(store, referrer))
 					return;
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the clip set '" + referrer +
-					"', so the skeleton it references cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the clip set '{}', so the skeleton it "
+					"references cannot be known: {}",
+					referrer,
+					e.what());
 			}
 
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
@@ -172,9 +175,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the material '" + referrer +
-					"', so the textures it references cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the material '{}', so the textures it "
+					"references cannot be known: {}",
+					referrer,
+					e.what());
 			}
 
 			// Where a material's texture references live is mapMaterialTextures' to know, so this
@@ -188,8 +193,10 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: the material '" + referrer + "': " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: the material '{}': {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -224,9 +231,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the sky '" + referrer +
-					"', so the textures it references cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the sky '{}', so the textures it "
+					"references cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -245,9 +254,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the environment lighting '" + referrer +
-					"', so the textures it references cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the environment lighting '{}', so the "
+					"textures it references cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -266,9 +277,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the environment '" + referrer +
-					"', so the assets it composes cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the environment '{}', so the assets it "
+					"composes cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 
@@ -308,9 +321,11 @@ namespace assetlib
 			}
 			catch (const std::exception& e)
 			{
-				throw std::runtime_error(
-					"assetlib::AssetRefGraph: cannot read the blend set '" + referrer +
-					"', so the clip set it names cannot be known: " + e.what());
+				core::throw_runtime_error(
+					"assetlib::AssetRefGraph: cannot read the blend set '{}', so the clip set it "
+					"names cannot be known: {}",
+					referrer,
+					e.what());
 			}
 		}
 	}
@@ -456,10 +471,12 @@ namespace assetlib
 					{
 						// Fatal, as for every built-in kind: a document the plugin cannot read is one
 						// whose references cannot be known, and a delete would then go through.
-						throw std::runtime_error(
-							"assetlib::AssetRefGraph: cannot read the " + custom->GetDesc().id +
-							" document '" + referrer +
-							"', so the assets it references cannot be known: " + e.what());
+						core::throw_runtime_error(
+							"assetlib::AssetRefGraph: cannot read the {} document '{}', so the "
+							"assets it references cannot be known: {}",
+							custom->GetDesc().id,
+							referrer,
+							e.what());
 					}
 					for (DocumentReference& reference : references)
 					{
@@ -618,9 +635,10 @@ namespace assetlib
 		{
 			plan.assetType = assetTypeFromExtension(plan.target);
 			if (!plan.assetType && !graph.IsKnownAsset(plan.target))
-				throw std::runtime_error(
-					"assetlib::planDeletion: '" + plan.target +
-					"' is not an asset this project stores anything about");
+				core::throw_runtime_error(
+					"assetlib::planDeletion: '{}' is not an asset this project stores anything "
+					"about",
+					plan.target);
 
 			const std::span<const AssetRef> held = graph.ReferrersOf(plan.target);
 			referrers.assign(held.begin(), held.end());

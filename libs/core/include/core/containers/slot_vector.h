@@ -3,7 +3,6 @@
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <vector>
 
 namespace core
@@ -96,7 +95,7 @@ namespace core
 		{
 			slot_handle handle = try_allocate_and_emplace(std::forward<Args>(args)...);
 			if (handle.is_null())
-				throw std::runtime_error("slot_vector: no free slots remaining");
+				core::throw_runtime_error("slot_vector: no free slots remaining");
 			return handle;
 		}
 

@@ -2,6 +2,7 @@
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
+#include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 
 #include <filesystem>
@@ -9,7 +10,6 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -32,7 +32,7 @@ namespace assetlib
 		{
 			std::ifstream stream(projectFile);
 			if (!stream)
-				throw std::runtime_error("Cannot open project file: " + projectFile.string());
+				core::throw_runtime_error("Cannot open project file: {}", projectFile.string());
 
 			nlohmann::json json;
 			try
@@ -46,7 +46,7 @@ namespace assetlib
 			}
 			catch (const nlohmann::json::exception& e)
 			{
-				throw std::runtime_error("Malformed project file: " + std::string(e.what()));
+				core::throw_runtime_error("Malformed project file: {}", e.what());
 			}
 		}
 	}
@@ -79,14 +79,13 @@ namespace assetlib
 		std::error_code ec;
 		std::filesystem::create_directories(root, ec);
 		if (ec)
-			throw std::runtime_error("Failed to create project directory: " + root.string());
+			core::throw_runtime_error("Failed to create project directory: {}", root.string());
 
 		for (const auto category : c_RequiredDirectories)
 		{
 			std::filesystem::create_directories(root / c_DataDirectoryName / category, ec);
 			if (ec)
-				throw std::runtime_error(
-					"Failed to create data directory: " + std::string(category));
+				core::throw_runtime_error("Failed to create data directory: {}", category);
 		}
 
 		Project project;
@@ -122,11 +121,10 @@ namespace assetlib
 			if (std::filesystem::exists(dir))
 			{
 				if (!std::filesystem::is_directory(dir))
-					throw std::runtime_error(
-						std::format(
-							"Data directory is not a directory: {}, please consider deleting "
-							"manually",
-							dir.string()));
+					core::throw_runtime_error(
+						"Data directory is not a directory: {}, please consider deleting "
+						"manually",
+						dir.string());
 
 				continue;
 			}
@@ -135,8 +133,7 @@ namespace assetlib
 			std::filesystem::create_directories(root / c_DataDirectoryName / category, ec);
 
 			if (ec)
-				throw std::runtime_error(
-					"Failed to create data directory: " + std::string(category));
+				core::throw_runtime_error("Failed to create data directory: {}", category);
 		}
 
 		project.ReloadStore();
@@ -162,7 +159,7 @@ namespace assetlib
 
 		std::ofstream stream(m_ProjectFile);
 		if (!stream)
-			throw std::runtime_error("Cannot write project file: " + m_ProjectFile.string());
+			core::throw_runtime_error("Cannot write project file: {}", m_ProjectFile.string());
 
 		stream << json.dump(4);
 	}

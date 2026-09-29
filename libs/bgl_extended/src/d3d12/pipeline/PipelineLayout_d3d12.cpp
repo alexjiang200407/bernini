@@ -100,9 +100,11 @@ namespace bgl::pipeline_util
 				core::ensure(code != nullptr, "Failed to generate entry point bytecode");
 
 				const auto* bytes = static_cast<const std::byte*>(code->getBufferPointer());
-				result.entryPointDxil.emplace_back(
-					entryName,
-					std::vector<std::byte>(bytes, bytes + code->getBufferSize()));
+				result.entryPointDxil.push_back(
+					{
+						.entryPoint = entryName,
+						.dxil       = std::vector<std::byte>(bytes, bytes + code->getBufferSize()),
+					});
 			}
 
 			for (uint32_t i = 0; i < layout->getParameterCount(); ++i)
@@ -186,12 +188,12 @@ namespace bgl::pipeline_util
 				auto found = std::find_if(
 					program.entryPointDxil.begin(),
 					program.entryPointDxil.end(),
-					[&](const auto& e) { return e.first == entryName; });
+					[&](const EntryPointDxil& e) { return e.entryPoint == entryName; });
 				core::ensure(
 					found != program.entryPointDxil.end(),
 					"Cached program is missing bytecode for a shader");
 
-				result.entryPointCode[entryName] = found->second;
+				result.entryPointCode[entryName] = found->dxil;
 			}
 
 			return result;
@@ -214,13 +216,15 @@ namespace bgl::pipeline_util
 
 		if (cache != nullptr)
 		{
-			std::vector<std::pair<std::string, std::string>> moduleEntries;
+			std::vector<bgpu::ProgramEntryPoint> moduleEntries;
 			moduleEntries.reserve(ordered.size());
 			for (IShader* shader : ordered)
 			{
-				moduleEntries.emplace_back(
-					shader->GetDesc().slangModuleName,
-					shader->GetDesc().entryPointName);
+				moduleEntries.push_back(
+					{
+						.moduleName = shader->GetDesc().slangModuleName,
+						.entryPoint = shader->GetDesc().entryPointName,
+					});
 			}
 
 			key         = cache->ComputeKey(std::move(moduleEntries));

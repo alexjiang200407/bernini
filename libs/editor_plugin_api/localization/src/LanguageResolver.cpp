@@ -1,3 +1,4 @@
+#include <core/err/util.h>
 #include <editor_plugin_api/LanguageResolver.h>
 
 #include "translation_validation.h"
@@ -5,7 +6,6 @@
 #include <QString>
 #include <editor_plugin_api/LocalizedText.h>
 #include <editor_plugin_api/TranslationCatalog.h>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -29,17 +29,17 @@ namespace editor
 	{
 		detail::ValidateContext(catalog.context);
 		if (m_Catalogs.contains(catalog.context))
-			throw std::runtime_error("Translation context already registered");
+			core::throw_runtime_error("Translation context already registered");
 		Entries entries;
 		for (const auto& entry : catalog.entries)
 		{
 			if (!detail::IsKey(entry.key))
-				throw std::runtime_error("Invalid translation key");
+				core::throw_runtime_error("Invalid translation key");
 			detail::ValidateLocale(entry.locale);
 			if (entry.text.isEmpty())
-				throw std::runtime_error("Empty translation; omit missing entries");
+				core::throw_runtime_error("Empty translation; omit missing entries");
 			if (!entries.emplace(TranslationKey(entry.locale, entry.key), entry.text).second)
-				throw std::runtime_error("Duplicate translation key and locale");
+				core::throw_runtime_error("Duplicate translation key and locale");
 		}
 		m_Catalogs.emplace(catalog.context, std::move(entries));
 	}

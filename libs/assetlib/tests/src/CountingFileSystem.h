@@ -1,11 +1,11 @@
 #pragma once
 #include <core/file/IFileSystem.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace assetlib::test
@@ -36,7 +36,7 @@ namespace assetlib::test
 		[[nodiscard]] uint32_t
 		ReadsOf(const std::string_view path) const
 		{
-			const auto it = m_ReadsByPath.find(std::string(path));
+			const auto it = m_ReadsByPath.find(path);
 			return it != m_ReadsByPath.end() ? it->second : 0;
 		}
 
@@ -58,7 +58,7 @@ namespace assetlib::test
 			std::vector<std::byte> out = m_Inner->Read(path);
 			bytesRead += out.size();
 			++reads;
-			++m_ReadsByPath[std::string(path)];
+			CountRead(path);
 			return out;
 		}
 
@@ -67,7 +67,7 @@ namespace assetlib::test
 		{
 			bytesRead += size;
 			++reads;
-			++m_ReadsByPath[std::string(path)];
+			CountRead(path);
 			return m_Inner->ReadRange(path, offset, size);
 		}
 
@@ -84,7 +84,16 @@ namespace assetlib::test
 		}
 
 	private:
-		const core::file::IFileSystem*                    m_Inner;
-		mutable std::unordered_map<std::string, uint32_t> m_ReadsByPath;
+		void
+		CountRead(std::string_view path) const
+		{
+			auto it = m_ReadsByPath.find(path);
+			if (it == m_ReadsByPath.end())
+				it = m_ReadsByPath.emplace(std::string(path), 0).first;
+			++it->second;
+		}
+
+		const core::file::IFileSystem*                 m_Inner;
+		mutable core::str::unordered_str_map<uint32_t> m_ReadsByPath;
 	};
 }

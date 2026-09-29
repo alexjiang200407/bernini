@@ -2,6 +2,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/IAssetPlugin.h>
 #include <catch2/catch_test_macros.hpp>
+#include <core/err/util.h>
 #include <core/profiling/memory.h>
 #include <cstdint>
 #include <editor_plugin_api/IEditorPlugin.h>
@@ -11,7 +12,6 @@
 #include <gamelib/ui/UiRuntime.h>
 #include <memory>
 #include <spdlog/spdlog.h>
-#include <stdexcept>
 #include <string>
 
 #include <RmlUi/Core/RenderInterface.h>
@@ -72,7 +72,7 @@ namespace
 			m_Handle = dlopen(EDITOR_SDK_FIXTURE, RTLD_NOW | RTLD_LOCAL);
 #endif
 			if (m_Handle == nullptr)
-				throw std::runtime_error("cannot load " EDITOR_SDK_FIXTURE);
+				core::throw_runtime_error("cannot load {}", EDITOR_SDK_FIXTURE);
 		}
 
 		template <typename Fn>
@@ -86,7 +86,7 @@ namespace
 			auto* const symbol = dlsym(m_Handle, name);
 #endif
 			if (symbol == nullptr)
-				throw std::runtime_error(std::string("SDK fixture exports no ") + name);
+				core::throw_runtime_error("SDK fixture exports no {}", name);
 			return reinterpret_cast<Fn*>(symbol);
 		}
 
