@@ -247,6 +247,12 @@ and portability.
     place kit variation can come from.
   - [ ] Not recommended: X-mirroring, since reversed handedness is visible on armed units.
 - [ ] Crowd Simulation & Pathfinding
+  - [x] **`crowdlib`** — the simulation's own library, on the device the application's `bgpu` context
+    owns and compiling through its Slang sessions, isolated from the renderer's frame. It links
+    `bgpu`, never the RHI (`docs/crowdlib.md`).
+  - [x] **The async-compute path** — a kernel on a second queue beside the frame, read back to the
+    CPU: a compute queue and fence on D3D12, a second `MTLCommandQueue` and a shared event on Metal.
+    `examples/bgl_async_compute` runs it under a rendered cube.
   - [ ] **Shared-source kernel harness** — one kernel body per pass, compiled as both a Slang entry
     point and a C++ loop; the IDL codegen is already half of this.
     - [ ] Type shims (`float3`/`clamp`/`lerp`/`saturate`) + macro layer for genuine divergences.
@@ -340,7 +346,8 @@ and portability.
     and the permanent corpse palette read before optimising ALU.
   - [ ] Test motion vectors across LODs, both pose sources, corpses, mounts, and both transitions.
 - [ ] Light and Shadow
-  - [ ] Async Compute
+  - [ ] Async Compute — the queue exists, for the crowd simulation (§ Crowd Simulation & Pathfinding,
+    `crowdlib`); moving a renderer pass onto one is what is left.
   - [x] Directional Lighting — one sun per view, additive on the image-based light. It casts no
     shadow; that is the shadow lines further down this section, and until they land a lit surface is
     lit through whatever stands in front of it.
