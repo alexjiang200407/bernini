@@ -1,16 +1,16 @@
 #include "scene/TextureAssetStore.h"
-#include "cmd/CommandList.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
-#include "types/TextureDimension.h"
 #include "types/vk_format.h"
-#include "uniforms/DescriptorHandle.h"
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/TextureDimension.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/fixed_buffer.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>
@@ -22,7 +22,7 @@
 
 namespace bgl
 {
-	TextureAssetStore::TextureAssetStore(core::SharedRef<IResourceManager> resourceManager) :
+	TextureAssetStore::TextureAssetStore(core::SharedRef<bgpu::IResourceManager> resourceManager) :
 		m_ResourceManager(std::move(resourceManager))
 	{
 		m_Defaults[static_cast<size_t>(DefaultTexture::kWhite)] = CreateSolid(255, 255, 255, 255);
@@ -42,7 +42,7 @@ namespace bgl
 	TextureAssetHandle
 	TextureAssetStore::Add(assetlib::ImageData img, std::string debugName)
 	{
-		const TextureHandle handle = Create(std::move(img), std::move(debugName));
+		const bgpu::TextureHandle handle = Create(std::move(img), std::move(debugName));
 		if (handle.IsNull())
 		{
 			return TextureAssetHandle{};
@@ -52,39 +52,39 @@ namespace bgl
 		return TextureAssetHandle{ handle.slot, m_Srvs.at(handle.slot.index).srv.bindlessIndex };
 	}
 
-	TextureHandle
+	bgpu::TextureHandle
 	TextureAssetStore::Create(assetlib::ImageData img, std::string debugName)
 	{
-		TextureDesc desc;
-		desc.width     = img.width;
-		desc.height    = img.height;
-		desc.mipLevels = img.mipLevels;
-		desc.arraySize = img.arraySize;
-		desc.format    = FromVkFormat(img.vkFormat);
-		desc.usage     = TextureUsageFlag::kSRV;
-		desc.dimension =
-			img.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
-		desc.initialLayout = BarrierLayout::kCopyDest;
+		bgpu::TextureDesc desc;
+		desc.width         = img.width;
+		desc.height        = img.height;
+		desc.mipLevels     = img.mipLevels;
+		desc.arraySize     = img.arraySize;
+		desc.format        = FromVkFormat(img.vkFormat);
+		desc.usage         = bgpu::TextureUsageFlag::kSRV;
+		desc.dimension     = img.isCubemap ? bgpu::TextureDimension::kTextureCube :
+		                                     bgpu::TextureDimension::kTexture2D;
+		desc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 		desc.debugName     = std::move(debugName);
 
-		const TextureHandle handle = m_ResourceManager->CreateTexture(desc);
+		const bgpu::TextureHandle handle = m_ResourceManager->CreateTexture(desc);
 		if (handle.IsNull())
 		{
 			return handle;
 		}
 
-		SrvDesc srvDesc;
+		bgpu::SrvDesc srvDesc;
 		srvDesc.format    = desc.format;
 		srvDesc.dimension = desc.dimension;
 		srvDesc.mipLevels = desc.mipLevels;
 		srvDesc.arraySize = desc.arraySize;
 		srvDesc.debugName = desc.debugName;
 
-		const SrvHandle srv = m_ResourceManager->CreateSrv(handle, srvDesc);
+		const bgpu::SrvHandle srv = m_ResourceManager->CreateSrv(handle, srvDesc);
 		if (srv.IsNull())
 		{
 			m_ResourceManager->DestroyTexture(handle, /*deferred*/ false);
-			return TextureHandle{};
+			return bgpu::TextureHandle{};
 		}
 		m_Srvs.emplace(handle.slot.index, Entry{ handle, srv });
 
@@ -92,7 +92,7 @@ namespace bgl
 		return handle;
 	}
 
-	TextureHandle
+	bgpu::TextureHandle
 	TextureAssetStore::CreateSolid(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 	{
 		auto img     = assetlib::ImageData();
@@ -113,7 +113,7 @@ namespace bgl
 	{
 		// Destroying retires the slot at once, so a texture already deleted fails this check even
 		// while the GPU is still finishing with it. There is nothing to remember here.
-		const TextureHandle handle = TextureHandle::From(texture);
+		const bgpu::TextureHandle handle = TextureHandleOf(texture);
 		if (handle.IsNull() || !m_ResourceManager->ValidTextureHandle(handle))
 		{
 			throw SceneError(
@@ -140,7 +140,7 @@ namespace bgl
 	}
 
 	void
-	TextureAssetStore::Flush(ICommandList* cmdList)
+	TextureAssetStore::Flush(bgpu::ICommandList* cmdList)
 	{
 		if (m_PendingUploads.empty())
 		{
@@ -149,14 +149,14 @@ namespace bgl
 
 		cmdList->BeginEvent("Scene Texture Uploads");
 
-		std::vector<TextureHandle>      handles;
-		std::vector<TextureBarrierDesc> barriers;
+		std::vector<bgpu::TextureHandle>      handles;
+		std::vector<bgpu::TextureBarrierDesc> barriers;
 		handles.reserve(m_PendingUploads.size());
 		barriers.reserve(m_PendingUploads.size());
 
 		for (const PendingUpload& pending : m_PendingUploads)
 		{
-			std::vector<TextureSubresourceData> subresources;
+			std::vector<bgpu::TextureSubresourceData> subresources;
 			subresources.reserve(pending.image.subresources.size());
 			for (const auto& s : pending.image.subresources)
 			{
@@ -167,13 +167,13 @@ namespace bgl
 			cmdList->WriteTexture(pending.handle, subresources);
 
 			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it.
-			TextureBarrierDesc barrier;
-			barrier.syncBefore   = BarrierSyncFlag::kCopy;
-			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
-			barrier.layoutBefore = BarrierLayout::kCopyDest;
-			barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
-			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-			barrier.layoutAfter  = BarrierLayout::kShaderResource;
+			bgpu::TextureBarrierDesc barrier;
+			barrier.syncBefore   = bgpu::BarrierSyncFlag::kCopy;
+			barrier.accessBefore = bgpu::BarrierAccessFlag::kCopyDest;
+			barrier.layoutBefore = bgpu::BarrierLayout::kCopyDest;
+			barrier.syncAfter    = bgpu::BarrierSyncFlag::kPixelShader;
+			barrier.accessAfter  = bgpu::BarrierAccessFlag::kShaderResource;
+			barrier.layoutAfter  = bgpu::BarrierLayout::kShaderResource;
 
 			handles.push_back(pending.handle);
 			barriers.push_back(barrier);
@@ -184,14 +184,14 @@ namespace bgl
 		m_PendingUploads.clear();
 	}
 
-	SrvHandle
+	bgpu::SrvHandle
 	TextureAssetStore::GetSrv(core::slot_handle textureSlot) const noexcept
 	{
 		const auto it = m_Srvs.find(textureSlot.index);
-		return it == m_Srvs.end() ? SrvHandle{} : it->second.srv;
+		return it == m_Srvs.end() ? bgpu::SrvHandle{} : it->second.srv;
 	}
 
-	DescriptorHandle
+	bgpu::DescriptorHandle
 	TextureAssetStore::GetDescriptor(core::slot_handle textureSlot) const noexcept
 	{
 		return GetSrv(textureSlot).descriptor;

@@ -1,10 +1,10 @@
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
@@ -26,13 +26,13 @@ TEST_CASE("A freed descriptor is reused without aliasing a live one", "[resource
 	REQUIRE(resourceManager != nullptr);
 
 	const auto makeBuffer = [&](const char* name) {
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName(name);
 		return resourceManager->CreateComputeBuffer(desc);
 	};
 
-	const bgl::BufferHandle first  = makeBuffer("Churn First");
-	const bgl::BufferHandle second = makeBuffer("Churn Second");
+	const bgpu::BufferHandle first  = makeBuffer("Churn First");
+	const bgpu::BufferHandle second = makeBuffer("Churn Second");
 	REQUIRE(resourceManager->ValidBufferHandle(first));
 	REQUIRE(resourceManager->ValidBufferHandle(second));
 
@@ -41,7 +41,7 @@ TEST_CASE("A freed descriptor is reused without aliasing a live one", "[resource
 	// Immediate, not deferred: nothing has been submitted, so the descriptor is free to reuse now.
 	resourceManager->DestroyBuffer(first, /*deferred*/ false);
 
-	const bgl::BufferHandle third = makeBuffer("Churn Third");
+	const bgpu::BufferHandle third = makeBuffer("Churn Third");
 	REQUIRE(resourceManager->ValidBufferHandle(third));
 
 	// The survivor keeps its descriptor and stays live; the newcomer must not have been handed it.

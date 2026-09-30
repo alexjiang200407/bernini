@@ -1,17 +1,20 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <spdlog/spdlog.h>
+
+namespace bgpu
+{
+	class PipelineBatch;
+	class IDevice;
+	class IResourceManager;
+}
 
 namespace bgl
 {
-	class PipelineBatch;
-
 	class FrameGraph;
-	class IDevice;
-	class IResourceManager;
 	class PassContext;
 	struct DrawData;
 
@@ -59,7 +62,7 @@ namespace bgl
 		ExecuteSort(const PassContext& ctx, const DrawData& draw);
 
 	private:
-		ComputeKernel m_DepthKeys;
-		ComputeKernel m_Sort;
+		bgpu::ComputeKernel m_DepthKeys;
+		bgpu::ComputeKernel m_Sort;
 	};
 }

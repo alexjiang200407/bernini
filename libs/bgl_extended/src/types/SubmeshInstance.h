@@ -1,7 +1,7 @@
 #pragma once
 #include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/Entry.h>
-#include <bgl_common/idl/RawEntry.h>
+#include <bgpu/idl/Entry.h>
+#include <bgpu/idl/RawEntry.h>
 #include <cstdint>
 
 namespace bgl
@@ -13,12 +13,12 @@ namespace bgl
 	 */
 	struct SubmeshInstance
 	{
-		idl::Entry meshInstance;
-		uint32_t   submeshIndex = 0;
+		bgpu::idl::Entry meshInstance;
+		uint32_t         submeshIndex = 0;
 
 		// A byte offset into the scene's material arena, naming the record's header -- not an
 		// element index. The record says which kind it is; `drawBucket` agrees by construction.
-		idl::RawEntry material;
+		bgpu::idl::RawEntry material;
 
 		// cInvalidDrawBucket, not 0: the sort skips an id past the ceiling, which is what keeps tail
 		// padding out of a real draw bucket.

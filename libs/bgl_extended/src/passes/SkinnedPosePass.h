@@ -1,15 +1,18 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
 #include <spdlog/spdlog.h>
+
+namespace bgpu
+{
+	class PipelineBatch;
+	class IDevice;
+}
 
 namespace bgl
 {
-	class PipelineBatch;
-
 	class FrameGraph;
-	class IDevice;
 	class PassContext;
 	struct DrawData;
 
@@ -51,6 +54,6 @@ namespace bgl
 		void
 		Execute(const PassContext& ctx, const DrawData& draw);
 
-		ComputeKernel m_PoseSkinned;
+		bgpu::ComputeKernel m_PoseSkinned;
 	};
 }

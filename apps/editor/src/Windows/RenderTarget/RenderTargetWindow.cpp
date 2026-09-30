@@ -27,9 +27,9 @@
 #include <QTimer>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/Viewport.h>
 #include <core/err/util.h>
 
 namespace

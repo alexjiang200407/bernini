@@ -1,15 +1,4 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -17,6 +6,17 @@
 #include <bgl/IGraphics.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/SkinnedTableState.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -65,11 +65,11 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// Every field is distinct, so one read at a neighbour's offset is a wrong value rather than a
 	// coincidence. The two integers stay small enough to survive the float the shader reports them
@@ -113,15 +113,15 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	std::memcpy(bytes.data() + c_VertexOffset, &vertexVec4, sizeof(vertexVec4));
 	std::memcpy(bytes.data() + c_VertexOffset + 16, &vertexVec3, sizeof(vertexVec3));
 
-	const bgl::BufferHandle records = resourceManager->CreateRawBuffer(
-		bgl::RawViewDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
+	const bgpu::BufferHandle records = resourceManager->CreateRawBuffer(
+		bgpu::RawViewDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
 	REQUIRE(resourceManager->ValidBufferHandle(records));
 
-	auto outDesc         = bgl::ComputeBufferDesc();
+	auto outDesc         = bgpu::ComputeBufferDesc();
 	outDesc.initialCount = c_OutValues;
 	outDesc.debugName    = "Raw Load Results";
 	outDesc.SetElement<glm::vec4>();
-	const bgl::BufferHandle outValues = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outValues = resourceManager->CreateComputeBuffer(outDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outValues));
 
 	// The view a buffer was created with is the one thing a shader cannot ask about, so the
@@ -129,13 +129,13 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(resourceManager->GetBufferDesc(records).isRaw);
 	CHECK_FALSE(resourceManager->GetBufferDesc(outValues).isRaw);
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = c_OutValues * sizeof(glm::vec4);
-	rbDesc.debugName                   = "Raw Load Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = c_OutValues * sizeof(glm::vec4);
+	rbDesc.debugName                    = "Raw Load Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSRawLoad"))
 			.SetDebugName("Raw Load"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -151,24 +151,24 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	cmdList->WriteBuffer(records, bytes.data(), 0, bytes.size());
 	cmdList->Barrier(
 		records,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource));
 
-	auto computeState   = bgl::ComputeState();
+	auto computeState   = bgpu::ComputeState();
 	computeState.kernel = &kernel;
 	cmdList->SetComputeState(computeState);
 	cmdList->Dispatch(1, 1, 1);
 
 	cmdList->Barrier(
 		outValues,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, outValues);
 	cmdList->Close();
@@ -246,33 +246,33 @@ TEST_CASE("A compute shader stores into a raw buffer", "[raw][compute][bindless]
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	constexpr uint32_t c_TargetBytes = 32;
 
-	const bgl::BufferHandle target = resourceManager->CreateRawBuffer(
-		bgl::RawViewDesc().SetByteSize(c_TargetBytes).SetIsUav().SetDebugName("Raw Store"));
+	const bgpu::BufferHandle target = resourceManager->CreateRawBuffer(
+		bgpu::RawViewDesc().SetByteSize(c_TargetBytes).SetIsUav().SetDebugName("Raw Store"));
 	REQUIRE(resourceManager->ValidBufferHandle(target));
 	CHECK(resourceManager->GetBufferDesc(target).isRaw);
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = c_TargetBytes;
-	rbDesc.debugName                   = "Raw Store Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = c_TargetBytes;
+	rbDesc.debugName                    = "Raw Store Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSRawStore"))
 			.SetDebugName("Raw Store"));
 	REQUIRE(kernel.pipeline != nullptr);
 
 	kernel["gUniforms"]["target"] = target;
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 
 	cmdList->Open(cmdQueue, cmdAllocator);
@@ -281,11 +281,11 @@ TEST_CASE("A compute shader stores into a raw buffer", "[raw][compute][bindless]
 
 	cmdList->Barrier(
 		target,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, target);
 	cmdList->Close();

@@ -3,7 +3,7 @@
 #include <QtNodes/NodeData>
 #include <QtNodes/internal/NodeData.hpp>
 
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <utility>

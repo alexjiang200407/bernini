@@ -398,11 +398,11 @@ Nine, at the granularity of Unreal's `ELLMTag`: `mesh`, `animation`, `texture`, 
 per thing somebody can act on. A finer taxonomy is a set of labels nobody maintains, and an
 unmaintained tag reports a number nobody trusts.
 
-**The list is the engine's, in `bgl_common/MemoryTag.h`; the machinery is `core`'s.** `core` is
+**The list is the engine's, in `bgpu/MemoryTag.h`; the machinery is `core`'s.** `core` is
 shared by every target and has no business knowing what a mesh is, so `core::profiling::TaggedBytes`
 is templated on a tag enum and asks only for a count and a name, both found by ADL beside it. The
 enum sits at the lowest point that everything charging memory can see — the renderer's resources and
-gamelib's container cache — so `bgl_wgpu` reaches it from there too. A report never names a tag enum
+gamelib's container cache, and a compute client's device buffers. A report never names a tag enum
 at all: each instantiation registers its table on first use and the report walks what registered,
 which is what lets `assetlib_cli` write one without linking a renderer. The registry is held once
 per process, in `core_process` ([core_process.md](core_process.md)), which is how a renderer
@@ -419,16 +419,16 @@ in advance.
 whatever owns the buffer**, so the release cannot be forgotten on a path that throws:
 
 ```cpp
-#include <bgl_common/MemoryTag.h>
+#include <bgpu/MemoryTag.h>
 
 struct CachedThing
 {
     std::vector<std::byte> bytes;
-    bgl::TaggedBytes       tracked;
+    bgpu::TaggedBytes       tracked;
 };
 
 thing.bytes   = load(key);
-thing.tracked = bgl::TaggedBytes(bgl::MemoryTag::kMesh, thing.bytes.size());
+thing.tracked = bgpu::TaggedBytes(bgpu::MemoryTag::kMesh, thing.bytes.size());
 ```
 
 Assigning a fresh one releases the charge it replaces, which is what a container that grew wants —

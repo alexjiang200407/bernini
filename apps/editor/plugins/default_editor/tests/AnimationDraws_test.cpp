@@ -12,7 +12,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

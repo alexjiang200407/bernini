@@ -1,20 +1,24 @@
 #include "RenderTarget_d3d12.h"
-#include "cmd/CommandAllocator_d3d12.h"
-#include "cmd/CommandQueue.h"
-#include "cmd/CommandQueue_d3d12.h"
-#include "constants/constants.h"
-#include "device/Device.h"
-#include "resource/ResourceManager_d3d12.h"
+#include "gfx/frame_constants.h"
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/types/NativeObject.h>
 #include <spdlog/spdlog.h>
+
+namespace
+{
+	using bgpu::d3d12ErrChecker;
+}
 
 namespace bgl
 {
 	RenderTarget::RenderTarget(
-		const RenderTargetDesc& desc,
-		DeviceRef               device,
-		CommandQueueRef         queue,
-		ResourceManagerRef      resourceManager,
-		bool                    enableDebug) :
+		const RenderTargetDesc&  desc,
+		bgpu::DeviceRef          device,
+		bgpu::CommandQueueRef    queue,
+		bgpu::ResourceManagerRef resourceManager,
+		bool                     enableDebug) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
 		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled), m_EnableDebug(enableDebug),
@@ -86,7 +90,9 @@ namespace bgl
 
 		wrl::ComPtr<IDXGISwapChain1> swap;
 
-		auto d3d12CommandQueue = m_CommandQueue->As<CommandQueue>()->GetD3D12CommandQueue();
+		auto* d3d12CommandQueue =
+			m_CommandQueue->GetNativeObject(bgpu::NativeObjectType::kD3D12CommandQueue)
+				.As<ID3D12CommandQueue>();
 		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
 			d3d12ErrChecker;
 
@@ -104,26 +110,26 @@ namespace bgl
 	RenderTarget::CreateRenderTargets()
 	{
 		{
-			TextureDesc textureDesc{};
-			textureDesc.format        = Format::BGRA8_UNORM;
+			bgpu::TextureDesc textureDesc{};
+			textureDesc.format        = bgpu::Format::BGRA8_UNORM;
 			textureDesc.width         = GetWidth();
 			textureDesc.height        = GetHeight();
-			textureDesc.dimension     = TextureDimension::kTexture2D;
-			textureDesc.usage         = TextureUsageFlag::kRenderTarget;
-			textureDesc.initialLayout = BarrierLayout::kPresent;
+			textureDesc.dimension     = bgpu::TextureDimension::kTexture2D;
+			textureDesc.usage         = bgpu::TextureUsageFlag::kRenderTarget;
+			textureDesc.initialLayout = bgpu::BarrierLayout::kPresent;
 
 			for (UINT i = 0; i < c_SwapchainImageCount; i++)
 			{
 				wrl::ComPtr<ID3D12Resource> backBuffer;
 				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
-				m_BackBuffers[i].textureHandle =
-					m_ResourceManager->As<ResourceManager>()->CreateTexture(
-						std::move(backBuffer),
-						textureDesc);
+				m_BackBuffers[i].textureHandle = m_ResourceManager->ImportNativeTexture(
+					bgpu::NativeObjectType::kD3D12Resource,
+					bgpu::NativeObject{ backBuffer.Get() },
+					textureDesc);
 
-				RtvDesc rtvDesc;
-				rtvDesc.format    = Format::SBGRA8_UNORM;
+				bgpu::RtvDesc rtvDesc;
+				rtvDesc.format    = bgpu::Format::SBGRA8_UNORM;
 				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
 
 				m_BackBuffers[i].rtvHandle =
@@ -140,27 +146,27 @@ namespace bgl
 		{
 			for (auto i = 0u; i < c_SwapchainImageCount; i++)
 			{
-				auto texDesc      = TextureDesc();
+				auto texDesc      = bgpu::TextureDesc();
 				texDesc.width     = GetWidth();
 				texDesc.height    = GetHeight();
 				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
-				texDesc.dimension = TextureDimension::kTexture2D;
-				texDesc.format    = Format::SBGRA8_UNORM;
-				texDesc.usage =
-					TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+				texDesc.dimension = bgpu::TextureDimension::kTexture2D;
+				texDesc.format    = bgpu::Format::SBGRA8_UNORM;
+				texDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+					                                    bgpu::TextureUsageFlag::kSRV };
+				texDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
 
-				auto rtvDesc      = RtvDesc();
-				rtvDesc.format    = Format::SBGRA8_UNORM;
+				auto rtvDesc      = bgpu::RtvDesc();
+				rtvDesc.format    = bgpu::Format::SBGRA8_UNORM;
 				rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
 
 				m_BackBuffers[i].rtvHandle =
 					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
 
-				auto srvDesc      = SrvDesc();
-				srvDesc.format    = Format::SBGRA8_UNORM;
+				auto srvDesc      = bgpu::SrvDesc();
+				srvDesc.format    = bgpu::Format::SBGRA8_UNORM;
 				srvDesc.debugName = std::format("Offscreen Back Buffer SRV: {}", i);
 
 				m_BackBuffers[i].srvHandle =
@@ -176,9 +182,9 @@ namespace bgl
 		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
 		// Alpha is carried because the blend state writes destination alpha and the capture path
 		// reads it, which rules out the packed three-channel float formats.
-		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
+		constexpr auto c_SceneColorFormat = bgpu::Format::RGBA16_FLOAT;
 
-		constexpr auto c_OutlineMaskFormat = Format::R8_UNORM;
+		constexpr auto c_OutlineMaskFormat = bgpu::Format::R8_UNORM;
 	}
 
 	void
@@ -192,29 +198,29 @@ namespace bgl
 	RenderTarget::CreateRenderAttachments()
 	{
 		{
-			auto depthTextureDesc      = TextureDesc();
-			depthTextureDesc.format    = Format::D24S8;
+			auto depthTextureDesc      = bgpu::TextureDesc();
+			depthTextureDesc.format    = bgpu::Format::D24S8;
 			depthTextureDesc.width     = GetRenderWidth();
 			depthTextureDesc.height    = GetRenderHeight();
-			depthTextureDesc.dimension = TextureDimension::kTexture2D;
+			depthTextureDesc.dimension = bgpu::TextureDimension::kTexture2D;
 			depthTextureDesc.debugName = "Depth Buffer";
-			depthTextureDesc.usage =
-				TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
-			depthTextureDesc.initialLayout = BarrierLayout::kDepthWrite;
+			depthTextureDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kDepthStencil,
+				                                             bgpu::TextureUsageFlag::kSRV };
+			depthTextureDesc.initialLayout = bgpu::BarrierLayout::kDepthWrite;
 
 			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
 
 			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
 
-			auto dsvDesc      = DsvDesc();
-			dsvDesc.format    = Format::D24S8;
+			auto dsvDesc      = bgpu::DsvDesc();
+			dsvDesc.format    = bgpu::Format::D24S8;
 			dsvDesc.debugName = "Depth Buffer RTV";
 
 			m_DepthBuffer.dsvHandle =
 				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 
-			auto depthSrvDesc      = SrvDesc();
-			depthSrvDesc.format    = Format::D24S8;
+			auto depthSrvDesc      = bgpu::SrvDesc();
+			depthSrvDesc.format    = bgpu::Format::D24S8;
 			depthSrvDesc.debugName = "Depth Buffer SRV";
 
 			m_DepthBuffer.srvHandle =
@@ -223,21 +229,21 @@ namespace bgl
 
 		{
 			// kSRV as well as kRenderTarget: the buffer exists to be resampled by a later pass.
-			auto motionTextureDesc      = TextureDesc();
+			auto motionTextureDesc      = bgpu::TextureDesc();
 			motionTextureDesc.format    = c_MotionVectorFormat;
 			motionTextureDesc.width     = GetRenderWidth();
 			motionTextureDesc.height    = GetRenderHeight();
-			motionTextureDesc.dimension = TextureDimension::kTexture2D;
+			motionTextureDesc.dimension = bgpu::TextureDimension::kTexture2D;
 			motionTextureDesc.debugName = "Motion Vectors";
-			motionTextureDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			motionTextureDesc.initialLayout = BarrierLayout::kRenderTarget;
+			motionTextureDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                              bgpu::TextureUsageFlag::kSRV };
+			motionTextureDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
 
-			motionTextureDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+			motionTextureDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
 
 			m_MotionVectors.textureHandle = m_ResourceManager->CreateTexture(motionTextureDesc);
 
-			auto rtvDesc      = RtvDesc();
+			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_MotionVectorFormat;
 			rtvDesc.debugName = "Motion Vectors RTV";
 
@@ -246,28 +252,28 @@ namespace bgl
 		}
 
 		{
-			auto sceneColorDesc      = TextureDesc();
+			auto sceneColorDesc      = bgpu::TextureDesc();
 			sceneColorDesc.format    = c_SceneColorFormat;
 			sceneColorDesc.width     = GetRenderWidth();
 			sceneColorDesc.height    = GetRenderHeight();
-			sceneColorDesc.dimension = TextureDimension::kTexture2D;
+			sceneColorDesc.dimension = bgpu::TextureDimension::kTexture2D;
 			sceneColorDesc.debugName = "Scene Color";
-			sceneColorDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			sceneColorDesc.initialLayout = BarrierLayout::kRenderTarget;
+			sceneColorDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                           bgpu::TextureUsageFlag::kSRV };
+			sceneColorDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
 
-			sceneColorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+			sceneColorDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 			m_SceneColor.textureHandle = m_ResourceManager->CreateTexture(sceneColorDesc);
 
-			auto rtvDesc      = RtvDesc();
+			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_SceneColorFormat;
 			rtvDesc.debugName = "Scene Color RTV";
 
 			m_SceneColor.rtvHandle =
 				m_ResourceManager->CreateRtv(m_SceneColor.textureHandle, rtvDesc);
 
-			auto srvDesc      = SrvDesc();
+			auto srvDesc      = bgpu::SrvDesc();
 			srvDesc.format    = c_SceneColorFormat;
 			srvDesc.debugName = "Scene Color SRV";
 
@@ -276,7 +282,7 @@ namespace bgl
 		}
 
 		{
-			auto srvDesc      = SrvDesc();
+			auto srvDesc      = bgpu::SrvDesc();
 			srvDesc.format    = c_MotionVectorFormat;
 			srvDesc.debugName = "Motion Vectors SRV";
 
@@ -285,28 +291,28 @@ namespace bgl
 		}
 
 		{
-			auto maskDesc      = TextureDesc();
-			maskDesc.format    = c_OutlineMaskFormat;
-			maskDesc.width     = GetRenderWidth();
-			maskDesc.height    = GetRenderHeight();
-			maskDesc.dimension = TextureDimension::kTexture2D;
-			maskDesc.debugName = "Outline Mask";
-			maskDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			maskDesc.initialLayout = BarrierLayout::kRenderTarget;
+			auto maskDesc          = bgpu::TextureDesc();
+			maskDesc.format        = c_OutlineMaskFormat;
+			maskDesc.width         = GetRenderWidth();
+			maskDesc.height        = GetRenderHeight();
+			maskDesc.dimension     = bgpu::TextureDimension::kTexture2D;
+			maskDesc.debugName     = "Outline Mask";
+			maskDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                         bgpu::TextureUsageFlag::kSRV };
+			maskDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
 
-			maskDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+			maskDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
 
 			m_OutlineMask.textureHandle = m_ResourceManager->CreateTexture(maskDesc);
 
-			auto rtvDesc      = RtvDesc();
+			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_OutlineMaskFormat;
 			rtvDesc.debugName = "Outline Mask RTV";
 
 			m_OutlineMask.rtvHandle =
 				m_ResourceManager->CreateRtv(m_OutlineMask.textureHandle, rtvDesc);
 
-			auto srvDesc      = SrvDesc();
+			auto srvDesc      = bgpu::SrvDesc();
 			srvDesc.format    = c_OutlineMaskFormat;
 			srvDesc.debugName = "Outline Mask SRV";
 
@@ -325,27 +331,27 @@ namespace bgl
 
 		for (uint32_t i = 0; i < m_History.size(); ++i)
 		{
-			auto historyDesc      = TextureDesc();
-			historyDesc.format    = c_SceneColorFormat;
-			historyDesc.width     = GetWidth();
-			historyDesc.height    = GetHeight();
-			historyDesc.dimension = TextureDimension::kTexture2D;
-			historyDesc.debugName = std::format("TAA History: {}", i);
-			historyDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
-			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+			auto historyDesc          = bgpu::TextureDesc();
+			historyDesc.format        = c_SceneColorFormat;
+			historyDesc.width         = GetWidth();
+			historyDesc.height        = GetHeight();
+			historyDesc.dimension     = bgpu::TextureDimension::kTexture2D;
+			historyDesc.debugName     = std::format("TAA History: {}", i);
+			historyDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                            bgpu::TextureUsageFlag::kSRV };
+			historyDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+			historyDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 			m_History[i].textureHandle = m_ResourceManager->CreateTexture(historyDesc);
 
-			auto rtvDesc      = RtvDesc();
+			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_SceneColorFormat;
 			rtvDesc.debugName = std::format("TAA History RTV: {}", i);
 
 			m_History[i].rtvHandle =
 				m_ResourceManager->CreateRtv(m_History[i].textureHandle, rtvDesc);
 
-			auto historySrvDesc      = SrvDesc();
+			auto historySrvDesc      = bgpu::SrvDesc();
 			historySrvDesc.format    = c_SceneColorFormat;
 			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
 
@@ -554,5 +560,21 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
 		}
 		m_OutlineMask = {};
+	}
+
+	RenderTargetRef
+	CreateBackendRenderTarget(
+		const RenderTargetDesc&  desc,
+		bgpu::DeviceRef          device,
+		bgpu::CommandQueueRef    queue,
+		bgpu::ResourceManagerRef resourceManager,
+		bool                     enableDebug)
+	{
+		return core::SharedRef<RenderTarget>::Make(
+			desc,
+			std::move(device),
+			std::move(queue),
+			std::move(resourceManager),
+			enableDebug);
 	}
 }

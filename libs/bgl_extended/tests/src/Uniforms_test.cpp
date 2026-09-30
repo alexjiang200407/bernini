@@ -1,18 +1,19 @@
-#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputePipeline.h"
-#include "pipeline/MeshletPipeline.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
-#include "uniforms/DescriptorHandle.h"
+#include "scene/TextureAssetStore.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl/TextureAssetHandle.h>
-#include <bgl_common/UniformValueType.h>
-#include <bgl_common/UniformsBase.h>
+#include <bgl/types/TextureAssetHandle.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
+#include <bgpu/uniforms/UniformValueType.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
@@ -55,7 +56,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 	SECTION("Scalar")
 	{
-		auto pipelineDesc = bgl::MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
 
@@ -66,8 +67,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// f1
 		{
-			CHECK(uniforms["f1"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["f1"].GetValueType() == bgl::UniformValueType::kFloat);
+			CHECK(uniforms["f1"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["f1"].GetValueType() == bgpu::UniformValueType::kFloat);
 			CHECK(uniforms["f1"].GetOffset() == 0u);
 
 			// Is scalar, so no indexing or member access allowed
@@ -110,8 +111,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// f2
 		{
-			CHECK(uniforms["f2"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["f2"].GetValueType() == bgl::UniformValueType::kFloat2);
+			CHECK(uniforms["f2"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["f2"].GetValueType() == bgpu::UniformValueType::kFloat2);
 			CHECK(uniforms["f2"].GetOffset() == 4u + c_Vec2AlignPad);  // f1 (0) + 4 bytes
 
 			CHECK(uniforms["f2"][0].IsNull());
@@ -130,8 +131,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// f3
 		{
-			CHECK(uniforms["f3"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["f3"].GetValueType() == bgl::UniformValueType::kFloat3);
+			CHECK(uniforms["f3"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["f3"].GetValueType() == bgpu::UniformValueType::kFloat3);
 			CHECK(uniforms["f3"].GetOffset() == 16u);  // Aligns to next 16-byte boundary
 
 			CHECK(uniforms["f3"][0].IsNull());
@@ -144,8 +145,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// f4
 		{
-			CHECK(uniforms["f4"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["f4"].GetValueType() == bgl::UniformValueType::kFloat4);
+			CHECK(uniforms["f4"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["f4"].GetValueType() == bgpu::UniformValueType::kFloat4);
 			CHECK(uniforms["f4"].GetOffset() == 32u);  // Row 3 start
 
 			CHECK_THROWS(static_cast<glm::vec3>(uniforms["f4"]));
@@ -157,8 +158,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// i1
 		{
-			CHECK(uniforms["i1"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["i1"].GetValueType() == bgl::UniformValueType::kInt);
+			CHECK(uniforms["i1"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["i1"].GetValueType() == bgpu::UniformValueType::kInt);
 			CHECK(uniforms["i1"].GetOffset() == 48u);  // Row 4 start
 
 			CHECK_THROWS(static_cast<int32_t>(uniforms["f1"]));  // Cross-contamination test
@@ -171,8 +172,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// i2
 		{
-			CHECK(uniforms["i2"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["i2"].GetValueType() == bgl::UniformValueType::kInt2);
+			CHECK(uniforms["i2"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["i2"].GetValueType() == bgpu::UniformValueType::kInt2);
 			CHECK(uniforms["i2"].GetOffset() == 52u + c_Vec2AlignPad);
 
 			CHECK_THROWS(static_cast<int32_t>(uniforms["i2"]));
@@ -184,8 +185,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// i3
 		{
-			CHECK(uniforms["i3"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["i3"].GetValueType() == bgl::UniformValueType::kInt3);
+			CHECK(uniforms["i3"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["i3"].GetValueType() == bgpu::UniformValueType::kInt3);
 			CHECK(uniforms["i3"].GetOffset() == 64u);  // Aligns to next 16-byte boundary
 
 			CHECK_THROWS(static_cast<glm::ivec4>(uniforms["i3"]));
@@ -197,8 +198,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// i4
 		{
-			CHECK(uniforms["i4"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["i4"].GetValueType() == bgl::UniformValueType::kInt4);
+			CHECK(uniforms["i4"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["i4"].GetValueType() == bgpu::UniformValueType::kInt4);
 			CHECK(uniforms["i4"].GetOffset() == 80u);
 
 			CHECK_THROWS(static_cast<glm::ivec3>(uniforms["i4"]));
@@ -210,8 +211,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// u1
 		{
-			CHECK(uniforms["u1"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["u1"].GetValueType() == bgl::UniformValueType::kUInt);
+			CHECK(uniforms["u1"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["u1"].GetValueType() == bgpu::UniformValueType::kUInt);
 			CHECK(uniforms["u1"].GetOffset() == 96u);  // Row 7 start
 
 			CHECK_THROWS(static_cast<glm::uvec2>(uniforms["u1"]));
@@ -223,8 +224,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// u2
 		{
-			CHECK(uniforms["u2"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["u2"].GetValueType() == bgl::UniformValueType::kUInt2);
+			CHECK(uniforms["u2"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["u2"].GetValueType() == bgpu::UniformValueType::kUInt2);
 			CHECK(uniforms["u2"].GetOffset() == 100u + c_Vec2AlignPad);
 
 			CHECK_THROWS(static_cast<uint32_t>(uniforms["u2"]));
@@ -236,8 +237,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// u3
 		{
-			CHECK(uniforms["u3"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["u3"].GetValueType() == bgl::UniformValueType::kUInt3);
+			CHECK(uniforms["u3"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["u3"].GetValueType() == bgpu::UniformValueType::kUInt3);
 			CHECK(uniforms["u3"].GetOffset() == 112u);  // Aligns to next 16-byte boundary
 
 			CHECK_THROWS(static_cast<glm::uvec4>(uniforms["u3"]));
@@ -249,8 +250,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// u4
 		{
-			CHECK(uniforms["u4"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["u4"].GetValueType() == bgl::UniformValueType::kUInt4);
+			CHECK(uniforms["u4"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["u4"].GetValueType() == bgpu::UniformValueType::kUInt4);
 			CHECK(uniforms["u4"].GetOffset() == 128u);
 
 			CHECK_THROWS(static_cast<glm::uvec3>(uniforms["u4"]));
@@ -262,8 +263,8 @@ TEST_CASE("Uniforms", "[uniforms]")
 
 		// mat
 		{
-			CHECK(uniforms["mat"].GetType() == bgl::UniformType::kValue);
-			CHECK(uniforms["mat"].GetValueType() == bgl::UniformValueType::kMat4x4);
+			CHECK(uniforms["mat"].GetType() == bgpu::UniformType::kValue);
+			CHECK(uniforms["mat"].GetValueType() == bgpu::UniformValueType::kMat4x4);
 			CHECK(uniforms["mat"].GetOffset() == 144u);  // Row 10 start
 
 			CHECK(uniforms["mat"][0].IsNull());
@@ -316,11 +317,11 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 	REQUIRE(device != nullptr);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSComputeBufferTest"))
 			.SetDebugName("CSComputeBufferTest"));
 
-	const bgl::Uniforms* variants[] = { &kernel["gUniforms"] };
+	const bgpu::Uniforms* variants[] = { &kernel["gUniforms"] };
 
 	SECTION("a declared member resolves")
 	{
@@ -332,7 +333,7 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 	{
 		constexpr std::array c_Names = { "outBuffer"sv, "noSuchMember"sv };
 
-		const auto unknown = bgl::FindUnknownMembers(variants, c_Names);
+		const auto unknown = bgpu::FindUnknownMembers(variants, c_Names);
 
 		REQUIRE(unknown.size() == 1);
 		CHECK(unknown.front() == "noSuchMember"sv);
@@ -340,10 +341,10 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 
 	SECTION("a variant that does not declare the buffer at all is skipped, not counted against it")
 	{
-		const bgl::Uniforms* withAbsent[] = { nullptr, &kernel["gUniforms"] };
-		constexpr std::array c_Names      = { "outBuffer"sv };
+		const bgpu::Uniforms* withAbsent[] = { nullptr, &kernel["gUniforms"] };
+		constexpr std::array  c_Names      = { "outBuffer"sv };
 
-		CHECK(bgl::FindUnknownMembers(withAbsent, c_Names).empty());
+		CHECK(bgpu::FindUnknownMembers(withAbsent, c_Names).empty());
 	}
 }
 
@@ -362,7 +363,7 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 
 	SECTION("a value")
 	{
-		auto pipelineDesc = bgl::MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
 
 		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
@@ -393,11 +394,11 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 	SECTION("a resource handle")
 	{
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSComputeBufferTest"))
 				.SetDebugName("CSComputeBufferTest"));
 
-		auto handle          = bgl::BufferHandle();
+		auto handle          = bgpu::BufferHandle();
 		handle.bindlessIndex = 7u;
 
 		kernel["gUniforms"]["outBuffer"].SetIfValid(handle);
@@ -413,11 +414,11 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 		// hold is that one write lands in both halves -- if it reached only the raw one, every
 		// material would sample whatever descriptor the view member was left holding.
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSRawArenaBinding"))
 				.SetDebugName("CSRawArenaBinding"));
 
-		auto binding                  = bgl::RawArenaBinding();
+		auto binding                  = bgpu::RawArenaBinding();
 		binding.buffer.bindlessIndex  = 11u;
 		binding.handles.bindlessIndex = 12u;
 
@@ -434,19 +435,19 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 
 TEST_CASE("Only a type the mirror can store is assignable to an accessor", "[uniforms]")
 {
-	STATIC_REQUIRE(bgl::UniformAssignable<float>);
-	STATIC_REQUIRE(bgl::UniformAssignable<glm::mat4>);
-	STATIC_REQUIRE(bgl::UniformAssignable<bgl::DescriptorHandle>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<float>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<glm::mat4>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<bgpu::DescriptorHandle>);
 
 	// The four handle types reach their own assignment operators rather than the value one.
-	STATIC_REQUIRE(bgl::UniformAssignable<bgl::BufferHandle>);
-	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SrvHandle>);
-	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SamplerHandle>);
-	STATIC_REQUIRE(bgl::UniformAssignable<bgl::TextureAssetHandle>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<bgpu::BufferHandle>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<bgpu::SrvHandle>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<bgpu::SamplerHandle>);
+	STATIC_REQUIRE(bgpu::UniformAssignable<bgl::TextureAssetHandle>);
 
 	// A double is the near miss that matters: writing 1.0 where the cbuffer declares a float is a
 	// compile error, not a silent kNone that would throw only once the pass ran.
-	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<double>);
-	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<int64_t>);
-	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<std::string>);
+	STATIC_REQUIRE_FALSE(bgpu::UniformAssignable<double>);
+	STATIC_REQUIRE_FALSE(bgpu::UniformAssignable<int64_t>);
+	STATIC_REQUIRE_FALSE(bgpu::UniformAssignable<std::string>);
 }

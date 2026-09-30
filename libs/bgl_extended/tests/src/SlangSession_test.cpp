@@ -1,19 +1,19 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -75,32 +75,32 @@ TEST_CASE(
 
 		auto device = gfxBase->GetDevice();
 
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		constexpr uint32_t c_Count = 8;
 
-		auto bufDesc = bgl::ComputeBufferDesc();
+		auto bufDesc = bgpu::ComputeBufferDesc();
 		bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Slang Session Out");
 
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 		REQUIRE(resourceManager->ValidBufferHandle(outBuf));
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSComputeBufferTest"))
 				.SetDebugName("CSComputeBufferTest"));
 
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 
-		auto state   = bgl::ComputeState();
+		auto state   = bgpu::ComputeState();
 		state.kernel = &kernel;
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 		rbDesc.debugName = "Slang Session Readback";
 
@@ -112,11 +112,11 @@ TEST_CASE(
 
 		cmdList->Barrier(
 			outBuf,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 		cmdList->CopyBufferToReadback(rb, outBuf);
 		cmdList->Close();

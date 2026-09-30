@@ -7,8 +7,8 @@
 #include "Windows/MeshEditor/nodes/ChannelData.h"
 #include "Windows/MeshEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MeshEditor/nodes/SurfaceOutputNode.h"
-#include <bgl/LayerType.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/LayerType.h>
 #include <editor_plugin_api/IEditorHost.h>
 
 #include <QDebug>
@@ -16,10 +16,10 @@
 
 #include "Windows/MeshEditor/material_graph.h"
 #include <assetlib_structs/BMaterial.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>

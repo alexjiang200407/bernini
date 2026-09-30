@@ -1,13 +1,13 @@
 #include "passes/SkinnedPosePass.h"
-#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "uniforms/Uniforms.h"
 #include <bgl/types/GroundPlaneDesc.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
@@ -21,7 +21,7 @@ namespace bgl
 
 		ctx.pipelines->Add(
 			m_PoseSkinned,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.anim.PoseSkinned"))
 				.SetDebugName("Pose Skinned"));
 	}
@@ -39,19 +39,19 @@ namespace bgl
 		fg.AddPass(
 			PassDesc()
 				.SetName("Pose Skinned {}", draw.drawIdx)
-				.AddBufferRead("scene.posedInstances", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.meshInstanceBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.playbackBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.rigBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.skinnedBoneBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.clipBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.boneSampleBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.skinnedLegBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.plantWeightBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.blendNodeBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.blendSampleBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.footIKBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferReadWrite("scene.bonePalettes", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.posedInstances", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.meshInstanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.playbackBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.rigBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedBoneBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.clipBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.boneSampleBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedLegBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.plantWeightBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.blendNodeBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.blendSampleBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.footIKBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferReadWrite("scene.bonePalettes", bgpu::BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
 
@@ -67,7 +67,7 @@ namespace bgl
 			return;
 		}
 
-		Uniforms& uniforms            = m_PoseSkinned["gUniforms"];
+		bgpu::Uniforms& uniforms      = m_PoseSkinned["gUniforms"];
 		uniforms["posedInstances"]    = ctx.GetBuffer("scene.posedInstances");
 		uniforms["meshBuffer"]        = ctx.GetBuffer("scene.meshInstanceBuffer");
 		uniforms["playbackBuffer"]    = ctx.GetBuffer("scene.playbackBuffer");
@@ -91,7 +91,7 @@ namespace bgl
 		uniforms["groundNormal"]      = ground.normal;
 		uniforms["plantFeet"]         = scene->GetFootPlanting() ? 1u : 0u;
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_PoseSkinned;
 
 		auto cmdList = ctx.GetCommandList();

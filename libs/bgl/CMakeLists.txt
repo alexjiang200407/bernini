@@ -41,42 +41,6 @@ target_link_libraries(bgl_selfcheck PRIVATE bgl)
 
 enable_strict_compiler(bgl_selfcheck)
 
-# The contract's own suite. Most of bgl is pure declaration, so what there is to run is the handful
-# of client-side helpers it defines over its own types -- and they need no device, which is why they
-# are testable here at all.
-if (BUILD_TESTS)
-	find_package(Catch2 CONFIG REQUIRED)
-
-	file(GLOB_RECURSE BGL_TESTS_SOURCES CONFIGURE_DEPENDS
-		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
-	)
-
-	add_executable(bgl_tests ${BGL_TESTS_SOURCES})
-
-	target_include_directories(bgl_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src)
-
-	target_link_libraries(bgl_tests
-		PRIVATE
-			bgl
-			Catch2::Catch2
-			Catch2::Catch2WithMain
-	)
-
-	target_precompile_headers(bgl_tests
-		PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
-		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
-	)
-
-	set_target_properties(bgl_tests PROPERTIES
-		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-
-	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files"
-		FILES ${BGL_TESTS_SOURCES})
-
-	enable_strict_compiler(bgl_tests)
-	enable_coverage(bgl_tests)
-endif()
-
 # The contract's Slang half: what a game surface conforms to and reads through, and nothing that
 # names a handle, an arena or a bucket -- the rule docs/bgl_api.md holds headers to, held for shaders.
 # Staged into the one ./shaders/src every renderer resolves from, owning bgl/ there; the shared tree's

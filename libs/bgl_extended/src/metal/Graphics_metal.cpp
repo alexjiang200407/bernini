@@ -1,7 +1,4 @@
 #include "AutoreleaseNet_metal.h"
-#include "MetalErrorChecker.h"
-#include "cmd/CommandQueue_metal.h"
-#include "device/Device_metal.h"
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
@@ -9,12 +6,14 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/metal/MetalErrorChecker.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -25,9 +24,9 @@
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include <bgpu/resource/ResourceManager.h>
 
 #include <core/file/file.h>
 #include <core/log/log.h>
@@ -88,7 +87,7 @@ namespace bgl
 				{
 					core::throw_runtime_error(
 						"Metal frame capture failed to start: {}",
-						GetErrorDescription(error));
+						bgpu::GetErrorDescription(error));
 				}
 				m_Active = true;
 			}
@@ -131,10 +130,9 @@ namespace bgl
 	public:
 		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			core::SharedRef<Device> device = core::SharedRef<Device>::Make(std::move(context));
-			m_Device                       = device;
+			m_Device = bgpu::CreateDevice(std::move(context));
 
-			auto rmDesc               = ResourceManagerDesc();
+			auto rmDesc               = bgpu::ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;
 			rmDesc.maxBuffers         = opts.maxBuffers;
 			rmDesc.maxSrvs            = opts.maxSrvs;
@@ -149,7 +147,7 @@ namespace bgl
 			// Before the context: it builds every pipeline, and a slot's pipelines compile against
 			// whatever module this bound to that slot.
 			m_SurfaceTypes =
-				RegisterSurfaces(*m_Device, device->GetGpuContext().GetDesc().clientShaderDir);
+				RegisterSurfaces(*m_Device, m_Device->GetGpuContext().GetDesc().clientShaderDir);
 
 			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 			m_Context         = std::make_unique<RenderContext>(
@@ -157,23 +155,23 @@ namespace bgl
 				m_ResourceManager,
 				m_DrawBucketTable,
 				m_SurfaceTypes,
-				device->GetGpuContext().GetDesc().enableDebugLayer);
+				m_Device->GetGpuContext().GetDesc().enableDebugLayer);
 
 			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
 			// by the first Draw that demands each, and that path drops the sessions again after
 			// every batch. This release covers the start-up build.
-			device->ReleaseSlangSession();
+			m_Device->ReleaseSlangSession();
 
 			spdlog::info("BGL initialized successfully.");
 		}
 
-		IDevice*
+		bgpu::IDevice*
 		GetDevice() const noexcept override
 		{
 			return m_Device.Get();
 		}
 
-		core::SharedRef<IResourceManager>
+		core::SharedRef<bgpu::IResourceManager>
 		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager;
@@ -235,7 +233,9 @@ namespace bgl
 		BeginFrame(const RenderTargetRef& target) override
 		{
 			if (!m_Opts.gpuCapturePath.empty() && m_Capture.Wanted())
-				m_Capture.Begin(m_Device->As<Device>()->GetMTLDevice(), m_Opts.gpuCapturePath);
+				m_Capture.Begin(
+					m_Device->GetNativeObject(bgpu::NativeObjectType::kMtlDevice).As<MTL::Device>(),
+					m_Opts.gpuCapturePath);
 
 			m_Context->BeginFrame(target);
 		}
@@ -317,10 +317,10 @@ namespace bgl
 		}
 
 	private:
-		GraphicsOptions    m_Opts;
-		FrameCapture       m_Capture;
-		DeviceRef          m_Device;
-		ResourceManagerRef m_ResourceManager;
+		GraphicsOptions          m_Opts;
+		FrameCapture             m_Capture;
+		bgpu::DeviceRef          m_Device;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		// Below the device: what the net holds are Metal objects that reference the device, so
 		// draining it once the device is released deallocs them into a purged one. A share rather

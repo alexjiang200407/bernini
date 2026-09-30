@@ -1,4 +1,4 @@
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullView.h>

@@ -1,11 +1,11 @@
 #include <SDL3/SDL_messagebox.h>
 #include <assetlib/transform.h>
 #include <assetlib_structs/Node.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <filesystem>

@@ -1,20 +1,23 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
-#include "resource/Rtv.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
-#include "types/ViewportState.h"
-#include <bgl/Viewport.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/types/ViewportState.h>
 #include <core/glm.h>
 #include <spdlog/spdlog.h>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	class PipelineBatch;
-
 	class IDevice;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 	class PassContext;
 
@@ -35,9 +38,9 @@ namespace bgl
 	public:
 		struct Args
 		{
-			SrvHandle sceneColor;
-			SrvHandle motionVectors;
-			SrvHandle depth;
+			bgpu::SrvHandle sceneColor;
+			bgpu::SrvHandle motionVectors;
+			bgpu::SrvHandle depth;
 
 			// The unjittered camera this frame and last -- this frame's inverse projection, and
 			// this frame's view space into last frame's -- so the resolve can tell whether a pixel's
@@ -50,19 +53,19 @@ namespace bgl
 
 			// Last frame's accumulation, and the one this frame writes. Distinct textures: a
 			// resource cannot be an SRV and an RTV in the same pass.
-			SrvHandle prevHistory;
-			RtvHandle history;
+			bgpu::SrvHandle prevHistory;
+			bgpu::RtvHandle history;
 
 			// Graph resource names, so the pass can declare the ping-pong halves it actually touches
 			// this frame rather than both.
 			std::string prevHistoryName;
 			std::string historyName;
 
-			SamplerHandle pointSampler;
-			SamplerHandle linearSampler;
+			bgpu::SamplerHandle pointSampler;
+			bgpu::SamplerHandle linearSampler;
 
 			// The output grid: the history's, and what this pass rasterizes over.
-			Viewport viewport;
+			bgpu::Viewport viewport;
 
 			// The grid the scene colour, the velocity buffer and the depth are on. Equal to the
 			// viewport's extent at render scale 1.0, where the resolve is a plain accumulation.
@@ -110,6 +113,6 @@ namespace bgl
 		void
 		Execute(const Args& args, const PassContext& resources);
 
-		MeshletKernel m_Kernel;
+		bgpu::MeshletKernel m_Kernel;
 	};
 }

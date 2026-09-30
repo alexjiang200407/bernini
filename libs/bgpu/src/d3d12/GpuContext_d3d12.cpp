@@ -6,12 +6,14 @@
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <mutex>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 #include <utility>
+#include <vector>
 
 #include <directx/d3d12.h>
 #include <dxgi1_6.h>
@@ -101,21 +103,17 @@ namespace bgpu
 				// Before the device: the shared pipeline states are the context's own, not a leak.
 				m_PipelineStates.clear();
 
-				// Everything an owner made on the device is gone by the time its context reference
-				// drops, so whatever the report names is a leak, attributed to whoever made it.
 				m_Device.Reset();
-				m_DxgiInfoQueue.Reset();
 				m_DebugController.Reset();
 
 				if (m_InfoQueue && m_MessageCallbackCookie != 0)
 					m_InfoQueue->UnregisterMessageCallback(m_MessageCallbackCookie);
 				m_InfoQueue.Reset();
 
-				if (GetDesc().enableDebugLayer)
+				if (m_DxgiInfoQueue)
 				{
-					wrl::ComPtr<IDXGIDebug1> dxgiDebug;
-					if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
-						dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+					LogLiveObjects();
+					m_DxgiInfoQueue.Reset();
 				}
 			}
 
@@ -156,6 +154,48 @@ namespace bgpu
 			}
 
 		private:
+			// Everything an owner made on the device is gone by the time its context reference
+			// drops, so each object reported is a leak, named by its debug name. The report reaches
+			// no message callback -- the device's is gone -- so it is read back from the queue it is
+			// stored in, or it goes only to an attached debugger.
+			void
+			LogLiveObjects() const noexcept
+			{
+				wrl::ComPtr<IDXGIDebug1> dxgiDebug;
+				if (FAILED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug))))
+					return;
+
+				m_DxgiInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
+				dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+
+				size_t       live  = 0;
+				const UINT64 count = m_DxgiInfoQueue->GetNumStoredMessages(DXGI_DEBUG_ALL);
+				for (UINT64 i = 0; i < count; ++i)
+				{
+					SIZE_T size = 0;
+					if (FAILED(m_DxgiInfoQueue->GetMessage(DXGI_DEBUG_ALL, i, nullptr, &size)))
+						continue;
+
+					auto  bytes   = std::vector<std::byte>(size);
+					auto* message = reinterpret_cast<DXGI_INFO_QUEUE_MESSAGE*>(bytes.data());
+					if (FAILED(m_DxgiInfoQueue->GetMessage(DXGI_DEBUG_ALL, i, message, &size)))
+						continue;
+
+					// Each live object is a warning; the report's framing lines are not.
+					if (message->Severity > DXGI_INFO_QUEUE_MESSAGE_SEVERITY_WARNING)
+						continue;
+
+					spdlog::error("[D3D12] outlived the GPU context: {}", message->pDescription);
+					++live;
+				}
+				m_DxgiInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
+
+				if (live > 0 && GetDesc().strictError)
+					core::fatal(
+						"[D3D12] strict error: {} object(s) outlived the GPU context",
+						live);
+			}
+
 			// The root signature is part of the key by address, so the entry holds it: a freed one's
 			// address could otherwise come back as a different signature.
 			using PipelineKey = std::pair<ID3D12RootSignature*, uint64_t>;

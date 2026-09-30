@@ -1,12 +1,12 @@
 #pragma once
-#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "resource/Dsv.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "types/Barrier.h"
 #include <array>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/types/Barrier.h>
 #include <span>
 #include <string>
 #include <utility>
@@ -23,20 +23,20 @@ namespace bgl
 		struct ColorTarget
 		{
 			std::string          name;  // graph resource name of the target
-			RtvHandle            rtv;
+			bgpu::RtvHandle      rtv;
 			std::array<float, 4> clearColor;
 		};
 
 		struct DepthTarget
 		{
-			std::string name;  // graph resource name of the target
-			DsvHandle   dsv;
+			std::string     name;  // graph resource name of the target
+			bgpu::DsvHandle dsv;
 		};
 
 		void
 		AttachToFrameGraph(
 			FrameGraph&                  fg,
-			IResourceManager*            resourceManager,
+			bgpu::IResourceManager*      resourceManager,
 			std::span<const ColorTarget> colors,
 			std::span<const DepthTarget> depths)
 		{
@@ -59,7 +59,7 @@ namespace bgl
 			std::vector<ColorTarget> targets(colors.begin(), colors.end());
 			std::vector<DepthTarget> depthTargets(depths.begin(), depths.end());
 			desc.SetExec([resourceManager, targets, depthTargets](const PassContext& resources) {
-				ICommandList* cmd = resources.GetCommandList();
+				bgpu::ICommandList* cmd = resources.GetCommandList();
 				for (const DepthTarget& depth : depthTargets)
 				{
 					if (!depth.dsv.IsNull())

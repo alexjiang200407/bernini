@@ -21,7 +21,10 @@ add_library(bgl_d3d12 OBJECT
 
 find_package(directx-headers CONFIG REQUIRED)
 
-find_package(winpixevent CONFIG REQUIRED)
+# bgpu found it first, and the port's config refuses to define its target twice.
+if(NOT TARGET Microsoft::WinPixEventRuntime)
+	find_package(winpixevent CONFIG REQUIRED)
+endif()
 
 find_package(Stb REQUIRED)  # stb_image_write for screenshot capture
 

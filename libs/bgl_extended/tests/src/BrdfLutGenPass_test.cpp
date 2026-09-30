@@ -1,27 +1,27 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/HalfFloat.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <catch2/catch_approx.hpp>
@@ -66,7 +66,7 @@ namespace
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
 		auto lut         = bgl::BrdfLutGenPass();
-		auto pipelines   = bgl::PipelineBatch(device);
+		auto pipelines   = bgpu::PipelineBatch(device);
 		auto drawBuckets = bgl::DrawBucketTable();
 		lut.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
 		pipelines.Build();
@@ -75,15 +75,17 @@ namespace
 		// readback below copies is created by the recording itself.
 		REQUIRE_FALSE(lut.Generated());
 
-		auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		// Registered so Generate's deferred RTV free gates on this queue's timeline; without it
 		// the free could reclaim the slot while the submission still draws through it.
 		resourceManager->RegisterQueue(cmdQueue.Get());
 
 		auto cmdAllocator = device->CreateCommandAllocator();
-		auto cmdList =
-			device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
+		auto cmdList      = device->CreateCommandList(
+			{ bgpu::QueueType::kGraphics },
+			cmdAllocator,
+			resourceManager);
 
 		cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 		lut.Generate(cmdList.Get());
@@ -91,19 +93,19 @@ namespace
 
 		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = layout.totalBytes;
 		rbDesc.debugName = "BRDF LUT Readback";
 
 		auto readback = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto toCopySource = bgl::TextureBarrierDesc();
-		toCopySource.AddSyncBefore(bgl::BarrierSyncFlag::kAllCommands)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutBefore(bgl::BarrierLayout::kShaderResource)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
-			.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
+		auto toCopySource = bgpu::TextureBarrierDesc();
+		toCopySource.AddSyncBefore(bgpu::BarrierSyncFlag::kAllCommands)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutBefore(bgpu::BarrierLayout::kShaderResource)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kCopySource);
 		cmdList->Barrier(lut.GetTexture(), toCopySource);
 
 		cmdList->CopyTextureToReadback(readback, lut.GetTexture());

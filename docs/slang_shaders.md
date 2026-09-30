@@ -1,11 +1,14 @@
 # Slang Shaders
 
-Every shader is one Slang source under one of three trees, and **both backends compile it at runtime**
+Every shader is one Slang source under one of four trees, and **both backends compile it at runtime**
 from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on Metal.
 
 ## The tree: a program has an entry point, a library module does not
 
 ```
+libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
+  idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
+  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle) and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
@@ -13,16 +16,18 @@ libs/bgl_common/shaders/src/          what every renderer shares; names no buffe
   lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's clipped screen bounds, affine transform maths; vertex decode; plain view structs
 libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
-  lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
+  lib/        forward/ types/ screen/                imported, never dispatched; types/ is the rest of the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
 ```
 
-All three are staged into one `./shaders/src` beside the executable, the contract first and
-`bgl_common`'s next, so an `import` never says which tree a module came from. Which tree a module
+All four are staged into one `./shaders/src` beside the executable, `bgpu`'s first, the contract
+next and `bgl_common`'s after it, so an `import` never says which tree a module came from. Which tree a module
 belongs in is checked rather than asked for, and the checks point the way the C++ links:
-`bgl_check_shaders` compiles every contract module with only the contract on the search path;
-`bgl_common_check_shaders` compiles every shared module with the shared tree and the contract, and one
-that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the build with
+`bgpu_check_shaders` compiles every RHI module with only bgpu's tree on the search path, so a
+compute client never imports something a renderer holds; `bgl_check_shaders` compiles every contract
+module with only the contract on the search path;
+`bgl_common_check_shaders` compiles every shared module with the shared tree, the contract and bgpu's
+tree, and one that imports anything from the renderer — a `.Handle` wrapper, `lib.forward.common` — fails the build with
 `cannot open file`. The rule is the same one `bgl_selfcheck` and `bgl_common_selfcheck` hold the C++
 to. A game checks its own modules the same way, with the contract as the one path, and never sees
 the shared tree in the build or in the check.
@@ -109,9 +114,9 @@ let n = gCount.load();
 
 A buffer element works the same way — the element type carries the atomic — through
 `AtomicComputeBuffer<T>` (in
-[`lib/types/ComputeBuffer.slang`](../libs/bgl_extended/shaders/src/lib/types/ComputeBuffer.slang)), the atomic
+[`lib/types/ComputeBuffer.slang`](../libs/bgpu/shaders/src/lib/types/ComputeBuffer.slang)), the atomic
 counterpart of `ComputeBuffer<T>`. The debug record buffer
-([`lib/debug/dbg.slang`](../libs/bgl_extended/shaders/src/lib/debug/dbg.slang)) is the worked example.
+([`lib/debug/dbg.slang`](../libs/bgpu/shaders/src/lib/debug/dbg.slang)) is the worked example.
 
 When the atomic target is a **field of an IDL struct** (e.g. `DispatchArgs.threadCountX`,
 `CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgl_idlgen` maps
@@ -132,7 +137,7 @@ element matches the CPU mirror `bgl_idlgen` emits — the default structured-buf
 
 ## A raw buffer holds bytes, and never a resource handle
 
-`RawBuffer` ([lib/types/RawBuffer.slang](../libs/bgl_extended/shaders/src/lib/types/RawBuffer.slang)) wraps
+`RawBuffer` ([lib/types/RawBuffer.slang](../libs/bgpu/shaders/src/lib/types/RawBuffer.slang)) wraps
 `ByteAddressBuffer.Handle`; `RawComputeBuffer` is its writable counterpart. The buffer must have been
 created by `CreateRawBuffer` — a view is chosen once, so binding a structured buffer here reads
 undefined bytes rather than failing.
@@ -163,9 +168,9 @@ bytes with no texture in the type — and samples them through a **second, typed
 allocation**. The raw view reads the record; the typed view is what makes a texture of the bytes
 inside it.
 
-`RawHandleView<T>` ([lib/types/RawHandleView.slang](../libs/bgl_extended/shaders/src/lib/types/RawHandleView.slang))
+`RawHandleView<T>` ([lib/types/RawHandleView.slang](../libs/bgpu/shaders/src/lib/types/RawHandleView.slang))
 is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
-stride divide inside the type. Its elements are `HandleElement<T>` rather than `T`, for the reason
+stride divide inside the type. Its elements are `BoxedHandle<T>` rather than `T`, for the reason
 below. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
 allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
 one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
@@ -200,27 +205,28 @@ nobody remembered to add was checked by nothing until it reached a Windows runti
 `programs.forward.Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
 The list is now the `programs/` tree, so a shader that exists is a shader that is validated.
 
-## A texture is its handle, and the extra accessors extend the resource type
+## A texture is its handle, and nothing wraps it
 
 A shader declares `Texture2D.Handle` / `TextureCube.Handle` exactly as it declares
 `SamplerState.Handle`, and samples through the built-in `Sample` / `SampleLevel` / `SampleBias`. The
 CPU writes the descriptor into that member directly (see [Uniforms](uniforms.md)); nothing wraps it.
 
-Three accessors the built-ins do not give live in
-[lib/types/Texture.slang](../libs/bgl_extended/shaders/src/lib/types/Texture.slang) — `Load(uint2, uint)`,
-`GetDimensions() -> float2` and `CubeFaceTexels()`. They extend **`Texture2D` / `TextureCube`, not
-the handle**: member lookup on a `DescriptorHandle<T>` resolves against `T`, so an
-`extension Texture2D.Handle` compiles and is never found.
+Call the built-ins in the forms both backends accept. Two catch a D3D12-first author:
 
-`GetDimensions()` is one of them because Slang's no-argument form is HLSL-only in the core module —
-calling it directly compiles on D3D12 and fails on Metal. The overload here is written through the
-out-parameter form, which both backends accept.
+- **`GetDimensions` takes the out-parameter form**, `GetDimensions(mip, width, height, levels)`.
+  Slang's no-argument form is HLSL-only in the core module, so it compiles on D3D12 and fails on
+  Metal, at runtime, when the pipeline is first built.
+- **An integer texel fetch is `Load(int3(coord, mip))`**, no sampler in the loop.
+
+A helper that wants its own accessor extends **`Texture2D` / `TextureCube`, not the handle**: member
+lookup on a `DescriptorHandle<T>` resolves against `T`, so an `extension Texture2D.Handle` compiles
+and is never found.
 
 **A buffer's element type is the one place the handle may not stand bare.**
 `StructuredBuffer<Texture2D.Handle>.Handle` lowers to `device texture2d*`, and MSL refuses a pointer
 to a resource anywhere inside what a constant buffer points at — which is where every such view is
-bound. `HandleElement<T>`
-([lib/types/HandleElement.slang](../libs/bgl_extended/shaders/src/lib/types/HandleElement.slang)) is the one-field
+bound. `BoxedHandle<T>`
+([lib/types/BoxedHandle.slang](../libs/bgpu/shaders/src/lib/types/BoxedHandle.slang)) is the one-field
 struct that makes it declarable, laid out identically; `RawHandleView<T>` applies it internally, so
 only a buffer of handles declared by hand names it. `slangc` will not catch this — it emits MSL
 rather than compiling it, so the error arrives from `newLibraryWithSource` at runtime.

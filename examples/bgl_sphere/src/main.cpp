@@ -7,8 +7,8 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgpu/GpuContext.h>
 #include <core/glm.h>
 #include <cstdint>

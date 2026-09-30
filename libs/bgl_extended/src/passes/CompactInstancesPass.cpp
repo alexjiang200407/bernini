@@ -1,15 +1,9 @@
 #include "passes/CompactInstancesPass.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
-#include "pipeline/ComputePipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
 #include "scene/CullState.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "uniforms/Uniforms.h"
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl_common/idl/Constants.h>
@@ -17,6 +11,12 @@
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
@@ -32,30 +32,30 @@ namespace bgl
 
 		ctx.pipelines->Add(
 			m_CullInstances,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
 		ctx.pipelines->Add(
 			m_Histogram,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
 		ctx.pipelines->Add(
 			m_PrefixSum,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
 		ctx.pipelines->Add(
 			m_CompactInstances,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));
 
 		{
-			auto desc = ComputeBufferDesc();
+			auto desc = bgpu::ComputeBufferDesc();
 			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
 
 			m_CullStats.Init(desc, ctx.resourceManager);
@@ -94,35 +94,49 @@ namespace bgl
 			.AddPass(
 				PassDesc()
 					.SetName("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_GeomBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_SubmeshBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_CullViewName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_InstanceLodPreviousName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_InstanceLodName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_CullStatsName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_GeomBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_SubmeshBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_CullViewName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceLodPreviousName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_InstanceLodName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_InstanceVisibilityName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(c_CullStatsName, bgpu::BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Histogram and Prefix Sum Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_DrawBucketPrefixSumName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_InstanceVisibilityName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_DrawBucketPrefixSumName,
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) {
 						ExecuteHistogramAndPrefixSum(ctx, draw);
 					}))
 			.AddPass(
 				PassDesc()
 					.SetName("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_InstanceVisibilityName,
+						bgpu::BarrierSyncFlag::kComputeShader)
 					// Only the visible instances are written, at offsets the prefix sum decides, so
 					// a stale entry left over from the previous frame is a plausible draw.
-					.AddPoisonedBufferArg(c_CompactedInstancesName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_DrawBucketPrefixSumName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_CompactDispatchArgsName, BarrierSyncFlag::kComputeShader)
+					.AddPoisonedBufferArg(
+						c_CompactedInstancesName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_DrawBucketPrefixSumName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_CompactDispatchArgsName,
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) {
 						ExecuteGenerateInstanceDispatchArgs(ctx, draw);
 					}));
@@ -172,7 +186,7 @@ namespace bgl
 			return;
 		}
 
-		Uniforms& uniforms         = m_CullInstances["gUniforms"];
+		bgpu::Uniforms& uniforms   = m_CullInstances["gUniforms"];
 		uniforms["cullView"]       = ctx.GetBuffer(c_CullViewName);
 		uniforms["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
 		uniforms["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
@@ -188,7 +202,7 @@ namespace bgl
 
 		auto cmdList = ctx.GetCommandList();
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_CullInstances;
 
 		cmdList->SetComputeState(computeState);
@@ -216,7 +230,7 @@ namespace bgl
 
 		auto cmdList = ctx.GetCommandList();
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_Histogram;
 
 		cmdList->SetComputeState(computeState);
@@ -233,11 +247,11 @@ namespace bgl
 		// flickering only in scenes mixing buckets.
 		cmdList->Barrier(
 			drawBucketPrefixSumBuffer,
-			BufferBarrierDesc()
-				.AddSyncBefore(BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(BarrierSyncFlag::kComputeShader)
-				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 
 		m_PrefixSum["gUniforms"]["inOutBuffer"] = drawBucketPrefixSumBuffer;
 
@@ -271,7 +285,7 @@ namespace bgl
 
 		auto cmdList = ctx.GetCommandList();
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_CompactInstances;
 
 		cmdList->SetComputeState(computeState);

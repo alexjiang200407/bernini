@@ -1,10 +1,14 @@
 # Bernini Render Hardware Interface
 
-The Render Hardware Interface (RHI) is `bgl_extended`'s API-agnostic graphics abstraction: a set of
-pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. Two backends
-implement it — `bgl_d3d12` and `bgl_metal` — chosen at configure time by `RENDERER_BACKEND`
-([libs/bgl_extended/CMakeLists.txt](libs/bgl_extended/CMakeLists.txt)) and linked into `bgl_extended` itself. Neither is ever
-visible to a caller.
+The Render Hardware Interface (RHI) is `bgpu`'s API-agnostic graphics abstraction: a set of
+pure-virtual interfaces (`bgpu::I*`) plus plain-old-data descriptors and state structs, public under
+`libs/bgpu/include/bgpu/`. Two backends implement it — `libs/bgpu/src/d3d12` and `libs/bgpu/src/metal`
+— chosen at configure time by `RENDERER_BACKEND` ([libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt))
+and built into `bgpu` itself. Neither is ever visible to a caller, and no RHI header names a backend
+type: what a caller needs of the API underneath -- a swapchain presents on the native queue and adopts
+its backbuffers -- it asks for as nvrhi does, with `GetNativeObject(NativeObjectType)` on the device,
+a queue or a command list, `GetNativeTexture` and `ImportNativeTexture` on the resource manager.
+The answer is an untyped `NativeObject` the caller casts, and null for a type the backend has none of.
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is
@@ -12,7 +16,11 @@ this interface is drawn at, not a general one: the only graphics pipeline object
 — `DispatchMeshIndirectCount` is the same dispatch with a GPU count an API may ignore (see
 § ICommandList). An API without the three cannot implement this interface.
 
-This is the layer bgl_extended is built *on*. For the surface an application links against — `IGraphics`,
+Every owner of the device builds on it — the renderer, `bgl_extended`, and a compute client beside it
+such as `crowdlib` — each through a device of its own (`bgpu::CreateDevice` on the shared
+`GpuContext`), so their queues, resource managers and heaps never meet ([bgpu.md](docs/bgpu.md)).
+`bgpu_selfcheck` compiles each public header against `bgpu` alone, and `bgpu_tests` runs a compute
+owner with no renderer in the process. For the surface an application links against — `IGraphics`,
 `IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
 [bgl Public API](docs/bgl_api.md).
 
@@ -114,17 +122,18 @@ doc and a header disagree, trust the header, then fix this doc.
   types, always held behind a `SharedRef`.
 
 * **`IDevice` is the sole factory.** All objects — shaders, pipelines, kernels, command
-  lists/allocators/queues, resource managers, render targets, uniforms — are created through
-  `IDevice`. Acquire the device from the `IGraphics` façade via `GetDevice()` (borrowed,
-  non-owning `IDevice*`). `CreateRenderTarget` takes the queue the target will present on, which
-  must be the queue of the context that drives it.
+  lists/allocators/queues, resource managers, uniforms — are created through `IDevice`, which
+  `bgpu::CreateDevice(context)` makes, one per owner. The renderer's façade lends its own through
+  `GetDevice()` (borrowed, non-owning `IDevice*`). A swapchain is not the RHI's: the renderer makes
+  its render targets itself (`CreateBackendRenderTarget`, beside each backend's `RenderTarget`), on
+  the queue of the context that drives them.
 
 * **Kernel = pipeline + reflected uniforms.** A `ComputeKernel` / `MeshletKernel` bundles a
   pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by
   name. `CreateComputeKernel` / `CreateMeshletKernel` build this from slang reflection.
 
 * **The renderer's kernels are requested in batches and built together.** A
-  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects kernel requests and
+  [PipelineBatch](libs/bgpu/include/bgpu/pipeline/PipelineBatch.h) collects kernel requests and
   builds the set across worker threads (`core::parallel_for`, up to six and never more than there
   are kernels — each worker that misses the cache stands up a Slang global session of about
   200 MB, and past six the links stop getting faster), then the passes check their binder names
@@ -369,7 +378,7 @@ Everything else is self-explanatory from the header.
   destructor flushes the queue first, which is what makes that safe. On Metal `Read` resolves the
   counter sample buffer, whose contract is command-buffer *completion* while the fence a caller
   waits on is a signalled event the driver may still be retiring behind — the flush caveat in
-  `libs/bgl_extended/CLAUDE.md`. A sample read in that window comes back as `c_UnwrittenTimestamp`
+  `libs/bgpu/CLAUDE.md`. A sample read in that window comes back as `c_UnwrittenTimestamp`
   and its row as zero, never as a stale value.
 * **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
   defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
@@ -397,8 +406,9 @@ Everything else is self-explanatory from the header.
 * **Assigning a `BufferHandle`** writes a descriptor index, not data: for a "smart buffer"
   struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` /
   `rawBuffer` exists; for a `kDescriptorHandle` value it is written directly; otherwise it throws.
-* **Assigning a `SamplerHandle` / `SrvHandle` / `TextureAssetHandle`** likewise writes a
-  `DescriptorHandle` (bindless), and all three take one path: the shader declares the handle itself
+* **Assigning a `SamplerHandle` / `SrvHandle`** likewise writes a `DescriptorHandle` (bindless), as
+  does the renderer's `TextureAssetHandle` through the specialisation beside `TextureAssetStore`, and
+  all three take one path: the shader declares the handle itself
   (`SamplerState.Handle`, `Texture2D.Handle`, `TextureCube.Handle`), which reflects as a
   `kDescriptorHandle` value and is written directly. Assigning throws if the target is anything else.
 

@@ -1,29 +1,30 @@
 #include "scene/Scene.h"
-#include "uniforms/DescriptorHandle.h"
 #include "util/util.h"
 #include <RangeWithCount.h>
 #include <RawEntry.h>
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/types/ChannelRouteDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/LayerType.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/RawTextureHandle.h>
+#include <bgpu/idl/RawArena.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
 #include <cstddef>
@@ -45,7 +46,7 @@ namespace bgl
 		// accessor, so the conversion is a copy -- kept in one place, as DescriptorHandle keeps its
 		// own inverse.
 		idl::RawTextureHandle
-		RawHandleOf(DescriptorHandle descriptor) noexcept
+		RawHandleOf(bgpu::DescriptorHandle descriptor) noexcept
 		{
 			auto raw = idl::RawTextureHandle();
 			std::memcpy(&raw, &descriptor, sizeof(raw));
@@ -340,7 +341,7 @@ namespace bgl
 	Scene::CreateSurfaceMaterial(const SurfaceMaterialDesc& desc)
 	{
 		const BuiltSurfaceMaterial built = BuildSurfaceMaterial(desc);
-		const idl::RawEntry        entry = m_Materials.AddRecord(built.kind, built.payload);
+		const bgpu::idl::RawEntry  entry = m_Materials.AddRecord(built.kind, built.payload);
 
 		return MaterialHandle{ built.kind, desc.layerType, entry.byteOffset };
 	}
@@ -375,7 +376,7 @@ namespace bgl
 					desc.surface));
 		}
 
-		m_Materials.SetRecordPayload(idl::RawEntry{ material.byteOffset }, built.payload);
+		m_Materials.SetRecordPayload(bgpu::idl::RawEntry{ material.byteOffset }, built.payload);
 
 		// Every rewrite counts, including one landing on the bytes already there: an entry is a
 		// GPU-layout mirror whose padding no comparison can trust.
@@ -385,8 +386,8 @@ namespace bgl
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
-		const idl::PbrMaterial material = BuildPbrMaterial(desc);
-		const idl::RawEntry    entry =
+		const idl::PbrMaterial    material = BuildPbrMaterial(desc);
+		const bgpu::idl::RawEntry entry =
 			m_Materials.AddRecord(MaterialType::kPBR, std::as_bytes(std::span(&material, 1)));
 
 		return MaterialHandle{ MaterialType::kPBR, desc.layerType, entry.byteOffset };
@@ -419,7 +420,7 @@ namespace bgl
 		// bucket -- which derives from materialType, not from the desc -- cannot change.
 		const idl::PbrMaterial rebuilt = BuildPbrMaterial(desc);
 		m_Materials.SetRecordPayload(
-			idl::RawEntry{ material.byteOffset },
+			bgpu::idl::RawEntry{ material.byteOffset },
 			std::as_bytes(std::span(&rebuilt, 1)));
 
 		// Every rewrite counts, including one landing on the bytes already there: an entry is a
@@ -479,10 +480,10 @@ namespace bgl
 			offsetof(idl::GameSurfaceRecord, routeTextures) ==
 			sizeof(idl::GameSurfaceRecord::textures));
 		static_assert(
-			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
+			bgpu::idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
 			idl::cGameSurfaceRouteChannelsByteOffset);
 		static_assert(
-			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routedMask) ==
+			bgpu::idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routedMask) ==
 			idl::cGameSurfaceRoutedMaskByteOffset);
 		// The contract's route array is four wide because a sample is; the record agrees.
 		static_assert(
@@ -491,14 +492,14 @@ namespace bgl
 		// A game surface's parameters follow the fixed part at an offset the shader holds as a
 		// constant; the struct growing without it is a record read one field late.
 		static_assert(
-			idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
+			bgpu::idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
 			idl::cGameSurfaceParamsByteOffset);
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
 		// strided by the handle itself, and a payload offset that is not a whole number of handles
 		// truncates the division into the middle of a neighbouring one.
-		static_assert(sizeof(DescriptorHandle) == sizeof(idl::RawTextureHandle));
-		static_assert(idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
+		static_assert(sizeof(bgpu::DescriptorHandle) == sizeof(idl::RawTextureHandle));
+		static_assert(bgpu::idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
 
 		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They
 		// describe the same nine routes, so a mismatch would silently sample the wrong map -- roughness
@@ -548,7 +549,7 @@ namespace bgl
 	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
 	{
 		const idl::LoosePbrMaterial material = BuildLoosePbrMaterial(desc);
-		const idl::RawEntry         entry =
+		const bgpu::idl::RawEntry   entry =
 			m_Materials.AddRecord(MaterialType::kLoosePbr, std::as_bytes(std::span(&material, 1)));
 
 		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, entry.byteOffset };
@@ -580,7 +581,7 @@ namespace bgl
 		// material follows it and the handle stays valid, and every rewrite moves the shading epoch.
 		const idl::LoosePbrMaterial rebuilt = BuildLoosePbrMaterial(desc);
 		m_Materials.SetRecordPayload(
-			idl::RawEntry{ material.byteOffset },
+			bgpu::idl::RawEntry{ material.byteOffset },
 			std::as_bytes(std::span(&rebuilt, 1)));
 
 		++m_TemporalEpoch;

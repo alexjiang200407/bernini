@@ -2,9 +2,9 @@
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/RenderJob.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/RenderJob.h>
 #include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <stdexcept>

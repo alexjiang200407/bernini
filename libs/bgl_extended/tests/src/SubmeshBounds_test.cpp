@@ -1,12 +1,5 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -16,6 +9,13 @@
 #include <bgl/IGraphics.h>
 #include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -153,13 +153,13 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	auto resourceManager = gfxBase->GetResourceManagerCpy();
 	auto device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = static_cast<uint64_t>(submeshBuffer.Capacity()) * sizeof(bgl::idl::Submesh);
 	rbDesc.debugName = "Submesh Readback";
 	auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -170,11 +170,11 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 
 	cmdList->Barrier(
 		submeshBuffer.GetBufferHandle(),
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(readback, submeshBuffer.GetBufferHandle());
 
 	cmdList->Close();

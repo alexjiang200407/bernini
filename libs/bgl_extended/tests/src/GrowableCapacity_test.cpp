@@ -1,6 +1,6 @@
-#include "scene/GrowableGpuBuffer.h"
 #include "types/SubmeshInstance.h"
 #include <bgl_common/idl/Constants.h>
+#include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
@@ -22,15 +22,15 @@ TEST_CASE("Growable capacities taper past 64 MiB", "[scene][capacity]")
 
 	SECTION("doubling holds below the taper")
 	{
-		CHECK(bgl::NextGpuBufferCapacity(256, 257, c_Stride) == 512);
-		CHECK(bgl::NextGpuBufferCapacity(512, 513, c_Stride) == 1024);
-		CHECK(bgl::NextGpuBufferCapacity(2097152, 2097153, c_Stride) == 4194304);
+		CHECK(bgpu::NextGpuBufferCapacity(256, 257, c_Stride) == 512);
+		CHECK(bgpu::NextGpuBufferCapacity(512, 513, c_Stride) == 1024);
+		CHECK(bgpu::NextGpuBufferCapacity(2097152, 2097153, c_Stride) == 4194304);
 	}
 
 	SECTION("the taper breaks the alignment doubling preserved")
 	{
 		// 4194304 * 16 B is exactly 64 MiB, so this is the first step to taper.
-		const uint32_t tapered = bgl::NextGpuBufferCapacity(4194304, 4194305, c_Stride);
+		const uint32_t tapered = bgpu::NextGpuBufferCapacity(4194304, 4194305, c_Stride);
 
 		CHECK(tapered == 6291457);
 		CHECK(tapered % bgl::idl::cHistogramGroupSize != 0);
@@ -48,7 +48,7 @@ TEST_CASE("Aligning a tapered capacity covers the padded range", "[scene][capaci
 	for (int step = 0; step < 24; ++step)
 	{
 		capacity =
-			core::round_up(bgl::NextGpuBufferCapacity(capacity, capacity + 1, c_Stride), c_Align);
+			core::round_up(bgpu::NextGpuBufferCapacity(capacity, capacity + 1, c_Stride), c_Align);
 
 		// The live count can reach capacity, and Update pads from there up to the next group
 		// boundary -- which is capacity itself exactly when this holds.

@@ -11,13 +11,13 @@
 #include "util/RigFixture.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/GeomHandle.h>
+#include <bgl/types/GeomHandle.h>
 
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
-#include <bgl_common/MemoryTag.h>
+#include <bgpu/MemoryTag.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/IFileSystem.h>
 #include <core/file/LooseFileSystem.h>
@@ -275,7 +275,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 // one, and a byte count would pin the fixture rather than the accounting.
 TEST_CASE("A cached container is charged to its subsystem's memory tag", "[containercache]")
 {
-	using bgl::MemoryTag;
+	using bgpu::MemoryTag;
 	using core::profiling::tag_totals;
 
 	DataRoot root("bernini_container_cache_tagged");
@@ -287,8 +287,8 @@ TEST_CASE("A cached container is charged to its subsystem's memory tag", "[conta
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	const uint64_t meshBefore      = tag_totals(MemoryTag::kMesh).live;
-	const uint64_t animationBefore = tag_totals(MemoryTag::kAnimation).live;
+	const uint64_t meshBefore      = tag_totals(bgpu::MemoryTag::kMesh).live;
+	const uint64_t animationBefore = tag_totals(bgpu::MemoryTag::kAnimation).live;
 
 	{
 		auto assets = game::AssetManager(
@@ -298,12 +298,12 @@ TEST_CASE("A cached container is charged to its subsystem's memory tag", "[conta
 		(void)assets.AcquireSkinnedMesh("Authored/Meshes/rig.glb", "Authored/Meshes/rig.glb");
 
 		// The .bmesh under mesh, and the .banim and the .bskel it named under animation.
-		CHECK(tag_totals(MemoryTag::kMesh).live > meshBefore);
-		CHECK(tag_totals(MemoryTag::kAnimation).live > animationBefore);
+		CHECK(tag_totals(bgpu::MemoryTag::kMesh).live > meshBefore);
+		CHECK(tag_totals(bgpu::MemoryTag::kAnimation).live > animationBefore);
 	}
 
 	// The manager is gone, so its cache is: a charge that outlived its container would report
 	// memory nobody is holding, which is worse than reporting none.
-	CHECK(tag_totals(MemoryTag::kMesh).live == meshBefore);
-	CHECK(tag_totals(MemoryTag::kAnimation).live == animationBefore);
+	CHECK(tag_totals(bgpu::MemoryTag::kMesh).live == meshBefore);
+	CHECK(tag_totals(bgpu::MemoryTag::kAnimation).live == animationBefore);
 }

@@ -1,26 +1,26 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/ErrorCode.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/debug/DebugBuffer.h>
+#include <bgpu/idl/ErrorCode.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <vector>
@@ -35,11 +35,11 @@ namespace
 	MakeDebugImage(uint32_t count, uint32_t overflow, uint32_t capacity)
 	{
 		std::vector<uint32_t> words(
-			bgl::DebugBuffer::c_HeaderWords + capacity * bgl::DebugBuffer::c_RecordWords,
+			bgpu::DebugBuffer::c_HeaderWords + capacity * bgpu::DebugBuffer::c_RecordWords,
 			0u);
-		words[bgl::DebugBuffer::c_CounterWord]  = count;
-		words[bgl::DebugBuffer::c_OverflowWord] = overflow;
-		words[bgl::DebugBuffer::c_CapacityWord] = capacity;
+		words[bgpu::DebugBuffer::c_CounterWord]  = count;
+		words[bgpu::DebugBuffer::c_OverflowWord] = overflow;
+		words[bgpu::DebugBuffer::c_CapacityWord] = capacity;
 		return words;
 	}
 
@@ -52,11 +52,12 @@ namespace
 		uint32_t               limit = 0,
 		uint32_t               job   = 0)
 	{
-		const uint32_t base = bgl::DebugBuffer::c_HeaderWords + i * bgl::DebugBuffer::c_RecordWords;
-		words[base + 0]     = errcode;
-		words[base + 1]     = value;
-		words[base + 2]     = limit;
-		words[base + 3]     = job;
+		const uint32_t base =
+			bgpu::DebugBuffer::c_HeaderWords + i * bgpu::DebugBuffer::c_RecordWords;
+		words[base + 0] = errcode;
+		words[base + 1] = value;
+		words[base + 2] = limit;
+		words[base + 3] = job;
 	}
 }
 
@@ -168,17 +169,17 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgl::DebugBuffer();
+	auto debugBuffer = bgpu::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSDbgRaiseTest"))
 			.SetDebugName("Dbg Raise Test"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -187,16 +188,16 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	// the engine can auto-bind the debug buffer.
 	REQUIRE(kernel.uniforms.contains("gDebug"));
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = debugBuffer.ByteSize();
 	rbDesc.debugName = "Dbg Raise Readback";
 	auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
-	                              bgl::BarrierAccessFlag accessBefore,
-	                              bgl::BarrierSyncFlag   syncAfter,
-	                              bgl::BarrierAccessFlag accessAfter) {
-		return bgl::BufferBarrierDesc()
+	const auto bufferBarrier = [](bgpu::BarrierSyncFlag   syncBefore,
+	                              bgpu::BarrierAccessFlag accessBefore,
+	                              bgpu::BarrierSyncFlag   syncAfter,
+	                              bgpu::BarrierAccessFlag accessAfter) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(syncBefore)
 		    .AddAccessBefore(accessBefore)
 		    .AddSyncAfter(syncAfter)
@@ -210,12 +211,12 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 
-	auto computeState   = bgl::ComputeState();
+	auto computeState   = bgpu::ComputeState();
 	computeState.kernel = &kernel;
 	cmdList->SetComputeState(computeState);
 	cmdList->SetActiveDebugBuffer(debugBuffer.GetBufferHandle());
@@ -224,10 +225,10 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess,
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(rb, debugBuffer.GetBufferHandle());
 
 	cmdList->Close();
@@ -365,17 +366,17 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgl::DebugBuffer();
+	auto debugBuffer = bgpu::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSNullDerefTest"))
 			.SetDebugName("Null Deref Test"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -386,34 +387,34 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 
 	// Entry and Range buffers are read-only views; binding a UAV there is a descriptor type mismatch.
 	const auto makeReadOnly = [&](const char* name) {
-		auto desc = bgl::StructBufferDesc();
+		auto desc = bgpu::StructBufferDesc();
 		desc.SetElement<uint32_t>();
 		desc.elementCount = 4;
 		desc.debugName    = name;
 		return resourceManager->CreateStructBuffer(desc);
 	};
 
-	const bgl::BufferHandle entryBuf = makeReadOnly("Null Deref Entries");
-	const bgl::BufferHandle rangeBuf = makeReadOnly("Null Deref Ranges");
+	const bgpu::BufferHandle entryBuf = makeReadOnly("Null Deref Entries");
+	const bgpu::BufferHandle rangeBuf = makeReadOnly("Null Deref Ranges");
 
-	auto outDesc = bgl::ComputeBufferDesc();
+	auto outDesc = bgpu::ComputeBufferDesc();
 	outDesc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName("Null Deref Out");
-	const bgl::BufferHandle outBuf = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outBuf = resourceManager->CreateComputeBuffer(outDesc);
 
 	kernel["gUniforms"]["entries"]["entryBuffer"] = entryBuf;
 	kernel["gUniforms"]["ranges"]["rangeBuffer"]  = rangeBuf;
 	kernel["gUniforms"]["outBuffer"]              = outBuf;
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = debugBuffer.ByteSize();
 	rbDesc.debugName = "Null Deref Readback";
 	auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
-	                              bgl::BarrierAccessFlag accessBefore,
-	                              bgl::BarrierSyncFlag   syncAfter,
-	                              bgl::BarrierAccessFlag accessAfter) {
-		return bgl::BufferBarrierDesc()
+	const auto bufferBarrier = [](bgpu::BarrierSyncFlag   syncBefore,
+	                              bgpu::BarrierAccessFlag accessBefore,
+	                              bgpu::BarrierSyncFlag   syncAfter,
+	                              bgpu::BarrierAccessFlag accessAfter) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(syncBefore)
 		    .AddAccessBefore(accessBefore)
 		    .AddSyncAfter(syncAfter)
@@ -426,12 +427,12 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 
-	auto computeState   = bgl::ComputeState();
+	auto computeState   = bgpu::ComputeState();
 	computeState.kernel = &kernel;
 	cmdList->SetComputeState(computeState);
 	cmdList->SetActiveDebugBuffer(debugBuffer.GetBufferHandle());
@@ -440,10 +441,10 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess,
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(rb, debugBuffer.GetBufferHandle());
 
 	cmdList->Close();
@@ -471,12 +472,12 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullEntryDeref)) == 1);
+			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullEntryDeref)) == 1);
 	CHECK(
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullRangeDeref)) == 1);
+			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullRangeDeref)) == 1);
 
 	resourceManager->UnmapReadback(rb);
 

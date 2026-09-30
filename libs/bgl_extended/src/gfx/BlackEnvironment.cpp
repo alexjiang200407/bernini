@@ -1,14 +1,14 @@
 #include "gfx/BlackEnvironment.h"
-#include "cmd/CommandList.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
 #include "types/EnvironmentMap.h"
-#include "types/Format.h"
-#include "types/TextureDimension.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/TextureDimension.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <string>
@@ -18,45 +18,48 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr Format   c_Format        = Format::RGBA16_FLOAT;
-		constexpr uint64_t c_BytesPerTexel = 8;
-		constexpr uint32_t c_CubeFaces     = 6;
+		constexpr bgpu::Format c_Format        = bgpu::Format::RGBA16_FLOAT;
+		constexpr uint64_t     c_BytesPerTexel = 8;
+		constexpr uint32_t     c_CubeFaces     = 6;
 
 		// One texel of zero, shared by every subresource: a face is a single texel.
 		constexpr std::array<uint16_t, 4> c_Black = { { 0, 0, 0, 0 } };
 
 		struct Created
 		{
-			TextureHandle texture;
-			SrvHandle     srv;
+			bgpu::TextureHandle texture;
+			bgpu::SrvHandle     srv;
 		};
 
 		Created
-		Create(IResourceManager& resourceManager, TextureDimension dimension, uint32_t arraySize)
+		Create(
+			bgpu::IResourceManager& resourceManager,
+			bgpu::TextureDimension  dimension,
+			uint32_t                arraySize)
 		{
-			const std::string name = dimension == TextureDimension::kTextureCube ?
+			const std::string name = dimension == bgpu::TextureDimension::kTextureCube ?
 			                             "Black environment" :
 			                             "Black BRDF LUT";
 
-			auto desc          = TextureDesc();
+			auto desc          = bgpu::TextureDesc();
 			desc.arraySize     = arraySize;
 			desc.format        = c_Format;
-			desc.usage         = TextureUsageFlag::kSRV;
+			desc.usage         = bgpu::TextureUsageFlag::kSRV;
 			desc.dimension     = dimension;
-			desc.initialLayout = BarrierLayout::kCopyDest;
+			desc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 			desc.debugName     = name;
 
-			const TextureHandle texture = resourceManager.CreateTexture(desc);
+			const bgpu::TextureHandle texture = resourceManager.CreateTexture(desc);
 			if (texture.IsNull())
 				throw GraphicsError(name + " texture could not be created");
 
-			auto srvDesc      = SrvDesc();
+			auto srvDesc      = bgpu::SrvDesc();
 			srvDesc.format    = c_Format;
 			srvDesc.dimension = dimension;
 			srvDesc.arraySize = arraySize;
 			srvDesc.debugName = name + " SRV";
 
-			const SrvHandle srv = resourceManager.CreateSrv(texture, srvDesc);
+			const bgpu::SrvHandle srv = resourceManager.CreateSrv(texture, srvDesc);
 			if (srv.IsNull())
 			{
 				resourceManager.DestroyTexture(texture, false);
@@ -66,42 +69,45 @@ namespace bgl
 		}
 
 		void
-		Fill(ICommandList& cmdList, TextureHandle texture, uint32_t subresources)
+		Fill(bgpu::ICommandList& cmdList, bgpu::TextureHandle texture, uint32_t subresources)
 		{
-			const TextureSubresourceData texel{ c_Black.data(), c_BytesPerTexel, c_BytesPerTexel };
-			const std::array<TextureSubresourceData, c_CubeFaces> data = {
+			const bgpu::TextureSubresourceData                          texel{ c_Black.data(),
+				                                                               c_BytesPerTexel,
+				                                                               c_BytesPerTexel };
+			const std::array<bgpu::TextureSubresourceData, c_CubeFaces> data = {
 				{ texel, texel, texel, texel, texel, texel }
 			};
 			cmdList.WriteTexture(texture, { data.data(), subresources });
 
-			TextureBarrierDesc barrier;
-			barrier.syncBefore   = BarrierSyncFlag::kCopy;
-			barrier.accessBefore = BarrierAccessFlag::kCopyDest;
-			barrier.layoutBefore = BarrierLayout::kCopyDest;
-			barrier.syncAfter    = BarrierSyncFlag::kPixelShader | BarrierSyncFlag::kComputeShader;
-			barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-			barrier.layoutAfter  = BarrierLayout::kShaderResource;
+			bgpu::TextureBarrierDesc barrier;
+			barrier.syncBefore   = bgpu::BarrierSyncFlag::kCopy;
+			barrier.accessBefore = bgpu::BarrierAccessFlag::kCopyDest;
+			barrier.layoutBefore = bgpu::BarrierLayout::kCopyDest;
+			barrier.syncAfter =
+				bgpu::BarrierSyncFlag::kPixelShader | bgpu::BarrierSyncFlag::kComputeShader;
+			barrier.accessAfter = bgpu::BarrierAccessFlag::kShaderResource;
+			barrier.layoutAfter = bgpu::BarrierLayout::kShaderResource;
 			cmdList.Barrier(texture, barrier);
 		}
 	}
 
 	void
-	BlackEnvironment::Init(ResourceManagerRef resourceManager)
+	BlackEnvironment::Init(bgpu::ResourceManagerRef resourceManager)
 	{
 		m_ResourceManager = std::move(resourceManager);
 
 		const Created cube =
-			Create(*m_ResourceManager, TextureDimension::kTextureCube, c_CubeFaces);
+			Create(*m_ResourceManager, bgpu::TextureDimension::kTextureCube, c_CubeFaces);
 		m_Cube    = cube.texture;
 		m_CubeSrv = cube.srv;
 
-		const Created lut = Create(*m_ResourceManager, TextureDimension::kTexture2D, 1);
+		const Created lut = Create(*m_ResourceManager, bgpu::TextureDimension::kTexture2D, 1);
 		m_Lut             = lut.texture;
 		m_LutSrv          = lut.srv;
 	}
 
 	void
-	BlackEnvironment::Upload(ICommandList* cmdList)
+	BlackEnvironment::Upload(bgpu::ICommandList* cmdList)
 	{
 		core::ensure(cmdList != nullptr, "Command list must be initialized");
 		core::ensure(!m_Cube.IsNull() && !m_Lut.IsNull(), "BlackEnvironment::Upload before Init");
@@ -125,20 +131,20 @@ namespace bgl
 	void
 	BlackEnvironment::Release() noexcept
 	{
-		for (SrvHandle* srv : { &m_CubeSrv, &m_LutSrv })
+		for (bgpu::SrvHandle* srv : { &m_CubeSrv, &m_LutSrv })
 		{
 			if (!srv->IsNull())
 			{
 				m_ResourceManager->DestroySrv(*srv, false);
-				*srv = SrvHandle{};
+				*srv = bgpu::SrvHandle{};
 			}
 		}
-		for (TextureHandle* texture : { &m_Cube, &m_Lut })
+		for (bgpu::TextureHandle* texture : { &m_Cube, &m_Lut })
 		{
 			if (!texture->IsNull())
 			{
 				m_ResourceManager->DestroyTexture(*texture, false);
-				*texture = TextureHandle{};
+				*texture = bgpu::TextureHandle{};
 			}
 		}
 	}

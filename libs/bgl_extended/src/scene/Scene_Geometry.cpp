@@ -8,23 +8,23 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/LodLevel.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/RigHandle.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/RigHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
-#include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/VertexLayout.h>
+#include <bgpu/idl/RawRange.h>
 #include <cmath>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -234,7 +234,7 @@ namespace bgl
 					minBound = glm::min(minBound, verts[geomVertexIdx].pos);
 					maxBound = glm::max(maxBound, verts[geomVertexIdx].pos);
 				}
-				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
+				const glm::vec4 sphere = core::bounding_sphere_of(minBound, maxBound);
 				meshlet.boundingSphere = sphere;
 
 				build.meshlets.push_back(meshlet);
@@ -341,7 +341,7 @@ namespace bgl
 					maxBound = glm::max(maxBound, v.pos);
 				}
 
-				const glm::vec4 sphere = BoundingSphereOf(minBound, maxBound);
+				const glm::vec4 sphere = core::bounding_sphere_of(minBound, maxBound);
 				submesh.boundingSphere = sphere;
 			}
 
@@ -429,7 +429,7 @@ namespace bgl
 		GeomHandle base = AddPreparedMesh(
 			CookStaticMesh(mesh, meshIndex),
 			materials,
-			BoundingSphereOf(posedBounds.min, posedBounds.max));
+			core::bounding_sphere_of(posedBounds.min, posedBounds.max));
 
 		GeomRecord& geom = m_Geoms[base.handle.index];
 		geom.rig         = rig.handle;
@@ -726,7 +726,7 @@ namespace bgl
 				levelZeroMin                 = glm::min(levelZeroMin, src.aabbMin);
 				levelZeroMax                 = glm::max(levelZeroMax, src.aabbMax);
 			}
-			impl->boundingSphere = BoundingSphereOf(levelZeroMin, levelZeroMax);
+			impl->boundingSphere = core::bounding_sphere_of(levelZeroMin, levelZeroMax);
 		}
 
 		for (uint32_t s = 0; s < entries; ++s)
@@ -771,7 +771,7 @@ namespace bgl
 			out.layout                             = src.layout;
 			out.vertexCount                        = src.vertexCount;
 			out.material                           = src.material;
-			out.boundingSphere                     = BoundingSphereOf(src.aabbMin, src.aabbMax);
+			out.boundingSphere = core::bounding_sphere_of(src.aabbMin, src.aabbMax);
 
 			out.vertexBytes.resize(vertexByteCount);
 			std::memcpy(

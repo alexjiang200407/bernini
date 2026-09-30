@@ -8,12 +8,12 @@
 #include <editor_sdk/environment.h>
 
 #include <array>
-#include <bgl/GeomHandle.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <cstdint>
 #include <filesystem>
 #include <gamelib/BlendSpaceInfo.h>

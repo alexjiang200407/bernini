@@ -249,7 +249,7 @@ and portability.
 - [ ] Crowd Simulation & Pathfinding
   - [x] **`crowdlib`** — the simulation's own library, on the device the application's `bgpu` context
     owns and compiling through its Slang sessions, isolated from the renderer's frame. It links
-    `bgpu`, never the RHI (`docs/crowdlib.md`).
+    `bgpu`, whose RHI it shares as classes, never the renderer (`docs/crowdlib.md`).
   - [x] **The async-compute path** — a kernel on a second queue beside the frame, read back to the
     CPU: a compute queue and fence on D3D12, a second `MTLCommandQueue` and a shared event on Metal.
     `examples/bgl_async_compute` runs it under a rendered cube.

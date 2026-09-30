@@ -1,24 +1,28 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
-#include "resource/Buffer.h"
-#include "resource/Rtv.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
-#include "types/Rect.h"
-#include "types/Viewport.h"
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/types/Rect.h>
+#include <bgpu/types/Viewport.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	class IDevice;
 	class PipelineBatch;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 	class PassContext;
 	class Overlay;
@@ -35,13 +39,13 @@ namespace bgl
 		// caller named at DrawOverlay.
 		struct Draw
 		{
-			BufferHandle vertices;
-			BufferHandle indices;
-			uint32_t     triangleCount = 0;
-			SrvHandle    texture;
-			glm::vec2    translation{ 0.0f };
-			glm::mat4    transform{ 1.0f };
-			Rect         scissor;
+			bgpu::BufferHandle vertices;
+			bgpu::BufferHandle indices;
+			uint32_t           triangleCount = 0;
+			bgpu::SrvHandle    texture;
+			glm::vec2          translation{ 0.0f };
+			glm::mat4          transform{ 1.0f };
+			bgpu::Rect         scissor;
 		};
 
 		struct Args
@@ -50,9 +54,9 @@ namespace bgl
 			std::span<const core::SharedRef<Overlay>> overlays;
 			std::span<const Draw>                     draws;
 
-			RtvHandle     backBuffer;
-			Viewport      viewport;
-			SamplerHandle sampler;
+			bgpu::RtvHandle     backBuffer;
+			bgpu::Viewport      viewport;
+			bgpu::SamplerHandle sampler;
 		};
 
 		OverlayPass() = default;
@@ -92,6 +96,6 @@ namespace bgl
 		void
 		Execute(const Args& args, const PassContext& resources);
 
-		MeshletKernel m_Kernel;
+		bgpu::MeshletKernel m_Kernel;
 	};
 }

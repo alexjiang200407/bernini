@@ -1,12 +1,8 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
@@ -16,11 +12,15 @@
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -500,10 +500,10 @@ TEST_CASE(
 
 	auto device       = gfxBase->GetDevice();
 	auto cmdAllocator = device->CreateCommandAllocator();
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdList =
 		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());
@@ -613,10 +613,10 @@ TEST_CASE(
 
 	auto device       = gfxBase->GetDevice();
 	auto cmdAllocator = device->CreateCommandAllocator();
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdList =
 		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());

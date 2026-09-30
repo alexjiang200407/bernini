@@ -1,8 +1,8 @@
 #include "passes/BindingNameCheck.h"
-#include "pipeline/MeshletKernel.h"
-#include "uniforms/Uniforms.h"
 #include <algorithm>
-#include <bgl_common/UniformsBase.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/uniforms/Uniforms.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <core/err/util.h>
 #include <span>
 #include <string>
@@ -14,10 +14,10 @@ namespace bgl
 	BindingNameCheck&
 	BindingNameCheck::Check(std::string_view cbuffer, std::span<const std::string_view> names)
 	{
-		std::vector<const Uniforms*> variants;
+		std::vector<const bgpu::Uniforms*> variants;
 		variants.reserve(m_Kernels.size());
 
-		for (const MeshletKernel& kernel : m_Kernels)
+		for (const bgpu::MeshletKernel& kernel : m_Kernels)
 		{
 			// A demand-built family holds unbuilt kernels; one is not a variant, it is an absence.
 			if (!kernel.pipeline.IsInitialized())
@@ -32,14 +32,14 @@ namespace bgl
 		// Under demand building the built subset may hold no variant with this cbuffer at all --
 		// every skinned bucket unbuilt leaves 'skinnedData' nowhere -- and that is absence, not a
 		// typo. The member check resumes with the first build that carries the cbuffer.
-		if (std::ranges::none_of(variants, [](const Uniforms* uniforms) {
+		if (std::ranges::none_of(variants, [](const bgpu::Uniforms* uniforms) {
 				return uniforms != nullptr;
 			}))
 		{
 			return *this;
 		}
 
-		const std::vector<std::string_view> unknown = FindUnknownMembers(variants, names);
+		const std::vector<std::string_view> unknown = bgpu::FindUnknownMembers(variants, names);
 		if (unknown.empty())
 		{
 			return *this;

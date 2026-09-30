@@ -1,21 +1,21 @@
 #include "passes/BloomPass.h"
-#include "cmd/CommandList.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "passes/BindingNameCheck.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
-#include "types/ViewportState.h"
 #include <array>
-#include <bgl/Viewport.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
+#include <bgpu/types/ViewportState.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <format>
@@ -49,28 +49,28 @@ namespace bgl
 			"coarse"sv, "fine"sv, "sampler"sv, "coarseTexelSize"sv, "scatter"sv,
 		};
 
-		MeshletPipelineDesc
-		ScreenPipeline(IDevice* device, std::string_view pixelEntry)
+		bgpu::MeshletPipelineDesc
+		ScreenPipeline(bgpu::IDevice* device, std::string_view pixelEntry)
 		{
-			auto pipelineDesc = MeshletPipelineDesc();
+			auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 			pipelineDesc.meshShader = device->CreateShader(std::string(c_MeshSrc), "MSMain");
 			pipelineDesc.pixelShader =
 				device->CreateShader(std::string(c_Src), std::string(pixelEntry));
 
-			pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
+			pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 
-			auto raster = RasterState();
-			raster.SetFillMode(RasterFillMode::kSolid)
-				.SetCullMode(RasterCullMode::kNone)
+			auto raster = bgpu::RasterState();
+			raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+				.SetCullMode(bgpu::RasterCullMode::kNone)
 				.SetFrontCounterClockwise(true)
 				.SetDepthClipEnable(false);
 
-			auto depth = DepthStencilState{};
+			auto depth = bgpu::DepthStencilState{};
 			depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
 			pipelineDesc.renderState =
-				RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+				bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 			return pipelineDesc;
 		}
@@ -113,7 +113,7 @@ namespace bgl
 			desc.SetName(std::format("BloomDown{}", i))
 				.AddTextureRead(
 					i == 0 ? args.sourceName : args.levels[i - 1].downName,
-					BarrierSyncFlag::kPixelShader)
+					bgpu::BarrierSyncFlag::kPixelShader)
 				.AddRenderTarget(args.levels[i].downName);
 
 			desc.SetExec([this, i](const PassContext& resources) {
@@ -132,8 +132,8 @@ namespace bgl
 			desc.SetName(std::format("BloomUp{}", i))
 				.AddTextureRead(
 					coarsest ? args.levels[i + 1].downName : args.levels[i + 1].upName,
-					BarrierSyncFlag::kPixelShader)
-				.AddTextureRead(args.levels[i].downName, BarrierSyncFlag::kPixelShader)
+					bgpu::BarrierSyncFlag::kPixelShader)
+				.AddTextureRead(args.levels[i].downName, bgpu::BarrierSyncFlag::kPixelShader)
 				.AddRenderTarget(args.levels[i].upName);
 
 			desc.SetExec(
@@ -146,7 +146,7 @@ namespace bgl
 	void
 	BloomPass::ExecuteDownsample(const Args& args, uint32_t level, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(
@@ -178,11 +178,11 @@ namespace bgl
 			core::fatal("Bloom shader is missing its '{}' constant buffer", c_DownsampleCbuffer);
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_DownsampleKernel;
 		gfxState.viewportState.AddViewportAndScissorRect(
-			Viewport(static_cast<float>(target.width), static_cast<float>(target.height)));
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(target.downRtv);
+			bgpu::Viewport(static_cast<float>(target.width), static_cast<float>(target.height)));
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(target.downRtv);
 
 		cmd->SetMeshletState(gfxState);
 
@@ -192,7 +192,7 @@ namespace bgl
 	void
 	BloomPass::ExecuteUpsample(const Args& args, uint32_t level, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(
@@ -221,11 +221,11 @@ namespace bgl
 			core::fatal("Bloom shader is missing its '{}' constant buffer", c_UpsampleCbuffer);
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_UpsampleKernel;
 		gfxState.viewportState.AddViewportAndScissorRect(
-			Viewport(static_cast<float>(target.width), static_cast<float>(target.height)));
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(target.upRtv);
+			bgpu::Viewport(static_cast<float>(target.width), static_cast<float>(target.height)));
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(target.upRtv);
 
 		cmd->SetMeshletState(gfxState);
 

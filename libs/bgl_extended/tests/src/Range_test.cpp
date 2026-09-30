@@ -1,18 +1,18 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "scene/RangeBuffer.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <bgl/IGraphics.h>
+#include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
@@ -42,13 +42,13 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 
-	auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
@@ -62,12 +62,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("AllocateRange marks dirty blocks")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);  // One element per block.
 		desc.debugName    = "RangeBuffer Allocate";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 
 		// Construction reserves element 0 and leaves its block dirty; flushing it leaves the counts
 		// below the caller's writes alone.
@@ -102,12 +102,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Add writes an element span and marks dirty")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Add";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 		rb.Update(cmdList);  // Flushes the reserved null element.
 
 		const int values[] = { 10, 20, 30 };
@@ -123,12 +123,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Set updates a single element and dirties one block")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Set";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 
 		const int values[] = { 1, 2, 3 };
 		auto      handle   = rb.Add(std::span<const int>(values, 3));
@@ -149,12 +149,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Erase frees the range and reallocation bumps generation")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Erase";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 
 		auto handle = rb.AllocateRange(4);
 		CHECK(handle.index == 1);
@@ -175,12 +175,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("Dirty tracking spans multiple blocks")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "RangeBuffer Spanning";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 		rb.Update(cmdList);  // Flushes the reserved null element.
 
 		// A 5-element range straddles block 0 (elems 1-3) and block 1 (elems 4-5).
@@ -193,12 +193,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("IsValid detects use-after-free and EraseByIndex frees ranges")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer IsValid";
 
-		auto rb = bgl::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
 
 		// The reserved element is not a live range, so a null offset read back from a GPU-side
 		// struct resolves to nothing rather than to element 0.
@@ -233,12 +233,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 	// mesh -- whose GPU data then belonged to another range entirely.
 	SECTION("A dirty range past the first block uploads its own bytes")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 16;
 		desc.blockSize    = 4 * sizeof(uint32_t);  // Four elements per block => 4 blocks.
 		desc.debugName    = "RangeBuffer Offset Upload";
 
-		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 		// Fill blocks 0-1 and flush, so the next upload's dirty run cannot start at block 0.
 		const uint32_t low[]     = { 100, 101, 102, 103, 104, 105, 106, 107 };
@@ -250,16 +250,16 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		REQUIRE(highHandle.index == 9);  // Entirely inside block 2.
 		rb.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(rb.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
@@ -290,12 +290,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 	SECTION("A range that outgrows the buffer is served rather than refused")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow";
 
-		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 		// initialCount is the caller's budget; the reserved null element rides on top of it.
 		REQUIRE(rb.Capacity() == desc.initialCount + 1);
@@ -323,12 +323,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 	// one. Without that copy this reads back zeroes.
 	SECTION("Data uploaded before a growth survives it")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow Preserve";
 
-		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 		const uint32_t before[]     = { 111, 222, 333, 444 };
 		auto           beforeHandle = rb.Add(std::span<const uint32_t>(before, std::size(before)));
@@ -348,16 +348,16 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		rb.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Grow Preserve Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(rb.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
@@ -390,12 +390,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 	// so a naive "copy from the one I just replaced" reads uninitialised memory.
 	SECTION("Data survives two growths with no flush between them")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 2;
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Double Grow";
 
-		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 		const uint32_t seed[]     = { 7, 8 };
 		auto           seedHandle = rb.Add(std::span<const uint32_t>(seed, std::size(seed)));
@@ -414,16 +414,16 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		rb.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Double Grow Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(rb.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());
@@ -454,12 +454,12 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 	// between them makes the dirty upload win. Without it the copied (stale) bytes can survive.
 	SECTION("Dirty data below the old capacity survives a growth in the same Update")
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow Overlap";
 
-		auto rb = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 		// Fits the initial capacity, dirties slots below it, and is NOT flushed -- so the original
 		// resource never receives these bytes.
@@ -474,16 +474,16 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		rb.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = static_cast<uint64_t>(rb.Capacity()) * sizeof(uint32_t);
 		rbDesc.debugName = "RangeBuffer Grow Overlap Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(rb.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, rb.GetBufferHandle());

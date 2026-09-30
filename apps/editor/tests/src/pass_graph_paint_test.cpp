@@ -8,13 +8,13 @@
 #include <QRect>
 #include <algorithm>
 #include <array>
-#include <bgl/PassHistory.h>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <gamelib/PassHistory.h>
 #include <optional>
 #include <qnamespace.h>
 #include <qrgb.h>
@@ -79,7 +79,7 @@ namespace
 	}
 
 	[[nodiscard]] QImage
-	Render(const bgl::PassHistory& history, const std::optional<std::size_t> selected)
+	Render(const game::PassHistory& history, const std::optional<std::size_t> selected)
 	{
 		QImage image(900, 380, QImage::Format_ARGB32);
 		image.fill(Qt::transparent);
@@ -94,7 +94,7 @@ namespace
 
 TEST_CASE("A history of frames draws its bands", "[gputiming]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	for (uint64_t frame = 1; frame <= 120; ++frame)
 	{
 		history.Append(SyntheticFrame(frame));
@@ -111,7 +111,7 @@ TEST_CASE("A history of frames draws its bands", "[gputiming]")
 
 TEST_CASE("An empty history says so rather than drawing an empty chart", "[gputiming]")
 {
-	const QImage image = Render(bgl::PassHistory(), std::nullopt);
+	const QImage image = Render(game::PassHistory(), std::nullopt);
 
 	// It drew something, and none of it is a band.
 	CHECK(DistinctColours(image) > 1);
@@ -120,7 +120,7 @@ TEST_CASE("An empty history says so rather than drawing an empty chart", "[gputi
 
 TEST_CASE("The marked sample is the one the caller asked for", "[gputiming]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	for (uint64_t frame = 1; frame <= 40; ++frame)
 	{
 		history.Append(SyntheticFrame(frame));
@@ -140,7 +140,7 @@ TEST_CASE("The marked sample is the one the caller asked for", "[gputiming]")
 
 TEST_CASE("Dense timing bands join without gaps and retain a one-frame spike", "[gputiming]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	for (uint64_t frame = 1; frame <= 600; ++frame)
 	{
 		history.Append(
@@ -172,7 +172,7 @@ TEST_CASE("Dense timing bands join without gaps and retain a one-frame spike", "
 TEST_CASE("Noisy GPU timings stay affordable relative to flat timings", "[gputiming][perf]")
 {
 	const auto historyOf = [](bool noisy) {
-		bgl::PassHistory history;
+		game::PassHistory history;
 		for (uint64_t frame = 1; frame <= 600; ++frame)
 		{
 			bgl::PassTimings timings{ .frame = frame };
@@ -188,7 +188,7 @@ TEST_CASE("Noisy GPU timings stay affordable relative to flat timings", "[gputim
 	};
 	const auto flat      = historyOf(false);
 	const auto noisy     = historyOf(true);
-	const auto paintTime = [](const bgl::PassHistory& history) {
+	const auto paintTime = [](const game::PassHistory& history) {
 		std::array<qint64, 5> times;
 		for (qint64& elapsed : times)
 		{
@@ -212,8 +212,8 @@ TEST_CASE("Noisy GPU timings stay affordable relative to flat timings", "[gputim
 
 TEST_CASE("A longer capture draws and selects only its latest 600 samples", "[gputiming]")
 {
-	bgl::PassHistory capture(3600);
-	bgl::PassHistory recent;
+	game::PassHistory capture(3600);
+	game::PassHistory recent;
 	for (uint64_t frame = 1; frame <= 3600; ++frame)
 	{
 		auto timings = SyntheticFrame(frame);

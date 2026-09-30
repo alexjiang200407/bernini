@@ -1,13 +1,16 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
+#include <bgpu/pipeline/MeshletKernel.h>
 #include <spdlog/spdlog.h>
+
+namespace bgpu
+{
+	class PipelineBatch;
+	class IDevice;
+}
 
 namespace bgl
 {
-	class PipelineBatch;
-
-	class IDevice;
 	class FrameGraph;
 	class PassContext;
 	struct DrawData;
@@ -47,6 +50,6 @@ namespace bgl
 		Execute(const DrawData& draw, const PassContext& resources);
 
 	private:
-		MeshletKernel m_Kernel;
+		bgpu::MeshletKernel m_Kernel;
 	};
 }

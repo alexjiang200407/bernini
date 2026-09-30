@@ -4,10 +4,10 @@
 #include "util/TestOptions.h"
 #include <RangeWithCount.h>
 #include <array>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/Geom.h>

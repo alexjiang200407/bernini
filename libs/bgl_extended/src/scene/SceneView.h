@@ -1,34 +1,28 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
-#include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
-#include "scene/EntryBuffer.h"
 #include "scene/NamedBuffer.h"
-#include "scene/PackedBuffer.h"
-#include "scene/RangeBuffer.h"
-#include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
-#include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
 #include "types/DrawBucketMask.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include <algorithm>
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
-#include <bgl/SkyboxDesc.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/FootIKLeg.h>
@@ -38,6 +32,12 @@
 #include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/PosedInstance.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/buffer/EntryBuffer.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/RawBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
@@ -53,9 +53,13 @@
 #include <tuple>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	class ICommandList;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 	class Scene;
 
@@ -115,10 +119,10 @@ namespace bgl
 	{
 	public:
 		SceneView(
-			const SceneRef&                   scene,
-			uint32_t                          initialInstances,
-			core::SharedRef<IResourceManager> resourceManager,
-			std::shared_ptr<DrawBucketTable>  buckets);
+			const SceneRef&                         scene,
+			uint32_t                                initialInstances,
+			core::SharedRef<bgpu::IResourceManager> resourceManager,
+			std::shared_ptr<DrawBucketTable>        buckets);
 
 		~SceneView() noexcept override;
 
@@ -377,7 +381,7 @@ namespace bgl
 		[[nodiscard]] std::span<const uint32_t>
 		GetSelectedInstances();
 
-		[[nodiscard]] const UploadBuffer<uint32_t>&
+		[[nodiscard]] const bgpu::UploadBuffer<uint32_t>&
 		GetSelectedInstanceBuffer() const noexcept
 		{
 			return m_CurrentSelectedInstances;
@@ -435,7 +439,7 @@ namespace bgl
 		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
 		void
-		Update(ICommandList* cmdList);
+		Update(bgpu::ICommandList* cmdList);
 
 		/**
 		 * Every bucket an instance of this view has ever resolved to. Never cleared: a bucket once
@@ -542,7 +546,7 @@ namespace bgl
 		PlaceRecord(
 			GeomHandle              geom,
 			glm::mat4               transform,
-			idl::RawEntry           record,
+			bgpu::idl::RawEntry     record,
 			core::multi_slot_handle palette,
 			core::multi_slot_handle footIK,
 			uint32_t                nodeCount);
@@ -593,11 +597,11 @@ namespace bgl
 		void
 		SyncInstanceScratch();
 
-		SceneRef                          m_Scene;
-		Scene*                            m_SceneRaw = nullptr;
-		core::SharedRef<IResourceManager> m_ResourceManager;
-		std::string                       m_NamePrefix;
-		uint32_t                          m_InitialInstances = 0;
+		SceneRef                                m_Scene;
+		Scene*                                  m_SceneRaw = nullptr;
+		core::SharedRef<bgpu::IResourceManager> m_ResourceManager;
+		std::string                             m_NamePrefix;
+		uint32_t                                m_InitialInstances = 0;
 
 		// The Scene material epoch these instances were resolved against. See Scene::MaterialEpoch.
 		uint64_t m_SceneEpoch = 0;
@@ -614,40 +618,40 @@ namespace bgl
 
 		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
 		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
-		UploadBuffer<uint32_t> m_DrawBucketFlags;
+		bgpu::UploadBuffer<uint32_t> m_DrawBucketFlags;
 
-		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
-		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
+		bgpu::PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
+		bgpu::EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
 		// stage that draws more than one can ask rather than mirror the draw-bucket table.
-		RawBuffer<idl::PlaybackType> m_Playback;
+		bgpu::RawBuffer<idl::PlaybackType> m_Playback;
 
 		BonePaletteBuffer m_Palettes;
 
 		// Every hero placement's runtime foot-IK weights, legs.count FootIKLegs apiece. Its own
 		// arena rather than a field of the playback record: the pose pass is the only reader, and
 		// a rig without legs owns no entry at all.
-		RangeBuffer<idl::FootIKLeg> m_FootIK;
+		bgpu::RangeBuffer<idl::FootIKLeg> m_FootIK;
 
 		// The placements the pose pass dispatches over, one workgroup each, with the foot-IK record
 		// of each beside it. Dense and CPU-authored rather than a sweep of the arena: erasing a
 		// record only releases its bytes, so a sweep would pose freed states -- into palette slices
 		// another instance may already own -- and would meet the crowd records sharing the arena,
 		// which own no palette.
-		UploadBuffer<idl::PosedInstance> m_PosedInstances;
+		bgpu::UploadBuffer<idl::PosedInstance> m_PosedInstances;
 
 		// The placements carrying a blob shadow, one disc each -- the blob-shadow pass
 		// dispatches over it. Dense and CPU-authored for the pose list's reason.
-		UploadBuffer<idl::BlobShadow> m_BlobShadows;
+		bgpu::UploadBuffer<idl::BlobShadow> m_BlobShadows;
 
 		// Every visible placement's grass fields, and one reference per chunk of them, grouped into
 		// m_GrassBatches by the bucket they draw through. Rebuilt whole, like the blob list.
-		UploadBuffer<idl::GrassDraw>     m_GrassDraws;
-		UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
-		std::vector<GrassBatch>          m_GrassBatches;
-		DrawBucketMask                   m_GrassDrawBuckets;
-		bool                             m_GrassDirty      = true;
-		uint64_t                         m_SceneGrassEpoch = 0;
+		bgpu::UploadBuffer<idl::GrassDraw>     m_GrassDraws;
+		bgpu::UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
+		std::vector<GrassBatch>                m_GrassBatches;
+		DrawBucketMask                         m_GrassDrawBuckets;
+		bool                                   m_GrassDirty      = true;
+		uint64_t                               m_SceneGrassEpoch = 0;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;
@@ -658,8 +662,8 @@ namespace bgl
 		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
 		// move a dense index, so a deletion staleness-marks the list exactly like a selection
 		// change does.
-		UploadBuffer<uint32_t> m_CurrentSelectedInstances;
-		bool                   m_SelectionDirty = false;
+		bgpu::UploadBuffer<uint32_t> m_CurrentSelectedInstances;
+		bool                         m_SelectionDirty = false;
 
 		// Set when a skinned placement is created or destroyed; RebuildPosedList clears it. Same
 		// bargain as m_SelectionDirty: authoring-time work, never per frame.

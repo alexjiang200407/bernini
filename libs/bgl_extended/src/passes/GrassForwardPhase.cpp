@@ -1,23 +1,24 @@
 #include "passes/GrassForwardPhase.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
-#include "pipeline/MeshletKernel.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/MeshletState.h"
-#include "uniforms/Uniforms.h"
 #include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
 #include <bgl/types/WindDesc.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/MeshletState.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <core/math.h>
 #include <cstdint>
@@ -34,24 +35,24 @@ namespace bgl
 		constexpr std::array<SceneBuffer, 5> c_GrassBuffers = {
 			{ { c_GrassDrawsName,
 			    "draws",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassChunkRefsName,
 			    "chunkRefs",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassLookBufferName,
 			    "looks",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassChunkBufferName,
 			    "chunks",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassClumpBufferName,
 			    "clumps",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader } }
 		};
 
 		constexpr std::array<std::string_view, 10> c_Fields = {
@@ -94,12 +95,12 @@ namespace bgl
 
 	void
 	GrassForwardPhase::Record(
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) const
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const SceneView& view = ViewOf(draw);
@@ -107,7 +108,7 @@ namespace bgl
 
 		for (const SceneView::GrassBatch& batch : view.GetGrassBatches())
 		{
-			MeshletKernel* kernel =
+			bgpu::MeshletKernel* kernel =
 				kernels
 					.BindDrawBucketKernel(batch.bucket, DrawLane::kAtRest, state, draw, resources);
 			core::ensure(

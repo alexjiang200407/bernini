@@ -1,6 +1,6 @@
 #pragma once
-#include <bgl/MaterialHandle.h>
 #include <bgl/glm.h>
+#include <bgl/types/MaterialHandle.h>
 #include <cstdint>
 
 namespace bgl

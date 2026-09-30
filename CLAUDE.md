@@ -18,9 +18,9 @@ they apply. See [docs/ai-coding.md](docs/ai-coding.md).
 - Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgl_common`, `./libs/bgpu`, `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`, `./libs/crowdlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - **`assetlib_structs` is data, and `assetlib` holds the answers.** Structs, the constants that address them and the `static_assert`s that pin their layout -- no function lives there. A question about a container is a free function one library up: `toMatrix` in `assetlib/transform.h`, `findAttribute` in `assetlib/vertex_layout.h`, `channelIndex` in `assetlib/bmaterial.h`. The rule is about who links what: `bgl` and `bgl_extended` link `assetlib_structs` and never `assetlib`, so anything placed there is something the renderer may call, and keeping the surface to data is what makes *the renderer cannot ask a container anything* true by construction instead of true until someone moves a file. The renderer pays for it in the open -- `Scene_Geometry.cpp` spells its own joints/weights check and `Scene_Materials.cpp` its own `static_cast<size_t>` -- and that cost is the rule working, not the rule failing. `assetlib_structs` is an INTERFACE target with nothing to compile; `assetlib_structs_selfcheck` compiles its whole public surface against it alone, so a header reaching into `assetlib` fails the build.
-- **`bgpu` owns the process's GPU device and the Slang sessions**, and the application creates it and hands it to every library that runs work on the device -- `bgl_extended`, and a client that runs its own compute beside the frame. It names both backends, which is why it is not `bgl_common`; it knows nothing of rendering and links only `core` and Slang, so `bgl`'s contract can include `<bgpu/GpuContext.h>` without a cycle. It owns the Slang diagnostic checker (`bgpu::SlangErrorChecker`) and the program cache every owner stores its compiled shaders in (`bgpu::ProgramCache`). `bgl` neither creates nor lends a device: `CreateGraphics` takes a `bgpu::GpuContextRef`. See [docs/bgpu.md](./docs/bgpu.md).
-- **`crowdlib` runs the crowd simulation's compute on a queue of its own**, on the device a `bgpu::GpuContext` owns. It links `bgpu` and never `bgl_extended`, so it drives D3D12 and Metal itself; the editor does not link it. See [docs/crowdlib.md](./docs/crowdlib.md).
-- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor any backend. It holds what every renderer needs and no renderer owns — the Slang reflection walk, the serializable `ReflectedLayout`, the constant-buffer mirror's layout walk (`UniformsBase`), the shader cache's reflection encoding (the salt, key and store are `bgpu`'s), the TAA jitter sequence, frustum-plane extraction, the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
+- **`bgpu` owns the process's GPU device, the Slang sessions and the RHI**, and the application creates the device and hands it to every library that runs work on it -- `bgl_extended`, and a client that runs its own compute beside the frame. Each owner makes a device of its own on it (`bgpu::CreateDevice`) and builds its queues, resource managers, pipelines and buffers from that, so the RHI is shared as classes and never as instances ([docs/rhi.md](./docs/rhi.md)). It names both backends and implements the RHI for each (`src/d3d12`, `src/metal`); it knows nothing of rendering and links only `core`, glm and Slang, so `bgl`'s contract can include `<bgpu/GpuContext.h>` without a cycle, and `bgpu_selfcheck` compiles every public header against `bgpu` alone. It owns the Slang diagnostic checker (`bgpu::SlangErrorChecker`), the program cache every owner stores its compiled shaders in (`bgpu::ProgramCache`), the Slang reflection walk and the constant-buffer mirror (`UniformsBase`, `Uniforms`), the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the Slang tree every other one imports: the IDL offset primitives, the buffer family and the GPU assert channel. `bgl` neither creates nor lends a device: `CreateGraphics` takes a `bgpu::GpuContextRef`. See [docs/bgpu.md](./docs/bgpu.md).
+- **`crowdlib` runs the crowd simulation's compute on a queue of its own**, on the device a `bgpu::GpuContext` owns. It links `bgpu` and never the renderer (`bgl`, `bgl_common`, `bgl_extended`); the editor does not link it. See [docs/crowdlib.md](./docs/crowdlib.md).
+- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor a backend of its own. It holds what every renderer needs and no renderer owns — the TAA jitter sequence, frustum-plane extraction, and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
 - **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
@@ -165,16 +165,16 @@ what is there, how it is parsed and refreshed, and what it does not list.
 
 **[bgpu](./docs/bgpu.md)**
 
-The process's GPU device and the compiler for it, owned by no renderer: what must precede the device
-or be shared through it (the debug layer, the Slang sessions, the program cache every owner stores
-its compiled shaders in), what deliberately is not (queues, pools, the driver's pipeline cache), why
-the application creates it and hands it to every owner, and the lifetime and session rules every
-owner keeps.
+The process's GPU device, the compiler for it and the RHI every owner builds on, owned by no
+renderer: what must precede the device or be shared through it (the debug layer, the Slang sessions,
+the program cache every owner stores its compiled shaders in), what each owner makes for itself
+(a device, queues, resource managers, pipelines, the driver's pipeline cache), why the application
+creates it and hands it to every owner, and the lifetime and session rules every owner keeps.
 
 **[crowdlib](./docs/crowdlib.md)**
 
 The crowd simulation's library: compute on a second queue beside the renderer's frame, on the device
-the application's context owns. Why it links `bgpu` and not the RHI, what the async queue is on D3D12
+the application's context owns. Why it links `bgpu` and never the renderer, what the async queue is on D3D12
 and on Metal, a job's submit-then-poll with one submission in flight, and how its kernels compile and bind.
 Then `ICrowd`, the group-level interface a game drives the crowd through: why it never names an
 agent, why commands wait for a fixed tick, and how a backend proves it keeps the contract.
@@ -202,7 +202,8 @@ Describes the collection of structures, descriptors, and resources that are boun
 
 **[Render Hardware Interface](./docs/rhi.md)**
 
-RHI usage — the internal abstraction bgl_extended is built *on*, one layer below the public API.
+RHI usage — `bgpu`'s abstraction over D3D12 and Metal, which the renderer is built *on* and a compute
+client drives directly, one layer below `bgl`'s public API.
 
 **[Uniforms](./docs/uniforms.md)**
 

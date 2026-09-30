@@ -40,7 +40,7 @@ namespace editor
 	/**
 	 * What the cull draws of `lods` placed at `world`, seen from `eye`: the level `forced` pins --
 	 * a mesh with fewer draws its coarsest -- or the level the size earns against the one it drew
-	 * last. `pixelsPerUnit` is the render grid's (bgl::PixelsPerUnit).
+	 * last. `pixelsPerUnit` is the render grid's (game::PixelsPerUnit).
 	 */
 	[[nodiscard]] LodReadout
 	ReadLod(

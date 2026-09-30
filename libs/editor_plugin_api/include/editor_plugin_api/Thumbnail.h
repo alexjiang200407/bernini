@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QImage>
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 #include <core/glm.h>
 #include <optional>
 #include <string>

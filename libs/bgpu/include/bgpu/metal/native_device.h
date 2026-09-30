@@ -1,6 +1,11 @@
 #pragma once
-#include <Metal/Metal.hpp>
 #include <bgpu/api.h>
+
+// Declared, not defined: a caller that dereferences one includes <Metal/Metal.hpp> itself.
+namespace MTL
+{
+	class Device;
+}
 
 namespace bgpu
 {

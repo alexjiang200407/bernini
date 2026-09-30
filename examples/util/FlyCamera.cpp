@@ -1,5 +1,5 @@
 #include "FlyCamera.h"
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_mouse.h>

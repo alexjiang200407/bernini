@@ -3,7 +3,7 @@
 #include <editor_sdk/export.h>
 
 #include <QStringList>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>

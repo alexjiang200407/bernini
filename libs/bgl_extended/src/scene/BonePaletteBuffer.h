@@ -1,8 +1,8 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/multi_slot_vector.h>
 #include <cstdint>
@@ -46,7 +46,7 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate the initial storage.
 		 */
 		void
-		Init(ResourceManagerRef resourceManager);
+		Init(bgpu::ResourceManagerRef resourceManager);
 
 		/**
 		 * Reserves `float4Count` contiguous float4s, growing the arena when it is full.
@@ -66,7 +66,7 @@ namespace bgl
 		}
 
 		// Re-read every frame: a growth mints a new handle and retires the old one.
-		[[nodiscard]] BufferHandle
+		[[nodiscard]] bgpu::BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			return m_Storage.GetBufferHandle();
@@ -79,7 +79,7 @@ namespace bgl
 		}
 
 		void
-		Update(ICommandList* cmdList)
+		Update(bgpu::ICommandList* cmdList)
 		{
 			m_Storage.Update(cmdList);
 		}
@@ -93,7 +93,7 @@ namespace bgl
 	private:
 		// Offsets only; see the class comment on why the element type is a placeholder.
 		core::multi_slot_vector<uint32_t> m_Offsets;
-		ComputeBuffer                     m_Storage;
-		ResourceManagerRef                m_ResourceManager;
+		bgpu::ComputeBuffer               m_Storage;
+		bgpu::ResourceManagerRef          m_ResourceManager;
 	};
 }

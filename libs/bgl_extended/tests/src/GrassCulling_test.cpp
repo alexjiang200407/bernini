@@ -1,25 +1,18 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "constants/constants.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
+#include "gfx/viewport.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
@@ -28,19 +21,27 @@
 #include <array>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
-#include <bgl/Camera.h>
-#include <bgl/GrassHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/Viewport.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/GrassDesc.h>
+#include <bgl/types/GrassHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/CullStats.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -109,19 +110,19 @@ namespace
 
 	struct Harness
 	{
-		bgl::GraphicsRef                       gfx;
-		bgl::GraphicsBase*                     gfxBase = nullptr;
-		core::SharedRef<bgl::IResourceManager> resourceManager;
-		bgl::IDevice*                          device = nullptr;
-		bgl::RenderTargetRef                   target;
-		bgl::RenderTargetBase*                 targetBase = nullptr;
-		bgl::SceneRef                          sceneRef;
-		bgl::SceneViewRef                      viewRef;
-		bgl::Scene*                            scene = nullptr;
-		bgl::SceneView*                        view  = nullptr;
-		bgl::CompactInstancesPass              compactPass;
-		bgl::ForwardPhases                     forwardPhases;
-		bgl::BrdfLutGenPass                    brdfLut;
+		bgl::GraphicsRef                        gfx;
+		bgl::GraphicsBase*                      gfxBase = nullptr;
+		core::SharedRef<bgpu::IResourceManager> resourceManager;
+		bgpu::IDevice*                          device = nullptr;
+		bgl::RenderTargetRef                    target;
+		bgl::RenderTargetBase*                  targetBase = nullptr;
+		bgl::SceneRef                           sceneRef;
+		bgl::SceneViewRef                       viewRef;
+		bgl::Scene*                             scene = nullptr;
+		bgl::SceneView*                         view  = nullptr;
+		bgl::CompactInstancesPass               compactPass;
+		bgl::ForwardPhases                      forwardPhases;
+		bgl::BrdfLutGenPass                     brdfLut;
 
 		Harness()
 		{
@@ -170,7 +171,7 @@ namespace
 
 			view->RefreshGrass();
 			const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
-			auto                        pipelines = bgl::PipelineBatch(device);
+			auto                        pipelines = bgpu::PipelineBatch(device);
 			const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 			compactPass.Init(ctx);
 			forwardPhases.Init(ctx);
@@ -182,10 +183,10 @@ namespace
 			// The blade shader samples the table; an unset handle indexes past the heap.
 			auto allocator = device->CreateCommandAllocator();
 			auto cmdList   = device->CreateCommandList(
-				{ bgl::QueueType::kGraphics },
+				{ bgpu::QueueType::kGraphics },
 				allocator,
 				resourceManager);
-			auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 			resourceManager->RegisterQueue(cmdQueue.Get());
 			cmdList->Open(cmdQueue, allocator);
 			brdfLut.Generate(cmdList.Get());
@@ -217,16 +218,16 @@ namespace
 				.Perspective(glm::radians(60.0f), static_cast<float>(c_W) / c_H, 0.1f, 500.0f);
 			const glm::mat4 viewProj = camera.GetViewProjection();
 
-			auto rbDesc      = bgl::ReadbackBufferDesc();
+			auto rbDesc      = bgpu::ReadbackBufferDesc();
 			rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
 			rbDesc.debugName = "Grass Cull Stats Readback";
 			auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-			auto listDesc  = bgl::CommandListDesc();
-			listDesc.type  = bgl::QueueType::kGraphics;
+			auto listDesc  = bgpu::CommandListDesc();
+			listDesc.type  = bgpu::QueueType::kGraphics;
 			auto allocator = device->CreateCommandAllocator();
 			auto cmdList   = device->CreateCommandList(listDesc, allocator, resourceManager);
-			auto cmdQueue  = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			auto cmdQueue  = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 			bgl::FrameGraph fg;
 			fg.RegisterQueue("main", cmdQueue, cmdList);
@@ -242,7 +243,7 @@ namespace
 			draw.view      = viewRef;
 			draw.cullState = &view->GetCullState(0);
 			draw.viewState.viewport =
-				bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+				bgpu::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
 			draw.viewState.viewProj     = viewProj;
 			draw.viewState.prevViewProj = viewProj;
 			draw.viewState.cullView     = bgl::BuildCullView(viewProj);
@@ -269,8 +270,8 @@ namespace
 					.SetName("Grass Cull Stats Readback")
 					.AddBufferArg(
 						bgl::c_CullStatsName,
-						bgl::BarrierSyncFlag::kCopy,
-						bgl::BarrierAccessFlag::kCopySource)
+						bgpu::BarrierSyncFlag::kCopy,
+						bgpu::BarrierAccessFlag::kCopySource)
 					.SetSideEffect()
 					.SetExec([&](const bgl::PassContext& ctx) {
 						ctx.GetCommandList()->CopyBufferToReadback(

@@ -1,7 +1,7 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 
 namespace bgl
@@ -40,7 +40,7 @@ namespace bgl
 		 * @throws std::runtime_error if the pattern buffer cannot be allocated.
 		 */
 		void
-		Init(ResourceManagerRef resourceManager);
+		Init(bgpu::ResourceManagerRef resourceManager);
 
 		void
 		Release(bool deferred = true) noexcept;
@@ -51,20 +51,20 @@ namespace bgl
 		 * @pre `cmdList` is open and `buffer` is in a copy-dest state.
 		 */
 		void
-		Poison(ICommandList* cmdList, BufferHandle buffer) noexcept;
+		Poison(bgpu::ICommandList* cmdList, bgpu::BufferHandle buffer) noexcept;
 
 	private:
 		// Uploaded on the first Poison, which is the first point there is a command list to record
 		// it on.
 		void
-		EnsurePattern(ICommandList* cmdList) noexcept;
+		EnsurePattern(bgpu::ICommandList* cmdList) noexcept;
 
 		// One chunk, tiled: a buffer large enough for the biggest poisoned buffer would be sized by
 		// whatever the scene happens to hold, and the copies cost the same either way.
 		static constexpr uint32_t c_PatternWords = 16 * 1024;
 
-		ResourceManagerRef m_ResourceManager;
-		BufferHandle       m_Pattern;
-		bool               m_PatternUploaded = false;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		bgpu::BufferHandle       m_Pattern;
+		bool                     m_PatternUploaded = false;
 	};
 }

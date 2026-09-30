@@ -6,8 +6,14 @@
 
 #	include <bgpu/api.h>
 #	include <cstdint>
-#	include <directx/d3d12.h>
 
+// Declared, not defined: a caller that dereferences one includes <directx/d3d12.h> itself.
+struct ID3D12Device;
+struct ID3D12PipelineState;
+struct ID3D12RootSignature;
+
+// include-cleaner wants the defining header for the declarations above.
+// NOLINTBEGIN(misc-include-cleaner)
 namespace bgpu
 {
 	class GpuContext;
@@ -46,5 +52,6 @@ namespace bgpu
 		uint64_t             identity,
 		ID3D12PipelineState* pipelineState) noexcept;
 }
+// NOLINTEND(misc-include-cleaner)
 
 #endif

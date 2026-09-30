@@ -1,16 +1,11 @@
 #pragma once
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "constants/constants.h"
 #include "debug/BufferPoisoner.h"
-#include "debug/DebugBuffer.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassTimer.h"
 #include "gfx/BlackEnvironment.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
 #include "overlay/Overlay.h"
 #include "passes/BlobShadowPass.h"
 #include "passes/BloomPass.h"
@@ -27,11 +22,7 @@
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
 #include "postprocess/TonemapLut.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "resource/Sampler.h"
 #include "types/DrawBucketMask.h"
-#include "types/Format.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
@@ -39,9 +30,19 @@
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/debug/DebugBuffer.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/types/Format.h>
 #include <core/glm.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -65,8 +66,8 @@ namespace bgl
 	{
 	public:
 		RenderContext(
-			DeviceRef                        device,
-			ResourceManagerRef               resourceManager,
+			bgpu::DeviceRef                  device,
+			bgpu::ResourceManagerRef         resourceManager,
 			std::shared_ptr<DrawBucketTable> buckets,
 			std::span<const SurfaceType>     surfaceTypes,
 			bool                             enableDebug);
@@ -126,7 +127,7 @@ namespace bgl
 
 		// The submission timeline. A render target presents on the queue its frames are recorded
 		// on, so every target must be created against this queue.
-		[[nodiscard]] CommandQueueRef
+		[[nodiscard]] bgpu::CommandQueueRef
 		GetCommandQueueCpy() const noexcept
 		{
 			return m_CommandQueue;
@@ -230,14 +231,14 @@ namespace bgl
 		 */
 		struct CaptureSlot
 		{
-			CommandAllocatorRef   allocator;
-			ReadbackBufferHandle  readback;
-			uint64_t              fence    = 0;
-			uint64_t              ticketId = 0;
-			TextureReadbackLayout layout;
-			uint32_t              width  = 0;
-			uint32_t              height = 0;
-			Format                format{};
+			bgpu::CommandAllocatorRef   allocator;
+			bgpu::ReadbackBufferHandle  readback;
+			uint64_t                    fence    = 0;
+			uint64_t                    ticketId = 0;
+			bgpu::TextureReadbackLayout layout;
+			uint32_t                    width  = 0;
+			uint32_t                    height = 0;
+			bgpu::Format                format{};
 		};
 
 		// The slot a live ticket names. @throws GraphicsError if the ticket is null or spent.
@@ -247,12 +248,12 @@ namespace bgl
 		CaptureTicket
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
 
-		DeviceRef                        m_Device;
+		bgpu::DeviceRef                  m_Device;
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
-		CommandQueueRef                  m_CommandQueue;
-		ResourceManagerRef               m_ResourceManager;
-		CommandAllocatorRef              m_BootstrapAllocator;
-		CommandListRef                   m_CommandList;
+		bgpu::CommandQueueRef            m_CommandQueue;
+		bgpu::ResourceManagerRef         m_ResourceManager;
+		bgpu::CommandAllocatorRef        m_BootstrapAllocator;
+		bgpu::CommandListRef             m_CommandList;
 
 		bool m_EnableDebug = false;
 		bool m_FrameActive = false;
@@ -324,10 +325,10 @@ namespace bgl
 		SkinnedPosePass      m_SkinnedPose;
 		TransparentSortPass  m_TransparentSort;
 
-		SamplerHandle m_PointClampSampler;
+		bgpu::SamplerHandle m_PointClampSampler;
 
 		// The reprojected history lands between texels, so it is the one thing here that is filtered.
-		SamplerHandle m_LinearClampSampler;
+		bgpu::SamplerHandle m_LinearClampSampler;
 
 		IGpuAssertionHandler* m_GpuAssertionHandler = nullptr;
 
@@ -344,9 +345,9 @@ namespace bgl
 		// Installed on the frame graph, which drives it for the buffer args passes declare poisoned.
 		BufferPoisoner m_BufferPoisoner;
 
-		DebugBuffer          m_DebugBuffer;
-		ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
-		bool                 m_DebugReadbackPending[c_SwapchainImageCount] = {};
+		bgpu::DebugBuffer          m_DebugBuffer;
+		bgpu::ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
+		bool                       m_DebugReadbackPending[c_SwapchainImageCount] = {};
 
 		// The fence that gates each slot's copy. A slot is context-wide but every RenderTarget indexes
 		// it with a frame index of its own, so the target that inspects a slot need not be the one that

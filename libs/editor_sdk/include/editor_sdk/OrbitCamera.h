@@ -1,7 +1,7 @@
 #pragma once
 #include <editor_sdk/export.h>
 
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 
 namespace editor
 {

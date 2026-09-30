@@ -1,18 +1,18 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "resource/Texture.h"
-#include "types/Format.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdint>
@@ -25,16 +25,16 @@ namespace
 	// and the GPU-side wait one queue takes on another.
 	struct QueueFixture
 	{
-		bgl::GraphicsRef        gfx;
-		bgl::ResourceManagerRef resourceManager;
-		bgl::IDevice*           device = nullptr;
+		bgl::GraphicsRef         gfx;
+		bgpu::ResourceManagerRef resourceManager;
+		bgpu::IDevice*           device = nullptr;
 
-		bgl::CommandQueueRef     queueA;
-		bgl::CommandQueueRef     queueB;
-		bgl::CommandAllocatorRef allocA;
-		bgl::CommandAllocatorRef allocB;
-		bgl::CommandListRef      listA;
-		bgl::CommandListRef      listB;
+		bgpu::CommandQueueRef     queueA;
+		bgpu::CommandQueueRef     queueB;
+		bgpu::CommandAllocatorRef allocA;
+		bgpu::CommandAllocatorRef allocB;
+		bgpu::CommandListRef      listA;
+		bgpu::CommandListRef      listB;
 
 		QueueFixture()
 		{
@@ -52,11 +52,11 @@ namespace
 			resourceManager = gfxBase->GetResourceManagerCpy();
 			device          = gfxBase->GetDevice();
 
-			auto listDesc = bgl::CommandListDesc();
-			listDesc.type = bgl::QueueType::kGraphics;
+			auto listDesc = bgpu::CommandListDesc();
+			listDesc.type = bgpu::QueueType::kGraphics;
 
-			queueA = device->CreateCommandQueue(bgl::QueueType::kGraphics);
-			queueB = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			queueA = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+			queueB = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 			allocA = device->CreateCommandAllocator();
 			allocB = device->CreateCommandAllocator();
 			listA  = device->CreateCommandList(listDesc, allocA, resourceManager);
@@ -75,10 +75,10 @@ namespace
 		}
 	};
 
-	bgl::BufferHandle
-	MakeBuffer(const bgl::ResourceManagerRef& rm, uint32_t elements, const char* name)
+	bgpu::BufferHandle
+	MakeBuffer(const bgpu::ResourceManagerRef& rm, uint32_t elements, const char* name)
 	{
-		auto desc         = bgl::StructBufferDesc();
+		auto desc         = bgpu::StructBufferDesc();
 		desc.stride       = sizeof(uint32_t);
 		desc.elementCount = elements;
 		desc.isUav        = true;
@@ -89,8 +89,8 @@ namespace
 
 TEST_CASE_METHOD(QueueFixture, "A queue's fence timeline advances and can be polled", "[queuesync]")
 {
-	const uint32_t          count  = 256;
-	const bgl::BufferHandle buffer = MakeBuffer(resourceManager, count, "Fence Timeline");
+	const uint32_t           count  = 256;
+	const bgpu::BufferHandle buffer = MakeBuffer(resourceManager, count, "Fence Timeline");
 	REQUIRE_FALSE(buffer.IsNull());
 
 	const std::vector<uint32_t> payload(count, 0x5Au);
@@ -121,8 +121,8 @@ TEST_CASE_METHOD(QueueFixture, "A queue's fence timeline advances and can be pol
 
 TEST_CASE_METHOD(QueueFixture, "Flush drains everything already submitted", "[queuesync]")
 {
-	const uint32_t          count  = 1024;
-	const bgl::BufferHandle buffer = MakeBuffer(resourceManager, count, "Flush Drain");
+	const uint32_t           count  = 1024;
+	const bgpu::BufferHandle buffer = MakeBuffer(resourceManager, count, "Flush Drain");
 	REQUIRE_FALSE(buffer.IsNull());
 
 	const std::vector<uint32_t> payload(count, 7u);
@@ -148,14 +148,14 @@ TEST_CASE_METHOD(
 	"A GPU-side wait holds a queue until the other signals",
 	"[queuesync]")
 {
-	const uint32_t          count  = 4096;
-	const bgl::BufferHandle source = MakeBuffer(resourceManager, count, "Cross-queue Source");
+	const uint32_t           count  = 4096;
+	const bgpu::BufferHandle source = MakeBuffer(resourceManager, count, "Cross-queue Source");
 	REQUIRE_FALSE(source.IsNull());
 
-	auto readbackDesc                        = bgl::ReadbackBufferDesc();
-	readbackDesc.byteSize                    = static_cast<uint64_t>(count) * sizeof(uint32_t);
-	readbackDesc.debugName                   = "Cross-queue Readback";
-	const bgl::ReadbackBufferHandle readback = resourceManager->CreateReadbackBuffer(readbackDesc);
+	auto readbackDesc                         = bgpu::ReadbackBufferDesc();
+	readbackDesc.byteSize                     = static_cast<uint64_t>(count) * sizeof(uint32_t);
+	readbackDesc.debugName                    = "Cross-queue Readback";
+	const bgpu::ReadbackBufferHandle readback = resourceManager->CreateReadbackBuffer(readbackDesc);
 	REQUIRE_FALSE(readback.IsNull());
 
 	const std::vector<uint32_t> payload(count, 0xC0FFEEu);
@@ -201,14 +201,14 @@ TEST_CASE_METHOD(
 	"InsertWaitForQueue waits on everything submitted so far",
 	"[queuesync]")
 {
-	const uint32_t          count  = 4096;
-	const bgl::BufferHandle source = MakeBuffer(resourceManager, count, "Wait-for-queue Source");
+	const uint32_t           count  = 4096;
+	const bgpu::BufferHandle source = MakeBuffer(resourceManager, count, "Wait-for-queue Source");
 	REQUIRE_FALSE(source.IsNull());
 
-	auto readbackDesc                        = bgl::ReadbackBufferDesc();
-	readbackDesc.byteSize                    = static_cast<uint64_t>(count) * sizeof(uint32_t);
-	readbackDesc.debugName                   = "Wait-for-queue Readback";
-	const bgl::ReadbackBufferHandle readback = resourceManager->CreateReadbackBuffer(readbackDesc);
+	auto readbackDesc                         = bgpu::ReadbackBufferDesc();
+	readbackDesc.byteSize                     = static_cast<uint64_t>(count) * sizeof(uint32_t);
+	readbackDesc.debugName                    = "Wait-for-queue Readback";
+	const bgpu::ReadbackBufferHandle readback = resourceManager->CreateReadbackBuffer(readbackDesc);
 	REQUIRE_FALSE(readback.IsNull());
 
 	const std::vector<uint32_t> payload(count, 0xABCDEFu);
@@ -253,22 +253,22 @@ TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager
 	REQUIRE(gfxBase != nullptr);
 	auto rm = gfxBase->GetResourceManagerCpy();
 
-	auto texDesc                 = bgl::TextureDesc();
-	texDesc.width                = 4;
-	texDesc.height               = 4;
-	texDesc.format               = bgl::Format::RGBA8_UNORM;
-	texDesc.usage                = bgl::TextureUsageFlag::kRenderTarget;
-	texDesc.debugName            = "Pool Bound";
-	const bgl::TextureHandle tex = rm->CreateTexture(texDesc);
+	auto texDesc                  = bgpu::TextureDesc();
+	texDesc.width                 = 4;
+	texDesc.height                = 4;
+	texDesc.format                = bgpu::Format::RGBA8_UNORM;
+	texDesc.usage                 = bgpu::TextureUsageFlag::kRenderTarget;
+	texDesc.debugName             = "Pool Bound";
+	const bgpu::TextureHandle tex = rm->CreateTexture(texDesc);
 	REQUIRE(rm->ValidTextureHandle(tex));
 
-	auto rtvDesc   = bgl::RtvDesc();
-	rtvDesc.format = bgl::Format::RGBA8_UNORM;
+	auto rtvDesc   = bgpu::RtvDesc();
+	rtvDesc.format = bgpu::Format::RGBA8_UNORM;
 
-	std::vector<bgl::RtvHandle> rtvs;
+	std::vector<bgpu::RtvHandle> rtvs;
 	for (uint32_t i = 0; i < opts.graphics.maxRtvs; ++i)
 	{
-		const bgl::RtvHandle rtv = rm->CreateRtv(tex, rtvDesc);
+		const bgpu::RtvHandle rtv = rm->CreateRtv(tex, rtvDesc);
 		CHECK_FALSE(rtv.IsNull());
 		rtvs.push_back(rtv);
 	}
@@ -276,6 +276,6 @@ TEST_CASE("A resource pool is bounded and reports exhaustion", "[resourcemanager
 	// One past the limit: a null handle, not a grown pool.
 	CHECK(rm->CreateRtv(tex, rtvDesc).IsNull());
 
-	for (const bgl::RtvHandle& rtv : rtvs) rm->DestroyRtv(rtv, false);
+	for (const bgpu::RtvHandle& rtv : rtvs) rm->DestroyRtv(rtv, false);
 	rm->DestroyTexture(tex, false);
 }

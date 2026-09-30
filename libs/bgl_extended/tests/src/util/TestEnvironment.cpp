@@ -2,7 +2,7 @@
 #include <assetlib/envmap.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>

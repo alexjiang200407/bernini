@@ -1,16 +1,16 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/ResourceManager.h"
-#include "types/QueueType.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
@@ -40,11 +40,11 @@ TEST_CASE("Geometry", "[geometry][render]")
 	REQUIRE(target != nullptr);
 
 	auto device       = gfxBase->GetDevice();
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	auto camera = bgl::Camera();
 	auto aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);

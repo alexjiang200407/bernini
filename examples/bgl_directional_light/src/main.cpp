@@ -4,20 +4,20 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_messagebox.h>
-#include <bgl/Camera.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/glm.h>

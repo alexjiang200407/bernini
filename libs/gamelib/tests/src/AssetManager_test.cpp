@@ -14,13 +14,13 @@
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <assetlib_structs/VkFormat.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
-#include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/containers/fixed_buffer.h>

@@ -5,12 +5,12 @@
 #include <array>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <catch2/catch_message.hpp>

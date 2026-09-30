@@ -1,7 +1,7 @@
 #include "util/frame_stats_text.h"
 #include "util/editor_language.h"
 #include <algorithm>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <cstddef>
 #include <optional>
 #include <qobject.h>

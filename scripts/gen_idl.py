@@ -40,6 +40,8 @@ import util.config as cfg
 
 TOOL = "bgl_idlgen"
 SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_common", "shaders", "src", "idl")
+# The offset primitives a module imports as siblings are bgpu's (libs/bgl_common/idl/CMakelists.txt).
+BGPU_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgpu", "shaders", "src", "idl")
 # Mirrors libs/bgl_common/idl/CMakelists.txt: the private headers are a build artifact, because a
 # struct's layout follows the backend it was generated for. Resolved per build dir.
 def layout_args(build_dir):
@@ -192,6 +194,7 @@ def main():
             *layout_args(os.path.dirname(os.path.dirname(tool))),
             *cpp_args,
             "-I", SRC_ROOT,
+            "--extern", f"{BGPU_ROOT}=bgpu::idl",
             module,
         ]
         if args.dry_run:

@@ -5,13 +5,13 @@
 #include "util/TestOptions.h"
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/SkyboxDesc.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

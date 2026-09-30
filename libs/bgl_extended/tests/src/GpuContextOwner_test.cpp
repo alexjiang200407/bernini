@@ -1,35 +1,27 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#if defined(RENDERER_BACKEND_DX12)
-#	include <directx/d3d12.h>
-#	include <wrl/client.h>
-
-namespace wrl = Microsoft::WRL;
-
-#	include "d3d12/pipeline/ComputePipeline_d3d12.h"
-#endif
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
@@ -66,27 +58,27 @@ namespace
 		auto  resourceManager = gfxBase->GetResourceManagerCpy();
 		auto* device          = gfxBase->GetDevice();
 
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-		auto bufDesc = bgl::ComputeBufferDesc();
+		auto bufDesc = bgpu::ComputeBufferDesc();
 		bufDesc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Owner Probe Out");
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSSourceProbe"))
 				.SetDebugName("CSSourceProbe"));
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 
-		auto state   = bgl::ComputeState();
+		auto state   = bgpu::ComputeState();
 		state.kernel = &kernel;
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = sizeof(uint32_t);
 		rbDesc.debugName = "Owner Probe Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -96,11 +88,11 @@ namespace
 		cmdList->Dispatch(1, 1, 1);
 		cmdList->Barrier(
 			outBuf,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		cmdList->CopyBufferToReadback(rb, outBuf);
 		cmdList->Close();
 
@@ -240,40 +232,3 @@ TEST_CASE("A source module registered again under its name replaces the text", "
 	device->AddSourceModule({ "game.probe", "public static const uint kProbeValue = 5u;\n" });
 	CHECK(ReadProbe(gfx) == 5u);
 }
-
-// bgl_extended_tests globs every .cpp whatever the backend, and the pipeline's native object is
-// D3D12's; Metal renderers build their own.
-#if defined(RENDERER_BACKEND_DX12)
-
-// A PSO is the device's, so a second renderer on the context gets the first one's object rather than
-// building its own -- and keeps getting it after the first is gone, since the context holds it. Under
-// GPU-based validation this is what stops every renderer repaying the debug layer's patching.
-TEST_CASE("Renderers on one context share their pipeline states", "[device][compute]")
-{
-	auto context = MakeContext();
-
-	const auto pipelineStateOf = [](const bgl::GraphicsRef& gfx) {
-		auto* device = gfx->As<bgl::GraphicsBase>()->GetDevice();
-		auto  kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
-				.SetShader(device->CreateShader("CSSourceProbe"))
-				.SetDebugName("CSSourceProbe"));
-		REQUIRE(kernel.pipeline != nullptr);
-		return kernel.pipeline->As<bgl::ComputePipeline>()->GetPipelineState();
-	};
-
-	auto first = bgl::CreateGraphics(context, bgl::GraphicsOptions());
-	REQUIRE(first != nullptr);
-	ID3D12PipelineState* const built = pipelineStateOf(first);
-
-	auto second = bgl::CreateGraphics(context, bgl::GraphicsOptions());
-	REQUIRE(second != nullptr);
-	CHECK(pipelineStateOf(second) == built);
-
-	first      = nullptr;
-	auto third = bgl::CreateGraphics(context, bgl::GraphicsOptions());
-	REQUIRE(third != nullptr);
-	CHECK(pipelineStateOf(third) == built);
-}
-
-#endif

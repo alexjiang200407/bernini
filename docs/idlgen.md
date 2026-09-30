@@ -72,9 +72,18 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   follows the backend it was generated for — MSL aligns a resource handle to 8 where the C/C++ scalar
   rules give it 4, and rounds a struct up to its alignment — so one committed copy would be right for
   one backend and silently wrong for the other. Each build directory carries its own, and switching
-  backend needs no regeneration. Both `<build>/generated` and [libs/bgl_common/include/bgl_common/idl/](libs/bgl_common/include/bgl_common/idl/)
+  backend needs no regeneration. Both `<build>/generated` and [libs/bgpu/include/bgpu/idl/](libs/bgpu/include/bgpu/idl/)
   are on the include path, because a generated header includes its imports as siblings and four of
   those (`Entry`, `Range`, `RangeWithCount`, `RawEntry`) are hand-written.
+
+  **The offset primitives, `ErrorCode` and `DebugRecord` are `bgpu`'s**, under
+  [libs/bgpu/shaders/src/idl/](libs/bgpu/shaders/src/idl/): the RHI's buffer family and assert
+  channel are built on them, and a compute client imports them with no renderer in its build. They
+  stage into the same `idl/` as the renderer's modules, so `import idl.Range` and a sibling's bare
+  `import Range;` resolve unchanged. `bgpu` generates the two with a concrete layout itself
+  (`BGPU_IDL_CPP_SOURCES` in [libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt)), as
+  `bgpu::idl::<Name>` under `<build>/generated/bgpu_idl/bgpu/idl/`; the renderer's modules name them
+  through `--extern`, so a generated field reads `bgpu::idl::Range`.
 
   **The public modules are the exception and stay committed**, under
   [libs/bgl/include/bgl/](libs/bgl/include/bgl/): a consumer includes `<bgl/...>` without building
@@ -118,7 +127,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | `public static const` | [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim, except that a `float` gains an `f` suffix; `public` needed for shader import. |
 | `import <Module>` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | `#include "<Module>.h"` (a sibling) | Only emitted for referenced types. |
 | a `float3`/`float4x4`/… field | [BoneSample.slang](libs/bgl_common/shaders/src/idl/BoneSample.slang) | `#include <core/glm.h>` | A header names what it uses; a renderer's PCH must not be what makes it compile. |
-| `interface` / generic-only | [IMaterial.slang](libs/bgl_common/shaders/src/idl/IMaterial.slang), [RangeWithCount.slang](libs/bgl_common/shaders/src/idl/RangeWithCount.slang) | *(none)* | Shader-only; no concrete layout. |
+| `interface` / generic-only | [IMaterial.slang](libs/bgl_common/shaders/src/idl/IMaterial.slang), [RangeWithCount.slang](libs/bgpu/shaders/src/idl/RangeWithCount.slang) | *(none)* | Shader-only; no concrete layout. |
 
 ### CLI options ([libs/bgl_common/idl/idlgen.cpp](libs/bgl_common/idl/idlgen.cpp))
 | Option | Role |
@@ -130,6 +139,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | `--metal-layout` | Lay structs out by MSL's rules (a Metal build's private headers). |
 | `--public` | The header is committed: refuse a struct whose size or offsets differ by backend, and emit no `alignas`. |
 | `-I,--include <dir>` | Extra search dir for `import`ed Slang modules (repeatable). |
+| `--extern <dir>=<ns>` | Another library's modules: searched like `-I`, and a field whose type's module is `<dir>/<Type>.slang` is emitted qualified by `<ns>` (repeatable). The renderer's modules pass bgpu's `idl/` as `bgpu::idl`. |
 
 ### Files & build wiring
 | Path | Role |
@@ -139,7 +149,9 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | [libs/bgl_common/idl/CMakelists.txt](libs/bgl_common/idl/CMakelists.txt) | The `bgl_idlgen` tool, the per-module `add_custom_command`s and the `bgl_idl_generate` target; `IDL_CPP_SOURCES` gates C++ output. |
 | [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand, via `just idl` (mirrors the CMake target; resolves the built tool via the CMake File API). |
 | `<build>/generated/bgl_common/idl/` | Generated C++ headers (`bgl::idl::<Name>`). A build artifact, not committed — see below. |
-| [libs/bgl_common/include/bgl_common/idl/](libs/bgl_common/include/bgl_common/idl/) | The **hand-written** headers only: `idl.h` (the aggregate), `Entry.h`, `Range.h`, `RangeWithCount.h`, `RawEntry.h` — the offset primitives, which are generic and so have no concrete layout to generate. |
+| [libs/bgl_common/include/bgl_common/idl/](libs/bgl_common/include/bgl_common/idl/) | `idl.h`, the renderer's aggregate. |
+| [libs/bgpu/include/bgpu/idl/](libs/bgpu/include/bgpu/idl/) | The **hand-written** offset primitives, `bgpu::idl::Entry`, `Range`, `RangeWithCount`, `RawEntry` — generic, and so with no concrete layout to generate. |
+| `<build>/generated/bgpu_idl/bgpu/idl/` | `ErrorCode.h`, `DebugRecord.h`: bgpu's generated mirrors (`bgpu::idl::<Name>`). |
 
 **Generated headers are never clang-formatted.** `scripts/format.py` skips any file whose first line
 carries the generator's `DO NOT EDIT MANUALLY` banner, so the one committed header is byte-for-byte
@@ -178,7 +190,9 @@ flowchart TD
   Relocating the file to a path that disagrees with its import name breaks every importer and the
   CPU/`.h` lockstep. Rename (re-path) instead.
 * An IDL module imports its siblings by bare name (`import Range;`), which Slang resolves beside the
-  importing file; the generated C++ includes the sibling header the same way.
+  importing file — at runtime, where every `idl/` module is staged into one directory; in the source
+  tree bgpu's `idl/` is a second search path — and the generated C++ includes the sibling header the
+  same way.
 
 ### Constants
 * **Must be `public static const <type|let> <name> = <expr>;`.** @pre `public` — otherwise the

@@ -1,6 +1,5 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Texture.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
@@ -8,17 +7,18 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/jitter.h>
+#include <bgpu/resource/Texture.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -1292,8 +1292,8 @@ TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][re
 
 		// What a scale change must not disturb: the output grid, and so the backbuffers and the two
 		// histories allocated against it.
-		const bgl::TextureHandle backbuffer = base->GetBackbufferTexture(0);
-		const bgl::TextureHandle history    = base->GetHistoryTexture(0);
+		const bgpu::TextureHandle backbuffer = base->GetBackbufferTexture(0);
+		const bgpu::TextureHandle history    = base->GetHistoryTexture(0);
 
 		REQUIRE(base->IsHistoryValid());
 

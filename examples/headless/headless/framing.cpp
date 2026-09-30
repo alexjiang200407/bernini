@@ -6,8 +6,8 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
-#include <bgl/Camera.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
 #include <cstdint>
 #include <headless/framing.h>
 #include <limits>

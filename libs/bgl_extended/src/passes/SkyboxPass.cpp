@@ -1,22 +1,24 @@
 #include "passes/SkyboxPass.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
+#include "scene/TextureAssetStore.h"
 #include <array>
 #include <bgl/ISceneView.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
 #include <core/err/util.h>
 #include <string>
 #include <string_view>
@@ -46,28 +48,29 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
+		pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 		pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
-		pipelineDesc.SetDsvFormat(Format::D24S8);
+		pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(true)
 			.SetDepthWriteEnable(false)
-			.SetDepthFunc(ComparisonFunc::kLessOrEqual)
+			.SetDepthFunc(bgpu::ComparisonFunc::kLessOrEqual)
 			.SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -101,7 +104,7 @@ namespace bgl
 	void
 	SkyboxPass::Execute(const DrawData& draw, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
@@ -130,10 +133,10 @@ namespace bgl
 			core::fatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer()
+		gfxState.frameBuffer = bgpu::FrameBuffer()
 		                           .AddColorAttachment(draw.targets.sceneColor)
 		                           .AddColorAttachment(draw.targets.motionVector)
 		                           .SetDepthAttachment(draw.targets.depth);

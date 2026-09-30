@@ -1,21 +1,22 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Texture.h"
 #include "scene/Scene.h"
-#include "types/QueueType.h"
+#include "scene/TextureAssetStore.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/containers/fixed_buffer.h>
 #include <cstddef>
@@ -163,7 +164,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	REQUIRE(scene != nullptr);
 
 	const bgl::TextureAssetHandle texture    = scene->AddTextureAsset(OneTexel());
-	const bgl::TextureHandle      gpuTexture = bgl::TextureHandle::From(texture);
+	const bgpu::TextureHandle     gpuTexture = bgl::TextureHandleOf(texture);
 	REQUIRE(resourceManager->ValidTextureHandle(gpuTexture));
 
 	SECTION("The handle dies at once; the descriptor slot outlives it, then is reclaimed")
@@ -235,10 +236,10 @@ TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][sc
 	// The flush the next frame would run. Before the fix this wrote through the stale handle and
 	// died on the validity assert.
 	auto* device       = gfxBase->GetDevice();
-	auto  cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto  cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 	auto  cmdAllocator = device->CreateCommandAllocator();
 	auto  cmdList =
-		device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
+		device->CreateCommandList({ bgpu::QueueType::kGraphics }, cmdAllocator, resourceManager);
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 	scene->Update(cmdList.Get());
@@ -246,5 +247,5 @@ TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][sc
 	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList.Get()));
 
 	// The survivor was untouched by the cancellation.
-	CHECK(resourceManager->ValidTextureHandle(bgl::TextureHandle::From(kept)));
+	CHECK(resourceManager->ValidTextureHandle(bgl::TextureHandleOf(kept)));
 }

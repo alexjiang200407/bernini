@@ -1,0 +1,379 @@
+#pragma once
+#include "resource/Buffer_d3d12.h"
+#include "resource/DescriptorAllocator_d3d12.h"
+#include "resource/Dsv_d3d12.h"
+#include "resource/ReadbackBuffer_d3d12.h"
+#include "resource/Rtv_d3d12.h"
+#include "resource/Sampler_d3d12.h"
+#include "resource/Srv_d3d12.h"
+#include "resource/Texture_d3d12.h"
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/NativeObject.h>
+#include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
+
+namespace bgpu
+{
+	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
+	// expected over one device. Exceeding it asserts; it is not a hard device limit.
+	constexpr uint32_t c_MaxRegisteredQueues = 8;
+
+	// One registered queue and the fence value it was at when a resource was retired against it.
+	struct QueueGate
+	{
+		ICommandQueue* queue      = nullptr;
+		uint64_t       fenceValue = 0;
+
+		bool
+		operator==(const QueueGate&) const noexcept = default;
+	};
+
+	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
+
+	enum class PendingType
+	{
+		kInvalid,
+		kBuffer,
+		kBufferSrv,
+		kSrv,
+		kRtv,
+		kDsv,
+		kTexture,
+		kReadback,
+		kSampler,
+	};
+
+	struct PendingDeletion
+	{
+		PendingType type      = PendingType::kInvalid;
+		uint32_t    slotIndex = 0xFFFFFFFF;
+
+		// Set only for the types that occupy the shader-visible heap -- kBuffer, kBufferSrv and
+		// kSrv; null for every other. A descriptor must outlive in-flight work exactly as the
+		// resource does, so it is handed back when the gate clears rather than at destroy time.
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+	};
+
+	// Deferred destroys captured at the same gate share it: a burst of frees within one frame all
+	// snapshot the same registered-queue fences, so they batch under one gate rather than each
+	// carrying its own copy. Freed as a group once every queue in `gate` passes.
+	struct PendingDeletionBatch
+	{
+		DeletionGate                 gate;
+		std::vector<PendingDeletion> deletions;
+	};
+
+	class ResourceManager final : public core::RefCounter<IResourceManager>
+	{
+	public:
+		[[nodiscard]] NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12Resource ?
+			           NativeObject{ GetTexture(handle).GetD3D12Resource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] TextureHandle
+		ImportNativeTexture(
+			NativeObjectType   type,
+			NativeObject       object,
+			const TextureDesc& desc) noexcept override
+		{
+			if (type != NativeObjectType::kD3D12Resource || !object)
+				return {};
+			return CreateTexture(wrl::ComPtr<ID3D12Resource>(object.As<ID3D12Resource>()), desc);
+		}
+
+		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
+
+		ResourceManager(const ResourceManager&)     = delete;
+		ResourceManager(ResourceManager&&) noexcept = delete;
+
+		ResourceManager&
+		operator=(const ResourceManager&) = delete;
+
+		ResourceManager&
+		operator=(ResourceManager&&) noexcept = delete;
+
+		/**
+		 * Automatically creates SRV/UAV for the buffer.
+		 */
+		[[nodiscard]]
+		BufferHandle
+		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
+
+		[[nodiscard]]
+		BufferHandle
+		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
+
+		/**
+		 * Creates the buffer with a raw (R32_TYPELESS + FLAG_RAW) SRV or UAV, which is what a
+		 * ByteAddressBuffer resolves to.
+		 */
+		[[nodiscard]]
+		BufferHandle
+		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
+
+		/**
+		 * Creates a structured SRV over a buffer that already has a view of its own, so the same
+		 * bytes can be read as elements of `desc.stride`.
+		 */
+		[[nodiscard]]
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept override;
+
+		void
+		DestroyBufferSrv(BufferSrvHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
+
+		/**
+		 * Automatically creates SRV/UAV for the texture.
+		 */
+		[[nodiscard]]
+		TextureHandle
+		CreateTexture(const TextureDesc& desc) noexcept override;
+
+		[[nodiscard]]
+		SamplerHandle
+		CreateSampler(const SamplerDesc& desc) noexcept override;
+
+		[[nodiscard]]
+		ReadbackBufferHandle
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
+
+		/**
+		 * Assume that desc is a correct descriptor for d3d12 resource.
+		 * Does not create SRV/UAV for the texture.
+		 */
+		[[nodiscard]]
+		TextureHandle
+		CreateTexture(wrl::ComPtr<ID3D12Resource> d3d12Texture, const TextureDesc& desc) noexcept;
+
+		[[nodiscard]]
+		SrvHandle
+		CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept override;
+
+		[[nodiscard]]
+		RtvHandle
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
+
+		void
+		RegisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		UnregisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		DestroySrv(SrvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		CleanupExpiredResources() noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidBufferHandle(const BufferHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidTextureHandle(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		IsTextureCube(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidSrvHandle(const SrvHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		bool
+		ValidRtvHandle(const RtvHandle& handle) const noexcept override;
+
+		void
+		SetDescriptorHeap(ID3D12GraphicsCommandList* cmdList) noexcept;
+
+		const Texture&
+		GetTexture(TextureHandle handle) const noexcept override;
+
+		TextureDesc
+		GetTextureDesc(TextureHandle handle) const noexcept override;
+
+		const Sampler&
+		GetSampler(SamplerHandle handle) const noexcept override;
+
+		const Buffer&
+		GetBuffer(BufferHandle handle) const noexcept override;
+
+		[[nodiscard]] BufferDesc
+		GetBufferDesc(BufferHandle handle) const noexcept override;
+
+		const ReadbackBuffer&
+		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;
+
+		TextureReadbackLayout
+		GetTextureReadbackLayout(TextureHandle handle) const noexcept override;
+
+		const void*
+		MapReadback(ReadbackBufferHandle handle) noexcept override;
+
+		void
+		UnmapReadback(ReadbackBufferHandle handle) noexcept override;
+
+		const Rtv&
+		GetRtv(RtvHandle handle) const noexcept override;
+
+		TextureHandle
+		GetRtvTexture(RtvHandle handle) const noexcept override;
+
+		TextureHandle
+		GetDsvTexture(DsvHandle handle) const noexcept override;
+
+		ID3D12DescriptorHeap*
+		GetCbvSrvUavHeap() const noexcept
+		{
+			return m_CbvSrvUavDescriptors.GetD3D12Heap();
+		}
+
+		ID3D12DescriptorHeap*
+		GetRtvHeap() const noexcept
+		{
+			return m_RtvHeap.Get();
+		}
+
+		ID3D12DescriptorHeap*
+		GetSamplerHeap() const noexcept
+		{
+			return m_SamplerHeap.Get();
+		}
+
+		wrl::ComPtr<ID3D12Device>
+		GetD3D12DeviceCpy() const noexcept
+		{
+			return m_Device;
+		}
+
+		void
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept override;
+
+		DsvHandle
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept override;
+
+		const Dsv&
+		GetDsv(DsvHandle handle) const noexcept override;
+
+		bool
+		ValidDsvHandle(const DsvHandle& handle) const noexcept override;
+
+		void
+		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
+			override;
+
+	private:
+		// The resource half of a buffer: a pool slot, a descriptor and the allocation, with no view
+		// yet written. The view goes into `buffer`'s CPU handle before `slot` receives it.
+		struct BufferAllocation
+		{
+			// Move-only, following the Buffer it carries. Declared rather than left implicit: MSVC
+			// warns on an implicitly deleted copy (C4625/C4626), and warnings are errors.
+			BufferAllocation()                            = default;
+			BufferAllocation(const BufferAllocation&)     = delete;
+			BufferAllocation(BufferAllocation&&) noexcept = default;
+			BufferAllocation&
+			operator=(const BufferAllocation&) = delete;
+			BufferAllocation&
+			operator=(BufferAllocation&&) noexcept = default;
+
+			core::slot_handle slot;
+			uint32_t          descriptorIndex = 0xFFFFFFFF;
+			Buffer            buffer;
+		};
+
+		/**
+		 * @pre m_PoolMutex is held.
+		 * @post a null `slot` on pool exhaustion or a failed allocation, with everything it did
+		 * take released; the error is already logged.
+		 */
+		[[nodiscard]] BufferAllocation
+		AllocateBuffer(const BufferDesc& desc) noexcept;
+
+		// Snapshots every registered queue's next fence value -- the gate a deferred destroy recorded
+		// now must clear before its slot is reclaimed.
+		[[nodiscard]] DeletionGate
+		CaptureGate() const noexcept;
+
+		// Records a retired slot for deferred reclamation, appending it to the batch that shares the
+		// current gate (or opening a new batch when the gate has advanced).
+		void
+		RetireDeferred(
+			PendingType type,
+			uint32_t    slotIndex,
+			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
+
+		wrl::ComPtr<ID3D12Device> m_Device;
+		DescriptorAllocator       m_CbvSrvUavDescriptors;
+		// Buffers and shader resource views are separate pools drawing descriptors from the one
+		// shader-visible heap the allocator owns. A texture is in neither -- only a view onto it is.
+		core::slot_vector<Buffer> m_Buffers;
+		core::slot_vector<Srv>    m_Srvs;
+
+		// A structured view onto a buffer is a descriptor and nothing else: the buffer it views owns
+		// the allocation, so unlike an Srv there is no object here to describe.
+		core::slot_vector<uint32_t> m_BufferSrvs;
+
+		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
+		wrl::ComPtr<ID3D12DescriptorHeap> m_SamplerHeap;
+		core::slot_vector<Sampler>        m_Samplers;
+
+		// Every texture, whatever it is used for. A texture owns storage and nothing else; the
+		// descriptor that makes one readable belongs to an Srv in m_Srvs.
+		core::slot_vector<Texture> m_Textures;
+
+		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
+
+		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
+		std::vector<PendingDeletionBatch> m_PendingBatches;
+
+		// The submission timelines a deferred destroy must clear. Borrowed: a context registers its
+		// queue on construction and unregisters before the queue dies. Capped at the same bound as a
+		// gate, so registration fails here rather than when CaptureGate would overflow.
+		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
+
+		// Serializes slot allocation/retirement/reclamation, the deletion batches and the queue
+		// registry across contexts. Get*/Valid* reads stay lockless: slot storage never moves
+		// (fixed-capacity pools, pinned by a core test) and only a handle's owner may destroy it,
+		// so a read never races the retirement of the slot it reads.
+		mutable std::mutex m_PoolMutex;
+	};
+}

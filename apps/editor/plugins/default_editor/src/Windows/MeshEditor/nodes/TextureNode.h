@@ -14,7 +14,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 
 class QLabel;

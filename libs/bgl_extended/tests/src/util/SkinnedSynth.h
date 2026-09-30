@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
-#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <cstdint>
 
 /**

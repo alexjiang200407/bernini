@@ -15,7 +15,7 @@ when this doc disagrees, trust the source, then fix this doc.
 ## Design Choices
 
 * **The cache is configuration, not an RHI object.** It is an internal optimization, so it is
-  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). Nothing about it
+  **not** a `bgpu::I*` interface — see [Render Hardware Interface](docs/rhi.md). Nothing about it
   crosses the RHI boundary: the directory is the GPU context's, beside its `clientShaderDir`, whose
   files are in the salt. The `Device` builds a `ShaderCache` when the context has a program cache
   and threads it through pipeline creation. A future Vulkan backend reads the same directory and
@@ -41,8 +41,8 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Both backends implement it; the entry contents differ.** D3D12 stores DXIL and a root parameter
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
-  `MTL::BinaryArchive`. The split is why the renderer's shared code
-  ([bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h)) is only
+  `MTL::BinaryArchive`. The split is why the backends' shared code
+  ([bgpu/src/shadercache/util.h](libs/bgpu/src/shadercache/util.h)) is only
   the `ReflectedLayout` encoding, while each backend owns a `ShaderCache` of its own: its entry
   encoding and its driver library. A cache directory is written by one backend and is not portable
   between them — the target is in the salt and the backend is the owner tag, so the other backend
@@ -82,7 +82,7 @@ when this doc disagrees, trust the source, then fix this doc.
 
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
-  [ReflectedLayout](libs/bgl_common/include/bgl_common/ReflectedLayout.h) POD, owned via `shared_ptr` in the
+  [ReflectedLayout](libs/bgpu/include/bgpu/reflection/ReflectedLayout.h) POD, owned via `shared_ptr` in the
   pipeline's `UniformLayoutEntry`. `Uniforms` is built from that POD, not from Slang — which is both
   what makes reflection cacheable and why the pipeline no longer retains the linked Slang program.
 
@@ -111,16 +111,16 @@ when this doc disagrees, trust the source, then fix this doc.
 | Piece | File | Role |
 |---|---|---|
 | `ProgramCache` | [libs/bgpu/include/bgpu/ProgramCache.h](libs/bgpu/include/bgpu/ProgramCache.h) | The GPU context's store: salt, key, the checked `.bsc` entries, the directory. Shared by every owner. |
-| `shader_cache::` util | [libs/bgl_common/include/bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h) | The `ReflectedLayout` encoding both backends' entries carry. |
+| `shader_cache::` util | [libs/bgpu/src/shadercache/util.h](libs/bgpu/src/shadercache/util.h) | The `ReflectedLayout` encoding both backends' entries carry. |
 | `core::hash_bytes` | [libs/core/include/core/hash.h](libs/core/include/core/hash.h) | The FNV-1a chain the salt and every key are built from. |
-| `ShaderCache` (D3D12) | [libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h) | The entry encoding over the context's store, the pipeline library, PSO identity hashing. |
-| `ShaderCache` (Metal) | [libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
-| `BuildPipelineLayout` | [libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
-| `CompileProgram` | [libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
+| `ShaderCache` (D3D12) | [libs/bgpu/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgpu/src/d3d12/shadercache/ShaderCache_d3d12.h) | The entry encoding over the context's store, the pipeline library, PSO identity hashing. |
+| `ShaderCache` (Metal) | [libs/bgpu/src/metal/shadercache/ShaderCache_metal.h](libs/bgpu/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
+| `BuildPipelineLayout` | [libs/bgpu/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgpu/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
+| `CompileProgram` | [libs/bgpu/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgpu/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
 | `SlangSessions` | [libs/bgpu/src/SlangSessions.h](libs/bgpu/src/SlangSessions.h) | One global session + session per compiling thread, behind `bgpu::GpuContext`; created lazily, released after the renderer is built. |
-| `Shader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | The one `IShader` for both backends: a module name and entry point, loaded on the calling thread's session. |
-| `ReflectedLayout` | [libs/bgl_common/include/bgl_common/ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
-| `ReflectLayoutFromSlang` | [libs/bgl_common/include/bgl_common/SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
+| `Shader` | [libs/bgpu/include/bgpu/resource/Shader.h](libs/bgpu/include/bgpu/resource/Shader.h) | The one `IShader` for both backends: a module name and entry point, loaded on the calling thread's session. |
+| `ReflectedLayout` | [libs/bgpu/include/bgpu/reflection/ReflectedLayout.h](libs/bgpu/include/bgpu/reflection/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
+| `ReflectLayoutFromSlang` | [libs/bgpu/include/bgpu/reflection/SlangReflection.h](libs/bgpu/include/bgpu/reflection/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
 | `shaderCacheDir` | [libs/bgpu/include/bgpu/GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h) | Where the cache lives, for every owner of the context. |
 | `clientShaderDir` | [libs/bgpu/include/bgpu/GpuContext.h](libs/bgpu/include/bgpu/GpuContext.h) | The one client directory whose files join every owner's salt. |

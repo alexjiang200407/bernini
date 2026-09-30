@@ -1,6 +1,6 @@
 #include "fg/PassTimer.h"
-#include "cmd/CommandList.h"
-#include "cmd/TimestampHeap.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/TimestampHeap.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
@@ -10,7 +10,7 @@
 namespace bgl
 {
 	void
-	PassTimer::Arm(ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept
+	PassTimer::Arm(bgpu::ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept
 	{
 		core::ensure(!m_PassOpen, "PassTimer::Arm inside a pass");
 		core::ensure(
@@ -32,7 +32,7 @@ namespace bgl
 	}
 
 	void
-	PassTimer::BeginPass(ICommandList* cmd, std::string_view name)
+	PassTimer::BeginPass(bgpu::ICommandList* cmd, std::string_view name)
 	{
 		if (m_Heap == nullptr)
 			return;
@@ -65,7 +65,7 @@ namespace bgl
 	}
 
 	void
-	PassTimer::EndPass(ICommandList* cmd) noexcept
+	PassTimer::EndPass(bgpu::ICommandList* cmd) noexcept
 	{
 		if (m_Heap == nullptr)
 			return;

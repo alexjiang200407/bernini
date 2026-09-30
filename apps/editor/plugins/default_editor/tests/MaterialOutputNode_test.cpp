@@ -4,7 +4,7 @@
 #include <QtNodes/internal/Definitions.hpp>
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 
 #include <QCheckBox>
 #include <QFormLayout>

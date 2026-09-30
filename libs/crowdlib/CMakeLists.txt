@@ -1,8 +1,8 @@
 # The crowd simulation's library: compute on a queue of its own, on the device the application's
-# bgpu context owns and the renderer borrows too. It links bgpu and never bgl_extended -- the RHI
-# stays the renderer's -- so it drives D3D12 and Metal itself from src/d3d12 and src/metal. It
-# shares the context's process-wide state, so it is built as the renderer is
-# (docs/core_process.md, "Linkage"). The editor does not link it. See docs/crowdlib.md.
+# bgpu context owns and the renderer borrows too. It links bgpu, which carries the RHI, and never the
+# renderer; the hash-fill job drives D3D12 and Metal itself from src/d3d12 and src/metal. It shares
+# the context's process-wide state, so it is built as the renderer is (docs/core_process.md,
+# "Linkage"). The editor does not link it. See docs/crowdlib.md.
 file(GLOB_RECURSE CROWDLIB_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )

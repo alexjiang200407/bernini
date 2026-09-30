@@ -1,16 +1,4 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -19,6 +7,18 @@
 #include <bgl/IGraphics.h>
 #include <bgl/LodLevel.h>
 #include <bgl_common/idl/InstanceLod.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -94,42 +94,42 @@ TEST_CASE(
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	constexpr uint32_t c_Words   = 5;
 	constexpr uint32_t c_Entries = 5;
 
-	auto wordsDesc         = bgl::ComputeBufferDesc();
+	auto wordsDesc         = bgpu::ComputeBufferDesc();
 	wordsDesc.initialCount = c_Words;
 	wordsDesc.debugName    = "Lod Words";
 	wordsDesc.SetElement<bgl::idl::InstanceLod>();
-	const bgl::BufferHandle words = resourceManager->CreateComputeBuffer(wordsDesc);
+	const bgpu::BufferHandle words = resourceManager->CreateComputeBuffer(wordsDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(words));
 
-	auto entriesDesc         = bgl::ComputeBufferDesc();
+	auto entriesDesc         = bgpu::ComputeBufferDesc();
 	entriesDesc.initialCount = c_Entries;
 	entriesDesc.debugName    = "Lod Entries";
 	entriesDesc.SetElement<uint32_t>();
-	const bgl::BufferHandle entries = resourceManager->CreateComputeBuffer(entriesDesc);
+	const bgpu::BufferHandle entries = resourceManager->CreateComputeBuffer(entriesDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(entries));
 
-	auto rbWordsDesc                        = bgl::ReadbackBufferDesc();
-	rbWordsDesc.byteSize                    = c_Words * sizeof(bgl::idl::InstanceLod);
-	rbWordsDesc.debugName                   = "Lod Words Readback";
-	const bgl::ReadbackBufferHandle rbWords = resourceManager->CreateReadbackBuffer(rbWordsDesc);
+	auto rbWordsDesc                         = bgpu::ReadbackBufferDesc();
+	rbWordsDesc.byteSize                     = c_Words * sizeof(bgl::idl::InstanceLod);
+	rbWordsDesc.debugName                    = "Lod Words Readback";
+	const bgpu::ReadbackBufferHandle rbWords = resourceManager->CreateReadbackBuffer(rbWordsDesc);
 
-	auto rbEntriesDesc      = bgl::ReadbackBufferDesc();
+	auto rbEntriesDesc      = bgpu::ReadbackBufferDesc();
 	rbEntriesDesc.byteSize  = c_Entries * sizeof(uint32_t);
 	rbEntriesDesc.debugName = "Lod Entries Readback";
-	const bgl::ReadbackBufferHandle rbEntries =
+	const bgpu::ReadbackBufferHandle rbEntries =
 		resourceManager->CreateReadbackBuffer(rbEntriesDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSLodWord"))
 			.SetDebugName("Lod Word"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -137,22 +137,22 @@ TEST_CASE(
 	kernel["gUniforms"]["words"]   = words;
 	kernel["gUniforms"]["entries"] = entries;
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 
-	for (const bgl::BufferHandle buffer : { words, entries })
+	for (const bgpu::BufferHandle buffer : { words, entries })
 	{
 		cmdList->Barrier(
 			buffer,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 	}
 
 	cmdList->CopyBufferToReadback(rbWords, words);

@@ -5,7 +5,7 @@
 
 #include <algorithm>
 #include <array>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <cstdint>
 #include <qobject.h>
 #include <qstringliteral.h>

@@ -1,12 +1,12 @@
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/ResourceManager.h"
-#include "resource/Texture.h"
-#include "types/Format.h"
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
@@ -21,12 +21,12 @@ namespace
 		return opts;
 	}
 
-	bgl::TextureHandle
-	MakeTexture(const bgl::ResourceManagerRef& rm)
+	bgpu::TextureHandle
+	MakeTexture(const bgpu::ResourceManagerRef& rm)
 	{
-		auto desc      = bgl::TextureDesc();
-		desc.format    = bgl::Format::RGBA8_UNORM;
-		desc.usage     = bgl::TextureUsageFlag::kSRV;
+		auto desc      = bgpu::TextureDesc();
+		desc.format    = bgpu::Format::RGBA8_UNORM;
+		desc.usage     = bgpu::TextureUsageFlag::kSRV;
 		desc.debugName = "MultiQueueDeletion";
 		return rm->CreateTexture(desc);
 	}
@@ -48,13 +48,13 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 
 	// Two more timelines on top of the context's own, which Graphics registers at construction --
 	// so the gate spans three, and WaitIdle() below is what clears the third.
-	auto queueA = device->CreateCommandQueue(bgl::QueueType::kGraphics);
-	auto queueB = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto queueA = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+	auto queueB = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 	rm->RegisterQueue(queueA.Get());
 	rm->RegisterQueue(queueB.Get());
 
-	const bgl::TextureHandle tex  = MakeTexture(rm);
-	const uint32_t           slot = tex.slot.index;
+	const bgpu::TextureHandle tex  = MakeTexture(rm);
+	const uint32_t            slot = tex.slot.index;
 	REQUIRE(rm->ValidTextureHandle(tex));
 
 	// Retire it against both timelines. Neither has been advanced, so the gate holds each queue's
@@ -70,14 +70,14 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 		rm->CleanupExpiredResources();
 
 		// ...but queueB has not, so the slot is still gated: a new texture must land elsewhere.
-		const bgl::TextureHandle other = MakeTexture(rm);
+		const bgpu::TextureHandle other = MakeTexture(rm);
 		CHECK(other.slot.index != slot);
 
 		// Now queueB reaches its gate too. All cleared: the slot returns to the free list.
 		queueB->Flush();
 		rm->CleanupExpiredResources();
 
-		const bgl::TextureHandle recycled = MakeTexture(rm);
+		const bgpu::TextureHandle recycled = MakeTexture(rm);
 		CHECK(recycled.slot.index == slot);
 	}
 
@@ -92,7 +92,7 @@ TEST_CASE("A deferred free waits for every registered queue", "[resourcemanager]
 		gfxBase->WaitIdle();
 		rm->CleanupExpiredResources();
 
-		const bgl::TextureHandle recycled = MakeTexture(rm);
+		const bgpu::TextureHandle recycled = MakeTexture(rm);
 		CHECK(recycled.slot.index == slot);
 	}
 

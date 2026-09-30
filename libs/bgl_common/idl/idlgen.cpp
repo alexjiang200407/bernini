@@ -27,7 +27,8 @@
  *
  * Usage:
  *   bgl_idlgen --src-root <dir> --cpp-out-dir <dir>
- *              [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]... <input.slang>
+ *              [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]...
+ *              [--extern <dir>=<namespace>]... <input.slang>
  */
 
 using Slang::ComPtr;
@@ -1109,6 +1110,7 @@ main(int argc, char** argv)
 	std::string              cppOutDir;
 	std::string              baseNs = "bgl::idl";
 	std::vector<std::string> includeDirs;
+	std::vector<std::string> externs;
 	bool                     metalLayout = false;
 	bool                     isPublic    = false;
 
@@ -1120,6 +1122,11 @@ main(int argc, char** argv)
 	app.add_option("--namespace", baseNs, "Base C++ namespace for the generated structs")
 		->capture_default_str();
 	app.add_option("-I,--include", includeDirs, "Search directory for imported Slang modules");
+	app.add_option(
+		"--extern",
+		externs,
+		"<dir>=<namespace>: another library's modules, searched like -I; a field whose type is "
+		"<dir>/<Type>.slang is emitted as <namespace>::<Type>");
 	app.add_flag(
 		"--metal-layout",
 		metalLayout,
@@ -1173,6 +1180,18 @@ main(int argc, char** argv)
 		for (const std::string& dir : includeDirs)
 		{
 			searchPaths.push_back(fs::absolute(dir).string());
+		}
+
+		std::vector<std::pair<fs::path, std::string>> externRoots;
+		for (const std::string& spec : externs)
+		{
+			const auto eq = spec.find('=');
+			if (eq == std::string::npos)
+			{
+				core::throw_runtime_error("--extern {} is not <dir>=<namespace>", spec);
+			}
+			externRoots.emplace_back(fs::absolute(spec.substr(0, eq)), spec.substr(eq + 1));
+			searchPaths.push_back(externRoots.back().first.string());
 		}
 		std::vector<const char*> searchPathPtrs;
 		for (const std::string& p : searchPaths)
@@ -1265,6 +1284,21 @@ main(int argc, char** argv)
 				enumSizes,
 				metalLayout,
 				isPublic));
+		}
+
+		for (StructInfo& info : structs)
+		{
+			for (FieldInfo& field : info.fields)
+			{
+				for (const auto& [dir, externNs] : externRoots)
+				{
+					if (fs::exists(dir / (field.type + ".slang")))
+					{
+						field.type = externNs + "::" + field.type;
+						break;
+					}
+				}
+			}
 		}
 
 		std::vector<EnumInfo> enums = ParseEnums(source);

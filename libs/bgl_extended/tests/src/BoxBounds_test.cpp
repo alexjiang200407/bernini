@@ -1,21 +1,21 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
@@ -81,11 +81,11 @@ namespace
 		auto  resourceManager = gfxBase->GetResourceManagerCpy();
 		auto* device          = gfxBase->GetDevice();
 
-		auto cmdListDesc  = bgl::CommandListDesc();
-		cmdListDesc.type  = bgl::QueueType::kGraphics;
+		auto cmdListDesc  = bgpu::CommandListDesc();
+		cmdListDesc.type  = bgpu::QueueType::kGraphics;
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		const auto count = static_cast<uint32_t>(boxes.size());
 
@@ -98,27 +98,27 @@ namespace
 			}
 		}
 
-		auto cornerDesc         = bgl::ComputeBufferDesc();
+		auto cornerDesc         = bgpu::ComputeBufferDesc();
 		cornerDesc.initialCount = count * c_Corners;
 		cornerDesc.debugName    = "Box Corners";
 		cornerDesc.SetElement<glm::vec4>();
-		const bgl::BufferHandle cornerBuffer = resourceManager->CreateComputeBuffer(cornerDesc);
+		const bgpu::BufferHandle cornerBuffer = resourceManager->CreateComputeBuffer(cornerDesc);
 		REQUIRE(resourceManager->ValidBufferHandle(cornerBuffer));
 
-		auto rectDesc         = bgl::ComputeBufferDesc();
+		auto rectDesc         = bgpu::ComputeBufferDesc();
 		rectDesc.initialCount = count;
 		rectDesc.debugName    = "Box Rects";
 		rectDesc.SetElement<glm::vec4>();
-		const bgl::BufferHandle rectBuffer = resourceManager->CreateComputeBuffer(rectDesc);
+		const bgpu::BufferHandle rectBuffer = resourceManager->CreateComputeBuffer(rectDesc);
 		REQUIRE(resourceManager->ValidBufferHandle(rectBuffer));
 
-		auto rbDesc                        = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize                    = count * sizeof(glm::vec4);
-		rbDesc.debugName                   = "Box Rects Readback";
-		const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+		auto rbDesc                         = bgpu::ReadbackBufferDesc();
+		rbDesc.byteSize                     = count * sizeof(glm::vec4);
+		rbDesc.debugName                    = "Box Rects Readback";
+		const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSBoxBounds"))
 				.SetDebugName("Box Bounds"));
 		REQUIRE(kernel.pipeline != nullptr);
@@ -133,24 +133,24 @@ namespace
 		cmdList->WriteBuffer(cornerBuffer, corners.data(), 0, corners.size() * sizeof(glm::vec4));
 		cmdList->Barrier(
 			cornerBuffer,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 
-		auto computeState   = bgl::ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &kernel;
 		cmdList->SetComputeState(computeState);
 		cmdList->Dispatch(count, 1, 1);
 
 		cmdList->Barrier(
 			rectBuffer,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 		cmdList->CopyBufferToReadback(rb, rectBuffer);
 		cmdList->Close();

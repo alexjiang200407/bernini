@@ -1,33 +1,33 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
-#include "scene/EntryBuffer.h"
-#include "scene/PackedBuffer.h"
-#include "scene/UploadBuffer.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "types/SubmeshInstance.h"
-#include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/buffer/EntryBuffer.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -73,11 +73,11 @@ TEST_CASE(
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// One mesh per placement, at a known distance down +Z from a camera at the origin. The
 	// transparent ones are deliberately added nearest-first, so a sort that preserved insertion
@@ -107,17 +107,17 @@ TEST_CASE(
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
 
-	auto meshBuffer = bgl::EntryBuffer<bgl::idl::MeshInstance>();
+	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>();
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Keys Mesh Buffer";
 		meshBuffer.Init(std::move(desc), resourceManager);
 	}
 
-	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Keys Instance Buffer";
 		instanceBuffer.Init(desc, resourceManager);
@@ -154,34 +154,34 @@ TEST_CASE(
 		(void)instanceHandle;
 	}
 
-	auto drawBucketFlags = bgl::UploadBuffer<uint32_t>();
+	auto drawBucketFlags = bgpu::UploadBuffer<uint32_t>();
 	{
-		auto desc         = bgl::UploadBufferDesc();
+		auto desc         = bgpu::UploadBufferDesc();
 		desc.initialCount = bgl::idl::cMaxDrawBuckets;
 		desc.debugName    = "Draw Bucket Flags";
 		drawBucketFlags.Init(std::move(desc), resourceManager);
 	}
 	drawBucketFlags.Assign(buckets.Flags());
 
-	auto entries = bgl::ComputeBuffer();
+	auto entries = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<SortEntry>().SetInitialCount(c_PaddedCount).SetDebugName("Sort Entries");
 		entries.Init(desc, resourceManager);
 	}
 
-	auto counter = bgl::ComputeBuffer();
+	auto counter = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Entry Count");
 		counter.Init(desc, resourceManager);
 	}
 
 	// The depth-key pass now skips frustum-culled instances via a visibility word the cull pass
 	// writes. This test isolates the keying, so it seeds every instance visible below.
-	auto visibility = bgl::ComputeBuffer();
+	auto visibility = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::InstanceVisibility>()
 			.SetInitialCount(c_PaddedCount)
 			.SetDebugName("Visibility");
@@ -189,7 +189,7 @@ TEST_CASE(
 	}
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 			.SetDebugName("Transparent Depth Keys"));
 
@@ -217,11 +217,11 @@ TEST_CASE(
 
 	// No FrameGraph here, so the copy -> compute transitions are ours to place: without them the
 	// clear can land after the kernel's atomics and zero the count.
-	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
-	                              bgl::BarrierAccessFlag accessBefore,
-	                              bgl::BarrierSyncFlag   syncAfter,
-	                              bgl::BarrierAccessFlag accessAfter) {
-		return bgl::BufferBarrierDesc()
+	const auto bufferBarrier = [](bgpu::BarrierSyncFlag   syncBefore,
+	                              bgpu::BarrierAccessFlag accessBefore,
+	                              bgpu::BarrierSyncFlag   syncAfter,
+	                              bgpu::BarrierAccessFlag accessAfter) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(syncBefore)
 		    .AddAccessBefore(accessBefore)
 		    .AddSyncAfter(syncAfter)
@@ -229,15 +229,15 @@ TEST_CASE(
 	};
 
 	const auto toRead = bufferBarrier(
-		bgl::BarrierSyncFlag::kCopy,
-		bgl::BarrierAccessFlag::kCopyDest,
-		bgl::BarrierSyncFlag::kComputeShader,
-		bgl::BarrierAccessFlag::kShaderResource);
+		bgpu::BarrierSyncFlag::kCopy,
+		bgpu::BarrierAccessFlag::kCopyDest,
+		bgpu::BarrierSyncFlag::kComputeShader,
+		bgpu::BarrierAccessFlag::kShaderResource);
 	const auto toWrite = bufferBarrier(
-		bgl::BarrierSyncFlag::kCopy,
-		bgl::BarrierAccessFlag::kCopyDest,
-		bgl::BarrierSyncFlag::kComputeShader,
-		bgl::BarrierAccessFlag::kUnorderedAccess);
+		bgpu::BarrierSyncFlag::kCopy,
+		bgpu::BarrierAccessFlag::kCopyDest,
+		bgpu::BarrierSyncFlag::kComputeShader,
+		bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 	cmdList->Barrier(instanceBuffer.GetBufferHandle(), toRead);
 	cmdList->Barrier(meshBuffer.GetBufferHandle(), toRead);
@@ -246,22 +246,22 @@ TEST_CASE(
 	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
 	cmdList->Barrier(counter.GetBufferHandle(), toWrite);
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 
 	const auto toCopySource = bufferBarrier(
-		bgl::BarrierSyncFlag::kComputeShader,
-		bgl::BarrierAccessFlag::kUnorderedAccess,
-		bgl::BarrierSyncFlag::kCopy,
-		bgl::BarrierAccessFlag::kCopySource);
+		bgpu::BarrierSyncFlag::kComputeShader,
+		bgpu::BarrierAccessFlag::kUnorderedAccess,
+		bgpu::BarrierSyncFlag::kCopy,
+		bgpu::BarrierAccessFlag::kCopySource);
 
 	cmdList->Barrier(entries.GetBufferHandle(), toCopySource);
 	cmdList->Barrier(counter.GetBufferHandle(), toCopySource);
 
 	const auto makeReadback = [&](uint64_t bytes, const char* name) {
-		auto desc      = bgl::ReadbackBufferDesc();
+		auto desc      = bgpu::ReadbackBufferDesc();
 		desc.byteSize  = bytes;
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);

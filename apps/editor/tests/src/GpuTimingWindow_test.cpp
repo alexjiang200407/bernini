@@ -13,7 +13,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTemporaryDir>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <qbuffer.h>

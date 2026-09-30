@@ -1,29 +1,30 @@
 #include "passes/BlobShadowPass.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/BlendState.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/MeshletState.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl/Viewport.h>
 #include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/BlendState.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/MeshletState.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
@@ -57,38 +58,39 @@ namespace bgl
 		// The transparents' blend, but colour only with no depth attachment -- the depth is this
 		// pass's input -- and its own two-stage program: the discs are not instance-pipeline
 		// geometry.
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
+		pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
 		// No test: the depth holds the world alone, so the receiver each fragment reads is exactly
 		// what the pixel shows. A unit in front is drawn after, and covers the decal.
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		auto blend = BlendState{};
+		auto blend = bgpu::BlendState{};
 		blend.SetRenderTarget(
 			0,
-			BlendState::RenderTarget{}
+			bgpu::BlendState::RenderTarget{}
 				.EnableBlend()
-				.SetSrcBlend(BlendFactor::kOne)
-				.SetDestBlend(BlendFactor::kInvSrcAlpha)
-				.SetBlendOp(BlendOp::kAdd)
-				.SetSrcBlendAlpha(BlendFactor::kZero)
-				.SetDestBlendAlpha(BlendFactor::kZero)
-				.SetBlendOpAlpha(BlendOp::kAdd));
+				.SetSrcBlend(bgpu::BlendFactor::kOne)
+				.SetDestBlend(bgpu::BlendFactor::kInvSrcAlpha)
+				.SetBlendOp(bgpu::BlendOp::kAdd)
+				.SetSrcBlendAlpha(bgpu::BlendFactor::kZero)
+				.SetDestBlendAlpha(bgpu::BlendFactor::kZero)
+				.SetBlendOpAlpha(bgpu::BlendOp::kAdd));
 
 		pipelineDesc.renderState =
-			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
+			bgpu::RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
+				depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -114,10 +116,10 @@ namespace bgl
 
 		desc.SetName("Blob Shadows {}", draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)
-			.AddTextureRead(c_DepthName, BarrierSyncFlag::kPixelShader)
-			.AddBufferRead(c_BlobShadowsName, BarrierSyncFlag::kVertexShader)
-			.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kVertexShader)
-			.AddBufferRead(c_BonePaletteName, BarrierSyncFlag::kVertexShader);
+			.AddTextureRead(c_DepthName, bgpu::BarrierSyncFlag::kPixelShader)
+			.AddBufferRead(c_BlobShadowsName, bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_BonePaletteName, bgpu::BarrierSyncFlag::kVertexShader);
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
@@ -147,8 +149,8 @@ namespace bgl
 			const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
 			uniforms["groundNormal"]      = ground.normal;
 
-			const Viewport& viewport = draw.viewState.viewport;
-			uniforms["viewportRect"] = glm::vec4(
+			const bgpu::Viewport& viewport = draw.viewState.viewport;
+			uniforms["viewportRect"]       = glm::vec4(
 				viewport.minX,
 				viewport.minY,
 				1.0f / (viewport.maxX - viewport.minX),
@@ -160,12 +162,12 @@ namespace bgl
 		}
 
 		// Colour alone: the velocity buffer is not the decal's to write, and the depth is read.
-		auto gfxState = MeshletState();
+		auto gfxState = bgpu::MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(draw.targets.sceneColor);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.sceneColor);
 		gfxState.kernel      = &m_Kernel;
 
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		cmd->SetMeshletState(gfxState);
 		cmd->DispatchMesh(blobs, 1, 1);
 	}

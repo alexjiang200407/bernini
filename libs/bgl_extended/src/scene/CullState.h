@@ -1,19 +1,23 @@
 #pragma once
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
-#include "scene/UploadBuffer.h"
 #include <array>
 #include <bgl_common/idl/CullView.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+namespace bgpu
+{
+	class ICommandList;
+}
+
 namespace bgl
 {
 	class FrameGraph;
-	class ICommandList;
 
 	/**
 	 * The GPU scratch one culled frustum produces: which instances survived, where they were
@@ -44,7 +48,10 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate.
 		 */
 		void
-		Init(uint32_t paddedInstances, uint32_t placements, ResourceManagerRef resourceManager);
+		Init(
+			uint32_t                 paddedInstances,
+			uint32_t                 placements,
+			bgpu::ResourceManagerRef resourceManager);
 
 		/**
 		 * Grows the per-slot buffers to `paddedInstances` and the per-placement ones to `placements`.
@@ -74,7 +81,7 @@ namespace bgl
 
 		// Retires the resources a Resize superseded; nothing is carried forward.
 		void
-		Update(ICommandList* cmdList);
+		Update(bgpu::ICommandList* cmdList);
 
 		/**
 		 * Imports every buffer under `scope`, which it makes the graph's current namespace.
@@ -92,40 +99,40 @@ namespace bgl
 
 		// Non-const: the cull pass seeds these through Clear / Assign+Update, which need the
 		// object rather than the handle the frame graph hands back.
-		[[nodiscard]] ComputeBuffer&
+		[[nodiscard]] bgpu::ComputeBuffer&
 		GetDrawBucketPrefixSum() noexcept
 		{
 			return m_DrawBucketPrefixSum;
 		}
 
-		[[nodiscard]] ComputeBuffer&
+		[[nodiscard]] bgpu::ComputeBuffer&
 		GetCompactedDispatchArgs() noexcept
 		{
 			return m_CompactedDispatchArgs;
 		}
 
-		[[nodiscard]] UploadBuffer<idl::CullView>&
+		[[nodiscard]] bgpu::UploadBuffer<idl::CullView>&
 		GetCullView() noexcept
 		{
 			return m_CullView;
 		}
 
 		/** One idl::InstanceVisibility per instance slot, as this frustum's last cull wrote them. */
-		[[nodiscard]] const ComputeBuffer&
+		[[nodiscard]] const bgpu::ComputeBuffer&
 		GetInstanceVisibility() const noexcept
 		{
 			return m_InstanceVisibility;
 		}
 
 		/** The level-of-detail words this frame's cull writes, one per placement slot. */
-		[[nodiscard]] ComputeBuffer&
+		[[nodiscard]] bgpu::ComputeBuffer&
 		GetInstanceLod() noexcept
 		{
 			return m_InstanceLod[m_LodCurrent];
 		}
 
 		/** The ones it reads: what the previous cull of this frustum wrote. */
-		[[nodiscard]] ComputeBuffer&
+		[[nodiscard]] bgpu::ComputeBuffer&
 		GetPreviousInstanceLod() noexcept
 		{
 			return m_InstanceLod[m_LodCurrent ^ 1u];
@@ -144,25 +151,25 @@ namespace bgl
 	private:
 		// Written by the compaction, bounded by the dispatch args that same compaction wrote, so it
 		// is never cleared between frames -- a reader only touches slots this frame's scatter filled.
-		ComputeBuffer m_CompactedInstances;
+		bgpu::ComputeBuffer m_CompactedInstances;
 
 		// One word per instance slot, written by the cull pass and read by the counting sort and the
 		// transparent depth-key pass.
-		ComputeBuffer m_InstanceVisibility;
+		bgpu::ComputeBuffer m_InstanceVisibility;
 
 		// Sized by the bucket ceiling rather than the instance count, so Resize does not reach
 		// them: one running total per bucket, and the indirect args the forward pass dispatches on.
-		ComputeBuffer m_DrawBucketPrefixSum;
-		ComputeBuffer m_CompactedDispatchArgs;
+		bgpu::ComputeBuffer m_DrawBucketPrefixSum;
+		bgpu::ComputeBuffer m_CompactedDispatchArgs;
 
 		// This frustum's planes, assigned per draw and read by the cull dispatch.
-		UploadBuffer<idl::CullView> m_CullView;
+		bgpu::UploadBuffer<idl::CullView> m_CullView;
 
 		// One idl::InstanceLod per placement slot, twice: the cull reads one and writes the other,
 		// and AdvanceLodHistory swaps them. Indexed by the placement's MeshInstance entry, which
 		// holds still while the placement lives where the dense instance slot does not.
-		std::array<ComputeBuffer, 2> m_InstanceLod;
-		uint32_t                     m_LodCurrent    = 0;
-		bool                         m_LodNeedsClear = true;
+		std::array<bgpu::ComputeBuffer, 2> m_InstanceLod;
+		uint32_t                           m_LodCurrent    = 0;
+		bool                               m_LodNeedsClear = true;
 	};
 }

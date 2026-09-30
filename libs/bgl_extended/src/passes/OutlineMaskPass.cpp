@@ -1,26 +1,27 @@
 // A SharedRef<ISceneView> is dereferenced and destroyed here, both of which need the
 // complete type -- include-cleaner sees only the declaration.
 #include "passes/OutlineMaskPass.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
 #include <core/err/util.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
@@ -40,7 +41,7 @@ namespace bgl
 		constexpr auto c_GeomSrc  = "programs.forward.AnyMesh"sv;
 		constexpr auto c_PixelSrc = "programs.screen.OutlineMask"sv;
 
-		constexpr auto c_MaskFormat = Format::R8_UNORM;
+		constexpr auto c_MaskFormat = bgpu::Format::R8_UNORM;
 	}
 
 	void
@@ -48,7 +49,7 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.ampShader   = ctx.device->CreateShader(std::string(c_GeomSrc), "ASMain");
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_GeomSrc), "MSMain");
@@ -58,16 +59,17 @@ namespace bgl
 
 		// No depth attachment and no culling: the mask is the full silhouette, occluded or not,
 		// whichever way its triangles face.
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -86,12 +88,12 @@ namespace bgl
 			.AddRenderTarget(c_OutlineMaskName)
 			.AddBufferArg(
 				c_SelectedInstancesName,
-				BarrierSyncFlag::kVertexShader,
-				BarrierAccessFlag::kUnorderedAccess)
+				bgpu::BarrierSyncFlag::kVertexShader,
+				bgpu::BarrierAccessFlag::kUnorderedAccess)
 			.AddBufferArg(
 				c_InstanceLodName,
-				BarrierSyncFlag::kVertexShader,
-				BarrierAccessFlag::kUnorderedAccess);
+				bgpu::BarrierSyncFlag::kVertexShader,
+				bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 		for (const std::span<const SceneBuffer> bindings :
 		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),
@@ -116,7 +118,7 @@ namespace bgl
 		uint32_t           selectedCount,
 		const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(
@@ -172,10 +174,10 @@ namespace bgl
 			expansion["lodDrawMode"] = idl::LodDrawMode::kCurrent;
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(draw.targets.outlineMask);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.outlineMask);
 
 		cmd->SetMeshletState(gfxState);
 

@@ -1,7 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
-#include "types/RasterState.h"
 #include <bgl_common/idl/DispatchArgs.h>
+#include <bgpu/types/RasterState.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -27,7 +27,7 @@ namespace bgl
 	 * and kAssert kinds cull in hardware, having no flag to read. Every pass drawing the bucket
 	 * must agree, or its depth holds faces the colour pass never drew.
 	 */
-	[[nodiscard]] RasterCullMode
+	[[nodiscard]] bgpu::RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept;
 
 	/**

@@ -227,6 +227,8 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
             ${Stb_INCLUDE_DIR}
+            # gamelib's header-only LOD math, which LodSelect_test holds the GPU's choice against.
+            ${BERNINI_ROOT}/libs/gamelib/include
     )
 
     target_force_include(bgl_extended_tests
@@ -308,6 +310,8 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${Stb_INCLUDE_DIR}
+			# gamelib's header-only LOD math, which LodSelect_test holds the GPU's choice against.
+			${BERNINI_ROOT}/libs/gamelib/include
 	)
 
 	target_force_include(bgl_extended_tests

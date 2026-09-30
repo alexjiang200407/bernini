@@ -1,11 +1,15 @@
 #pragma once
-#include "resource/ResourceManager.h"
+#include <bgpu/resource/ResourceManager.h>
+
+namespace bgpu
+{
+	class IDevice;
+	class PipelineBatch;
+}
 
 namespace bgl
 {
 	class DrawBucketTable;
-	class IDevice;
-	class PipelineBatch;
 
 	/**
 	 * What a pass is handed when it requests its kernels: at Init, and again at each demand build
@@ -15,9 +19,9 @@ namespace bgl
 	 */
 	struct PassInitContext
 	{
-		IDevice*               device          = nullptr;
-		PipelineBatch*         pipelines       = nullptr;
-		ResourceManagerRef     resourceManager = nullptr;
-		const DrawBucketTable* drawBucketTable = nullptr;
+		bgpu::IDevice*           device          = nullptr;
+		bgpu::PipelineBatch*     pipelines       = nullptr;
+		bgpu::ResourceManagerRef resourceManager = nullptr;
+		const DrawBucketTable*   drawBucketTable = nullptr;
 	};
 }

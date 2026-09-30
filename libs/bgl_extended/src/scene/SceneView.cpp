@@ -1,12 +1,10 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "resource/ResourceManager.h"
-#include "resource/Texture.h"
 #include "scene/NamedBuffer.h"
 #include "scene/Scene.h"
+#include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include "util/util.h"
@@ -14,20 +12,20 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
-#include <bgl/InstanceDesc.h>
 #include <bgl/LodLevel.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceFlag.h>
-#include <bgl/MeshInstanceHandle.h>
-#include <bgl/RigHandle.h>
-#include <bgl/SkyboxDesc.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/MeshInstanceFlags.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/RigHandle.h>
+#include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgl_common/idl/BlobShadow.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DrawBucket.h>
@@ -38,6 +36,10 @@
 #include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
+#include <bgpu/idl/RawArena.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
 #include <cmath>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
@@ -147,10 +149,10 @@ namespace bgl
 	}
 
 	SceneView::SceneView(
-		const SceneRef&                   scene,
-		uint32_t                          initialInstances,
-		core::SharedRef<IResourceManager> resourceManager,
-		std::shared_ptr<DrawBucketTable>  buckets) :
+		const SceneRef&                         scene,
+		uint32_t                                initialInstances,
+		core::SharedRef<bgpu::IResourceManager> resourceManager,
+		std::shared_ptr<DrawBucketTable>        buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
 		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
@@ -180,7 +182,7 @@ namespace bgl
 			core::round_up(m_InitialInstances, idl::cHistogramGroupSize);
 
 		{
-			auto instanceBufferDesc              = PackedBufferDesc();
+			auto instanceBufferDesc              = bgpu::PackedBufferDesc();
 			instanceBufferDesc.initialCount      = paddedInstances;
 			instanceBufferDesc.capacityAlignment = idl::cHistogramGroupSize;
 			instanceBufferDesc.debugName         = "Instance Buffer";
@@ -190,7 +192,7 @@ namespace bgl
 		}
 
 		{
-			auto flagsDesc         = UploadBufferDesc();
+			auto flagsDesc         = bgpu::UploadBufferDesc();
 			flagsDesc.initialCount = idl::cMaxDrawBuckets;
 			flagsDesc.debugName    = "Draw Bucket Flags";
 
@@ -198,7 +200,7 @@ namespace bgl
 		}
 
 		{
-			auto meshBufferDesc         = EntryBufferDesc();
+			auto meshBufferDesc         = bgpu::EntryBufferDesc();
 			meshBufferDesc.initialCount = m_InitialInstances;
 			meshBufferDesc.debugName    = "Mesh Buffer";
 			meshBufferDesc.blockSize    = sizeof(idl::MeshInstance) * 256;
@@ -207,18 +209,18 @@ namespace bgl
 		}
 
 		{
-			auto playbackDesc = RawBufferDesc();
+			auto playbackDesc = bgpu::RawBufferDesc();
 
 			// One record of each kind: most views hold no animated placement at all, and the arena
 			// grows on the first that does.
 			playbackDesc.initialBytes =
-				2 * idl::cRawPayloadOffset +
+				2 * bgpu::idl::cRawPayloadOffset +
 				static_cast<uint32_t>(sizeof(idl::SkinnedState) + sizeof(idl::SkinnedTableState));
 
 			// The null record must cover the largest payload as well as its header, so a null
 			// reference reads zeros for a whole record rather than the first live one.
 			playbackDesc.nullRecordBytes =
-				idl::cRawPayloadOffset +
+				bgpu::idl::cRawPayloadOffset +
 				static_cast<uint32_t>(
 					std::max(sizeof(idl::SkinnedState), sizeof(idl::SkinnedTableState)));
 
@@ -230,7 +232,7 @@ namespace bgl
 		m_Palettes.Init(m_ResourceManager);
 
 		{
-			auto footIKDesc         = RangeBufferDesc();
+			auto footIKDesc         = bgpu::RangeBufferDesc();
 			footIKDesc.initialCount = 1;
 			footIKDesc.debugName    = "Foot IK Buffer";
 
@@ -238,7 +240,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = UploadBufferDesc();
+			auto desc         = bgpu::UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Posed Instances";
 
@@ -246,7 +248,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = UploadBufferDesc();
+			auto desc         = bgpu::UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Blob Shadows";
 
@@ -254,12 +256,12 @@ namespace bgl
 		}
 
 		{
-			auto draws         = UploadBufferDesc();
+			auto draws         = bgpu::UploadBufferDesc();
 			draws.initialCount = 1;
 			draws.debugName    = "Grass Draws";
 			m_GrassDraws.Init(std::move(draws), m_ResourceManager);
 
-			auto refs         = UploadBufferDesc();
+			auto refs         = bgpu::UploadBufferDesc();
 			refs.initialCount = 1;
 			refs.debugName    = "Grass Chunk Refs";
 			m_GrassChunkRefs.Init(std::move(refs), m_ResourceManager);
@@ -270,7 +272,7 @@ namespace bgl
 
 		{
 			// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
-			auto desc                = UploadBufferDesc();
+			auto desc                = bgpu::UploadBufferDesc();
 			desc.debugName           = "Selected Instances";
 			desc.unorderedAccessView = true;
 
@@ -708,7 +710,7 @@ namespace bgl
 		state.playback.phase = desc.phase;
 		state.playback.rate  = desc.rate;
 
-		const idl::RawEntry record = m_Playback.AddRecord(
+		const bgpu::idl::RawEntry record = m_Playback.AddRecord(
 			idl::PlaybackType::kSkinnedTable,
 			std::as_bytes(std::span(&state, 1)));
 
@@ -760,7 +762,7 @@ namespace bgl
 			idl::cFloat4sPerBone * boneCount * 2 + idl::cFloat4sPerSole * legCount);
 
 		auto footIK = core::multi_slot_handle();
-		auto record = idl::RawEntry();
+		auto record = bgpu::idl::RawEntry();
 		try
 		{
 			// Weight one on every leg, so an instance nobody writes plants as the baked weights
@@ -806,7 +808,7 @@ namespace bgl
 	SceneView::PlaceRecord(
 		GeomHandle              geom,
 		glm::mat4               transform,
-		idl::RawEntry           record,
+		bgpu::idl::RawEntry     record,
 		core::multi_slot_handle palette,
 		core::multi_slot_handle footIK,
 		uint32_t                nodeCount)
@@ -889,7 +891,7 @@ namespace bgl
 		}
 
 		m_Playback.SetRecordPayload(
-			idl::RawEntry{ meta.animState },
+			bgpu::idl::RawEntry{ meta.animState },
 			std::as_bytes(std::span(&state, 1)));
 	}
 
@@ -1059,7 +1061,7 @@ namespace bgl
 
 			// One field for either tier: the record's own header says which, so nothing here
 			// decides it. Zero stays zero, which is the null a static placement wants.
-			mesh.playback = idl::RawEntry{ animState };
+			mesh.playback = bgpu::idl::RawEntry{ animState };
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
@@ -1459,7 +1461,7 @@ namespace bgl
 	{
 		// Resolve an asset handle to the view the scene created for it, optionally requiring a cube map.
 		const auto resolve = [this](TextureAssetHandle asset, const char* name, bool requireCube) {
-			const auto texHandle = TextureHandle::From(asset);
+			const auto texHandle = TextureHandleOf(asset);
 			if (!m_ResourceManager->ValidTextureHandle(texHandle))
 			{
 				throw SceneError(
@@ -1574,7 +1576,7 @@ namespace bgl
 	void
 	SceneView::SetSkyBox(SkyboxDesc desc)
 	{
-		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);
+		auto cubeTex = TextureHandleOf(desc.skyboxCubeTex);
 		if (!m_ResourceManager->ValidTextureHandle(cubeTex))
 		{
 			throw SceneError("SetSkyBox: invalid skybox texture asset handle");
@@ -1603,7 +1605,7 @@ namespace bgl
 		// An invalid handle leaves the entry alone; the kNull PSO's pixel shader never reads it.
 		if (material.IsValid())
 		{
-			instance.material = idl::RawEntry{ material.byteOffset };
+			instance.material = bgpu::idl::RawEntry{ material.byteOffset };
 		}
 
 		instance.drawBucket = m_DrawBucketTable->Resolve(GeometryStageOf(geomType), material);
@@ -1622,8 +1624,8 @@ namespace bgl
 
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
-		const idl::RawEntry material = instance.material;
-		const uint32_t      bucket   = instance.drawBucket;
+		const bgpu::idl::RawEntry material = instance.material;
+		const uint32_t            bucket   = instance.drawBucket;
 
 		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
@@ -1662,7 +1664,7 @@ namespace bgl
 	}
 
 	void
-	SceneView::Update(ICommandList* cmdList)
+	SceneView::Update(bgpu::ICommandList* cmdList)
 	{
 		// Must run before the flush below, so what it rewrites is uploaded in the same Update.
 		if (const uint64_t epoch = m_SceneRaw->MaterialEpoch(); epoch != m_SceneEpoch)

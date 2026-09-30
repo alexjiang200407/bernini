@@ -1,20 +1,20 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
-#include "types/ClearValue.h"
-#include "types/Format.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ClearValue.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -26,13 +26,13 @@ namespace
 	// fresh instance (Catch constructs the fixture per test case).
 	struct ReadbackFixture
 	{
-		bgl::GraphicsRef         gfx;
-		bgl::GraphicsBase*       gfxBase = nullptr;
-		bgl::ResourceManagerRef  resourceManager;
-		bgl::IDevice*            device = nullptr;
-		bgl::CommandAllocatorRef cmdAllocator;
-		bgl::CommandListRef      cmdList;
-		bgl::CommandQueueRef     cmdQueue;
+		bgl::GraphicsRef          gfx;
+		bgl::GraphicsBase*        gfxBase = nullptr;
+		bgpu::ResourceManagerRef  resourceManager;
+		bgpu::IDevice*            device = nullptr;
+		bgpu::CommandAllocatorRef cmdAllocator;
+		bgpu::CommandListRef      cmdList;
+		bgpu::CommandQueueRef     cmdQueue;
 
 		ReadbackFixture()
 		{
@@ -53,12 +53,12 @@ namespace
 
 			device = gfxBase->GetDevice();
 
-			auto cmdListDesc = bgl::CommandListDesc();
-			cmdListDesc.type = bgl::QueueType::kGraphics;
+			auto cmdListDesc = bgpu::CommandListDesc();
+			cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 			cmdAllocator = device->CreateCommandAllocator();
 			cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-			cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 		}
 	};
 }
@@ -67,14 +67,14 @@ TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback]")
 {
 	const uint32_t values[] = { 11, 22, 33, 44, 55, 66, 77, 88 };
 
-	auto bufDesc         = bgl::StructBufferDesc();
+	auto bufDesc         = bgpu::StructBufferDesc();
 	bufDesc.stride       = sizeof(uint32_t);
 	bufDesc.elementCount = static_cast<uint32_t>(std::size(values));
 	bufDesc.debugName    = "Readback Source Buffer";
 
 	auto src = resourceManager->CreateStructBuffer(bufDesc);
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = sizeof(values);
 	rbDesc.debugName = "Readback Buffer";
 
@@ -86,11 +86,11 @@ TEST_CASE_METHOD(ReadbackFixture, "Buffer readback", "[readback]")
 
 	// The write lands via a copy, so move the buffer from copy-dest to
 	// copy-source before reading it back.
-	auto barrier = bgl::BufferBarrierDesc();
-	barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-		.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-		.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-		.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+	auto barrier = bgpu::BufferBarrierDesc();
+	barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+		.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+		.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 	cmdList->Barrier(src, barrier);
 
 	cmdList->CopyBufferToReadback(rb, src);
@@ -120,19 +120,19 @@ TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
 	const float    clear[4] = { 0.25f, 0.5f, 0.75f, 1.0f };
 
 	// RGBA32_FLOAT so the cleared values come back bit-for-bit.
-	auto texDesc          = bgl::TextureDesc();
+	auto texDesc          = bgpu::TextureDesc();
 	texDesc.width         = width;
 	texDesc.height        = height;
-	texDesc.format        = bgl::Format::RGBA32_FLOAT;
-	texDesc.usage         = bgl::TextureUsageFlag::kRenderTarget;
-	texDesc.initialLayout = bgl::BarrierLayout::kRenderTarget;
+	texDesc.format        = bgpu::Format::RGBA32_FLOAT;
+	texDesc.usage         = bgpu::TextureUsageFlag::kRenderTarget;
+	texDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
 	texDesc.debugName     = "Readback Source Texture";
-	texDesc.clearValue.SetColor(bgl::Color(clear[0], clear[1], clear[2], clear[3]));
+	texDesc.clearValue.SetColor(bgpu::Color(clear[0], clear[1], clear[2], clear[3]));
 
 	auto tex = resourceManager->CreateTexture(texDesc);
 
-	auto rtvDesc      = bgl::RtvDesc();
-	rtvDesc.format    = bgl::Format::RGBA32_FLOAT;
+	auto rtvDesc      = bgpu::RtvDesc();
+	rtvDesc.format    = bgpu::Format::RGBA32_FLOAT;
 	rtvDesc.debugName = "Readback Source RTV";
 
 	auto rtv = resourceManager->CreateRtv(tex, rtvDesc);
@@ -141,7 +141,7 @@ TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
 	REQUIRE(layout.rowCount == height);
 	REQUIRE(layout.rowSizeBytes == width * 4 * sizeof(float));
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = layout.totalBytes;
 	rbDesc.debugName = "Readback Buffer (Texture)";
 
@@ -153,13 +153,13 @@ TEST_CASE_METHOD(ReadbackFixture, "Texture readback", "[readback]")
 	resourceManager->ClearRtv(cmdList, rtv, clearColor);
 
 	// Move the texture from render-target to copy-source for the readback.
-	auto barrier = bgl::TextureBarrierDesc();
-	barrier.AddSyncBefore(bgl::BarrierSyncFlag::kRenderTarget)
-		.AddAccessBefore(bgl::BarrierAccessFlag::kRenderTarget)
-		.SetLayoutBefore(bgl::BarrierLayout::kRenderTarget)
-		.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-		.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
-		.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
+	auto barrier = bgpu::TextureBarrierDesc();
+	barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kRenderTarget)
+		.AddAccessBefore(bgpu::BarrierAccessFlag::kRenderTarget)
+		.SetLayoutBefore(bgpu::BarrierLayout::kRenderTarget)
+		.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+		.SetLayoutAfter(bgpu::BarrierLayout::kCopySource);
 	cmdList->Barrier(tex, barrier);
 
 	cmdList->CopyTextureToReadback(rb, tex);

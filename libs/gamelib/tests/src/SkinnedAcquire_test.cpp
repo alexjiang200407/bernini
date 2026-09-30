@@ -14,7 +14,7 @@
 #include <assetlib_structs/Node.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/pak.h>

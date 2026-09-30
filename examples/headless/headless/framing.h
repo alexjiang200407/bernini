@@ -1,8 +1,8 @@
 #pragma once
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
-#include <bgl/Camera.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
 #include <cstdint>
 
 namespace headless

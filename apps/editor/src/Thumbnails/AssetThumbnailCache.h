@@ -8,17 +8,17 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/environment.h>
 
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/RenderJob.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/RenderJob.h>
 #include <cstdint>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <filesystem>

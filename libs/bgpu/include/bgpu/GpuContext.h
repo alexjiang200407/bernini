@@ -37,7 +37,8 @@ namespace bgpu
 		// Loads the PIX GPU capturer before the device exists, which is the only time it can be.
 		bool enablePixDebug = false;
 
-		// A debug-layer warning or error ends the process instead of being logged.
+		// A debug-layer warning or error ends the process instead of being logged, and so does an
+		// object that outlives the context.
 		bool strictError = false;
 
 		LogLevel logLevel = LogLevel::kError;

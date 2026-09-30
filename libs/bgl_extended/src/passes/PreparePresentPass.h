@@ -1,7 +1,7 @@
 #pragma once
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "types/Barrier.h"
+#include <bgpu/types/Barrier.h>
 #include <span>
 #include <string>
 #include <utility>
@@ -22,9 +22,9 @@ namespace bgl
 			{
 				desc.AddTextureArg(
 					TextureArg{ name,
-				                BarrierSyncFlag::kNone,
-				                BarrierAccessFlag::kNone,
-				                BarrierLayout::kPresent });
+				                bgpu::BarrierSyncFlag::kNone,
+				                bgpu::BarrierAccessFlag::kNone,
+				                bgpu::BarrierLayout::kPresent });
 			}
 
 			fg.AddPass(std::move(desc));

@@ -1,24 +1,16 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "constants/constants.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
@@ -29,26 +21,35 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/Camera.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
 #include <bgl_common/idl/Submesh.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -491,7 +492,7 @@ TEST_CASE(
 	auto forwardPhases = bgl::ForwardPhases();
 	{
 		const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
-		auto                        pipelines = bgl::PipelineBatch(device);
+		auto                        pipelines = bgpu::PipelineBatch(device);
 		const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 		compactPass.Init(ctx);
 		forwardPhases.Init(ctx);
@@ -500,16 +501,16 @@ TEST_CASE(
 		forwardPhases.CheckBindings();
 	}
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
 	rbDesc.debugName = "Cull Stats Readback";
 	auto rbStats     = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	bgl::FrameGraph fg;
 	fg.RegisterQueue("main", cmdQueue, cmdList);
@@ -526,7 +527,7 @@ TEST_CASE(
 	draw.cullIdx                = 0;
 	draw.view                   = viewRef;
 	draw.cullState              = &view->GetCullState(0);
-	draw.viewState.viewport     = bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+	draw.viewState.viewport     = bgpu::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
 	draw.viewState.viewProj     = viewProj;
 	draw.viewState.prevViewProj = viewProj;
 	draw.viewState.cullView     = bgl::BuildCullView(viewProj);

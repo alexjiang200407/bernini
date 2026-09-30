@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl_common/idl/RawRange.h>
+#include <bgpu/idl/RawRange.h>
 #include <core/containers/multi_slot_handle.h>
 #include <functional>
 #include <vector>
@@ -33,8 +33,8 @@ namespace bgl
 		// The raw arena's counterpart: it hands back a byte offset rather than a slot handle,
 		// and frees by the same.
 		template <typename Buffer>
-		idl::RawRange
-		Track(Buffer& buffer, idl::RawRange range)
+		bgpu::idl::RawRange
+		Track(Buffer& buffer, bgpu::idl::RawRange range)
 		{
 			m_Undo.emplace_back([&buffer, range]() { buffer.Erase(range.byteStart); });
 			return range;

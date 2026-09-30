@@ -1,0 +1,91 @@
+#include "pipeline/ComputePipeline_d3d12.h"
+#include "pipeline/PipelineLayout_d3d12.h"
+#include "shadercache/ShaderCache_d3d12.h"
+#include <bgpu/GpuContext.h>
+#include <bgpu/d3d12/native_device.h>
+#include <bgpu/resource/Shader.h>
+#include <core/err/util.h>
+#include <cstdint>
+#include <directx/d3d12.h>
+#include <spdlog/spdlog.h>
+
+// clang-format off
+#pragma warning(push)
+#pragma warning(disable: 4324) // structure was padded due to alignment specifier
+#pragma warning(disable: 5029) // Allow __declspec(align) on non-class types
+namespace
+{
+        struct ComputePsoStream
+        {
+            typedef __declspec(align(sizeof(void*))) D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ALIGNED_TYPE;
+
+            ALIGNED_TYPE RootSignature_Type;        ID3D12RootSignature* RootSignature;
+            ALIGNED_TYPE ComputeShader_Type;        D3D12_SHADER_BYTECODE ComputeShader;
+        };
+}
+#pragma warning(pop)
+// clang-format on
+
+namespace bgpu
+{
+	ComputePipeline::ComputePipeline(
+		const bgpu::GpuContext&    context,
+		ShaderCache*               cache,
+		const ComputePipelineDesc& desc) : m_Desc(desc)
+	{
+		ID3D12Device* device = bgpu::GetD3d12Device(context);
+		core::ensure(device != nullptr, "Device pointer must not be null.");
+		core::ensure(desc.shader != nullptr, "Compute shader cannot be null");
+
+		wrl::ComPtr<ID3D12Device2> device2;
+		device->QueryInterface(IID_PPV_ARGS(&device2)) >> d3d12ErrChecker;
+
+		pipeline_util::PipelineLayout pipelineLayout =
+			pipeline_util::BuildPipelineLayout(device, cache, { desc.shader });
+
+		m_RootSignature        = std::move(pipelineLayout.rootSignature);
+		m_UniformLayoutEntries = std::move(pipelineLayout.uniformLayoutEntries);
+
+		auto codeIt = pipelineLayout.entryPointCode.find(desc.shader->GetDesc().entryPointName);
+		core::ensure(
+			codeIt != pipelineLayout.entryPointCode.end(),
+			"Missing compiled bytecode for compute shader");
+
+		ComputePsoStream psoDesc = {};
+
+		psoDesc.RootSignature_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE;
+		psoDesc.RootSignature      = m_RootSignature.Get();
+
+		psoDesc.ComputeShader_Type = D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS;
+		psoDesc.ComputeShader =
+			D3D12_SHADER_BYTECODE{ codeIt->second.data(), codeIt->second.size() };
+
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
+		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
+		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
+
+		const uint64_t identity = ShaderCache::CombineHash(0, codeIt->second);
+
+		m_PipelineState.Attach(bgpu::FindPipelineState(context, m_RootSignature.Get(), identity));
+		if (m_PipelineState != nullptr)
+			return;
+
+		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
+		{
+			device2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&m_PipelineState)) >>
+				d3d12ErrChecker;
+
+			if (cache != nullptr)
+				cache->StorePipeline(identity, m_PipelineState.Get());
+		}
+
+		bgpu::SharePipelineState(context, m_RootSignature.Get(), identity, m_PipelineState.Get());
+	}
+
+	ComputePipeline::~ComputePipeline() noexcept
+	{
+		spdlog::trace("~ComputePipeline");
+		m_PipelineState.Reset();
+		m_RootSignature.Reset();
+	}
+}

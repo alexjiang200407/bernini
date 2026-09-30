@@ -1,17 +1,17 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "scene/PackedBuffer.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <vector>
@@ -38,21 +38,21 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 
-	auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
-	using PackedInt = bgl::PackedBuffer<int>;
+	using PackedInt = bgpu::PackedBuffer<int>;
 
 	SECTION("EmplaceBack and access by handle")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Emplace";
@@ -87,7 +87,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Set updates a value via its handle")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Set";
@@ -106,7 +106,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase keeps other handles valid despite the swap")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Erase";
@@ -138,7 +138,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erasing the last element moves nothing")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer EraseLast";
@@ -163,7 +163,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase re-dirties the swapped-in slot")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer EraseDirty";
@@ -188,7 +188,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Erase down to empty then refill")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Refill";
@@ -215,7 +215,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Update clears dirty blocks and is a no-op when clean")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Update";
@@ -236,7 +236,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Dirty tracking spans multiple blocks")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "PackedBuffer Blocks";
@@ -263,7 +263,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 	SECTION("Update skips a block left dirty above the shrunken size")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = 2 * sizeof(int);  // Two elements per block => 4 blocks.
 		desc.debugName    = "PackedBuffer Underflow";
@@ -294,7 +294,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
 	SECTION("A dirty element past the first block uploads its own bytes")
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = 16;
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
 		desc.debugName    = "PackedBuffer Offset Upload";
@@ -310,16 +310,16 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		pb.Set(handles[8], 999);
 		pb.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = desc.initialCount * sizeof(int);
 		rbDesc.debugName = "PackedBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(pb.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, pb.GetBufferHandle());

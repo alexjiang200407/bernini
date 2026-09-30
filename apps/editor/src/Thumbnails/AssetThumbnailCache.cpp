@@ -9,8 +9,8 @@
 #include <assetlib_structs/Node.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <cctype>
 #include <cstddef>
 #include <editor_plugin_api/IEditorRegistry.h>
@@ -33,8 +33,8 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/Camera.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/Viewport.h>
 
 #include <chrono>
 #include <cmath>

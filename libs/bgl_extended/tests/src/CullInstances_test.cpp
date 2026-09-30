@@ -1,30 +1,14 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
-#include "scene/EntryBuffer.h"
-#include "scene/PackedBuffer.h"
-#include "scene/RangeBuffer.h"
-#include "scene/UploadBuffer.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/QueueType.h"
 #include "types/SubmeshInstance.h"
-#include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/MeshInstanceFlag.h>
+#include <bgl/types/Camera.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
@@ -36,6 +20,22 @@
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/buffer/EntryBuffer.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
@@ -76,11 +76,11 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// Eye at the origin looking down -Z, 90-degree fov, square aspect: at depth d the visible
 	// half-extent is d. Every sphere is unit radius, so the margins below clear it comfortably.
@@ -116,9 +116,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	// One submesh, a unit sphere at its own origin, shared by every mesh. Each instance's world
 	// bound is that sphere pushed out by its mesh transform.
-	auto submeshBuffer = bgl::RangeBuffer<bgl::idl::Submesh>();
+	auto submeshBuffer = bgpu::RangeBuffer<bgl::idl::Submesh>();
 	{
-		auto desc         = bgl::RangeBufferDesc();
+		auto desc         = bgpu::RangeBufferDesc();
 		desc.initialCount = 1;
 		desc.debugName    = "Cull Submesh";
 		submeshBuffer.Init(desc, resourceManager);
@@ -128,9 +128,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	submesh.boundingSphere  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	const auto submeshRange = submeshBuffer.Add(std::span<const bgl::idl::Submesh>(&submesh, 1));
 
-	auto geomBuffer = bgl::EntryBuffer<bgl::idl::Geom>();
+	auto geomBuffer = bgpu::EntryBuffer<bgl::idl::Geom>();
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 1;
 		desc.debugName    = "Cull Geom";
 		geomBuffer.Init(desc, resourceManager);
@@ -143,17 +143,17 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	const auto geomHandle = geomBuffer.Add(geomRecord);
 
-	auto meshBuffer = bgl::EntryBuffer<bgl::idl::MeshInstance>();
+	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>();
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = c_LiveCount;
 		desc.debugName    = "Cull Mesh";
 		meshBuffer.Init(desc, resourceManager);
 	}
 
-	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = padded;
 		desc.debugName    = "Cull Instances";
 		instanceBuffer.Init(desc, resourceManager);
@@ -181,8 +181,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	}
 
 	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {
-		auto buffer = bgl::ComputeBuffer();
-		auto desc   = bgl::ComputeBufferDesc();
+		auto buffer = bgpu::ComputeBuffer();
+		auto desc   = bgpu::ComputeBufferDesc();
 		desc.SetElement<decltype(element)>();
 		desc.initialCount = count;
 		desc.debugName    = name;
@@ -190,9 +190,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		return buffer;
 	};
 
-	auto cullView = bgl::UploadBuffer<bgl::idl::CullView>();
+	auto cullView = bgpu::UploadBuffer<bgl::idl::CullView>();
 	{
-		auto desc         = bgl::UploadBufferDesc();
+		auto desc         = bgpu::UploadBufferDesc();
 		desc.initialCount = 1;
 		desc.debugName    = "Cull View";
 		cullView.Init(desc, resourceManager);
@@ -206,7 +206,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	auto lodCurrent  = makeCompute(bgl::idl::InstanceLod{}, c_LiveCount + 1, "Lod Current");
 
 	auto cull = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("programs.culling.CullInstances"))
 			.SetDebugName("Cull Instances"));
 	REQUIRE(cull.pipeline != nullptr);
@@ -252,15 +252,15 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Cull")
-			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferRead("meshBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferRead("geomBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferRead("submeshBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferRead("cullView", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("stats", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferRead("lodPrevious", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("lodCurrent", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("instanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("meshBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("geomBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("submeshBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("cullView", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("stats", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("lodPrevious", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("lodCurrent", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
@@ -276,7 +276,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				cull["gUniforms"]["stats"] = stats.GetBufferHandle();
 #endif
 
-				auto state   = bgl::ComputeState();
+				auto state   = bgpu::ComputeState();
 				state.kernel = &cull;
 				cmd->SetComputeState(state);
 				cmd->Dispatch(core::div_ceil(padded, bgl::idl::cHistogramGroupSize), 1, 1);
@@ -284,7 +284,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	fg.Compile(resourceManager.Get());
 
-	auto rbDesc       = bgl::ReadbackBufferDesc();
+	auto rbDesc       = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize   = static_cast<uint64_t>(padded) * sizeof(bgl::idl::InstanceVisibility);
 	rbDesc.debugName  = "Visibility Readback";
 	auto rbVisibility = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -298,11 +298,11 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.Execute();
 
 	const auto toCopySource = []() {
-		return bgl::BufferBarrierDesc()
-		    .AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-		    .AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-		    .AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-		    .AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		return bgpu::BufferBarrierDesc()
+		    .AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+		    .AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+		    .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		    .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 	};
 
 	cmdList->Barrier(visibility.GetBufferHandle(), toCopySource());

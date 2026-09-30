@@ -1,6 +1,6 @@
 #pragma once
-#include "pipeline/MeshletKernel.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <concepts>
 #include <ranges>
 #include <span>
@@ -46,7 +46,9 @@ namespace bgl
 	{
 	public:
 		/** @pre `kernels` outlives every `Check`; it is not copied. */
-		BindingNameCheck(std::string_view binder, std::span<const MeshletKernel> kernels) noexcept :
+		BindingNameCheck(
+			std::string_view                     binder,
+			std::span<const bgpu::MeshletKernel> kernels) noexcept :
 			m_Binder(binder), m_Kernels(kernels)
 		{}
 
@@ -55,7 +57,7 @@ namespace bgl
 		Check(std::string_view cbuffer, std::span<const std::string_view> names);
 
 	private:
-		std::string_view               m_Binder;
-		std::span<const MeshletKernel> m_Kernels;
+		std::string_view                     m_Binder;
+		std::span<const bgpu::MeshletKernel> m_Kernels;
 	};
 }

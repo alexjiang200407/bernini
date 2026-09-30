@@ -1,12 +1,12 @@
 #include "passes/RigFramesPass.h"
-#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -20,7 +20,7 @@ namespace bgl
 
 		ctx.pipelines->Add(
 			m_PoseRigFrames,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.anim.PoseRigFrames"))
 				.SetDebugName("Pose Rig Frames"));
 	}
@@ -53,11 +53,11 @@ namespace bgl
 		fg.AddPass(
 			PassDesc()
 				.SetName("Pose Rig Frames {}", draw.drawIdx)
-				.AddBufferRead("scene.rigBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.skinnedBoneBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.clipBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferRead("scene.boneSampleBuffer", BarrierSyncFlag::kComputeShader)
-				.AddBufferReadWrite("scene.boneAnimTables", BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.rigBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedBoneBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.clipBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.boneSampleBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferReadWrite("scene.boneAnimTables", bgpu::BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
 
@@ -75,14 +75,14 @@ namespace bgl
 		const std::span<const Scene::RigFill> fills = scene->PendingRigFills();
 		core::ensure(!fills.empty(), "Pose Rig Frames was attached with no rig to fill");
 
-		Uniforms& uniforms         = m_PoseRigFrames["gUniforms"];
+		bgpu::Uniforms& uniforms   = m_PoseRigFrames["gUniforms"];
 		uniforms["rigs"]           = ctx.GetBuffer("scene.rigBuffer");
 		uniforms["boneBuffer"]     = ctx.GetBuffer("scene.skinnedBoneBuffer");
 		uniforms["clipBuffer"]     = ctx.GetBuffer("scene.clipBuffer");
 		uniforms["sampleBuffer"]   = ctx.GetBuffer("scene.boneSampleBuffer");
 		uniforms["boneAnimTables"] = ctx.GetBuffer("scene.boneAnimTables");
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_PoseRigFrames;
 
 		auto cmdList = ctx.GetCommandList();

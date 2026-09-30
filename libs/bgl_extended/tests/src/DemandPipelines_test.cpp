@@ -3,22 +3,22 @@
 #include "gfx/RenderContext.h"
 #include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
 #include "types/DrawBucketMask.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
-#include <bgl/Camera.h>
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/pipeline/PipelineBatch.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
 #include <cstdint>
@@ -248,7 +248,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 
 	bgl::ForwardPhases forward;
 
-	auto       pipelines       = bgl::PipelineBatch(device);
+	auto       pipelines       = bgpu::PipelineBatch(device);
 	const auto resourceManager = gfxBase->GetResourceManagerCpy();
 	const auto passes = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 	forward.Init(passes);

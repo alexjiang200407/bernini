@@ -107,6 +107,13 @@ add_dependencies(bgl_common_copy_shaders bgl_copy_contract_shaders)
 # find_program carries the vcpkg tools/ hint that finds slangc on a preset whose renderer never runs
 # a build-time shader step of its own.
 
+# bgpu's tree sits below this one: idl.Entry and its siblings, and the modules here import them bare
+# as siblings too (`import Range;`), which they are once staged.
+set(BGL_COMMON_BGPU_INCLUDES
+	-I "${BERNINI_ROOT}/libs/bgpu/shaders/src"
+	-I "${BERNINI_ROOT}/libs/bgpu/shaders/src/idl")
+file(GLOB_RECURSE BGL_COMMON_BGPU_SHADERS CONFIGURE_DEPENDS ${BERNINI_ROOT}/libs/bgpu/shaders/src/*.slang)
+
 set(BGL_COMMON_SHADER_CHECKS "")
 foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
 	file(RELATIVE_PATH MODULE_REL "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "${MODULE}")
@@ -118,8 +125,8 @@ foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
 		OUTPUT  "${MODULE_OUT}"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${MODULE_OUT_DIR}"
 		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
-				-I "${BGL_SHADER_CONTRACT_ROOT}" -o "${MODULE_OUT}"
-		DEPENDS ${BGL_COMMON_SHADER_SOURCES} ${BGL_SHADER_CONTRACT_SOURCES}
+				-I "${BGL_SHADER_CONTRACT_ROOT}" ${BGL_COMMON_BGPU_INCLUDES} -o "${MODULE_OUT}"
+		DEPENDS ${BGL_COMMON_SHADER_SOURCES} ${BGL_SHADER_CONTRACT_SOURCES} ${BGL_COMMON_BGPU_SHADERS}
 		COMMENT "shared-module check ${MODULE_REL}"
 		VERBATIM
 	)
@@ -153,7 +160,7 @@ foreach(DRIVER ${BGL_COMMON_WGSL_DRIVERS})
 		OUTPUT  "${DRIVER_OUT}"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/wgsl_check"
 		COMMAND ${SLANG_EXECUTABLE} "${DRIVER}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
-				-I "${BGL_SHADER_CONTRACT_ROOT}"
+				-I "${BGL_SHADER_CONTRACT_ROOT}" ${BGL_COMMON_BGPU_INCLUDES}
 				-target wgsl -entry main -stage ${DRIVER_STAGE} -o "${DRIVER_OUT}"
 		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES} ${BGL_SHADER_CONTRACT_SOURCES}
 		COMMENT "wgsl check ${DRIVER_NAME}"

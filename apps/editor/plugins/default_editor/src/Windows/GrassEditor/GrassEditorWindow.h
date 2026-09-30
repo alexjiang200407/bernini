@@ -12,9 +12,9 @@
 #include <QWidget>
 #include <assetlib/grass_patch.h>
 #include <assetlib_structs/BGrass.h>
-#include <bgl/GeomHandle.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/WindDesc.h>
 #include <core/glm.h>
 #include <cstdint>

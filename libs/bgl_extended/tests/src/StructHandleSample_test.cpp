@@ -1,25 +1,25 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
-#include "types/ComputeState.h"
-#include "types/Format.h"
-#include "types/QueueType.h"
-#include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/QueueType.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -55,66 +55,66 @@ TEST_CASE(
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto texDesc          = bgl::TextureDesc();
+	auto texDesc          = bgpu::TextureDesc();
 	texDesc.width         = 1;
 	texDesc.height        = 1;
-	texDesc.format        = bgl::Format::RGBA8_UNORM;
-	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
-	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.format        = bgpu::Format::RGBA8_UNORM;
+	texDesc.usage         = bgpu::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 	texDesc.debugName     = "Struct Handle Source";
 
-	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
+	const bgpu::TextureHandle texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
-	auto srvDesc      = bgl::SrvDesc();
+	auto srvDesc      = bgpu::SrvDesc();
 	srvDesc.format    = texDesc.format;
 	srvDesc.dimension = texDesc.dimension;
 	srvDesc.debugName = "Struct Handle Source SRV";
 
-	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	const bgpu::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
 	REQUIRE(resourceManager->ValidSrvHandle(srv));
 
 	// Deliberately not grey: a wrong channel order or a zeroed sample is visible in the result.
-	const uint8_t               texel[4] = { 255, 128, 0, 255 };
-	bgl::TextureSubresourceData sub{};
+	const uint8_t                texel[4] = { 255, 128, 0, 255 };
+	bgpu::TextureSubresourceData sub{};
 	sub.data       = texel;
 	sub.rowPitch   = sizeof(texel);
 	sub.slicePitch = sizeof(texel);
-	std::array<bgl::TextureSubresourceData, 1> subresources{ sub };
+	std::array<bgpu::TextureSubresourceData, 1> subresources{ sub };
 
-	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	const bgpu::SamplerHandle sampler = resourceManager->CreateSampler(bgpu::SamplerDesc());
 	REQUIRE(resourceManager->ValidSamplerHandle(sampler));
 
 	// The handle the shader dereferences, resolved exactly as Scene resolves a material's.
-	auto materialDesc         = bgl::ComputeBufferDesc();
+	auto materialDesc         = bgpu::ComputeBufferDesc();
 	materialDesc.initialCount = 1;
 	materialDesc.debugName    = "Struct-Resident Texture Handle";
-	materialDesc.SetElement<bgl::DescriptorHandle>();
-	const bgl::BufferHandle materials = resourceManager->CreateComputeBuffer(materialDesc);
+	materialDesc.SetElement<bgpu::DescriptorHandle>();
+	const bgpu::BufferHandle materials = resourceManager->CreateComputeBuffer(materialDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(materials));
 
-	const bgl::DescriptorHandle stored = srv.descriptor;
+	const bgpu::DescriptorHandle stored = srv.descriptor;
 
-	auto outDesc         = bgl::ComputeBufferDesc();
+	auto outDesc         = bgpu::ComputeBufferDesc();
 	outDesc.initialCount = 1;
 	outDesc.debugName    = "Sampled Colour";
 	outDesc.SetElement<glm::vec4>();
-	const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = sizeof(glm::vec4);
-	rbDesc.debugName                   = "Sampled Colour Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = sizeof(glm::vec4);
+	rbDesc.debugName                    = "Sampled Colour Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSStructHandleSample"))
 			.SetDebugName("Struct Handle Sample"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -130,33 +130,33 @@ TEST_CASE(
 	cmdList->WriteTexture(texture, subresources);
 	cmdList->Barrier(
 		texture,
-		bgl::TextureBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgpu::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kShaderResource));
 	cmdList->Barrier(
 		materials,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource));
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 
 	cmdList->Barrier(
 		outBuffer,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, outBuffer);
 	cmdList->Close();

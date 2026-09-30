@@ -3,13 +3,13 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <catch2/catch_test_macros.hpp>

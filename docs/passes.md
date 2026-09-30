@@ -7,7 +7,7 @@ graph then culls, orders, derives barriers, and records — see [Frame Graph](do
 that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
-[PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) in the
+[PipelineBatch](libs/bgpu/include/bgpu/pipeline/PipelineBatch.h) in the
 [PassInitContext](libs/bgl_extended/src/passes/PassInitContext.h) it is handed -- one argument for
 every pass, holding the device, the batch, the resource manager and the draw-bucket table -- naming
 the member each
@@ -84,7 +84,7 @@ motion-vector and depth handles, and the depth's shader-resource view), `lightin
 skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
 `c_SceneColorName` / `c_DepthName` in
-[constants/constants.h](libs/bgl_extended/src/constants/constants.h) are
+[gfx/frame_constants.h](libs/bgl_extended/src/gfx/frame_constants.h) are
 what both the importer and the passes name them by.
 
 ---
@@ -291,7 +291,7 @@ marker described above; scaling a surviving cutout fragment's radiance by textur
 
 ## Hashed alpha
 
-`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
+`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/types/LayerType.h)) is stochastic coverage:
 alpha becomes a per-pixel hashed threshold rather than a cutoff, so every layer of a self-occluding
 surface writes depth and participates, and the correct blend is what the ensemble averages to.
 
@@ -444,7 +444,7 @@ It adds **four sub-passes**:
    diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
    `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
    going finer, and a change dissolved over the view's `fadeSeconds`. Its C++ twin is
-   [bgl/lod_select.h](libs/bgl/include/bgl/lod_select.h). The choice is one word per
+   [bgl/lod_select.h](libs/gamelib/include/gamelib/lod_select.h). The choice is one word per
    placement (`idl::InstanceLod`) that every submesh-instance thread of the placement computes alike
    from last frame's word, read from one buffer while the placement's submesh 0 writes the other;
    the view swaps the two each draw (`CullState::AdvanceLodHistory`). The visibility word carries

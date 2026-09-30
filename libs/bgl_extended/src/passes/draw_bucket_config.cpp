@@ -1,9 +1,9 @@
 #include "passes/draw_bucket_config.h"
 #include "gfx/DrawBucketTable.h"
-#include "types/RasterState.h"
 #include "util/util.h"
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
+#include <bgpu/types/RasterState.h>
 #include <core/err/util.h>
 #include <format>
 #include <string>
@@ -102,19 +102,19 @@ namespace bgl
 	uint32_t
 	DrawBucketMeshStageCullsBackfaces(const DrawBucketDesc& desc) noexcept
 	{
-		return DrawBucketCullMode(desc) == RasterCullMode::kNone ? 1u : 0u;
+		return DrawBucketCullMode(desc) == bgpu::RasterCullMode::kNone ? 1u : 0u;
 	}
 
-	RasterCullMode
+	bgpu::RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{
 		// A blade is seen from either side, and a material's doubleSided flag is a mesh's question.
 		if (desc.geom == GeometryStage::kGrass)
 		{
-			return RasterCullMode::kNone;
+			return bgpu::RasterCullMode::kNone;
 		}
 		return desc.material == MaterialType::kNull || desc.material == MaterialType::kAssert ?
-		           RasterCullMode::kBack :
-		           RasterCullMode::kNone;
+		           bgpu::RasterCullMode::kBack :
+		           bgpu::RasterCullMode::kNone;
 	}
 }

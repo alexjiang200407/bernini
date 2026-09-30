@@ -7,7 +7,7 @@
 #include <bgl/error.h>
 #include <bgl/glm.h>
 
-#include "uniforms/DescriptorHandle.h"
+#include <bgpu/uniforms/DescriptorHandle.h>
 
 #include <slang-com-ptr.h>
 #include <slang.h>

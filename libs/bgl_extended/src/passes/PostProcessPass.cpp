@@ -1,22 +1,23 @@
 #include "passes/PostProcessPass.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
 #include "postprocess/color_grade.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
 #include <array>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -80,23 +81,24 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(bgpu::Format::SBGRA8_UNORM);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(false);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -113,17 +115,17 @@ namespace bgl
 		auto desc = PassDesc();
 
 		desc.SetName("PostProcess")
-			.AddTextureRead(args.sourceName, BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(args.sourceName, bgpu::BarrierSyncFlag::kPixelShader)
 			.AddRenderTarget(c_BackbufferName);
 
 		if (args.outlineEnabled)
 		{
-			desc.AddTextureRead(c_OutlineMaskName, BarrierSyncFlag::kPixelShader);
+			desc.AddTextureRead(c_OutlineMaskName, bgpu::BarrierSyncFlag::kPixelShader);
 		}
 
 		if (args.bloomEnabled)
 		{
-			desc.AddTextureRead(args.bloomName, BarrierSyncFlag::kPixelShader);
+			desc.AddTextureRead(args.bloomName, bgpu::BarrierSyncFlag::kPixelShader);
 		}
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
@@ -134,7 +136,7 @@ namespace bgl
 	void
 	PostProcessPass::Execute(const Args& args, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(m_Kernel.pipeline.IsInitialized(), "PostProcess pipeline must be initialized");
@@ -189,10 +191,10 @@ namespace bgl
 			core::fatal("PostProcess shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(args.viewport);
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(args.backBuffer);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(args.backBuffer);
 
 		cmd->SetMeshletState(gfxState);
 

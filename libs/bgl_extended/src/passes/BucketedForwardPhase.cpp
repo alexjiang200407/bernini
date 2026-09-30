@@ -1,19 +1,20 @@
 #include "passes/BucketedForwardPhase.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
 #include "fg/PassDesc.h"
 #include "gfx/DrawBucketTable.h"
+#include "gfx/frame_constants.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
 #include "passes/draw_bucket_config.h"
-#include "pipeline/MeshletKernel.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/MeshletState.h"
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/MeshletState.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <string>
@@ -43,12 +44,12 @@ namespace bgl
 
 	void
 	BucketedForwardPhase::Record(
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) const
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const auto             dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
@@ -67,7 +68,7 @@ namespace bgl
 			for (const DrawLane lane : { DrawLane::kAtRest, DrawLane::kDissolve })
 			{
 				// A bucket never demanded has no kernel -- and, by the same fact, no instances.
-				MeshletKernel* kernel =
+				bgpu::MeshletKernel* kernel =
 					kernels.BindDrawBucketKernel(bucket, lane, state, draw, resources);
 				if (kernel == nullptr)
 				{

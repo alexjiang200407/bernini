@@ -1,9 +1,9 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
 #include "types/EnvironmentMap.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <spdlog/spdlog.h>
 
 namespace bgl
@@ -33,11 +33,11 @@ namespace bgl
 
 		/** @throws GraphicsError if a texture or its view cannot be created. */
 		void
-		Init(ResourceManagerRef resourceManager);
+		Init(bgpu::ResourceManagerRef resourceManager);
 
 		/** Records the zero fill and the barriers that make both sampleable. @pre Init succeeded. */
 		void
-		Upload(ICommandList* cmdList);
+		Upload(bgpu::ICommandList* cmdList);
 
 		/** `env` with every handle it lacks replaced by black. */
 		[[nodiscard]] EnvironmentMap
@@ -47,10 +47,10 @@ namespace bgl
 		Release() noexcept;
 
 	private:
-		ResourceManagerRef m_ResourceManager;
-		TextureHandle      m_Cube;
-		SrvHandle          m_CubeSrv;
-		TextureHandle      m_Lut;
-		SrvHandle          m_LutSrv;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		bgpu::TextureHandle      m_Cube;
+		bgpu::SrvHandle          m_CubeSrv;
+		bgpu::TextureHandle      m_Lut;
+		bgpu::SrvHandle          m_LutSrv;
 	};
 }
