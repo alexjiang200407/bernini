@@ -71,7 +71,7 @@ namespace bgl
 		m_LodNeedsClear = true;
 
 		{
-			auto desc         = UploadBufferDesc();
+			auto desc         = bgpu::UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Cull View";
 

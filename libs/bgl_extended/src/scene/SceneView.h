@@ -5,7 +5,6 @@
 #include "scene/NamedBuffer.h"
 #include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
-#include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
 #include "types/DrawBucketMask.h"
 #include "types/EnvironmentMap.h"
@@ -37,6 +36,7 @@
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
@@ -381,7 +381,7 @@ namespace bgl
 		[[nodiscard]] std::span<const uint32_t>
 		GetSelectedInstances();
 
-		[[nodiscard]] const UploadBuffer<uint32_t>&
+		[[nodiscard]] const bgpu::UploadBuffer<uint32_t>&
 		GetSelectedInstanceBuffer() const noexcept
 		{
 			return m_CurrentSelectedInstances;
@@ -618,7 +618,7 @@ namespace bgl
 
 		// The table's transparency flags mirrored for the GPU: TransparentDepthKeys reads them to
 		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
-		UploadBuffer<uint32_t> m_DrawBucketFlags;
+		bgpu::UploadBuffer<uint32_t> m_DrawBucketFlags;
 
 		bgpu::PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
 		bgpu::EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
@@ -638,20 +638,20 @@ namespace bgl
 		// record only releases its bytes, so a sweep would pose freed states -- into palette slices
 		// another instance may already own -- and would meet the crowd records sharing the arena,
 		// which own no palette.
-		UploadBuffer<idl::PosedInstance> m_PosedInstances;
+		bgpu::UploadBuffer<idl::PosedInstance> m_PosedInstances;
 
 		// The placements carrying a blob shadow, one disc each -- the blob-shadow pass
 		// dispatches over it. Dense and CPU-authored for the pose list's reason.
-		UploadBuffer<idl::BlobShadow> m_BlobShadows;
+		bgpu::UploadBuffer<idl::BlobShadow> m_BlobShadows;
 
 		// Every visible placement's grass fields, and one reference per chunk of them, grouped into
 		// m_GrassBatches by the bucket they draw through. Rebuilt whole, like the blob list.
-		UploadBuffer<idl::GrassDraw>     m_GrassDraws;
-		UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
-		std::vector<GrassBatch>          m_GrassBatches;
-		DrawBucketMask                   m_GrassDrawBuckets;
-		bool                             m_GrassDirty      = true;
-		uint64_t                         m_SceneGrassEpoch = 0;
+		bgpu::UploadBuffer<idl::GrassDraw>     m_GrassDraws;
+		bgpu::UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
+		std::vector<GrassBatch>                m_GrassBatches;
+		DrawBucketMask                         m_GrassDrawBuckets;
+		bool                                   m_GrassDirty      = true;
+		uint64_t                               m_SceneGrassEpoch = 0;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;
@@ -662,8 +662,8 @@ namespace bgl
 		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
 		// move a dense index, so a deletion staleness-marks the list exactly like a selection
 		// change does.
-		UploadBuffer<uint32_t> m_CurrentSelectedInstances;
-		bool                   m_SelectionDirty = false;
+		bgpu::UploadBuffer<uint32_t> m_CurrentSelectedInstances;
+		bool                         m_SelectionDirty = false;
 
 		// Set when a skinned placement is created or destroyed; RebuildPosedList clears it. Same
 		// bargain as m_SelectionDirty: authoring-time work, never per frame.

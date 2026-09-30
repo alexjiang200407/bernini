@@ -191,7 +191,7 @@ namespace bgl
 		}
 
 		{
-			auto flagsDesc         = UploadBufferDesc();
+			auto flagsDesc         = bgpu::UploadBufferDesc();
 			flagsDesc.initialCount = idl::cMaxDrawBuckets;
 			flagsDesc.debugName    = "Draw Bucket Flags";
 
@@ -239,7 +239,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = UploadBufferDesc();
+			auto desc         = bgpu::UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Posed Instances";
 
@@ -247,7 +247,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = UploadBufferDesc();
+			auto desc         = bgpu::UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Blob Shadows";
 
@@ -255,12 +255,12 @@ namespace bgl
 		}
 
 		{
-			auto draws         = UploadBufferDesc();
+			auto draws         = bgpu::UploadBufferDesc();
 			draws.initialCount = 1;
 			draws.debugName    = "Grass Draws";
 			m_GrassDraws.Init(std::move(draws), m_ResourceManager);
 
-			auto refs         = UploadBufferDesc();
+			auto refs         = bgpu::UploadBufferDesc();
 			refs.initialCount = 1;
 			refs.debugName    = "Grass Chunk Refs";
 			m_GrassChunkRefs.Init(std::move(refs), m_ResourceManager);
@@ -270,7 +270,7 @@ namespace bgl
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
 		{
-			auto desc      = UploadBufferDesc();
+			auto desc      = bgpu::UploadBufferDesc();
 			desc.debugName = "Selected Instances";
 
 			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);

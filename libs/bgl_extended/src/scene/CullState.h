@@ -1,8 +1,8 @@
 #pragma once
-#include "scene/UploadBuffer.h"
 #include <array>
 #include <bgl_common/idl/CullView.h>
 #include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <string>
@@ -111,7 +111,7 @@ namespace bgl
 			return m_CompactedDispatchArgs;
 		}
 
-		[[nodiscard]] UploadBuffer<idl::CullView>&
+		[[nodiscard]] bgpu::UploadBuffer<idl::CullView>&
 		GetCullView() noexcept
 		{
 			return m_CullView;
@@ -163,7 +163,7 @@ namespace bgl
 		bgpu::ComputeBuffer m_CompactedDispatchArgs;
 
 		// This frustum's planes, assigned per draw and read by the cull dispatch.
-		UploadBuffer<idl::CullView> m_CullView;
+		bgpu::UploadBuffer<idl::CullView> m_CullView;
 
 		// One idl::InstanceLod per placement slot, twice: the cull reads one and writes the other,
 		// and AdvanceLodHistory swaps them. Indexed by the placement's MeshInstance entry, which

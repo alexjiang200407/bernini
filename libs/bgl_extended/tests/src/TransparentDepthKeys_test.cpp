@@ -1,6 +1,5 @@
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
-#include "scene/UploadBuffer.h"
 #include "types/SubmeshInstance.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
@@ -17,6 +16,7 @@
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -154,9 +154,9 @@ TEST_CASE(
 		(void)instanceHandle;
 	}
 
-	auto drawBucketFlags = bgl::UploadBuffer<uint32_t>();
+	auto drawBucketFlags = bgpu::UploadBuffer<uint32_t>();
 	{
-		auto desc         = bgl::UploadBufferDesc();
+		auto desc         = bgpu::UploadBufferDesc();
 		desc.initialCount = bgl::idl::cMaxDrawBuckets;
 		desc.debugName    = "Draw Bucket Flags";
 		drawBucketFlags.Init(std::move(desc), resourceManager);

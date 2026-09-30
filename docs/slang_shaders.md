@@ -8,7 +8,7 @@ from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on
 ```
 libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
   idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
-  lib/  types/ debug/                 the buffer family (Entry, Range, Packed and Compute buffers) and the GPU assert channel (dbg)
+  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers), bindless texture helpers, and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
@@ -212,7 +212,7 @@ A shader declares `Texture2D.Handle` / `TextureCube.Handle` exactly as it declar
 CPU writes the descriptor into that member directly (see [Uniforms](uniforms.md)); nothing wraps it.
 
 Three accessors the built-ins do not give live in
-[lib/types/Texture.slang](../libs/bgl_extended/shaders/src/lib/types/Texture.slang) — `Load(uint2, uint)`,
+[lib/types/Texture.slang](../libs/bgpu/shaders/src/lib/types/Texture.slang) — `Load(uint2, uint)`,
 `GetDimensions() -> float2` and `CubeFaceTexels()`. They extend **`Texture2D` / `TextureCube`, not
 the handle**: member lookup on a `DescriptorHandle<T>` resolves against `T`, so an
 `extension Texture2D.Handle` compiles and is never found.
