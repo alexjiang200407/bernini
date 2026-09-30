@@ -37,7 +37,9 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 
 	auto contextDesc             = bgpu::GpuContextDesc();
 	contextDesc.enableDebugLayer = true;
-	auto context                 = bgpu::CreateGpuContext(contextDesc);
+	// On D3D12 an object this case leaks, reported as the context dies, ends the process.
+	contextDesc.strictError = true;
+	auto context            = bgpu::CreateGpuContext(contextDesc);
 	REQUIRE(context != nullptr);
 
 	auto device = bgpu::CreateDevice(context);
@@ -99,7 +101,8 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	depthDesc.usage         = bgpu::TextureUsageFlag::kDepthStencil;
 	depthDesc.initialLayout = bgpu::BarrierLayout::kDepthWrite;
 	depthDesc.debugName     = "entry points: depth";
-	const auto depth        = rm->CreateTexture(depthDesc);
+	depthDesc.clearValue.SetDepthStencil(1.0f, 0);
+	const auto depth = rm->CreateTexture(depthDesc);
 
 	auto dsvDesc   = bgpu::DsvDesc();
 	dsvDesc.format = bgpu::Format::D32;

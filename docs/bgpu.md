@@ -39,8 +39,8 @@ rm->RegisterQueue(queue.Get());
   messages into the log, the PIX capturer load, Metal's validation-from-environment detection, the
   device itself, the `bgpu.log` file, and the Slang sessions
   ([src/SlangSessions.h](../libs/bgpu/src/SlangSessions.h)) with their search paths. With
-  the debug layer on, the context's destructor reports live objects, so a leak is attributed to
-  whichever owner made it rather than to "the device".
+  the debug layer on, the context's destructor reports live objects into `bgpu.log`, so a leak is
+  attributed to whichever owner made it rather than to "the device".
 * **The program cache is the context's, because the sessions are.** What a key must describe —
   the compiler, the options every session is created with, every file under the search paths,
   every registered source module — is all held here, so `ProgramCache` keys and stores what any

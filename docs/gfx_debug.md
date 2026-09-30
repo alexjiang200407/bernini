@@ -267,8 +267,13 @@ before any renderer exists:
 * Validation messages are routed to `bgpu.log` through the GPU context's callback registered on
   `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error
   into `core::fatal`.
-* When the context dies with the layer on it reports the live objects, so a leak is attributed to
-  whichever owner of the device made it.
+* When the context dies with the layer on it reports the live objects, each as an error in
+  `bgpu.log` naming the object's debug name, so a leak is attributed to whichever owner of the
+  device made it; `strictError` makes one fatal. The device is gone by then, so its callback
+  cannot carry the report: the context reads it back from the DXGI info queue. This needs only
+  `enableDebugLayer`, not GPU-based validation, and works in a Release build — the layer is a
+  runtime switch, present wherever the Windows "Graphics Tools" feature is installed.
+  `bgpu_tests`' entry-point case runs strict, so a leak from any RHI factory fails it.
 
 This runtime layer is **independent** of the compile-time `BERNINI_GPU_DEBUG` GPU-assertion
 system in §1: one is a D3D12 API validator, the other is your shaders reporting logic errors.
