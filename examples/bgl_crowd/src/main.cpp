@@ -6,6 +6,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
@@ -42,8 +43,9 @@ namespace
 		uint32_t height = 720;
 
 		// 0 runs until the window closes; otherwise every group must stand at its goal by then.
-		uint32_t frames   = 0;
-		bool     headless = false;
+		uint32_t    frames   = 0;
+		bool        headless = false;
+		std::string screenshot;
 	};
 
 	constexpr float c_Tick = 1.0f / 30.0f;
@@ -158,26 +160,36 @@ namespace
 		auto scene = graphics->CreateScene(bgl::SceneDesc());
 		auto view  = graphics->CreateSceneView(scene, crowdDesc.maxAgents + 1);
 
+		// The only light: with no environment map, a scene without a sun renders black.
+		view->SetDirectionalLight(
+			{ .direction = glm::vec3(-0.4f, -1.0f, -0.3f),
+		      .color     = glm::vec3(1.0f),
+		      .intensity = 3.0f });
+
 		const auto ground = scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(0.35f, 0.45f, 0.3f, 1.0f), .roughnessFactor = 0.9f });
 		view->CreateStaticMeshInstance(
 			scene->AddCubeGeom(ground),
 			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.05f, 0.0f)) *
-				glm::scale(glm::mat4(1.0f), glm::vec3(60.0f, 0.1f, 40.0f)));
+				glm::scale(glm::mat4(1.0f), glm::vec3(60.0f, 0.05f, 60.0f)));
 
 		// One pool of boxes per type, as many as the type's agents: a split or a merge keeps a type's
 		// count, so each frame hands a type's agents to its pool in readback order.
 		const glm::vec4 colors[] = { glm::vec4(0.8f, 0.25f, 0.2f, 1.0f),
 			                         glm::vec4(0.2f, 0.35f, 0.8f, 1.0f) };
-		const glm::vec3 sizes[]  = { glm::vec3(0.5f, 1.7f, 0.4f), glm::vec3(0.8f, 1.6f, 2.0f) };
+		// Whole extents; AddCubeGeom's cube spans -1..1, so it is scaled by half of each.
+		const glm::vec3 sizes[] = { glm::vec3(0.5f, 1.7f, 0.4f), glm::vec3(0.8f, 1.6f, 1.5f) };
 		std::vector<bgl::MeshInstanceHandle> pools[2];
 		uint32_t                             counts[2] = { 100, 36 };
 		for (uint32_t type = 0; type < 2; ++type)
 		{
-			const auto geom = scene->AddCubeGeom(scene->CreatePbrMaterial(
+			// Below the ground until an agent takes it: a degenerate matrix has no inverse for the
+			// renderer to take.
+			const auto parked = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -10.0f, 0.0f));
+			const auto geom   = scene->AddCubeGeom(scene->CreatePbrMaterial(
 				{ .baseColorFactor = colors[type], .roughnessFactor = 0.6f }));
 			for (uint32_t i = 0; i < counts[type]; ++i)
-				pools[type].push_back(view->CreateStaticMeshInstance(geom, glm::mat4(0.0f)));
+				pools[type].push_back(view->CreateStaticMeshInstance(geom, parked));
 		}
 
 		auto camera = bgl::Camera();
@@ -250,7 +262,7 @@ namespace
 									sizes[type].y * 0.5f,
 									agent.position.y)) *
 								glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
-								glm::scale(glm::mat4(1.0f), sizes[type]));
+								glm::scale(glm::mat4(1.0f), sizes[type] * 0.5f));
 					}
 				}
 
@@ -279,6 +291,8 @@ namespace
 
 		crowd->Wait();
 		graphics->WaitIdle();
+		if (!opts.screenshot.empty())
+			graphics->ScreenshotPng(target, opts.screenshot);
 		if (opts.frames == 0)
 			return 0;
 
@@ -322,6 +336,7 @@ main(int argc, char** argv)
 		"Frames to draw, then exit non-zero unless every group stands at its goal; 0 runs until "
 		"closed");
 	app.add_flag("--headless", opts.headless, "Render offscreen, with no window");
+	app.add_option("--screenshot", opts.screenshot, "Write the last frame drawn to this PNG");
 
 	CLI11_PARSE(app, argc, argv);
 
