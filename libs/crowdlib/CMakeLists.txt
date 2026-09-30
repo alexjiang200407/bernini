@@ -142,9 +142,10 @@ add_dependencies(crowdlib crowdlib_copy_shaders)
 # DXIL validation at build time, as the renderer's programs have: nothing loads the output, and a
 # construct Metal accepts that DXC rejects stops the Windows build here rather than at runtime.
 if(RENDERER_BACKEND STREQUAL "DX12")
-	# The IDL modules declare records, not entry points: the kernels that import them are checked.
+	# Only the kernels (CS*) have entry points; the IDL and the modules they import are checked
+	# through them.
 	set(CROWDLIB_KERNEL_SOURCES ${CROWDLIB_SHADER_SOURCES})
-	list(FILTER CROWDLIB_KERNEL_SOURCES EXCLUDE REGEX ".*/crowd/idl/.*")
+	list(FILTER CROWDLIB_KERNEL_SOURCES INCLUDE REGEX ".*/crowd/CS[^/]*\\.slang$")
 	set(SLANG_COMPILE_OUTS "")
 	foreach(SHADER ${CROWDLIB_KERNEL_SOURCES})
 		file(RELATIVE_PATH SHADER_REL "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "${SHADER}")
@@ -154,7 +155,7 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 			OUT_DIR  "${CMAKE_CURRENT_BINARY_DIR}/shader_check/${SHADER_REL_DIR}"
 			TARGET   "dxil"
 			DXC      "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
-			INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+			INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "${BERNINI_ROOT}/libs/bgpu/shaders/src"
 		)
 	endforeach()
 	add_custom_target(crowdlib_check_shaders ALL DEPENDS ${SLANG_COMPILE_OUTS})

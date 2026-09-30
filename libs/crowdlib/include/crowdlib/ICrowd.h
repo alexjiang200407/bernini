@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/GpuContext.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <crowdlib/CrowdDesc.h>
@@ -7,6 +8,7 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/api.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
@@ -153,4 +155,14 @@ namespace crowd
 	};
 
 	using CrowdRef = core::SharedRef<ICrowd>;
+
+	/**
+	 * A crowd on `context`'s device, with a device, resource manager and compute queue of its own
+	 * beside every other owner's. The application keeps the context alive until the crowd is gone.
+	 *
+	 * @throws std::runtime_error for a description a crowd refuses, or a device that cannot make the
+	 *         crowd's kernels or buffers.
+	 */
+	[[nodiscard]] CROWD_API CrowdRef
+	CreateCrowd(bgpu::GpuContextRef context, CrowdDesc desc);
 }
