@@ -76,7 +76,6 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: reached only from a scope that holds one (CommandList::Open, Flush).
 	MTL::CommandBuffer*
 	CommandQueue::NewCommandBuffer() const noexcept
 	{
@@ -160,21 +159,18 @@ namespace bgpu
 		return m_NextFenceValue++;
 	}
 
-	// no-pool: reads the shared event's value, a scalar.
 	bool
 	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{
 		return m_Event->signaledValue() >= fenceValue;
 	}
 
-	// no-pool: reads the shared event's value, a scalar.
 	uint64_t
 	CommandQueue::PollCurrentFenceValue() noexcept
 	{
 		return m_Event->signaledValue();
 	}
 
-	// no-pool: reads the shared event's value, a scalar.
 	uint64_t
 	CommandQueue::GetLastCompletedFence() const noexcept
 	{
@@ -254,7 +250,6 @@ namespace bgpu
 		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
 	}
 
-	// no-pool: reached only from a scope that holds one (CommandList::Open, Flush).
 	void
 	CommandQueue::BeginCommandBuffer(MTL::CommandBuffer* cmdBuffer) noexcept
 	{

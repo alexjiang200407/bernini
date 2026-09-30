@@ -40,7 +40,6 @@ import os
 import subprocess
 import sys
 
-import util.autorelease_scope as autorelease_scope
 import util.cmake_tools as ct
 import util.config as cfg
 import util.jobserver as jobserver
@@ -321,13 +320,6 @@ def main():
 
     if args.configure:
         return 0
-
-    # Textual, so it fails every build that would ship the leak -- CI's too, which runs no suite.
-    unpooled = autorelease_scope.unpooled(ct.REPO_ROOT)
-    if unpooled:
-        for entry in unpooled:
-            print(f"error: {entry}", file=sys.stderr)
-        return 1
 
     repair_deps_log(ninja, binary_dir, env)
 

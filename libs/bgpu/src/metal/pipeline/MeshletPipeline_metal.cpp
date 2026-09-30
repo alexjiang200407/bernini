@@ -29,7 +29,6 @@
 namespace bgpu
 {
 
-	// no-pool: reached only from pipeline construction, which holds one.
 	NS::SharedPtr<MTL::DepthStencilState>
 	MeshletPipeline::BuildDepthStencilState(MTL::Device* device) const
 	{

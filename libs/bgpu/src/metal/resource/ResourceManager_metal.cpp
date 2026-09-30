@@ -76,7 +76,6 @@ namespace bgpu
 		ReserveUnboundSlot(m_Samplers);
 	}
 
-	// no-pool: reached only from an entry point that holds one.
 	BufferHandle
 	ResourceManager::EmplaceBuffer(const BufferDesc& desc) noexcept
 	{
@@ -169,7 +168,6 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept
 	{
@@ -249,7 +247,6 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: reached only from an entry point that holds one.
 	DeletionGate
 	ResourceManager::CaptureGate() const noexcept
 	{
@@ -259,7 +256,6 @@ namespace bgpu
 		return gate;
 	}
 
-	// no-pool: reached only from an entry point that holds one.
 	void
 	ResourceManager::RetireDeferred(PendingType type, uint32_t slotIndex) noexcept
 	{
@@ -371,14 +367,12 @@ namespace bgpu
 		});
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const Buffer&
 	ResourceManager::GetBuffer(BufferHandle handle) const noexcept
 	{
 		return m_Buffers[handle.slot];
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	BufferDesc
 	ResourceManager::GetBufferDesc(BufferHandle handle) const noexcept
 	{
@@ -386,7 +380,6 @@ namespace bgpu
 		return m_Buffers[handle.slot].GetDesc();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const ReadbackBuffer&
 	ResourceManager::GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept
 	{
@@ -407,14 +400,12 @@ namespace bgpu
 		// Shared storage on unified memory: contents() stays valid, nothing to unmap.
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidBufferHandle(const BufferHandle& handle) const noexcept
 	{
 		return !handle.IsNull() && m_Buffers.valid(handle.slot);
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept
 	{
@@ -537,14 +528,12 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const Texture&
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
 		return m_Textures[handle.slot];
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	TextureDesc
 	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
 	{
@@ -552,7 +541,6 @@ namespace bgpu
 		return m_Textures[handle.slot].GetDesc();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const Rtv&
 	ResourceManager::GetRtv(RtvHandle handle) const noexcept
 	{
@@ -562,14 +550,12 @@ namespace bgpu
 		return m_Rtvs[handle.idx];
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	TextureHandle
 	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
 	{
 		return GetRtv(handle).GetTextureHandle();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	TextureReadbackLayout
 	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const noexcept
 	{
@@ -588,7 +574,6 @@ namespace bgpu
 		return layout;
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
@@ -596,7 +581,6 @@ namespace bgpu
 		       !m_Textures[handle.slot].IsNull();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidSrvHandle(const SrvHandle& handle) const noexcept
 	{
@@ -604,7 +588,6 @@ namespace bgpu
 		       !m_Srvs[handle.idx].IsNull();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const noexcept
 	{
@@ -658,7 +641,6 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const Sampler&
 	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
 	{
@@ -666,7 +648,6 @@ namespace bgpu
 		return m_Samplers[handle.idx];
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidSamplerHandle(const SamplerHandle& handle) const noexcept
 	{
@@ -709,7 +690,6 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	const Dsv&
 	ResourceManager::GetDsv(DsvHandle handle) const noexcept
 	{
@@ -717,14 +697,12 @@ namespace bgpu
 		return m_Dsvs[handle.idx];
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	TextureHandle
 	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
 	{
 		return GetDsv(handle).GetTextureHandle();
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
 	{
@@ -749,7 +727,6 @@ namespace bgpu
 		cmdList->As<CommandList>()->ClearDepthStencil(texture, depth, stencil);
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	std::span<MTL::Resource* const>
 	ResourceManager::GetLiveTextureResources() noexcept
 	{
@@ -768,7 +745,6 @@ namespace bgpu
 		return m_LiveTextures;
 	}
 
-	// no-pool: a slot lookup; sends no message that autoreleases.
 	bool
 	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
 	{

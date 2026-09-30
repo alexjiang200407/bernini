@@ -48,14 +48,12 @@ namespace bgpu
 		}
 	}
 
-	// no-pool: Slang only; touches no Metal object.
 	void
 	Device::AddSourceModule(const bgpu::SlangSourceModule& sourceModule) noexcept
 	{
 		m_Context->AddSourceModule(sourceModule);
 	}
 
-	// no-pool: Slang only; touches no Metal object.
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
