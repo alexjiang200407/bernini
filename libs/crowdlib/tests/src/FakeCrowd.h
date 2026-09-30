@@ -8,6 +8,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/debug/AgentReadback.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <deque>
