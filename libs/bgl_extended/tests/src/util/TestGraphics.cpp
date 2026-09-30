@@ -3,9 +3,11 @@
 
 #include <bgl/IGraphics.h>
 #include <bgpu/GpuContext.h>
+#include <catch2/catch_test_case_info.hpp>
 #include <catch2/interfaces/catch_interfaces_config.hpp>
 #include <catch2/reporters/catch_reporter_event_listener.hpp>
 #include <catch2/reporters/catch_reporter_registrars.hpp>
+#include <spdlog/spdlog.h>
 
 namespace bgl::test
 {
@@ -21,6 +23,20 @@ namespace bgl::test
 		{
 		public:
 			explicit ReleaseAtRunEnd(const Catch::IConfig* config) : EventListenerBase(config) {}
+
+			// The context reports what outlived it only when it dies, and a renderer a case leaked
+			// holds it alive for the rest of the run: that leak and every one after it go unreported.
+			void
+			testCaseEnded(const Catch::TestCaseStats& stats) override
+			{
+				if (g_Context != nullptr && g_Context->GetRefCount() > 1)
+				{
+					spdlog::error(
+						"'{}' left the GPU context held: a renderer outlived the case, and the "
+						"context cannot report leaks until it dies",
+						stats.testInfo->name);
+				}
+			}
 
 			void
 			testRunEnded(const Catch::TestRunStats&) override
