@@ -16,9 +16,9 @@ namespace
 		return desc;
 	}
 
-	// A module of the shader contract, staged beside the suite by bgl_copy_contract_shaders, spelled
-	// as an import spells it.
-	constexpr const char* c_ContractModule = "bgl.SurfaceSource";
+	// A module of bgpu's own tree, staged beside the suite by bgpu_copy_shaders, spelled as an import
+	// spells it. It imports others, so a load resolves more than one file.
+	constexpr const char* c_Module = "lib.types.RawBuffer";
 }
 
 // The premise of a shared context: the application creates one and hands it to every owner, and
@@ -36,7 +36,7 @@ TEST_CASE("One GPU context is live per process, and another may follow it", "[re
 	// The successor compiles: the sessions it creates are its own.
 	auto second = bgpu::CreateGpuContext(DebugDesc());
 	REQUIRE(second != nullptr);
-	CHECK(second->LoadModule(c_ContractModule) != nullptr);
+	CHECK(second->LoadModule(c_Module) != nullptr);
 }
 
 TEST_CASE("The search paths are the staged tree, then the client's directory", "[device]")
@@ -65,9 +65,9 @@ TEST_CASE("A released session is recreated by the next load", "[render][device]"
 {
 	auto context = bgpu::CreateGpuContext(DebugDesc());
 
-	REQUIRE(context->LoadModule(c_ContractModule) != nullptr);
+	REQUIRE(context->LoadModule(c_Module) != nullptr);
 	context->ReleaseSlangSessions();
-	CHECK(context->LoadModule(c_ContractModule) != nullptr);
+	CHECK(context->LoadModule(c_Module) != nullptr);
 }
 
 // Sessions are per thread, and a source module is part of the description every session is created

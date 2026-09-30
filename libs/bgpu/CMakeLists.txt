@@ -313,9 +313,9 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu and the
-	# contract exactly as a renderer resolves them.
-	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders)
+	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu exactly as a
+	# renderer resolves them.
+	add_dependencies(bgpu_tests bgpu_copy_shaders)
 
 	# The suite's own kernels, under bgpu/ in the tests root the sessions search, which no other
 	# copier writes.
