@@ -52,9 +52,14 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   `newLibraryWithSource`, so a shader error surfaces when the pipeline is first built.
 - **A scope that creates an autoreleased Metal object owns the pool it drains into.** Most Metal
   factories autorelease — `commandBuffer()`, `nextDrawable()` — and the pool the object lands in is
-  whichever one on this thread was pushed last. So anything here creating one scopes its own
-  `NS::AutoreleasePool` — `CommandList::Open`..`Close`, `CommandQueue::Flush` — rather than letting it
-  reach whatever net its owner holds (the renderer's is `AutoreleaseNet_metal.h`, in `bgl_extended`).
+  whichever one on this thread was pushed last. So every entry point here that makes, submits or
+  releases one holds its own pool (`ScopeAutoreleasePool()`, `src/metal/autorelease_scope.h`) — the
+  device's factories, the resource manager's creates and destroys, the queue's submit and waits,
+  `CommandList::Open`..`Close` — and a caller needs no pool of its own: the renderer's net
+  (`AutoreleaseNet_metal.h`, in `bgl_extended`) catches nothing from here, and a compute client with
+  no net leaks nothing. `OBJC_DEBUG_MISSING_POOLS=YES` names any that escape. What Metal itself
+  autoreleases on its own completion threads (the device, as a finished command buffer releases
+  the resources it held) is outside any code here, and harmless: the device is never freed.
   Committing a command buffer before the pool drains is safe: the driver holds its own reference
   until the buffer retires.
 - **A flush is not done when its fence is.** An event signalled with `encodeSignalEvent` fires as

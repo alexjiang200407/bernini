@@ -1,4 +1,5 @@
 #include "device/Device_metal.h"
+#include "autorelease_scope.h"
 
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
@@ -37,6 +38,7 @@ namespace bgpu
 	Device::Device(const bgpu::GpuContextRef& context) :
 		m_Context(context), m_Device(NS::RetainPtr(bgpu::GetMtlDevice(*context)))
 	{
+		const auto pool = ScopeAutoreleasePool();
 		if (m_Context->GetProgramCache() != nullptr)
 		{
 			m_ShaderCache = std::make_unique<ShaderCache>(
@@ -61,18 +63,21 @@ namespace bgpu
 	core::SharedRef<ICommandQueue>
 	Device::CreateCommandQueue(QueueType) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<CommandQueue>::Make(m_Device.get());
 	}
 
 	core::SharedRef<ICommandAllocator>
 	Device::CreateCommandAllocator(QueueType) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<CommandAllocator>::Make();
 	}
 
 	core::SharedRef<ITimestampHeap>
 	Device::CreateTimestampHeap(uint32_t capacity) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		// Apple GPUs sample at an encoder's stage boundary and nowhere finer, which is the point the
 		// command list attaches a span's slots to; a device without even that has no timestamps.
 		// Once: every render target asks at creation, and a device that cannot is the same device
@@ -139,6 +144,7 @@ namespace bgpu
 		core::SharedRef<ICommandAllocator> commandAllocator,
 		core::SharedRef<IResourceManager>  resourceManager) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<CommandList>::Make(
 			desc,
 			commandAllocator.Get(),
@@ -148,24 +154,28 @@ namespace bgpu
 	core::SharedRef<IResourceManager>
 	Device::CreateResourceManager(const ResourceManagerDesc& desc) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<ResourceManager>::Make(m_Device.get(), desc);
 	}
 
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<Shader>::Make(std::move(desc), m_Context);
 	}
 
 	core::SharedRef<IComputePipeline>
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<ComputePipeline>::Make(m_Device.get(), m_ShaderCache.get(), desc);
 	}
 
 	core::SharedRef<IMeshletPipeline>
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return core::SharedRef<MeshletPipeline>::Make(m_Device.get(), m_ShaderCache.get(), desc);
 	}
 
@@ -173,6 +183,7 @@ namespace bgpu
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return Uniforms(pipeline, cbufferName);
 	}
 
@@ -180,6 +191,7 @@ namespace bgpu
 	Device::CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return Uniforms(pipeline, cbufferName);
 	}
 

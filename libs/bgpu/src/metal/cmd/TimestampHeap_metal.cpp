@@ -1,4 +1,5 @@
 #include "cmd/TimestampHeap_metal.h"
+#include "autorelease_scope.h"
 
 #include <bgpu/cmd/TimestampHeap.h>
 #include <core/err/util.h>
@@ -14,6 +15,7 @@ namespace bgpu
 		NS::SharedPtr<MTL::CounterSampleBuffer> buffer,
 		uint32_t capacity) noexcept : m_Buffer(std::move(buffer)), m_Capacity(capacity)
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(m_Buffer.get() != nullptr, "A timestamp heap needs a counter sample buffer");
 	}
 

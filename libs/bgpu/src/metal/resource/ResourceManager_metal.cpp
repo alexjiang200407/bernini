@@ -1,4 +1,5 @@
 #include "resource/ResourceManager_metal.h"
+#include "autorelease_scope.h"
 #include "convert_metal.h"
 #include "resource/Dsv_metal.h"
 #include "resource/ReadbackBuffer_metal.h"
@@ -56,6 +57,7 @@ namespace bgpu
 		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_BufferSrvs(desc.maxBufferSrvs),
 		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
 	{
+		const auto pool = ScopeAutoreleasePool();
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
 		// concurrent reader. Exhaustion returns a null handle instead, which every Create* reports.
@@ -91,6 +93,7 @@ namespace bgpu
 	BufferHandle
 	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(desc.stride > 0, "StructuredBuffer requires a valid stride");
 		core::ensure(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
 
@@ -105,6 +108,7 @@ namespace bgpu
 	BufferHandle
 	ResourceManager::CreateRawBuffer(const RawViewDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(desc.byteSize > 0, "A raw buffer requires a byte size");
 		core::ensure(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");
 		core::ensure(desc.byteSize <= c_MaxRawBufferBytes, "A raw view cannot address past 4 GiB");
@@ -121,6 +125,7 @@ namespace bgpu
 	BufferSrvHandle
 	ResourceManager::CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidBufferHandle(buffer), "CreateBufferSrv on an invalid buffer");
 		core::ensure(desc.stride > 0, "A structured view requires a stride");
 		core::ensure(
@@ -146,6 +151,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyBufferSrv(BufferSrvHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidBufferSrvHandle(handle), "Cannot destroy invalid buffer view handle");
 
@@ -171,6 +177,7 @@ namespace bgpu
 	BufferHandle
 	ResourceManager::CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		// A compute buffer is a GPU-only structured buffer with UAV access; reuse the
 		// structured-buffer path to create it.
 		StructBufferDesc sbDesc;
@@ -184,6 +191,7 @@ namespace bgpu
 	ReadbackBufferHandle
 	ResourceManager::CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
 		const auto slot = m_Readbacks.try_allocate_and_emplace(m_Device, desc);
@@ -198,6 +206,7 @@ namespace bgpu
 	void
 	ResourceManager::RegisterQueue(ICommandQueue* queue) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(queue != nullptr, "RegisterQueue requires a non-null queue");
 		core::ensure(
@@ -209,6 +218,7 @@ namespace bgpu
 	void
 	ResourceManager::UnregisterQueue(ICommandQueue* queue) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		for (uint32_t i = 0; i < m_RegisteredQueues.size(); ++i)
 		{
@@ -262,6 +272,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyBuffer(BufferHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidBufferHandle(handle), "Cannot destroy invalid buffer handle");
 
@@ -279,6 +290,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidReadbackBufferHandle(handle), "Cannot destroy invalid readback handle");
 
@@ -296,6 +308,7 @@ namespace bgpu
 	void
 	ResourceManager::CleanupExpiredResources() noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
 		// Poll each queue once, not per pending deletion.
@@ -376,12 +389,14 @@ namespace bgpu
 	const void*
 	ResourceManager::MapReadback(ReadbackBufferHandle handle) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		return m_Readbacks[handle.slot].GetData();
 	}
 
 	void
 	ResourceManager::UnmapReadback(ReadbackBufferHandle) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		// Shared storage on unified memory: contents() stays valid, nothing to unmap.
 	}
 
@@ -400,6 +415,7 @@ namespace bgpu
 	TextureHandle
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
+		const auto pool     = ScopeAutoreleasePool();
 		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
@@ -416,6 +432,7 @@ namespace bgpu
 	SrvHandle
 	ResourceManager::CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
@@ -441,6 +458,7 @@ namespace bgpu
 	RtvHandle
 	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
@@ -456,6 +474,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
+		const auto pool     = ScopeAutoreleasePool();
 		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
@@ -474,6 +493,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroySrv(SrvHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
 
@@ -492,6 +512,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
 
@@ -577,6 +598,7 @@ namespace bgpu
 	void
 	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidRtvHandle(handle), "ClearRtv on an invalid RTV handle");
 		core::ensure(
 			cmdList != nullptr && cmdList->IsOpen(),
@@ -589,6 +611,7 @@ namespace bgpu
 	SamplerHandle
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
 		const auto slot = m_Samplers.try_allocate_and_emplace(m_Device, desc);
@@ -603,6 +626,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
 
@@ -634,6 +658,7 @@ namespace bgpu
 	DsvHandle
 	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
@@ -649,6 +674,7 @@ namespace bgpu
 	void
 	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
+		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
 
@@ -691,6 +717,7 @@ namespace bgpu
 		float         depth,
 		uint8_t       stencil) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(ValidDsvHandle(handle), "ClearDsv on an invalid DSV handle");
 		core::ensure(
 			cmdList != nullptr && cmdList->IsOpen(),

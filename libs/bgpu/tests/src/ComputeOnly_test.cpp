@@ -140,5 +140,7 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 #if defined(BERNINI_GPU_DEBUG)
 	debugBuffer.Release(false);
 #endif
+	// An owner drains the queues it made before it lets go of them (docs/bgpu.md, Teardown).
+	queue->Flush();
 	rm->UnregisterQueue(queue.Get());
 }

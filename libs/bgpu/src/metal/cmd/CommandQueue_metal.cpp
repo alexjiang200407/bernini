@@ -1,4 +1,5 @@
 #include "cmd/CommandQueue_metal.h"
+#include "autorelease_scope.h"
 #include <bgpu/metal/MetalErrorChecker.h>
 
 #include "cmd/CommandList_metal.h"
@@ -98,6 +99,7 @@ namespace bgpu
 		m_Queue(NS::TransferPtr(device->newCommandQueue())),
 		m_Event(NS::TransferPtr(device->newSharedEvent()))
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(m_Queue.get() != nullptr, "Metal command queue creation failed");
 		core::ensure(m_Event.get() != nullptr, "Metal shared event creation failed");
 
@@ -139,6 +141,7 @@ namespace bgpu
 	uint64_t
 	CommandQueue::ExecuteCommandList(ICommandList* commandList) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(commandList != nullptr, "Command list is not initialized.");
 
 		auto* cmdBuffer = commandList->As<CommandList>()->GetCommandBuffer();
@@ -174,6 +177,7 @@ namespace bgpu
 	void
 	CommandQueue::WaitForFenceCPUBlocking(uint64_t fenceValue) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		// Block until the fence actually reaches fenceValue -- the d3d12 counterpart waits INFINITE.
 		// MTL::SharedEvent's CPU wait is bounded, so loop: it returns on signal or timeout, and a
 		// timeout must not be mistaken for completion (that would let a caller read GPU work still in
@@ -210,6 +214,7 @@ namespace bgpu
 	void
 	CommandQueue::InsertWait(uint64_t fenceValue) noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(
 			m_ListsBuilding == 0,
 			"Insert a GPU wait before opening the list that must observe it: {} list(s) are "
@@ -222,6 +227,7 @@ namespace bgpu
 	void
 	CommandQueue::InsertWaitForQueueFence(ICommandQueue* cq, uint64_t fenceValue) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(cq != nullptr, "InsertWaitForQueueFence requires a non-null queue");
 		core::ensure(
 			m_ListsBuilding == 0,
@@ -235,6 +241,7 @@ namespace bgpu
 	void
 	CommandQueue::InsertWaitForQueue(ICommandQueue* otherQueue) const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		core::ensure(otherQueue != nullptr, "InsertWaitForQueue requires a non-null queue");
 		// Everything submitted so far: the next value has not been signalled yet.
 		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
