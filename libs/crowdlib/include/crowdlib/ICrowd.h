@@ -7,7 +7,7 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
-#include <crowdlib/debug/AgentSnapshot.h>
+#include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -145,7 +145,7 @@ namespace crowd
 		 * @throws std::runtime_error unless the crowd was created with
 		 *         CrowdDesc::debugAgentReadback.
 		 */
-		[[nodiscard]] virtual std::optional<debug::AgentSnapshot>
+		[[nodiscard]] virtual std::optional<debug::CrowdReadback>
 		ReadDebugAgents() const = 0;
 
 	protected:

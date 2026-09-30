@@ -6,7 +6,7 @@
 
 namespace crowd::debug
 {
-	/** A group's agents in a snapshot: `agents[first, first + count)`, in formation-slot order. */
+	/** A group's agents in a readback: `agents[first, first + count)`, in formation-slot order. */
 	struct GroupAgents
 	{
 		GroupHandle group;
@@ -19,7 +19,7 @@ namespace crowd::debug
 	 * its handle is then refused by the crowd, but the tick still measured it. The spans are valid
 	 * until the crowd's next Step or Wait, or its release.
 	 */
-	struct AgentSnapshot
+	struct CrowdReadback
 	{
 		uint64_t                       tick = 0;
 		std::span<const AgentReadback> agents;

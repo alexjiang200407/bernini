@@ -487,24 +487,24 @@ TEMPLATE_LIST_TEST_CASE(
 	const auto tick = crowd->Step();
 	crowd->Wait();
 
-	const auto snapshot = crowd->ReadDebugAgents();
-	REQUIRE(snapshot.has_value());
-	CHECK(snapshot->tick == tick);
-	CHECK(snapshot->agents.size() == 30);
-	REQUIRE(snapshot->groups.size() == 2);
+	const auto readback = crowd->ReadDebugAgents();
+	REQUIRE(readback.has_value());
+	CHECK(readback->tick == tick);
+	CHECK(readback->agents.size() == 30);
+	REQUIRE(readback->groups.size() == 2);
 
 	auto covered = uint32_t{ 0 };
-	for (const auto& range : snapshot->groups)
+	for (const auto& range : readback->groups)
 	{
 		REQUIRE((range.group == west || range.group == east));
 		const auto& orders = range.group == west ? MakeOrders() : eastOrders;
 		CHECK(range.count == crowd->GetAgentCount(range.group));
-		REQUIRE(range.first + range.count <= snapshot->agents.size());
+		REQUIRE(range.first + range.count <= readback->agents.size());
 		covered += range.count;
 
 		for (uint32_t slot = 0; slot < range.count; ++slot)
 		{
-			const auto& agent    = snapshot->agents[range.first + slot];
+			const auto& agent    = readback->agents[range.first + slot];
 			const auto  expected = crowd::SlotPosition(orders, range.count, slot);
 			CHECK_THAT(agent.position.x, WithinAbs(expected.x, 1e-3f));
 			CHECK_THAT(agent.position.y, WithinAbs(expected.y, 1e-3f));
@@ -517,7 +517,7 @@ TEMPLATE_LIST_TEST_CASE(
 }
 
 TEMPLATE_LIST_TEST_CASE(
-	"A snapshot still holds a group released after its tick, and outlives polling",
+	"A readback still holds a group released after its tick, and outlives polling",
 	"[crowd][debug]",
 	CrowdFactories)
 {
@@ -531,16 +531,16 @@ TEMPLATE_LIST_TEST_CASE(
 	crowd->DestroyGroup(released);
 	CHECK_FALSE(crowd->HasGroup(released));
 
-	const auto snapshot = crowd->ReadDebugAgents();
-	REQUIRE(snapshot.has_value());
-	const auto agents = std::vector(snapshot->agents.begin(), snapshot->agents.end());
-	REQUIRE(snapshot->groups.size() == 2);
-	for (const auto& range : snapshot->groups)
+	const auto readback = crowd->ReadDebugAgents();
+	REQUIRE(readback.has_value());
+	const auto agents = std::vector(readback->agents.begin(), readback->agents.end());
+	REQUIRE(readback->groups.size() == 2);
+	for (const auto& range : readback->groups)
 		CHECK(range.count == (range.group == kept ? 12u : 5u));
 
 	static_cast<void>(crowd->GetCompletedTick());
 	static_cast<void>(crowd->GetReport(kept));
-	REQUIRE(snapshot->agents.size() == agents.size());
+	REQUIRE(readback->agents.size() == agents.size());
 	for (size_t i = 0; i < agents.size(); ++i)
-		CHECK(snapshot->agents[i].position == agents[i].position);
+		CHECK(readback->agents[i].position == agents[i].position);
 }

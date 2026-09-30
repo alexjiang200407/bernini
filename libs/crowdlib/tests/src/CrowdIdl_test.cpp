@@ -2,10 +2,10 @@
 // reflects; this checks that a record written at its stride into a buffer and read back is the same
 // record, as a kernel's upload and a readback both rely on.
 #include "idl/Agent.h"
+#include "idl/AgentRange.h"
 #include "idl/Constants.h"
 #include "idl/Group.h"
 #include "idl/GroupSum.h"
-#include "idl/Span.h"
 #include "idl/TickParams.h"
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
@@ -30,7 +30,7 @@ namespace
 	}
 }
 
-TEST_CASE("A spawned span's source is no agent index", "[crowd][idl]")
+TEST_CASE("A spawned range's source is no agent index", "[crowd][idl]")
 {
 	CHECK(crowd::idl::c_SpawnSource == std::numeric_limits<uint32_t>::max());
 	CHECK(crowd::idl::c_WalkingSpeedShare > 0.0f);
@@ -70,14 +70,14 @@ TEST_CASE("The crowd's GPU records survive a buffer at their stride", "[crowd][i
 	CHECK(groups[0].firstAgent == 40);
 	CHECK(groups[0].maxSpeed == 1.5f);
 
-	const auto spans = RoundTrip(
-		std::vector<crowd::idl::Span>{ { .firstAgent = 0,
-	                                     .source     = crowd::idl::c_SpawnSource,
-	                                     .agentCount = 9,
-	                                     .group      = 2,
-	                                     .firstSlot  = 3 } });
-	CHECK(spans[0].source == crowd::idl::c_SpawnSource);
-	CHECK(spans[0].firstSlot == 3);
+	const auto ranges = RoundTrip(
+		std::vector<crowd::idl::AgentRange>{ { .firstAgent       = 0,
+	                                           .sourceFirstAgent = crowd::idl::c_SpawnSource,
+	                                           .agentCount       = 9,
+	                                           .group            = 2,
+	                                           .firstSlot        = 3 } });
+	CHECK(ranges[0].sourceFirstAgent == crowd::idl::c_SpawnSource);
+	CHECK(ranges[0].firstSlot == 3);
 
 	const auto sums = RoundTrip(
 		std::vector<crowd::idl::GroupSum>{ { .meanPosition = glm::vec2(-1.0f, 1.0f),
@@ -92,6 +92,6 @@ TEST_CASE("The crowd's GPU records survive a buffer at their stride", "[crowd][i
 	                                           .velocityInertia = 0.01f,
 	                                           .agentCount      = 100,
 	                                           .groupCount      = 3,
-	                                           .spanCount       = 4 } });
-	CHECK(params[0].spanCount == 4);
+	                                           .agentRangeCount = 4 } });
+	CHECK(params[0].agentRangeCount == 4);
 }

@@ -10,7 +10,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
 #include <crowdlib/SolverDesc.h>
-#include <crowdlib/debug/AgentSnapshot.h>
+#include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -277,14 +277,14 @@ namespace crowd::test
 		return std::nullopt;
 	}
 
-	std::optional<debug::AgentSnapshot>
+	std::optional<debug::CrowdReadback>
 	FakeCrowd::ReadDebugAgents() const
 	{
 		if (!m_Desc.debugAgentReadback)
 			core::throw_runtime_error("The crowd was created without its debug agent readback");
 		if (GetCompletedTick() == 0)
 			return std::nullopt;
-		return debug::AgentSnapshot{ .tick   = GetCompletedTick(),
+		return debug::CrowdReadback{ .tick   = GetCompletedTick(),
 			                         .agents = m_Completed.agents,
 			                         .groups = m_Completed.groups };
 	}

@@ -8,7 +8,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
-#include <crowdlib/debug/AgentSnapshot.h>
+#include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <deque>
 #include <optional>
@@ -100,11 +100,11 @@ namespace crowd::test
 		[[nodiscard]] std::optional<GroupReport>
 		GetReport(GroupHandle group) const override;
 
-		[[nodiscard]] std::optional<debug::AgentSnapshot>
+		[[nodiscard]] std::optional<debug::CrowdReadback>
 		ReadDebugAgents() const override;
 
 		/**
-		 * Invalidates a snapshot ReadDebugAgents returned, as Wait does.
+		 * Invalidates a readback ReadDebugAgents returned, as Wait does.
 		 *
 		 * @throws std::runtime_error when no tick is in flight.
 		 */

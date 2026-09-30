@@ -8,5 +8,5 @@ public struct TickParams
 
     public uint agentCount;
     public uint groupCount;
-    public uint spanCount;
+    public uint agentRangeCount;
 };

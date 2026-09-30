@@ -90,8 +90,8 @@ each refuses; what follows is why it is shaped as it is.
 * **Plain C++ types, not IDL.** The descriptions carry validation rules and `std::vector`s; the
   GPU records they are packed into belong to the implementation, and go through the IDL with it.
 * **The crowd's IDL is its own.** The records its kernels share with the CPU — an agent, a group, a
-  span of agents moved from one tick's layout to the next, a tick's parameters, a report row, a
-  debug sample — are Slang modules under `shaders/src/crowd/idl/`, imported by the kernels as
+  range of one tick's agents and where it comes from in the last, a tick's parameters, a report
+  row, a debug record — are Slang modules under `shaders/src/crowd/idl/`, imported by the kernels as
   `crowd.idl.<Name>` and mirrored into C++ as `crowd::idl` by `bgpu_idlgen` ([idlgen.md](idlgen.md)).
   The debug record is public, so its module is generated with `--public` into the committed
   `include/crowdlib/debug/AgentReadback.h`, `crowd::debug`, and has no private twin. Not the
