@@ -2,6 +2,8 @@
 struct VSOut
 {
     float4 position : SV_Position;
+    // DXC rejects a mesh output that is SV_Position alone: "invalid for shader model: ms".
+    float2 uv : TEXCOORD;
 };
 
 [shader("mesh")]
@@ -15,6 +17,7 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
         float2 uv = float2((gtid << 1) & 2, gtid & 2);
         VSOut o;
         o.position = float4(uv * float2(2.0, -2.0) + float2(-1.0, 1.0), 0.5, 1.0);
+        o.uv = uv;
         verts[gtid] = o;
     }
     if (gtid == 0)
