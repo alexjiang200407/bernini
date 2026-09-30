@@ -165,12 +165,4 @@ namespace bgpu
 		m_PipelineState.Reset();
 		m_RootSignature.Reset();
 	}
-
-	MeshletPipelineDesc&
-	bgpu::MeshletPipelineDesc::AddRtvFormat(const Rtv& rtv)
-	{
-		auto& desc = rtv.GetDesc();
-		rtvFormats.push_back(desc.format);
-		return *this;
-	}
 }

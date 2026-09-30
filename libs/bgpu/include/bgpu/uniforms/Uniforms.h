@@ -20,7 +20,7 @@ namespace bgpu
 	class IComputePipeline;
 
 	/**
-	 * One constant buffer's mirror as this renderer binds it: the shared layout walk, plus the root
+	 * One constant buffer's mirror as the RHI binds it: the shared layout walk, plus the root
 	 * parameter D3D12 binds the bytes at. The handle types it accepts are the specialisations below.
 	 */
 	class Uniforms final : public UniformsBase

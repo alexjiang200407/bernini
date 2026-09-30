@@ -1125,9 +1125,8 @@ main(int argc, char** argv)
 	app.add_option(
 		"--extern",
 		externs,
-		"<dir>=<namespace>: a type whose module is <dir>/<Type>.slang is another library's, so it "
-	    "is "
-		"searched for there and named qualified by <namespace>");
+		"<dir>=<namespace>: another library's modules, searched like -I; a field whose type is "
+		"<dir>/<Type>.slang is emitted as <namespace>::<Type>");
 	app.add_flag(
 		"--metal-layout",
 		metalLayout,

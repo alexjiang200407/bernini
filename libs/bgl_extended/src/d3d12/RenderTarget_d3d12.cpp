@@ -6,6 +6,11 @@
 #include <bgpu/device/Device.h>
 #include <spdlog/spdlog.h>
 
+namespace
+{
+	using bgpu::d3d12ErrChecker;
+}
+
 namespace bgl
 {
 	RenderTarget::RenderTarget(

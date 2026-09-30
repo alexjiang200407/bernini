@@ -44,7 +44,7 @@ namespace bgpu
 		const uint32_t hardware = std::max(1u, std::thread::hardware_concurrency());
 		const uint32_t workers  = threads != 0 ? threads : std::min(hardware, c_MaxBuildThreads);
 
-		core::parallel_for(count, workers, "bgl pipeline build", [&](size_t index) {
+		core::parallel_for(count, workers, "bgpu pipeline build", [&](size_t index) {
 			if (index < m_MeshletRequests.size())
 			{
 				auto& [kernel, desc] = m_MeshletRequests[index];

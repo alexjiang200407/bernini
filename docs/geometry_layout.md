@@ -5,8 +5,8 @@ The structs that describe renderable geometry — `MeshInstance`, `Submesh`, `Me
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
 GPU: the shaders import the IDL modules under [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/)
 directly, and `bgl_idlgen` generates a byte-identical C++ mirror of each into the build tree at
-`<build>/generated/bgl_common/idl/`. Only the offset primitives are hand-written, in
-`libs/bgl_common/include/bgl_common/idl/`: they are generic, and a generic has no concrete layout to mirror.
+`<build>/generated/bgl_common/idl/`. Only the offset primitives are hand-written, and they are
+`bgpu`'s, in `libs/bgpu/include/bgpu/idl/`: they are generic, and a generic has no concrete layout to mirror.
 This document links the **generated shader slang** — the GPU-facing view is the one that drives
 rendering, and the C++ mirror pins the same offsets with `static_assert`s.
 

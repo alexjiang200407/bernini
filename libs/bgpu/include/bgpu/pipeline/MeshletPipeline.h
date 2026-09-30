@@ -1,6 +1,5 @@
 #pragma once
 #include <bgpu/constants/constants.h>
-#include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Shader.h>
 #include <bgpu/types/Format.h>
 #include <bgpu/types/RenderState.h>
@@ -48,9 +47,6 @@ namespace bgpu
 			pixelShader = std::move(shader);
 			return *this;
 		}
-
-		MeshletPipelineDesc&
-		AddRtvFormat(const Rtv& rtv);
 
 		MeshletPipelineDesc&
 		AddRtvFormat(const Format& fmt)

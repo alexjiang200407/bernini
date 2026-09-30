@@ -33,10 +33,10 @@ namespace
 		return device;
 	}
 
-	bgl::DescriptorAllocator
+	bgpu::DescriptorAllocator
 	MakeAllocator(ID3D12Device* device)
 	{
-		return bgl::DescriptorAllocator(
+		return bgpu::DescriptorAllocator(
 			device,
 			D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 			c_Capacity,
