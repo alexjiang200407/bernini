@@ -165,6 +165,23 @@ namespace bgl
 			spdlog::info("BGL initialized successfully.");
 		}
 
+		// The context's members free deferred once its queue is gone, so the sweep that reclaims
+		// them runs here rather than whenever the manager's last holder lets go.
+		~Graphics() noexcept override
+		{
+			m_Context.reset();
+			m_ResourceManager->CleanupExpiredResources();
+		}
+
+		Graphics(const Graphics&)     = delete;
+		Graphics(Graphics&&) noexcept = delete;
+
+		Graphics&
+		operator=(const Graphics&) = delete;
+
+		Graphics&
+		operator=(Graphics&&) noexcept = delete;
+
 		bgpu::IDevice*
 		GetDevice() const noexcept override
 		{

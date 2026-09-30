@@ -492,8 +492,7 @@ TEST_CASE(
 	auto                        pipelines = bgpu::PipelineBatch(device);
 	const auto ctx           = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 	auto       compactPass   = bgl::CompactInstancesPass(ctx);
-	auto       forwardPhases = bgl::ForwardPhases();
-	forwardPhases.Init(ctx);
+	auto       forwardPhases = bgl::ForwardPhases(ctx);
 	forwardPhases.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
 	pipelines.Build();
 	forwardPhases.CheckBindings();
@@ -569,7 +568,6 @@ TEST_CASE(
 	CHECK(stats->meshletGroupsCulled <= surelyCulled + borderline);
 
 	resourceManager->UnmapReadback(rbStats);
-	forwardPhases.Release();
 }
 
 #endif

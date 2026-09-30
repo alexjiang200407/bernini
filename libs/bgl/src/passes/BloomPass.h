@@ -59,7 +59,7 @@ namespace bgl
 			float scatter   = 0.0f;
 		};
 
-		BloomPass() = default;
+		explicit BloomPass(const PassInitContext& ctx);
 		~BloomPass() noexcept { spdlog::trace("~BloomPass"); }
 
 		BloomPass(const BloomPass&) noexcept = delete;
@@ -71,17 +71,7 @@ namespace bgl
 		BloomPass&
 		operator=(BloomPass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_DownsampleKernel.Reset();
-			m_UpsampleKernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

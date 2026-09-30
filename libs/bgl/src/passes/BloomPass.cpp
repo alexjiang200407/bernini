@@ -76,8 +76,7 @@ namespace bgl
 		}
 	}
 
-	void
-	BloomPass::Init(const PassInitContext& ctx)
+	BloomPass::BloomPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

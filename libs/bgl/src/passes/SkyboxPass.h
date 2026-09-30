@@ -18,7 +18,7 @@ namespace bgl
 	class SkyboxPass
 	{
 	public:
-		SkyboxPass() = default;
+		explicit SkyboxPass(const PassInitContext& ctx);
 		~SkyboxPass() noexcept { spdlog::trace("~SkyboxPass"); }
 
 		SkyboxPass(const SkyboxPass&) noexcept = delete;
@@ -30,16 +30,7 @@ namespace bgl
 		SkyboxPass&
 		operator=(SkyboxPass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

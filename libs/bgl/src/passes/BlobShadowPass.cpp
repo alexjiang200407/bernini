@@ -50,8 +50,7 @@ namespace bgl
 		};
 	}
 
-	void
-	BlobShadowPass::Init(const PassInitContext& ctx)
+	BlobShadowPass::BlobShadowPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

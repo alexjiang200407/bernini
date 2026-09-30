@@ -53,6 +53,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace bgl
@@ -163,7 +164,7 @@ namespace bgl
 		[[nodiscard]] bool
 		IsBrdfLutGenerated() const noexcept
 		{
-			return m_BrdfLut.Generated();
+			return m_BrdfLut.has_value() && m_BrdfLut->Generated();
 		}
 
 		/** The table every bucket id in this renderer was allocated by. */
@@ -250,18 +251,37 @@ namespace bgl
 		CaptureTicket
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
 
-		// Takes the start-up batch so every pass can request into it from the member-init list;
-		// the batch outlives them all because it is a parameter of this constructor.
+		// The start-up batch and the one context every always-on pass requests into. A parameter
+		// of the constructor below, so it outlives the whole member-init list and no longer.
+		struct StartupPasses
+		{
+			StartupPasses(
+				bgpu::IDevice*           device,
+				bgpu::ResourceManagerRef resourceManager,
+				const DrawBucketTable*   buckets) noexcept :
+				batch(device), context{ device, &batch, std::move(resourceManager), buckets }
+			{}
+
+			StartupPasses(const StartupPasses&) = delete;
+			StartupPasses(StartupPasses&&)      = delete;
+
+			StartupPasses&
+			operator=(const StartupPasses&) = delete;
+
+			StartupPasses&
+			operator=(StartupPasses&&) = delete;
+
+			bgpu::PipelineBatch batch;
+			PassInitContext     context;
+		};
+
 		RenderContext(
 			bgpu::DeviceRef                  device,
 			bgpu::ResourceManagerRef         resourceManager,
 			std::shared_ptr<DrawBucketTable> buckets,
 			std::span<const SurfaceType>     surfaceTypes,
 			bool                             enableDebug,
-			bgpu::PipelineBatch&&            pipelines);
-
-		[[nodiscard]] PassInitContext
-		MakePassInitContext(bgpu::PipelineBatch& pipelines) const noexcept;
+			StartupPasses&&                  startup);
 
 		bgpu::DeviceRef                  m_Device;
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
@@ -323,22 +343,23 @@ namespace bgl
 		// KindIsPbrLit answers from for a game kind.
 		std::vector<SurfaceShading> m_GameSurfaceShading;
 
-		BrdfLutGenPass       m_BrdfLut;
-		TonemapLut           m_TonemapLut;
-		BlackEnvironment     m_BlackEnvironment;
-		PreparePresentPass   m_PreparePresentPass;
-		ForwardPhases        m_Forward;
-		BlobShadowPass       m_BlobShadows;
-		SkyboxPass           m_Skybox;
-		PostProcessPass      m_PostProcess;
-		BloomPass            m_BloomPass;
-		OverlayPass          m_OverlayPass;
-		OutlineMaskPass      m_OutlineMask;
-		TaaResolvePass       m_TaaResolve;
-		CompactInstancesPass m_CompactInstances;
-		RigFramesPass        m_RigFrames;
-		SkinnedPosePass      m_SkinnedPose;
-		TransparentSortPass  m_TransparentSort;
+		// Built by the first Draw that shades a PBR-lit bucket.
+		std::optional<BrdfLutGenPass> m_BrdfLut;
+		TonemapLut                    m_TonemapLut;
+		BlackEnvironment              m_BlackEnvironment;
+		PreparePresentPass            m_PreparePresentPass;
+		ForwardPhases                 m_Forward;
+		BlobShadowPass                m_BlobShadows;
+		SkyboxPass                    m_Skybox;
+		PostProcessPass               m_PostProcess;
+		BloomPass                     m_BloomPass;
+		OverlayPass                   m_OverlayPass;
+		OutlineMaskPass               m_OutlineMask;
+		TaaResolvePass                m_TaaResolve;
+		CompactInstancesPass          m_CompactInstances;
+		RigFramesPass                 m_RigFrames;
+		SkinnedPosePass               m_SkinnedPose;
+		TransparentSortPass           m_TransparentSort;
 
 		bgpu::SamplerHandle m_PointClampSampler;
 

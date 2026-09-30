@@ -27,7 +27,7 @@ namespace bgl
 	class BlobShadowPass
 	{
 	public:
-		BlobShadowPass() = default;
+		explicit BlobShadowPass(const PassInitContext& ctx);
 		~BlobShadowPass() noexcept { spdlog::trace("~BlobShadowPass"); }
 
 		BlobShadowPass(const BlobShadowPass&) noexcept = delete;
@@ -39,16 +39,7 @@ namespace bgl
 		BlobShadowPass&
 		operator=(BlobShadowPass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

@@ -13,8 +13,7 @@
 
 namespace bgl
 {
-	void
-	RigFramesPass::Init(const PassInitContext& ctx)
+	RigFramesPass::RigFramesPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
@@ -23,13 +22,6 @@ namespace bgl
 			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.anim.PoseRigFrames"))
 				.SetDebugName("Pose Rig Frames"));
-	}
-
-	void
-	RigFramesPass::Release()
-	{
-		spdlog::trace("RigFramesPass::Release");
-		m_PoseRigFrames.Reset();
 	}
 
 	void

@@ -68,7 +68,7 @@ namespace bgl
 	class ForwardPhases
 	{
 	public:
-		ForwardPhases() = default;
+		explicit ForwardPhases(const PassInitContext& ctx);
 		~ForwardPhases() noexcept { spdlog::trace("~ForwardPhases"); }
 
 		ForwardPhases(const ForwardPhases&) noexcept = delete;
@@ -79,23 +79,6 @@ namespace bgl
 
 		ForwardPhases&
 		operator=(ForwardPhases&&) noexcept = delete;
-
-		void
-		Release()
-		{
-			for (bgpu::MeshletKernel& kernel : m_Kernels)
-			{
-				kernel.Reset();
-			}
-			for (bgpu::MeshletKernel& kernel : m_DissolveKernels)
-			{
-				kernel.Reset();
-			}
-			m_TransparentKernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
 
 		/**
 		 * Requests the kernels for the buckets set in `buckets` that are not already initialized --
@@ -125,7 +108,7 @@ namespace bgl
 			return m_TransparentKernel.pipeline.IsInitialized();
 		}
 
-		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name no PSO declares. */
 		void
 		CheckBindings() const;
 

@@ -207,11 +207,11 @@ namespace bgl
 		bool                             enableDebug) :
 		RenderContext(
 			device,
-			std::move(resourceManager),
-			std::move(buckets),
+			resourceManager,
+			buckets,
 			surfaceTypes,
 			enableDebug,
-			bgpu::PipelineBatch(device.Get()))
+			StartupPasses(device.Get(), resourceManager, buckets.get()))
 	{}
 
 	RenderContext::RenderContext(
@@ -220,13 +220,19 @@ namespace bgl
 		std::shared_ptr<DrawBucketTable> buckets,
 		std::span<const SurfaceType>     surfaceTypes,
 		bool                             enableDebug,
-		bgpu::PipelineBatch&&            pipelines) :
+		StartupPasses&&                  startup) :
 		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug),
-		m_CompactInstances(MakePassInitContext(pipelines))
+		m_TonemapLut(m_ResourceManager, c_TonemapLutFile), m_BlackEnvironment(m_ResourceManager),
+		m_Forward(startup.context), m_BlobShadows(startup.context), m_Skybox(startup.context),
+		m_PostProcess(startup.context), m_BloomPass(startup.context),
+		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
+		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
+		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
+		m_TransparentSort(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
 		,
-		m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
+		m_BufferPoisoner(m_ResourceManager), m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
 #endif
 	{
 		m_GameSurfaceShading.reserve(surfaceTypes.size());
@@ -249,21 +255,7 @@ namespace bgl
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
 		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
-		const auto passes = MakePassInitContext(pipelines);
-		m_RigFrames.Init(passes);
-		m_SkinnedPose.Init(passes);
-		m_TransparentSort.Init(passes);
-		m_Forward.Init(passes);
-		m_BlobShadows.Init(passes);
-		m_Skybox.Init(passes);
-		m_PostProcess.Init(passes);
-		m_BloomPass.Init(passes);
-		m_OverlayPass.Init(passes);
-		m_OutlineMask.Init(passes);
-		m_TaaResolve.Init(passes);
-		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
-		m_BlackEnvironment.Init(m_ResourceManager);
-		pipelines.Build();
+		startup.batch.Build();
 
 		m_Forward.CheckBindings();
 		m_BlobShadows.CheckBindings();
@@ -287,7 +279,6 @@ namespace bgl
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
 #if defined(BERNINI_GPU_DEBUG)
-		m_BufferPoisoner.Init(m_ResourceManager);
 		m_FrameGraph.SetBufferPoisoner(&m_BufferPoisoner);
 
 		for (auto& readback : m_DebugReadbacks)
@@ -298,15 +289,6 @@ namespace bgl
 			readback         = m_ResourceManager->CreateReadbackBuffer(rbDesc);
 		}
 #endif
-	}
-
-	PassInitContext
-	RenderContext::MakePassInitContext(bgpu::PipelineBatch& pipelines) const noexcept
-	{
-		return PassInitContext{ m_Device.Get(),
-			                    &pipelines,
-			                    m_ResourceManager,
-			                    m_DrawBucketTable.get() };
 	}
 
 	RenderContext::~RenderContext() noexcept
@@ -327,14 +309,6 @@ namespace bgl
 				m_ResourceManager->DestroyReadbackBuffer(slot.readback, false);
 			}
 		}
-		m_Forward.Release();
-		m_BlobShadows.Release();
-		m_Skybox.Release();
-		m_PostProcess.Release();
-		m_BloomPass.Release();
-		m_OverlayPass.Release();
-		m_OutlineMask.Release();
-		m_TaaResolve.Release();
 		if (!m_PointClampSampler.IsNull())
 		{
 			m_ResourceManager->DestroySampler(m_PointClampSampler, false);
@@ -343,12 +317,6 @@ namespace bgl
 		{
 			m_ResourceManager->DestroySampler(m_LinearClampSampler, false);
 		}
-		m_BrdfLut.Release();
-		m_TonemapLut.Release();
-		m_BlackEnvironment.Release();
-		m_RigFrames.Release();
-		m_SkinnedPose.Release();
-		m_TransparentSort.Release();
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The GPU is idle, so assertions from the final frames whose slot was never reused by a later
@@ -363,7 +331,6 @@ namespace bgl
 		}
 
 		m_FrameGraph.SetBufferPoisoner(nullptr);
-		m_BufferPoisoner.Release(false);
 #endif
 
 		// Clear retained passes; each pass descriptor holds a resource-manager reference that would
@@ -740,7 +707,7 @@ namespace bgl
 	void
 	RenderContext::EnsureBrdfLutExists(DrawBucketMask demanded)
 	{
-		if (m_BrdfLut.Generated())
+		if (m_BrdfLut.has_value() && m_BrdfLut->Generated())
 			return;
 
 		const DrawBucketTable& table  = *m_DrawBucketTable;
@@ -755,13 +722,17 @@ namespace bgl
 		// The same demand shape as the bucket kernels above: built by the first Draw that needs
 		// it, so a scene shaded entirely by lit surfaces never builds the pipeline or the texture.
 		auto pipelines = bgpu::PipelineBatch(m_Device.Get());
-		m_BrdfLut.Init(MakePassInitContext(pipelines));
+		m_BrdfLut.emplace(
+			PassInitContext{ m_Device.Get(),
+		                     &pipelines,
+		                     m_ResourceManager,
+		                     m_DrawBucketTable.get() });
 		pipelines.Build();
 		m_Device->ReleaseSlangSession();
 
 		// Recorded at the head of the open frame list, so every pass the frame graph records at
 		// EndFrame -- the first sampler of the table among them -- orders after the write.
-		m_BrdfLut.Generate(m_CommandList.Get());
+		m_BrdfLut->Generate(m_CommandList.Get());
 	}
 
 	void
@@ -892,7 +863,7 @@ namespace bgl
 			job.time - prevCamera.time);
 
 		auto env               = view->GetEnvironmentMap();
-		env.brdfLut            = m_BrdfLut.GetSrv();
+		env.brdfLut            = m_BrdfLut.has_value() ? m_BrdfLut->GetSrv() : bgpu::SrvHandle();
 		draw.lighting.env      = m_BlackEnvironment.Complete(env);
 		draw.lighting.exposure = view->GetExposure();
 

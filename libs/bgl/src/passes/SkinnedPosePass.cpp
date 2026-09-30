@@ -14,8 +14,7 @@
 
 namespace bgl
 {
-	void
-	SkinnedPosePass::Init(const PassInitContext& ctx)
+	SkinnedPosePass::SkinnedPosePass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
@@ -24,13 +23,6 @@ namespace bgl
 			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.anim.PoseSkinned"))
 				.SetDebugName("Pose Skinned"));
-	}
-
-	void
-	SkinnedPosePass::Release()
-	{
-		spdlog::trace("SkinnedPosePass::Release");
-		m_PoseSkinned.Reset();
 	}
 
 	void
