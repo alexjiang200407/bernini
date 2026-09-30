@@ -89,9 +89,13 @@ rm->RegisterQueue(queue.Get());
   accessors, the error checkers, and the out-of-line members of the RHI's concrete classes (the
   cbuffer mirror, the growable and compute buffers, the pipeline batch); the interfaces cross the
   boundary through virtual calls. `bgpu_selfcheck` compiles each public header against `bgpu`
-  alone, so none reaches into a renderer. On Metal it is
-  also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
-  user in the process links.
+  alone, so none reaches into a renderer. On Metal it is also the one translation unit that emits
+  metal-cpp's symbols, since it is the library every Metal user in the process links.
+* **The context never includes the RHI.** The RHI depends on the context and never the reverse, so
+  a consumer of the context alone could take it by a CMake split, with no code moved.
+  `bgpu_context_selfcheck` holds that: it stages the context's headers (`BGPU_CONTEXT_HEADERS` in
+  `libs/bgpu/CMakeLists.txt`) into a tree of their own and compiles each against it, so an include
+  of an RHI header fails to resolve. A new context header joins that list.
 
 ## Threading & Synchronization
 

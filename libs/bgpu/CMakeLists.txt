@@ -266,6 +266,42 @@ set_target_properties(bgpu_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 add_dependencies(bgpu_selfcheck bgpu_idl_generate)
 enable_strict_compiler(bgpu_selfcheck)
 
+# The context half -- the device, the Slang sessions, the program cache -- never includes the RHI
+# (docs/bgpu.md). bgpu_selfcheck cannot see that: it compiles against all of bgpu. This one stages only the
+# context's headers into a tree of their own and compiles each against it, so an include of an RHI
+# header fails to resolve. A new context header is added to the list; one left off is RHI by default.
+set(BGPU_CONTEXT_HEADERS
+	api.h
+	GpuContext.h
+	MemoryTag.h
+	ProgramCache.h
+	SlangErrorChecker.h
+	d3d12/D3d12ErrorChecker.h
+)
+if(RENDERER_BACKEND STREQUAL "METAL")
+	list(APPEND BGPU_CONTEXT_HEADERS metal/MetalErrorChecker.h)
+endif()
+set(BGPU_CONTEXT_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/context_include")
+set(BGPU_CONTEXT_SELFCHECK_SOURCES "")
+foreach(header ${BGPU_CONTEXT_HEADERS})
+	configure_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/${header}"
+		"${BGPU_CONTEXT_INCLUDE}/bgpu/${header}"
+		COPYONLY)
+	string(MAKE_C_IDENTIFIER "bgpu/${header}" check_name)
+	set(check_source "${CMAKE_CURRENT_BINARY_DIR}/context_selfcheck/${check_name}.cpp")
+	file(GENERATE OUTPUT ${check_source} CONTENT "#include <bgpu/${header}>\n")
+	list(APPEND BGPU_CONTEXT_SELFCHECK_SOURCES ${check_source})
+endforeach()
+add_library(bgpu_context_selfcheck STATIC ${BGPU_CONTEXT_SELFCHECK_SOURCES})
+# Not bgpu: its include directories are the ones this check exists to withhold.
+target_include_directories(bgpu_context_selfcheck PRIVATE ${BGPU_CONTEXT_INCLUDE})
+target_link_libraries(bgpu_context_selfcheck PRIVATE core slang::slang)
+target_compile_definitions(bgpu_context_selfcheck
+	PRIVATE $<TARGET_PROPERTY:bgpu,INTERFACE_COMPILE_DEFINITIONS>)
+set_target_properties(bgpu_context_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+enable_strict_compiler(bgpu_context_selfcheck)
+
 # The suite needs a device, so there is none without a backend.
 if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	find_package(Catch2 CONFIG REQUIRED)
