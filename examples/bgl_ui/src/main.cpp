@@ -8,8 +8,8 @@
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>

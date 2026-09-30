@@ -7,9 +7,9 @@
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IScene.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/RigHandle.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/RigHandle.h>
 #include <bgl_common/idl/BlendNode.h>
 #include <bgl_common/idl/BlendNodeKind.h>
 #include <bgl_common/idl/BlendSpaceSample.h>

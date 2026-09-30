@@ -1,8 +1,8 @@
 #include <assetlib/envmap.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/SkyboxDesc.h>
 #include <bgl/glm.h>
+#include <bgl/types/SkyboxDesc.h>
 #include <editor_sdk/environment.h>
 
 #include <QLoggingCategory>

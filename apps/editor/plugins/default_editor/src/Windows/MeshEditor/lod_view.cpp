@@ -4,7 +4,8 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <bgl/glm.h>
-#include <bgl/lod_select.h>
+#include <core/math.h>
+#include <gamelib/lod_select.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -37,7 +38,7 @@ namespace editor
 			minBound = glm::min(minBound, submesh.aabbMin);
 			maxBound = glm::max(maxBound, submesh.aabbMax);
 		}
-		lods.levelZeroSphere = bgl::BoundingSphereOf(minBound, maxBound);
+		lods.levelZeroSphere = core::bounding_sphere_of(minBound, maxBound);
 		return lods;
 	}
 
@@ -52,8 +53,8 @@ namespace editor
 		const std::optional<uint32_t> previous) noexcept
 	{
 		auto readout   = LodReadout();
-		readout.pixels = bgl::ProjectedDiameter(
-			bgl::TransformSphere(world, lods.levelZeroSphere),
+		readout.pixels = game::ProjectedDiameter(
+			game::TransformSphere(world, lods.levelZeroSphere),
 			eye,
 			pixelsPerUnit);
 
@@ -61,7 +62,7 @@ namespace editor
 		if (forced.has_value() && count > 0)
 			readout.level = std::min(*forced, count - 1);
 		else
-			readout.level = bgl::ChooseLevel(lods.minPixels, readout.pixels, pixelScale, previous);
+			readout.level = game::ChooseLevel(lods.minPixels, readout.pixels, pixelScale, previous);
 		return readout;
 	}
 }

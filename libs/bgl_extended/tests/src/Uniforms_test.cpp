@@ -5,7 +5,7 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/MeshletPipeline.h>

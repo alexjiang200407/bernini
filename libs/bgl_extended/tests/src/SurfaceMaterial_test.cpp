@@ -4,20 +4,20 @@
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/Camera.h>
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <array>

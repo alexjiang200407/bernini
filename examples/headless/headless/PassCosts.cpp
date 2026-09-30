@@ -1,7 +1,7 @@
 #include <algorithm>
-#include <bgl/PassHistory.h>
 #include <cstddef>
 #include <format>
+#include <gamelib/PassHistory.h>
 #include <headless/PassCosts.h>
 #include <optional>
 #include <ostream>
@@ -26,7 +26,7 @@ namespace headless
 	}
 
 	PassCosts
-	SummarisePasses(const bgl::PassHistory& history)
+	SummarisePasses(const game::PassHistory& history)
 	{
 		auto costs = PassCosts();
 

@@ -2,13 +2,13 @@
 #include <algorithm>
 #include <bgl/GeomType.h>
 #include <bgl/LodLevel.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DrawBucket.h>

@@ -6,7 +6,7 @@
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/OverlayVertex.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>

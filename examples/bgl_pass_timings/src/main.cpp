@@ -7,18 +7,18 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/IGraphics.h>
-#include <bgl/PassHistory.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
-#include <bgl/pass_timing_csv.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/Viewport.h>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <gamelib/AssetManager.h>
+#include <gamelib/PassHistory.h>
+#include <gamelib/pass_timing_csv.h>
 #include <headless/PassCosts.h>
 #include <headless/framing.h>
 #include <headless/headless_render.h>
@@ -64,7 +64,7 @@ namespace
 	};
 
 	void
-	Report(const bgl::PassHistory& history, const Options& opts)
+	Report(const game::PassHistory& history, const Options& opts)
 	{
 		std::cout << std::format(
 			"\n{} frames of {} at {}x{}, render scale {}, {}, TAA {}, sharpness {}, {} dropped to "
@@ -172,9 +172,9 @@ try
 	job.camera   = headless::FrameBounds(bounds, opts.width, opts.height);
 	job.viewport = bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
-	bgl::PassHistory history(opts.frames);
-	uint64_t         lastFrame = 0;
-	uint32_t         resolved  = 0;
+	game::PassHistory history(opts.frames);
+	uint64_t          lastFrame = 0;
+	uint32_t          resolved  = 0;
 
 	// A frame's samples land once its fence has passed, so a draw does not always produce a row --
 	// hence a budget rather than a count. A device with no pass-boundary timestamp produces none at
@@ -212,7 +212,7 @@ try
 		std::cerr << std::format("Could not write {}\n", opts.out);
 		return 1;
 	}
-	csv << bgl::PassHistoryCsv(history);
+	csv << game::PassHistoryCsv(history);
 	csv.close();
 
 	Report(history, opts);

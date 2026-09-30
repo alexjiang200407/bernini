@@ -5,19 +5,19 @@
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/types/ChannelRouteDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/LayerType.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>

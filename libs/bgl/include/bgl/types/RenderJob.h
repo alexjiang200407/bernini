@@ -1,7 +1,7 @@
 #pragma once
-#include <bgl/Camera.h>
 #include <bgl/ISceneView.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/Viewport.h>
 #include <core/ref/SharedRef.h>
 
 namespace bgl

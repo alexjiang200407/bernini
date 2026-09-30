@@ -3,14 +3,14 @@
 #include <algorithm>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
-#include <bgl/GrassHandle.h>
 #include <bgl/IScene.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/glm.h>
+#include <bgl/types/GeomHandle.h>
 #include <bgl/types/GrassDesc.h>
+#include <bgl/types/GrassHandle.h>
+#include <bgl/types/LayerType.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GrassChunk.h>
 #include <bgl_common/idl/GrassClump.h>

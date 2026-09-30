@@ -5,7 +5,7 @@
 #include "overlay/Overlay.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/device/Device.h>

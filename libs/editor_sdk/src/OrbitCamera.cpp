@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 #include <cmath>
 #include <editor_sdk/OrbitCamera.h>
 

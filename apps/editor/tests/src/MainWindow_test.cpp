@@ -26,12 +26,12 @@
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <cstdint>
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorViewport.h>

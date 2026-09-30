@@ -8,7 +8,7 @@ class QPainter;
 class QPalette;
 class QRect;
 
-namespace bgl
+namespace game
 {
 	class PassHistory;
 }
@@ -25,7 +25,7 @@ namespace editor
 	 * @return nullopt outside the plotted area, and when there is nothing recorded.
 	 */
 	[[nodiscard]] std::optional<std::size_t>
-	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, int x);
+	PassGraphSampleAt(const QRect& rect, const game::PassHistory& history, int x);
 
 	/**
 	 * Draws the latest 600 samples of `history` over `rect`, oldest visible sample at the left: one band per pass in
@@ -45,7 +45,7 @@ namespace editor
 	PaintPassGraph(
 		QPainter&                  painter,
 		const QRect&               rect,
-		const bgl::PassHistory&    history,
+		const game::PassHistory&   history,
 		std::optional<std::size_t> selected,
 		const QPalette&            palette);
 }

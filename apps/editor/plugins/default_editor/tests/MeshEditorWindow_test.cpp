@@ -19,9 +19,9 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
-#include <bgl/LayerType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
+#include <bgl/types/LayerType.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>

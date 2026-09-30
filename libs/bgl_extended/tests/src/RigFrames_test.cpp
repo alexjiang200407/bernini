@@ -10,7 +10,7 @@
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
-#include <bgl/RigHandle.h>
+#include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgpu/cmd/CommandAllocator.h>

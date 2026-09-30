@@ -1,6 +1,6 @@
 #pragma once
-#include <bgl/PassHistory.h>
 #include <cstddef>
+#include <gamelib/PassHistory.h>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -30,7 +30,7 @@ namespace headless
 	 * took. A frame the graph culled a pass from is not a zero-cost sample for it: it is left out.
 	 */
 	[[nodiscard]] PassCosts
-	SummarisePasses(const bgl::PassHistory& history);
+	SummarisePasses(const game::PassHistory& history);
 
 	/** The costs as a fixed-width table, the frame total ruled off below the passes. */
 	void

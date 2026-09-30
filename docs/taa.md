@@ -107,7 +107,7 @@ catalog](docs/api_catalog.md).
 
 * **The client's `Camera` never carries the jitter.** `RenderContext::Draw` left-multiplies a
   clip-space translation onto the projection it builds, so the public
-  [Camera](libs/bgl/include/bgl/Camera.h) a caller reads back for picking or gizmo placement is the
+  [Camera](libs/bgl/include/bgl/types/Camera.h) a caller reads back for picking or gizmo placement is the
   one they set. A translation rather than a poke at the projection's own terms: it adds
   `jitter * clip.w` to `clip.xy`, which lands as a constant NDC offset after the divide and is
   correct for an orthographic camera too.

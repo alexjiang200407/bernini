@@ -4,7 +4,7 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/ComputePipeline.h>

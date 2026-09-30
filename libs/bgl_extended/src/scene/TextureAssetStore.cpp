@@ -3,7 +3,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Srv.h>

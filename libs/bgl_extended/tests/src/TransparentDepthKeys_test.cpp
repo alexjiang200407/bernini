@@ -7,8 +7,8 @@
 #include "util/util.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>

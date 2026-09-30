@@ -14,21 +14,19 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
-#include <bgl/Camera.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/PassHistory.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
-#include <bgl/pass_timing_csv.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
 #include <core/err/util.h>
 #include <cstddef>
@@ -39,6 +37,8 @@
 #include <fstream>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ClipInfo.h>
+#include <gamelib/PassHistory.h>
+#include <gamelib/pass_timing_csv.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <headless/PassCosts.h>
 #include <headless/framing.h>
@@ -589,9 +589,9 @@ try
 
 	target->SetGpuTimingEnabled(true);
 
-	bgl::PassHistory history(opts.frames);
-	uint64_t         lastRow = 0;
-	const auto       collect = [&] {
+	game::PassHistory history(opts.frames);
+	uint64_t          lastRow = 0;
+	const auto        collect = [&] {
 		const bgl::PassTimings timings = graphics->GetPassTimings(target);
 		if (timings.passes.empty() || timings.frame == lastRow)
 			return;
@@ -639,7 +639,7 @@ try
 	{
 		core::throw_runtime_error("Could not write {}", csvPath.string());
 	}
-	csv << bgl::PassHistoryCsv(history);
+	csv << game::PassHistoryCsv(history);
 	csv.close();
 
 	std::cout << std::format("\n{} frames timed\n\n", history.SampleCount());

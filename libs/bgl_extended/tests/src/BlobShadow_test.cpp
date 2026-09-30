@@ -2,11 +2,11 @@
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

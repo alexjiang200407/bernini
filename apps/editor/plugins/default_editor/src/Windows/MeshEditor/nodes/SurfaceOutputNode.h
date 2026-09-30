@@ -9,7 +9,7 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <filesystem>
 #include <qjsonobject.h>

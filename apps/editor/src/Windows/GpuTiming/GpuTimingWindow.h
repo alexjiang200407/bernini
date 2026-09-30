@@ -2,12 +2,12 @@
 
 #include <QString>
 #include <QWidget>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <cstddef>
 #include <qtmetamacros.h>
 #include <vector>
 
-#include <bgl/PassHistory.h>
+#include <gamelib/PassHistory.h>
 
 class QDir;
 class QLabel;
@@ -58,7 +58,7 @@ namespace editor
 		[[nodiscard]] QString
 		Export(const QDir& directory);
 
-		[[nodiscard]] const bgl::PassHistory&
+		[[nodiscard]] const game::PassHistory&
 		History() const noexcept
 		{
 			return m_History;
@@ -91,11 +91,11 @@ namespace editor
 
 		static constexpr std::size_t c_CaptureCapacity = 3600;
 
-		bgl::PassHistory m_History{ c_CaptureCapacity };
-		PassGraphView*   m_Graph  = nullptr;
-		QLabel*          m_Status = nullptr;
-		QPushButton*     m_Pause  = nullptr;
-		QString          m_Source;
-		bool             m_Paused = false;
+		game::PassHistory m_History{ c_CaptureCapacity };
+		PassGraphView*    m_Graph  = nullptr;
+		QLabel*           m_Status = nullptr;
+		QPushButton*      m_Pause  = nullptr;
+		QString           m_Source;
+		bool              m_Paused = false;
 	};
 }

@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>

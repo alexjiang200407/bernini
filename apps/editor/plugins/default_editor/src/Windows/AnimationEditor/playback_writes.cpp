@@ -2,7 +2,7 @@
 
 #include "Windows/AnimationEditor/transition_spans.h"
 
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>

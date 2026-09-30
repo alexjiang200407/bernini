@@ -4,7 +4,7 @@
 #include <gamelib/ClipInfo.h>
 #include <span>
 
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 
 namespace game
 {

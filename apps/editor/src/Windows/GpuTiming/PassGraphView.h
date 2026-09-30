@@ -9,7 +9,7 @@ class QMouseEvent;
 class QPaintEvent;
 class QEvent;
 
-namespace bgl
+namespace game
 {
 	class PassHistory;
 }
@@ -27,7 +27,7 @@ namespace editor
 		Q_OBJECT
 
 	public:
-		explicit PassGraphView(const bgl::PassHistory& history, QWidget* parent = nullptr);
+		explicit PassGraphView(const game::PassHistory& history, QWidget* parent = nullptr);
 
 		/** The sample under the pointer, or nullopt when the pointer is elsewhere. */
 		[[nodiscard]] std::optional<std::size_t>
@@ -47,7 +47,7 @@ namespace editor
 		leaveEvent(QEvent* event) override;
 
 	private:
-		const bgl::PassHistory&    m_History;
+		const game::PassHistory&   m_History;
 		std::optional<std::size_t> m_Marked;
 	};
 }

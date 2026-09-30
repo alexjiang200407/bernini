@@ -8,7 +8,7 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include <algorithm>
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <cstddef>
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>

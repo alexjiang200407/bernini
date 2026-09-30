@@ -12,7 +12,7 @@
 
 namespace editor
 {
-	PassGraphView::PassGraphView(const bgl::PassHistory& history, QWidget* parent) :
+	PassGraphView::PassGraphView(const game::PassHistory& history, QWidget* parent) :
 		QWidget(parent), m_History(history)
 	{
 		setObjectName("PassGraphView");

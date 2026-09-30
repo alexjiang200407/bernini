@@ -21,9 +21,9 @@
 #include <assetlib_structs/Mesh.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <editor_plugin_api/localize.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/BackgroundTask.h>

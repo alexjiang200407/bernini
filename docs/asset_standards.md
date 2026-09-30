@@ -493,7 +493,7 @@ object meant to switch as one is one mesh with a primitive per material.
 * **Looking at them.** The Mesh Editor's *Level of Detail* selector, above its submesh selector,
   offers the levels of the mesh the selected submesh belongs to. *Auto* is the game's own choice and
   names the level it draws (`Auto: LOD 1`), read with the cull's arithmetic
-  ([lod_select.h](libs/bgl/include/bgl/lod_select.h)) against the preview's first placement of that
+  ([lod_select.h](libs/gamelib/include/gamelib/lod_select.h)) against the preview's first placement of that
   mesh; a level pins every placement to it (`ISceneView::SetLodSelection`), which is how a coarse
   level is inspected up close. The selection outline follows the level drawn. It reads the
   thresholds and does not edit them.

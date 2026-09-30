@@ -3,16 +3,16 @@
 #include "util/SkinnedSynth.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <catch2/catch_test_macros.hpp>

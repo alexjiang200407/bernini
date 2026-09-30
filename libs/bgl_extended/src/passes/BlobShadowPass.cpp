@@ -9,8 +9,8 @@
 #include "scene/scene_buffer_names.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl/Viewport.h>
 #include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>

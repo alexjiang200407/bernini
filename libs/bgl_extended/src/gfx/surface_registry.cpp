@@ -3,10 +3,10 @@
 #include "gfx/DrawBucketTable.h"
 #include "passes/draw_bucket_config.h"
 #include "util/util.h"
-#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
+#include <bgl/types/LayerType.h>
 #include <bgl_common/SurfaceReflection.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgpu/GpuContext.h>

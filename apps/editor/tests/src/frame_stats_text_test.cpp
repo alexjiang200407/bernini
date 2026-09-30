@@ -1,6 +1,6 @@
 #include "util/frame_stats_text.h"
 
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <catch2/catch_test_macros.hpp>
 #include <optional>
 #include <qobject.h>

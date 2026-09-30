@@ -13,7 +13,7 @@
 
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
-#include <bgl/GeomHandle.h>
+#include <bgl/types/GeomHandle.h>
 #include <editor_sdk/BMeshUtil.h>
 #include <editor_sdk/BackgroundTask.h>
 #include <editor_sdk/mesh_drop.h>
@@ -36,18 +36,18 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
-#include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
-#include <bgl/Viewport.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/Viewport.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
+#include <gamelib/lod_select.h>
 #include <limits>
 #include <optional>
 #include <qlogging.h>
@@ -695,7 +695,7 @@ MeshPreviewWindow::ReadShownLod()
 	if (placement == m_Instances.end())
 		return std::nullopt;
 
-	const float pixelsPerUnit = bgl::PixelsPerUnit(
+	const float pixelsPerUnit = game::PixelsPerUnit(
 		bgl::Viewport(1.0f, static_cast<float>(renderRows)),
 		m_Camera.GetViewProjection());
 	const editor::LodReadout readout = editor::ReadLod(

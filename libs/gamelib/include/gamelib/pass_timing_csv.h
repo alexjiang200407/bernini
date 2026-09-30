@@ -1,11 +1,11 @@
 #pragma once
-#include <bgl/PassHistory.h>
 #include <cstddef>
 #include <format>
+#include <gamelib/PassHistory.h>
 #include <optional>
 #include <string>
 
-namespace bgl
+namespace game
 {
 	namespace detail
 	{

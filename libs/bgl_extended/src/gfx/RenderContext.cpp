@@ -27,11 +27,10 @@
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/Viewport.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/jitter.h>
 #include <bgpu/constants/constants.h>
@@ -862,9 +861,8 @@ namespace bgl
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.viewState.cameraPos = glm::vec3(invView[3]);
-		draw.viewState.pixelsPerUnit =
-			PixelsPerUnit(ToContractViewport(viewport), camera.unjitteredViewProj);
+		draw.viewState.cameraPos     = glm::vec3(invView[3]);
+		draw.viewState.pixelsPerUnit = PixelsPerUnit(viewport, camera.unjitteredViewProj);
 		ResolveLodSelection(
 			draw.viewState.cullView,
 			view->GetLodSelection(),

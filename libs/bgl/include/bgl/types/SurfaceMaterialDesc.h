@@ -1,8 +1,8 @@
 #pragma once
-#include <bgl/LayerType.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/TextureAssetHandle.h>
 
 #include <array>
 #include <cstddef>

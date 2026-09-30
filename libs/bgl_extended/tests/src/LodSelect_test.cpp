@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "gfx/viewport.h"
 #include "scene/CullState.h"
 #include "scene/SceneView.h"
 #include "util/LodMesh.h"
@@ -6,21 +7,20 @@
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <array>
-#include <bgl/Camera.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
-#include <bgl/MeshInstanceHandle.h>
-#include <bgl/RenderJob.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/GeomHandle.h>
 #include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgpu/cmd/CommandAllocator.h>
@@ -30,12 +30,14 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/QueueType.h>
+#include <bgpu/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <gamelib/lod_select.h>
 #include <optional>
 #include <vector>
 
@@ -263,10 +265,10 @@ TEST_CASE("the size test a tool reads chooses the level the cull chose", "[lod][
 	// Frame()'s camera stands at the origin looking down -Z, so its view is the identity.
 	const glm::mat4 viewProj =
 		bgl::Camera().Perspective(glm::radians(90.0f), 1.0f, 0.1f, 200.0f).GetProjection();
-	const float pixelsPerUnit = bgl::PixelsPerUnit(
+	const float pixelsPerUnit = game::PixelsPerUnit(
 		bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size)),
 		viewProj);
-	const glm::vec4 sphere = bgl::BoundingSphereOf(glm::vec3(-1.0f), glm::vec3(1.0f));
+	const glm::vec4 sphere = core::bounding_sphere_of(glm::vec3(-1.0f), glm::vec3(1.0f));
 
 	const std::array<glm::mat4, 5> worlds = {
 		LodScene::At(DistanceFor(55.0f)),
@@ -280,12 +282,12 @@ TEST_CASE("the size test a tool reads chooses the level the cull chose", "[lod][
 	{
 		INFO("placement " << i);
 		REQUIRE(reads[i].lod.level.has_value());
-		const float size = bgl::ProjectedDiameter(
-			bgl::TransformSphere(worlds[i], sphere),
+		const float size = game::ProjectedDiameter(
+			game::TransformSphere(worlds[i], sphere),
 			glm::vec3(0.0f),
 			pixelsPerUnit);
 		CHECK(
-			bgl::ChooseLevel(c_Thresholds, size, 1.0f, std::nullopt) ==
+			game::ChooseLevel(c_Thresholds, size, 1.0f, std::nullopt) ==
 			static_cast<uint32_t>(*reads[i].lod.level));
 	}
 }
@@ -393,4 +395,15 @@ TEST_CASE("a change of level dissolves: both levels draw until it ends", "[lod][
 		CHECK_FALSE(read.lod.outgoing.has_value());
 		CHECK(read.visible == 0u);
 	}
+}
+
+// The renderer sizes the cull's pixels-per-unit itself (gfx/viewport.h), and the editor's LOD view
+// asks gamelib; neither links the other, so this is what keeps the two on one answer.
+TEST_CASE("The renderer and gamelib measure pixels per unit alike", "[lod]")
+{
+	const glm::mat4 viewProj =
+		bgl::Camera().Perspective(glm::radians(70.0f), 1.5f, 0.1f, 500.0f).GetProjection();
+	CHECK(
+		bgl::PixelsPerUnit(bgpu::Viewport(0.0f, 960.0f, 0.0f, 640.0f, 0.0f, 1.0f), viewProj) ==
+		game::PixelsPerUnit(bgl::Viewport(0.0f, 960.0f, 0.0f, 640.0f, 0.0f, 1.0f), viewProj));
 }

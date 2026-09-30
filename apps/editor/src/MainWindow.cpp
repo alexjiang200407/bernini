@@ -73,7 +73,7 @@
 
 #include <QDebug>
 #include <QKeySequence>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <core/str/str.h>
 #include <memory>
 #include <optional>

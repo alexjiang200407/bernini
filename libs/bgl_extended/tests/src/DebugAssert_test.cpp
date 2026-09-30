@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

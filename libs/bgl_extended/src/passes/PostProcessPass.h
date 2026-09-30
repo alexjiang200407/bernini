@@ -1,7 +1,7 @@
 #pragma once
 #include "passes/PassInitContext.h"
 #include <bgl/IRenderTarget.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/Viewport.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>

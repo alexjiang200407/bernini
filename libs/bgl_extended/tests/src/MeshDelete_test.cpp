@@ -12,9 +12,9 @@
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/idl.h>
 #include <bgpu/cmd/CommandAllocator.h>

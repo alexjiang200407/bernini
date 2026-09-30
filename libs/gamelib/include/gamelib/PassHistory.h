@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace game
 {
 	/**
 	 * The last N timed frames of one render target, as a table of passes against frames: what a
@@ -20,7 +20,7 @@ namespace bgl
 	 * A frame graph does not run the same passes every frame -- a culled pass leaves no row, and
 	 * turning TAA off removes two -- so the passes are a union in execution order, and a cell is
 	 * empty where that pass did not run in that frame. Empty is not zero: zero is a pass that ran
-	 * and could not be sampled, which PassTiming already reports as such.
+	 * and could not be sampled, which bgl::PassTiming already reports as such.
 	 */
 	class PassHistory
 	{
@@ -39,7 +39,7 @@ namespace bgl
 		 * resolves does not record the same frame twice.
 		 */
 		void
-		Append(const PassTimings& timings)
+		Append(const bgl::PassTimings& timings)
 		{
 			if (timings.passes.empty() || timings.frame == m_LastFrame)
 				return;
@@ -51,7 +51,7 @@ namespace bgl
 			sample.frame = timings.frame;
 			sample.milliseconds.assign(m_Passes.size(), std::nullopt);
 
-			for (const PassTiming& row : timings.passes)
+			for (const bgl::PassTiming& row : timings.passes)
 			{
 				const auto column = std::ranges::find(m_Passes, row.name);
 				sample.milliseconds[static_cast<std::size_t>(
@@ -139,10 +139,10 @@ namespace bgl
 		// Merges a frame's pass names into m_Passes, keeping execution order: a pass first seen part
 		// way through the history belongs beside the pass it ran after, not at the end of the table.
 		void
-		MergePasses(const std::vector<PassTiming>& passes)
+		MergePasses(const std::vector<bgl::PassTiming>& passes)
 		{
 			std::size_t after = 0;
-			for (const PassTiming& row : passes)
+			for (const bgl::PassTiming& row : passes)
 			{
 				const auto known = std::ranges::find(m_Passes, row.name);
 				if (known != m_Passes.end())

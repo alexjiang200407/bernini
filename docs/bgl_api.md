@@ -460,7 +460,7 @@ flowchart TD
   swap). Per view, and **not** an epoch change: the cull reads it as it selects, so a new selection
   arrives through the same dissolve a change of size does. The choice is never read back: a tool
   that says which level a placement draws runs the same size test on the CPU,
-  [lod_select.h](libs/bgl/include/bgl/lod_select.h), which the renderer computes its own inputs
+  [lod_select.h](libs/gamelib/include/gamelib/lod_select.h), which the renderer computes its own inputs
   through and `LodSelect_test` pins to the GPU's choice.
 
 ---

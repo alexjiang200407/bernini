@@ -9,10 +9,10 @@
 
 #include <QStringList>
 
-#include <bgl/Camera.h>
-#include <bgl/GeomHandle.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
 #include <cstdint>
 #include <filesystem>
 #include <gamelib/Raycaster.h>

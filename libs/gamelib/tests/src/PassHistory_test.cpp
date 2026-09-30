@@ -1,10 +1,10 @@
-#include <bgl/PassHistory.h>
+#include <gamelib/PassHistory.h>
 
-#include <bgl/PassTiming.h>
-#include <bgl/pass_timing_csv.h>
+#include <bgl/types/PassTiming.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <gamelib/pass_timing_csv.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,7 +39,7 @@ namespace
 
 TEST_CASE("A frame already recorded is not recorded twice", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 
 	history.Append(Frame(7, { { .name = "Clear", .milliseconds = 1.0 } }));
 	history.Append(Frame(7, { { .name = "Clear", .milliseconds = 1.0 } }));
@@ -52,7 +52,7 @@ TEST_CASE("A frame already recorded is not recorded twice", "[passhistory]")
 
 TEST_CASE("A read that resolved no rows records nothing", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 
 	history.Append(Frame(0, {}));
 
@@ -62,7 +62,7 @@ TEST_CASE("A read that resolved no rows records nothing", "[passhistory]")
 
 TEST_CASE("The oldest samples fall off the end once the history is full", "[passhistory]")
 {
-	bgl::PassHistory history(3);
+	game::PassHistory history(3);
 
 	for (uint64_t frame = 1; frame <= 5; ++frame)
 	{
@@ -77,7 +77,7 @@ TEST_CASE("The oldest samples fall off the end once the history is full", "[pass
 
 TEST_CASE("A pass that appears part way through lands in execution order", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 
 	history.Append(Frame(
 		1,
@@ -106,7 +106,7 @@ TEST_CASE("A pass that appears part way through lands in execution order", "[pas
 
 TEST_CASE("A frame's total is what its passes cost together", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 
 	history.Append(Frame(
 		1,
@@ -123,7 +123,7 @@ TEST_CASE("A frame's total is what its passes cost together", "[passhistory]")
 
 TEST_CASE("Clearing forgets the frames and the passes", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 
 	history.Append(Frame(1, { { .name = "Clear", .milliseconds = 0.5 } }));
 	history.Clear();
@@ -139,12 +139,12 @@ TEST_CASE("Clearing forgets the frames and the passes", "[passhistory]")
 
 TEST_CASE("The CSV holds a header even with nothing recorded", "[passhistory]")
 {
-	CHECK(bgl::PassHistoryCsv(bgl::PassHistory()) == "sample,frame,total\n");
+	CHECK(game::PassHistoryCsv(game::PassHistory()) == "sample,frame,total\n");
 }
 
 TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	history.Append(Frame(
 		11,
 		{ { .name = "Clear", .milliseconds = 0.125 },
@@ -154,7 +154,7 @@ TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[pass
 		{ { .name = "Clear", .milliseconds = 0.125 },
 	      { .name = "Forward 0", .milliseconds = 1.0 } }));
 
-	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
+	const std::vector<std::string> lines = Lines(game::PassHistoryCsv(history));
 
 	REQUIRE(lines.size() == 4);
 	CHECK(lines[0] == "sample,frame,Clear,Forward 0,total");
@@ -165,7 +165,7 @@ TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[pass
 
 TEST_CASE("A pass that did not run leaves the field empty, not zero", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	history.Append(Frame(1, { { .name = "Clear", .milliseconds = 0.125 } }));
 	history.Append(Frame(
 		2,
@@ -173,7 +173,7 @@ TEST_CASE("A pass that did not run leaves the field empty, not zero", "[passhist
 	      // Zero is a pass that ran and could not be sampled, and must survive as a figure.
 	      { .name = "SceneUpdate 0", .milliseconds = 0.0 } }));
 
-	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
+	const std::vector<std::string> lines = Lines(game::PassHistoryCsv(history));
 
 	REQUIRE(lines.size() >= 3);
 	CHECK(lines[1] == "0,1,0.125,,0.125");
@@ -182,10 +182,10 @@ TEST_CASE("A pass that did not run leaves the field empty, not zero", "[passhist
 
 TEST_CASE("A pass name carrying a comma stays one field", "[passhistory]")
 {
-	bgl::PassHistory history;
+	game::PassHistory history;
 	history.Append(Frame(1, { { .name = "Forward, part 2", .milliseconds = 1.0 } }));
 
-	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
+	const std::vector<std::string> lines = Lines(game::PassHistoryCsv(history));
 
 	CHECK(lines[0] == "sample,frame,\"Forward, part 2\",total");
 }

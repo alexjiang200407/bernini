@@ -22,8 +22,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <Qt>
-#include <bgl/PassTiming.h>
-#include <bgl/pass_timing_csv.h>
+#include <bgl/types/PassTiming.h>
+#include <gamelib/pass_timing_csv.h>
 #include <qcontainerfwd.h>
 #include <qlogging.h>
 #include <qtmetamacros.h>
@@ -147,7 +147,7 @@ namespace editor
 		metadata.replace('"', "\"\"");
 		QTextStream stream(&csv);
 		stream << "# export_context_json,\"" << metadata << "\"\n";
-		stream << QString::fromStdString(bgl::PassHistoryCsv(m_History));
+		stream << QString::fromStdString(game::PassHistoryCsv(m_History));
 		stream.flush();
 		csv.close();
 

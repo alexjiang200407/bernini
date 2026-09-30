@@ -7,10 +7,10 @@
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

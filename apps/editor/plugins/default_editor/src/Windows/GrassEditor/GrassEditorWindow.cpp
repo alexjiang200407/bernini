@@ -1,5 +1,5 @@
 #include "GrassEditorWindow.h"
-#include <bgl/Camera.h>
+#include <bgl/types/Camera.h>
 #include <editor_plugin_api/EditorPanel.h>
 
 #include <assetlib/codecs.h>

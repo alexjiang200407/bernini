@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QString>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <optional>
 #include <vector>
 

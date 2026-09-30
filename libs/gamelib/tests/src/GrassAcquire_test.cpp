@@ -7,10 +7,10 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BGrass.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

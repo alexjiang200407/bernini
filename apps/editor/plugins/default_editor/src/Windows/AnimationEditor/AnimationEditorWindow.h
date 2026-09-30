@@ -18,7 +18,7 @@
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
-#include <bgl/InstanceDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <editor_sdk/environment.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"

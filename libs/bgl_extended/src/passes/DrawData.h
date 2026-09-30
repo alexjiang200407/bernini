@@ -1,7 +1,7 @@
 #pragma once
 #include "types/EnvironmentMap.h"
-#include <bgl/SkyboxDesc.h>
-#include <bgl/Viewport.h>
+#include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
@@ -43,7 +43,7 @@ namespace bgl
 		glm::vec3 cameraPos{ 0.0f };
 
 		// What one world unit spans on the render grid at a distance of one, in pixels: what grass
-		// thins by and a placement's level of detail is chosen by (bgl::PixelsPerUnit).
+		// thins by and a placement's level of detail is chosen by (PixelsPerUnit, gfx/viewport.h).
 		float pixelsPerUnit = 0.0f;
 
 		// The frustum planes the cull dispatch tests against, derived from viewProj.

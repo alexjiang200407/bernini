@@ -3,7 +3,7 @@
 #include "fg/PassDesc.h"
 #include "passes/BindingNameCheck.h"
 #include <array>
-#include <bgl/Viewport.h>
+#include <bgl/types/Viewport.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/MeshletPipeline.h>

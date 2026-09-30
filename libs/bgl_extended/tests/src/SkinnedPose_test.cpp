@@ -13,9 +13,9 @@
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>

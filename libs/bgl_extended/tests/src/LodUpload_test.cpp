@@ -7,7 +7,6 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -15,6 +14,7 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/GeomHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/Geom.h>

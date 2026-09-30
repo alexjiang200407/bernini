@@ -1,11 +1,11 @@
 #pragma once
 
 #include <QWidget>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/types/Camera.h>
 #include <cstdint>
 #include <functional>
 #include <gamelib/AssetManager.h>

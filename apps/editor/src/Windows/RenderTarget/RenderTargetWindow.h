@@ -3,9 +3,9 @@
 #include <QElapsedTimer>
 #include <QString>
 #include <QWidget>
-#include <bgl/Camera.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/PassTiming.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/PassTiming.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>

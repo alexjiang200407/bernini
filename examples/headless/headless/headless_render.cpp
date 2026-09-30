@@ -3,9 +3,9 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/SkyboxDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SkyboxDesc.h>
 #include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <exception>

@@ -10,9 +10,9 @@
 #include <bgl/IScene.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/Geom.h>

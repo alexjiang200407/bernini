@@ -12,9 +12,9 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <algorithm>
-#include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/Camera.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DrawBucket.h>

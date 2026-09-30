@@ -20,17 +20,16 @@
 #include <array>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
-#include <bgl/Camera.h>
-#include <bgl/GrassHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/Viewport.h>
-#include <bgl/lod_select.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/GrassDesc.h>
+#include <bgl/types/GrassHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/Viewport.h>
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgpu/cmd/CommandAllocator.h>
@@ -227,13 +226,12 @@ namespace
 			draw.cullState = &view->GetCullState(0);
 			draw.viewState.viewport =
 				bgpu::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
-			draw.viewState.viewProj      = viewProj;
-			draw.viewState.prevViewProj  = viewProj;
-			draw.viewState.cullView      = bgl::BuildCullView(viewProj);
-			draw.viewState.cameraPos     = eye;
-			draw.viewState.pixelsPerUnit = bgl::PixelsPerUnit(
-				bgl::ToContractViewport(draw.viewState.viewport),
-				draw.viewState.unjitteredViewProj);
+			draw.viewState.viewProj     = viewProj;
+			draw.viewState.prevViewProj = viewProj;
+			draw.viewState.cullView     = bgl::BuildCullView(viewProj);
+			draw.viewState.cameraPos    = eye;
+			draw.viewState.pixelsPerUnit =
+				bgl::PixelsPerUnit(draw.viewState.viewport, draw.viewState.unjitteredViewProj);
 			draw.targets.sceneColor   = targetBase->GetSceneColorRtv();
 			draw.targets.motionVector = targetBase->GetMotionVectorRtv();
 			draw.targets.depth        = targetBase->GetDepthDsv();

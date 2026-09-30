@@ -1,7 +1,7 @@
 #pragma once
 #include <bgl/LodLevel.h>
-#include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgl/types/Viewport.h>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -10,7 +10,7 @@
 // The size test the cull chooses a placement's level of detail by (lib/culling/lod_select.slang),
 // for a tool that says which level a placement draws without reading the GPU's choice back. The
 // renderer computes its own inputs through these too, so the two cannot drift.
-namespace bgl
+namespace game
 {
 	/**
 	 * What one world unit spans on the render grid, in pixels, at a distance of one: half the
@@ -19,7 +19,7 @@ namespace bgl
 	 * translation and has no size. The viewport is the render grid's, after the render scale.
 	 */
 	[[nodiscard]] inline float
-	PixelsPerUnit(const Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept
+	PixelsPerUnit(const bgl::Viewport& viewport, const glm::mat4& unjitteredViewProj) noexcept
 	{
 		const float yScale = glm::length(
 			glm::vec3(
@@ -27,14 +27,6 @@ namespace bgl
 				unjitteredViewProj[1][1],
 				unjitteredViewProj[2][1]));
 		return 0.5f * (viewport.maxY - viewport.minY) * yScale;
-	}
-
-	/** (center, radius) circumscribing the box, so it is conservative for whatever the box held. */
-	[[nodiscard]] inline glm::vec4
-	BoundingSphereOf(const glm::vec3& minBound, const glm::vec3& maxBound) noexcept
-	{
-		const glm::vec3 center = (minBound + maxBound) * 0.5f;
-		return glm::vec4(center, glm::distance(maxBound, center));
 	}
 
 	/** `sphere` placed by `world`, its radius grown by the largest axis scale. */
@@ -85,7 +77,7 @@ namespace bgl
 
 	/**
 	 * The level the cull draws this frame when it drew `previous` the last: coarser happens at the
-	 * threshold, finer only once `size` clears that level's floor by cLodHysteresis. nullopt for a
+	 * threshold, finer only once `size` clears that level's floor by bgl::cLodHysteresis. nullopt for a
 	 * placement with no last choice.
 	 */
 	[[nodiscard]] inline uint32_t
@@ -99,7 +91,7 @@ namespace bgl
 		if (!previous.has_value() || atThreshold >= *previous)
 			return atThreshold;
 		return glm::min(
-			LevelBySize(minPixels, size, pixelScale * (1.0f + cLodHysteresis)),
+			LevelBySize(minPixels, size, pixelScale * (1.0f + bgl::cLodHysteresis)),
 			*previous);
 	}
 }

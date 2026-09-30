@@ -29,9 +29,9 @@
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

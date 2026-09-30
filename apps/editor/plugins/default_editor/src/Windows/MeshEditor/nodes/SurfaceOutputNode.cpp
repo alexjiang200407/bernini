@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/localize.h>

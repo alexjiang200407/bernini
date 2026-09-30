@@ -6,10 +6,10 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/PassTiming.h>
-#include <bgl/RenderJob.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
+#include <bgl/types/PassTiming.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/metal/MetalErrorChecker.h>

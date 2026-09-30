@@ -13,9 +13,9 @@
 #include <QString>
 #include <Qt>
 #include <algorithm>
-#include <bgl/PassHistory.h>
 #include <cmath>
 #include <cstddef>
+#include <gamelib/PassHistory.h>
 #include <optional>
 #include <vector>
 
@@ -31,7 +31,7 @@ namespace
 	constexpr std::size_t c_MaxVisibleSamples = 600;
 
 	[[nodiscard]] std::size_t
-	VisibleSampleCount(const bgl::PassHistory& history)
+	VisibleSampleCount(const game::PassHistory& history)
 	{
 		return std::min(history.SampleCount(), c_MaxVisibleSamples);
 	}
@@ -77,7 +77,7 @@ namespace
 namespace editor
 {
 	std::optional<std::size_t>
-	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, const int x)
+	PassGraphSampleAt(const QRect& rect, const game::PassHistory& history, const int x)
 	{
 		const std::size_t samples = VisibleSampleCount(history);
 		const std::size_t first   = history.SampleCount() - samples;
@@ -104,7 +104,7 @@ namespace editor
 	PaintPassGraph(
 		QPainter&                        painter,
 		const QRect&                     rect,
-		const bgl::PassHistory&          history,
+		const game::PassHistory&         history,
 		const std::optional<std::size_t> selected,
 		const QPalette&                  palette)
 	{

@@ -3,9 +3,9 @@
 #include "util/VertexPacking.h"
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Node.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
 
 #include <array>
 #include <assetlib_structs/Animation.h>

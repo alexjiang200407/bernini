@@ -11,7 +11,7 @@
 #include "util/RigFixture.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <bgl/GeomHandle.h>
+#include <bgl/types/GeomHandle.h>
 
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>

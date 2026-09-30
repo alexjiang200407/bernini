@@ -1,9 +1,9 @@
 #pragma once
 #include <array>
-#include <bgl/LayerType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 #include <bgl/types/ChannelRouteDesc.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/TextureAssetHandle.h>
 
 namespace bgl
 {

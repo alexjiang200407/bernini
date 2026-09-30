@@ -7,7 +7,7 @@
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/PassTiming.h>
+#include <bgl/types/PassTiming.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>

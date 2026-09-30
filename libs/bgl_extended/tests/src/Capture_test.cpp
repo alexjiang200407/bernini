@@ -5,7 +5,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/ISceneView.h>
-#include <bgl/RenderJob.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

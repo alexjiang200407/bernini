@@ -1,7 +1,7 @@
 #include "gfx/DrawBucketTable.h"
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

@@ -56,4 +56,12 @@ namespace core
 	{
 		return div_ceil(value, multiple) * static_cast<T>(multiple);
 	}
+
+	/** (center, radius) circumscribing the box, so it is conservative for whatever the box held. */
+	[[nodiscard]] inline glm::vec4
+	bounding_sphere_of(const glm::vec3& minBound, const glm::vec3& maxBound) noexcept
+	{
+		const glm::vec3 center = (minBound + maxBound) * 0.5f;
+		return glm::vec4(center, glm::distance(maxBound, center));
+	}
 }

@@ -13,10 +13,10 @@
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
-#include <bgl/InstanceDesc.h>
-#include <bgl/LayerType.h>
-#include <bgl/MaterialHandle.h>
 #include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/LayerType.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>

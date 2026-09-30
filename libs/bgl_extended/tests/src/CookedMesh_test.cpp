@@ -4,14 +4,14 @@
 #include <array>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VertexLayout.h>
-#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/MaterialHandle.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/RenderJob.h>
+#include <bgl/types/GeomHandle.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 
 #include <catch2/catch_test_macros.hpp>

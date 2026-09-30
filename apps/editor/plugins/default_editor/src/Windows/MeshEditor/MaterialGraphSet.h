@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "Windows/MeshEditor/CachedMaterial.h"
-#include <bgl/MaterialHandle.h>
+#include <bgl/types/MaterialHandle.h>
 
 class MaterialGraphModel;
 class MaterialGraphScene;

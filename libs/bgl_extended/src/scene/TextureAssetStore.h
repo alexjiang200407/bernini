@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
