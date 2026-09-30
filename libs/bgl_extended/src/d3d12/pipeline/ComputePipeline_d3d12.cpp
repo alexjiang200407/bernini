@@ -2,7 +2,10 @@
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
+#include <bgpu/GpuContext.h>
+#include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
+#include <cstdint>
 #include <spdlog/spdlog.h>
 
 // clang-format off
@@ -25,10 +28,11 @@ namespace
 namespace bgl
 {
 	ComputePipeline::ComputePipeline(
-		ID3D12Device*              device,
+		const bgpu::GpuContext&    context,
 		ShaderCache*               cache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
+		ID3D12Device* device = bgpu::GetD3d12Device(context);
 		core::ensure(device != nullptr, "Device pointer must not be null.");
 		core::ensure(desc.shader != nullptr, "Compute shader cannot be null");
 
@@ -59,9 +63,11 @@ namespace bgl
 		streamDesc.SizeInBytes                   = sizeof(ComputePsoStream);
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
-		uint64_t identity = 0;
-		if (cache != nullptr)
-			identity = ShaderCache::CombineHash(0, codeIt->second);
+		const uint64_t identity = ShaderCache::CombineHash(0, codeIt->second);
+
+		m_PipelineState.Attach(bgpu::FindPipelineState(context, m_RootSignature.Get(), identity));
+		if (m_PipelineState != nullptr)
+			return;
 
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{
@@ -71,6 +77,8 @@ namespace bgl
 			if (cache != nullptr)
 				cache->StorePipeline(identity, m_PipelineState.Get());
 		}
+
+		bgpu::SharePipelineState(context, m_RootSignature.Get(), identity, m_PipelineState.Get());
 	}
 
 	ComputePipeline::~ComputePipeline() noexcept

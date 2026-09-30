@@ -804,7 +804,9 @@ contours the pose it is drawn in.
   target's outline is enabled** (`IRenderTarget::SetOutlineEnabled`); several
   views drawing into one target union their masks, cleared once in `BeginFrame`.
 * **In:** `scene.selectedInstances` (the view's dense selected-drawable list) and the seven
-  forward geometry tables.
+  forward geometry tables. The list is bound as the mesh stage's `compactedInstances`, a
+  `ComputeBuffer`, so it is uploaded like any CPU list but viewed as a UAV
+  (`UploadBufferDesc::unorderedAccessView`); an SRV there is a descriptor-type mismatch.
 * **Out:** the outline mask.
 
 ### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl_extended/src/passes/TaaResolvePass.cpp)

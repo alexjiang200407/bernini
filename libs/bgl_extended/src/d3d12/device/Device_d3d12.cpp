@@ -98,13 +98,13 @@ namespace bgl
 	MeshletPipelineRef
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<MeshletPipeline>::Make(m_Device.Get(), m_ShaderCache.get(), desc);
+		return core::SharedRef<MeshletPipeline>::Make(*m_Context, m_ShaderCache.get(), desc);
 	}
 
 	ComputePipelineRef
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<ComputePipeline>::Make(m_Device.Get(), m_ShaderCache.get(), desc);
+		return core::SharedRef<ComputePipeline>::Make(*m_Context, m_ShaderCache.get(), desc);
 	}
 
 	CommandAllocatorRef

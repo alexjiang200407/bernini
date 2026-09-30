@@ -1,4 +1,5 @@
 #include "util/TestGraphics.h"
+#include "util/GpuValidation.h"
 
 #include <bgl/IGraphics.h>
 #include <bgpu/GpuContext.h>
@@ -34,11 +35,22 @@ namespace bgl::test
 	bgl::GraphicsRef
 	CreateGraphics(const GraphicsSetup& opts)
 	{
-		if (g_Context == nullptr || !(g_Desc == opts.gpuContext))
+		// Under --gpu-validation every device is instrumented anyway (main() turns it on for the
+		// process), so a case that did not ask is given the desc of one that did. Otherwise the two
+		// kinds alternate, each switch builds a new device, and the PSOs the last context shared are
+		// patched all over again -- tens of seconds a case.
+		auto desc = opts.gpuContext;
+		if (GpuValidationEnabled())
+		{
+			desc.enableDebugLayer         = true;
+			desc.enableGPUValidationLayer = true;
+		}
+
+		if (g_Context == nullptr || !(g_Desc == desc))
 		{
 			g_Context = nullptr;
-			g_Context = bgpu::CreateGpuContext(opts.gpuContext);
-			g_Desc    = opts.gpuContext;
+			g_Context = bgpu::CreateGpuContext(desc);
+			g_Desc    = desc;
 		}
 		return bgl::CreateGraphics(g_Context, opts.graphics);
 	}

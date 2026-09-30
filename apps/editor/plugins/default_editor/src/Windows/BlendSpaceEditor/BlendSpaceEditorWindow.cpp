@@ -493,8 +493,8 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	// After the width above is taken: collapsing the group takes its sliders out of the hint.
 	m_GroundControls->Apply();
 
-	// A native surface, beside a native viewport: see docs/known_issues.md, "Scrolling a panel's
-	// properties column smears the main tab bar".
+	// A native surface, beside a native viewport: a backing-store blit scroll computes against the
+	// wrong geometry there and smears stale pixels over the main tab bar.
 	scrollBox->viewport()->setAttribute(Qt::WA_NativeWindow);
 
 	return scrollBox;

@@ -3,8 +3,11 @@
 #include "resource/Rtv_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
+#include <bgpu/GpuContext.h>
+#include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
 #include <core/math.h>
+#include <cstdint>
 #include <spdlog/spdlog.h>
 
 // clang-format off
@@ -37,10 +40,11 @@ namespace
 namespace bgl
 {
 	MeshletPipeline::MeshletPipeline(
-		ID3D12Device*              device,
+		const bgpu::GpuContext&    context,
 		ShaderCache*               cache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
+		ID3D12Device* device = bgpu::GetD3d12Device(context);
 		core::ensure(device != nullptr, "Device pointer must not be null.");
 
 		wrl::ComPtr<ID3D12Device2> device2;
@@ -125,29 +129,30 @@ namespace bgl
 		streamDesc.pPipelineStateSubobjectStream = &psoDesc;
 
 		uint64_t identity = 0;
-		if (cache != nullptr)
+		for (const core::SharedRef<IShader>& shader :
+		     { desc.meshShader, desc.pixelShader, desc.ampShader })
 		{
-			for (const core::SharedRef<IShader>& shader :
-			     { desc.meshShader, desc.pixelShader, desc.ampShader })
-			{
-				if (shader == nullptr)
-					continue;
+			if (shader == nullptr)
+				continue;
 
-				identity = ShaderCache::CombineHash(
-					identity,
-					pipelineLayout.entryPointCode.at(shader->GetDesc().entryPointName));
-			}
-
-			// The render state is part of the graphics PSO but not the bytecode, so it
-			// must contribute to the identity. These structs are zero-initialized before
-			// conversion, so their padding is deterministic across runs.
-			identity = ShaderCache::CombineHash(identity, psoDesc.RasterizerState);
-			identity = ShaderCache::CombineHash(identity, psoDesc.DepthStencilState);
-			identity = ShaderCache::CombineHash(identity, psoDesc.BlendState);
-			identity = ShaderCache::CombineHash(identity, psoDesc.RenderTargets);
-			identity = ShaderCache::CombineHash(identity, psoDesc.DSVFormat);
-			identity = ShaderCache::CombineHash(identity, psoDesc.PrimitiveTopologyType);
+			identity = ShaderCache::CombineHash(
+				identity,
+				pipelineLayout.entryPointCode.at(shader->GetDesc().entryPointName));
 		}
+
+		// The render state is part of the graphics PSO but not the bytecode, so it
+		// must contribute to the identity. These structs are zero-initialized before
+		// conversion, so their padding is deterministic across runs.
+		identity = ShaderCache::CombineHash(identity, psoDesc.RasterizerState);
+		identity = ShaderCache::CombineHash(identity, psoDesc.DepthStencilState);
+		identity = ShaderCache::CombineHash(identity, psoDesc.BlendState);
+		identity = ShaderCache::CombineHash(identity, psoDesc.RenderTargets);
+		identity = ShaderCache::CombineHash(identity, psoDesc.DSVFormat);
+		identity = ShaderCache::CombineHash(identity, psoDesc.PrimitiveTopologyType);
+
+		m_PipelineState.Attach(bgpu::FindPipelineState(context, m_RootSignature.Get(), identity));
+		if (m_PipelineState != nullptr)
+			return;
 
 		if (cache == nullptr || !cache->LoadPipeline(identity, streamDesc, &m_PipelineState))
 		{
@@ -157,6 +162,8 @@ namespace bgl
 			if (cache != nullptr)
 				cache->StorePipeline(identity, m_PipelineState.Get());
 		}
+
+		bgpu::SharePipelineState(context, m_RootSignature.Get(), identity, m_PipelineState.Get());
 	}
 
 	MeshletPipeline::~MeshletPipeline() noexcept

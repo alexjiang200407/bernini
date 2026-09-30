@@ -127,40 +127,6 @@ and every other checkout queues behind it.
 
 ---
 
-## The editor's viewport is more saturated than the same frame anywhere else
-
-**Symptom.** On a Mac, the Mesh Editor's viewport reads more saturated than Blender's Material
-Preview of the same model under the same environment, reds first: fur binned by luma has more red
-at the same brightness and the same green and blue. Every headless measurement agrees with Blender
-— `ScreenshotPng` captures, the `[parity]` sphere, a flat grey at any albedo — and only the screen
-does not. Seven measured changes to lighting, tone map, textures and the resolve did not move it.
-
-**Cause.** The window's colour space was never set. Qt's `NSWindow` *reports* `sRGB IEC61966-2.1`
-already, and the layer was composited unmatched all the same: its sRGB bytes taken as the display's
-own space, P3 on the built-in display of every current Mac, so every red was drawn a gamut wider
-than it was made for. Converting Blender's captured fur from Display P3 to sRGB reproduces
-Bernini's captured fur to within 0.006 per channel, which is the whole of the symptom. Tagging the
-`CAMetalLayer`'s `colorspace` sRGB changed nothing, on the editor and on a standalone window alike:
-macOS already treats an untagged sRGB-format layer as sRGB.
-
-**Fixed by** `[window setColorSpace:[NSColorSpace sRGBColorSpace]]` in
-[`MetalSurface_mac.mm`](../apps/editor/src/Platform/MetalSurface_mac.mm), which is the caller's to
-do: `RenderTargetDesc::wnd` is the caller's layer, in the caller's window. After it the viewport's
-fur lands on Blender's to within 0.003 per channel in every luma bin.
-
-**Gates.** None a test can hold — the compositor is not in a headless run. Eyes: the Mesh Editor
-beside Blender's Material Preview on a P3 display, fur the same red.
-
-**If it comes back.** Check that the window's colour space is still set by hand -- a toolkit that
-recreates the window, or a viewport created before its widget has one (`[nsView window]` is nil
-then, and the set is skipped), loses it. Already ruled out, by measurement, and not worth a second
-day: the tone map (a grey sphere matches Eevee to 0.001 and flat greys to 0.009 at every albedo), the
-texture bake (byte-for-byte the source, mips averaged in linear light), Eevee's specular (a Diffuse
-BSDF renders identically at the glb's specular factor of zero), and Blender's film filter (0.005 luma
-over an aligned mask, with a point spread of nearly a one-pixel box).
-
----
-
 ## SIGSEGV in libobjc while a Metal `Graphics` is torn down
 
 **Symptom.** `editor_tests` on `macos-clang-metal-debug` exits 11 with no failing case named, roughly
@@ -223,128 +189,6 @@ a rate near one suite run in twenty, and do not read a handful of clean runs as 
 
 ---
 
-## Coming back to the editor finds the Material or Animation panel emptied
-
-**Symptom.** The Mesh Editor holds a mesh, its per-submesh graphs and some unsaved edits to
-them. Minimize the editor, restore it, and the panel is back to the default sphere with the graphs
-blank — the same for the Animation panel's rig. Nothing warns, no dialog asks, and the held-open
-assets have been released, so the Content Explorer will now delete a mesh the panel was showing a
-moment ago. Reported as "alt-tab deletes the current mesh"; the app switch is not what does it.
-
-**Cause.** `MainWindow` cleared both panels off `QDockWidget::visibilityChanged(false)`, on the
-premise that the signal follows the tab. It follows two things. Measured on Qt 6.8.3 (cocoa): a tab
-switch emits `false` for the leaving dock with the window still showing, and **minimizing emits
-`false` for every dock** — `isVisible()` still true, `isMinimized()` true — as does hiding the
-window, with `isVisible()` false. A plain app switch (Cmd-Tab) and Cmd+H emit nothing at all, with
-or without a native child view, which is why the reported gesture never matched the code being read.
-
-**Fixed by** `editor::IsPanelShown` ([panel_visibility.cpp](../apps/editor/src/util/panel_visibility.cpp)),
-which holds a panel shown while its window is minimized or hidden, with both destructive
-connections in `MainWindow::Build` routed through it. Rendering and the animation clock still follow
-raw visibility: parking those while the window is away is right, and reverses itself on restore.
-
-**Gates.** `just run editor_tests -- "[panelclear]"`. The truth table, plus a headless editor holding
-`apples.bmesh` that is minimized, restored and hidden and must still name that mesh — and must still
-drop it when the tab is left. Three of its assertions fail against the unfixed wiring.
-
-**If it comes back.** The likely arrival is a *fourth* panel wired straight to
-`QDockWidget::visibilityChanged`, since only the two connections are guarded, not the signal. Check
-that first; `dock->isHidden()` is not the discriminator to reach for instead, because a tab switch
-does not hide the unselected dock — Qt moves it off-screen, so it reads unhidden either way.
-
-## GPU Timing Graph makes animation playback stutter
-
-**Symptom.** On macOS, playback stutters while GPU Timing Graph is focused and recovers when
-focus returns to the animation editor. The graph remains open and GPU timing remains enabled.
-
-**Cause.** Painting each timing band as one large antialiased polygon is expensive for noisy
-histories. The graph paints on the GUI thread, which also advances the animation transport. A
-Qt 6.8.3 Cocoa probe measured full-history paints at 260–310 ms while the render thread kept
-roughly 16.7 ms frames: repeated rendered poses can look like a GPU slowdown even when rendering
-is steady. Batched timing arrivals and hover redraws both pay that painting cost. Timer precision
-and changing the graph to a tool window did not remove the stalls.
-
-**Fixed by** filling each pair of adjacent samples as a convex span in
-[pass_graph_paint.cpp](../apps/editor/src/Windows/GpuTiming/pass_graph_paint.cpp). Shared edges are
-not antialiased, which avoids seams between fills. This retains every sample and spike. The same
-probe measured full-history paints at 3–6 ms and about 62 animation ticks per second with either
-window focused.
-
-**Gates.** `just run editor_tests -- "[gputiming]"`: a dense history must draw without gaps and
-retain a one-frame spike. Its `[perf]` case compares equally sized noisy and flat histories;
-the original painter took about 136 ms versus 2.5 ms and fails the ratio check. Native focus and
-hover interaction still need a visual check.
-
-**If it comes back.** Compare graph-paint time and transport ticks with the renderer's frame
-stats. A healthy render rate does not establish that the GUI supplied a fresh animation time.
-
-## Scrolling a panel's properties column smears the main tab bar
-
-**Symptom.** Scroll the Animation panel's left column and a second copy of the window's tab strip —
-*Level Editor | Mesh Editor | Animation Editor* — appears below the real one, offset by roughly
-the scroll delta. The duplicate is stale pixels, not a live widget: it does not respond to clicks and
-the next full repaint of that region clears it. It shows up wherever a viewport shares a top-level
-with a scrolling column, so the Animation panel is where it was found rather than where it lives.
-
-**Cause.** A `QScrollArea` scrolls by **blitting the top-level's backing store** and repainting only
-the strip that was exposed. `RenderTargetWindow` takes `Qt::WA_PaintOnScreen`
-([RenderTargetWindow.cpp](../apps/editor/src/Windows/RenderTarget/RenderTargetWindow.cpp)), which
-implies `WA_NativeWindow` and realises a native view through `winId()` — deliberately, since the
-swapchain needs a real surface. Qt does not composite that widget through the backing store, so the
-store's idea of the window disagrees with what is on screen, and the blit is computed against the
-wrong geometry. The give-away is *where* the smear lands: the tab strip is not inside the scroll
-area at all, so the blit wrote outside the widget that issued it. That also rules out the obvious
-guess — forcing `viewport()->update()` on scroll repaints the viewport and cannot clean a region
-outside it.
-
-The bug predates the Animation panel's blend-space editor; that work only added enough controls to
-the column to make it scroll in an ordinary window, which is why it surfaced then.
-
-**Fixed by** giving the scroll area's viewport a surface of its own —
-`scrollBox->viewport()->setAttribute(Qt::WA_NativeWindow)` in
-`AnimationEditorWindow::BuildPropertiesColumn`. A native viewport cannot blit past itself, whatever
-the top-level's store believes. The cost is one extra native view per scrolling column.
-
-**Gates.** None, and that is the honest state of it: the artifact is stale pixels in a compositor
-surface, which nothing the suite can assert reaches — an offscreen render is composited correctly and
-shows nothing. It is checked by eye, by scrolling the column with a viewport on screen.
-
-**If it comes back.** Suspect a *new* scrolling column that did not get the attribute, rather than a
-regression in this one — the fix is per scroll area and nothing enforces it. `WA_PaintOnScreen` on
-the viewport is not the remedy to reach for instead: that stops the widget being composited at all,
-which is what caused this in the first place.
----
-
-## Flat skin-coloured patches over a blended, double-sided character
-
-**Symptom.** A closed mesh — a head, a body — set to the Alpha Blend layer with Double Sided on
-draws unshaded, flat-toned patches over its front: mouth and nostril interiors compositing over the
-face, moving with the camera. Reported first from the Mesh Editor's Layer controls, on a
-material whose base colour carries no alpha channel at all.
-
-**Cause.** Not a defect, and not this feature's: the transparent phase sorts instances, never the
-triangles inside one, and writes no depth among them — so within one mesh the last-rasterized
-triangle wins. Double Sided is what lets the interior faces reach the rasterizer, and their flipped
-normals are why they shade flat. With no alpha channel every fragment lands at coverage 1, so the
-whole head pays the transparent path's ordering hazards for an image Opaque would draw correctly.
-The full mechanism is [passes.md § Two-sided surfaces](passes.md) — "it is the geometry showing
-through, not a defect in the sort". The engine's own PBR blend materials do exactly the same; a
-game-defined surface inherits it from the shared blend draw bucket.
-
-**The answer** is a material choice, not a fix: Double Sided off where a translucent solid has no
-inside worth drawing, or the Hashed Alpha layer, which writes real depth and self-occludes (and
-needs TAA running). Alpha Blend earns its keep only when something feeds alpha below 1.
-
-**Gates.** `just run bgl_extended_tests -- "[twosided]"` pins the facing and the mesh-stage cull the
-paragraph above rests on. There is no gate that could pin per-triangle sorting, because the engine
-deliberately has none.
-
-**If it comes back.** It never left; this entry exists so the symptom is recognised as the blend
-draw bucket's documented behaviour rather than diagnosed as a regression of whatever feature last
-touched the material path.
-
----
-
 ## Every static mesh is missing on D3D12, and the cull says it dropped everything
 
 **Symptom.** Nothing drawn through the static tier appears on Windows: a headless render is the clear
@@ -389,10 +233,18 @@ runs on past it. The stack is `CommandList::Barrier` under `FrameGraph::Execute`
 named case passes *with* the flag when it is the only case in the run — so it reads like an
 interaction between cases, and it is not.
 
-**Cause.** GPU-based validation patches every shader, and that case draws 48 frames (24 per `Shoot`,
-twice, because TAA has to converge). Instrumented, one of those submits takes longer than the
-display driver's TDR window and Windows removes the device. It is a cost limit, not a defect: there
-is nothing wrong with the frame.
+Any case that draws a static mesh through the renderer does it: `[capture]`, `[taa]`, `[resize]`,
+`[motionvectors]`, `[surface]` and more. With the suite sharded, one removal is a TDR, which resets the
+adapter, so every other shard dies with it and the failures look scattered.
+
+**Cause.** The static tier's mesh shaders (`MSMain` and `MSDissolve` in
+[StaticMesh.slang](../libs/bgl_extended/shaders/src/programs/forward/StaticMesh.slang)) returned
+early for a culled meshlet and then reached the backface cull's `GroupMemoryBarrierWithGroupSync`.
+`visible` is uniform across the group in practice, but a barrier after a return the compiler cannot
+prove uniform is undefined, and instrumented it deadlocks: the `Forward World` pass never finishes
+and TDR removes the device. Uninstrumented it happens to work, which is why it survived. Neither
+stage returns now; a culled meshlet's counts are zero, so its loops are empty and every thread
+reaches the barrier.
 
 **Why it looks order-dependent.** `SetEnableGPUBasedValidation` sets it on the *debug layer*, which
 is the process's, not the `ID3D12Debug1` that asked: every device created afterwards is instrumented,
@@ -406,17 +258,22 @@ cases:
 
 **Ruled out**, each by measurement: a stale driver pipeline library replayed into a validating device
 (it hangs the same with the cache directory emptied); a second device in the process (two cases that
-both decline validation pass under the flag); and the case itself (it hangs *alone* once edited to
-ask for validation). What is left is the instrumented frame's cost.
+both decline validation pass under the flag); and the instrumented frame's cost, which was the
+first explanation here: a single frame of one cube hung, and it stops hanging once the mesh shader
+is edited alone -- a constant pixel shader still hangs, and so does clamping every loop in the mesh
+stage to its constant maximum.
 
-**Gates.** None — the hang is the machine's TDR window against an instrumented frame, so a gate would
-pin the GPU rather than the code. `bgpu::GpuContext::GpuValidationActive`
-([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the half that *is*
-code: it answers for the process rather than reading the desc back, so a successor context
-cannot report "off" while running instrumented and have its owners cache driver pipelines built
-without the instrumentation.
+**Gates.** `bgl_extended_tests.exe "[capture]" --gpu-validation` hangs the device within one frame
+if the barrier is behind a return again, and the minimal repro above does too.
+`bgpu::GpuContext::GpuValidationActive`
+([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the scope half: it
+answers for the process rather than reading the desc back, so a successor context cannot report
+"off" while running instrumented and have its owners cache driver pipelines built without the
+instrumentation.
 
-**If it comes back.** It has not gone. Run GPU validation over a tag at a time rather than the whole
-suite, and read the log for the validation findings rather than the exit code. Raising the driver's
-`TdrDelay` lets a longer run finish, which is a machine setting and not something the tree can carry.
-Do not chase the predecessor case: it is only what turned instrumentation on.
+**If it comes back.** Find the pass first: submit and wait after every pass in `FrameGraph::Execute`
+and log its name, and the one that never returns is the one TDR killed -- fence waits on a removed
+device return at once, so trust the log's removal timestamp over any "ok" printed after it. Then
+look in that pass's shaders for a group barrier after a `return`, or a loop whose trip count is read
+from payload memory (the entry above). Shaders are compiled from `bin/shaders/src` at run time, so
+edit that copy and rerun one case to bisect without a rebuild; the next build overwrites it.

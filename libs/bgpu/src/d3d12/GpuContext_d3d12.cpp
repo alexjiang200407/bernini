@@ -1,13 +1,17 @@
 #include "ContextBase.h"
+#include <atomic>
 #include <bgpu/GpuContext.h>
 #include <bgpu/d3d12/D3d12ErrorChecker.h>
 #include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
-#include <atomic>
+#include <cstdint>
+#include <map>
+#include <mutex>
 #include <slang.h>
 #include <spdlog/spdlog.h>
+#include <utility>
 
 #include <directx/d3d12.h>
 #include <dxgi1_6.h>
@@ -94,6 +98,9 @@ namespace bgpu
 			{
 				spdlog::trace("~GpuContext");
 
+				// Before the device: the shared pipeline states are the context's own, not a leak.
+				m_PipelineStates.clear();
+
 				// Everything an owner made on the device is gone by the time its context reference
 				// drops, so whatever the report names is a leak, attributed to whoever made it.
 				m_Device.Reset();
@@ -124,7 +131,41 @@ namespace bgpu
 				return m_Device.Get();
 			}
 
+			[[nodiscard]] ID3D12PipelineState*
+			FindPipelineState(ID3D12RootSignature* rootSignature, uint64_t identity) const noexcept
+			{
+				const auto lock = std::scoped_lock(m_PipelineStatesMutex);
+				const auto it   = m_PipelineStates.find(PipelineKey{ rootSignature, identity });
+				if (it == m_PipelineStates.end())
+					return nullptr;
+
+				it->second.pipelineState->AddRef();
+				return it->second.pipelineState.Get();
+			}
+
+			void
+			SharePipelineState(
+				ID3D12RootSignature* rootSignature,
+				uint64_t             identity,
+				ID3D12PipelineState* pipelineState) const noexcept
+			{
+				const auto lock = std::scoped_lock(m_PipelineStatesMutex);
+				m_PipelineStates.try_emplace(
+					PipelineKey{ rootSignature, identity },
+					SharedPipeline{ rootSignature, pipelineState });
+			}
+
 		private:
+			// The root signature is part of the key by address, so the entry holds it: a freed one's
+			// address could otherwise come back as a different signature.
+			using PipelineKey = std::pair<ID3D12RootSignature*, uint64_t>;
+
+			struct SharedPipeline
+			{
+				wrl::ComPtr<ID3D12RootSignature> rootSignature;
+				wrl::ComPtr<ID3D12PipelineState> pipelineState;
+			};
+
 			static void CALLBACK
 			LogMessage(
 				D3D12_MESSAGE_CATEGORY /*category*/,
@@ -164,15 +205,43 @@ namespace bgpu
 			wrl::ComPtr<IDXGIInfoQueue>   m_DxgiInfoQueue;
 			wrl::ComPtr<ID3D12InfoQueue1> m_InfoQueue;
 			DWORD                         m_MessageCallbackCookie = 0;
+
+			mutable std::mutex                            m_PipelineStatesMutex;
+			mutable std::map<PipelineKey, SharedPipeline> m_PipelineStates;
 		};
+
+		[[nodiscard]] const Context&
+		AsD3d12(const GpuContext& context) noexcept
+		{
+			const auto* d3d12 = dynamic_cast<const Context*>(&context);
+			core::ensure(d3d12 != nullptr, "The GPU context is not a D3D12 one");
+			return *d3d12;
+		}
 	}
 
 	ID3D12Device*
 	GetD3d12Device(const GpuContext& context) noexcept
 	{
-		const auto* d3d12 = dynamic_cast<const Context*>(&context);
-		core::ensure(d3d12 != nullptr, "The GPU context is not a D3D12 one");
-		return d3d12->GetDevice();
+		return AsD3d12(context).GetDevice();
+	}
+
+	ID3D12PipelineState*
+	FindPipelineState(
+		const GpuContext&    context,
+		ID3D12RootSignature* rootSignature,
+		uint64_t             identity) noexcept
+	{
+		return AsD3d12(context).FindPipelineState(rootSignature, identity);
+	}
+
+	void
+	SharePipelineState(
+		const GpuContext&    context,
+		ID3D12RootSignature* rootSignature,
+		uint64_t             identity,
+		ID3D12PipelineState* pipelineState) noexcept
+	{
+		AsD3d12(context).SharePipelineState(rootSignature, identity, pipelineState);
 	}
 
 	GpuContextRef

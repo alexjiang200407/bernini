@@ -45,14 +45,12 @@ void MSMain(
 
     // One call site for the counts, whichever way that goes: DXC refuses a second.
     SetMeshOutputCounts(vertexCount, triangleCount);
-    if (!visible)
-    {
-        return;
-    }
 
+    // No early return for a culled meshlet: every thread must reach the barrier below. The counts
+    // are zero for one, so both loops are empty.
     // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
     // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
-    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    for (uint v = gtid; v < vertexCount; v += cMeshGroupSize)
     {
         let vertex = StaticVertex(ctx, payload.instance, v);
         verts[v] = vertex;
@@ -72,7 +70,7 @@ void MSMain(
         GroupMemoryBarrierWithGroupSync();
     }
 
-    for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
+    for (uint t = gtid; t < triangleCount; t += cMeshGroupSize)
     {
         tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
     }
@@ -108,12 +106,8 @@ void MSDissolve(
     }
 
     SetMeshOutputCounts(vertexCount, triangleCount);
-    if (!visible)
-    {
-        return;
-    }
 
-    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    for (uint v = gtid; v < vertexCount; v += cMeshGroupSize)
     {
         let vertex = StaticVertex(ctx, payload.instance, v);
         verts[v] = DissolveVSOut(vertex, ctx.lodDissolve);
@@ -128,7 +122,7 @@ void MSDissolve(
         GroupMemoryBarrierWithGroupSync();
     }
 
-    for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
+    for (uint t = gtid; t < triangleCount; t += cMeshGroupSize)
     {
         tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
     }

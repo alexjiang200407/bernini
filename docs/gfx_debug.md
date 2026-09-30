@@ -262,7 +262,12 @@ before any renderer exists:
 * `enableDebugLayer` → `ID3D12Debug::EnableDebugLayer()`. Turns on D3D12 API validation and sets
   break-on-severity for ERROR and CORRUPTION via `IDXGIInfoQueue`.
 * `enableGPUValidationLayer` → `SetEnableGPUBasedValidation(TRUE)`. **Only meaningful with
-  `enableDebugLayer` on.**
+  `enableDebugLayer` on.** Its main cost is the debug layer patching each new PSO object on first
+  use, paid once per GPU context because renderers on a context share their PSOs
+  ([shader_cache.md](shader_cache.md)); a validated frame after that costs about twice an
+  unvalidated one, 3.5× under TAA. Do not turn off synchronized command-queue validation to win
+  that back: it takes the frame to unvalidated cost because GPU-based validation then reports
+  nothing -- a known-bad descriptor read went from two messages to none.
 * `enablePixDebug` → loads `WinPixGpuCapturer.dll` for PIX captures. See [RHI](docs/rhi.md).
 * Validation messages are routed to `bgpu.log` through the GPU context's callback registered on
   `ID3D12InfoQueue1`, so they appear alongside your logging. `strictError` turns a warning or error

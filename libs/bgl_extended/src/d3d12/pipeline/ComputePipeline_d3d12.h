@@ -4,6 +4,11 @@
 #include <core/err/util.h>
 #include <core/str/str.h>
 
+namespace bgpu
+{
+	class GpuContext;
+}
+
 namespace bgl
 {
 	class ShaderCache;
@@ -11,7 +16,10 @@ namespace bgl
 	class ComputePipeline : public core::RefCounter<IComputePipeline>
 	{
 	public:
-		ComputePipeline(ID3D12Device* device, ShaderCache* cache, const ComputePipelineDesc& desc);
+		ComputePipeline(
+			const bgpu::GpuContext&    context,
+			ShaderCache*               cache,
+			const ComputePipelineDesc& desc);
 
 		~ComputePipeline() noexcept override;
 

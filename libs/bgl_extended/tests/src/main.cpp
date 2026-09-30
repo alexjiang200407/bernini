@@ -2,6 +2,7 @@
 #include <catch2/catch_session.hpp>
 #define CATCH_CONFIG_RUNNER
 #include "util/GpuValidation.h"
+#include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 
 int
@@ -15,9 +16,9 @@ main(int argc, char* argv[])
 	const auto cli =
 		session.cli() |
 		Catch::Clara::Opt(gpuValidation)["--gpu-validation"](
-			"Enable D3D12 GPU-based validation. Slow -- it patches every shader, taking device "
-			"creation from ~3s to ~18s and roughly doubling the suite -- so it is for a final "
-			"verification run rather than day-to-day.");
+			"Enable D3D12 GPU-based validation for every case. Slow -- the debug layer patches "
+			"each pipeline on first use -- so it is for a verification run rather than "
+			"day-to-day; a release build runs it several times faster.");
 	session.cli(cli);
 
 	int returnCode = session.applyCommandLine(argc, argv);
@@ -26,6 +27,17 @@ main(int argc, char* argv[])
 
 	// Set before the first test runs, so every CreateGraphics sees it.
 	bgl::test::SetGpuValidation(gpuValidation);
+
+	// Validation is the process's once any device asks for it, so a case that does not ask was
+	// instrumented only when one that did happened to run first. Asked for here, every case is,
+	// whatever the order or the filter.
+	if (gpuValidation)
+	{
+		auto desc                     = bgpu::GpuContextDesc();
+		desc.enableDebugLayer         = true;
+		desc.enableGPUValidationLayer = true;
+		(void)bgpu::CreateGpuContext(desc);
+	}
 
 	core::install_crash_handlers();
 

@@ -7,6 +7,7 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
+#include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
@@ -120,6 +121,7 @@ namespace
 		bgl::SceneView*                        view  = nullptr;
 		bgl::CompactInstancesPass              compactPass;
 		bgl::ForwardPhases                     forwardPhases;
+		bgl::BrdfLutGenPass                    brdfLut;
 
 		Harness()
 		{
@@ -173,8 +175,23 @@ namespace
 			compactPass.Init(ctx);
 			forwardPhases.Init(ctx);
 			forwardPhases.AddDrawBucketKernels(ctx, view->GrassDrawBuckets());
+			brdfLut.Init(ctx);
 			pipelines.Build();
 			forwardPhases.CheckBindings();
+
+			// The blade shader samples the table; an unset handle indexes past the heap.
+			auto allocator = device->CreateCommandAllocator();
+			auto cmdList   = device->CreateCommandList(
+				{ bgl::QueueType::kGraphics },
+				allocator,
+				resourceManager);
+			auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			resourceManager->RegisterQueue(cmdQueue.Get());
+			cmdList->Open(cmdQueue, allocator);
+			brdfLut.Generate(cmdList.Get());
+			cmdList->Close();
+			cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
+			resourceManager->UnregisterQueue(cmdQueue.Get());
 		}
 
 		Harness(const Harness&) = delete;
@@ -188,6 +205,7 @@ namespace
 		{
 			compactPass.Release(false);
 			forwardPhases.Release();
+			brdfLut.Release();
 		}
 
 		/** One frame from `eye` looking at `at`, and the counters it left. */
@@ -239,7 +257,8 @@ namespace
 				scene->GetSampler(bgl::Scene::StandardSampler::kAnisoLinearWrap);
 			draw.samplers.linearClamp =
 				scene->GetSampler(bgl::Scene::StandardSampler::kLinearClamp);
-			draw.lighting.env = view->GetEnvironmentMap();
+			draw.lighting.env         = view->GetEnvironmentMap();
+			draw.lighting.env.brdfLut = brdfLut.GetSrv();
 
 			fg.SetResourceNamespace(view->GetCullNamespace(0));
 			compactPass.AttachToFrameGraph(fg, draw);

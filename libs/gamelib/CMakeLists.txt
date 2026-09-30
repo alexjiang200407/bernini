@@ -92,6 +92,7 @@ if (BUILD_TESTS)
 	# their own so source_group's TREE only sees files under this directory.
 	set(GAMELIB_TESTS_BORROWED
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/GoldenImage.cpp
+		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/GpuValidation.cpp
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestEnvironment.cpp
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestOptions.cpp
 		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestGraphics.cpp
