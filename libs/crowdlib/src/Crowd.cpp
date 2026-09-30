@@ -119,7 +119,7 @@ namespace crowd
 			bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 		void
-		SetTickParams(bgpu::ComputeKernel& kernel, const TickPlan& plan)
+		SetTickParams(bgpu::ComputeKernel& kernel, const TickUploads& plan)
 		{
 			auto params               = kernel["gUniforms"]["params"];
 			params["tickSeconds"]     = plan.params.tickSeconds;
@@ -319,14 +319,14 @@ namespace crowd
 		Unmap(slot);
 		Record(slot, tick, plan);
 
-		slot.tick       = tick;
-		slot.agentCount = plan.params.agentCount;
-		slot.rows       = plan.rows;
+		slot.tick         = tick;
+		slot.agentCount   = plan.params.agentCount;
+		slot.groupHandles = plan.groupHandles;
 		slot.groups.clear();
-		for (uint32_t row = 0; row < plan.rows.size(); ++row)
+		for (uint32_t row = 0; row < plan.groupHandles.size(); ++row)
 		{
 			slot.groups.push_back(
-				{ .group = plan.rows[row],
+				{ .group = plan.groupHandles[row],
 			      .first = plan.groups[row].firstAgent,
 			      .count = plan.groups[row].agentCount });
 		}
@@ -369,9 +369,9 @@ namespace crowd
 			return std::nullopt;
 
 		auto& slot = SlotOf(tick);
-		for (uint32_t row = 0; row < slot.rows.size(); ++row)
+		for (uint32_t row = 0; row < slot.groupHandles.size(); ++row)
 		{
-			if (slot.rows[row] != group)
+			if (slot.groupHandles[row] != group)
 				continue;
 			if (slot.mappedGroupSums == nullptr)
 				slot.mappedGroupSums = m_ResourceManager->MapReadback(slot.groupSums);
@@ -405,7 +405,7 @@ namespace crowd
 	}
 
 	void
-	Crowd::Record(TickSlot& slot, uint64_t tick, const TickPlan& plan)
+	Crowd::Record(TickSlot& slot, uint64_t tick, const TickUploads& plan)
 	{
 		// Ping-pong: each tick reads the buffer the tick before it wrote.
 		const auto agents   = m_AgentsPingPong[tick % 2];

@@ -96,7 +96,7 @@ namespace crowd
 		ReadDebugAgents() const override;
 
 	private:
-		/** One tick in the ring: what it recorded into, and what its readbacks are rows of. */
+		/** One tick in the ring: what it recorded into, and which group each readback row is. */
 		struct TickSlot
 		{
 			uint64_t                        tick  = 0;
@@ -106,7 +106,7 @@ namespace crowd
 			bgpu::ReadbackBufferHandle      groupSums;
 			bgpu::ReadbackBufferHandle      agents;
 			uint32_t                        agentCount = 0;
-			std::vector<GroupHandle>        rows;
+			std::vector<GroupHandle>        groupHandles;
 			std::vector<debug::GroupAgents> groups;
 
 			// Mapped on first read, and unmapped before the slot is recorded into again.
@@ -123,7 +123,7 @@ namespace crowd
 		FreeResources() noexcept;
 
 		void
-		Record(TickSlot& slot, uint64_t tick, const TickPlan& plan);
+		Record(TickSlot& slot, uint64_t tick, const TickUploads& plan);
 
 		[[nodiscard]] TickSlot&
 		SlotOf(uint64_t tick) const noexcept;

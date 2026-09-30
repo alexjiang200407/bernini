@@ -56,9 +56,9 @@ namespace
 
 	/** The plan's invariant: every agent laid out once, group by group, slots in order. */
 	void
-	CheckLayout(const crowd::TickPlan& plan)
+	CheckLayout(const crowd::TickUploads& plan)
 	{
-		REQUIRE(plan.groups.size() == plan.rows.size());
+		REQUIRE(plan.groups.size() == plan.groupHandles.size());
 		CHECK(plan.params.groupCount == plan.groups.size());
 		CHECK(plan.params.agentRangeCount == plan.ranges.size());
 
@@ -87,15 +87,15 @@ namespace
 	};
 
 	uint32_t
-	RowOf(const crowd::TickPlan& plan, crowd::GroupHandle group)
+	RowOf(const crowd::TickUploads& plan, crowd::GroupHandle group)
 	{
-		const auto row = std::ranges::find(plan.rows, group);
-		REQUIRE(row != plan.rows.end());
-		return static_cast<uint32_t>(row - plan.rows.begin());
+		const auto row = std::ranges::find(plan.groupHandles, group);
+		REQUIRE(row != plan.groupHandles.end());
+		return static_cast<uint32_t>(row - plan.groupHandles.begin());
 	}
 
 	std::vector<crowd::idl::AgentRange>
-	RangesOf(const crowd::TickPlan& plan, crowd::GroupHandle group)
+	RangesOf(const crowd::TickUploads& plan, crowd::GroupHandle group)
 	{
 		const uint32_t row    = RowOf(plan, group);
 		auto           ranges = std::vector<crowd::idl::AgentRange>();
@@ -118,7 +118,7 @@ TEST_CASE("A created group is spawned whole, and read back from its own range af
 	REQUIRE(first.ranges.size() == 1);
 	CHECK(first.ranges[0].sourceFirstAgent == crowd::idl::c_SpawnSource);
 	CHECK(first.ranges[0].agentCount == 10);
-	CHECK(first.rows[0] == group);
+	CHECK(first.groupHandles[0] == group);
 
 	const auto record = first.groups[0];
 	CHECK(record.front == glm::vec2(0.0f, 1.0f));
@@ -187,7 +187,7 @@ TEST_CASE("A merge appends every agent of one group to the rear of the other", "
 
 	const auto tick = plan.PlanTick();
 	CheckLayout(tick);
-	REQUIRE(tick.rows.size() == 1);
+	REQUIRE(tick.groupHandles.size() == 1);
 	const auto ranges = RangesOf(tick, into);
 	REQUIRE_FALSE(ranges.empty());
 	CHECK(ranges.back().firstSlot + ranges.back().agentCount == 8);
@@ -297,8 +297,8 @@ TEST_CASE("The plan refuses what a crowd refuses, and is unchanged by it", "[cro
 		CHECK_THROWS_AS(plan.CreateGroup(Group(1)), std::runtime_error);
 
 		const auto full = plan.PlanTick();
-		CHECK_THROWS_AS(plan.SplitGroup(full.rows[0], 1), std::runtime_error);
-		CHECK(plan.GetAgentCount(full.rows[0]) == 2);
+		CHECK_THROWS_AS(plan.SplitGroup(full.groupHandles[0], 1), std::runtime_error);
+		CHECK(plan.GetAgentCount(full.groupHandles[0]) == 2);
 		CHECK(plan.GetTotalAgentCount() == 8);
 	}
 
@@ -417,8 +417,8 @@ TEST_CASE("Any sequence of commands reads every agent from where it last was", "
 		auto next = std::vector<uint32_t>(step.params.agentCount);
 		for (const auto& range : step.ranges)
 		{
-			const auto& entry = model.at(step.rows[range.group].handle.index);
-			REQUIRE(entry.handle == step.rows[range.group]);
+			const auto& entry = model.at(step.groupHandles[range.group].handle.index);
+			REQUIRE(entry.handle == step.groupHandles[range.group]);
 			const auto& ids = entry.ids;
 			for (uint32_t i = 0; i < range.agentCount; ++i)
 			{

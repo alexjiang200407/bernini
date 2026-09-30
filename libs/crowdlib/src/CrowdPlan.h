@@ -15,15 +15,18 @@
 namespace crowd
 {
 	/**
-	 * What one tick uploads: a Group record per row, the ranges that lay its agents out from the
-	 * previous tick's buffer, and which group each row is, for its report.
+	 * What one tick uploads: a Group record per row, and the ranges that lay its agents out from the
+	 * previous tick's buffer.
 	 */
-	struct TickPlan
+	struct TickUploads
 	{
 		idl::TickParams              params{};
 		std::vector<idl::Group>      groups;
-		std::vector<GroupHandle>     rows;
 		std::vector<idl::AgentRange> ranges;
+
+		// Not uploaded: groupHandles[row] is the group behind groups[row], which a report row and a
+		// debug readback's range are matched to.
+		std::vector<GroupHandle> groupHandles;
 	};
 
 	/** A run of a group's agents in slot order: spawned, or read from the previous tick's buffer. */
@@ -99,7 +102,7 @@ namespace crowd
 		 * Applies every command issued since the last call: the returned ranges read the buffer the
 		 * last plan laid out, and the next plan reads the one this lays out.
 		 */
-		[[nodiscard]] TickPlan
+		[[nodiscard]] TickUploads
 		PlanTick();
 
 	private:

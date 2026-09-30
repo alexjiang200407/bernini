@@ -257,10 +257,10 @@ namespace crowd
 		return m_Obstacles;
 	}
 
-	TickPlan
+	TickUploads
 	CrowdPlan::PlanTick()
 	{
-		auto     plan       = TickPlan();
+		auto     plan       = TickUploads();
 		uint32_t firstAgent = 0;
 		for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
 		{
@@ -297,7 +297,7 @@ namespace crowd
 			      .spacing    = group.orders.formation.spacing,
 			      .speed      = type.preferredSpeed * group.orders.pace,
 			      .maxSpeed   = type.maxSpeed });
-			plan.rows.push_back({ .handle = { index, m_Groups.generation(index) } });
+			plan.groupHandles.push_back({ .handle = { index, m_Groups.generation(index) } });
 
 			group.pieces = { { .sourceFirstAgent = firstAgent, .agentCount = group.agentCount } };
 			firstAgent += group.agentCount;
