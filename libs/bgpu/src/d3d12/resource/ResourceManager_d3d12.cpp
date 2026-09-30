@@ -1,6 +1,7 @@
 #include "d3d12/resource/ResourceManager_d3d12.h"
 #include "cmd/CommandList_d3d12.h"
 #include "convert_d3d12.h"
+#include "resource/BoundedPool.h"
 #include <bgpu/cmd/CommandList.h>
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
@@ -20,22 +21,18 @@ namespace bgpu
 		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
-		core::ensure(desc.maxSrvs > 0, "maxSrvs must be greater than zero");
 		// Every buffer, every SRV and every second view of a buffer takes a descriptor, so a heap
 		// smaller than the pools it serves turns a legal create into an exhausted-heap failure. The
 		// +1 is the unbound sentinel the allocator burns at index 0 and never hands out.
 		core::ensure(
 			desc.maxCbvSrvUavs >= desc.maxBuffers + desc.maxSrvs + desc.maxBufferSrvs + 1,
 			"maxCbvSrvUavs must cover maxBuffers + maxSrvs + maxBufferSrvs, and the unbound slot");
-		core::ensure(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
-		core::ensure(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
-		core::ensure(desc.maxTextures > 0, "maxTextures must be greater than zero");
-		core::ensure(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
+		core::ensure(desc.maxSamplers <= 2048, "maxSamplers must be at most 2048");
 
-		core::ensure(
-			desc.maxSamplers > 0 && desc.maxSamplers <= 2048,
-			"maxSamplers must be in (0, 2048]");
-
+		// D3D12 refuses a heap of no descriptors, and a pool of zero is how a compute owner says it
+		// makes none of that kind: the heap is not created, and every create from it fails as
+		// exhausted.
+		if (desc.maxRtvs > 0)
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
 			rtvHeapDesc.NumDescriptors             = desc.maxRtvs;
@@ -45,6 +42,7 @@ namespace bgpu
 				d3d12ErrChecker;
 		}
 
+		if (desc.maxDsvs > 0)
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
 			dsvHeapDesc.NumDescriptors             = desc.maxDsvs;
@@ -54,6 +52,7 @@ namespace bgpu
 				d3d12ErrChecker;
 		}
 
+		if (desc.maxSamplers > 0)
 		{
 			D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
 			samplerHeapDesc.NumDescriptors             = desc.maxSamplers;
@@ -67,7 +66,7 @@ namespace bgpu
 	ResourceManager::BufferAllocation
 	ResourceManager::AllocateBuffer(const BufferDesc& desc) noexcept
 	{
-		auto slot = m_Buffers.try_allocate_slot();
+		auto slot = TryAllocateBounded(m_Buffers);
 		if (slot.is_null())
 		{
 			spdlog::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
@@ -242,7 +241,7 @@ namespace bgpu
 			bufferDesc.byteSize % desc.stride == 0,
 			"A structured view must divide the buffer it views");
 
-		auto slot = m_BufferSrvs.try_allocate_slot();
+		auto slot = TryAllocateBounded(m_BufferSrvs);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateBufferSrv '{}': buffer view pool exhausted", desc.debugName);
@@ -327,7 +326,7 @@ namespace bgpu
 	ResourceManager::CreateTexture(const TextureDesc& desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		auto                        slot = m_Textures.try_allocate_slot();
+		auto                        slot = TryAllocateBounded(m_Textures);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
@@ -342,7 +341,7 @@ namespace bgpu
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		auto                        samplerSlotHandle = m_Samplers.try_allocate_slot();
+		auto                        samplerSlotHandle = TryAllocateBounded(m_Samplers);
 		if (samplerSlotHandle.is_null())
 		{
 			spdlog::error("CreateSampler: sampler pool exhausted");
@@ -366,7 +365,7 @@ namespace bgpu
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(desc.byteSize > 0, "Readback buffer requires a positive byte size");
 
-		auto slot = m_ReadbackBuffers.try_allocate_slot();
+		auto slot = TryAllocateBounded(m_ReadbackBuffers);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateReadbackBuffer: readback pool exhausted");
@@ -385,7 +384,7 @@ namespace bgpu
 		const TextureDesc&          desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		auto                        slot = m_Textures.try_allocate_slot();
+		auto                        slot = TryAllocateBounded(m_Textures);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
@@ -403,7 +402,7 @@ namespace bgpu
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		core::ensure(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
 
-		auto slot = m_Srvs.try_allocate_slot();
+		auto slot = TryAllocateBounded(m_Srvs);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
@@ -444,7 +443,7 @@ namespace bgpu
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
-		auto                        rtvSlotHandle = m_Rtvs.try_allocate_slot();
+		auto                        rtvSlotHandle = TryAllocateBounded(m_Rtvs);
 		if (rtvSlotHandle.is_null())
 		{
 			spdlog::error("CreateRtv: RTV pool exhausted");
@@ -849,7 +848,7 @@ namespace bgpu
 		core::ensure(cmdList != nullptr, "Command list cannot be null");
 		ID3D12DescriptorHeap* heaps[] = { m_CbvSrvUavDescriptors.GetD3D12Heap(),
 			                              m_SamplerHeap.Get() };
-		cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
+		cmdList->SetDescriptorHeaps(m_SamplerHeap ? 2u : 1u, heaps);
 	}
 
 	bool
@@ -987,7 +986,7 @@ namespace bgpu
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		auto&                       texture       = GetTexture(textureHandle);
 		wrl::ComPtr<ID3D12Resource> resource      = texture.GetD3D12ResourceCopy();
-		auto                        dsvSlotHandle = m_Dsvs.try_allocate_slot();
+		auto                        dsvSlotHandle = TryAllocateBounded(m_Dsvs);
 		if (dsvSlotHandle.is_null())
 		{
 			spdlog::error("CreateDsv: DSV pool exhausted");

@@ -17,6 +17,11 @@
 
 namespace bgpu
 {
+	/**
+	 * The pool sizes are the renderer's. Every pool but maxBuffers may be zero, which is how an
+	 * owner says it makes none of that kind: no heap is created for it, and every create from it
+	 * fails as an exhausted pool does. A compute owner starts from ComputeOnly().
+	 */
 	struct ResourceManagerDesc
 	{
 		// Descriptors in the shader-visible heap. Every buffer, every SRV and every second view of a
@@ -35,6 +40,20 @@ namespace bgpu
 		uint32_t maxTextures        = 1024;
 		uint32_t maxSamplers        = 128;
 		uint32_t maxReadbackBuffers = 64;
+
+		/** Buffers, their second views and readbacks at the default sizes; no texture of any kind. */
+		[[nodiscard]] static constexpr ResourceManagerDesc
+		ComputeOnly() noexcept
+		{
+			auto desc          = ResourceManagerDesc();
+			desc.maxSrvs       = 0;
+			desc.maxRtvs       = 0;
+			desc.maxDsvs       = 0;
+			desc.maxTextures   = 0;
+			desc.maxSamplers   = 0;
+			desc.maxCbvSrvUavs = desc.maxBuffers + desc.maxBufferSrvs + 1;
+			return desc;
+		}
 	};
 
 	class IResourceManager : public core::Ref

@@ -19,7 +19,7 @@ auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug l
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 
 auto device = bgpu::CreateDevice(context);              // another: a compute client's own device
-auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc());
+auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
 auto queue  = device->CreateCommandQueue(bgpu::QueueType::kCompute);
 rm->RegisterQueue(queue.Get());
 ```

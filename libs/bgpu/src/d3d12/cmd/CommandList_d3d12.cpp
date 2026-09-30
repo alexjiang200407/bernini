@@ -283,12 +283,7 @@ namespace bgpu
 		m_LastCompletedFence = cmdQueue->GetLastCompletedFence();
 		m_RecordingVersion   = MakeVersion(cmdQueue->GetNextFenceValue(), m_Desc.type, false);
 
-		auto                  d3d12ResourceManager = m_ResourceManager->As<ResourceManager>();
-		ID3D12DescriptorHeap* heaps[]              = {
-			d3d12ResourceManager->GetCbvSrvUavHeap(),
-			d3d12ResourceManager->GetSamplerHeap(),
-		};
-		m_CommandList->SetDescriptorHeaps(std::size(heaps), heaps);
+		m_ResourceManager->As<ResourceManager>()->SetDescriptorHeap(m_CommandList.Get());
 		m_Open = true;
 	}
 
