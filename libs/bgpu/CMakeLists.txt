@@ -86,7 +86,9 @@ endif()
 if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx-headers CONFIG REQUIRED)
 	find_package(winpixevent CONFIG REQUIRED)
-	# PUBLIC: <bgpu/d3d12/native_device.h> names ID3D12Device from these headers.
+	# PUBLIC: what a caller does with a native pointer bgpu hands out -- the renderer's swapchain,
+	# crowdlib's own D3D12 job -- needs these headers, though bgpu's own public headers only
+	# forward-declare the interfaces.
 	target_link_libraries(bgpu
 		PUBLIC  Microsoft::DirectX-Headers
 		PRIVATE d3d12 dxgi dxguid Microsoft::WinPixEventRuntime)

@@ -5,7 +5,10 @@
 
 #	include <bgpu/api.h>
 #	include <bgpu/resource/Texture.h>
-#	include <directx/d3d12.h>
+
+// Declared, not defined: a caller that dereferences one includes <directx/d3d12.h> itself.
+struct ID3D12CommandQueue;
+struct ID3D12Resource;
 
 namespace bgpu
 {

@@ -1,8 +1,13 @@
 #pragma once
-#include <Metal/Metal.hpp>
 #include <bgpu/api.h>
 #include <bgpu/resource/Texture.h>
-#include <bgpu/types/Format.h>
+
+// Declared, not defined: a caller that dereferences one includes <Metal/Metal.hpp> itself.
+namespace MTL
+{
+	class CommandBuffer;
+	class Texture;
+}
 
 namespace bgpu
 {
@@ -24,8 +29,4 @@ namespace bgpu
 	 */
 	[[nodiscard]] BGPU_API MTL::CommandBuffer*
 						   NewMtlCommandBuffer(ICommandQueue& queue) noexcept;
-
-	/** The pixel format a texture of `format` is created with. */
-	[[nodiscard]] BGPU_API MTL::PixelFormat
-						   ToMtlPixelFormat(Format format) noexcept;
 }

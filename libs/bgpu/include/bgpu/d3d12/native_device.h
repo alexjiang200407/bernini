@@ -5,7 +5,9 @@
 #if defined(_WIN32)
 
 #	include <bgpu/api.h>
-#	include <directx/d3d12.h>
+
+// Declared, not defined: a caller that dereferences one includes <directx/d3d12.h> itself.
+struct ID3D12Device;
 
 namespace bgpu
 {

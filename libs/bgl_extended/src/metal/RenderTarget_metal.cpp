@@ -24,7 +24,9 @@ namespace bgl
 	namespace
 	{
 		constexpr bgpu::Format c_BackbufferFormat = bgpu::Format::SBGRA8_UNORM;
-		constexpr bgpu::Format c_DepthFormat      = bgpu::Format::D24S8;
+		// The layer's spelling of the same format; CreateOutputAttachments checks the two agree.
+		constexpr MTL::PixelFormat c_BackbufferPixelFormat = MTL::PixelFormatBGRA8Unorm_sRGB;
+		constexpr bgpu::Format     c_DepthFormat           = bgpu::Format::D24S8;
 
 		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
 		// Alpha is carried because the blend state writes destination alpha and the capture path
@@ -64,7 +66,7 @@ namespace bgl
 
 			// Must match the ring's colour format: the present path is a blit, and Metal requires
 			// both sides of one to agree.
-			m_Layer->setPixelFormat(bgpu::ToMtlPixelFormat(c_BackbufferFormat));
+			m_Layer->setPixelFormat(c_BackbufferPixelFormat);
 
 			// A drawable is a blit destination here, not only an attachment, which framebufferOnly
 			// would forbid.
@@ -112,6 +114,10 @@ namespace bgl
 			texDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 			m_Backbuffers[i].texture = m_ResourceManager->CreateTexture(texDesc);
+			core::ensure(
+				bgpu::GetMtlTexture(*m_ResourceManager, m_Backbuffers[i].texture)->pixelFormat() ==
+					c_BackbufferPixelFormat,
+				"the present blit needs the layer and the ring in one format");
 
 			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_BackbufferFormat;

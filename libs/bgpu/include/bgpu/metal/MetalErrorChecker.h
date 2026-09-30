@@ -1,7 +1,12 @@
 #pragma once
-#include <Foundation/Foundation.hpp>
 #include <bgpu/api.h>
 #include <string>
+
+// Declared, not defined: a caller that reads one includes <Foundation/Foundation.hpp> itself.
+namespace NS
+{
+	class Error;
+}
 
 namespace bgpu
 {
