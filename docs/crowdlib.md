@@ -182,9 +182,10 @@ checksum against the CPU's. `--frames N` exits non-zero on a mismatch or no read
 `--headless` draws offscreen.
 
 `examples/bgl_crowd` draws the crowd: two infantry and two cavalry groups march across a field,
-one box per agent from the debug readback, while the crowd steps a tick a frame on its own queue.
-At tick 60 a group splits off its rear under new orders, and at tick 150 one cavalry group merges
-into the other; every group's report is logged every 60 ticks. `--frames N` exits non-zero unless
+one box per agent from the debug readback. At tick 60 a group splits off its rear under new orders,
+and at tick 150 one cavalry group merges into the other; a moving group's report is logged every
+60 ticks. Run until closed, it steps at the wall clock's pace and every group marches back and forth
+between its two ends; with `--frames` it steps a tick a frame and marches once. `--frames N` exits non-zero unless
 every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
 draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks
 at it.

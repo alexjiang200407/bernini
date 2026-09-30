@@ -1,5 +1,6 @@
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
+#include <algorithm>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -11,6 +12,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
+#include <chrono>
 #include <cmath>
 #include <core/err/util.h>
 #include <crowdlib/AgentType.h>
@@ -26,14 +28,18 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Groups of infantry and cavalry marching across a field, simulated by crowdlib on its compute queue
 // and drawn by the renderer as one box per agent from the crowd's debug readback -- the only
-// per-agent read the crowd has, and the one a game would never drive itself with. The crowd steps
-// one fixed tick a frame while it can, and the frame draws whatever tick last completed. Partway
-// through, a group splits off its rear and a cavalry group merges into another; the log prints
-// every group's report as it goes.
+// per-agent read the crowd has, and the one a game would never drive itself with. The frame draws
+// whatever tick last completed. Partway through, a group splits off its rear and a cavalry group
+// merges into another; the log prints each moving group's report as it goes.
+//
+// Run until closed, the crowd steps its fixed tick at the wall clock's pace and every group marches
+// back and forth between its two ends. With --frames it steps one tick a frame and marches once,
+// so the run is the same every time and its end can be checked.
 
 namespace
 {
@@ -50,6 +56,9 @@ namespace
 
 	constexpr float c_Tick = 1.0f / 30.0f;
 
+	// Long enough for the slowest group to cross the field and stand before it turns around.
+	constexpr uint64_t c_MarchTicks = 540;
+
 	constexpr auto c_Infantry =
 		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
 	constexpr auto c_Cavalry = crowd::AgentType{ .radius         = 0.8f,
@@ -63,6 +72,9 @@ namespace
 		crowd::GroupHandle handle;
 		uint32_t           type = 0;
 		crowd::GroupOrders orders;
+
+		// The other end of its march, where it turns to next.
+		glm::vec2 home = glm::vec2(0.0f);
 	};
 
 	crowd::GroupOrders
@@ -125,7 +137,11 @@ namespace
 			const auto handle =
 				crowd->CreateGroup({ .agentType = type, .agentCount = count, .orders = spawn });
 			groups.push_back(
-				{ .name = std::move(name), .handle = handle, .type = type, .orders = orders });
+				{ .name   = std::move(name),
+			      .handle = handle,
+			      .type   = type,
+			      .orders = orders,
+			      .home   = start });
 		};
 		add("left foot",
 		    0,
@@ -206,9 +222,14 @@ namespace
 		renderJob.viewport =
 			bgl::Viewport(static_cast<float>(opts.width), static_cast<float>(opts.height));
 
+		const bool live      = opts.frames == 0;
+		auto       lastMeans = std::vector<glm::vec2>(groups.size() + 1, glm::vec2(INFINITY));
+		auto       clock     = std::chrono::steady_clock::now();
+		float      owed      = 0.0f;
+
 		uint64_t drawnTick = 0;
 		uint32_t frame     = 0;
-		for (; opts.frames == 0 || frame < opts.frames; ++frame)
+		for (; live || frame < opts.frames; ++frame)
 		{
 			if (window)
 			{
@@ -217,9 +238,30 @@ namespace
 					break;
 			}
 
-			if (crowd->CanStep())
+			// Live, a tick is owed per c_Tick of wall time; capped, so a stall does not replay as a
+			// burst.
+			const auto now = std::chrono::steady_clock::now();
+			owed =
+				std::min(owed + std::chrono::duration<float>(now - clock).count(), 4.0f * c_Tick);
+			clock          = now;
+			const bool due = !live || owed >= c_Tick;
+
+			if (due && crowd->CanStep())
 			{
+				owed -= live ? c_Tick : 0.0f;
 				const uint64_t next = crowd->GetSubmittedTick() + 1;
+				if (live && next % c_MarchTicks == 0)
+				{
+					for (auto& group : groups)
+					{
+						if (!crowd->HasGroup(group.handle))
+							continue;
+						std::swap(group.orders.goal, group.home);
+						group.orders.facing = -group.orders.facing;
+						crowd->SetOrders(group.handle, group.orders);
+					}
+					std::cout << std::format("tick {}: every group turns around\n", next);
+				}
 				if (next == 60)
 				{
 					auto orders = Orders({ -6.0f, 0.0f }, { 1.0f, 0.0f }, 5, 1.0f);
@@ -227,7 +269,8 @@ namespace
 						{ .name   = "left rear",
 					      .handle = crowd->SplitGroup(groups[0].handle, 20),
 					      .type   = 0,
-					      .orders = orders });
+					      .orders = orders,
+					      .home   = { -15.0f, -3.0f } });
 					crowd->SetOrders(groups.back().handle, orders);
 					std::cout << std::format(
 						"tick {}: left foot splits off its rear twenty\n",
@@ -268,12 +311,15 @@ namespace
 
 				if (drawnTick % 60 == 0)
 				{
-					for (const auto& group : groups)
+					for (uint32_t i = 0; i < groups.size(); ++i)
 					{
+						const auto& group = groups[i];
 						if (!crowd->HasGroup(group.handle))
 							continue;
-						if (const auto report = crowd->GetReport(group.handle))
+						const auto report = crowd->GetReport(group.handle);
+						if (report && glm::length(report->meanPosition - lastMeans[i]) > 1e-3f)
 						{
+							lastMeans[i] = report->meanPosition;
 							std::cout << std::format(
 								"tick {:>4}: {:<12} {:>3} agents at ({:6.2f}, {:6.2f})\n",
 								report->tick,
@@ -322,6 +368,8 @@ int
 main(int argc, char** argv)
 {
 	core::install_crash_handlers();
+	// The log is read while the crowd runs, so every line reaches it as it is written.
+	std::cout << std::unitbuf;
 
 	auto opts = Options{};
 
