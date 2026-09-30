@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/api.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
@@ -39,7 +40,7 @@ namespace bgpu
 		/**
 		 * @throws std::runtime_error if the device cannot allocate the initial resource.
 		 */
-		void
+		BGPU_API void
 		Init(
 			ResourceManagerRef resourceManager,
 			std::string        debugName,
@@ -58,11 +59,11 @@ namespace bgpu
 		 * @throws std::runtime_error if the device cannot allocate the larger resource; the buffer
 		 *         is left intact at its current capacity.
 		 */
-		void
+		BGPU_API void
 		Grow(uint32_t newCapacity, bool preserveContents = true);
 
 		// Records the forward copy for any pending growth and retires the superseded resources.
-		void
+		BGPU_API void
 		FlushGrowth(ICommandList* cmdList);
 
 		[[nodiscard]] bool
@@ -89,7 +90,7 @@ namespace bgpu
 			return !m_Handle.IsNull();
 		}
 
-		void
+		BGPU_API void
 		Release(bool deferred) noexcept;
 
 	private:
@@ -116,6 +117,6 @@ namespace bgpu
 	 * and tapers past c_TaperBytes, where the transient old+new residency of a doubling would cost
 	 * more device memory than the growth is worth.
 	 */
-	[[nodiscard]] uint32_t
+	[[nodiscard]] BGPU_API uint32_t
 	NextGpuBufferCapacity(uint32_t current, uint32_t required, uint32_t stride) noexcept;
 }

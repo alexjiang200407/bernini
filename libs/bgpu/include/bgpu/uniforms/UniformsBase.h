@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <bgpu/api.h>
 #include <bgpu/reflection/ReflectedLayout.h>
 #include <bgpu/uniforms/UniformValueType.h>
 #include <concepts>
@@ -342,6 +343,7 @@ namespace bgpu
 		 * @param layout The reflected tree; shared, since one PSO's layout serves every kernel on it.
 		 * @param size The constant buffer's size in bytes, which the tree alone does not carry.
 		 */
+		BGPU_API
 		UniformsBase(std::shared_ptr<const ReflectedLayout> layout, size_t size);
 
 		UniformsBase(const UniformsBase&) = delete;
@@ -353,16 +355,16 @@ namespace bgpu
 		UniformsBase&
 		operator=(const UniformsBase&) = delete;
 
-		Accessor
+		BGPU_API Accessor
 		operator[](std::string_view name);
 
-		Accessor
+		BGPU_API Accessor
 		operator[](uint32_t idx);
 
-		ConstAccessor
+		BGPU_API ConstAccessor
 		operator[](std::string_view name) const;
 
-		ConstAccessor
+		BGPU_API ConstAccessor
 		operator[](uint32_t idx) const;
 
 		[[nodiscard]] bool
@@ -372,7 +374,7 @@ namespace bgpu
 		}
 
 		/** Whether `name` resolves to a member of this constant buffer. False for an empty mirror. */
-		[[nodiscard]] bool
+		[[nodiscard]] BGPU_API bool
 		HasMember(std::string_view name) const;
 
 		/** The reflected layout this mirror was built from. Null for an empty mirror. */

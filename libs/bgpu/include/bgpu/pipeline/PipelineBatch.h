@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/api.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/MeshletKernel.h>
@@ -31,17 +32,18 @@ namespace bgpu
 		// against 2.8 GB peak).
 		static constexpr uint32_t c_MaxBuildThreads = 6;
 
-		explicit PipelineBatch(IDevice* device) noexcept;
+		explicit BGPU_API
+		PipelineBatch(IDevice* device) noexcept;
 
 		PipelineBatch(const PipelineBatch&) = delete;
 
 		PipelineBatch&
 		operator=(const PipelineBatch&) = delete;
 
-		void
+		BGPU_API void
 		Add(MeshletKernel& kernel, MeshletPipelineDesc desc);
 
-		void
+		BGPU_API void
 		Add(ComputeKernel& kernel, ComputePipelineDesc desc);
 
 		/**
@@ -50,7 +52,7 @@ namespace bgpu
 		 * Returns once every one is built. A shader that fails to compile is fatal, as it is on the
 		 * calling thread.
 		 */
-		void
+		BGPU_API void
 		Build(uint32_t threads = 0);
 
 		[[nodiscard]] size_t

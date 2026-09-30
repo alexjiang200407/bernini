@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/api.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Sampler.h>
@@ -26,7 +27,9 @@ namespace bgpu
 	{
 	public:
 		Uniforms() = default;
+		BGPU_API
 		Uniforms(IMeshletPipeline const* pipeline, std::string_view cbufferName);
+		BGPU_API
 		Uniforms(IComputePipeline const* pipeline, std::string_view cbufferName);
 
 		Uniforms(const Uniforms&) = delete;
@@ -45,7 +48,8 @@ namespace bgpu
 		}
 
 	private:
-		explicit Uniforms(UniformLayoutEntry entry);
+		explicit BGPU_API
+		Uniforms(UniformLayoutEntry entry);
 
 	private:
 		uint32_t m_RootParamIndex = 0xFFFFFFFF;

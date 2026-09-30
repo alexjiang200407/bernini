@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/api.h>
 #include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/Buffer.h>
@@ -33,7 +34,7 @@ namespace bgpu
 		ComputeBuffer&
 		operator=(ComputeBuffer&&) noexcept = default;
 
-		void
+		BGPU_API void
 		Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager);
 
 		/**
@@ -42,7 +43,7 @@ namespace bgpu
 		 *
 		 * @throws std::runtime_error if the device cannot allocate; the buffer is left intact.
 		 */
-		void
+		BGPU_API void
 		Resize(uint32_t newCount);
 
 		// True once Init() has created the GPU buffer and before Release().

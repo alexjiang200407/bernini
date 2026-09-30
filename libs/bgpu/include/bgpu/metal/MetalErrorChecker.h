@@ -1,5 +1,6 @@
 #pragma once
 #include <Foundation/Foundation.hpp>
+#include <bgpu/api.h>
 #include <string>
 
 namespace bgpu
@@ -11,8 +12,8 @@ namespace bgpu
 	 * with no diagnosis at all -- reading through the error is then the crash that hides the failure
 	 * it was meant to report.
 	 */
-	[[nodiscard]] std::string
-	GetErrorDescription(const NS::Error* error);
+	[[nodiscard]] BGPU_API std::string
+						   GetErrorDescription(const NS::Error* error);
 
 	/**
 	 * Holds the NSError a Metal call writes, so a call site reads like its D3D12 and Slang
@@ -42,13 +43,13 @@ namespace bgpu
 			return m_Error;
 		}
 
-		bool
+		BGPU_API bool
 		ReportError() const;
 
 	private:
 		NS::Error* m_Error = nullptr;
 	};
 
-	void
+	BGPU_API void
 	operator>>(const void* object, const MetalErrorChecker& checker);
 }
