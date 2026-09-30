@@ -1,6 +1,6 @@
 #pragma once
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <string>
 #include <vector>

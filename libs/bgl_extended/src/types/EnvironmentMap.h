@@ -1,5 +1,5 @@
 #pragma once
-#include "resource/Srv.h"
+#include <bgpu/resource/Srv.h>
 
 namespace bgl
 {

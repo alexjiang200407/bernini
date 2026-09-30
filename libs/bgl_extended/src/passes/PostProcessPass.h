@@ -1,12 +1,12 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
-#include "resource/Rtv.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
-#include "types/ViewportState.h"
 #include <bgl/IRenderTarget.h>
 #include <bgl/Viewport.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/types/ViewportState.h>
 #include <spdlog/spdlog.h>
 #include <string>
 

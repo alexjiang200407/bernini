@@ -1,7 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
-#include "types/RasterState.h"
 #include <bgl_common/idl/DispatchArgs.h>
+#include <bgpu/types/RasterState.h>
 #include <cstdint>
 #include <string>
 #include <string_view>

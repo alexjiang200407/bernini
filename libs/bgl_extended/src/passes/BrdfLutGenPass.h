@@ -1,10 +1,10 @@
 #pragma once
-#include "device/Device.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
 

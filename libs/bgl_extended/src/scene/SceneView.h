@@ -1,12 +1,8 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
-#include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
-#include "scene/EntryBuffer.h"
 #include "scene/NamedBuffer.h"
-#include "scene/PackedBuffer.h"
-#include "scene/RangeBuffer.h"
 #include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
@@ -38,6 +34,10 @@
 #include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/PosedInstance.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/buffer/EntryBuffer.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>

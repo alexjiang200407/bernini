@@ -1,4 +1,3 @@
-#include "resource/Texture.h"
 #include "scene/TextureAssetStore.h"
 #include "util/FakeResourceManager.h"
 #include "util/RecordingCommandList.h"
@@ -7,6 +6,7 @@
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgpu/resource/Texture.h>
 #include <core/containers/fixed_buffer.h>
 #include <core/ref/SharedRef.h>
 

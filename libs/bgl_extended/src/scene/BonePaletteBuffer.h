@@ -1,8 +1,8 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/multi_slot_vector.h>
 #include <cstdint>

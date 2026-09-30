@@ -1,6 +1,6 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "cmd/TimestampHeap.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/TimestampHeap.h>
 #include <cstdint>
 #include <span>
 #include <string>

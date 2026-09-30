@@ -1,6 +1,6 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
+#include <bgpu/pipeline/MeshletKernel.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
 

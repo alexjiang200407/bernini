@@ -1,9 +1,9 @@
 #pragma once
 
-#include "cmd/CommandList.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>

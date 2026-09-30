@@ -1,14 +1,14 @@
 #include "passes/TransparentForwardPhase.h"
-#include "cmd/CommandList.h"
 #include "fg/PassDesc.h"
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
-#include "pipeline/MeshletKernel.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/MeshletState.h"
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/MeshletState.h>
 #include <core/err/util.h>
 #include <string>
 

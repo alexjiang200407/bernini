@@ -4,9 +4,9 @@
 #include "passes/GrassForwardPhase.h"
 #include "passes/PassInitContext.h"
 #include "passes/TransparentForwardPhase.h"
-#include "pipeline/MeshletKernel.h"
 #include "types/DrawBucketMask.h"
-#include "types/MeshletState.h"
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/types/MeshletState.h>
 #include <cstdint>
 #include <span>
 #include <spdlog/spdlog.h>

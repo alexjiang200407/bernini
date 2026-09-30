@@ -1,11 +1,9 @@
 #include "gfx/RenderContext.h"
-#include "cmd/TimestampHeap.h"
 #include "fg/PassTimer.h"
+#include <bgpu/cmd/TimestampHeap.h>
 #include <core/glm.h>
 
-#include "constants/constants.h"
 #include "debug/DebugReadback.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
@@ -13,17 +11,9 @@
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
 #include "postprocess/BloomChain.h"
-#include "resource/ResourceManager.h"
-#include "resource/Sampler.h"
-#include "resource/Texture.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "types/Format.h"
-#include "types/QueueType.h"
-#include "types/Rect.h"
 #include "util/util.h"
 #include <algorithm>
 #include <array>
@@ -42,6 +32,16 @@
 #include <bgl_common/Frustum.h>
 #include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/jitter.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/QueueType.h>
+#include <bgpu/types/Rect.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
 #include <core/err/util.h>

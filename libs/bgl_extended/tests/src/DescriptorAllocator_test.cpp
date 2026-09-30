@@ -10,7 +10,7 @@
 
 namespace wrl = Microsoft::WRL;
 
-#	include "constants/constants.h"
+#	include <bgpu/constants/constants.h>
 #	include "d3d12/resource/DescriptorAllocator_d3d12.h"
 
 #	include <catch2/catch_test_macros.hpp>

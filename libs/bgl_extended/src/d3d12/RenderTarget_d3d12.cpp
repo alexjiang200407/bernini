@@ -1,10 +1,10 @@
 #include "RenderTarget_d3d12.h"
 #include "cmd/CommandAllocator_d3d12.h"
-#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "resource/ResourceManager_d3d12.h"
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
 #include <spdlog/spdlog.h>
 
 namespace bgl

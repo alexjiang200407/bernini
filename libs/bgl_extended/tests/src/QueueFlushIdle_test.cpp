@@ -2,17 +2,17 @@
 // itself: a command buffer's retirement is only observable through metal-cpp.
 // Held through SharedRef via `auto`, and dereferenced: both need the complete type, which
 // include-cleaner cannot see through the template.
-#include "cmd/CommandAllocator.h"  // IWYU pragma: keep
-#include "cmd/CommandQueue.h"      // IWYU pragma: keep
-#include "resource/Buffer.h"
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
+#include <bgpu/cmd/CommandAllocator.h>  // IWYU pragma: keep
+#include <bgpu/cmd/CommandQueue.h>      // IWYU pragma: keep
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
-#	include "cmd/CommandList.h"
-#	include "device/Device.h"
+#	include <bgpu/cmd/CommandList.h>
+#	include <bgpu/device/Device.h>
 #	include "gfx/GraphicsBase.h"
 #	include "metal/cmd/CommandList_metal.h"
 #	include "util/TestOptions.h"

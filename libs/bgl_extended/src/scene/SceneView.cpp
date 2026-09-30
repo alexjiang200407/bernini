@@ -1,12 +1,9 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "resource/ResourceManager.h"
-#include "resource/Texture.h"
 #include "scene/NamedBuffer.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include "util/util.h"
@@ -38,6 +35,9 @@
 #include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
 #include <cmath>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>

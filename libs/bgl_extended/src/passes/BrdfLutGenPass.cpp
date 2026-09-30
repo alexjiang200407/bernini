@@ -1,22 +1,22 @@
 #include "passes/BrdfLutGenPass.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/Shader.h"
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/Shader.h>
 #include <core/err/util.h>
 
-#include "cmd/CommandList.h"
-#include "device/Device.h"
-#include "pipeline/MeshletPipeline.h"
-#include "resource/FrameBuffer.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
-#include "types/TextureDimension.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
+#include <bgpu/types/TextureDimension.h>
 #include <string_view>
 #include <utility>
 

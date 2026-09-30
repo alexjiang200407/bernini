@@ -53,7 +53,7 @@
 #include <assetlib_structs/Grass.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
-#include <bgl_common/MemoryTag.h>
+#include <bgpu/MemoryTag.h>
 #include <core/err/util.h>
 
 #include <memory>

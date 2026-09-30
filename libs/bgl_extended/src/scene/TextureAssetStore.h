@@ -1,11 +1,11 @@
 #pragma once
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
-#include "uniforms/DescriptorHandle.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>

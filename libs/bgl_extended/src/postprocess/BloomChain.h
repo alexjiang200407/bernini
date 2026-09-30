@@ -1,8 +1,8 @@
 #pragma once
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <cstdint>
 #include <span>
 #include <vector>

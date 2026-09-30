@@ -1,12 +1,8 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <array>
@@ -21,6 +17,10 @@
 #include <bgl/MaterialType.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/idl.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>

@@ -1,9 +1,9 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/ComputeKernel.h"
-#include "pipeline/ComputePipeline.h"
-#include "scene/ComputeBuffer.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/ref/SharedRef.h>
 #include <spdlog/spdlog.h>
 

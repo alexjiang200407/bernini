@@ -1,6 +1,6 @@
 #pragma once
-#include "types/Format.h"
 #include <assetlib_structs/VkFormat.h>
+#include <bgpu/types/Format.h>
 
 namespace bgl
 {

@@ -1,11 +1,5 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "resource/Texture.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/HalfFloat.h"
@@ -27,6 +21,12 @@
 #include <bgl/Viewport.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl_common/jitter.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

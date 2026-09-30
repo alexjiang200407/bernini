@@ -1,5 +1,3 @@
-#include "cmd/CommandQueue.h"
-#include "device/Device.h"
 #include "device/Device_d3d12.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
@@ -11,6 +9,8 @@
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/device/Device.h>
 #include <core/log/log.h>
 #include <memory>
 #include <span>

@@ -1,6 +1,6 @@
 #include "postprocess/BloomChain.h"
-#include "types/Format.h"
 #include <algorithm>
+#include <bgpu/types/Format.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <format>

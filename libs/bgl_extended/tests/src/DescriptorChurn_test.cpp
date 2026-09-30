@@ -1,10 +1,10 @@
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 

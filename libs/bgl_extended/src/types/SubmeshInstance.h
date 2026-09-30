@@ -1,7 +1,7 @@
 #pragma once
 #include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/Entry.h>
-#include <bgl_common/idl/RawEntry.h>
+#include <bgpu/idl/Entry.h>
+#include <bgpu/idl/RawEntry.h>
 #include <cstdint>
 
 namespace bgl

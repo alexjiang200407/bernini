@@ -1,19 +1,19 @@
 #pragma once
 // idl::SkinnedState arrived through the idl.h umbrella this sweep removed.
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Buffer.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/SkinnedState.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>

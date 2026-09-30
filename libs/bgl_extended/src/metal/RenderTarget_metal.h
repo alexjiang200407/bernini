@@ -3,16 +3,16 @@
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandQueue.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Dsv.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
-#include "resource/Srv.h"
-#include "resource/Texture.h"
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 
 #include <array>
 #include <bgl/IGraphics.h>

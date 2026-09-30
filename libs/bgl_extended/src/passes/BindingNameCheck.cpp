@@ -1,8 +1,8 @@
 #include "passes/BindingNameCheck.h"
-#include "pipeline/MeshletKernel.h"
-#include "uniforms/Uniforms.h"
 #include <algorithm>
-#include <bgl_common/UniformsBase.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/uniforms/Uniforms.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <core/err/util.h>
 #include <span>
 #include <string>

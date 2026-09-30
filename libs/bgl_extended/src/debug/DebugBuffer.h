@@ -1,10 +1,10 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
 #include <array>
 #include <bgl_common/idl/DebugRecord.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <utility>

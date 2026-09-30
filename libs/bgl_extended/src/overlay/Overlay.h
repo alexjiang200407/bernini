@@ -1,14 +1,14 @@
 #pragma once
 #include "gfx/RenderTargetBase.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
 #include "scene/TextureAssetStore.h"
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/OverlayVertex.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/ref/RefCounter.h>

@@ -1,13 +1,13 @@
 #pragma once
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandQueue.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Dsv.h"
-#include "resource/ResourceManager.h"
-#include "resource/Rtv.h"
 #include <bgl/IGraphics.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
 #include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 

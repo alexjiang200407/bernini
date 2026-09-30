@@ -1,6 +1,4 @@
 #include "util/util.h"
-#include "types/Format.h"
-#include "types/FormatInfo.h"
 #include <algorithm>
 #include <bgl/GeomType.h>
 #include <bgl/LodLevel.h>
@@ -16,6 +14,8 @@
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/FormatInfo.h>
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>

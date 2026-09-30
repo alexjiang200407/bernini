@@ -1,7 +1,7 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 
 namespace bgl

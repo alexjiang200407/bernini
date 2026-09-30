@@ -1,10 +1,10 @@
 #pragma once
 #include "fg/PassDesc.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <array>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <span>
 #include <string_view>

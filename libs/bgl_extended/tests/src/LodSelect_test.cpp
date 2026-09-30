@@ -1,13 +1,6 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/CullState.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/LodMesh.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -30,6 +23,13 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/InstanceVisibility.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

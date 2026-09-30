@@ -1,9 +1,9 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include "pipeline/MeshletKernel.h"
-#include "resource/Rtv.h"
-#include "resource/Sampler.h"
-#include "resource/Srv.h"
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
 #include <core/glm.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>

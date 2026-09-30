@@ -3,7 +3,6 @@
 #include "gfx/RenderContext.h"
 #include "passes/ForwardPhases.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
 #include "types/DrawBucketMask.h"
 #include "util/TestEnvironment.h"
@@ -19,6 +18,7 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/Viewport.h>
+#include <bgpu/pipeline/PipelineBatch.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
 #include <cstdint>

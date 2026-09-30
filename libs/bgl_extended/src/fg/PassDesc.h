@@ -1,10 +1,10 @@
 #pragma once
-#include "constants/constants.h"
-#include "resource/Buffer.h"
-#include "resource/Dsv.h"
-#include "resource/Rtv.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
+#include <bgpu/constants/constants.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
 #include <core/str/str.h>

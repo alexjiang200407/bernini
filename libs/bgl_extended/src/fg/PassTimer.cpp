@@ -1,6 +1,6 @@
 #include "fg/PassTimer.h"
-#include "cmd/CommandList.h"
-#include "cmd/TimestampHeap.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/TimestampHeap.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>

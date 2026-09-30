@@ -1,7 +1,7 @@
 #pragma once
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "types/Barrier.h"
+#include <bgpu/types/Barrier.h>
 #include <span>
 #include <string>
 #include <utility>

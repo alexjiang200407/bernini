@@ -1,6 +1,6 @@
 #include "scene/BonePaletteBuffer.h"
-#include "resource/ResourceManager.h"
-#include "scene/GrowableGpuBuffer.h"
+#include <bgpu/buffer/GrowableGpuBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/err/util.h>
 #include <cstdint>

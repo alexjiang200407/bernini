@@ -1,6 +1,5 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Texture.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
@@ -19,6 +18,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl_common/jitter.h>
+#include <bgpu/resource/Texture.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

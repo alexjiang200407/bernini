@@ -1,11 +1,5 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
-#include "device/Device.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Texture.h"
 #include "scene/Scene.h"
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
@@ -16,6 +10,12 @@
 #include <bgl/MaterialType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/containers/fixed_buffer.h>
 #include <cstddef>

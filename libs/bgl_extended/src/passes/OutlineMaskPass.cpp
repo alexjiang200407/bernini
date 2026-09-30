@@ -1,26 +1,26 @@
 // A SharedRef<ISceneView> is dereferenced and destroyed here, both of which need the
 // complete type -- include-cleaner sees only the declaration.
 #include "passes/OutlineMaskPass.h"
-#include "cmd/CommandList.h"
-#include "constants/constants.h"
-#include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
-#include "pipeline/MeshletPipeline.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "types/DepthStencilState.h"
-#include "types/Format.h"
-#include "types/RasterState.h"
-#include "types/RenderState.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/LodDrawMode.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/FrameBuffer.h>
+#include <bgpu/resource/Shader.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/DepthStencilState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/RasterState.h>
+#include <bgpu/types/RenderState.h>
 #include <core/err/util.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.

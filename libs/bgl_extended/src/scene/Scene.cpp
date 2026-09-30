@@ -1,14 +1,8 @@
 #include "scene/Scene.h"
-#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "resource/Sampler.h"
 #include "scene/NamedBuffer.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
-#include "uniforms/DescriptorHandle.h"
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/ImageData.h>
@@ -24,6 +18,12 @@
 #include <bgl_common/idl/Geom.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>

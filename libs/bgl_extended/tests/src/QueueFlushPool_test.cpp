@@ -1,13 +1,13 @@
 // bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: autorelease pools are the Metal backend's problem alone.
-#include "types/QueueType.h"
 #include "util/TestGraphics.h"
+#include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
-#	include "cmd/CommandQueue.h"
-#	include "device/Device.h"
+#	include <bgpu/cmd/CommandQueue.h>
+#	include <bgpu/device/Device.h>
 #	include "gfx/GraphicsBase.h"
 #	include "metal/cmd/CommandQueue_metal.h"
 #	include "util/GpuValidation.h"

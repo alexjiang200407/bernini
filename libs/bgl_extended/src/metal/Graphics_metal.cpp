@@ -1,5 +1,4 @@
 #include "AutoreleaseNet_metal.h"
-#include "MetalErrorChecker.h"
 #include "cmd/CommandQueue_metal.h"
 #include "device/Device_metal.h"
 #include <assetlib_structs/ImageData.h>
@@ -15,6 +14,7 @@
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/metal/MetalErrorChecker.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -25,9 +25,9 @@
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include <bgpu/resource/ResourceManager.h>
 
 #include <core/file/file.h>
 #include <core/log/log.h>

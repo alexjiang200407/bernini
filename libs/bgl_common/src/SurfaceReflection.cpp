@@ -2,8 +2,8 @@
 
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
-#include <bgl_common/SlangReflection.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
+#include <bgpu/reflection/SlangReflection.h>
 
 #include <algorithm>
 #include <array>

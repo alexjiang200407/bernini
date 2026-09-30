@@ -1,6 +1,4 @@
 #pragma once
-#include "types/Format.h"
-#include "types/FormatInfo.h"
 #include <bgl/GeomType.h>
 #include <bgl/LodLevel.h>
 #include <bgl/MaterialHandle.h>
@@ -12,6 +10,8 @@
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/FormatInfo.h>
 #include <cstdint>
 #include <optional>
 

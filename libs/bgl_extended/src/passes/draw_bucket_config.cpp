@@ -1,9 +1,9 @@
 #include "passes/draw_bucket_config.h"
 #include "gfx/DrawBucketTable.h"
-#include "types/RasterState.h"
 #include "util/util.h"
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgpu/types/RasterState.h>
 #include <core/err/util.h>
 #include <format>
 #include <string>

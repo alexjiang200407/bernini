@@ -1,9 +1,4 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/PaletteReadback.h"
@@ -22,6 +17,11 @@
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

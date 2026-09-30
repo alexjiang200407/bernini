@@ -1,6 +1,5 @@
 #include "gfx/surface_registry.h"
 
-#include "device/Device.h"
 #include "gfx/DrawBucketTable.h"
 #include "passes/draw_bucket_config.h"
 #include "util/util.h"
@@ -11,6 +10,7 @@
 #include <bgl_common/SurfaceReflection.h>
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/device/Device.h>
 #include <core/log/log.h>
 
 #include <algorithm>

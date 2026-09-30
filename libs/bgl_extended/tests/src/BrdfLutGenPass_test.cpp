@@ -1,16 +1,8 @@
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandList.h"
-#include "cmd/CommandQueue.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/PassInitContext.h"
-#include "pipeline/PipelineBatch.h"
-#include "resource/Readback.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
-#include "types/QueueType.h"
 #include "util/HalfFloat.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -22,6 +14,14 @@
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <bgl/glm.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/QueueType.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <catch2/catch_approx.hpp>

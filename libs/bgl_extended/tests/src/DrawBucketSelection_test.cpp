@@ -1,6 +1,5 @@
 #include "gfx/DrawBucketTable.h"
 #include "passes/draw_bucket_config.h"
-#include "types/RasterState.h"
 #include "util/util.h"
 #include <array>
 #include <bgl/GeomType.h>
@@ -9,6 +8,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/DrawBucket.h>
+#include <bgpu/types/RasterState.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>

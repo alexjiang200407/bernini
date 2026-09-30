@@ -1,9 +1,9 @@
 #pragma once
-#include "resource/ResourceManager.h"
-#include "scene/ComputeBuffer.h"
 #include "scene/UploadBuffer.h"
 #include <array>
 #include <bgl_common/idl/CullView.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <string>
 #include <string_view>

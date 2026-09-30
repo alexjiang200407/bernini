@@ -1,9 +1,9 @@
 #pragma once
-#include "cmd/CommandList.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "scene/GrowableGpuBuffer.h"
-#include "uniforms/DescriptorHandle.h"
+#include <bgpu/buffer/GrowableGpuBuffer.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/err/util.h>
 #include <core/type_traits.h>
 #include <cstdint>

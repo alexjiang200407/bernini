@@ -1,6 +1,6 @@
 #include "types/vk_format.h"
-#include "types/Format.h"
 #include <assetlib_structs/VkFormat.h>
+#include <bgpu/types/Format.h>
 #include <core/err/util.h>
 #include <cstdint>
 

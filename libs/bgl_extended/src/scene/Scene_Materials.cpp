@@ -1,5 +1,4 @@
 #include "scene/Scene.h"
-#include "uniforms/DescriptorHandle.h"
 #include "util/util.h"
 #include <RangeWithCount.h>
 #include <RawEntry.h>
@@ -24,6 +23,7 @@
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/RawTextureHandle.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
 #include <cstddef>

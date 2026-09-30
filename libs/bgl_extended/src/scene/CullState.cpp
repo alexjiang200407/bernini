@@ -1,6 +1,5 @@
 #include "scene/CullState.h"
 #include "fg/FrameGraph.h"
-#include "resource/ResourceManager.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
 #include <bgl_common/idl/CullView.h>
@@ -8,6 +7,7 @@
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/InstanceVisibility.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
 #include <string_view>

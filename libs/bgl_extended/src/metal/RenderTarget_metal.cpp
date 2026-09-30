@@ -1,19 +1,19 @@
 #include "RenderTarget_metal.h"
 
-#include "cmd/CommandAllocator.h"
-#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_metal.h"
-#include "constants/constants.h"
 #include "convert_metal.h"
-#include "device/Device.h"
 #include "device/Device_metal.h"
-#include "resource/ResourceManager.h"
 #include "resource/ResourceManager_metal.h"
-#include "resource/Texture.h"
-#include "types/Barrier.h"
-#include "types/Format.h"
 #include <CoreFoundation/CFCGTypes.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/Format.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <format>

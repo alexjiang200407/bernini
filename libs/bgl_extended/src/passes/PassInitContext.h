@@ -1,5 +1,5 @@
 #pragma once
-#include "resource/ResourceManager.h"
+#include <bgpu/resource/ResourceManager.h>
 
 namespace bgl
 {

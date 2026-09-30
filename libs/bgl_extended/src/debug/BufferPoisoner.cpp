@@ -1,7 +1,7 @@
 #include "debug/BufferPoisoner.h"
-#include "cmd/CommandList.h"
-#include "resource/ResourceManager.h"
-#include "types/Barrier.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
 #include <core/err/util.h>
 
 #include <algorithm>

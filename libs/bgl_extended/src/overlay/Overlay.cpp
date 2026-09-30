@@ -1,10 +1,5 @@
 #include "overlay/Overlay.h"
-#include "cmd/CommandList.h"
 #include "gfx/RenderTargetBase.h"
-#include "resource/Buffer.h"
-#include "resource/ResourceManager.h"
-#include "resource/Srv.h"
-#include "types/Barrier.h"
 #include <assetlib_structs/ImageData.h>
 #include <atomic>
 #include <bgl/IGraphics.h>
@@ -12,6 +7,11 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/OverlayVertex.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/types/Barrier.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>

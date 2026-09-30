@@ -3,13 +3,13 @@
 #include "passes/TransparentSortPass.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
-#include "pipeline/ComputePipeline.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/scene_buffer_names.h"
-#include "types/Barrier.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/types/Barrier.h>
 #include <core/err/util.h>
 #include <core/math.h>
 #include <cstdint>

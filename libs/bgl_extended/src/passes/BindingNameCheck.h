@@ -1,6 +1,6 @@
 #pragma once
-#include "pipeline/MeshletKernel.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <concepts>
 #include <ranges>
 #include <span>

@@ -17,7 +17,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
-#include <bgl_common/MemoryTag.h>
+#include <bgpu/MemoryTag.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/IFileSystem.h>
 #include <core/file/LooseFileSystem.h>

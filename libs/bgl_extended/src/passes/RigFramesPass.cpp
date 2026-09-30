@@ -1,12 +1,12 @@
 #include "passes/RigFramesPass.h"
-#include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
-#include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "types/Barrier.h"
-#include "uniforms/Uniforms.h"
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <span>
 #include <spdlog/spdlog.h>
