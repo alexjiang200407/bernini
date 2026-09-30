@@ -7,6 +7,7 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -136,6 +137,16 @@ namespace crowd
 		 */
 		[[nodiscard]] virtual std::optional<GroupReport>
 		GetReport(GroupHandle group) const = 0;
+
+		/**
+		 * Every agent as GetCompletedTick() left them: empty until a tick has completed. The one
+		 * per-agent read a crowd has, for seeing it and never for driving a game.
+		 *
+		 * @throws std::runtime_error unless the crowd was created with
+		 *         CrowdDesc::debugAgentReadback.
+		 */
+		[[nodiscard]] virtual std::optional<debug::CrowdReadback>
+		ReadDebugAgents() const = 0;
 
 	protected:
 		ICrowd() noexcept = default;

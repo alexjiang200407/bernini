@@ -89,6 +89,24 @@ each refuses; what follows is why it is shaped as it is.
   command that would exceed one throws rather than growing it.
 * **Plain C++ types, not IDL.** The descriptions carry validation rules and `std::vector`s; the
   GPU records they are packed into belong to the implementation, and go through the IDL with it.
+* **The crowd's IDL is its own.** The records its kernels share with the CPU — an agent, a group, a
+  range of one tick's agents and where it comes from in the last, a tick's parameters, a report
+  row, a debug record — are Slang modules under `shaders/src/crowd/idl/`, imported by the kernels as
+  `crowd.idl.<Name>` and mirrored into C++ as `crowd::idl` by `bgpu_idlgen` ([idlgen.md](idlgen.md)).
+  The debug record is public, so its module is generated with `--public` into the committed
+  `include/crowdlib/debug/AgentReadback.h`, `crowd::debug`, and has no private twin. Not the
+  renderer's tree: its mirrors belong to `bgl`, which crowdlib does not link.
+* **A formation has one CPU reference.** `SlotPosition` (`src/formation.h`) is where each slot of
+  a group stands — ranks front to back, files from the facing's left, the block centred on the goal
+  and each rank across the facing — and the kernels compute the same function, as
+  `HashFillReference` is `CSHashFill`'s CPU half. It is internal: a game orders a formation and
+  reads its report, and never needs a slot's position.
+* **One per-agent read, for seeing the crowd.** `ReadDebugAgents` hands back every agent's position
+  and facing and each group's range of them, as the last completed tick left them. It is in every
+  build and off unless `CrowdDesc::debugAgentReadback` asks for it, so a crowd that does not pays no
+  copy. It is a method rather than an interface of its own because it keeps no state of its own:
+  its copies ride each tick and are reused on the crowd's tick ring. Debug data that did keep its
+  own state would earn a separate interface.
 * **Each backend implements `ICrowd` directly**, as `bgl`'s backends implement the RHI's
   interfaces. There is no `CreateCrowd` yet: it arrives with the first backend, since a factory with
   nothing to create would only fail at link time.
@@ -120,7 +138,9 @@ a torn entry compiled again. `[crowd]`: `ICrowd`'s contract, against the fake �
 every report until a tick that includes it completes, handles refused once released and after their
 slot is reused, capacities and invalid descriptions refused (agent types, the solver, pace,
 obstacles), a split and a merge conserving agents
-and refusing to empty a group or mix types, and `Step` refused past `maxTicksInFlight`.
+and refusing to empty a group or mix types, `Step` refused past `maxTicksInFlight`, and the debug
+readback refused unless asked for and holding every agent in its slot on its group's first tick.
+`[formation]` pins `SlotPosition`'s layout, and `[idl]` the records' round trip through a buffer.
 
 `examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
 kernel runs on the async queue, the fence logged before and after each draw, and every readback's

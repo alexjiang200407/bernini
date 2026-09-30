@@ -24,5 +24,8 @@ namespace crowd
 		uint32_t maxTicksInFlight = 2;
 
 		SolverDesc solver;
+
+		// Keeps every agent's position and facing for ICrowd::ReadDebugAgents, at a copy per tick.
+		bool debugAgentReadback = false;
 	};
 }

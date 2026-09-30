@@ -20,7 +20,9 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/), so the relative path (minus
   extension) is the Slang `import` name (`idl.<Name>`), the `.h` sub-path under the output root,
   and the C++ namespace (each sub-directory appends a `::` segment onto the base `bgl::idl`). The
-  import path, the `#include` and the `.h` location cannot drift. **To move a module, rename it
+  import path, the `#include` and the `.h` location cannot drift. crowdlib runs the same tool over
+  a tree of its own, `libs/crowdlib/shaders/src/crowd/idl/`, into `crowd::idl`
+  ([crowdlib.md](crowdlib.md)); `just idl` covers the renderer's tree only. **To move a module, rename it
   (change its relative path) so importers follow it — never relocate it to a path that disagrees
   with its import name.**
 

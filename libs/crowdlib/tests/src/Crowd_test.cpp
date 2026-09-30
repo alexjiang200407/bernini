@@ -2,10 +2,14 @@
 // capacities, the refusals, and that commands and reports move one fixed tick at a time. Only the
 // fake implements it so far, so none of this proves anything about movement, a real queue's timing
 // or GPU memory. The cases tagged [fake] need what only the fake can promise: a tick held in flight,
-// or a group reported standing at its goal the tick it is ordered there.
+// or a group reported standing at its goal the tick it is ordered there. The debug readback is
+// checked on a group's first tick, when every backend has it standing in its slots.
 #include "FakeCrowd.h"
+#include "formation.h"
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <core/glm.h>
 #include <core/ref/SharedRef.h>
 #include <crowdlib/AgentType.h>
@@ -15,6 +19,7 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <span>
@@ -449,4 +454,94 @@ TEST_CASE("A split group carries the source's orders", "[crowd][fake]")
 	CompleteOneTick(*crowd);
 
 	CHECK(crowd->GetReport(detached)->meanPosition == glm::vec2(12.0f, 3.0f));
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"The debug readback is refused by a crowd created without it",
+	"[crowd][debug]",
+	CrowdFactories)
+{
+	auto crowd = TestType::Create(MakeDesc());
+	crowd->CreateGroup(MakeGroup(10));
+	CompleteOneTick(*crowd);
+	CHECK_THROWS_AS(crowd->ReadDebugAgents(), std::runtime_error);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"The debug readback holds every agent, grouped in slot order, standing where it spawned",
+	"[crowd][debug]",
+	CrowdFactories)
+{
+	using Catch::Matchers::WithinAbs;
+
+	auto desc               = MakeDesc();
+	desc.debugAgentReadback = true;
+	auto crowd              = TestType::Create(std::move(desc));
+
+	auto eastOrders   = MakeOrders(glm::vec2(20.0f, -3.0f));
+	eastOrders.facing = glm::vec2(1.0f, 0.0f);
+	auto west         = crowd->CreateGroup(MakeGroup(23));
+	auto east = crowd->CreateGroup({ .agentType = 1, .agentCount = 7, .orders = eastOrders });
+
+	CHECK_FALSE(crowd->ReadDebugAgents().has_value());
+
+	const auto tick = crowd->Step();
+	crowd->Wait();
+
+	const auto readback = crowd->ReadDebugAgents();
+	REQUIRE(readback.has_value());
+	CHECK(readback->tick == tick);
+	CHECK(readback->agents.size() == 30);
+	REQUIRE(readback->groups.size() == 2);
+
+	auto covered = uint32_t{ 0 };
+	for (const auto& range : readback->groups)
+	{
+		REQUIRE((range.group == west || range.group == east));
+		const auto& orders = range.group == west ? MakeOrders() : eastOrders;
+		CHECK(range.count == crowd->GetAgentCount(range.group));
+		REQUIRE(range.first + range.count <= readback->agents.size());
+		covered += range.count;
+
+		for (uint32_t slot = 0; slot < range.count; ++slot)
+		{
+			const auto& agent    = readback->agents[range.first + slot];
+			const auto  expected = crowd::SlotPosition(orders, range.count, slot);
+			CHECK_THAT(agent.position.x, WithinAbs(expected.x, 1e-3f));
+			CHECK_THAT(agent.position.y, WithinAbs(expected.y, 1e-3f));
+			CHECK_THAT(
+				glm::dot(agent.facing, glm::normalize(orders.facing)),
+				WithinAbs(1.0f, 1e-3f));
+		}
+	}
+	CHECK(covered == 30);
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A readback still holds a group released after its tick, and outlives polling",
+	"[crowd][debug]",
+	CrowdFactories)
+{
+	auto desc               = MakeDesc();
+	desc.debugAgentReadback = true;
+	auto crowd              = TestType::Create(std::move(desc));
+	auto kept               = crowd->CreateGroup(MakeGroup(12));
+	auto released           = crowd->CreateGroup(MakeGroup(5));
+	CompleteOneTick(*crowd);
+
+	crowd->DestroyGroup(released);
+	CHECK_FALSE(crowd->HasGroup(released));
+
+	const auto readback = crowd->ReadDebugAgents();
+	REQUIRE(readback.has_value());
+	const auto agents = std::vector(readback->agents.begin(), readback->agents.end());
+	REQUIRE(readback->groups.size() == 2);
+	for (const auto& range : readback->groups)
+		CHECK(range.count == (range.group == kept ? 12u : 5u));
+
+	static_cast<void>(crowd->GetCompletedTick());
+	static_cast<void>(crowd->GetReport(kept));
+	REQUIRE(readback->agents.size() == agents.size());
+	for (size_t i = 0; i < agents.size(); ++i)
+		CHECK(readback->agents[i].position == agents[i].position);
 }

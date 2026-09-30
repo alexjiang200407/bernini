@@ -1,4 +1,5 @@
 #include "FakeCrowd.h"
+#include "formation.h"
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -10,6 +11,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
 #include <crowdlib/SolverDesc.h>
+#include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -214,22 +216,35 @@ namespace crowd::test
 			core::throw_runtime_error("{} ticks are already in flight", m_InFlight.size());
 
 		++m_SubmittedTick;
-		auto measurements = std::vector<FakeMeasurement>();
+		auto tick = FakeTick();
 		for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
 		{
 			if (!m_Groups.allocated(index))
 				continue;
 			const auto& group   = m_Groups[index];
+			const auto  handle  = GroupHandle{ .handle = { index, m_Groups.generation(index) } };
+			const auto  front   = glm::normalize(group.orders.facing);
 			auto        report  = GroupReport();
 			report.tick         = m_SubmittedTick;
 			report.agentCount   = group.agentCount;
 			report.meanPosition = group.orders.goal;
-			report.meanFacing   = glm::normalize(group.orders.facing);
-			measurements.push_back(
-				{ .group  = GroupHandle{ .handle = { index, m_Groups.generation(index) } },
-			      .report = report });
+			report.meanFacing   = front;
+			tick.measurements.push_back({ .group = handle, .report = report });
+
+			if (!m_Desc.debugAgentReadback)
+				continue;
+			tick.groups.push_back(
+				{ .group = handle,
+			      .first = static_cast<uint32_t>(tick.agents.size()),
+			      .count = group.agentCount });
+			for (uint32_t slot = 0; slot < group.agentCount; ++slot)
+			{
+				tick.agents.push_back(
+					{ .position = SlotPosition(group.orders, group.agentCount, slot),
+				      .facing   = front });
+			}
 		}
-		m_InFlight.push_back(std::move(measurements));
+		m_InFlight.push_back(std::move(tick));
 		return m_SubmittedTick;
 	}
 
@@ -255,12 +270,24 @@ namespace crowd::test
 	FakeCrowd::GetReport(GroupHandle group) const
 	{
 		static_cast<void>(GetGroup(group));
-		for (const auto& measurement : m_Completed)
+		for (const auto& measurement : m_Completed.measurements)
 		{
 			if (measurement.group == group)
 				return measurement.report;
 		}
 		return std::nullopt;
+	}
+
+	std::optional<debug::CrowdReadback>
+	FakeCrowd::ReadDebugAgents() const
+	{
+		if (!m_Desc.debugAgentReadback)
+			core::throw_runtime_error("The crowd was created without its debug agent readback");
+		if (GetCompletedTick() == 0)
+			return std::nullopt;
+		return debug::CrowdReadback{ .tick   = GetCompletedTick(),
+			                         .agents = m_Completed.agents,
+			                         .groups = m_Completed.groups };
 	}
 
 	void
