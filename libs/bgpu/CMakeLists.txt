@@ -257,6 +257,7 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		# part of that surface, so the case compiles its own copy.
 		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
 			target_sources(bgpu_tests PRIVATE ${BGPU_BACKEND_DIR}/resource/DescriptorAllocator_d3d12.cpp)
+			target_include_directories(bgpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 			target_precompile_headers(bgpu_tests PRIVATE ${BGPU_BACKEND_DIR}/pch.h)
 		endif()
 	endif()

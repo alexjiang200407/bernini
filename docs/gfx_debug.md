@@ -279,6 +279,11 @@ before any renderer exists:
   `enableDebugLayer`, not GPU-based validation, and works in a Release build — the layer is a
   runtime switch, present wherever the Windows "Graphics Tools" feature is installed.
   `bgpu_tests`' entry-point case runs strict, so a leak from any RHI factory fails it.
+* The report runs only when the context dies, and anything holding the context keeps it alive. The
+  suites that borrow `bgl_extended`'s `TestGraphics` share one context across cases, so a renderer
+  one case leaks would silence every report after it; the harness logs an error naming any case
+  that ends with the context still held. The report is process-wide (`DXGI_DEBUG_ALL`): a context
+  that dies while another lives reports the survivor's objects too.
 
 This runtime layer is **independent** of the compile-time `BERNINI_GPU_DEBUG` GPU-assertion
 system in §1: one is a D3D12 API validator, the other is your shaders reporting logic errors.
