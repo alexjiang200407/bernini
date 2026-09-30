@@ -21,7 +21,7 @@
 #include <vector>
 
 // What a compute client beside the renderer does, with nothing of the renderer in the process: this
-// suite links bgpu alone. Its own device on the shared context, its own resource manager with its
+// suite links bgpu and no renderer. Its own device on the shared context, its own resource manager with its
 // own compute queue registered, the buffer family written from the CPU, one dispatch, one readback.
 TEST_CASE("A compute owner dispatches and reads back without a renderer", "[compute][render]")
 {

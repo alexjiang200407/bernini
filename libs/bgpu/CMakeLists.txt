@@ -242,7 +242,11 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	)
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
-		target_link_libraries(bgpu_tests PRIVATE d3d12)
+		# The Agility SDK's two exports must be the executable's, and the DLLs a device and a compile
+		# load (D3D12Core, dxcompiler, dxil) are staged beside the executables by bgl_extended's build
+		# -- a staging dependency, not a link: nothing here links the renderer.
+		target_link_libraries(bgpu_tests PRIVATE d3d12 bgl_d3d12_agility)
+		add_dependencies(bgpu_tests bgl_extended)
 		# A shared bgpu exports only what BGPU_API marks, and the allocator it tests directly is not
 		# part of that surface, so the case compiles its own copy.
 		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
