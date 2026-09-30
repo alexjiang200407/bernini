@@ -2,7 +2,6 @@ import idl.IMaterial;
 import idl.RawEntry;
 import lib.types.ComputeBuffer;
 import lib.types.RawHandleArena;
-import lib.types.Texture;
 
 // Declares a raw arena and its typed handle view as ONE member, which is what Uniforms has to place
 // for the pair to be assignable in a single write. Both halves are read so neither is stripped
@@ -22,5 +21,5 @@ void main()
     let entry = RawEntry<IMaterial>.At(16u);
 
     gUniforms.outBuffer[0] = gUniforms.arena.LoadTag(entry);
-    gUniforms.outBuffer[1] = uint(gUniforms.arena.GetHandleAt(16u, 0).Load(uint2(0, 0)).x);
+    gUniforms.outBuffer[1] = uint(gUniforms.arena.GetHandleAt(16u, 0).Load(int3(0, 0, 0)).x);
 }

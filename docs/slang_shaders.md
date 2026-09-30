@@ -8,7 +8,7 @@ from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on
 ```
 libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
   idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
-  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle), bindless texture helpers, and the GPU assert channel (dbg)
+  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle) and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
@@ -205,21 +205,22 @@ nobody remembered to add was checked by nothing until it reached a Windows runti
 `programs.forward.Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
 The list is now the `programs/` tree, so a shader that exists is a shader that is validated.
 
-## A texture is its handle, and the extra accessors extend the resource type
+## A texture is its handle, and nothing wraps it
 
 A shader declares `Texture2D.Handle` / `TextureCube.Handle` exactly as it declares
 `SamplerState.Handle`, and samples through the built-in `Sample` / `SampleLevel` / `SampleBias`. The
 CPU writes the descriptor into that member directly (see [Uniforms](uniforms.md)); nothing wraps it.
 
-Three accessors the built-ins do not give live in
-[lib/types/Texture.slang](../libs/bgpu/shaders/src/lib/types/Texture.slang) — `Load(uint2, uint)`,
-`GetDimensions() -> float2` and `CubeFaceTexels()`. They extend **`Texture2D` / `TextureCube`, not
-the handle**: member lookup on a `DescriptorHandle<T>` resolves against `T`, so an
-`extension Texture2D.Handle` compiles and is never found.
+Call the built-ins in the forms both backends accept. Two catch a D3D12-first author:
 
-`GetDimensions()` is one of them because Slang's no-argument form is HLSL-only in the core module —
-calling it directly compiles on D3D12 and fails on Metal. The overload here is written through the
-out-parameter form, which both backends accept.
+- **`GetDimensions` takes the out-parameter form**, `GetDimensions(mip, width, height, levels)`.
+  Slang's no-argument form is HLSL-only in the core module, so it compiles on D3D12 and fails on
+  Metal, at runtime, when the pipeline is first built.
+- **An integer texel fetch is `Load(int3(coord, mip))`**, no sampler in the loop.
+
+A helper that wants its own accessor extends **`Texture2D` / `TextureCube`, not the handle**: member
+lookup on a `DescriptorHandle<T>` resolves against `T`, so an `extension Texture2D.Handle` compiles
+and is never found.
 
 **A buffer's element type is the one place the handle may not stand bare.**
 `StructuredBuffer<Texture2D.Handle>.Handle` lowers to `device texture2d*`, and MSL refuses a pointer

@@ -70,8 +70,7 @@ rm->RegisterQueue(queue.Get());
   [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h), which forward-declare
   the native type rather than include the SDK.
 * **Its Slang half is staged first.** The offset primitives (`idl.Entry`, `idl.Range` ...), the
-  buffer family (`lib.types.EntryBuffer` ...), the bindless texture helpers (`lib.types.Texture`) and
-  the GPU assert channel (`lib.debug.dbg`,
+  buffer family (`lib.types.EntryBuffer` ...) and the GPU assert channel (`lib.debug.dbg`,
   `idl.ErrorCode`, `idl.DebugRecord`) live under `libs/bgpu/shaders/src` and stage into the one
   `./shaders/src` every session resolves from, ahead of every tree that imports them; each module is
   checked against bgpu's tree alone. The sessions define `BERNINI_GPU_DEBUG` for every owner, so an

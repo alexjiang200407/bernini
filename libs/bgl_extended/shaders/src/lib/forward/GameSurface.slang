@@ -14,7 +14,6 @@ import lib.forward.common;
 import lib.geom.vertexdecode;
 import lib.math.HashedAlpha;
 import lib.math.PbrShading;
-import lib.types.Texture;
 
 // A data slot gathered from its record's channel routes: component c of slot `slot` reads the
 // routeChannels-named component of routeTextures[slot * cGameSurfaceRouteChannels + c], as
@@ -205,7 +204,14 @@ public struct GameRecord<G : ISurfaceSource>
     // The mip-0 texel counts of the texture the surface declared its coverage is measured against.
     // @pre engine.coverageSlot != cNoCoverageSlot, which CreateSurfaceMaterial refuses the hashed
     // layer without.
-    public float2 CoverageDimensions() { return materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(); }
+    public float2 CoverageDimensions()
+    {
+        uint width;
+        uint height;
+        uint levels;
+        materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(0, width, height, levels);
+        return float2(width, height);
+    }
 }
 
 // The engine's side of ISurfaceLight: the same sun and environment the PBR lighting path reads,
@@ -273,7 +279,14 @@ public struct LitGameRecord<G : ILitSurfaceSource>
     }
 
     // @pre engine.coverageSlot != cNoCoverageSlot, as GameRecord::CoverageDimensions.
-    public float2 CoverageDimensions() { return materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(); }
+    public float2 CoverageDimensions()
+    {
+        uint width;
+        uint height;
+        uint levels;
+        materialData.GetTextureAt(byteOffset, engine.coverageSlot).GetDimensions(0, width, height, levels);
+        return float2(width, height);
+    }
 }
 
 public struct NullSurfaceParams

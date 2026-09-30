@@ -1,5 +1,4 @@
 import idl.ISurfaceEnv;
-import lib.types.Texture;
 
 // Assembled at the call site rather than nested inside the constant buffer it comes from: a struct
 // mixing plain data with resource handles cannot be placed below a constant buffer's top level, and
@@ -15,7 +14,14 @@ public struct SurfaceEnv : ISurfaceEnv
 
     float3 Prefiltered(float3 dir, float lod) { return prefilterMap.SampleLevel(clampSampler, dir, lod).rgb; }
 
-    uint PrefilterFaceTexels() { return prefilterMap.CubeFaceTexels(); }
+    uint PrefilterFaceTexels()
+    {
+        uint width;
+        uint height;
+        uint levels;
+        prefilterMap.GetDimensions(0, width, height, levels);
+        return width;
+    }
 
     float2 BrdfLut(float cosTheta, float roughness) { return brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg; }
 };

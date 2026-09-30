@@ -13,7 +13,6 @@ import lib.geom.vertexdecode;
 import lib.math.PbrShading;
 import lib.types.SurfaceEnv;
 import lib.types.RawHandleArena;
-import lib.types.Texture;
 
 public struct MaterialData
 {
@@ -149,7 +148,14 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetSpecular() { return payload.specular; }
 
-    float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 0).GetDimensions(); }
+    float2 GetBaseColorDimensions()
+    {
+        uint width;
+        uint height;
+        uint levels;
+        materialData.GetTextureAt(byteOffset, 0).GetDimensions(0, width, height, levels);
+        return float2(width, height);
+    }
 
     float GetBaseColorAlphaBiased(float2 uv, float bias)
     {
@@ -236,7 +242,14 @@ public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     // The alpha carrier's resolution: coverage machinery cares about the channel being tested,
     // and the loose colour channels may come from other maps at other sizes.
-    float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 3).GetDimensions(); }
+    float2 GetBaseColorDimensions()
+    {
+        uint width;
+        uint height;
+        uint levels;
+        materialData.GetTextureAt(byteOffset, 3).GetDimensions(0, width, height, levels);
+        return float2(width, height);
+    }
 
     float GetBaseColorAlphaBiased(float2 uv, float bias)
     {
