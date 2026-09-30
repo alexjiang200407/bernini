@@ -1,4 +1,5 @@
 #include "pipeline/MeshletPipeline_d3d12.h"
+#include "convert_d3d12.h"
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
 #include <bgpu/resource/Shader.h>

@@ -3,6 +3,7 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue_d3d12.h"
 #include "cmd/TimestampHeap_d3d12.h"
+#include "convert_d3d12.h"
 #include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"

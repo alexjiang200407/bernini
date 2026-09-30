@@ -1,4 +1,5 @@
 #include "resource/Srv_d3d12.h"
+#include "convert_d3d12.h"
 #include <core/err/util.h>
 
 namespace bgpu
