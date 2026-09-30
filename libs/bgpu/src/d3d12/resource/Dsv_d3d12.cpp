@@ -1,7 +1,7 @@
 #include "Dsv_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	Dsv::Dsv(
 		ID3D12Device*         device,

@@ -1,7 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The domain, code and description carried by `error`, or a fixed string when it carries none.

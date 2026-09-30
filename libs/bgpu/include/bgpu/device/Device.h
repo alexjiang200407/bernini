@@ -14,7 +14,7 @@
 #include <string>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	class IResourceManager;
 	class IShader;

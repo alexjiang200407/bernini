@@ -2,7 +2,7 @@
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	// Metal has no standalone depth-stencil view, for the same reason it has no render-target view: a
 	// render pass attaches the texture directly. So a Metal Dsv remembers which texture it targets,

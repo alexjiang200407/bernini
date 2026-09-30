@@ -3,7 +3,7 @@
 
 #include <core/ref/RefCounter.h>
 
-namespace bgl
+namespace bgpu
 {
 	// Metal has no command-allocator object -- command buffers come straight from the queue. This
 	// exists only to satisfy the RHI shape; there is nothing to reset.

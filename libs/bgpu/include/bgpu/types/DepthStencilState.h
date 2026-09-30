@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-namespace bgl
+namespace bgpu
 {
 	enum class StencilOp : uint8_t
 	{

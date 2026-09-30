@@ -5,7 +5,7 @@
 
 #include <bgpu/MemoryTag.h>
 
-namespace bgl
+namespace bgpu
 {
 	// The Metal definition of the RHI's forward-declared `Buffer`. A GPU-private structured buffer;
 	// its bindless slot index (from the ResourceManager's pool) is what a handle carries.
@@ -20,7 +20,7 @@ namespace bgl
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
 			core::ensure(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
 
-			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
+			m_Tracked = bgpu::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(

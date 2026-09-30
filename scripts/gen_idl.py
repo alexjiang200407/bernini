@@ -194,7 +194,7 @@ def main():
             *layout_args(os.path.dirname(os.path.dirname(tool))),
             *cpp_args,
             "-I", SRC_ROOT,
-            "-I", BGPU_ROOT,
+            "--extern", f"{BGPU_ROOT}=bgpu::idl",
             module,
         ]
         if args.dry_run:

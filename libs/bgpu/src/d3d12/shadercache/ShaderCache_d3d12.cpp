@@ -11,7 +11,7 @@
 #include <bgpu/GpuContext.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	using shader_cache::ReadLayout;
 	using shader_cache::WriteLayout;

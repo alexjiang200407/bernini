@@ -61,10 +61,6 @@ target_include_directories(bgpu
 
 find_package(glm CONFIG REQUIRED)
 
-# TEMPORARY, gone with the namespace move in the next commit: the RHI's viewport types still spell
-# <bgl/Viewport.h>.
-target_include_directories(bgpu PUBLIC ${BERNINI_ROOT}/libs/bgl/include)
-
 target_link_libraries(bgpu PUBLIC core slang::slang glm::glm)
 
 # DescriptorHandle's alignment is per backend and it sits in GPU structs every owner lays out, so

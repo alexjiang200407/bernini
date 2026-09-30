@@ -67,7 +67,7 @@ namespace bgl
 			"drawLane"sv, "baseTable"sv, "compactedInstances"sv, "cullBackfaces"sv, "lodDrawMode"sv,
 		};
 
-		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
+		constexpr auto c_SceneColorFormat = bgpu::Format::RGBA16_FLOAT;
 
 		// The shared blend kernel's programs: the whole depth-sorted list draws through this one
 		// pipeline, and AnyMesh branches tier per instance, so no bucket needs a blend kernel of
@@ -77,12 +77,12 @@ namespace bgl
 
 		struct PsoConfig
 		{
-			std::string      pixelSrc;
-			RasterCullMode   cull;
-			bool             depthWrite;
-			bool             blend;
-			ComparisonFunc   depthFunc = ComparisonFunc::kLess;
-			std::string_view geomSrc;
+			std::string          pixelSrc;
+			bgpu::RasterCullMode cull;
+			bool                 depthWrite;
+			bool                 blend;
+			bgpu::ComparisonFunc depthFunc = bgpu::ComparisonFunc::kLess;
+			std::string_view     geomSrc;
 			// The dissolve lane's entries: MSDissolve and PSDissolve, which carry and read the
 			// placement's dissolve code, beside the at-rest lane's MSMain and PSMain.
 			std::string_view meshEntry  = "MSMain"sv;
@@ -94,8 +94,8 @@ namespace bgl
 		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane)
 		{
 			auto config =
-				PsoConfig{ DrawBucketPixelSrc(desc), DrawBucketCullMode(desc),   true, false,
-				           ComparisonFunc::kLess,    DrawBucketGeometrySrc(desc) };
+				PsoConfig{ DrawBucketPixelSrc(desc),    DrawBucketCullMode(desc),   true, false,
+				           bgpu::ComparisonFunc::kLess, DrawBucketGeometrySrc(desc) };
 			if (lane == DrawLane::kDissolve)
 			{
 				config.meshEntry  = "MSDissolve"sv;
@@ -104,10 +104,10 @@ namespace bgl
 			return config;
 		}
 
-		MeshletPipelineDesc
-		ForwardPipelineDesc(IDevice* device, const PsoConfig& cfg)
+		bgpu::MeshletPipelineDesc
+		ForwardPipelineDesc(bgpu::IDevice* device, const PsoConfig& cfg)
 		{
-			auto pipelineDesc = MeshletPipelineDesc();
+			auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 			pipelineDesc.ampShader = device->CreateShader(std::string(cfg.geomSrc), "ASMain");
 			pipelineDesc.meshShader =
@@ -124,15 +124,15 @@ namespace bgl
 			{
 				pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
 			}
-			pipelineDesc.SetDsvFormat(Format::D24S8);
+			pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
 
-			auto raster = RasterState();
-			raster.SetFillMode(RasterFillMode::kSolid)
+			auto raster = bgpu::RasterState();
+			raster.SetFillMode(bgpu::RasterFillMode::kSolid)
 				.SetCullMode(cfg.cull)
 				.SetFrontCounterClockwise(true)
 				.SetDepthClipEnable(true);
 
-			auto depth = DepthStencilState{};
+			auto depth = bgpu::DepthStencilState{};
 			depth.SetDepthTestEnable(true)
 				.SetDepthWriteEnable(cfg.depthWrite)
 				.SetDepthFunc(cfg.depthFunc)
@@ -141,25 +141,26 @@ namespace bgl
 			// Premultiplied: programs.forward.Transparent returns radiance already weighted by its own
 			// coverage, so the reflection reaches the film undimmed by the material's alpha while
 			// the transmitted lobe is thinned in the shader. kSrcAlpha here would scale both.
-			auto blend = BlendState{};
+			auto blend = bgpu::BlendState{};
 			// Composited colour has no single depth; zero alpha excludes it from TAA depth validation.
 			if (cfg.blend)
 			{
 				blend.SetRenderTarget(
 					0,
-					BlendState::RenderTarget{}
+					bgpu::BlendState::RenderTarget{}
 						.EnableBlend()
-						.SetSrcBlend(BlendFactor::kOne)
-						.SetDestBlend(BlendFactor::kInvSrcAlpha)
-						.SetBlendOp(BlendOp::kAdd)
-						.SetSrcBlendAlpha(BlendFactor::kZero)
-						.SetDestBlendAlpha(BlendFactor::kZero)
-						.SetBlendOpAlpha(BlendOp::kAdd));
+						.SetSrcBlend(bgpu::BlendFactor::kOne)
+						.SetDestBlend(bgpu::BlendFactor::kInvSrcAlpha)
+						.SetBlendOp(bgpu::BlendOp::kAdd)
+						.SetSrcBlendAlpha(bgpu::BlendFactor::kZero)
+						.SetDestBlendAlpha(bgpu::BlendFactor::kZero)
+						.SetBlendOpAlpha(bgpu::BlendOp::kAdd));
 			}
 
-			pipelineDesc.renderState =
-				RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
-					depth);
+			pipelineDesc.renderState = bgpu::RenderState()
+			                               .SetRasterState(raster)
+			                               .SetBlendState(blend)
+			                               .SetDepthStencilState(depth);
 
 			return pipelineDesc;
 		}
@@ -225,10 +226,10 @@ namespace bgl
 				ForwardPipelineDesc(
 					ctx.device,
 					PsoConfig{ std::string(c_TransparentSrc),
-			                   RasterCullMode::kNone,
+			                   bgpu::RasterCullMode::kNone,
 			                   false,
 			                   true,
-			                   ComparisonFunc::kLess,
+			                   bgpu::ComparisonFunc::kLess,
 			                   c_AnyGeomSrc }));
 		}
 	}
@@ -242,11 +243,11 @@ namespace bgl
 	}
 
 	void
-	ForwardPhases::CheckKernelNames(std::span<const MeshletKernel> kernels) const
+	ForwardPhases::CheckKernelNames(std::span<const bgpu::MeshletKernel> kernels) const
 	{
 		// The buckets are demand-built, so nothing reads their names off until a first one is;
 		// EnsureDrawBucketPipelinesExist re-checks after every build.
-		if (!AnyInitialized(kernels))
+		if (!bgpu::AnyInitialized(kernels))
 		{
 			return;
 		}
@@ -322,13 +323,13 @@ namespace bgl
 		fg.AddPass(std::move(desc));
 	}
 
-	MeshletKernel*
+	bgpu::MeshletKernel*
 	ForwardPhases::BindDrawBucketKernel(
-		const uint32_t     bucket,
-		const DrawLane     lane,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources)
+		const uint32_t      bucket,
+		const DrawLane      lane,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources)
 	{
 		auto& kernels = lane == DrawLane::kDissolve ? m_DissolveKernels : m_Kernels;
 		if (bucket >= kernels.size() || !kernels[bucket].pipeline.IsInitialized())
@@ -336,21 +337,21 @@ namespace bgl
 			return nullptr;
 		}
 
-		MeshletKernel& kernel = kernels[bucket];
+		bgpu::MeshletKernel& kernel = kernels[bucket];
 		BindKernel(kernel, draw, resources);
 		state.kernel      = &kernel;
-		state.frameBuffer = FrameBuffer()
+		state.frameBuffer = bgpu::FrameBuffer()
 		                        .AddColorAttachment(draw.targets.sceneColor)
 		                        .AddColorAttachment(draw.targets.motionVector)
 		                        .SetDepthAttachment(draw.targets.depth);
 		return &kernel;
 	}
 
-	MeshletKernel*
+	bgpu::MeshletKernel*
 	ForwardPhases::BindTransparentKernel(
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources)
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources)
 	{
 		if (!TransparentInitialized())
 		{
@@ -359,7 +360,7 @@ namespace bgl
 
 		BindKernel(m_TransparentKernel, draw, resources);
 		state.kernel      = &m_TransparentKernel;
-		state.frameBuffer = FrameBuffer()
+		state.frameBuffer = bgpu::FrameBuffer()
 		                        .AddColorAttachment(draw.targets.sceneColor)
 		                        .SetDepthAttachment(draw.targets.depth);
 		return &m_TransparentKernel;
@@ -367,9 +368,9 @@ namespace bgl
 
 	void
 	ForwardPhases::BindKernel(
-		MeshletKernel&     kernel,
-		const DrawData&    draw,
-		const PassContext& resources)
+		bgpu::MeshletKernel& kernel,
+		const DrawData&      draw,
+		const PassContext&   resources)
 	{
 		if (auto foundForwardData = kernel.FindUniforms("forwardData"))
 		{
@@ -432,7 +433,7 @@ namespace bgl
 			return;
 		}
 
-		auto state = MeshletState();
+		auto state = bgpu::MeshletState();
 		state.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 
 		phase.Record(*this, state, draw, resources);

@@ -14,10 +14,10 @@ namespace bgl
 	/** One scene buffer a pass both declares to the graph and binds into a kernel's uniforms. */
 	struct SceneBuffer
 	{
-		std::string_view graphName;
-		std::string_view uniformKey;
-		BarrierAccess    access;
-		BarrierSync      sync;
+		std::string_view    graphName;
+		std::string_view    uniformKey;
+		bgpu::BarrierAccess access;
+		bgpu::BarrierSync   sync;
 	};
 
 	// The geometry tables every forward expansion and vertex decode reads. Every pass built on
@@ -26,44 +26,44 @@ namespace bgl
 	constexpr std::array<SceneBuffer, 10> c_ForwardDataBuffers = {
 		{ { c_InstanceBufferName,
 		    "instanceBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_MeshInstanceBufferName,
 		    "meshBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_GeomBufferName,
 		    "geomBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_SubmeshBufferName,
 		    "submeshBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_MeshletBufferName,
 		    "meshletBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_MeshletGroupBufferName,
 		    "meshletGroupBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_VertexMapBufferName,
 		    "vertexMapBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_VertexDataBufferName,
 		    "vertexDataBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_IndexBufferName,
 		    "indexBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_PlaybackArenaBufferName,
 		    "playbackBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader } }
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader } }
 	};
 
 	// The material arena, for every pass whose pixel stages read records and textures out of it:
@@ -73,8 +73,8 @@ namespace bgl
 	constexpr std::array<SceneBuffer, 1> c_MaterialBuffers = {
 		{ { c_MaterialArenaBufferName,
 		    "materials",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kPixelShader } }
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kPixelShader } }
 	};
 
 	// The rig tables the skinned vertex evaluation reads, whichever pose source a placement draws
@@ -83,35 +83,35 @@ namespace bgl
 	constexpr std::array<SceneBuffer, 4> c_SkinnedBuffers = {
 		{ { c_RigBufferName,
 		    "rigBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_BonePaletteName,
 		    "bonePaletteBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_BoneAnimTableName,
 		    "boneAnimTables",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_ClipBufferName,
 		    "clipBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader } }
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader } }
 	};
 
 	constexpr std::array<SceneBuffer, 3> c_ExpansionBuffers = {
 		{ { c_CompactedInstancesName,
 		    "compactedInstances",
-		    BarrierAccessFlag::kUnorderedAccess,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kUnorderedAccess,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_DrawBucketPrefixSumName,
 		    "drawBucketPrefixSum",
-		    BarrierAccessFlag::kUnorderedAccess,
-		    BarrierSyncFlag::kVertexShader },
+		    bgpu::BarrierAccessFlag::kUnorderedAccess,
+		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_InstanceLodName,
 		    "instanceLod",
-		    BarrierAccessFlag::kUnorderedAccess,
-		    BarrierSyncFlag::kVertexShader } }
+		    bgpu::BarrierAccessFlag::kUnorderedAccess,
+		    bgpu::BarrierSyncFlag::kVertexShader } }
 	};
 
 	/**
@@ -122,8 +122,8 @@ namespace bgl
 	inline void
 	DeclareMeshletCullBuffers(PassDesc& desc)
 	{
-		desc.AddBufferRead(c_CullViewName, BarrierSyncFlag::kVertexShader);
-		desc.AddBufferReadWrite(c_CullStatsName, BarrierSyncFlag::kVertexShader);
+		desc.AddBufferRead(c_CullViewName, bgpu::BarrierSyncFlag::kVertexShader);
+		desc.AddBufferReadWrite(c_CullStatsName, bgpu::BarrierSyncFlag::kVertexShader);
 	}
 
 	/**
@@ -132,7 +132,7 @@ namespace bgl
 	 * absent from a kernel's reflection.
 	 */
 	inline void
-	BindMeshletCullBuffers(Uniforms& expansion, const PassContext& resources)
+	BindMeshletCullBuffers(bgpu::Uniforms& expansion, const PassContext& resources)
 	{
 		expansion["cullView"].SetIfValid(resources.GetBuffer(c_CullViewName));
 		expansion["stats"].SetIfValid(resources.GetBuffer(c_CullStatsName));
@@ -140,7 +140,7 @@ namespace bgl
 
 	inline void
 	BindSceneBuffers(
-		Uniforms&                    uniforms,
+		bgpu::Uniforms&              uniforms,
 		std::span<const SceneBuffer> bindings,
 		const PassContext&           resources)
 	{

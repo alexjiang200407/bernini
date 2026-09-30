@@ -2,7 +2,7 @@
 #include <bgpu/constants/constants.h>
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	DescriptorAllocator::DescriptorAllocator(
 		ID3D12Device*               device,

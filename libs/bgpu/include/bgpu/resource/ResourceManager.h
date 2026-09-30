@@ -14,7 +14,7 @@
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	struct ResourceManagerDesc
 	{

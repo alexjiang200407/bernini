@@ -1,7 +1,7 @@
 #include "resource/ReadbackBuffer_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	ReadbackBuffer::ReadbackBuffer(ID3D12Device* device, const ReadbackBufferDesc& desc) :
 		m_ByteSize(desc.byteSize)

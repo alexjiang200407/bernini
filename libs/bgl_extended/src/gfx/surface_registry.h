@@ -4,9 +4,16 @@
 #include <filesystem>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class IDevice;
+}
+
+namespace bgl
+{
 
 	/**
 	 * Reads every surface in `dir`, binds each to a slot, and generates the programs its draw
@@ -28,5 +35,5 @@ namespace bgl
 	 *         reflection itself refuses.
 	 */
 	[[nodiscard]] std::vector<SurfaceType>
-	RegisterSurfaces(IDevice& device, const std::filesystem::path& dir);
+	RegisterSurfaces(bgpu::IDevice& device, const std::filesystem::path& dir);
 }

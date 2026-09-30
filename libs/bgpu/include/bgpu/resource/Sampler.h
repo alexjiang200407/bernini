@@ -3,7 +3,7 @@
 #include <core/containers/slot_handle.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	class Sampler;
 	class ResourceManager;

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <span>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * A fixed number of GPU timestamp slots, written by a command list's timed spans and read back

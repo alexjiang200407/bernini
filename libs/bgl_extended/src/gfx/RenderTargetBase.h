@@ -136,12 +136,12 @@ namespace bgl
 		 * the device cannot time a pass; timing is then simply never armed.
 		 */
 		void
-		InitGpuTiming(TimestampHeapRef heap) noexcept
+		InitGpuTiming(bgpu::TimestampHeapRef heap) noexcept
 		{
 			m_TimingHeap = std::move(heap);
 		}
 
-		[[nodiscard]] ITimestampHeap*
+		[[nodiscard]] bgpu::ITimestampHeap*
 		GetTimingHeap() const noexcept
 		{
 			return m_TimingHeap.Get();
@@ -316,19 +316,19 @@ namespace bgl
 		SetFrameFence(uint32_t frameIndex, uint64_t fenceValue) noexcept = 0;
 
 		/** Borrowed; the target owns it. Reset it before recording the frame. */
-		[[nodiscard]] virtual ICommandAllocator*
+		[[nodiscard]] virtual bgpu::ICommandAllocator*
 		GetFrameAllocator(uint32_t frameIndex) const noexcept = 0;
 
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept = 0;
 
-		[[nodiscard]] virtual RtvHandle
+		[[nodiscard]] virtual bgpu::RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept = 0;
 
 		// A shader-readable view of a ring slot, for a pass on another target that samples what this
 		// one presented. Null on a D3D12 windowed target, whose swapchain images get no view; a
 		// windowed target's ring is never read on either backend.
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetBackbufferSrv(uint32_t frameIndex) const noexcept = 0;
 
 		// Whether a frame has been presented since creation or the last resize; before that the
@@ -336,10 +336,10 @@ namespace bgl
 		[[nodiscard]] virtual bool
 		HasPresented() const noexcept = 0;
 
-		[[nodiscard]] virtual DsvHandle
+		[[nodiscard]] virtual bgpu::DsvHandle
 		GetDepthDsv() const noexcept = 0;
 
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetDepthTexture() const noexcept = 0;
 
 		/**
@@ -347,7 +347,7 @@ namespace bgl
 		 * after the geometry has written it. Reads raw device depth; linearizing it is the
 		 * consumer's business, since only it knows which projection produced the frame.
 		 */
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetDepthSrv() const noexcept = 0;
 
 		/**
@@ -358,10 +358,10 @@ namespace bgl
 		 * One texture, not one per frame in flight: a consumer wants this frame's motion, and the
 		 * history it reprojects into is its own resource.
 		 */
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetMotionVectorTexture() const noexcept = 0;
 
-		[[nodiscard]] virtual RtvHandle
+		[[nodiscard]] virtual bgpu::RtvHandle
 		GetMotionVectorRtv() const noexcept = 0;
 
 		/**
@@ -371,16 +371,16 @@ namespace bgl
 		 * One texture, not one per frame in flight: the tonemap consumes it within the frame that
 		 * wrote it, so a second copy would never be read.
 		 */
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetSceneColorTexture() const noexcept = 0;
 
-		[[nodiscard]] virtual RtvHandle
+		[[nodiscard]] virtual bgpu::RtvHandle
 		GetSceneColorRtv() const noexcept = 0;
 
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetSceneColorSrv() const noexcept = 0;
 
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetMotionVectorSrv() const noexcept = 0;
 
 		/**
@@ -388,13 +388,13 @@ namespace bgl
 		 * and the post-process dilates into the outline. Cleared to zero each frame; sized with the
 		 * render grid, like every other attachment a geometry pass draws into.
 		 */
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetOutlineMaskTexture() const noexcept = 0;
 
-		[[nodiscard]] virtual RtvHandle
+		[[nodiscard]] virtual bgpu::RtvHandle
 		GetOutlineMaskRtv() const noexcept = 0;
 
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetOutlineMaskSrv() const noexcept = 0;
 
 		/**
@@ -405,13 +405,13 @@ namespace bgl
 		 *
 		 * @pre `index` is 0 or 1.
 		 */
-		[[nodiscard]] virtual TextureHandle
+		[[nodiscard]] virtual bgpu::TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept = 0;
 
-		[[nodiscard]] virtual RtvHandle
+		[[nodiscard]] virtual bgpu::RtvHandle
 		GetHistoryRtv(uint32_t index) const noexcept = 0;
 
-		[[nodiscard]] virtual SrvHandle
+		[[nodiscard]] virtual bgpu::SrvHandle
 		GetHistorySrv(uint32_t index) const noexcept = 0;
 
 		[[nodiscard]] virtual uint32_t
@@ -529,7 +529,7 @@ namespace bgl
 		ColorGradeSettings m_ColorGradeSettings;
 
 		bool                                           m_GpuTimingEnabled = false;
-		TimestampHeapRef                               m_TimingHeap;
+		bgpu::TimestampHeapRef                         m_TimingHeap;
 		std::array<TimingFrame, c_SwapchainImageCount> m_TimingFrames;
 		std::vector<PassTiming>                        m_PassTimings;
 		uint64_t                                       m_PassTimingFrame = 0;
@@ -542,9 +542,9 @@ namespace bgl
 	 */
 	[[nodiscard]] RenderTargetRef
 	CreateBackendRenderTarget(
-		const RenderTargetDesc& desc,
-		DeviceRef               device,
-		CommandQueueRef         queue,
-		ResourceManagerRef      resourceManager,
-		bool                    enableDebug);
+		const RenderTargetDesc&  desc,
+		bgpu::DeviceRef          device,
+		bgpu::CommandQueueRef    queue,
+		bgpu::ResourceManagerRef resourceManager,
+		bool                     enableDebug);
 }

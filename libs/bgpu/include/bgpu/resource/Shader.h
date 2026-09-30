@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	struct ShaderDesc
 	{

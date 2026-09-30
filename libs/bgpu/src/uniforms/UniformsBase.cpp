@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	namespace detail
 	{

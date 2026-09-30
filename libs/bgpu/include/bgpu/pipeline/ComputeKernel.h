@@ -6,7 +6,7 @@
 #include <core/str/str.h>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	struct ComputeKernel
 	{

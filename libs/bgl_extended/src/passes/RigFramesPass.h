@@ -4,12 +4,19 @@
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class PipelineBatch;
+	class IDevice;
+}
+
+namespace bgl
+{
 
 	class FrameGraph;
-	class IDevice;
 	class PassContext;
 	struct DrawData;
 
@@ -51,6 +58,6 @@ namespace bgl
 		void
 		Execute(const PassContext& ctx, const DrawData& draw);
 
-		ComputeKernel m_PoseRigFrames;
+		bgpu::ComputeKernel m_PoseRigFrames;
 	};
 }

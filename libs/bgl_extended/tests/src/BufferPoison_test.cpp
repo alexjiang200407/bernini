@@ -24,13 +24,13 @@ namespace
 	// so is neither copyable nor movable.
 	struct PoisonFixture
 	{
-		bgl::GraphicsRef         gfx;
-		bgl::ResourceManagerRef  resourceManager;
-		bgl::IDevice*            device = nullptr;
-		bgl::CommandAllocatorRef cmdAllocator;
-		bgl::CommandListRef      cmdList;
-		bgl::CommandQueueRef     cmdQueue;
-		bgl::BufferPoisoner      poisoner;
+		bgl::GraphicsRef          gfx;
+		bgpu::ResourceManagerRef  resourceManager;
+		bgpu::IDevice*            device = nullptr;
+		bgpu::CommandAllocatorRef cmdAllocator;
+		bgpu::CommandListRef      cmdList;
+		bgpu::CommandQueueRef     cmdQueue;
+		bgl::BufferPoisoner       poisoner;
 
 		PoisonFixture()
 		{
@@ -48,12 +48,12 @@ namespace
 			resourceManager = gfxBase->GetResourceManagerCpy();
 			device          = gfxBase->GetDevice();
 
-			auto cmdListDesc = bgl::CommandListDesc();
-			cmdListDesc.type = bgl::QueueType::kGraphics;
+			auto cmdListDesc = bgpu::CommandListDesc();
+			cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 			cmdAllocator = device->CreateCommandAllocator();
 			cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-			cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 			poisoner.Init(resourceManager);
 		}
@@ -70,14 +70,14 @@ namespace
 		operator=(PoisonFixture&&) = delete;
 	};
 
-	bgl::BufferBarrierDesc
+	bgpu::BufferBarrierDesc
 	ToCopySource() noexcept
 	{
-		return bgl::BufferBarrierDesc()
-		    .AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-		    .AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-		    .AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-		    .AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		return bgpu::BufferBarrierDesc()
+		    .AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+		    .AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+		    .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		    .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 	}
 }
 
@@ -91,13 +91,13 @@ TEST_CASE("Poisoning fills a buffer larger than the pattern chunk", "[poison][re
 	// Over 64 KiB, so the fill takes more than one copy and the last one is a partial chunk.
 	constexpr uint32_t c_Count = 20'000;
 
-	auto bufDesc = bgl::ComputeBufferDesc();
+	auto bufDesc = bgpu::ComputeBufferDesc();
 	bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Poison Target");
 
 	auto target = fixture.resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(fixture.resourceManager->ValidBufferHandle(target));
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 	rbDesc.debugName = "Poison Readback";
 
@@ -143,23 +143,23 @@ TEST_CASE("A dispatch overwrites the poison it was given, and only that", "[pois
 	constexpr uint32_t c_Count   = 16;
 	constexpr uint32_t c_Written = 8;
 
-	auto bufDesc = bgl::ComputeBufferDesc();
+	auto bufDesc = bgpu::ComputeBufferDesc();
 	bufDesc.SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName("Poison Dispatch Target");
 
 	auto target = fixture.resourceManager->CreateComputeBuffer(bufDesc);
 	REQUIRE(fixture.resourceManager->ValidBufferHandle(target));
 
 	auto kernel = fixture.device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(fixture.device->CreateShader("CSComputeBufferTest"))
 			.SetDebugName("CSComputeBufferTest"));
 
 	kernel["gUniforms"]["outBuffer"] = target;
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = c_Count * sizeof(uint32_t);
 	rbDesc.debugName = "Poison Dispatch Readback";
 
@@ -170,22 +170,22 @@ TEST_CASE("A dispatch overwrites the poison it was given, and only that", "[pois
 	fixture.poisoner.Poison(fixture.cmdList, target);
 	fixture.cmdList->Barrier(
 		target,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 
 	fixture.cmdList->SetComputeState(state);
 	fixture.cmdList->Dispatch(1, 1, 1);
 
 	fixture.cmdList->Barrier(
 		target,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	fixture.cmdList->CopyBufferToReadback(readback, target);
 	fixture.cmdList->Close();

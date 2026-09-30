@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-namespace bgl
+namespace bgpu
 {
 	enum class QueueType : uint8_t
 	{

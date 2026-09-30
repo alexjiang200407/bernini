@@ -11,10 +11,10 @@
 namespace bgl
 {
 	void
-	TransparentSortState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
+	TransparentSortState::Init(uint32_t paddedInstances, bgpu::ResourceManagerRef resourceManager)
 	{
 		{
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = paddedInstances;
 			desc.debugName    = "Sorted Transparent Instances";
 			desc.SetElement<uint32_t>();
@@ -23,7 +23,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = paddedInstances;
 			desc.debugName    = "Transparent Sort Entries";
 			desc.SetElement<glm::uvec2>();
@@ -32,7 +32,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Transparent Sort Count";
 			desc.SetElement<uint32_t>();
@@ -41,7 +41,7 @@ namespace bgl
 		}
 
 		{
-			auto desc = ComputeBufferDesc();
+			auto desc = bgpu::ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>().SetInitialCount(1).SetDebugName(
 				"Transparent Dispatch Args");
 
@@ -71,7 +71,7 @@ namespace bgl
 	}
 
 	void
-	TransparentSortState::Update(ICommandList* cmdList)
+	TransparentSortState::Update(bgpu::ICommandList* cmdList)
 	{
 		m_SortedInstances.Update(cmdList);
 		m_Entries.Update(cmdList);
@@ -81,7 +81,7 @@ namespace bgl
 	TransparentSortState::ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs)
 		const
 	{
-		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
+		const auto importUpdated = [&](std::string_view name, const bgpu::ComputeBuffer& buffer) {
 			fg.ImportBuffer(name, buffer.GetBufferHandle());
 			updateArgs.emplace_back(name);
 		};

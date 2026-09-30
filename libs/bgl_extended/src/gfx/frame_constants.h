@@ -21,6 +21,6 @@ namespace bgl
 	// The velocity buffer: RG is where the surface was last frame as a UV displacement, BA the part
 	// of it the surface moved on its own -- the velocity less what the camera alone gives the same
 	// world position.
-	constexpr Format           c_MotionVectorFormat = Format::RGBA16_FLOAT;
+	constexpr bgpu::Format     c_MotionVectorFormat = bgpu::Format::RGBA16_FLOAT;
 	constexpr std::string_view c_OutlineMaskName    = "outlineMask";
 }

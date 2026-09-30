@@ -87,7 +87,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	REQUIRE(arena.IsInitialized());
 
 	// ADR-4: an arena is capped at what its view addresses, not at what the device could allocate.
-	CHECK(arena.GetByteCeiling() == bgl::c_MaxRawBufferBytes);
+	CHECK(arena.GetByteCeiling() == bgpu::c_MaxRawBufferBytes);
 
 	SECTION("the null record owns the head, and nothing else is handed it")
 	{
@@ -156,7 +156,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	{
 		const auto before = arena.GetByteCapacity();
 
-		std::vector<bgl::idl::RawEntry> records;
+		std::vector<bgpu::idl::RawEntry> records;
 		for (uint32_t i = 0; i < 64; ++i)
 		{
 			records.push_back(arena.AddRecord(TestTag::kLarge, BytesOf(LargePayload{})));
@@ -198,13 +198,13 @@ TEST_CASE("A range buffer refuses to grow past its byte ceiling", "[raw][scene]"
 
 	// 16 elements of 4 bytes plus the reserved null one is a capacity of 17; the ceiling is 18, so
 	// there is exactly one element of growth to be had.
-	auto desc         = bgl::RangeBufferDesc();
+	auto desc         = bgpu::RangeBufferDesc();
 	desc.initialCount = 16;
 	desc.maxBytes     = 18 * sizeof(uint32_t);
 	desc.blockSize    = sizeof(uint32_t);
 	desc.debugName    = "Capped Range";
 
-	auto capped = bgl::RangeBuffer<uint32_t>(desc, resourceManager);
+	auto capped = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
 
 	// Fills the initial capacity exactly, so the next allocation is the one that must grow.
 	CHECK_NOTHROW(capped.AllocateRange(16));
@@ -233,33 +233,33 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
 	constexpr uint32_t c_BlockSize = 65536;
 	constexpr uint32_t c_Blocks    = 65536;
 
-	const auto whole = bgl::MakeCopySlice(0, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
+	const auto whole = bgpu::MakeCopySlice(0, c_Blocks, c_BlockSize, bgpu::c_MaxRawBufferBytes);
 
 	CHECK(whole.offset == 0);
-	CHECK(whole.size == bgl::c_MaxRawBufferBytes);
+	CHECK(whole.size == bgpu::c_MaxRawBufferBytes);
 
 	// The last block of that arena, which a 32-bit offset also cannot express.
 	const auto tail =
-		bgl::MakeCopySlice(c_Blocks - 1, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
+		bgpu::MakeCopySlice(c_Blocks - 1, c_Blocks, c_BlockSize, bgpu::c_MaxRawBufferBytes);
 
-	CHECK(tail.offset == bgl::c_MaxRawBufferBytes - c_BlockSize);
+	CHECK(tail.offset == bgpu::c_MaxRawBufferBytes - c_BlockSize);
 	CHECK(tail.size == c_BlockSize);
 
 	// A run past the end of the mirror uploads nothing rather than a negative length.
-	CHECK(bgl::MakeCopySlice(4, 8, c_BlockSize, 2 * c_BlockSize) == bgl::CopySlice{});
+	CHECK(bgpu::MakeCopySlice(4, 8, c_BlockSize, 2 * c_BlockSize) == bgpu::CopySlice{});
 
 	// And a partial tail is clamped to what the mirror holds.
-	CHECK(bgl::MakeCopySlice(1, 4, 16, 40) == bgl::CopySlice{ 16, 24 });
+	CHECK(bgpu::MakeCopySlice(1, 4, 16, 40) == bgpu::CopySlice{ 16, 24 });
 
 	// The blocks a range lands in are computed in the same width, so the last elements of a full
 	// arena mark the last block rather than one below the first.
 	constexpr uint32_t c_LastPair =
-		static_cast<uint32_t>((bgl::c_MaxRawBufferBytes / bgl::idl::cRawBlockBytes) - 2);
+		static_cast<uint32_t>((bgpu::c_MaxRawBufferBytes / bgl::idl::cRawBlockBytes) - 2);
 
 	CHECK(
-		bgl::FindDirtyBlocks(c_LastPair, 2, bgl::idl::cRawBlockBytes, c_BlockSize) ==
-		bgl::DirtyBlockSpan{ c_Blocks - 1, c_Blocks - 1 });
-	CHECK(bgl::FindDirtyBlocks(4, 3, 16, 16) == bgl::DirtyBlockSpan{ 4, 6 });
+		bgpu::FindDirtyBlocks(c_LastPair, 2, bgl::idl::cRawBlockBytes, c_BlockSize) ==
+		bgpu::DirtyBlockSpan{ c_Blocks - 1, c_Blocks - 1 });
+	CHECK(bgpu::FindDirtyBlocks(4, 3, 16, 16) == bgpu::DirtyBlockSpan{ 4, 6 });
 }
 
 /**
@@ -271,21 +271,22 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
 TEST_CASE("Growth stops at what a raw view can address", "[raw][scene]")
 {
 	constexpr uint64_t c_Block     = bgl::idl::cRawBlockBytes;
-	constexpr uint32_t c_LastBlock = static_cast<uint32_t>(bgl::c_MaxRawBufferBytes / c_Block);
+	constexpr uint32_t c_LastBlock = static_cast<uint32_t>(bgpu::c_MaxRawBufferBytes / c_Block);
 
 	// Exactly at the ceiling is allowed: a uint addresses 0 .. 2^32-1, so the last byte is reachable.
 	CHECK(
-		bgl::GrowCapacityFor(c_LastBlock - 1, 1, c_Block, bgl::c_MaxRawBufferBytes) == c_LastBlock);
+		bgpu::GrowCapacityFor(c_LastBlock - 1, 1, c_Block, bgpu::c_MaxRawBufferBytes) ==
+		c_LastBlock);
 
 	// One block past it is refused rather than wrapped.
-	CHECK(bgl::GrowCapacityFor(c_LastBlock, 1, c_Block, bgl::c_MaxRawBufferBytes) == 0);
+	CHECK(bgpu::GrowCapacityFor(c_LastBlock, 1, c_Block, bgpu::c_MaxRawBufferBytes) == 0);
 
 	// Under a ceiling the growth curve is clamped to it rather than overshooting.
-	CHECK(bgl::GrowCapacityFor(17, 1, 4, 72) == 18);
-	CHECK(bgl::GrowCapacityFor(18, 1, 4, 72) == 0);
+	CHECK(bgpu::GrowCapacityFor(17, 1, 4, 72) == 18);
+	CHECK(bgpu::GrowCapacityFor(18, 1, 4, 72) == 0);
 
 	// With no ceiling the curve is untouched.
-	CHECK(bgl::GrowCapacityFor(17, 1, 4, 0) == bgl::NextGpuBufferCapacity(17, 18, 4));
+	CHECK(bgpu::GrowCapacityFor(17, 1, 4, 0) == bgpu::NextGpuBufferCapacity(17, 18, 4));
 }
 
 /**
@@ -312,11 +313,11 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	auto desc            = bgl::RawBufferDesc();
 	desc.initialBytes    = 256;
@@ -335,19 +336,19 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 
 	constexpr uint32_t c_Results = 4;
 
-	auto outDesc         = bgl::ComputeBufferDesc();
+	auto outDesc         = bgpu::ComputeBufferDesc();
 	outDesc.initialCount = c_Results;
 	outDesc.debugName    = "Arena Read Results";
 	outDesc.SetElement<glm::vec4>();
-	const bgl::BufferHandle outValues = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outValues = resourceManager->CreateComputeBuffer(outDesc);
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = c_Results * sizeof(glm::vec4);
-	rbDesc.debugName                   = "Arena Read Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = c_Results * sizeof(glm::vec4);
+	rbDesc.debugName                    = "Arena Read Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSRawBufferRead"))
 			.SetDebugName("Raw Arena Read"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -365,24 +366,24 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 
 	cmdList->Barrier(
 		arena.GetBufferHandle(),
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource));
 
-	auto computeState   = bgl::ComputeState();
+	auto computeState   = bgpu::ComputeState();
 	computeState.kernel = &kernel;
 	cmdList->SetComputeState(computeState);
 	cmdList->Dispatch(1, 1, 1);
 
 	cmdList->Barrier(
 		outValues,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, outValues);
 	cmdList->Close();

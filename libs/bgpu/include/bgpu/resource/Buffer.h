@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	class Buffer;
 	class ResourceManager;

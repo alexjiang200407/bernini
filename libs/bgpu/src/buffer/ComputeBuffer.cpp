@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	void
 	ComputeBuffer::Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager)

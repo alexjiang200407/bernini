@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-namespace bgl
+namespace bgpu
 {
 	enum class ShaderStage : uint32_t
 	{

@@ -4,7 +4,7 @@
 #include <bgpu/resource/Shader.h>
 #include <core/err/util.h>
 
-namespace bgl::pipeline_util
+namespace bgpu::pipeline_util
 {
 	namespace
 	{

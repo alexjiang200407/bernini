@@ -54,8 +54,8 @@ TEST_CASE("Descriptor indices are unique until the heap is exhausted", "[descrip
 	{
 		const auto index = allocator.Allocate();
 		CHECK(index < c_Capacity);
-		CHECK(index != bgl::c_UnboundDescriptorIndex);  // the reserved slot is never handed out
-		CHECK(live.insert(index).second);               // an index handed out twice fails to insert
+		CHECK(index != bgpu::c_UnboundDescriptorIndex);  // the reserved slot is never handed out
+		CHECK(live.insert(index).second);  // an index handed out twice fails to insert
 	}
 
 	CHECK_THROWS_AS(allocator.Allocate(), std::runtime_error);

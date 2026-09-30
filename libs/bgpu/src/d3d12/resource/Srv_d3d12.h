@@ -3,7 +3,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	class Srv final
 	{

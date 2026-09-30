@@ -5,10 +5,17 @@
 #include <string>
 #include <vector>
 
+namespace bgpu
+{}
+
+namespace bgpu
+{
+	class ICommandList;
+}
+
 namespace bgl
 {
 	class FrameGraph;
-	class ICommandList;
 
 	/**
 	 * The GPU scratch the transparent depth sort produces: the compacted (key, instance) pairs, how
@@ -40,7 +47,7 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate.
 		 */
 		void
-		Init(uint32_t paddedInstances, ResourceManagerRef resourceManager);
+		Init(uint32_t paddedInstances, bgpu::ResourceManagerRef resourceManager);
 
 		/** @throws std::runtime_error if the device cannot allocate; the buffers are left intact. */
 		void
@@ -51,7 +58,7 @@ namespace bgl
 
 		// Retires the resources a Resize superseded; nothing is carried forward.
 		void
-		Update(ICommandList* cmdList);
+		Update(bgpu::ICommandList* cmdList);
 
 		// Imports every buffer under the graph's current namespace. `updateArgs` receives the names
 		// the owning view's update pass declares copy-dest; the sort's own seed is left out, since
@@ -60,11 +67,11 @@ namespace bgl
 		ImportResources(FrameGraph& fg, std::vector<std::string>& updateArgs) const;
 
 	private:
-		ComputeBuffer m_SortedInstances;
-		ComputeBuffer m_Entries;
+		bgpu::ComputeBuffer m_SortedInstances;
+		bgpu::ComputeBuffer m_Entries;
 
 		// Single counters, so they are made once and never resized.
-		ComputeBuffer m_Count;
-		ComputeBuffer m_DispatchArgs;
+		bgpu::ComputeBuffer m_Count;
+		bgpu::ComputeBuffer m_DispatchArgs;
 	};
 }

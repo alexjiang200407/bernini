@@ -32,24 +32,24 @@ TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 	contextDesc.enableDebugLayer = true;
 	auto context                 = bgpu::CreateGpuContext(contextDesc);
 
-	auto device = bgl::CreateDevice(context);
-	auto rm     = device->CreateResourceManager(bgl::ResourceManagerDesc());
+	auto device = bgpu::CreateDevice(context);
+	auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc());
 
-	auto queue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto queue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 	rm->RegisterQueue(queue.Get());
 
 	auto alloc    = device->CreateCommandAllocator();
-	auto listDesc = bgl::CommandListDesc();
-	listDesc.type = bgl::QueueType::kGraphics;
+	auto listDesc = bgpu::CommandListDesc();
+	listDesc.type = bgpu::QueueType::kGraphics;
 	auto list     = device->CreateCommandList(listDesc, alloc, rm);
 
-	auto bufDesc      = bgl::RawViewDesc();
+	auto bufDesc      = bgpu::RawViewDesc();
 	bufDesc.byteSize  = c_CopyBytes;
 	bufDesc.debugName = "flush idle probe";
 	bufDesc.isUav     = true;
 
-	const bgl::BufferHandle src = rm->CreateRawBuffer(bufDesc);
-	const bgl::BufferHandle dst = rm->CreateRawBuffer(bufDesc);
+	const bgpu::BufferHandle src = rm->CreateRawBuffer(bufDesc);
+	const bgpu::BufferHandle dst = rm->CreateRawBuffer(bufDesc);
 	REQUIRE_FALSE(src.IsNull());
 	REQUIRE_FALSE(dst.IsNull());
 
@@ -67,7 +67,7 @@ TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 		list->CopyBuffer(dst, src, 0, 0, c_CopyBytes);
 		list->Close();
 
-		MTL::CommandBuffer* cmdBuffer = list->As<bgl::CommandList>()->GetCommandBuffer();
+		MTL::CommandBuffer* cmdBuffer = list->As<bgpu::CommandList>()->GetCommandBuffer();
 		(void)queue->ExecuteCommandList(list.Get());
 
 		queue->Flush();

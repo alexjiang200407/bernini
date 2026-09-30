@@ -43,13 +43,13 @@ namespace bgl
 		 *         texture cannot be created.
 		 */
 		void
-		Init(ResourceManagerRef resourceManager, const std::filesystem::path& file);
+		Init(bgpu::ResourceManagerRef resourceManager, const std::filesystem::path& file);
 
 		/** Records the upload and the barrier that makes it sampleable. @pre Init succeeded. */
 		void
-		Upload(ICommandList* cmdList);
+		Upload(bgpu::ICommandList* cmdList);
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetSrv() const noexcept
 		{
 			return m_Srv;
@@ -59,10 +59,10 @@ namespace bgl
 		Release() noexcept;
 
 	private:
-		ResourceManagerRef     m_ResourceManager;
-		TextureHandle          m_Texture;
-		SrvHandle              m_Srv;
-		std::vector<std::byte> m_Pixels;
-		uint32_t               m_Size = 0;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		bgpu::TextureHandle      m_Texture;
+		bgpu::SrvHandle          m_Srv;
+		std::vector<std::byte>   m_Pixels;
+		uint32_t                 m_Size = 0;
 	};
 }

@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	struct PackedBufferDesc
 	{

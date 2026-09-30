@@ -4,7 +4,7 @@
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	class CommandAllocator : public core::RefCounter<ICommandAllocator>
 	{

@@ -2,7 +2,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	// Metal has no descriptor heap: a shader reaches a texture by its native id, or the encoder finds
 	// it by pool slot at dispatch. So a Metal Srv owns nothing and just remembers which texture it

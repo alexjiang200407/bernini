@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	// A meshlet pipeline paired with the uniforms for every constant buffer it declares
 	// (keyed by buffer name). Created by IDevice::CreateMeshletKernel. The map is empty for

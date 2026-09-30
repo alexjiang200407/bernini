@@ -39,7 +39,7 @@ namespace bgl
 		 *      capacity.
 		 */
 		void
-		Arm(ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept;
+		Arm(bgpu::ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept;
 
 		void
 		Disarm() noexcept;
@@ -52,10 +52,10 @@ namespace bgl
 
 		// Called by FrameGraph::Execute around each kept pass. No-ops when not armed.
 		void
-		BeginPass(ICommandList* cmd, std::string_view name);
+		BeginPass(bgpu::ICommandList* cmd, std::string_view name);
 
 		void
-		EndPass(ICommandList* cmd) noexcept;
+		EndPass(bgpu::ICommandList* cmd) noexcept;
 
 		[[nodiscard]] std::span<const Entry>
 		Entries() const noexcept
@@ -63,7 +63,7 @@ namespace bgl
 			return m_Entries;
 		}
 
-		[[nodiscard]] ITimestampHeap*
+		[[nodiscard]] bgpu::ITimestampHeap*
 		GetHeap() const noexcept
 		{
 			return m_Heap;
@@ -83,13 +83,13 @@ namespace bgl
 		}
 
 	private:
-		ITimestampHeap*    m_Heap       = nullptr;
-		uint32_t           m_FirstSlot  = 0;
-		uint32_t           m_EndSlot    = 0;
-		uint32_t           m_NextSlot   = 0;
-		bool               m_Overflowed = false;
-		bool               m_PassOpen   = false;
-		bool               m_PassTimed  = false;
-		std::vector<Entry> m_Entries;
+		bgpu::ITimestampHeap* m_Heap       = nullptr;
+		uint32_t              m_FirstSlot  = 0;
+		uint32_t              m_EndSlot    = 0;
+		uint32_t              m_NextSlot   = 0;
+		bool                  m_Overflowed = false;
+		bool                  m_PassOpen   = false;
+		bool                  m_PassTimed  = false;
+		std::vector<Entry>    m_Entries;
 	};
 }

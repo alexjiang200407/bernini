@@ -27,7 +27,7 @@ namespace bgl
 	 * and kAssert kinds cull in hardware, having no flag to read. Every pass drawing the bucket
 	 * must agree, or its depth holds faces the colour pass never drew.
 	 */
-	[[nodiscard]] RasterCullMode
+	[[nodiscard]] bgpu::RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept;
 
 	/**

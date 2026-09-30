@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	enum class HandleKind : uint8_t
 	{

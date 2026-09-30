@@ -131,7 +131,7 @@ TEST_CASE("Deleting a texture releases the view created with it", "[textures]")
 	auto fixture = Fixture();
 
 	const TextureAssetHandle texture = fixture.store.Add(MakeImage(), "Test");
-	const SrvHandle          srv     = fixture.store.GetSrv(texture.textureSlot);
+	const bgpu::SrvHandle    srv     = fixture.store.GetSrv(texture.textureSlot);
 	REQUIRE_FALSE(srv.IsNull());
 
 	fixture.store.Delete(texture);

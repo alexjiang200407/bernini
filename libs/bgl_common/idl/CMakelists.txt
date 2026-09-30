@@ -165,7 +165,7 @@ foreach(src ${IDL_SOURCES})
                 ${IDL_LAYOUT_ARGS}
                 ${cpp_args}
                 -I "${IDL_SRC_ROOT}"
-                -I "${IDL_BGPU_ROOT}"
+                --extern "${IDL_BGPU_ROOT}=bgpu::idl"
                 "${src}"
         DEPENDS bgl_idlgen "${src}" ${import_deps}
         COMMENT "idlgen ${rel}"

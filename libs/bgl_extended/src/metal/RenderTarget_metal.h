@@ -38,10 +38,10 @@ namespace bgl
 		// `desc.wnd` is the CAMetalLayer to present into, and is read only when desc.headless is
 		// false. The queue is what the present blit is encoded on.
 		RenderTarget(
-			const RenderTargetDesc& desc,
-			DeviceRef               device,
-			CommandQueueRef         queue,
-			ResourceManagerRef      resourceManager);
+			const RenderTargetDesc&  desc,
+			bgpu::DeviceRef          device,
+			bgpu::CommandQueueRef    queue,
+			bgpu::ResourceManagerRef resourceManager);
 
 		~RenderTarget() noexcept override;
 
@@ -77,28 +77,28 @@ namespace bgl
 			m_FrameFences[frameIndex] = fenceValue;
 		}
 
-		[[nodiscard]] ICommandAllocator*
+		[[nodiscard]] bgpu::ICommandAllocator*
 		GetFrameAllocator(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_FrameAllocators[frameIndex].Get();
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_Backbuffers[frameIndex].texture;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_Backbuffers[frameIndex].rtv;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
@@ -111,73 +111,73 @@ namespace bgl
 			return m_Presented;
 		}
 
-		[[nodiscard]] DsvHandle
+		[[nodiscard]] bgpu::DsvHandle
 		GetDepthDsv() const noexcept override
 		{
 			return m_DepthDsv;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetDepthTexture() const noexcept override
 		{
 			return m_DepthTexture;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetDepthSrv() const noexcept override
 		{
 			return m_DepthSrv;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
 			return m_MotionTexture;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetMotionVectorRtv() const noexcept override
 		{
 			return m_MotionRtv;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetSceneColorTexture() const noexcept override
 		{
 			return m_SceneColorTexture;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetSceneColorRtv() const noexcept override
 		{
 			return m_SceneColorRtv;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetSceneColorSrv() const noexcept override
 		{
 			return m_SceneColorSrv;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetMotionVectorSrv() const noexcept override
 		{
 			return m_MotionSrv;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetOutlineMaskTexture() const noexcept override
 		{
 			return m_OutlineMaskTexture;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetOutlineMaskRtv() const noexcept override
 		{
 			return m_OutlineMaskRtv;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetOutlineMaskSrv() const noexcept override
 		{
 			return m_OutlineMaskSrv;
@@ -221,21 +221,21 @@ namespace bgl
 			m_TaaEnabled = enabled;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
 			return m_History[index].texture;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetHistoryRtv(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
 			return m_History[index].rtv;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetHistorySrv(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
@@ -273,16 +273,16 @@ namespace bgl
 	private:
 		struct Backbuffer
 		{
-			TextureHandle texture;
-			RtvHandle     rtv;
-			SrvHandle     srv;
+			bgpu::TextureHandle texture;
+			bgpu::RtvHandle     rtv;
+			bgpu::SrvHandle     srv;
 		};
 
 		struct Accumulation
 		{
-			TextureHandle texture;
-			RtvHandle     rtv;
-			SrvHandle     srv;
+			bgpu::TextureHandle texture;
+			bgpu::RtvHandle     rtv;
+			bgpu::SrvHandle     srv;
 		};
 
 		void
@@ -312,9 +312,9 @@ namespace bgl
 		void
 		PresentToLayer() noexcept;
 
-		DeviceRef          m_Device;
-		CommandQueueRef    m_Queue;
-		ResourceManagerRef m_ResourceManager;
+		bgpu::DeviceRef          m_Device;
+		bgpu::CommandQueueRef    m_Queue;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
@@ -323,22 +323,22 @@ namespace bgl
 		bool m_OutlineEnabled = true;
 		bool m_TaaAllocated   = false;
 
-		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
-		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
-		std::array<CommandAllocatorRef, c_SwapchainImageCount> m_FrameAllocators;
+		std::array<Backbuffer, c_SwapchainImageCount>                m_Backbuffers;
+		std::array<uint64_t, c_SwapchainImageCount>                  m_FrameFences{};
+		std::array<bgpu::CommandAllocatorRef, c_SwapchainImageCount> m_FrameAllocators;
 
-		TextureHandle m_DepthTexture;
-		DsvHandle     m_DepthDsv;
-		SrvHandle     m_DepthSrv;
-		TextureHandle m_MotionTexture;
-		RtvHandle     m_MotionRtv;
-		TextureHandle m_SceneColorTexture;
-		RtvHandle     m_SceneColorRtv;
-		SrvHandle     m_SceneColorSrv;
-		SrvHandle     m_MotionSrv;
-		TextureHandle m_OutlineMaskTexture;
-		RtvHandle     m_OutlineMaskRtv;
-		SrvHandle     m_OutlineMaskSrv;
+		bgpu::TextureHandle m_DepthTexture;
+		bgpu::DsvHandle     m_DepthDsv;
+		bgpu::SrvHandle     m_DepthSrv;
+		bgpu::TextureHandle m_MotionTexture;
+		bgpu::RtvHandle     m_MotionRtv;
+		bgpu::TextureHandle m_SceneColorTexture;
+		bgpu::RtvHandle     m_SceneColorRtv;
+		bgpu::SrvHandle     m_SceneColorSrv;
+		bgpu::SrvHandle     m_MotionSrv;
+		bgpu::TextureHandle m_OutlineMaskTexture;
+		bgpu::RtvHandle     m_OutlineMaskRtv;
+		bgpu::SrvHandle     m_OutlineMaskSrv;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

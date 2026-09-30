@@ -58,47 +58,47 @@ TEST_CASE(
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	auto debugBuffer = bgl::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	// A 1x1 RGBA8 texture we will upload a known red texel into.
-	auto texDesc          = bgl::TextureDesc();
+	auto texDesc          = bgpu::TextureDesc();
 	texDesc.width         = 1;
 	texDesc.height        = 1;
-	texDesc.format        = bgl::Format::RGBA8_UNORM;
-	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
-	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.format        = bgpu::Format::RGBA8_UNORM;
+	texDesc.usage         = bgpu::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 	texDesc.debugName     = "Texture Sample Test";
 
 	auto texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
-	auto srvDesc      = bgl::SrvDesc();
+	auto srvDesc      = bgpu::SrvDesc();
 	srvDesc.format    = texDesc.format;
 	srvDesc.dimension = texDesc.dimension;
 	srvDesc.debugName = "Texture Sample SRV";
 
-	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	const bgpu::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
 	REQUIRE(resourceManager->ValidSrvHandle(srv));
 
-	const uint8_t               redTexel[4] = { 255, 0, 0, 255 };
-	bgl::TextureSubresourceData sub{};
+	const uint8_t                redTexel[4] = { 255, 0, 0, 255 };
+	bgpu::TextureSubresourceData sub{};
 	sub.data       = redTexel;
 	sub.rowPitch   = sizeof(redTexel);
 	sub.slicePitch = sizeof(redTexel);
-	std::array<bgl::TextureSubresourceData, 1> subresources{ sub };
+	std::array<bgpu::TextureSubresourceData, 1> subresources{ sub };
 
 	// SamplerDesc defaults are linear filtering + clamp addressing.
-	auto sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	auto sampler = resourceManager->CreateSampler(bgpu::SamplerDesc());
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSTextureSampleTest"))
 			.SetDebugName("Texture Sample Test"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -108,7 +108,7 @@ TEST_CASE(
 	kernel["gUniforms"]["texture"] = srv;
 	kernel["gUniforms"]["sampler"] = sampler;
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = debugBuffer.ByteSize();
 	rbDesc.debugName = "Texture Sample Readback";
 	auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -119,25 +119,25 @@ TEST_CASE(
 	cmdList->WriteTexture(texture, subresources);
 	cmdList->Barrier(
 		texture,
-		bgl::TextureBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgpu::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kShaderResource));
 
 	// Reset the debug header, then hand the buffer to the shader.
 	debugBuffer.Reset(cmdList);
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 
-	auto computeState   = bgl::ComputeState();
+	auto computeState   = bgpu::ComputeState();
 	computeState.kernel = &kernel;
 	cmdList->SetComputeState(computeState);
 	cmdList->SetActiveDebugBuffer(debugBuffer.GetBufferHandle());
@@ -145,11 +145,11 @@ TEST_CASE(
 
 	cmdList->Barrier(
 		debugBuffer.GetBufferHandle(),
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(rb, debugBuffer.GetBufferHandle());
 
 	cmdList->Close();
@@ -197,56 +197,56 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto texDesc          = bgl::TextureDesc();
+	auto texDesc          = bgpu::TextureDesc();
 	texDesc.width         = 1;
 	texDesc.height        = 1;
-	texDesc.format        = bgl::Format::RGBA8_UNORM;
-	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
-	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.format        = bgpu::Format::RGBA8_UNORM;
+	texDesc.usage         = bgpu::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 	texDesc.debugName     = "Texture Readback Source";
 
-	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
+	const bgpu::TextureHandle texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
-	auto srvDesc      = bgl::SrvDesc();
+	auto srvDesc      = bgpu::SrvDesc();
 	srvDesc.format    = texDesc.format;
 	srvDesc.dimension = texDesc.dimension;
 	srvDesc.debugName = "Texture Sample SRV";
 
-	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	const bgpu::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
 	REQUIRE(resourceManager->ValidSrvHandle(srv));
 
 	// Deliberately not grey: a wrong channel order or a zeroed sample is visible in the result.
-	const uint8_t               texel[4] = { 255, 128, 0, 255 };
-	bgl::TextureSubresourceData sub{};
+	const uint8_t                texel[4] = { 255, 128, 0, 255 };
+	bgpu::TextureSubresourceData sub{};
 	sub.data       = texel;
 	sub.rowPitch   = sizeof(texel);
 	sub.slicePitch = sizeof(texel);
-	std::array<bgl::TextureSubresourceData, 1> subresources{ sub };
+	std::array<bgpu::TextureSubresourceData, 1> subresources{ sub };
 
-	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	const bgpu::SamplerHandle sampler = resourceManager->CreateSampler(bgpu::SamplerDesc());
 	REQUIRE(resourceManager->ValidSamplerHandle(sampler));
 
-	auto outDesc         = bgl::ComputeBufferDesc();
+	auto outDesc         = bgpu::ComputeBufferDesc();
 	outDesc.initialCount = 1;
 	outDesc.debugName    = "Sampled Colour";
 	outDesc.SetElement<glm::vec4>();
-	const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = sizeof(glm::vec4);
-	rbDesc.debugName                   = "Sampled Colour Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = sizeof(glm::vec4);
+	rbDesc.debugName                    = "Sampled Colour Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSTextureSampleReadback"))
 			.SetDebugName("Texture Sample Readback"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -261,26 +261,26 @@ TEST_CASE("bindless texture and sampler resolve to the sampled texel", "[texture
 	cmdList->WriteTexture(texture, subresources);
 	cmdList->Barrier(
 		texture,
-		bgl::TextureBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgpu::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kShaderResource));
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 
 	cmdList->Barrier(
 		outBuffer,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, outBuffer);
 	cmdList->Close();
@@ -339,36 +339,36 @@ TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
 	auto  resourceManager = gfxBase->GetResourceManagerCpy();
 	auto* device          = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto texDesc          = bgl::TextureDesc();
+	auto texDesc          = bgpu::TextureDesc();
 	texDesc.width         = c_TexSize;
 	texDesc.height        = c_TexSize;
 	texDesc.mipLevels     = c_MipLevels;
-	texDesc.format        = bgl::Format::SRGBA8_UNORM;
-	texDesc.usage         = bgl::TextureUsageFlag::kSRV;
-	texDesc.initialLayout = bgl::BarrierLayout::kCopyDest;
+	texDesc.format        = bgpu::Format::SRGBA8_UNORM;
+	texDesc.usage         = bgpu::TextureUsageFlag::kSRV;
+	texDesc.initialLayout = bgpu::BarrierLayout::kCopyDest;
 	texDesc.debugName     = "Mip Readback Source";
 
-	const bgl::TextureHandle texture = resourceManager->CreateTexture(texDesc);
+	const bgpu::TextureHandle texture = resourceManager->CreateTexture(texDesc);
 	REQUIRE(resourceManager->ValidTextureHandle(texture));
 
-	auto srvDesc      = bgl::SrvDesc();
+	auto srvDesc      = bgpu::SrvDesc();
 	srvDesc.format    = texDesc.format;
 	srvDesc.dimension = texDesc.dimension;
 	srvDesc.mipLevels = texDesc.mipLevels;
 	srvDesc.debugName = "Mip Readback SRV";
 
-	const bgl::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
+	const bgpu::SrvHandle srv = resourceManager->CreateSrv(texture, srvDesc);
 	REQUIRE(resourceManager->ValidSrvHandle(srv));
 
 	// Each mip filled with its colour; the buffers must outlive WriteTexture's recording.
-	std::array<std::vector<uint8_t>, c_MipLevels>        mipPixels;
-	std::array<bgl::TextureSubresourceData, c_MipLevels> subresources;
+	std::array<std::vector<uint8_t>, c_MipLevels>         mipPixels;
+	std::array<bgpu::TextureSubresourceData, c_MipLevels> subresources;
 	for (uint32_t mip = 0; mip < c_MipLevels; ++mip)
 	{
 		const uint32_t dim = c_TexSize >> mip;
@@ -382,23 +382,23 @@ TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
 			                  static_cast<uint64_t>(dim) * dim * 4 };
 	}
 
-	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
+	const bgpu::SamplerHandle sampler = resourceManager->CreateSampler(bgpu::SamplerDesc());
 	REQUIRE(resourceManager->ValidSamplerHandle(sampler));
 
-	auto outDesc         = bgl::ComputeBufferDesc();
+	auto outDesc         = bgpu::ComputeBufferDesc();
 	outDesc.initialCount = c_MipLevels;
 	outDesc.debugName    = "Sampled Mip Colours";
 	outDesc.SetElement<glm::vec4>();
-	const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+	const bgpu::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
 
-	auto rbDesc                        = bgl::ReadbackBufferDesc();
-	rbDesc.byteSize                    = sizeof(glm::vec4) * c_MipLevels;
-	rbDesc.debugName                   = "Sampled Mip Readback";
-	const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+	auto rbDesc                         = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize                     = sizeof(glm::vec4) * c_MipLevels;
+	rbDesc.debugName                    = "Sampled Mip Readback";
+	const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSTextureMipReadback"))
 			.SetDebugName("Texture Mip Readback"));
 	REQUIRE(kernel.pipeline != nullptr);
@@ -414,26 +414,26 @@ TEST_CASE("explicit-LOD samples return each uploaded mip", "[texture][compute]")
 	cmdList->WriteTexture(texture, subresources);
 	cmdList->Barrier(
 		texture,
-		bgl::TextureBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.SetLayoutBefore(bgl::BarrierLayout::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutAfter(bgl::BarrierLayout::kShaderResource));
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.SetLayoutBefore(bgpu::BarrierLayout::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kShaderResource));
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 
 	cmdList->Barrier(
 		outBuffer,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 	cmdList->CopyBufferToReadback(rb, outBuffer);
 	cmdList->Close();

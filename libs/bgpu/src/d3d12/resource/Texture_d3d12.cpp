@@ -1,7 +1,7 @@
 #include "resource/Texture_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	Texture::Texture(
 		ID3D12Device*         device,
@@ -94,7 +94,7 @@ namespace bgl
 			device10->GetResourceAllocationInfo2(0, 1, &textureDesc, nullptr);
 		if (allocation.SizeInBytes != std::numeric_limits<uint64_t>::max())
 		{
-			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, allocation.SizeInBytes);
+			m_Tracked = bgpu::TaggedBytes(MemoryTag::kDeviceTexture, allocation.SizeInBytes);
 		}
 	}
 

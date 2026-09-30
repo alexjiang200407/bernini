@@ -36,10 +36,10 @@ namespace bgl
 
 		void
 		Record(
-			ForwardPhases&     kernels,
-			MeshletState&      state,
-			const DrawData&    draw,
-			const PassContext& resources) const override;
+			ForwardPhases&      kernels,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources) const override;
 
 	private:
 		GeometryStage    m_Stage;

@@ -26,7 +26,7 @@ namespace bgl::test
 	 * Only the calls a texture upload makes are recorded; the rest are no-ops rather than aborts,
 	 * because a subject may legitimately mix other work onto the same list.
 	 */
-	class RecordingCommandList : public core::RefCounter<ICommandList>
+	class RecordingCommandList : public core::RefCounter<bgpu::ICommandList>
 	{
 	public:
 		RecordingCommandList()                            = default;
@@ -41,17 +41,17 @@ namespace bgl::test
 
 		struct TextureWrite
 		{
-			TextureHandle handle;
-			size_t        subresourceCount = 0;
+			bgpu::TextureHandle handle;
+			size_t              subresourceCount = 0;
 		};
 
-		std::vector<TextureWrite>       textureWrites;
-		std::vector<TextureHandle>      barrieredTextures;
-		std::vector<TextureBarrierDesc> textureBarriers;
-		std::vector<std::string>        events;
+		std::vector<TextureWrite>             textureWrites;
+		std::vector<bgpu::TextureHandle>      barrieredTextures;
+		std::vector<bgpu::TextureBarrierDesc> textureBarriers;
+		std::vector<std::string>              events;
 
 		[[nodiscard]] bool
-		WroteTexture(TextureHandle handle) const noexcept
+		WroteTexture(bgpu::TextureHandle handle) const noexcept
 		{
 			return std::ranges::any_of(textureWrites, [handle](const TextureWrite& write) {
 				return write.handle == handle;
@@ -60,16 +60,16 @@ namespace bgl::test
 
 		void
 		WriteTexture(
-			TextureHandle                           handle,
-			std::span<const TextureSubresourceData> subresources) noexcept override
+			bgpu::TextureHandle                           handle,
+			std::span<const bgpu::TextureSubresourceData> subresources) noexcept override
 		{
 			textureWrites.push_back({ handle, subresources.size() });
 		}
 
 		void
 		Barrier(
-			std::span<const TextureHandle>      handles,
-			std::span<const TextureBarrierDesc> barriers) noexcept override
+			std::span<const bgpu::TextureHandle>      handles,
+			std::span<const bgpu::TextureBarrierDesc> barriers) noexcept override
 		{
 			barrieredTextures.insert(barrieredTextures.end(), handles.begin(), handles.end());
 			textureBarriers.insert(textureBarriers.end(), barriers.begin(), barriers.end());
@@ -86,7 +86,7 @@ namespace bgl::test
 		{}
 
 		void
-		BeginTiming(ITimestampHeap&, uint32_t, uint32_t) noexcept override
+		BeginTiming(bgpu::ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 
 		bool
@@ -96,44 +96,47 @@ namespace bgl::test
 		}
 
 		void
-		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
+		ResolveTimestamps(bgpu::ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 
 		void
-		WriteBuffer(BufferHandle, const void*, size_t, size_t) noexcept override
+		WriteBuffer(bgpu::BufferHandle, const void*, size_t, size_t) noexcept override
 		{}
 		void
-		CopyBuffer(BufferHandle, BufferHandle, uint64_t, uint64_t, uint64_t) noexcept override
+		CopyBuffer(bgpu::BufferHandle, bgpu::BufferHandle, uint64_t, uint64_t, uint64_t) noexcept
+			override
 		{}
 		void
-		CopyBufferToReadback(ReadbackBufferHandle, BufferHandle) noexcept override
+		CopyBufferToReadback(bgpu::ReadbackBufferHandle, bgpu::BufferHandle) noexcept override
 		{}
 		void
-		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
+		CopyTextureToReadback(bgpu::ReadbackBufferHandle, bgpu::TextureHandle) noexcept override
 		{}
 		void
-		Barrier(BufferHandle, const BufferBarrierDesc&) noexcept override
+		Barrier(bgpu::BufferHandle, const bgpu::BufferBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(TextureHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::TextureHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(RtvHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::RtvHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(DsvHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::DsvHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(std::span<const BufferHandle>, std::span<const BufferBarrierDesc>) noexcept override
+		Barrier(
+			std::span<const bgpu::BufferHandle>,
+			std::span<const bgpu::BufferBarrierDesc>) noexcept override
 		{}
 		void
-		Open(ICommandQueue*, ICommandAllocator*) noexcept override
+		Open(bgpu::ICommandQueue*, bgpu::ICommandAllocator*) noexcept override
 		{}
 		void
 		Close() noexcept override
 		{}
 		void
-		SetMeshletState(const MeshletState&) noexcept override
+		SetMeshletState(const bgpu::MeshletState&) noexcept override
 		{}
 		void
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
@@ -145,7 +148,7 @@ namespace bgl::test
 		DispatchMeshIndirectCount(uint32_t, uint32_t) noexcept override
 		{}
 		void
-		SetComputeState(const ComputeState&) noexcept override
+		SetComputeState(const bgpu::ComputeState&) noexcept override
 		{}
 		void
 		Dispatch(uint32_t, uint32_t, uint32_t) noexcept override
@@ -157,10 +160,10 @@ namespace bgl::test
 			return true;
 		}
 
-		QueueType
+		bgpu::QueueType
 		GetType() const noexcept override
 		{
-			return QueueType::kGraphics;
+			return bgpu::QueueType::kGraphics;
 		}
 	};
 }

@@ -26,7 +26,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 
 	NS::SharedPtr<MTL::DepthStencilState>

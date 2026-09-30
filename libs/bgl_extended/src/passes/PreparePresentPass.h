@@ -22,9 +22,9 @@ namespace bgl
 			{
 				desc.AddTextureArg(
 					TextureArg{ name,
-				                BarrierSyncFlag::kNone,
-				                BarrierAccessFlag::kNone,
-				                BarrierLayout::kPresent });
+				                bgpu::BarrierSyncFlag::kNone,
+				                bgpu::BarrierAccessFlag::kNone,
+				                bgpu::BarrierLayout::kPresent });
 			}
 
 			fg.AddPass(std::move(desc));

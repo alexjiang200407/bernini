@@ -196,7 +196,7 @@ namespace game
 
 			// This cache is the CPU-side residency of everything the reference dimensions price --
 			// a .banim is 59.7 MB and a .bmesh 16.8 MB -- and it holds each until the manager dies.
-			bgl::TaggedBytes tracked;
+			bgpu::TaggedBytes tracked;
 
 			// The charge is move-only, so an entry is too. Spelled out rather than left implicit
 			// because MSVC's /Wall makes an implicitly deleted copy an error, and a constructor is
@@ -217,22 +217,22 @@ namespace game
 		};
 
 		/** The tag a cached container is charged to; one overload per thing ReadCached holds. */
-		constexpr bgl::MemoryTag
+		constexpr bgpu::MemoryTag
 		TagOf(const assetlib::Skeleton&) noexcept
 		{
-			return bgl::MemoryTag::kAnimation;
+			return bgpu::MemoryTag::kAnimation;
 		}
 
-		constexpr bgl::MemoryTag
+		constexpr bgpu::MemoryTag
 		TagOf(const assetlib::AnimationSet&) noexcept
 		{
-			return bgl::MemoryTag::kAnimation;
+			return bgpu::MemoryTag::kAnimation;
 		}
 
-		bgl::TaggedBytes
+		bgpu::TaggedBytes
 		Charged(const assetlib::RegenMesh& value) noexcept
 		{
-			return bgl::TaggedBytes(bgl::MemoryTag::kMesh, assetlib::residentBytes(value.mesh));
+			return bgpu::TaggedBytes(bgpu::MemoryTag::kMesh, assetlib::residentBytes(value.mesh));
 		}
 
 		template <class T>
@@ -251,10 +251,10 @@ namespace game
 		}
 
 		template <std::movable T>
-		bgl::TaggedBytes
+		bgpu::TaggedBytes
 		Charged(const T& value) noexcept
 		{
-			return bgl::TaggedBytes(TagOf(value), assetlib::residentBytes(value));
+			return bgpu::TaggedBytes(TagOf(value), assetlib::residentBytes(value));
 		}
 
 		/** Reads the container a mount key names -- what ReadCached defers to when its stamp moves. */
@@ -1543,8 +1543,8 @@ namespace game
 		grass.chunks = geometry.chunks;
 		grass.clumps = geometry.clumps;
 		grass.looks  = loaded.bindings.grassLooks;
-		const bgl::TaggedBytes uploadCopy(
-			bgl::MemoryTag::kMesh,
+		const bgpu::TaggedBytes uploadCopy(
+			bgpu::MemoryTag::kMesh,
 			grass.clumps.size() * sizeof(assetlib::GrassClump) +
 				grass.chunks.size() * sizeof(assetlib::GrassChunk) +
 				grass.fields.size() * sizeof(assetlib::GrassField));

@@ -148,10 +148,10 @@ namespace bgl
 	}
 
 	SceneView::SceneView(
-		const SceneRef&                   scene,
-		uint32_t                          initialInstances,
-		core::SharedRef<IResourceManager> resourceManager,
-		std::shared_ptr<DrawBucketTable>  buckets) :
+		const SceneRef&                         scene,
+		uint32_t                                initialInstances,
+		core::SharedRef<bgpu::IResourceManager> resourceManager,
+		std::shared_ptr<DrawBucketTable>        buckets) :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
 		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
 	{
@@ -181,7 +181,7 @@ namespace bgl
 			core::round_up(m_InitialInstances, idl::cHistogramGroupSize);
 
 		{
-			auto instanceBufferDesc              = PackedBufferDesc();
+			auto instanceBufferDesc              = bgpu::PackedBufferDesc();
 			instanceBufferDesc.initialCount      = paddedInstances;
 			instanceBufferDesc.capacityAlignment = idl::cHistogramGroupSize;
 			instanceBufferDesc.debugName         = "Instance Buffer";
@@ -199,7 +199,7 @@ namespace bgl
 		}
 
 		{
-			auto meshBufferDesc         = EntryBufferDesc();
+			auto meshBufferDesc         = bgpu::EntryBufferDesc();
 			meshBufferDesc.initialCount = m_InitialInstances;
 			meshBufferDesc.debugName    = "Mesh Buffer";
 			meshBufferDesc.blockSize    = sizeof(idl::MeshInstance) * 256;
@@ -231,7 +231,7 @@ namespace bgl
 		m_Palettes.Init(m_ResourceManager);
 
 		{
-			auto footIKDesc         = RangeBufferDesc();
+			auto footIKDesc         = bgpu::RangeBufferDesc();
 			footIKDesc.initialCount = 1;
 			footIKDesc.debugName    = "Foot IK Buffer";
 
@@ -707,7 +707,7 @@ namespace bgl
 		state.playback.phase = desc.phase;
 		state.playback.rate  = desc.rate;
 
-		const idl::RawEntry record = m_Playback.AddRecord(
+		const bgpu::idl::RawEntry record = m_Playback.AddRecord(
 			idl::PlaybackType::kSkinnedTable,
 			std::as_bytes(std::span(&state, 1)));
 
@@ -759,7 +759,7 @@ namespace bgl
 			idl::cFloat4sPerBone * boneCount * 2 + idl::cFloat4sPerSole * legCount);
 
 		auto footIK = core::multi_slot_handle();
-		auto record = idl::RawEntry();
+		auto record = bgpu::idl::RawEntry();
 		try
 		{
 			// Weight one on every leg, so an instance nobody writes plants as the baked weights
@@ -805,7 +805,7 @@ namespace bgl
 	SceneView::PlaceRecord(
 		GeomHandle              geom,
 		glm::mat4               transform,
-		idl::RawEntry           record,
+		bgpu::idl::RawEntry     record,
 		core::multi_slot_handle palette,
 		core::multi_slot_handle footIK,
 		uint32_t                nodeCount)
@@ -888,7 +888,7 @@ namespace bgl
 		}
 
 		m_Playback.SetRecordPayload(
-			idl::RawEntry{ meta.animState },
+			bgpu::idl::RawEntry{ meta.animState },
 			std::as_bytes(std::span(&state, 1)));
 	}
 
@@ -1058,7 +1058,7 @@ namespace bgl
 
 			// One field for either tier: the record's own header says which, so nothing here
 			// decides it. Zero stays zero, which is the null a static placement wants.
-			mesh.playback = idl::RawEntry{ animState };
+			mesh.playback = bgpu::idl::RawEntry{ animState };
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
@@ -1602,7 +1602,7 @@ namespace bgl
 		// An invalid handle leaves the entry alone; the kNull PSO's pixel shader never reads it.
 		if (material.IsValid())
 		{
-			instance.material = idl::RawEntry{ material.byteOffset };
+			instance.material = bgpu::idl::RawEntry{ material.byteOffset };
 		}
 
 		instance.drawBucket = m_DrawBucketTable->Resolve(GeometryStageOf(geomType), material);
@@ -1621,8 +1621,8 @@ namespace bgl
 
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
-		const idl::RawEntry material = instance.material;
-		const uint32_t      bucket   = instance.drawBucket;
+		const bgpu::idl::RawEntry material = instance.material;
+		const uint32_t            bucket   = instance.drawBucket;
 
 		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
@@ -1661,7 +1661,7 @@ namespace bgl
 	}
 
 	void
-	SceneView::Update(ICommandList* cmdList)
+	SceneView::Update(bgpu::ICommandList* cmdList)
 	{
 		// Must run before the flush below, so what it rewrites is uploaded in the same Update.
 		if (const uint64_t epoch = m_SceneRaw->MaterialEpoch(); epoch != m_SceneEpoch)

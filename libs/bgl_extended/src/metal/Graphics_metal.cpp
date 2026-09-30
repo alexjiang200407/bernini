@@ -87,7 +87,7 @@ namespace bgl
 				{
 					core::throw_runtime_error(
 						"Metal frame capture failed to start: {}",
-						GetErrorDescription(error));
+						bgpu::GetErrorDescription(error));
 				}
 				m_Active = true;
 			}
@@ -130,9 +130,9 @@ namespace bgl
 	public:
 		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			m_Device = CreateDevice(std::move(context));
+			m_Device = bgpu::CreateDevice(std::move(context));
 
-			auto rmDesc               = ResourceManagerDesc();
+			auto rmDesc               = bgpu::ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;
 			rmDesc.maxBuffers         = opts.maxBuffers;
 			rmDesc.maxSrvs            = opts.maxSrvs;
@@ -165,13 +165,13 @@ namespace bgl
 			spdlog::info("BGL initialized successfully.");
 		}
 
-		IDevice*
+		bgpu::IDevice*
 		GetDevice() const noexcept override
 		{
 			return m_Device.Get();
 		}
 
-		core::SharedRef<IResourceManager>
+		core::SharedRef<bgpu::IResourceManager>
 		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager;
@@ -317,10 +317,10 @@ namespace bgl
 		}
 
 	private:
-		GraphicsOptions    m_Opts;
-		FrameCapture       m_Capture;
-		DeviceRef          m_Device;
-		ResourceManagerRef m_ResourceManager;
+		GraphicsOptions          m_Opts;
+		FrameCapture             m_Capture;
+		bgpu::DeviceRef          m_Device;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		// Below the device: what the net holds are Metal objects that reference the device, so
 		// draining it once the device is released deallocs them into a purged one. A share rather

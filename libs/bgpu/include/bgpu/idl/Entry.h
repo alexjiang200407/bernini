@@ -2,7 +2,7 @@
 #include <core/containers/slot_handle.h>
 #include <cstdint>
 
-namespace bgl::idl
+namespace bgpu::idl
 {
 	struct Entry
 	{

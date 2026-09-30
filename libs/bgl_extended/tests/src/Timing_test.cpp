@@ -59,29 +59,29 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 	}
 	REQUIRE(heap->GetCapacity() == 8);
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// Ticks per second is what turns a pair of slots into a duration, and it is the one number
 	// here that a backend could plausibly report as unknown.
 	const double frequency = cmdQueue->GetTimestampFrequency();
 	CHECK(frequency > 0.0);
 
-	auto bufDesc = bgl::ComputeBufferDesc();
+	auto bufDesc = bgpu::ComputeBufferDesc();
 	bufDesc.SetElement<uint32_t>().SetInitialCount(8).SetDebugName("Timing Out Buffer");
 	auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSComputeBufferTest"))
 			.SetDebugName("CSComputeBufferTest"));
 	kernel["gUniforms"]["outBuffer"] = outBuf;
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 
 	cmdList->Open(cmdQueue, cmdAllocator);
@@ -97,11 +97,11 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 	cmdList->BeginTiming(*heap, 2, 3);
 	cmdList->Barrier(
 		outBuf,
-		bgl::BufferBarrierDesc()
-			.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 	const bool barrierSampled = cmdList->EndTiming();
 
 	cmdList->ResolveTimestamps(*heap, 0, 4);
@@ -113,19 +113,19 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 	heap->Read(0, ticks);
 
 	REQUIRE(dispatchSampled);
-	CHECK(ticks[0] != bgl::ITimestampHeap::c_UnwrittenTimestamp);
-	CHECK(ticks[1] != bgl::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(ticks[0] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(ticks[1] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 	CHECK(ticks[1] >= ticks[0]);
 
 	if (barrierSampled)
 	{
-		CHECK(ticks[2] != bgl::ITimestampHeap::c_UnwrittenTimestamp);
+		CHECK(ticks[2] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 		CHECK(ticks[3] >= ticks[2]);
 	}
 	else
 	{
-		CHECK(ticks[2] == bgl::ITimestampHeap::c_UnwrittenTimestamp);
-		CHECK(ticks[3] == bgl::ITimestampHeap::c_UnwrittenTimestamp);
+		CHECK(ticks[2] == bgpu::ITimestampHeap::c_UnwrittenTimestamp);
+		CHECK(ticks[3] == bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 	}
 
 	// A dispatch of one threadgroup is microseconds, not a frame: a duration past a second means
@@ -136,8 +136,8 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 	// A span whose slots were never sampled must not leave a stale pair behind either.
 	std::array<uint64_t, 2> untouched{};
 	heap->Read(6, untouched);
-	CHECK(untouched[0] == bgl::ITimestampHeap::c_UnwrittenTimestamp);
-	CHECK(untouched[1] == bgl::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(untouched[0] == bgpu::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(untouched[1] == bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 
 	cmdQueue->Flush();
 	resourceManager->DestroyBuffer(outBuf, false);

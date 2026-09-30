@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace bgl::shader_cache
+namespace bgpu::shader_cache
 {
 	void
 	WriteLayout(core::io::ByteWriter& writer, const ReflectedLayout& layout)

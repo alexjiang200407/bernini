@@ -39,7 +39,7 @@ namespace bgl
 		}
 	}
 
-	BufferHandle
+	bgpu::BufferHandle
 	PassContext::GetBuffer(std::string_view sv) const
 	{
 		const auto it = m_Buffers.find(sv);
@@ -58,7 +58,7 @@ namespace bgl
 		return it->second.handle;
 	}
 
-	TextureHandle
+	bgpu::TextureHandle
 	PassContext::GetTexture(std::string_view sv) const
 	{
 		const auto it = m_Textures.find(sv);
@@ -80,14 +80,14 @@ namespace bgl
 	namespace
 	{
 		bool
-		IsWrite(BarrierAccess access) noexcept
+		IsWrite(bgpu::BarrierAccess access) noexcept
 		{
 			return access.any(
-				BarrierAccessFlag::kUnorderedAccess,
-				BarrierAccessFlag::kRenderTarget,
-				BarrierAccessFlag::kDepthWrite,
-				BarrierAccessFlag::kCopyDest,
-				BarrierAccessFlag::kAccelStructWrite);
+				bgpu::BarrierAccessFlag::kUnorderedAccess,
+				bgpu::BarrierAccessFlag::kRenderTarget,
+				bgpu::BarrierAccessFlag::kDepthWrite,
+				bgpu::BarrierAccessFlag::kCopyDest,
+				bgpu::BarrierAccessFlag::kAccelStructWrite);
 		}
 
 		bool
@@ -105,7 +105,7 @@ namespace bgl
 				return true;
 			}
 
-			return after.access.any(BarrierAccessFlag::kUnorderedAccess);
+			return after.access.any(bgpu::BarrierAccessFlag::kUnorderedAccess);
 		}
 
 		AccessState
@@ -114,14 +114,14 @@ namespace bgl
 			AccessState out;
 			out.sync   = a.sync | b.sync;
 			out.access = a.access | b.access;
-			out.layout = (b.layout != BarrierLayout::kUndefined) ? b.layout : a.layout;
+			out.layout = (b.layout != bgpu::BarrierLayout::kUndefined) ? b.layout : a.layout;
 			return out;
 		}
 
-		TextureBarrierDesc
+		bgpu::TextureBarrierDesc
 		MakeTextureBarrierDesc(const AccessState& before, const AccessState& after) noexcept
 		{
-			TextureBarrierDesc desc;
+			bgpu::TextureBarrierDesc desc;
 			desc.syncBefore   = before.sync;
 			desc.accessBefore = before.access;
 			desc.syncAfter    = after.sync;
@@ -133,14 +133,15 @@ namespace bgl
 	}
 
 	FrameGraph::ResourceKey
-	FrameGraph::KeyOf(const std::variant<BufferHandle, TextureHandle>& handle) noexcept
+	FrameGraph::KeyOf(const std::variant<bgpu::BufferHandle, bgpu::TextureHandle>& handle) noexcept
 	{
 		const core::slot_handle slot = std::visit([](const auto& h) { return h.slot; }, handle);
 
 		return ResourceKey{ slot.index,
 			                slot.generation,
-			                std::holds_alternative<TextureHandle>(handle) ? ResourceKind::kTexture :
-			                                                                ResourceKind::kBuffer };
+			                std::holds_alternative<bgpu::TextureHandle>(handle) ?
+			                    ResourceKind::kTexture :
+			                    ResourceKind::kBuffer };
 	}
 
 	AccessState
@@ -160,7 +161,7 @@ namespace bgl
 	FrameGraph&
 	FrameGraph::ImportBuffer(
 		std::string_view           name,
-		BufferHandle               handle,
+		bgpu::BufferHandle         handle,
 		std::optional<AccessState> initial)
 	{
 		return ImportBufferKey(std::string(m_CurrentNamespace).append(name), handle, initial);
@@ -169,7 +170,7 @@ namespace bgl
 	FrameGraph&
 	FrameGraph::ImportGlobalBuffer(
 		std::string_view           name,
-		BufferHandle               handle,
+		bgpu::BufferHandle         handle,
 		std::optional<AccessState> initial)
 	{
 		return ImportBufferKey(std::string(name), handle, initial);
@@ -178,7 +179,7 @@ namespace bgl
 	FrameGraph&
 	FrameGraph::ImportBufferKey(
 		std::string                key,
-		BufferHandle               handle,
+		bgpu::BufferHandle         handle,
 		std::optional<AccessState> initial)
 	{
 		ImportedRes res;
@@ -192,7 +193,7 @@ namespace bgl
 	FrameGraph&
 	FrameGraph::ImportTexture(
 		std::string_view           name,
-		TextureHandle              handle,
+		bgpu::TextureHandle        handle,
 		std::optional<AccessState> initial)
 	{
 		const std::string key = std::string(m_CurrentNamespace).append(name);
@@ -257,7 +258,7 @@ namespace bgl
 			node.accesses.push_back(
 				{ b.name,
 			      ResourceKind::kBuffer,
-			      AccessState{ b.sync, b.access, BarrierLayout::kUndefined },
+			      AccessState{ b.sync, b.access, bgpu::BarrierLayout::kUndefined },
 			      IsWrite(b.access) });
 		}
 		for (const TextureArg& t : node.desc.textures)
@@ -287,7 +288,7 @@ namespace bgl
 	}
 
 	void
-	FrameGraph::Compile(IResourceManager* resourceManager)
+	FrameGraph::Compile(bgpu::IResourceManager* resourceManager)
 	{
 		core::ensure(resourceManager != nullptr, "ResourceManager cannot be null");
 
@@ -301,7 +302,7 @@ namespace bgl
 					continue;  // transient: no declared kind to conflict with
 				}
 				const bool importedIsBuffer =
-					std::holds_alternative<BufferHandle>(it->second.handle);
+					std::holds_alternative<bgpu::BufferHandle>(it->second.handle);
 
 				const bool accessIsBuffer = a.kind == ResourceKind::kBuffer;
 				if (importedIsBuffer != accessIsBuffer)
@@ -329,14 +330,14 @@ namespace bgl
 					pass.desc.name);
 			}
 
-			const auto rejectIfImported = [&](TextureHandle tex) {
+			const auto rejectIfImported = [&](bgpu::TextureHandle tex) {
 				for (const auto& [name, res] : m_Imported)
 				{
-					if (!std::holds_alternative<TextureHandle>(res.handle))
+					if (!std::holds_alternative<bgpu::TextureHandle>(res.handle))
 					{
 						continue;
 					}
-					const TextureHandle imported = std::get<TextureHandle>(res.handle);
+					const bgpu::TextureHandle imported = std::get<bgpu::TextureHandle>(res.handle);
 					if (imported == tex)
 					{
 						core::throw_runtime_error(
@@ -394,7 +395,7 @@ namespace bgl
 	}
 
 	void
-	FrameGraph::DeriveBarriers(IResourceManager* resourceManager)
+	FrameGraph::DeriveBarriers(bgpu::IResourceManager* resourceManager)
 	{
 		for (auto& [name, res] : m_Imported)
 		{
@@ -403,12 +404,12 @@ namespace bgl
 
 		std::unordered_map<uint32_t, AccessState> attachmentState;
 
-		const AccessState rtTarget{ BarrierSyncFlag::kRenderTarget,
-			                        BarrierAccessFlag::kRenderTarget,
-			                        BarrierLayout::kRenderTarget };
-		const AccessState dsTarget{ BarrierSyncFlag::kDepthStencil,
-			                        BarrierAccessFlag::kDepthWrite,
-			                        BarrierLayout::kDepthWrite };
+		const AccessState rtTarget{ bgpu::BarrierSyncFlag::kRenderTarget,
+			                        bgpu::BarrierAccessFlag::kRenderTarget,
+			                        bgpu::BarrierLayout::kRenderTarget };
+		const AccessState dsTarget{ bgpu::BarrierSyncFlag::kDepthStencil,
+			                        bgpu::BarrierAccessFlag::kDepthWrite,
+			                        bgpu::BarrierLayout::kDepthWrite };
 
 		for (const size_t p : m_Scheduler.Order())
 		{
@@ -447,19 +448,20 @@ namespace bgl
 					continue;
 				}
 
-				if (std::holds_alternative<BufferHandle>(res.handle))
+				if (std::holds_alternative<bgpu::BufferHandle>(res.handle))
 				{
-					BufferBarrierDesc desc;
+					bgpu::BufferBarrierDesc desc;
 					desc.syncBefore   = res.current.sync;
 					desc.accessBefore = res.current.access;
 					desc.syncAfter    = target.sync;
 					desc.accessAfter  = target.access;
-					pass.barriers.bufferHandles.push_back(std::get<BufferHandle>(res.handle));
+					pass.barriers.bufferHandles.push_back(std::get<bgpu::BufferHandle>(res.handle));
 					pass.barriers.bufferDescs.push_back(desc);
 				}
 				else
 				{
-					pass.barriers.textureHandles.push_back(std::get<TextureHandle>(res.handle));
+					pass.barriers.textureHandles.push_back(
+						std::get<bgpu::TextureHandle>(res.handle));
 					pass.barriers.textureDescs.push_back(
 						MakeTextureBarrierDesc(res.current, target));
 				}
@@ -470,7 +472,7 @@ namespace bgl
 			const auto& colorAttachments = pass.desc.colorAttachments;
 			for (size_t i = 0; i < colorAttachments.size(); ++i)
 			{
-				const TextureHandle tex =
+				const bgpu::TextureHandle tex =
 					resourceManager->GetRtvTexture(colorAttachments.data()[i]);
 				AccessState& cur = attachmentState[tex.slot.index];
 				if (!StateEqual(cur, rtTarget))
@@ -482,8 +484,9 @@ namespace bgl
 			}
 			if (!pass.desc.depthAttachment.IsNull())
 			{
-				const TextureHandle tex = resourceManager->GetDsvTexture(pass.desc.depthAttachment);
-				AccessState&        cur = attachmentState[tex.slot.index];
+				const bgpu::TextureHandle tex =
+					resourceManager->GetDsvTexture(pass.desc.depthAttachment);
+				AccessState& cur = attachmentState[tex.slot.index];
 				if (!StateEqual(cur, dsTarget))
 				{
 					pass.barriers.textureHandles.push_back(tex);
@@ -495,7 +498,10 @@ namespace bgl
 	}
 
 	void
-	FrameGraph::RegisterQueue(std::string name, CommandQueueRef queue, CommandListRef list)
+	FrameGraph::RegisterQueue(
+		std::string           name,
+		bgpu::CommandQueueRef queue,
+		bgpu::CommandListRef  list)
 	{
 		m_Queues.insert_or_assign(
 			std::move(name),
@@ -522,8 +528,8 @@ namespace bgl
 					pass.desc.name,
 					pass.desc.queue);
 			}
-			ICommandList*  cmd   = qit->second.list.Get();
-			ICommandQueue* queue = qit->second.queue.Get();
+			bgpu::ICommandList*  cmd   = qit->second.list.Get();
+			bgpu::ICommandQueue* queue = qit->second.queue.Get();
 
 			cmd->BeginEvent(pass.desc.name);
 			if (m_PassTimer != nullptr)
@@ -553,12 +559,12 @@ namespace bgl
 				ctx.m_CommandQueue = queue;
 				for (const BufferArg& barg : pass.desc.buffers)
 				{
-					BufferHandle handle{};
+					bgpu::BufferHandle handle{};
 					if (const auto it = m_Imported.find(ResolveName(pass.ns, barg.name));
 					    it != m_Imported.end() &&
-					    std::holds_alternative<BufferHandle>(it->second.handle))
+					    std::holds_alternative<bgpu::BufferHandle>(it->second.handle))
 					{
-						handle = std::get<BufferHandle>(it->second.handle);
+						handle = std::get<bgpu::BufferHandle>(it->second.handle);
 					}
 					ctx.m_Buffers.insert_or_assign(
 						barg.name,
@@ -566,12 +572,12 @@ namespace bgl
 				}
 				for (const TextureArg& targ : pass.desc.textures)
 				{
-					TextureHandle handle{};
+					bgpu::TextureHandle handle{};
 					if (const auto it = m_Imported.find(ResolveName(pass.ns, targ.name));
 					    it != m_Imported.end() &&
-					    std::holds_alternative<TextureHandle>(it->second.handle))
+					    std::holds_alternative<bgpu::TextureHandle>(it->second.handle))
 					{
-						handle = std::get<TextureHandle>(it->second.handle);
+						handle = std::get<bgpu::TextureHandle>(it->second.handle);
 					}
 					ctx.m_Textures.insert_or_assign(
 						targ.name,
@@ -605,7 +611,7 @@ namespace bgl
 	}
 
 	void
-	FrameGraph::PoisonPassBuffers(const PassNode& pass, ICommandList* cmd)
+	FrameGraph::PoisonPassBuffers(const PassNode& pass, bgpu::ICommandList* cmd)
 	{
 		for (const BufferArg& arg : pass.desc.buffers)
 		{
@@ -615,14 +621,15 @@ namespace bgl
 			}
 
 			const auto it = m_Imported.find(ResolveName(pass.ns, arg.name));
-			if (it == m_Imported.end() || !std::holds_alternative<BufferHandle>(it->second.handle))
+			if (it == m_Imported.end() ||
+			    !std::holds_alternative<bgpu::BufferHandle>(it->second.handle))
 			{
 				continue;
 			}
 
 			// A transient reaches here as a null handle: DeriveBarriers inserts a default entry for
 			// every name it tracks, imported or not.
-			const BufferHandle handle = std::get<BufferHandle>(it->second.handle);
+			const bgpu::BufferHandle handle = std::get<bgpu::BufferHandle>(it->second.handle);
 			if (handle.IsNull())
 			{
 				continue;
@@ -631,15 +638,15 @@ namespace bgl
 			// The fill is a copy, so the buffer round-trips out of the state DeriveBarriers put it
 			// in and back again -- leaving the tracked state the pass declared, and separating the
 			// fill from the pass's own writes with a barrier the graph would not otherwise emit.
-			BufferBarrierDesc toCopy;
+			bgpu::BufferBarrierDesc toCopy;
 			toCopy.syncBefore   = arg.sync;
 			toCopy.accessBefore = arg.access;
-			toCopy.syncAfter    = BarrierSyncFlag::kCopy;
-			toCopy.accessAfter  = BarrierAccessFlag::kCopyDest;
+			toCopy.syncAfter    = bgpu::BarrierSyncFlag::kCopy;
+			toCopy.accessAfter  = bgpu::BarrierAccessFlag::kCopyDest;
 
-			BufferBarrierDesc toPass;
-			toPass.syncBefore   = BarrierSyncFlag::kCopy;
-			toPass.accessBefore = BarrierAccessFlag::kCopyDest;
+			bgpu::BufferBarrierDesc toPass;
+			toPass.syncBefore   = bgpu::BarrierSyncFlag::kCopy;
+			toPass.accessBefore = bgpu::BarrierAccessFlag::kCopyDest;
 			toPass.syncAfter    = arg.sync;
 			toPass.accessAfter  = arg.access;
 

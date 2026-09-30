@@ -55,11 +55,11 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// Many real instances spread (with collisions) across three buckets, the last at the very top
 	// of the ceiling: a table hands ids out densely, but nothing in the chain may assume they stop
@@ -75,9 +75,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// differently, which is exactly what a per-instance material override is.
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
-	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Histogram Instances";
 		instanceBuffer.Init(desc, resourceManager);
@@ -118,9 +118,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxDrawLanes threads and
 	// touches every element.
-	auto outBuffer = bgl::ComputeBuffer();
+	auto outBuffer = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
 		desc.initialCount = bgl::idl::cMaxDrawLanes;
 		desc.debugName    = "Histogram Output";
@@ -130,9 +130,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// The histogram now gates on a per-instance visibility word the cull pass writes. This test
 	// isolates the counting sort, so it stands in for a cull that passed everything: seeded
 	// all-visible below.
-	auto visibility = bgl::ComputeBuffer();
+	auto visibility = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::InstanceVisibility>();
 		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Visibility";
@@ -140,13 +140,13 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	}
 
 	auto histogramKernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
 			.SetDebugName("Histogram Instances"));
 	REQUIRE(histogramKernel.pipeline != nullptr);
 
 	auto prefixSumKernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
 			.SetDebugName("Prefix-Sum Instances"));
 	REQUIRE(prefixSumKernel.pipeline != nullptr);
@@ -160,7 +160,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	prefixSumKernel["gUniforms"]["inOutBuffer"] = outBuffer.GetBufferHandle();
 
 	const auto makeReadback = [&](const char* name) {
-		auto desc      = bgl::ReadbackBufferDesc();
+		auto desc      = bgpu::ReadbackBufferDesc();
 		desc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
@@ -168,11 +168,11 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	auto rbHistogram = makeReadback("Histogram Readback");
 	auto rbPrefixSum = makeReadback("Prefix-Sum Readback");
 
-	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
-	                              bgl::BarrierAccessFlag accessBefore,
-	                              bgl::BarrierSyncFlag   syncAfter,
-	                              bgl::BarrierAccessFlag accessAfter) {
-		return bgl::BufferBarrierDesc()
+	const auto bufferBarrier = [](bgpu::BarrierSyncFlag   syncBefore,
+	                              bgpu::BarrierAccessFlag accessBefore,
+	                              bgpu::BarrierSyncFlag   syncAfter,
+	                              bgpu::BarrierAccessFlag accessAfter) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(syncBefore)
 		    .AddAccessBefore(accessBefore)
 		    .AddSyncAfter(syncAfter)
@@ -194,27 +194,27 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	cmdList->Barrier(
 		instanceBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kShaderResource));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kShaderResource));
 	cmdList->Barrier(
 		visibility.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->Barrier(
 		outBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopyDest,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 
 	// Histogram: one thread per (padded) instance slot.
-	auto histogramState   = bgl::ComputeState();
+	auto histogramState   = bgpu::ComputeState();
 	histogramState.kernel = &histogramKernel;
 	cmdList->SetComputeState(histogramState);
 	cmdList->Dispatch(c_GroupCount, 1, 1);
@@ -223,21 +223,21 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	cmdList->Barrier(
 		outBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess,
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(rbHistogram, outBuffer.GetBufferHandle());
 	cmdList->Barrier(
 		outBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource,
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 
 	// Prefix sum (in place, single group over the buckets).
-	auto prefixState   = bgl::ComputeState();
+	auto prefixState   = bgpu::ComputeState();
 	prefixState.kernel = &prefixSumKernel;
 	cmdList->SetComputeState(prefixState);
 	cmdList->Dispatch(1, 1, 1);
@@ -245,10 +245,10 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	cmdList->Barrier(
 		outBuffer.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess,
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource));
 	cmdList->CopyBufferToReadback(rbPrefixSum, outBuffer.GetBufferHandle());
 
 	cmdList->Close();

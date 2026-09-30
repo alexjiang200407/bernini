@@ -35,7 +35,7 @@ namespace bgl
 	{
 	public:
 		UploadBuffer() noexcept = default;
-		UploadBuffer(UploadBufferDesc desc, ResourceManagerRef resourceManager)
+		UploadBuffer(UploadBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
@@ -53,7 +53,7 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate the initial resource.
 		 */
 		void
-		Init(UploadBufferDesc desc, ResourceManagerRef resourceManager)
+		Init(UploadBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
 		{
 			core::ensure(desc.initialCount > 0, "UploadBuffer must have a positive initial count");
 			core::ensure(
@@ -109,7 +109,7 @@ namespace bgl
 			{
 				// No forward copy: the upload below rewrites the whole resource anyway.
 				m_Storage.Grow(
-					NextGpuBufferCapacity(
+					bgpu::NextGpuBufferCapacity(
 						m_Storage.GetCapacity(),
 						static_cast<uint32_t>(values.size()),
 						sizeof(T)),
@@ -134,7 +134,7 @@ namespace bgl
 
 		// Retires storage a growth superseded and uploads a changed list.
 		void
-		Update(ICommandList* cmdList)
+		Update(bgpu::ICommandList* cmdList)
 		{
 			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
@@ -159,18 +159,18 @@ namespace bgl
 
 		// Re-read every frame: growth mints a new handle and retires the old one (see
 		// GrowableGpuBuffer), so a cached descriptor index goes stale.
-		[[nodiscard]] BufferHandle
+		[[nodiscard]] bgpu::BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
-		[[nodiscard]] DescriptorHandle
+		[[nodiscard]] bgpu::DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
 			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
-			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
+			return bgpu::DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		void
@@ -185,9 +185,9 @@ namespace bgl
 		}
 
 	private:
-		UploadBufferDesc  m_Desc;
-		GrowableGpuBuffer m_Storage;
-		std::vector<T>    m_Values;
-		bool              m_Dirty = false;
+		UploadBufferDesc        m_Desc;
+		bgpu::GrowableGpuBuffer m_Storage;
+		std::vector<T>          m_Values;
+		bool                    m_Dirty = false;
 	};
 }

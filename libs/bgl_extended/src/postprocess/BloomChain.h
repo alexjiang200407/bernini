@@ -23,14 +23,14 @@ namespace bgl
 	public:
 		struct Level
 		{
-			TextureHandle downTexture;
-			RtvHandle     downRtv;
-			SrvHandle     downSrv;
+			bgpu::TextureHandle downTexture;
+			bgpu::RtvHandle     downRtv;
+			bgpu::SrvHandle     downSrv;
 
 			// Null on the last level, which is never upsampled into.
-			TextureHandle upTexture;
-			RtvHandle     upRtv;
-			SrvHandle     upSrv;
+			bgpu::TextureHandle upTexture;
+			bgpu::RtvHandle     upRtv;
+			bgpu::SrvHandle     upSrv;
 
 			uint32_t width  = 0;
 			uint32_t height = 0;
@@ -58,7 +58,7 @@ namespace bgl
 		 *       the size changes or Retry is called.
 		 */
 		void
-		Ensure(ResourceManagerRef resourceManager, uint32_t width, uint32_t height);
+		Ensure(bgpu::ResourceManagerRef resourceManager, uint32_t width, uint32_t height);
 
 		/** Lets the next Ensure attempt a size that failed, as re-enabling bloom asks it to. */
 		void
@@ -86,22 +86,22 @@ namespace bgl
 		}
 
 		/** The finished bloom the combine samples. Null until Ensure has run. */
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetBloomSrv() const noexcept
 		{
 			if (m_Levels.empty())
 			{
-				return SrvHandle();
+				return bgpu::SrvHandle();
 			}
 
 			return IsUpsampled() ? m_Levels.front().upSrv : m_Levels.front().downSrv;
 		}
 
 	private:
-		ResourceManagerRef m_ResourceManager;
-		std::vector<Level> m_Levels;
-		uint32_t           m_Width  = 0;
-		uint32_t           m_Height = 0;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		std::vector<Level>       m_Levels;
+		uint32_t                 m_Width  = 0;
+		uint32_t                 m_Height = 0;
 
 		// Set when the pools refused this size, so Ensure does not ask them again every frame.
 		bool m_AllocationFailed = false;

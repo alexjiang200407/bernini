@@ -500,10 +500,10 @@ TEST_CASE(
 
 	auto device       = gfxBase->GetDevice();
 	auto cmdAllocator = device->CreateCommandAllocator();
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdList =
 		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());
@@ -613,10 +613,10 @@ TEST_CASE(
 
 	auto device       = gfxBase->GetDevice();
 	auto cmdAllocator = device->CreateCommandAllocator();
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdList =
 		device->CreateCommandList(cmdListDesc, cmdAllocator, gfxBase->GetResourceManagerCpy());

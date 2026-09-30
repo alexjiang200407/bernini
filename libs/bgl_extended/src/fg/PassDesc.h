@@ -15,18 +15,25 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class IResourceManager;
 	class ICommandList;
 	class ICommandQueue;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 
 	struct BufferArg
 	{
-		std::string   name;
-		BarrierSync   sync;
-		BarrierAccess access;
+		std::string         name;
+		bgpu::BarrierSync   sync;
+		bgpu::BarrierAccess access;
 
 		// Fill the buffer with the poison word before the pass runs. See
 		// PassDesc::AddPoisonedBufferArg; ignored unless the graph has a poisoner installed.
@@ -35,10 +42,10 @@ namespace bgl
 
 	struct TextureArg
 	{
-		std::string   name;
-		BarrierSync   sync;
-		BarrierAccess access;
-		BarrierLayout layout;
+		std::string         name;
+		bgpu::BarrierSync   sync;
+		bgpu::BarrierAccess access;
+		bgpu::BarrierLayout layout;
 	};
 
 	class PassContext
@@ -46,14 +53,14 @@ namespace bgl
 	private:
 		struct BufferEntry
 		{
-			BufferHandle handle;
-			BufferArg    arg;
+			bgpu::BufferHandle handle;
+			BufferArg          arg;
 		};
 
 		struct TextureEntry
 		{
-			TextureHandle handle;
-			TextureArg    arg;
+			bgpu::TextureHandle handle;
+			TextureArg          arg;
 		};
 
 	public:
@@ -62,25 +69,25 @@ namespace bgl
 		 * std::runtime_error if the name was not declared by the pass or resolves
 		 * to no imported resource (e.g. a transient).
 		 */
-		BufferHandle
+		bgpu::BufferHandle
 		GetBuffer(std::string_view sv) const;
 
 		/**
 		 * Resolves a texture declared by this pass. See GetBuffer for the throwing
 		 * contract.
 		 */
-		TextureHandle
+		bgpu::TextureHandle
 		GetTexture(std::string_view sv) const;
 
 		// The command list / queue of the queue this pass was assigned to (its
 		// PassDesc::queue), supplied by the graph at execute time.
-		[[nodiscard]] ICommandList*
+		[[nodiscard]] bgpu::ICommandList*
 		GetCommandList() const noexcept
 		{
 			return m_CommandList;
 		}
 
-		[[nodiscard]] ICommandQueue*
+		[[nodiscard]] bgpu::ICommandQueue*
 		GetCommandQueue() const noexcept
 		{
 			return m_CommandQueue;
@@ -89,8 +96,8 @@ namespace bgl
 	private:
 		core::str::unordered_str_map<BufferEntry>  m_Buffers;
 		core::str::unordered_str_map<TextureEntry> m_Textures;
-		ICommandList*                              m_CommandList  = nullptr;
-		ICommandQueue*                             m_CommandQueue = nullptr;
+		bgpu::ICommandList*                        m_CommandList  = nullptr;
+		bgpu::ICommandQueue*                       m_CommandQueue = nullptr;
 
 		friend class FrameGraph;
 	};
@@ -103,10 +110,10 @@ namespace bgl
 		// graph resolves each view to its texture (via the ResourceManager) to
 		// barrier it and to reject a texture reached both here and as an import.
 		// Can be empty.
-		core::static_vector<RtvHandle, c_MaxRenderTargets> colorAttachments;
+		core::static_vector<bgpu::RtvHandle, bgpu::c_MaxRenderTargets> colorAttachments;
 
 		// Depth target, transitioned to depth-write. Empty when null.
-		DsvHandle depthAttachment;
+		bgpu::DsvHandle depthAttachment;
 
 		std::vector<BufferArg>  buffers;
 		std::vector<TextureArg> textures;
@@ -127,14 +134,14 @@ namespace bgl
 		}
 
 		PassDesc&
-		AddColorAttachment(RtvHandle view)
+		AddColorAttachment(bgpu::RtvHandle view)
 		{
 			colorAttachments.push_back(view);
 			return *this;
 		}
 
 		PassDesc&
-		SetDepthAttachment(DsvHandle view) noexcept
+		SetDepthAttachment(bgpu::DsvHandle view) noexcept
 		{
 			depthAttachment = view;
 			return *this;
@@ -149,9 +156,9 @@ namespace bgl
 
 		PassDesc&
 		AddBufferArg(
-			std::string_view bufferName,
-			BarrierSync      bufferSync,
-			BarrierAccess    bufferAccess)
+			std::string_view    bufferName,
+			bgpu::BarrierSync   bufferSync,
+			bgpu::BarrierAccess bufferAccess)
 		{
 			buffers.push_back(BufferArg(std::string(bufferName), bufferSync, bufferAccess));
 			return *this;
@@ -166,12 +173,12 @@ namespace bgl
 		 * Only valid for an unordered-access arg, which is why the access is not a parameter.
 		 */
 		PassDesc&
-		AddPoisonedBufferArg(std::string_view bufferName, BarrierSync bufferSync)
+		AddPoisonedBufferArg(std::string_view bufferName, bgpu::BarrierSync bufferSync)
 		{
 			buffers.push_back(BufferArg(
 				std::string(bufferName),
 				bufferSync,
-				BarrierAccessFlag::kUnorderedAccess,
+				bgpu::BarrierAccessFlag::kUnorderedAccess,
 				true));
 			return *this;
 		}
@@ -185,10 +192,10 @@ namespace bgl
 
 		PassDesc&
 		AddTextureArg(
-			std::string_view textureName,
-			BarrierSync      textureSync,
-			BarrierAccess    textureAccess,
-			BarrierLayout    textureLayout)
+			std::string_view    textureName,
+			bgpu::BarrierSync   textureSync,
+			bgpu::BarrierAccess textureAccess,
+			bgpu::BarrierLayout textureLayout)
 		{
 			textures.push_back(
 				TextureArg(std::string(textureName), textureSync, textureAccess, textureLayout));
@@ -205,9 +212,9 @@ namespace bgl
 		{
 			return AddTextureArg(
 				textureName,
-				BarrierSyncFlag::kRenderTarget,
-				BarrierAccessFlag::kRenderTarget,
-				BarrierLayout::kRenderTarget);
+				bgpu::BarrierSyncFlag::kRenderTarget,
+				bgpu::BarrierAccessFlag::kRenderTarget,
+				bgpu::BarrierLayout::kRenderTarget);
 		}
 
 		/** A depth-stencil texture this pass depth-tests against and writes. */
@@ -216,34 +223,34 @@ namespace bgl
 		{
 			return AddTextureArg(
 				textureName,
-				BarrierSyncFlag::kDepthStencil,
-				BarrierAccessFlag::kDepthWrite,
-				BarrierLayout::kDepthWrite);
+				bgpu::BarrierSyncFlag::kDepthStencil,
+				bgpu::BarrierAccessFlag::kDepthWrite,
+				bgpu::BarrierLayout::kDepthWrite);
 		}
 
 		/** A texture `stages` sample or load. */
 		PassDesc&
-		AddTextureRead(std::string_view textureName, BarrierSync stages)
+		AddTextureRead(std::string_view textureName, bgpu::BarrierSync stages)
 		{
 			return AddTextureArg(
 				textureName,
 				stages,
-				BarrierAccessFlag::kShaderResource,
-				BarrierLayout::kShaderResource);
+				bgpu::BarrierAccessFlag::kShaderResource,
+				bgpu::BarrierLayout::kShaderResource);
 		}
 
 		/** A buffer `stages` only read. */
 		PassDesc&
-		AddBufferRead(std::string_view bufferName, BarrierSync stages)
+		AddBufferRead(std::string_view bufferName, bgpu::BarrierSync stages)
 		{
-			return AddBufferArg(bufferName, stages, BarrierAccessFlag::kShaderResource);
+			return AddBufferArg(bufferName, stages, bgpu::BarrierAccessFlag::kShaderResource);
 		}
 
 		/** A buffer `stages` bind for unordered access -- read, written, or both. */
 		PassDesc&
-		AddBufferReadWrite(std::string_view bufferName, BarrierSync stages)
+		AddBufferReadWrite(std::string_view bufferName, bgpu::BarrierSync stages)
 		{
-			return AddBufferArg(bufferName, stages, BarrierAccessFlag::kUnorderedAccess);
+			return AddBufferArg(bufferName, stages, bgpu::BarrierAccessFlag::kUnorderedAccess);
 		}
 
 		/** A buffer an indirect dispatch or draw reads its arguments or count from. */
@@ -252,22 +259,28 @@ namespace bgl
 		{
 			return AddBufferArg(
 				bufferName,
-				BarrierSyncFlag::kIndirectArgument,
-				BarrierAccessFlag::kIndirectArgument);
+				bgpu::BarrierSyncFlag::kIndirectArgument,
+				bgpu::BarrierAccessFlag::kIndirectArgument);
 		}
 
 		/** A buffer this pass copies out of. */
 		PassDesc&
 		AddCopySource(std::string_view bufferName)
 		{
-			return AddBufferArg(bufferName, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopySource);
+			return AddBufferArg(
+				bufferName,
+				bgpu::BarrierSyncFlag::kCopy,
+				bgpu::BarrierAccessFlag::kCopySource);
 		}
 
 		/** A buffer this pass copies into. */
 		PassDesc&
 		AddCopyDest(std::string_view bufferName)
 		{
-			return AddBufferArg(bufferName, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest);
+			return AddBufferArg(
+				bufferName,
+				bgpu::BarrierSyncFlag::kCopy,
+				bgpu::BarrierAccessFlag::kCopyDest);
 		}
 
 		/** Formats the name, so a pass keyed on its draw and frustum need not spell out std::format. */

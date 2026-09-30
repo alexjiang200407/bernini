@@ -44,12 +44,12 @@ namespace bgl
 
 	void
 	BucketedForwardPhase::Record(
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) const
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const auto             dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
@@ -68,7 +68,7 @@ namespace bgl
 			for (const DrawLane lane : { DrawLane::kAtRest, DrawLane::kDissolve })
 			{
 				// A bucket never demanded has no kernel -- and, by the same fact, no instances.
-				MeshletKernel* kernel =
+				bgpu::MeshletKernel* kernel =
 					kernels.BindDrawBucketKernel(bucket, lane, state, draw, resources);
 				if (kernel == nullptr)
 				{

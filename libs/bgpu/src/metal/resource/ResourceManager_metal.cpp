@@ -34,7 +34,7 @@
 #include <span>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	namespace
 	{

@@ -4,7 +4,7 @@
 
 #include <bgpu/resource/Readback.h>
 
-namespace bgl
+namespace bgpu
 {
 	// The Metal definition of the RHI's forward-declared `ReadbackBuffer`. Shared storage so the CPU
 	// reads it directly: on Apple Silicon's unified memory `contents()` is the mapping, valid for the

@@ -20,7 +20,7 @@
 #	include <pix3.h>
 #endif
 
-namespace bgl
+namespace bgpu
 {
 	CommandList::CommandList(
 		const CommandListDesc& desc,

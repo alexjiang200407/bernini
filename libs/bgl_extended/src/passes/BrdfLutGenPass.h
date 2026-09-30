@@ -8,11 +8,17 @@
 #include <cstdint>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class PipelineBatch;
-
 	class ICommandList;
+}
+
+namespace bgl
+{
 
 	/**
 	 * The split-sum BRDF lookup table, generated at most once per device -- on the first frame
@@ -52,7 +58,7 @@ namespace bgl
 		 * @pre `cmdList` is open, and Init's pipeline batch has been built.
 		 */
 		void
-		Generate(ICommandList* cmdList);
+		Generate(bgpu::ICommandList* cmdList);
 
 		/** Whether Generate has run: the one question laziness makes worth asking. */
 		[[nodiscard]] bool
@@ -62,14 +68,14 @@ namespace bgl
 		}
 
 		/** The table itself, for barriers and copies. Null until Generate. */
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetTexture() const noexcept
 		{
 			return m_Texture;
 		}
 
 		/** Null until Generate; a scene that never demands PBR shading hands this out null. */
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetSrv() const noexcept
 		{
 			return m_Srv;
@@ -84,9 +90,9 @@ namespace bgl
 		// smooth in both axes, so this is already well past what the interpolation can resolve.
 		static constexpr uint32_t c_Dimension = 256;
 
-		ResourceManagerRef m_ResourceManager;
-		MeshletKernel      m_Kernel;
-		TextureHandle      m_Texture;
-		SrvHandle          m_Srv;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		bgpu::MeshletKernel      m_Kernel;
+		bgpu::TextureHandle      m_Texture;
+		bgpu::SrvHandle          m_Srv;
 	};
 }

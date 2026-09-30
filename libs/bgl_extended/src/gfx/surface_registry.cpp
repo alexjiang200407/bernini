@@ -261,7 +261,7 @@ namespace bgl
 	}
 
 	std::vector<SurfaceType>
-	RegisterSurfaces(IDevice& device, const std::filesystem::path& dir)
+	RegisterSurfaces(bgpu::IDevice& device, const std::filesystem::path& dir)
 	{
 		if (dir.empty())
 			return {};

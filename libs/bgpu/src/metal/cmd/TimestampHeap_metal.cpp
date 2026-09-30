@@ -8,7 +8,7 @@
 #include <span>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	TimestampHeap::TimestampHeap(
 		NS::SharedPtr<MTL::CounterSampleBuffer> buffer,

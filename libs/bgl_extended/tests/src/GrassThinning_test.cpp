@@ -90,27 +90,27 @@ void main()
 		auto device          = gfxBase->GetDevice();
 		device->AddSourceModule({ "CSGrassThinningProbe", std::string(c_Probe), false });
 
-		auto cmdListDesc  = bgl::CommandListDesc();
-		cmdListDesc.type  = bgl::QueueType::kGraphics;
+		auto cmdListDesc  = bgpu::CommandListDesc();
+		cmdListDesc.type  = bgpu::QueueType::kGraphics;
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-		auto bufDesc = bgl::ComputeBufferDesc();
+		auto bufDesc = bgpu::ComputeBufferDesc();
 		bufDesc.SetElement<float>().SetInitialCount(c_Count).SetDebugName(
 			"Grass Thinning Probe Out");
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSGrassThinningProbe"))
 				.SetDebugName("CSGrassThinningProbe"));
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 
-		auto state   = bgl::ComputeState();
+		auto state   = bgpu::ComputeState();
 		state.kernel = &kernel;
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = c_Count * sizeof(float);
 		rbDesc.debugName = "Grass Thinning Probe Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -120,11 +120,11 @@ void main()
 		cmdList->Dispatch(1, 1, 1);
 		cmdList->Barrier(
 			outBuf,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		cmdList->CopyBufferToReadback(rb, outBuf);
 		cmdList->Close();
 		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));

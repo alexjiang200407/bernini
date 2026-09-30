@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	ShaderRef
 	IDevice::CreateShader(std::string slangModuleName, std::string entryPointName) const noexcept

@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	class ShaderCache;
 	class ITimestampHeap;

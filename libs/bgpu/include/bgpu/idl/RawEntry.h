@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-namespace bgl::idl
+namespace bgpu::idl
 {
 	struct RawEntry
 	{

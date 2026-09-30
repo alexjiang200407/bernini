@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace bgl
+namespace bgpu
 {
 	// Describes a single constant buffer parameter reflected from a pipeline's linked
 	// shader program: its size, the API-agnostic layout used to build the CPU-side

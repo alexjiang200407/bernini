@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	// Walks a slang constant-buffer type layout into the API-agnostic ReflectedLayout
 	// tree. Everything downstream (Uniforms, the shader cache) works off the POD result.

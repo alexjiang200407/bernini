@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The GPU-side storage of a CPU-mirrored buffer, able to grow without a fixed ceiling.

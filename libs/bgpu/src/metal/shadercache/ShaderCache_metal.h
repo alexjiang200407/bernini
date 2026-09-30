@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	// One reflected constant buffer of a linked program: the Uniforms mirror plus the bindless
 	// handle fields the dispatch path rewrites, so both can be rebuilt without touching slang.

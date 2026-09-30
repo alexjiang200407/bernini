@@ -2,10 +2,17 @@
 #include <bgl/IGraphics.h>
 #include <core/ref/SharedRef.h>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class IDevice;
 	class IResourceManager;
+}
+
+namespace bgl
+{
 	class RenderContext;
 
 	class GraphicsBase : public IGraphics
@@ -21,10 +28,10 @@ namespace bgl
 		GraphicsBase&
 		operator=(GraphicsBase&&) noexcept = delete;
 
-		virtual IDevice*
+		virtual bgpu::IDevice*
 		GetDevice() const noexcept = 0;
 
-		virtual core::SharedRef<IResourceManager>
+		virtual core::SharedRef<bgpu::IResourceManager>
 		GetResourceManagerCpy() const noexcept = 0;
 
 		virtual const RenderContext*

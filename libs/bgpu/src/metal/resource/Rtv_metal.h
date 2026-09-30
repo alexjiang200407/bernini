@@ -2,7 +2,7 @@
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	// Metal has no standalone render-target view: a render pass attaches the texture directly. So a
 	// Metal Rtv just remembers which texture (and view desc) it targets; the attach/clear happens

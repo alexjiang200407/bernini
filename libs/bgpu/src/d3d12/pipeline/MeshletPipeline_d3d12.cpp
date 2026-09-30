@@ -34,7 +34,7 @@ namespace
 #pragma warning(pop)
 // clang-format on
 
-namespace bgl
+namespace bgpu
 {
 	MeshletPipeline::MeshletPipeline(
 		ID3D12Device*              device,
@@ -167,7 +167,7 @@ namespace bgl
 	}
 
 	MeshletPipelineDesc&
-	bgl::MeshletPipelineDesc::AddRtvFormat(const Rtv& rtv)
+	bgpu::MeshletPipelineDesc::AddRtvFormat(const Rtv& rtv)
 	{
 		auto& desc = rtv.GetDesc();
 		rtvFormats.push_back(desc.format);

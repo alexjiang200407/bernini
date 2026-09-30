@@ -1,7 +1,7 @@
 #pragma once
 #include <bgpu/types/QueueType.h>
 
-namespace bgl
+namespace bgpu
 {
 	constexpr uint64_t c_VersionSubmittedFlag = 0x8000000000000000;
 	constexpr uint32_t c_VersionQueueShift    = 60;

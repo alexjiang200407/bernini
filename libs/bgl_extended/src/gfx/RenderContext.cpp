@@ -1,6 +1,7 @@
 #include "gfx/RenderContext.h"
 #include "fg/PassTimer.h"
 #include "gfx/frame_constants.h"
+#include "gfx/viewport.h"
 #include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/types/FormatInfo.h>
 #include <core/glm.h>
@@ -73,7 +74,7 @@ namespace bgl
 
 		// An output-space viewport on the grid the geometry passes render into. The identity at
 		// scale 1.0, where the two grids are the same size.
-		Viewport
+		bgpu::Viewport
 		ToRenderViewport(const RenderTargetBase& rt, const Viewport& viewport)
 		{
 			const float x =
@@ -81,7 +82,7 @@ namespace bgl
 			const float y =
 				static_cast<float>(rt.GetRenderHeight()) / static_cast<float>(rt.GetHeight());
 
-			return Viewport(
+			return bgpu::Viewport(
 				viewport.minX * x,
 				viewport.maxX * x,
 				viewport.minY * y,
@@ -92,9 +93,9 @@ namespace bgl
 
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
 		bool
-		IsBgra(Format format)
+		IsBgra(bgpu::Format format)
 		{
-			return format == Format::BGRA8_UNORM || format == Format::SBGRA8_UNORM;
+			return format == bgpu::Format::BGRA8_UNORM || format == bgpu::Format::SBGRA8_UNORM;
 		}
 
 		// A mapped GPU readback as an RGBA8 image: drops the padding D3D12 aligns each row to, and
@@ -106,7 +107,7 @@ namespace bgl
 			size_t         rowPitch,
 			uint32_t       width,
 			uint32_t       height,
-			Format         format)
+			bgpu::Format   format)
 		{
 			if (src == nullptr)
 			{
@@ -123,8 +124,9 @@ namespace bgl
 			auto image     = assetlib::ImageData();
 			image.width    = width;
 			image.height   = height;
-			image.vkFormat = GetFormatInfo(format).isSRGB ? assetlib::VkFormat::R8G8B8A8_SRGB :
-			                                                assetlib::VkFormat::R8G8B8A8_UNORM;
+			image.vkFormat = bgpu::GetFormatInfo(format).isSRGB ?
+			                     assetlib::VkFormat::R8G8B8A8_SRGB :
+			                     assetlib::VkFormat::R8G8B8A8_UNORM;
 			image.pixels   = core::fixed_buffer<std::byte>(tightPitch * height);
 			image.subresources.push_back({ 0, tightPitch, tightPitch * height });
 
@@ -199,8 +201,8 @@ namespace bgl
 	}
 
 	RenderContext::RenderContext(
-		DeviceRef                        device,
-		ResourceManagerRef               resourceManager,
+		bgpu::DeviceRef                  device,
+		bgpu::ResourceManagerRef         resourceManager,
 		std::shared_ptr<DrawBucketTable> buckets,
 		std::span<const SurfaceType>     surfaceTypes,
 		bool                             enableDebug) :
@@ -219,15 +221,15 @@ namespace bgl
 
 		m_BootstrapAllocator = m_Device->CreateCommandAllocator();
 
-		auto cmdListDesc = CommandListDesc();
-		cmdListDesc.type = QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 		m_CommandList =
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
 		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
-		auto       pipelines = PipelineBatch(m_Device.Get());
+		auto       pipelines = bgpu::PipelineBatch(m_Device.Get());
 		const auto passes    = PassInitContext{ m_Device.Get(),
 			                                    &pipelines,
 			                                    m_ResourceManager,
@@ -256,9 +258,11 @@ namespace bgl
 		m_TaaResolve.CheckBindings();
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
-			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
+			bgpu::SamplerDesc().SetAllFilters(false).SetAllAddressModes(
+				bgpu::SamplerAddressMode::kClamp));
 		m_LinearClampSampler = m_ResourceManager->CreateSampler(
-			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
+			bgpu::SamplerDesc().SetAllFilters(true).SetAllAddressModes(
+				bgpu::SamplerAddressMode::kClamp));
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_TonemapLut.Upload(m_CommandList.Get());
@@ -272,7 +276,7 @@ namespace bgl
 		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
 		for (auto& readback : m_DebugReadbacks)
 		{
-			auto rbDesc      = ReadbackBufferDesc();
+			auto rbDesc      = bgpu::ReadbackBufferDesc();
 			rbDesc.byteSize  = m_DebugBuffer.ByteSize();
 			rbDesc.debugName = "GPU Debug Readback";
 			readback         = m_ResourceManager->CreateReadbackBuffer(rbDesc);
@@ -488,7 +492,7 @@ namespace bgl
 
 			if (entry.sampled)
 			{
-				row.milliseconds = TimestampSpanMilliseconds(
+				row.milliseconds = bgpu::TimestampSpanMilliseconds(
 					m_TimingTicks[entry.startSlot - frame.firstSlot],
 					m_TimingTicks[entry.endSlot - frame.firstSlot],
 					ticksPerSecond);
@@ -565,11 +569,11 @@ namespace bgl
 		m_DebugBuffer.Reset(m_CommandList.Get());
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
-			BufferBarrierDesc()
-				.AddSyncBefore(BarrierSyncFlag::kCopy)
-				.AddAccessBefore(BarrierAccessFlag::kCopyDest)
-				.AddSyncAfter(BarrierSyncFlag::kAllCommands)
-				.AddAccessAfter(BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kAllCommands)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 		m_CommandList->EndEvent();
 		m_CommandList->SetActiveDebugBuffer(m_DebugBuffer.GetBufferHandle());
 #endif
@@ -596,9 +600,9 @@ namespace bgl
 		m_FrameGraph.ImportTexture(
 			c_BackbufferName,
 			rt.GetBackbufferTexture(index),
-			AccessState{ BarrierSyncFlag::kNone,
-		                 BarrierAccessFlag::kNone,
-		                 BarrierLayout::kPresent });
+			AccessState{ bgpu::BarrierSyncFlag::kNone,
+		                 bgpu::BarrierAccessFlag::kNone,
+		                 bgpu::BarrierLayout::kPresent });
 
 		// Resumes the state the graph tracked last frame; the target creates them in
 		// render-target / depth-write.
@@ -660,7 +664,7 @@ namespace bgl
 			return;
 		}
 
-		auto       pipelines = PipelineBatch(m_Device.Get());
+		auto       pipelines = bgpu::PipelineBatch(m_Device.Get());
 		const auto passes =
 			PassInitContext{ m_Device.Get(), &pipelines, m_ResourceManager, &table };
 		m_Forward.AddDrawBucketKernels(passes, missing);
@@ -726,7 +730,7 @@ namespace bgl
 
 		// The same demand shape as the bucket kernels above: built by the first Draw that needs
 		// it, so a scene shaded entirely by lit surfaces never builds the pipeline or the texture.
-		auto       pipelines = PipelineBatch(m_Device.Get());
+		auto       pipelines = bgpu::PipelineBatch(m_Device.Get());
 		const auto passes    = PassInitContext{ m_Device.Get(),
 			                                    &pipelines,
 			                                    m_ResourceManager,
@@ -763,7 +767,7 @@ namespace bgl
 
 		// The job's viewport is output-space, because that is the frame a client can see. The
 		// geometry passes are handed the render grid instead, and only the resolve spans both.
-		const Viewport viewport = ToRenderViewport(*m_ActiveTarget, job.viewport);
+		const bgpu::Viewport viewport = ToRenderViewport(*m_ActiveTarget, job.viewport);
 
 		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
 		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
@@ -858,8 +862,9 @@ namespace bgl
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
-		draw.viewState.cameraPos     = glm::vec3(invView[3]);
-		draw.viewState.pixelsPerUnit = PixelsPerUnit(viewport, camera.unjitteredViewProj);
+		draw.viewState.cameraPos = glm::vec3(invView[3]);
+		draw.viewState.pixelsPerUnit =
+			PixelsPerUnit(ToContractViewport(viewport), camera.unjitteredViewProj);
 		ResolveLodSelection(
 			draw.viewState.cullView,
 			view->GetLodSelection(),
@@ -991,9 +996,10 @@ namespace bgl
 			m_FrameOverlays.push_back(core::SharedRef<Overlay>(overlay));
 		}
 
-		const auto targetRect = Rect(Viewport(
-			static_cast<float>(m_ActiveTarget->GetWidth()),
-			static_cast<float>(m_ActiveTarget->GetHeight())));
+		const auto targetRect = bgpu::Rect(
+			bgpu::Viewport(
+				static_cast<float>(m_ActiveTarget->GetWidth()),
+				static_cast<float>(m_ActiveTarget->GetHeight())));
 
 		for (const OverlayDraw& draw : job.draws)
 		{
@@ -1060,7 +1066,7 @@ namespace bgl
 		m_FrameGraph.SetResourceNamespace("");
 
 		const auto viewport =
-			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+			bgpu::Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
 
 		const auto renderSize = glm::vec2(
 			static_cast<float>(rt.GetRenderWidth()),
@@ -1211,9 +1217,9 @@ namespace bgl
 				m_FrameGraph.ImportTexture(
 					sources.back(),
 					source->GetBackbufferTexture(source->GetLastPresentedIndex()),
-					AccessState{ BarrierSyncFlag::kNone,
-				                 BarrierAccessFlag::kNone,
-				                 BarrierLayout::kPresent });
+					AccessState{ bgpu::BarrierSyncFlag::kNone,
+				                 bgpu::BarrierAccessFlag::kNone,
+				                 bgpu::BarrierLayout::kPresent });
 			}
 
 			auto overlayArgs       = OverlayPass::Args();
@@ -1257,21 +1263,21 @@ namespace bgl
 		m_CommandList->BeginEvent("GPU Debug Buffer Readback");
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
-			BufferBarrierDesc()
-				.AddSyncBefore(BarrierSyncFlag::kAllCommands)
-				.AddAccessBefore(BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(BarrierSyncFlag::kCopy)
-				.AddAccessAfter(BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kAllCommands)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		m_CommandList->CopyBufferToReadback(
 			m_DebugReadbacks[index],
 			m_DebugBuffer.GetBufferHandle());
 		m_CommandList->Barrier(
 			m_DebugBuffer.GetBufferHandle(),
-			BufferBarrierDesc()
-				.AddSyncBefore(BarrierSyncFlag::kCopy)
-				.AddAccessBefore(BarrierAccessFlag::kCopySource)
-				.AddSyncAfter(BarrierSyncFlag::kCopy)
-				.AddAccessAfter(BarrierAccessFlag::kCopyDest));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopySource)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopyDest));
 		m_CommandList->EndEvent();
 		m_DebugReadbackPending[index] = true;
 #endif
@@ -1397,8 +1403,8 @@ namespace bgl
 
 		RenderTargetBase& rt = *target->As<RenderTargetBase>();
 
-		const uint32_t index         = rt.GetLastPresentedIndex();
-		TextureHandle  textureHandle = rt.GetBackbufferTexture(index);
+		const uint32_t      index         = rt.GetLastPresentedIndex();
+		bgpu::TextureHandle textureHandle = rt.GetBackbufferTexture(index);
 
 		// A discard frees the slot with its copy possibly still in flight; the allocator cannot
 		// be reset under it.
@@ -1415,7 +1421,7 @@ namespace bgl
 
 		slot.layout = m_ResourceManager->GetTextureReadbackLayout(textureHandle);
 
-		auto readbackDesc      = ReadbackBufferDesc();
+		auto readbackDesc      = bgpu::ReadbackBufferDesc();
 		readbackDesc.byteSize  = slot.layout.totalBytes;
 		readbackDesc.debugName = "Capture Readback";
 		slot.readback          = m_ResourceManager->CreateReadbackBuffer(readbackDesc);
@@ -1423,26 +1429,26 @@ namespace bgl
 		m_CommandList->Open(m_CommandQueue.Get(), slot.allocator.Get());
 
 		{
-			auto barrier = TextureBarrierDesc();
-			barrier.AddSyncBefore(BarrierSyncFlag::kNone)
-				.AddAccessBefore(BarrierAccessFlag::kNone)
-				.SetLayoutBefore(BarrierLayout::kPresent)
-				.AddSyncAfter(BarrierSyncFlag::kCopy)
-				.AddAccessAfter(BarrierAccessFlag::kCopySource)
-				.SetLayoutAfter(BarrierLayout::kCopySource);
+			auto barrier = bgpu::TextureBarrierDesc();
+			barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kNone)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kNone)
+				.SetLayoutBefore(bgpu::BarrierLayout::kPresent)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+				.SetLayoutAfter(bgpu::BarrierLayout::kCopySource);
 			m_CommandList->Barrier(textureHandle, barrier);
 		}
 
 		m_CommandList->CopyTextureToReadback(slot.readback, textureHandle);
 
 		{
-			auto barrier = TextureBarrierDesc();
-			barrier.AddSyncBefore(BarrierSyncFlag::kCopy)
-				.AddAccessBefore(BarrierAccessFlag::kCopySource)
-				.SetLayoutBefore(BarrierLayout::kCopySource)
-				.AddSyncAfter(BarrierSyncFlag::kNone)
-				.AddAccessAfter(BarrierAccessFlag::kNone)
-				.SetLayoutAfter(BarrierLayout::kPresent);
+			auto barrier = bgpu::TextureBarrierDesc();
+			barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopySource)
+				.SetLayoutBefore(bgpu::BarrierLayout::kCopySource)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kNone)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kNone)
+				.SetLayoutAfter(bgpu::BarrierLayout::kPresent);
 			m_CommandList->Barrier(textureHandle, barrier);
 		}
 
@@ -1452,10 +1458,10 @@ namespace bgl
 		// copy runs after the frame that filled this backbuffer.
 		slot.fence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 
-		const TextureDesc texDesc = m_ResourceManager->GetTextureDesc(textureHandle);
-		slot.width                = texDesc.width;
-		slot.height               = texDesc.height;
-		slot.format               = texDesc.format;
+		const bgpu::TextureDesc texDesc = m_ResourceManager->GetTextureDesc(textureHandle);
+		slot.width                      = texDesc.width;
+		slot.height                     = texDesc.height;
+		slot.format                     = texDesc.format;
 
 		slot.ticketId = m_NextCaptureId++;
 		return CaptureTicket{ slot.ticketId };

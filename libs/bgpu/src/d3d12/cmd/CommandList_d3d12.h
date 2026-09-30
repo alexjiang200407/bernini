@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	class ICommandQueue;
 	class ITimestampHeap;

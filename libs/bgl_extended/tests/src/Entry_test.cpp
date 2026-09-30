@@ -35,24 +35,24 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc = bgl::CommandListDesc();
-	cmdListDesc.type = bgl::QueueType::kGraphics;
+	auto cmdListDesc = bgpu::CommandListDesc();
+	cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 
-	auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
 	SECTION("CRUD")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 3;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "Test Entry Buffer";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		// Construction reserves the null element and leaves its block dirty, so the GPU is given a
 		// zeroed element 0 on the first flush.
@@ -103,12 +103,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("The null offset is never handed out")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Null Offset";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		// The reserved element is not a live entry, so an offset read back from a GPU-side struct
 		// that never had a handle assigned resolves to nothing.
@@ -128,12 +128,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Add and Set")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Add/Set";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		// Flushes the reserved null element, so the counts below are the caller's writes alone.
 		entryBuffer.Update(cmdList);
@@ -159,12 +159,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Erase reuses the slot with a bumped generation")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Erase";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		auto a = entryBuffer.EmplaceBack(10);
 		auto b = entryBuffer.EmplaceBack(20);
@@ -188,12 +188,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("Dirty block tracking across blocks")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 8;
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "EntryBuffer Blocks";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		// The reserved null element already occupies the first of block 0's four, so three entries
 		// fill it.
@@ -222,12 +222,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 	SECTION("IsValid detects use-after-free")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer IsValid";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		auto a = entryBuffer.EmplaceBack(10);
 		CHECK(entryBuffer.IsValid(a));
@@ -255,12 +255,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 			uint32_t refCount = 0;
 		};
 
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 4;
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Meta";
 
-		auto entryBuffer = bgl::EntryBuffer<int, RefMeta>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int, RefMeta>(desc, resourceManager);
 
 		auto a = entryBuffer.Add(1);
 		CHECK(entryBuffer.MetaAt(a.index).refCount == 0);
@@ -279,12 +279,12 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
 	SECTION("A dirty slot past the first block uploads its own bytes")
 	{
-		auto desc         = bgl::EntryBufferDesc();
+		auto desc         = bgpu::EntryBufferDesc();
 		desc.initialCount = 16;
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
 		desc.debugName    = "EntryBuffer Offset Upload";
 
-		auto entryBuffer = bgl::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
 
 		core::slot_handle handles[9];
 		for (int i = 0; i < 9; ++i) handles[i] = entryBuffer.EmplaceBack(100 + i);
@@ -295,16 +295,16 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		entryBuffer.Set(handles[8], 999);
 		entryBuffer.Update(cmdList);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = entryBuffer.Capacity() * sizeof(int);
 		rbDesc.debugName = "EntryBuffer Offset Upload Readback";
 		auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kCopyDest)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(entryBuffer.GetBufferHandle(), barrier);
 
 		cmdList->CopyBufferToReadback(readback, entryBuffer.GetBufferHandle());

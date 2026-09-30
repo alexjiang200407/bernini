@@ -38,39 +38,39 @@ using namespace bgl;
 
 namespace
 {
-	BufferHandle
+	bgpu::BufferHandle
 	MakeBuffer(uint32_t idx)
 	{
-		return BufferHandle({ { idx, 0 } });
+		return bgpu::BufferHandle({ { idx, 0 } });
 	}
 
 	BufferArg
 	UavBuf(std::string name)
 	{
 		return { std::move(name),
-			     BarrierSyncFlag::kComputeShader,
-			     BarrierAccessFlag::kUnorderedAccess };
+			     bgpu::BarrierSyncFlag::kComputeShader,
+			     bgpu::BarrierAccessFlag::kUnorderedAccess };
 	}
 
 	BufferArg
 	SrvBuf(std::string name)
 	{
 		return { std::move(name),
-			     BarrierSyncFlag::kPixelShader,
-			     BarrierAccessFlag::kShaderResource };
+			     bgpu::BarrierSyncFlag::kPixelShader,
+			     bgpu::BarrierAccessFlag::kShaderResource };
 	}
 
 	TextureArg
 	SrvTex(std::string name)
 	{
 		return { std::move(name),
-			     BarrierSyncFlag::kPixelShader,
-			     BarrierAccessFlag::kShaderResource,
-			     BarrierLayout::kShaderResource };
+			     bgpu::BarrierSyncFlag::kPixelShader,
+			     bgpu::BarrierAccessFlag::kShaderResource,
+			     bgpu::BarrierLayout::kShaderResource };
 	}
 
 	// A do-nothing ICommandList so Execute() can run without a GPU device.
-	class NullCommandList : public core::RefCounter<ICommandList>
+	class NullCommandList : public core::RefCounter<bgpu::ICommandList>
 	{
 	public:
 		NullCommandList()                       = default;
@@ -87,13 +87,19 @@ namespace
 		std::vector<std::string>* log = nullptr;
 
 		void
-		WriteBuffer(BufferHandle, const void*, size_t, size_t) noexcept override
+		WriteBuffer(bgpu::BufferHandle, const void*, size_t, size_t) noexcept override
 		{}
 		void
-		WriteTexture(TextureHandle, std::span<const TextureSubresourceData>) noexcept override
+		WriteTexture(bgpu::TextureHandle, std::span<const bgpu::TextureSubresourceData>) noexcept
+			override
 		{}
 		void
-		CopyBuffer(BufferHandle dst, BufferHandle, uint64_t, uint64_t, uint64_t) noexcept override
+		CopyBuffer(
+			bgpu::BufferHandle dst,
+			bgpu::BufferHandle,
+			uint64_t,
+			uint64_t,
+			uint64_t) noexcept override
 		{
 			if (log != nullptr)
 			{
@@ -101,13 +107,13 @@ namespace
 			}
 		}
 		void
-		CopyBufferToReadback(ReadbackBufferHandle, BufferHandle) noexcept override
+		CopyBufferToReadback(bgpu::ReadbackBufferHandle, bgpu::BufferHandle) noexcept override
 		{}
 		void
-		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
+		CopyTextureToReadback(bgpu::ReadbackBufferHandle, bgpu::TextureHandle) noexcept override
 		{}
 		void
-		BeginTiming(ITimestampHeap&, uint32_t startSlot, uint32_t endSlot) noexcept override
+		BeginTiming(bgpu::ITimestampHeap&, uint32_t startSlot, uint32_t endSlot) noexcept override
 		{
 			if (log != nullptr)
 			{
@@ -120,10 +126,10 @@ namespace
 			return true;
 		}
 		void
-		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
+		ResolveTimestamps(bgpu::ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 		void
-		Barrier(BufferHandle handle, const BufferBarrierDesc&) noexcept override
+		Barrier(bgpu::BufferHandle handle, const bgpu::BufferBarrierDesc&) noexcept override
 		{
 			if (log != nullptr)
 			{
@@ -131,16 +137,18 @@ namespace
 			}
 		}
 		void
-		Barrier(TextureHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::TextureHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(RtvHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::RtvHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(DsvHandle, const TextureBarrierDesc&) noexcept override
+		Barrier(bgpu::DsvHandle, const bgpu::TextureBarrierDesc&) noexcept override
 		{}
 		void
-		Barrier(std::span<const BufferHandle>, std::span<const BufferBarrierDesc>) noexcept override
+		Barrier(
+			std::span<const bgpu::BufferHandle>,
+			std::span<const bgpu::BufferBarrierDesc>) noexcept override
 		{
 			if (log != nullptr)
 			{
@@ -148,11 +156,12 @@ namespace
 			}
 		}
 		void
-		Barrier(std::span<const TextureHandle>, std::span<const TextureBarrierDesc>) noexcept
-			override
+		Barrier(
+			std::span<const bgpu::TextureHandle>,
+			std::span<const bgpu::TextureBarrierDesc>) noexcept override
 		{}
 		void
-		Open(ICommandQueue*, ICommandAllocator*) noexcept override
+		Open(bgpu::ICommandQueue*, bgpu::ICommandAllocator*) noexcept override
 		{}
 		void
 		Close() noexcept override
@@ -164,10 +173,10 @@ namespace
 		EndEvent() noexcept override
 		{}
 		void
-		SetMeshletState(const MeshletState&) noexcept override
+		SetMeshletState(const bgpu::MeshletState&) noexcept override
 		{}
 		void
-		SetComputeState(const ComputeState&) noexcept override
+		SetComputeState(const bgpu::ComputeState&) noexcept override
 		{}
 		void
 		DispatchMesh(uint32_t, uint32_t, uint32_t) noexcept override
@@ -186,15 +195,15 @@ namespace
 		{
 			return false;
 		}
-		QueueType
+		bgpu::QueueType
 		GetType() const noexcept override
 		{
-			return QueueType{};
+			return bgpu::QueueType{};
 		}
 	};
 
 	// A do-nothing ICommandQueue, paired with NullCommandList for Execute() tests.
-	class NullCommandQueue : public core::RefCounter<ICommandQueue>
+	class NullCommandQueue : public core::RefCounter<bgpu::ICommandQueue>
 	{
 	public:
 		NullCommandQueue()                        = default;
@@ -208,7 +217,7 @@ namespace
 		operator=(NullCommandQueue&&) = delete;
 
 		uint64_t
-		ExecuteCommandList(ICommandList*) noexcept override
+		ExecuteCommandList(bgpu::ICommandList*) noexcept override
 		{
 			return 0;
 		}
@@ -236,10 +245,10 @@ namespace
 		InsertWait(uint64_t) noexcept override
 		{}
 		void
-		InsertWaitForQueueFence(ICommandQueue*, uint64_t) const noexcept override
+		InsertWaitForQueueFence(bgpu::ICommandQueue*, uint64_t) const noexcept override
 		{}
 		void
-		InsertWaitForQueue(ICommandQueue*) const noexcept override
+		InsertWaitForQueue(bgpu::ICommandQueue*) const noexcept override
 		{}
 		void
 		WaitForFenceCPUBlocking(uint64_t) noexcept override
@@ -258,7 +267,7 @@ namespace
 
 	// A ResourceManager that only resolves attachment views to textures; the rest
 	// of the interface is unused by the frame graph and aborts if ever called.
-	class MockResourceManager : public core::RefCounter<IResourceManager>
+	class MockResourceManager : public core::RefCounter<bgpu::IResourceManager>
 	{
 	public:
 		MockResourceManager()                           = default;
@@ -271,20 +280,20 @@ namespace
 		MockResourceManager&
 		operator=(MockResourceManager&&) = delete;
 
-		std::unordered_map<uint32_t, TextureHandle> rtvToTexture;
-		std::unordered_map<uint32_t, TextureHandle> dsvToTexture;
+		std::unordered_map<uint32_t, bgpu::TextureHandle> rtvToTexture;
+		std::unordered_map<uint32_t, bgpu::TextureHandle> dsvToTexture;
 
-		TextureHandle
-		GetRtvTexture(RtvHandle handle) const noexcept override
+		bgpu::TextureHandle
+		GetRtvTexture(bgpu::RtvHandle handle) const noexcept override
 		{
 			const auto it = rtvToTexture.find(handle.idx);
-			return it != rtvToTexture.end() ? it->second : TextureHandle{};
+			return it != rtvToTexture.end() ? it->second : bgpu::TextureHandle{};
 		}
-		TextureHandle
-		GetDsvTexture(DsvHandle handle) const noexcept override
+		bgpu::TextureHandle
+		GetDsvTexture(bgpu::DsvHandle handle) const noexcept override
 		{
 			const auto it = dsvToTexture.find(handle.idx);
-			return it != dsvToTexture.end() ? it->second : TextureHandle{};
+			return it != dsvToTexture.end() ? it->second : bgpu::TextureHandle{};
 		}
 
 		// Enough of a buffer for a live BufferPoisoner: it creates one pattern buffer, asks for
@@ -292,197 +301,199 @@ namespace
 		// one-time pattern upload barrier against.
 		static constexpr uint32_t c_PatternHandleIndex = 100;
 
-		BufferHandle
-		CreateStructBuffer(const StructBufferDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateStructBuffer(const bgpu::StructBufferDesc&) noexcept override
 		{
-			return BufferHandle({ c_PatternHandleIndex, 0 }, c_PatternHandleIndex);
+			return bgpu::BufferHandle({ c_PatternHandleIndex, 0 }, c_PatternHandleIndex);
 		}
-		BufferHandle
-		CreateComputeBuffer(const ComputeBufferDesc&) noexcept override
-		{
-			return {};
-		}
-		BufferHandle
-		CreateRawBuffer(const RawViewDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateComputeBuffer(const bgpu::ComputeBufferDesc&) noexcept override
 		{
 			return {};
 		}
-		BufferSrvHandle
-		CreateBufferSrv(BufferHandle, const BufferSrvDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateRawBuffer(const bgpu::RawViewDesc&) noexcept override
+		{
+			return {};
+		}
+		bgpu::BufferSrvHandle
+		CreateBufferSrv(bgpu::BufferHandle, const bgpu::BufferSrvDesc&) noexcept override
 		{
 			return {};
 		}
 		void
-		DestroyBufferSrv(BufferSrvHandle, bool) noexcept override
+		DestroyBufferSrv(bgpu::BufferSrvHandle, bool) noexcept override
 		{}
 		bool
-		ValidBufferSrvHandle(const BufferSrvHandle&) const noexcept override
+		ValidBufferSrvHandle(const bgpu::BufferSrvHandle&) const noexcept override
 		{
 			return false;
 		}
-		TextureHandle
-		CreateTexture(const TextureDesc&) noexcept override
+		bgpu::TextureHandle
+		CreateTexture(const bgpu::TextureDesc&) noexcept override
 		{
 			return {};
 		}
-		SamplerHandle
-		CreateSampler(const SamplerDesc&) noexcept override
+		bgpu::SamplerHandle
+		CreateSampler(const bgpu::SamplerDesc&) noexcept override
 		{
 			return {};
 		}
-		ReadbackBufferHandle
-		CreateReadbackBuffer(const ReadbackBufferDesc&) noexcept override
+		bgpu::ReadbackBufferHandle
+		CreateReadbackBuffer(const bgpu::ReadbackBufferDesc&) noexcept override
 		{
 			return {};
 		}
 		void
-		RegisterQueue(ICommandQueue*) noexcept override
+		RegisterQueue(bgpu::ICommandQueue*) noexcept override
 		{}
 		void
-		UnregisterQueue(ICommandQueue*) noexcept override
+		UnregisterQueue(bgpu::ICommandQueue*) noexcept override
 		{}
 		void
-		DestroyBuffer(BufferHandle, bool) noexcept override
+		DestroyBuffer(bgpu::BufferHandle, bool) noexcept override
 		{}
 		void
-		DestroyTexture(TextureHandle, bool) noexcept override
+		DestroyTexture(bgpu::TextureHandle, bool) noexcept override
 		{}
 		void
-		DestroySampler(SamplerHandle, bool) noexcept override
+		DestroySampler(bgpu::SamplerHandle, bool) noexcept override
 		{}
 		void
-		DestroyReadbackBuffer(ReadbackBufferHandle, bool) noexcept override
+		DestroyReadbackBuffer(bgpu::ReadbackBufferHandle, bool) noexcept override
 		{}
 		void
-		DestroySrv(SrvHandle, bool) noexcept override
+		DestroySrv(bgpu::SrvHandle, bool) noexcept override
 		{}
 		void
-		DestroyRtv(RtvHandle, bool) noexcept override
+		DestroyRtv(bgpu::RtvHandle, bool) noexcept override
 		{}
 		void
-		DestroyDsv(DsvHandle, bool) noexcept override
+		DestroyDsv(bgpu::DsvHandle, bool) noexcept override
 		{}
 		void
 		CleanupExpiredResources() noexcept override
 		{}
-		SrvHandle
-		CreateSrv(TextureHandle, const SrvDesc&) noexcept override
+		bgpu::SrvHandle
+		CreateSrv(bgpu::TextureHandle, const bgpu::SrvDesc&) noexcept override
 		{
 			return {};
 		}
-		RtvHandle
-		CreateRtv(TextureHandle, const RtvDesc&) noexcept override
+		bgpu::RtvHandle
+		CreateRtv(bgpu::TextureHandle, const bgpu::RtvDesc&) noexcept override
 		{
 			return {};
 		}
-		DsvHandle
-		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
+		bgpu::DsvHandle
+		CreateDsv(bgpu::TextureHandle, const bgpu::DsvDesc&) noexcept override
 		{
 			return {};
 		}
-		const Rtv&
-		GetRtv(RtvHandle) const noexcept override
+		const bgpu::Rtv&
+		GetRtv(bgpu::RtvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Dsv&
-		GetDsv(DsvHandle) const noexcept override
+		const bgpu::Dsv&
+		GetDsv(bgpu::DsvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Buffer&
-		GetBuffer(BufferHandle) const noexcept override
+		const bgpu::Buffer&
+		GetBuffer(bgpu::BufferHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Texture&
-		GetTexture(TextureHandle) const noexcept override
+		const bgpu::Texture&
+		GetTexture(bgpu::TextureHandle) const noexcept override
 		{
 			std::abort();
 		}
 
-		BufferDesc
-		GetBufferDesc(BufferHandle) const noexcept override
+		bgpu::BufferDesc
+		GetBufferDesc(bgpu::BufferHandle) const noexcept override
 		{
 			// One pattern chunk over, so a poisoned buffer takes two copies.
-			return BufferDesc{ .byteSize = 96 * 1024, .isUav = true, .debugName = "Mock Buffer" };
+			return bgpu::BufferDesc{ .byteSize  = 96 * 1024,
+				                     .isUav     = true,
+				                     .debugName = "Mock Buffer" };
 		}
 
-		TextureDesc
-		GetTextureDesc(TextureHandle) const noexcept override
+		bgpu::TextureDesc
+		GetTextureDesc(bgpu::TextureHandle) const noexcept override
 		{
 			return {};
 		}
 
-		const Sampler&
-		GetSampler(SamplerHandle) const noexcept override
+		const bgpu::Sampler&
+		GetSampler(bgpu::SamplerHandle) const noexcept override
 		{
 			std::abort();
 		}
 
-		const ReadbackBuffer&
-		GetReadbackBuffer(ReadbackBufferHandle) const noexcept override
+		const bgpu::ReadbackBuffer&
+		GetReadbackBuffer(bgpu::ReadbackBufferHandle) const noexcept override
 		{
 			std::abort();
 		}
-		TextureReadbackLayout
-		GetTextureReadbackLayout(TextureHandle) const noexcept override
+		bgpu::TextureReadbackLayout
+		GetTextureReadbackLayout(bgpu::TextureHandle) const noexcept override
 		{
 			return {};
 		}
 		const void*
-		MapReadback(ReadbackBufferHandle) noexcept override
+		MapReadback(bgpu::ReadbackBufferHandle) noexcept override
 		{
 			return nullptr;
 		}
 		void
-		UnmapReadback(ReadbackBufferHandle) noexcept override
+		UnmapReadback(bgpu::ReadbackBufferHandle) noexcept override
 		{}
 		bool
-		ValidBufferHandle(const BufferHandle&) const noexcept override
+		ValidBufferHandle(const bgpu::BufferHandle&) const noexcept override
 		{
 			return true;
 		}
 		bool
-		ValidTextureHandle(const TextureHandle&) const noexcept override
+		ValidTextureHandle(const bgpu::TextureHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		IsTextureCube(const TextureHandle&) const noexcept override
+		IsTextureCube(const bgpu::TextureHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidSrvHandle(const SrvHandle&) const noexcept override
+		ValidSrvHandle(const bgpu::SrvHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidSamplerHandle(const SamplerHandle&) const noexcept override
+		ValidSamplerHandle(const bgpu::SamplerHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidReadbackBufferHandle(const ReadbackBufferHandle&) const noexcept override
+		ValidReadbackBufferHandle(const bgpu::ReadbackBufferHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidRtvHandle(const RtvHandle&) const noexcept override
+		ValidRtvHandle(const bgpu::RtvHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidDsvHandle(const DsvHandle&) const noexcept override
+		ValidDsvHandle(const bgpu::DsvHandle&) const noexcept override
 		{
 			return false;
 		}
 		void
-		ClearRtv(ICommandList*, RtvHandle, float[4]) noexcept override
+		ClearRtv(bgpu::ICommandList*, bgpu::RtvHandle, float[4]) noexcept override
 		{}
 		void
-		ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept override
+		ClearDsv(bgpu::ICommandList*, bgpu::DsvHandle, float, uint8_t) noexcept override
 		{}
 	};
 
@@ -568,13 +579,13 @@ TEST_CASE("FrameGraph: derives producer -> consumer barriers", "[fg]")
 	const PassBarriers& fillBarriers = fg.BarriersFor("Fill");
 	REQUIRE(fillBarriers.bufferDescs.size() == 1);
 	CHECK(fillBarriers.bufferHandles[0].slot.index == 7);
-	CHECK(fillBarriers.bufferDescs[0].accessBefore == BarrierAccessFlag::kNone);
-	CHECK(fillBarriers.bufferDescs[0].accessAfter == BarrierAccessFlag::kUnorderedAccess);
+	CHECK(fillBarriers.bufferDescs[0].accessBefore == bgpu::BarrierAccessFlag::kNone);
+	CHECK(fillBarriers.bufferDescs[0].accessAfter == bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 	const PassBarriers& readBarriers = fg.BarriersFor("Read");
 	REQUIRE(readBarriers.bufferDescs.size() == 1);
-	CHECK(readBarriers.bufferDescs[0].accessBefore == BarrierAccessFlag::kUnorderedAccess);
-	CHECK(readBarriers.bufferDescs[0].accessAfter == BarrierAccessFlag::kShaderResource);
+	CHECK(readBarriers.bufferDescs[0].accessBefore == bgpu::BarrierAccessFlag::kUnorderedAccess);
+	CHECK(readBarriers.bufferDescs[0].accessAfter == bgpu::BarrierAccessFlag::kShaderResource);
 }
 
 TEST_CASE("FrameGraph: emits no barrier when the state is unchanged", "[fg]")
@@ -584,7 +595,8 @@ TEST_CASE("FrameGraph: emits no barrier when the state is unchanged", "[fg]")
 	fg.ImportBuffer(
 		"buf",
 		MakeBuffer(1),
-		AccessState{ BarrierSyncFlag::kPixelShader, BarrierAccessFlag::kShaderResource });
+		AccessState{ bgpu::BarrierSyncFlag::kPixelShader,
+	                 bgpu::BarrierAccessFlag::kShaderResource });
 
 	fg.AddPass(PassDesc{}.SetName("ReadA").AddBufferArg(SrvBuf("buf")).SetSideEffect());
 	fg.AddPass(PassDesc{}.SetName("ReadB").AddBufferArg(SrvBuf("buf")).SetSideEffect());
@@ -610,8 +622,8 @@ TEST_CASE("FrameGraph: a same-state UAV access still gets a barrier", "[fg]")
 	const PassBarriers& barriers = fg.BarriersFor("ReadWrite");
 	REQUIRE(barriers.bufferDescs.size() == 1);
 	CHECK(barriers.bufferHandles[0].slot.index == 3);
-	CHECK(barriers.bufferDescs[0].accessBefore == BarrierAccessFlag::kUnorderedAccess);
-	CHECK(barriers.bufferDescs[0].accessAfter == BarrierAccessFlag::kUnorderedAccess);
+	CHECK(barriers.bufferDescs[0].accessBefore == bgpu::BarrierAccessFlag::kUnorderedAccess);
+	CHECK(barriers.bufferDescs[0].accessAfter == bgpu::BarrierAccessFlag::kUnorderedAccess);
 }
 
 //
@@ -629,8 +641,8 @@ TEST_CASE("FrameGraph: GetBuffer on an undeclared buffer throws", "[fg]")
 
 	fg.Compile(&NullRm());
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
@@ -647,16 +659,16 @@ TEST_CASE("FrameGraph: GetBuffer on a transient (unimported) buffer throws", "[f
 
 	fg.Compile(&NullRm());
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
 
 TEST_CASE("FrameGraph: GetBuffer resolves an imported buffer; imports clear after Execute", "[fg]")
 {
-	FrameGraph   fg;
-	BufferHandle got{};
+	FrameGraph         fg;
+	bgpu::BufferHandle got{};
 
 	fg.ImportBuffer("buf", MakeBuffer(9));
 	fg.AddPass(
@@ -667,8 +679,8 @@ TEST_CASE("FrameGraph: GetBuffer resolves an imported buffer; imports clear afte
 	fg.Compile(&NullRm());
 	REQUIRE(fg.ImportedResourceCount() == 1);
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
@@ -709,11 +721,11 @@ TEST_CASE("FrameGraph: a texture that is both an attachment and an import throws
 {
 	FrameGraph fg;
 
-	TextureHandle tex{};
+	bgpu::TextureHandle tex{};
 	tex.slot.index = 5;
 	fg.ImportTexture("rt", tex);  // tracked by name...
 
-	RtvHandle rtv{};
+	bgpu::RtvHandle rtv{};
 	rtv.idx = 99;  // ...and the RTV resolves to the same texture (idx 5).
 
 	MockResourceManager rm;
@@ -728,10 +740,10 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 {
 	FrameGraph fg;
 
-	TextureHandle tex{};
+	bgpu::TextureHandle tex{};
 	tex.slot.index = 7;  // never imported -> reached only as an attachment
 
-	RtvHandle rtv{};
+	bgpu::RtvHandle rtv{};
 	rtv.idx = 1;
 
 	MockResourceManager rm;
@@ -745,8 +757,8 @@ TEST_CASE("FrameGraph: an attachment-only texture transitions to render target",
 	const PassBarriers& barriers = fg.BarriersFor("Render");
 	REQUIRE(barriers.textureDescs.size() == 1);
 	CHECK(barriers.textureHandles[0].slot.index == 7);
-	CHECK(barriers.textureDescs[0].accessAfter == BarrierAccessFlag::kRenderTarget);
-	CHECK(barriers.textureDescs[0].layoutAfter == BarrierLayout::kRenderTarget);
+	CHECK(barriers.textureDescs[0].accessAfter == bgpu::BarrierAccessFlag::kRenderTarget);
+	CHECK(barriers.textureDescs[0].layoutAfter == bgpu::BarrierLayout::kRenderTarget);
 }
 
 namespace
@@ -758,7 +770,7 @@ namespace
 		std::vector<std::string>             log;
 		core::SharedRef<MockResourceManager> rm    = core::SharedRef<MockResourceManager>::Make();
 		core::SharedRef<NullCommandList>     list  = core::SharedRef<NullCommandList>::Make();
-		CommandQueueRef                      queue = core::SharedRef<NullCommandQueue>::Make();
+		bgpu::CommandQueueRef                queue = core::SharedRef<NullCommandQueue>::Make();
 		BufferPoisoner                       poisoner;
 
 		PoisonHarness()
@@ -782,7 +794,7 @@ namespace
 		Run(FrameGraph& fg)
 		{
 			fg.Compile(rm.Get());
-			CommandListRef cmd = list;
+			bgpu::CommandListRef cmd = list;
 			fg.RegisterQueue("main", queue, cmd);
 			fg.Execute();
 		}
@@ -806,7 +818,7 @@ TEST_CASE("FrameGraph: a poisoned arg is filled between the pass barriers and it
 	fg.AddPass(
 		PassDesc{}
 			.SetName("P")
-			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.AddPoisonedBufferArg("scratch", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
 
 	h.Run(fg);
@@ -833,7 +845,7 @@ TEST_CASE("FrameGraph: a poison declaration is inert with no poisoner installed"
 	fg.AddPass(
 		PassDesc{}
 			.SetName("P")
-			.AddPoisonedBufferArg("scratch", BarrierSyncFlag::kComputeShader)
+			.AddPoisonedBufferArg("scratch", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
 
 	h.Run(fg);
@@ -852,7 +864,7 @@ TEST_CASE("FrameGraph: a poisoned transient is skipped", "[fg]")
 	fg.AddPass(
 		PassDesc{}
 			.SetName("P")
-			.AddPoisonedBufferArg("never.imported", BarrierSyncFlag::kComputeShader)
+			.AddPoisonedBufferArg("never.imported", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetSideEffect()
 			.SetExec([&](const PassContext&) { h.log.push_back("exec"); }));
 
@@ -879,9 +891,9 @@ TEST_CASE("FrameGraph: name resolution walks outward through nested scopes", "[f
 	fg.SetResourceNamespace("v0:c1:");
 	fg.ImportBuffer("buf", MakeBuffer(4));
 
-	BufferHandle innerBuf{};
-	BufferHandle viewOnly{};
-	BufferHandle globalOnly{};
+	bgpu::BufferHandle innerBuf{};
+	bgpu::BufferHandle viewOnly{};
+	bgpu::BufferHandle globalOnly{};
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Frustum")
@@ -896,7 +908,7 @@ TEST_CASE("FrameGraph: name resolution walks outward through nested scopes", "[f
 
 	fg.SetResourceNamespace("v0:");
 
-	BufferHandle viewBuf{};
+	bgpu::BufferHandle viewBuf{};
 	fg.AddPass(
 		PassDesc{}.SetName("View").AddBufferArg(UavBuf("buf")).SetExec([&](const PassContext& ctx) {
 			viewBuf = ctx.GetBuffer("buf");
@@ -904,7 +916,7 @@ TEST_CASE("FrameGraph: name resolution walks outward through nested scopes", "[f
 
 	fg.SetResourceNamespace("");
 
-	BufferHandle bareBuf{};
+	bgpu::BufferHandle bareBuf{};
 	fg.AddPass(
 		PassDesc{}.SetName("Bare").AddBufferArg(UavBuf("buf")).SetExec([&](const PassContext& ctx) {
 			bareBuf = ctx.GetBuffer("buf");
@@ -912,8 +924,8 @@ TEST_CASE("FrameGraph: name resolution walks outward through nested scopes", "[f
 
 	fg.Compile(&NullRm());
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
@@ -945,8 +957,8 @@ TEST_CASE("FrameGraph: an outer scope cannot name an inner scope's import", "[fg
 
 	fg.Compile(&NullRm());
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
@@ -961,7 +973,7 @@ TEST_CASE("FrameGraph: a pass resolves an import registered after it was added",
 
 	fg.SetResourceNamespace("v0:");
 
-	BufferHandle resolved{};
+	bgpu::BufferHandle resolved{};
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Consumer")
@@ -976,8 +988,8 @@ TEST_CASE("FrameGraph: a pass resolves an import registered after it was added",
 	// import made it a root, which a record-time resolve could not have seen.
 	CHECK(fg.ExecutionOrder() == std::vector<std::string>{ "Consumer" });
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
@@ -990,7 +1002,7 @@ TEST_CASE(
 {
 	FrameGraph fg;
 
-	const auto runFrame = [&](BufferHandle handle, std::string passName) {
+	const auto runFrame = [&](bgpu::BufferHandle handle, std::string passName) {
 		fg.ImportBuffer("sceneColor", handle);
 		fg.AddPass(
 			PassDesc{}
@@ -999,8 +1011,8 @@ TEST_CASE(
 				.SetSideEffect());
 		fg.Compile(&NullRm());
 
-		CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-		CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+		bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+		bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 		fg.RegisterQueue("main", queue, cmd);
 		fg.Execute();
 	};
@@ -1016,8 +1028,8 @@ TEST_CASE(
 	const PassBarriers& second = fg.BarriersFor("ReadSecond");
 	REQUIRE(second.bufferDescs.size() == 1);
 	CHECK(second.bufferHandles[0].slot.index == 2);
-	CHECK(second.bufferDescs[0].accessBefore == BarrierAccessFlag::kNone);
-	CHECK(second.bufferDescs[0].accessAfter == BarrierAccessFlag::kShaderResource);
+	CHECK(second.bufferDescs[0].accessBefore == bgpu::BarrierAccessFlag::kNone);
+	CHECK(second.bufferDescs[0].accessAfter == bgpu::BarrierAccessFlag::kShaderResource);
 }
 
 TEST_CASE("FrameGraph: the same resource resumes its own state under a new name", "[fg]")
@@ -1028,8 +1040,8 @@ TEST_CASE("FrameGraph: the same resource resumes its own state under a new name"
 	fg.AddPass(PassDesc{}.SetName("Read").AddBufferArg(SrvBuf("sceneColor")).SetSideEffect());
 	fg.Compile(&NullRm());
 
-	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
-	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	bgpu::CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	bgpu::CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
 	fg.RegisterQueue("main", queue, cmd);
 	fg.Execute();
 
@@ -1045,7 +1057,7 @@ namespace
 {
 	// A heap the graph can hand its timer without a device: the slots exist, and read as never
 	// written, which is all a test of *where the spans go* needs.
-	class NullTimestampHeap : public core::RefCounter<ITimestampHeap>
+	class NullTimestampHeap : public core::RefCounter<bgpu::ITimestampHeap>
 	{
 	public:
 		NullTimestampHeap()                         = default;
@@ -1089,7 +1101,7 @@ TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Producer")
-			.AddBufferReadWrite("a", BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("a", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const PassContext&) { h.log.push_back("exec:Producer"); }));
 	fg.AddPass(PassDesc{}.SetName("Orphan").SetExec([&](const PassContext&) {
 		h.log.push_back("exec:Orphan");
@@ -1097,7 +1109,7 @@ TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled
 	fg.AddPass(
 		PassDesc{}
 			.SetName("Consumer")
-			.AddBufferRead("a", BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("a", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetSideEffect()
 			.SetExec([&](const PassContext&) { h.log.push_back("exec:Consumer"); }));
 
@@ -1154,53 +1166,55 @@ TEST_CASE("FrameGraph: passes past the timer's capacity are listed unsampled", "
 
 TEST_CASE("PassDesc: each access helper declares its own barrier flags", "[fg]")
 {
-	using bgl::BarrierAccessFlag;
-	using bgl::BarrierLayout;
-	using bgl::BarrierSyncFlag;
+	using bgpu::BarrierAccessFlag;
+	using bgpu::BarrierLayout;
+	using bgpu::BarrierSyncFlag;
 
 	auto desc = bgl::PassDesc();
 	desc.AddRenderTarget("rt")
 		.AddDepthWrite("depth")
-		.AddTextureRead("sampled", BarrierSyncFlag::kPixelShader)
-		.AddBufferRead("read", BarrierSyncFlag::kComputeShader)
-		.AddBufferReadWrite("uav", BarrierSyncFlag::kVertexShader)
+		.AddTextureRead("sampled", bgpu::BarrierSyncFlag::kPixelShader)
+		.AddBufferRead("read", bgpu::BarrierSyncFlag::kComputeShader)
+		.AddBufferReadWrite("uav", bgpu::BarrierSyncFlag::kVertexShader)
 		.AddIndirectArgs("args")
 		.AddCopySource("from")
 		.AddCopyDest("to");
 
 	REQUIRE(desc.textures.size() == 3);
-	const auto texture =
-		[&](size_t i, bgl::BarrierSync sync, bgl::BarrierAccess access, BarrierLayout layout) {
-			CHECK(desc.textures[i].sync == sync);
-			CHECK(desc.textures[i].access == access);
-			CHECK(desc.textures[i].layout == layout);
-		};
+	const auto texture = [&](size_t              i,
+	                         bgpu::BarrierSync   sync,
+	                         bgpu::BarrierAccess access,
+	                         bgpu::BarrierLayout layout) {
+		CHECK(desc.textures[i].sync == sync);
+		CHECK(desc.textures[i].access == access);
+		CHECK(desc.textures[i].layout == layout);
+	};
 	texture(
 		0,
-		BarrierSyncFlag::kRenderTarget,
-		BarrierAccessFlag::kRenderTarget,
-		BarrierLayout::kRenderTarget);
+		bgpu::BarrierSyncFlag::kRenderTarget,
+		bgpu::BarrierAccessFlag::kRenderTarget,
+		bgpu::BarrierLayout::kRenderTarget);
 	texture(
 		1,
-		BarrierSyncFlag::kDepthStencil,
-		BarrierAccessFlag::kDepthWrite,
-		BarrierLayout::kDepthWrite);
+		bgpu::BarrierSyncFlag::kDepthStencil,
+		bgpu::BarrierAccessFlag::kDepthWrite,
+		bgpu::BarrierLayout::kDepthWrite);
 	texture(
 		2,
-		BarrierSyncFlag::kPixelShader,
-		BarrierAccessFlag::kShaderResource,
-		BarrierLayout::kShaderResource);
+		bgpu::BarrierSyncFlag::kPixelShader,
+		bgpu::BarrierAccessFlag::kShaderResource,
+		bgpu::BarrierLayout::kShaderResource);
 	CHECK(desc.textures[2].name == "sampled");
 
 	REQUIRE(desc.buffers.size() == 5);
-	const auto buffer = [&](size_t i, bgl::BarrierSync sync, bgl::BarrierAccess access) {
+	const auto buffer = [&](size_t i, bgpu::BarrierSync sync, bgpu::BarrierAccess access) {
 		CHECK(desc.buffers[i].sync == sync);
 		CHECK(desc.buffers[i].access == access);
 		CHECK_FALSE(desc.buffers[i].poison);
 	};
-	buffer(0, BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kShaderResource);
-	buffer(1, BarrierSyncFlag::kVertexShader, BarrierAccessFlag::kUnorderedAccess);
-	buffer(2, BarrierSyncFlag::kIndirectArgument, BarrierAccessFlag::kIndirectArgument);
-	buffer(3, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopySource);
-	buffer(4, BarrierSyncFlag::kCopy, BarrierAccessFlag::kCopyDest);
+	buffer(0, bgpu::BarrierSyncFlag::kComputeShader, bgpu::BarrierAccessFlag::kShaderResource);
+	buffer(1, bgpu::BarrierSyncFlag::kVertexShader, bgpu::BarrierAccessFlag::kUnorderedAccess);
+	buffer(2, bgpu::BarrierSyncFlag::kIndirectArgument, bgpu::BarrierAccessFlag::kIndirectArgument);
+	buffer(3, bgpu::BarrierSyncFlag::kCopy, bgpu::BarrierAccessFlag::kCopySource);
+	buffer(4, bgpu::BarrierSyncFlag::kCopy, bgpu::BarrierAccessFlag::kCopyDest);
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include <bgpu/types/Format.h>
 
-namespace bgl
+namespace bgpu
 {
 	constexpr uint32_t c_MaxRenderTargets = 8;
 

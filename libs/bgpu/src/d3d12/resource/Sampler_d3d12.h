@@ -2,7 +2,7 @@
 #include "convert_d3d12.h"
 #include <bgpu/resource/Sampler.h>
 
-namespace bgl
+namespace bgpu
 {
 	// A sampler is descriptor-heap-only: unlike Buffer/Texture there is no backing
 	// ID3D12Resource. The object just owns its slot in the shader-visible sampler

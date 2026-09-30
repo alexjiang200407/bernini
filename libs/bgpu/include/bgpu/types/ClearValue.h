@@ -5,7 +5,7 @@
 #include <utility>
 #include <variant>
 
-namespace bgl
+namespace bgpu
 {
 	struct DepthStencilClearValue
 	{

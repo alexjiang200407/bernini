@@ -64,19 +64,19 @@ namespace
 
 	/** Copies a whole compute buffer back after the frame that wrote it. */
 	std::vector<std::byte>
-	ReadBack(bgl::GraphicsBase* gfxBase, const bgl::ComputeBuffer& buffer)
+	ReadBack(bgl::GraphicsBase* gfxBase, const bgpu::ComputeBuffer& buffer)
 	{
 		auto resourceManager = gfxBase->GetResourceManagerCpy();
 		auto device          = gfxBase->GetDevice();
 		gfxBase->WaitIdle();
 
-		auto listDesc  = bgl::CommandListDesc();
-		listDesc.type  = bgl::QueueType::kGraphics;
+		auto listDesc  = bgpu::CommandListDesc();
+		listDesc.type  = bgpu::QueueType::kGraphics;
 		auto allocator = device->CreateCommandAllocator();
 		auto list      = device->CreateCommandList(listDesc, allocator, resourceManager);
-		auto queue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto queue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = buffer.ByteSize();
 		rbDesc.debugName = "LOD Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -84,11 +84,11 @@ namespace
 		list->Open(queue, allocator);
 		list->Barrier(
 			buffer.GetBufferHandle(),
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		list->CopyBufferToReadback(rb, buffer.GetBufferHandle());
 		list->Close();
 		queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list));

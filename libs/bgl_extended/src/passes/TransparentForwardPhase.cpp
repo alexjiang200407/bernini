@@ -17,7 +17,9 @@ namespace bgl
 	void
 	TransparentForwardPhase::Declare(PassDesc& desc) const
 	{
-		desc.AddBufferReadWrite(c_SortedTransparentInstancesName, BarrierSyncFlag::kVertexShader)
+		desc.AddBufferReadWrite(
+				c_SortedTransparentInstancesName,
+				bgpu::BarrierSyncFlag::kVertexShader)
 			.AddIndirectArgs(c_TransparentDispatchArgsName);
 
 		// The sorted list holds every stage, the skinned one included.
@@ -29,16 +31,16 @@ namespace bgl
 
 	void
 	TransparentForwardPhase::Record(
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) const
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		// Built whenever any transparent bucket is demanded; absent, the sorted list is empty too.
-		MeshletKernel* kernel = kernels.BindTransparentKernel(state, draw, resources);
+		bgpu::MeshletKernel* kernel = kernels.BindTransparentKernel(state, draw, resources);
 		if (kernel == nullptr)
 		{
 			return;

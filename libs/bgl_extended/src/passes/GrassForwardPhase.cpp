@@ -35,24 +35,24 @@ namespace bgl
 		constexpr std::array<SceneBuffer, 5> c_GrassBuffers = {
 			{ { c_GrassDrawsName,
 			    "draws",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassChunkRefsName,
 			    "chunkRefs",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassLookBufferName,
 			    "looks",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassChunkBufferName,
 			    "chunks",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
 			  { c_GrassClumpBufferName,
 			    "clumps",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader } }
 		};
 
 		constexpr std::array<std::string_view, 10> c_Fields = {
@@ -95,12 +95,12 @@ namespace bgl
 
 	void
 	GrassForwardPhase::Record(
-		ForwardPhases&     kernels,
-		MeshletState&      state,
-		const DrawData&    draw,
-		const PassContext& resources) const
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 
 		const SceneView& view = ViewOf(draw);
@@ -108,7 +108,7 @@ namespace bgl
 
 		for (const SceneView::GrassBatch& batch : view.GetGrassBatches())
 		{
-			MeshletKernel* kernel =
+			bgpu::MeshletKernel* kernel =
 				kernels
 					.BindDrawBucketKernel(batch.bucket, DrawLane::kAtRest, state, draw, resources);
 			core::ensure(

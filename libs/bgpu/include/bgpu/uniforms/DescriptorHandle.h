@@ -1,7 +1,7 @@
 #pragma once
 #include <core/containers/slot_handle.h>
 
-namespace bgl
+namespace bgpu
 {
 	// A GPU descriptor handle is a uint2. D3D12 reads it as ordinary data under the ScalarDataLayout
 	// an EntryBuffer<T> uses, so it is 4-aligned there, matching two bare uint32_t. Metal reads the

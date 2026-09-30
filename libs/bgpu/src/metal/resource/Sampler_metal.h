@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <bgpu/resource/Sampler.h>
 
-namespace bgl
+namespace bgpu
 {
 	// The Metal definition of the RHI's forward-declared `Sampler`. A MTL::SamplerState is the whole
 	// object: unlike D3D12 there is no descriptor heap slot behind it, and a shader reaches it by the

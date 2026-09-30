@@ -3,7 +3,7 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 
-namespace bgl
+namespace bgpu
 {
 	class ICommandAllocator : public core::Ref
 	{

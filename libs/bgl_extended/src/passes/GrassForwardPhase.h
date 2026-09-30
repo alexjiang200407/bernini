@@ -41,10 +41,10 @@ namespace bgl
 
 		void
 		Record(
-			ForwardPhases&     kernels,
-			MeshletState&      state,
-			const DrawData&    draw,
-			const PassContext& resources) const override;
+			ForwardPhases&      kernels,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources) const override;
 
 		/** Checks the names the phase binds into its own constant buffer. */
 		static void

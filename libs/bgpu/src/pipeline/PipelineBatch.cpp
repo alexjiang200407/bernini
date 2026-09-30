@@ -13,7 +13,7 @@
 #include <thread>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	PipelineBatch::PipelineBatch(IDevice* device) noexcept : m_Device(device)
 	{

@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	NS::String*
 	ConvertString(const std::string& s) noexcept

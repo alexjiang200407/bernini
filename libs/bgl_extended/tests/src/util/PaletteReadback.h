@@ -55,8 +55,8 @@ namespace bgl::test
 		auto resourceManager = gfxBase->GetResourceManagerCpy();
 		auto device          = gfxBase->GetDevice();
 
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		// Drain the renderer first: this copy rides its own queue, which nothing orders against the
 		// frame that wrote the palette.
@@ -64,16 +64,16 @@ namespace bgl::test
 
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		cmdAllocator->ResetAllocator();
 
-		const bgl::BufferHandle palettes = view->GetPalettes().GetBufferHandle();
+		const bgpu::BufferHandle palettes = view->GetPalettes().GetBufferHandle();
 
 		// The whole arena, not just the slice wanted: CopyBufferToReadback copies the entire source
 		// buffer, so a destination sized to the slice overruns it -- silently, until GPU validation
 		// is on.
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = uint64_t(view->GetPalettes().Capacity()) * sizeof(glm::vec4);
 		rbDesc.debugName = "Bone Palette Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -81,11 +81,11 @@ namespace bgl::test
 		cmdList->Open(cmdQueue, cmdAllocator);
 
 		// The pass left it in UAV state; a copy needs it as a source.
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 		cmdList->Barrier(palettes, barrier);
 
 		cmdList->CopyBufferToReadback(rb, palettes);

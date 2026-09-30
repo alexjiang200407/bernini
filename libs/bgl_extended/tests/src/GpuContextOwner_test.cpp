@@ -58,27 +58,27 @@ namespace
 		auto  resourceManager = gfxBase->GetResourceManagerCpy();
 		auto* device          = gfxBase->GetDevice();
 
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-		auto bufDesc = bgl::ComputeBufferDesc();
+		auto bufDesc = bgpu::ComputeBufferDesc();
 		bufDesc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Owner Probe Out");
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSSourceProbe"))
 				.SetDebugName("CSSourceProbe"));
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 
-		auto state   = bgl::ComputeState();
+		auto state   = bgpu::ComputeState();
 		state.kernel = &kernel;
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = sizeof(uint32_t);
 		rbDesc.debugName = "Owner Probe Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -88,11 +88,11 @@ namespace
 		cmdList->Dispatch(1, 1, 1);
 		cmdList->Barrier(
 			outBuf,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		cmdList->CopyBufferToReadback(rb, outBuf);
 		cmdList->Close();
 

@@ -41,7 +41,7 @@ namespace bgl
 		constexpr auto c_GeomSrc  = "programs.forward.AnyMesh"sv;
 		constexpr auto c_PixelSrc = "programs.screen.OutlineMask"sv;
 
-		constexpr auto c_MaskFormat = Format::R8_UNORM;
+		constexpr auto c_MaskFormat = bgpu::Format::R8_UNORM;
 	}
 
 	void
@@ -49,7 +49,7 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.ampShader   = ctx.device->CreateShader(std::string(c_GeomSrc), "ASMain");
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_GeomSrc), "MSMain");
@@ -59,16 +59,17 @@ namespace bgl
 
 		// No depth attachment and no culling: the mask is the full silhouette, occluded or not,
 		// whichever way its triangles face.
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -85,11 +86,11 @@ namespace bgl
 
 		desc.SetName("Outline Mask {}", draw.drawIdx)
 			.AddRenderTarget(c_OutlineMaskName)
-			.AddBufferRead(c_SelectedInstancesName, BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_SelectedInstancesName, bgpu::BarrierSyncFlag::kVertexShader)
 			.AddBufferArg(
 				c_InstanceLodName,
-				BarrierSyncFlag::kVertexShader,
-				BarrierAccessFlag::kUnorderedAccess);
+				bgpu::BarrierSyncFlag::kVertexShader,
+				bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 		for (const std::span<const SceneBuffer> bindings :
 		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),
@@ -114,7 +115,7 @@ namespace bgl
 		uint32_t           selectedCount,
 		const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(
@@ -170,10 +171,10 @@ namespace bgl
 			expansion["lodDrawMode"] = idl::LodDrawMode::kCurrent;
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(draw.targets.outlineMask);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.outlineMask);
 
 		cmd->SetMeshletState(gfxState);
 

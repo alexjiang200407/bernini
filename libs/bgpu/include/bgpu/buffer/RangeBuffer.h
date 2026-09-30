@@ -20,7 +20,7 @@
 #include <variant>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	struct RangeBufferDesc
 	{

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	// One reflected constant buffer of a linked program: everything needed to rebuild
 	// the root parameter and the Uniforms mirror without touching slang.

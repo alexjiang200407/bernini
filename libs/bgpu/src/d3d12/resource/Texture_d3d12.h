@@ -4,7 +4,7 @@
 
 #include <bgpu/MemoryTag.h>
 
-namespace bgl
+namespace bgpu
 {
 	class Texture final
 	{

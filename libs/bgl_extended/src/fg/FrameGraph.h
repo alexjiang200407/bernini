@@ -31,17 +31,17 @@ namespace bgl
 	// Buffers ignore layout.
 	struct AccessState
 	{
-		BarrierSync   sync   = BarrierSyncFlag::kNone;
-		BarrierAccess access = BarrierAccessFlag::kNone;
-		BarrierLayout layout = BarrierLayout::kUndefined;
+		bgpu::BarrierSync   sync   = bgpu::BarrierSyncFlag::kNone;
+		bgpu::BarrierAccess access = bgpu::BarrierAccessFlag::kNone;
+		bgpu::BarrierLayout layout = bgpu::BarrierLayout::kUndefined;
 	};
 
 	struct PassBarriers
 	{
-		std::vector<BufferHandle>       bufferHandles;
-		std::vector<BufferBarrierDesc>  bufferDescs;
-		std::vector<TextureHandle>      textureHandles;
-		std::vector<TextureBarrierDesc> textureDescs;
+		std::vector<bgpu::BufferHandle>       bufferHandles;
+		std::vector<bgpu::BufferBarrierDesc>  bufferDescs;
+		std::vector<bgpu::TextureHandle>      textureHandles;
+		std::vector<bgpu::TextureBarrierDesc> textureDescs;
 
 		[[nodiscard]] bool
 		Empty() const noexcept
@@ -75,7 +75,7 @@ namespace bgl
 		FrameGraph&
 		ImportBuffer(
 			std::string_view           name,
-			BufferHandle               handle,
+			bgpu::BufferHandle         handle,
 			std::optional<AccessState> initial = {});
 
 		/**
@@ -88,13 +88,13 @@ namespace bgl
 		FrameGraph&
 		ImportGlobalBuffer(
 			std::string_view           name,
-			BufferHandle               handle,
+			bgpu::BufferHandle         handle,
 			std::optional<AccessState> initial = {});
 
 		FrameGraph&
 		ImportTexture(
 			std::string_view           name,
-			TextureHandle              handle,
+			bgpu::TextureHandle        handle,
 			std::optional<AccessState> initial = {});
 
 		FrameGraph&
@@ -111,7 +111,7 @@ namespace bgl
 		SetResourceNamespace(std::string resourceNamespace);
 
 		void
-		RegisterQueue(std::string name, CommandQueueRef queue, CommandListRef list);
+		RegisterQueue(std::string name, bgpu::CommandQueueRef queue, bgpu::CommandListRef list);
 
 		/**
 		 * Installs the poisoner that fills the buffer args passes declare with
@@ -136,7 +136,7 @@ namespace bgl
 		}
 
 		void
-		Compile(IResourceManager* resourceManager);
+		Compile(bgpu::IResourceManager* resourceManager);
 
 		void
 		Execute();
@@ -180,9 +180,9 @@ namespace bgl
 
 		struct ImportedRes
 		{
-			std::variant<BufferHandle, TextureHandle> handle;
-			AccessState                               initial;
-			AccessState                               current;
+			std::variant<bgpu::BufferHandle, bgpu::TextureHandle> handle;
+			AccessState                                           initial;
+			AccessState                                           current;
 		};
 
 		// Identity of the resource itself. Buffers and textures index separate pools, so the kind
@@ -209,18 +209,21 @@ namespace bgl
 		};
 
 		[[nodiscard]] static ResourceKey
-		KeyOf(const std::variant<BufferHandle, TextureHandle>& handle) noexcept;
+		KeyOf(const std::variant<bgpu::BufferHandle, bgpu::TextureHandle>& handle) noexcept;
 
 		void
-		DeriveBarriers(IResourceManager* resourceManager);
+		DeriveBarriers(bgpu::IResourceManager* resourceManager);
 
 		// Fills every poison-declared buffer of `pass`, bracketed by the transitions from and back
 		// to the state the pass declared for it.
 		void
-		PoisonPassBuffers(const PassNode& pass, ICommandList* cmd);
+		PoisonPassBuffers(const PassNode& pass, bgpu::ICommandList* cmd);
 
 		FrameGraph&
-		ImportBufferKey(std::string key, BufferHandle handle, std::optional<AccessState> initial);
+		ImportBufferKey(
+			std::string                key,
+			bgpu::BufferHandle         handle,
+			std::optional<AccessState> initial);
 
 		[[nodiscard]] AccessState
 		ResolveInitialState(ResourceKey key, std::optional<AccessState> initial) const;
@@ -240,8 +243,8 @@ namespace bgl
 
 		struct QueueBinding
 		{
-			CommandQueueRef queue;
-			CommandListRef  list;
+			bgpu::CommandQueueRef queue;
+			bgpu::CommandListRef  list;
 		};
 
 		std::vector<PassNode>                      m_Passes;

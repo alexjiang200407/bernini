@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	class IMeshletPipeline;
 	class IComputePipeline;

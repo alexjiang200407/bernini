@@ -30,7 +30,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	Device::~Device() = default;
 

@@ -83,9 +83,9 @@ namespace bgl
 	}
 
 	Scene::Scene(
-		SceneDesc                         desc,
-		core::SharedRef<IResourceManager> resourceManager,
-		std::span<const SurfaceType>      surfaces) :
+		SceneDesc                               desc,
+		core::SharedRef<bgpu::IResourceManager> resourceManager,
+		std::span<const SurfaceType>            surfaces) :
 		m_Desc(std::move(desc)), m_Surfaces(surfaces.begin(), surfaces.end()),
 		m_ResourceManager(std::move(resourceManager)), m_Textures(m_ResourceManager)
 	{
@@ -102,12 +102,13 @@ namespace bgl
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
 			m_ResourceManager->CreateSampler(
-				SamplerDesc().SetAllFilters(true).SetMaxAnisotropy(16.f).SetAllAddressModes(
-					SamplerAddressMode::kWrap));
+				bgpu::SamplerDesc().SetAllFilters(true).SetMaxAnisotropy(16.f).SetAllAddressModes(
+					bgpu::SamplerAddressMode::kWrap));
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kLinearClamp)] =
 			m_ResourceManager->CreateSampler(
-				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
+				bgpu::SamplerDesc().SetAllFilters(true).SetAllAddressModes(
+					bgpu::SamplerAddressMode::kClamp));
 	}
 
 	void
@@ -121,7 +122,7 @@ namespace bgl
 		m_Geoms.reset(atLeastOne(m_Desc.initialGeom));
 
 		{
-			auto geomBufferDesc         = EntryBufferDesc();
+			auto geomBufferDesc         = bgpu::EntryBufferDesc();
 			geomBufferDesc.initialCount = atLeastOne(m_Desc.initialGeom);
 			geomBufferDesc.debugName    = "Geom Buffer";
 
@@ -129,7 +130,7 @@ namespace bgl
 		}
 
 		{
-			auto submeshBufferDesc         = RangeBufferDesc();
+			auto submeshBufferDesc         = bgpu::RangeBufferDesc();
 			submeshBufferDesc.initialCount = atLeastOne(initialSubmeshes);
 			submeshBufferDesc.debugName    = "Submesh Buffer";
 
@@ -137,7 +138,7 @@ namespace bgl
 		}
 
 		{
-			auto meshletBufferDesc         = RangeBufferDesc();
+			auto meshletBufferDesc         = bgpu::RangeBufferDesc();
 			meshletBufferDesc.initialCount = atLeastOne(m_Desc.initialMeshlets);
 			meshletBufferDesc.debugName    = "Meshlet Buffer";
 
@@ -145,7 +146,7 @@ namespace bgl
 		}
 
 		{
-			auto groupBufferDesc = RangeBufferDesc();
+			auto groupBufferDesc = bgpu::RangeBufferDesc();
 			groupBufferDesc.initialCount =
 				atLeastOne(m_Desc.initialMeshlets / idl::cMeshletsPerGroup);
 			groupBufferDesc.debugName = "Meshlet Group Buffer";
@@ -154,7 +155,7 @@ namespace bgl
 		}
 
 		{
-			auto vertexMapBufferDesc         = RangeBufferDesc();
+			auto vertexMapBufferDesc         = bgpu::RangeBufferDesc();
 			vertexMapBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
 			vertexMapBufferDesc.debugName    = "Vertex Map Buffer";
 
@@ -172,7 +173,7 @@ namespace bgl
 		}
 
 		{
-			auto indexBufferDesc         = RangeBufferDesc();
+			auto indexBufferDesc         = bgpu::RangeBufferDesc();
 			indexBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
 			indexBufferDesc.debugName    = "Index Buffer";
 
@@ -188,12 +189,13 @@ namespace bgl
 			// Clamped, not truncated: a budget past what a raw view addresses would otherwise wrap
 			// to a small arena, which is the wrap the arena's own checks exist to make loud.
 			materialDesc.initialBytes = atLeastOne(
-				static_cast<uint32_t>(std::min<uint64_t>(materialBytes, c_MaxRawBufferBytes - 1)));
+				static_cast<uint32_t>(
+					std::min<uint64_t>(materialBytes, bgpu::c_MaxRawBufferBytes - 1)));
 			materialDesc.debugName = "Material Arena";
 
 			// A material payload keeps its texture handles inline, so the arena carries the typed
 			// view that makes textures of them -- and re-issues it inside its own growth.
-			materialDesc.handleStride = sizeof(DescriptorHandle);
+			materialDesc.handleStride = sizeof(bgpu::DescriptorHandle);
 
 			materialDesc.nullRecordBytes = MaterialNullRecordBytes(surfaceRecordBytes);
 
@@ -203,7 +205,7 @@ namespace bgl
 		// The animated buffers start at one entry each rather than from a SceneDesc knob: most scenes
 		// hold no animated geometry at all, and the arenas grow on the first that does.
 		{
-			auto clipBufferDesc         = RangeBufferDesc();
+			auto clipBufferDesc         = bgpu::RangeBufferDesc();
 			clipBufferDesc.initialCount = 1;
 			clipBufferDesc.debugName    = "Clip Buffer";
 
@@ -211,7 +213,7 @@ namespace bgl
 		}
 
 		{
-			auto rigBufferDesc         = EntryBufferDesc();
+			auto rigBufferDesc         = bgpu::EntryBufferDesc();
 			rigBufferDesc.initialCount = 1;
 			rigBufferDesc.debugName    = "Rig Buffer";
 
@@ -221,7 +223,7 @@ namespace bgl
 		m_BoneAnimTables.Init(m_ResourceManager);
 
 		{
-			auto skinnedBoneBufferDesc         = RangeBufferDesc();
+			auto skinnedBoneBufferDesc         = bgpu::RangeBufferDesc();
 			skinnedBoneBufferDesc.initialCount = 1;
 			skinnedBoneBufferDesc.debugName    = "Skinned Bone Buffer";
 
@@ -229,7 +231,7 @@ namespace bgl
 		}
 
 		{
-			auto boneSampleBufferDesc         = RangeBufferDesc();
+			auto boneSampleBufferDesc         = bgpu::RangeBufferDesc();
 			boneSampleBufferDesc.initialCount = 1;
 			boneSampleBufferDesc.debugName    = "Bone Sample Buffer";
 
@@ -237,7 +239,7 @@ namespace bgl
 		}
 
 		{
-			auto skinnedLegBufferDesc         = RangeBufferDesc();
+			auto skinnedLegBufferDesc         = bgpu::RangeBufferDesc();
 			skinnedLegBufferDesc.initialCount = 1;
 			skinnedLegBufferDesc.debugName    = "Skinned Leg Buffer";
 
@@ -245,7 +247,7 @@ namespace bgl
 		}
 
 		{
-			auto plantWeightBufferDesc         = RangeBufferDesc();
+			auto plantWeightBufferDesc         = bgpu::RangeBufferDesc();
 			plantWeightBufferDesc.initialCount = 1;
 			plantWeightBufferDesc.debugName    = "Plant Weight Buffer";
 
@@ -253,7 +255,7 @@ namespace bgl
 		}
 
 		{
-			auto blendNodeBufferDesc         = RangeBufferDesc();
+			auto blendNodeBufferDesc         = bgpu::RangeBufferDesc();
 			blendNodeBufferDesc.initialCount = 1;
 			blendNodeBufferDesc.debugName    = "Blend Node Buffer";
 
@@ -261,7 +263,7 @@ namespace bgl
 		}
 
 		{
-			auto blendSampleBufferDesc         = RangeBufferDesc();
+			auto blendSampleBufferDesc         = bgpu::RangeBufferDesc();
 			blendSampleBufferDesc.initialCount = 1;
 			blendSampleBufferDesc.debugName    = "Blend Sample Buffer";
 
@@ -270,17 +272,17 @@ namespace bgl
 
 		// Like the animated buffers: most scenes hold no grass, and these grow on the first field.
 		{
-			auto grassLookDesc         = EntryBufferDesc();
+			auto grassLookDesc         = bgpu::EntryBufferDesc();
 			grassLookDesc.initialCount = 1;
 			grassLookDesc.debugName    = "Grass Look Buffer";
 			m_GrassLooks.Init(std::move(grassLookDesc), m_ResourceManager);
 
-			auto grassChunkDesc         = RangeBufferDesc();
+			auto grassChunkDesc         = bgpu::RangeBufferDesc();
 			grassChunkDesc.initialCount = 1;
 			grassChunkDesc.debugName    = "Grass Chunk Buffer";
 			m_GrassChunks.Init(std::move(grassChunkDesc), m_ResourceManager);
 
-			auto grassClumpDesc         = RangeBufferDesc();
+			auto grassClumpDesc         = bgpu::RangeBufferDesc();
 			grassClumpDesc.initialCount = 1;
 			grassClumpDesc.debugName    = "Grass Clump Buffer";
 			m_GrassClumps.Init(std::move(grassClumpDesc), m_ResourceManager);
@@ -316,7 +318,7 @@ namespace bgl
 	}
 
 	void
-	Scene::Update(ICommandList* cmdList)
+	Scene::Update(bgpu::ICommandList* cmdList)
 	{
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
 			if (buffer.IsInitialized())

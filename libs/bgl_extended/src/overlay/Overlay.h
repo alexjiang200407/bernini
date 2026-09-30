@@ -18,16 +18,23 @@
 #include <string>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class ICommandList;
+}
+
+namespace bgl
+{
 
 	// A compiled geometry: a vertex buffer and an index buffer, both bindless.
 	struct OverlayGeometry
 	{
-		BufferHandle vertices;
-		BufferHandle indices;
-		uint32_t     triangleCount = 0;
+		bgpu::BufferHandle vertices;
+		bgpu::BufferHandle indices;
+		uint32_t           triangleCount = 0;
 	};
 
 	// What an OverlayTextureHandle names: an image in the store, or a target whose latest output is
@@ -48,7 +55,7 @@ namespace bgl
 	class Overlay final : public core::RefCounter<IOverlay>
 	{
 	public:
-		explicit Overlay(ResourceManagerRef resourceManager);
+		explicit Overlay(bgpu::ResourceManagerRef resourceManager);
 		~Overlay() noexcept override;
 
 		Overlay(const Overlay&) noexcept = delete;
@@ -89,7 +96,7 @@ namespace bgl
 		// A null handle resolves to the store's opaque white, so an untextured draw samples 1. A
 		// target-backed one resolves to the slot that target last presented, so the answer changes
 		// as the target draws -- and to white until it has presented at all.
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetTextureSrv(OverlayTextureHandle texture) const noexcept;
 
 		// The target behind a texture, or null for an image or a null handle.
@@ -98,7 +105,7 @@ namespace bgl
 
 		/** Uploads every geometry and texture created since the last call, on `cmdList`. */
 		void
-		Flush(ICommandList* cmdList);
+		Flush(bgpu::ICommandList* cmdList);
 
 	private:
 		struct PendingGeometry
@@ -108,7 +115,7 @@ namespace bgl
 			std::vector<uint32_t>      indices;
 		};
 
-		ResourceManagerRef m_ResourceManager;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		// Process-unique and never zero, so a default-constructed handle matches no overlay.
 		uint32_t m_Id = 0;

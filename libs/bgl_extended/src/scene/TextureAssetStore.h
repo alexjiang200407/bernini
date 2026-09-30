@@ -16,27 +16,34 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
-	class ICommandList;
-
-	/** The texture resource a scene's texture asset names. */
-	[[nodiscard]] inline TextureHandle
-	TextureHandleOf(TextureAssetHandle asset) noexcept
-	{
-		return { asset.textureSlot };
-	}
 
 	// A texture asset binds as the view the scene made for it, which the handle carries.
 	template <>
-	struct UniformAssign<TextureAssetHandle>
+	struct UniformAssign<bgl::TextureAssetHandle>
 	{
 		static void
-		Assign(UniformsBase::Accessor accessor, TextureAssetHandle handle)
+		Assign(bgpu::UniformsBase::Accessor accessor, bgl::TextureAssetHandle handle)
 		{
 			accessor.AssignDescriptorIndex(handle.shaderIndex);
 		}
 	};
+}
+
+namespace bgpu
+{
+	class ICommandList;
+}
+
+namespace bgl
+{
+	/** The texture resource a scene's texture asset names. */
+	[[nodiscard]] inline bgpu::TextureHandle
+	TextureHandleOf(TextureAssetHandle asset) noexcept
+	{
+		return { asset.textureSlot };
+	}
 
 	/**
 	 * Every texture asset a scene owns: the resource, the shader resource view that reaches it, and
@@ -58,7 +65,7 @@ namespace bgl
 			kCount
 		};
 
-		explicit TextureAssetStore(core::SharedRef<IResourceManager> resourceManager);
+		explicit TextureAssetStore(core::SharedRef<bgpu::IResourceManager> resourceManager);
 
 		// Releases every texture and view still held -- the defaults, and whatever the owner did not
 		// Delete -- deferred behind the frames that could still sample them.
@@ -96,11 +103,11 @@ namespace bgl
 		 * These bindless textures are not frame-graph resources, so the barrier is issued directly.
 		 */
 		void
-		Flush(ICommandList* cmdList);
+		Flush(bgpu::ICommandList* cmdList);
 
 		// The view created for the texture in `textureSlot`, or a null handle if this store created
 		// none.
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetSrv(core::slot_handle textureSlot) const noexcept;
 
 		/**
@@ -108,28 +115,28 @@ namespace bgl
 		 * one when that texture has no view. Null is not an error: a material may name a channel no
 		 * texture was ever routed to.
 		 */
-		[[nodiscard]] DescriptorHandle
+		[[nodiscard]] bgpu::DescriptorHandle
 		GetDescriptor(core::slot_handle textureSlot) const noexcept;
 
 		[[nodiscard]] core::slot_handle
 		GetDefaultSlot(DefaultTexture kind) const noexcept;
 
 	private:
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		Create(assetlib::ImageData img, std::string debugName);
 
 		// A 1x1 RGBA8 texture through the same deferred-upload path as any loaded image.
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		CreateSolid(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
 		// Decoded pixels awaiting upload. Held by value: the caller's ImageData is consumed on Add,
 		// so the bytes must outlive it.
 		struct PendingUpload
 		{
-			TextureHandle       handle;
+			bgpu::TextureHandle handle;
 			assetlib::ImageData image;
 
-			PendingUpload(TextureHandle texture, assetlib::ImageData data) noexcept :
+			PendingUpload(bgpu::TextureHandle texture, assetlib::ImageData data) noexcept :
 				handle(texture), image(std::move(data))
 			{}
 
@@ -145,11 +152,11 @@ namespace bgl
 
 		struct Entry
 		{
-			TextureHandle texture;
-			SrvHandle     srv;
+			bgpu::TextureHandle texture;
+			bgpu::SrvHandle     srv;
 		};
 
-		core::SharedRef<IResourceManager> m_ResourceManager;
+		core::SharedRef<bgpu::IResourceManager> m_ResourceManager;
 
 		// Keyed by the texture's slot index. A texture carries no descriptor of its own, and
 		// destroying one does not cascade to its views, so whoever created both releases both.
@@ -157,6 +164,6 @@ namespace bgl
 
 		std::vector<PendingUpload> m_PendingUploads;
 
-		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_Defaults;
+		std::array<bgpu::TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_Defaults;
 	};
 }

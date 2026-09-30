@@ -43,13 +43,13 @@ namespace bgl
 			return m_Opts;
 		}
 
-		IDevice*
+		bgpu::IDevice*
 		GetDevice() const noexcept override
 		{
 			return m_Device.Get();
 		}
 
-		core::SharedRef<IResourceManager>
+		core::SharedRef<bgpu::IResourceManager>
 		GetResourceManagerCpy() const noexcept override
 		{
 			return m_ResourceManager.Get();
@@ -188,9 +188,9 @@ namespace bgl
 	private:
 		GraphicsOptions m_Opts;
 
-		DeviceRef m_Device;
+		bgpu::DeviceRef m_Device;
 
-		ResourceManagerRef m_ResourceManager;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;
 
@@ -207,10 +207,10 @@ namespace bgl
 {
 	Graphics::Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 	{
-		m_Device = CreateDevice(std::move(context));
+		m_Device = bgpu::CreateDevice(std::move(context));
 
 		{
-			auto resourceManagerDesc               = ResourceManagerDesc();
+			auto resourceManagerDesc               = bgpu::ResourceManagerDesc();
 			resourceManagerDesc.maxCbvSrvUavs      = m_Opts.maxCbvSrvUavs;
 			resourceManagerDesc.maxBuffers         = m_Opts.maxBuffers;
 			resourceManagerDesc.maxSrvs            = m_Opts.maxSrvs;

@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <span>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The RHI timestamp heap over an MTL::CounterSampleBuffer of the device's timestamp counter set.

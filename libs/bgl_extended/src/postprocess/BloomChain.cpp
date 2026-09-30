@@ -13,7 +13,7 @@ namespace bgl
 	namespace
 	{
 		// The scene colour's format: the ladder carries the same exposed linear radiance.
-		constexpr Format c_BloomFormat = Format::RGBA16_FLOAT;
+		constexpr bgpu::Format c_BloomFormat = bgpu::Format::RGBA16_FLOAT;
 
 		// Six levels reaches a ~2000-pixel-wide glow on a 4K target, which is as wide as any
 		// shipping preset; below eight texels a level is all filter footprint and adds ringing
@@ -25,22 +25,22 @@ namespace bgl
 		// release; the manager has already logged which pool refused.
 		bool
 		CreateLevelTarget(
-			IResourceManager& resourceManager,
-			uint32_t          width,
-			uint32_t          height,
-			std::string_view  kind,
-			uint32_t          level,
-			TextureHandle&    texture,
-			RtvHandle&        rtv,
-			SrvHandle&        srv)
+			bgpu::IResourceManager& resourceManager,
+			uint32_t                width,
+			uint32_t                height,
+			std::string_view        kind,
+			uint32_t                level,
+			bgpu::TextureHandle&    texture,
+			bgpu::RtvHandle&        rtv,
+			bgpu::SrvHandle&        srv)
 		{
-			auto textureDesc   = TextureDesc();
-			textureDesc.width  = width;
-			textureDesc.height = height;
-			textureDesc.format = c_BloomFormat;
-			textureDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			textureDesc.initialLayout = BarrierLayout::kRenderTarget;
+			auto textureDesc          = bgpu::TextureDesc();
+			textureDesc.width         = width;
+			textureDesc.height        = height;
+			textureDesc.format        = c_BloomFormat;
+			textureDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                            bgpu::TextureUsageFlag::kSRV };
+			textureDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
 			textureDesc.debugName     = std::format("Bloom {}: {}", kind, level);
 
 			texture = resourceManager.CreateTexture(textureDesc);
@@ -49,11 +49,11 @@ namespace bgl
 				return false;
 			}
 
-			auto rtvDesc      = RtvDesc();
+			auto rtvDesc      = bgpu::RtvDesc();
 			rtvDesc.format    = c_BloomFormat;
 			rtvDesc.debugName = std::format("Bloom {} RTV: {}", kind, level);
 
-			auto srvDesc      = SrvDesc();
+			auto srvDesc      = bgpu::SrvDesc();
 			srvDesc.format    = c_BloomFormat;
 			srvDesc.debugName = std::format("Bloom {} SRV: {}", kind, level);
 
@@ -65,7 +65,7 @@ namespace bgl
 	}
 
 	void
-	BloomChain::Ensure(ResourceManagerRef resourceManager, uint32_t width, uint32_t height)
+	BloomChain::Ensure(bgpu::ResourceManagerRef resourceManager, uint32_t width, uint32_t height)
 	{
 		core::ensure(width > 0 && height > 0, "A bloom chain cannot be zero-sized");
 

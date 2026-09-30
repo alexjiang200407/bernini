@@ -15,10 +15,17 @@
 #include <spdlog/spdlog.h>
 #include <string>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class IDevice;
 	class PipelineBatch;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 	class PassContext;
 	class Overlay;
@@ -35,13 +42,13 @@ namespace bgl
 		// caller named at DrawOverlay.
 		struct Draw
 		{
-			BufferHandle vertices;
-			BufferHandle indices;
-			uint32_t     triangleCount = 0;
-			SrvHandle    texture;
-			glm::vec2    translation{ 0.0f };
-			glm::mat4    transform{ 1.0f };
-			Rect         scissor;
+			bgpu::BufferHandle vertices;
+			bgpu::BufferHandle indices;
+			uint32_t           triangleCount = 0;
+			bgpu::SrvHandle    texture;
+			glm::vec2          translation{ 0.0f };
+			glm::mat4          transform{ 1.0f };
+			bgpu::Rect         scissor;
 		};
 
 		struct Args
@@ -50,9 +57,9 @@ namespace bgl
 			std::span<const core::SharedRef<Overlay>> overlays;
 			std::span<const Draw>                     draws;
 
-			RtvHandle     backBuffer;
-			Viewport      viewport;
-			SamplerHandle sampler;
+			bgpu::RtvHandle     backBuffer;
+			bgpu::Viewport      viewport;
+			bgpu::SamplerHandle sampler;
 		};
 
 		OverlayPass() = default;
@@ -92,6 +99,6 @@ namespace bgl
 		void
 		Execute(const Args& args, const PassContext& resources);
 
-		MeshletKernel m_Kernel;
+		bgpu::MeshletKernel m_Kernel;
 	};
 }

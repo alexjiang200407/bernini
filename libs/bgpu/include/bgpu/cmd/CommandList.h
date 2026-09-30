@@ -13,7 +13,7 @@
 #include <span>
 #include <string_view>
 
-namespace bgl
+namespace bgpu
 {
 	struct CommandListDesc
 	{

@@ -15,5 +15,5 @@
 namespace
 {
 	// Without a definition the archive is empty, which some toolchains warn on.
-	[[maybe_unused]] const bgl::ReflectedLayout c_Unused;
+	[[maybe_unused]] const bgpu::ReflectedLayout c_Unused;
 }

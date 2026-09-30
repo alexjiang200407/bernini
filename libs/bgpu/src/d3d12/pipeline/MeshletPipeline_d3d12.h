@@ -3,7 +3,7 @@
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	class ShaderCache;
 

@@ -25,7 +25,7 @@ namespace bgl::test
 	 * Only the texture and view half is implemented -- everything else aborts if called, so a
 	 * subject that strays outside that half fails loudly rather than reading a zeroed handle.
 	 */
-	class FakeResourceManager : public core::RefCounter<IResourceManager>
+	class FakeResourceManager : public core::RefCounter<bgpu::IResourceManager>
 	{
 	public:
 		FakeResourceManager()                           = default;
@@ -45,12 +45,12 @@ namespace bgl::test
 		// one that must take its already-created texture back down with it.
 		bool failNextSrv = false;
 
-		std::vector<TextureDesc>   createdTextures;
-		std::vector<TextureHandle> destroyedTextures;
-		std::vector<SrvHandle>     destroyedSrvs;
+		std::vector<bgpu::TextureDesc>   createdTextures;
+		std::vector<bgpu::TextureHandle> destroyedTextures;
+		std::vector<bgpu::SrvHandle>     destroyedSrvs;
 
 		[[nodiscard]] bool
-		IsTextureLive(TextureHandle handle) const noexcept
+		IsTextureLive(bgpu::TextureHandle handle) const noexcept
 		{
 			return m_LiveTextures.contains(handle.slot.index);
 		}
@@ -61,8 +61,8 @@ namespace bgl::test
 			return m_LiveTextures.size();
 		}
 
-		TextureHandle
-		CreateTexture(const TextureDesc& desc) noexcept override
+		bgpu::TextureHandle
+		CreateTexture(const bgpu::TextureDesc& desc) noexcept override
 		{
 			if (failNextTexture)
 			{
@@ -74,11 +74,11 @@ namespace bgl::test
 
 			const uint32_t index = m_NextTextureIndex++;
 			m_LiveTextures.insert(index);
-			return TextureHandle{ core::slot_handle{ index, 1 } };
+			return bgpu::TextureHandle{ core::slot_handle{ index, 1 } };
 		}
 
-		SrvHandle
-		CreateSrv(TextureHandle, const SrvDesc&) noexcept override
+		bgpu::SrvHandle
+		CreateSrv(bgpu::TextureHandle, const bgpu::SrvDesc&) noexcept override
 		{
 			if (failNextSrv)
 			{
@@ -88,224 +88,224 @@ namespace bgl::test
 
 			const uint32_t index = m_NextSrvIndex++;
 
-			auto srv          = SrvHandle();
+			auto srv          = bgpu::SrvHandle();
 			srv.idx           = index;
 			srv.generation    = 1;
 			srv.bindlessIndex = index;
-			srv.descriptor    = DescriptorHandle{ index };
+			srv.descriptor    = bgpu::DescriptorHandle{ index };
 			return srv;
 		}
 
 		void
-		DestroyTexture(TextureHandle handle, bool) noexcept override
+		DestroyTexture(bgpu::TextureHandle handle, bool) noexcept override
 		{
 			destroyedTextures.push_back(handle);
 			m_LiveTextures.erase(handle.slot.index);
 		}
 
 		void
-		DestroySrv(SrvHandle handle, bool) noexcept override
+		DestroySrv(bgpu::SrvHandle handle, bool) noexcept override
 		{
 			destroyedSrvs.push_back(handle);
 		}
 
 		bool
-		ValidTextureHandle(const TextureHandle& handle) const noexcept override
+		ValidTextureHandle(const bgpu::TextureHandle& handle) const noexcept override
 		{
 			return IsTextureLive(handle);
 		}
 
-		BufferHandle
-		CreateStructBuffer(const StructBufferDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateStructBuffer(const bgpu::StructBufferDesc&) noexcept override
 		{
 			std::abort();
 		}
-		BufferHandle
-		CreateComputeBuffer(const ComputeBufferDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateComputeBuffer(const bgpu::ComputeBufferDesc&) noexcept override
 		{
 			std::abort();
 		}
-		BufferHandle
-		CreateRawBuffer(const RawViewDesc&) noexcept override
+		bgpu::BufferHandle
+		CreateRawBuffer(const bgpu::RawViewDesc&) noexcept override
 		{
 			std::abort();
 		}
-		BufferSrvHandle
-		CreateBufferSrv(BufferHandle, const BufferSrvDesc&) noexcept override
+		bgpu::BufferSrvHandle
+		CreateBufferSrv(bgpu::BufferHandle, const bgpu::BufferSrvDesc&) noexcept override
 		{
 			std::abort();
 		}
 		void
-		DestroyBufferSrv(BufferSrvHandle, bool) noexcept override
+		DestroyBufferSrv(bgpu::BufferSrvHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		bool
-		ValidBufferSrvHandle(const BufferSrvHandle&) const noexcept override
+		ValidBufferSrvHandle(const bgpu::BufferSrvHandle&) const noexcept override
 		{
 			return false;
 		}
-		SamplerHandle
-		CreateSampler(const SamplerDesc&) noexcept override
+		bgpu::SamplerHandle
+		CreateSampler(const bgpu::SamplerDesc&) noexcept override
 		{
 			std::abort();
 		}
-		ReadbackBufferHandle
-		CreateReadbackBuffer(const ReadbackBufferDesc&) noexcept override
+		bgpu::ReadbackBufferHandle
+		CreateReadbackBuffer(const bgpu::ReadbackBufferDesc&) noexcept override
 		{
 			std::abort();
 		}
 		void
-		RegisterQueue(ICommandQueue*) noexcept override
+		RegisterQueue(bgpu::ICommandQueue*) noexcept override
 		{}
 		void
-		UnregisterQueue(ICommandQueue*) noexcept override
+		UnregisterQueue(bgpu::ICommandQueue*) noexcept override
 		{}
 		void
-		DestroyBuffer(BufferHandle, bool) noexcept override
+		DestroyBuffer(bgpu::BufferHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		void
-		DestroySampler(SamplerHandle, bool) noexcept override
+		DestroySampler(bgpu::SamplerHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		void
-		DestroyReadbackBuffer(ReadbackBufferHandle, bool) noexcept override
+		DestroyReadbackBuffer(bgpu::ReadbackBufferHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		void
-		DestroyRtv(RtvHandle, bool) noexcept override
+		DestroyRtv(bgpu::RtvHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		void
-		DestroyDsv(DsvHandle, bool) noexcept override
+		DestroyDsv(bgpu::DsvHandle, bool) noexcept override
 		{
 			std::abort();
 		}
 		void
 		CleanupExpiredResources() noexcept override
 		{}
-		RtvHandle
-		CreateRtv(TextureHandle, const RtvDesc&) noexcept override
+		bgpu::RtvHandle
+		CreateRtv(bgpu::TextureHandle, const bgpu::RtvDesc&) noexcept override
 		{
 			std::abort();
 		}
-		DsvHandle
-		CreateDsv(TextureHandle, const DsvDesc&) noexcept override
+		bgpu::DsvHandle
+		CreateDsv(bgpu::TextureHandle, const bgpu::DsvDesc&) noexcept override
 		{
 			std::abort();
 		}
-		const Rtv&
-		GetRtv(RtvHandle) const noexcept override
+		const bgpu::Rtv&
+		GetRtv(bgpu::RtvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Dsv&
-		GetDsv(DsvHandle) const noexcept override
+		const bgpu::Dsv&
+		GetDsv(bgpu::DsvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		TextureHandle
-		GetRtvTexture(RtvHandle) const noexcept override
+		bgpu::TextureHandle
+		GetRtvTexture(bgpu::RtvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		TextureHandle
-		GetDsvTexture(DsvHandle) const noexcept override
+		bgpu::TextureHandle
+		GetDsvTexture(bgpu::DsvHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Buffer&
-		GetBuffer(BufferHandle) const noexcept override
+		const bgpu::Buffer&
+		GetBuffer(bgpu::BufferHandle) const noexcept override
 		{
 			std::abort();
 		}
-		BufferDesc
-		GetBufferDesc(BufferHandle) const noexcept override
+		bgpu::BufferDesc
+		GetBufferDesc(bgpu::BufferHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Texture&
-		GetTexture(TextureHandle) const noexcept override
+		const bgpu::Texture&
+		GetTexture(bgpu::TextureHandle) const noexcept override
 		{
 			std::abort();
 		}
-		TextureDesc
-		GetTextureDesc(TextureHandle) const noexcept override
+		bgpu::TextureDesc
+		GetTextureDesc(bgpu::TextureHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const Sampler&
-		GetSampler(SamplerHandle) const noexcept override
+		const bgpu::Sampler&
+		GetSampler(bgpu::SamplerHandle) const noexcept override
 		{
 			std::abort();
 		}
-		const ReadbackBuffer&
-		GetReadbackBuffer(ReadbackBufferHandle) const noexcept override
+		const bgpu::ReadbackBuffer&
+		GetReadbackBuffer(bgpu::ReadbackBufferHandle) const noexcept override
 		{
 			std::abort();
 		}
-		TextureReadbackLayout
-		GetTextureReadbackLayout(TextureHandle) const noexcept override
+		bgpu::TextureReadbackLayout
+		GetTextureReadbackLayout(bgpu::TextureHandle) const noexcept override
 		{
 			std::abort();
 		}
 		const void*
-		MapReadback(ReadbackBufferHandle) noexcept override
+		MapReadback(bgpu::ReadbackBufferHandle) noexcept override
 		{
 			std::abort();
 		}
 		void
-		UnmapReadback(ReadbackBufferHandle) noexcept override
+		UnmapReadback(bgpu::ReadbackBufferHandle) noexcept override
 		{
 			std::abort();
 		}
 		bool
-		ValidBufferHandle(const BufferHandle&) const noexcept override
+		ValidBufferHandle(const bgpu::BufferHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		IsTextureCube(const TextureHandle&) const noexcept override
+		IsTextureCube(const bgpu::TextureHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidSrvHandle(const SrvHandle&) const noexcept override
+		ValidSrvHandle(const bgpu::SrvHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidSamplerHandle(const SamplerHandle&) const noexcept override
+		ValidSamplerHandle(const bgpu::SamplerHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidReadbackBufferHandle(const ReadbackBufferHandle&) const noexcept override
+		ValidReadbackBufferHandle(const bgpu::ReadbackBufferHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidRtvHandle(const RtvHandle&) const noexcept override
+		ValidRtvHandle(const bgpu::RtvHandle&) const noexcept override
 		{
 			return false;
 		}
 		bool
-		ValidDsvHandle(const DsvHandle&) const noexcept override
+		ValidDsvHandle(const bgpu::DsvHandle&) const noexcept override
 		{
 			return false;
 		}
 		void
-		ClearRtv(ICommandList*, RtvHandle, float[4]) noexcept override
+		ClearRtv(bgpu::ICommandList*, bgpu::RtvHandle, float[4]) noexcept override
 		{
 			std::abort();
 		}
 		void
-		ClearDsv(ICommandList*, DsvHandle, float, uint8_t) noexcept override
+		ClearDsv(bgpu::ICommandList*, bgpu::DsvHandle, float, uint8_t) noexcept override
 		{
 			std::abort();
 		}

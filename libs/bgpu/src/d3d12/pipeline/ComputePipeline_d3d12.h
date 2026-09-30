@@ -4,7 +4,7 @@
 #include <core/err/util.h>
 #include <core/str/str.h>
 
-namespace bgl
+namespace bgpu
 {
 	class ShaderCache;
 

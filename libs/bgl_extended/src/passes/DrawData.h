@@ -28,7 +28,7 @@ namespace bgl
 	 */
 	struct ViewState
 	{
-		Viewport viewport;
+		bgpu::Viewport viewport;
 
 		glm::mat4 viewProj{ 1.0f };
 		glm::mat4 prevViewProj{ 1.0f };
@@ -67,13 +67,13 @@ namespace bgl
 	/** The attachments a draw renders into, all owned by the frame's render target. */
 	struct DrawTargets
 	{
-		RtvHandle sceneColor;
-		RtvHandle motionVector;
-		DsvHandle depth;
-		RtvHandle outlineMask;
+		bgpu::RtvHandle sceneColor;
+		bgpu::RtvHandle motionVector;
+		bgpu::DsvHandle depth;
+		bgpu::RtvHandle outlineMask;
 
 		// The same depth as a shader resource: what the blob-shadow decal reads the world from.
-		SrvHandle depthSrv;
+		bgpu::SrvHandle depthSrv;
 	};
 
 	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */
@@ -109,8 +109,8 @@ namespace bgl
 	/** The scene's standard samplers, resolved once per draw so a pass need not reach for them. */
 	struct DrawSamplers
 	{
-		SamplerHandle anisoLinearWrap;
-		SamplerHandle linearClamp;
+		bgpu::SamplerHandle anisoLinearWrap;
+		bgpu::SamplerHandle linearClamp;
 	};
 
 	/**
@@ -142,6 +142,6 @@ namespace bgl
 		// The material arena and the typed view of the same allocation, as one pair. Bound from
 		// here rather than from the graph, which tracks resource state -- a view is not a resource.
 		// The arena re-issues the view inside its own growth, so this is read per draw, never cached.
-		RawArenaBinding materialArena;
+		bgpu::RawArenaBinding materialArena;
 	};
 }

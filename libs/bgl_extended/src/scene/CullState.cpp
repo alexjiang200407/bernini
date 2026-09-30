@@ -18,13 +18,13 @@ namespace bgl
 {
 	void
 	CullState::Init(
-		uint32_t           paddedInstances,
-		uint32_t           placements,
-		ResourceManagerRef resourceManager)
+		uint32_t                 paddedInstances,
+		uint32_t                 placements,
+		bgpu::ResourceManagerRef resourceManager)
 	{
 		{
 			// Twice the slots: a placement fading between two levels draws both, one entry each.
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = paddedInstances * 2;
 			desc.debugName    = "Compacted Instances";
 			desc.SetElement<uint32_t>();
@@ -33,7 +33,7 @@ namespace bgl
 		}
 
 		{
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = paddedInstances;
 			desc.debugName    = "Instance Visibility";
 			desc.SetElement<idl::InstanceVisibility>();
@@ -42,7 +42,7 @@ namespace bgl
 		}
 
 		{
-			auto desc = ComputeBufferDesc();
+			auto desc = bgpu::ComputeBufferDesc();
 			desc.SetElement<uint32_t>()
 				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Draw Bucket Prefix Sum");
@@ -51,7 +51,7 @@ namespace bgl
 		}
 
 		{
-			auto desc = ComputeBufferDesc();
+			auto desc = bgpu::ComputeBufferDesc();
 			desc.SetElement<idl::DispatchArgs>()
 				.SetInitialCount(idl::cMaxDrawLanes)
 				.SetDebugName("Compacted Dispatch Args");
@@ -61,7 +61,7 @@ namespace bgl
 
 		for (uint32_t i = 0; i < m_InstanceLod.size(); ++i)
 		{
-			auto desc         = ComputeBufferDesc();
+			auto desc         = bgpu::ComputeBufferDesc();
 			desc.initialCount = std::max(placements, 1u);
 			desc.debugName    = i == 0 ? "Instance LOD A" : "Instance LOD B";
 			desc.SetElement<idl::InstanceLod>();
@@ -90,7 +90,7 @@ namespace bgl
 
 		if (placements > m_InstanceLod[0].GetDesc().initialCount)
 		{
-			for (ComputeBuffer& words : m_InstanceLod) words.Resize(placements);
+			for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Resize(placements);
 			m_LodNeedsClear = true;
 		}
 	}
@@ -109,15 +109,15 @@ namespace bgl
 		m_DrawBucketPrefixSum.Release(deferred);
 		m_CompactedDispatchArgs.Release(deferred);
 		m_CullView.Release(deferred);
-		for (ComputeBuffer& words : m_InstanceLod) words.Release(deferred);
+		for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Release(deferred);
 	}
 
 	void
-	CullState::Update(ICommandList* cmdList)
+	CullState::Update(bgpu::ICommandList* cmdList)
 	{
 		m_CompactedInstances.Update(cmdList);
 		m_InstanceVisibility.Update(cmdList);
-		for (ComputeBuffer& words : m_InstanceLod) words.Update(cmdList);
+		for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Update(cmdList);
 	}
 
 	void
@@ -128,7 +128,7 @@ namespace bgl
 	{
 		fg.SetResourceNamespace(std::string(scope));
 
-		const auto importUpdated = [&](std::string_view name, const ComputeBuffer& buffer) {
+		const auto importUpdated = [&](std::string_view name, const bgpu::ComputeBuffer& buffer) {
 			fg.ImportBuffer(name, buffer.GetBufferHandle());
 			updateArgs.push_back(std::format("{}{}", scope, name));
 		};

@@ -4,6 +4,7 @@
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
 #include "gfx/frame_constants.h"
+#include "gfx/viewport.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
@@ -109,18 +110,18 @@ namespace
 
 	struct Harness
 	{
-		bgl::GraphicsRef                       gfx;
-		bgl::GraphicsBase*                     gfxBase = nullptr;
-		core::SharedRef<bgl::IResourceManager> resourceManager;
-		bgl::IDevice*                          device = nullptr;
-		bgl::RenderTargetRef                   target;
-		bgl::RenderTargetBase*                 targetBase = nullptr;
-		bgl::SceneRef                          sceneRef;
-		bgl::SceneViewRef                      viewRef;
-		bgl::Scene*                            scene = nullptr;
-		bgl::SceneView*                        view  = nullptr;
-		bgl::CompactInstancesPass              compactPass;
-		bgl::ForwardPhases                     forwardPhases;
+		bgl::GraphicsRef                        gfx;
+		bgl::GraphicsBase*                      gfxBase = nullptr;
+		core::SharedRef<bgpu::IResourceManager> resourceManager;
+		bgpu::IDevice*                          device = nullptr;
+		bgl::RenderTargetRef                    target;
+		bgl::RenderTargetBase*                  targetBase = nullptr;
+		bgl::SceneRef                           sceneRef;
+		bgl::SceneViewRef                       viewRef;
+		bgl::Scene*                             scene = nullptr;
+		bgl::SceneView*                         view  = nullptr;
+		bgl::CompactInstancesPass               compactPass;
+		bgl::ForwardPhases                      forwardPhases;
 
 		Harness()
 		{
@@ -169,7 +170,7 @@ namespace
 
 			view->RefreshGrass();
 			const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
-			auto                        pipelines = bgl::PipelineBatch(device);
+			auto                        pipelines = bgpu::PipelineBatch(device);
 			const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 			compactPass.Init(ctx);
 			forwardPhases.Init(ctx);
@@ -200,16 +201,16 @@ namespace
 				.Perspective(glm::radians(60.0f), static_cast<float>(c_W) / c_H, 0.1f, 500.0f);
 			const glm::mat4 viewProj = camera.GetViewProjection();
 
-			auto rbDesc      = bgl::ReadbackBufferDesc();
+			auto rbDesc      = bgpu::ReadbackBufferDesc();
 			rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
 			rbDesc.debugName = "Grass Cull Stats Readback";
 			auto readback    = resourceManager->CreateReadbackBuffer(rbDesc);
 
-			auto listDesc  = bgl::CommandListDesc();
-			listDesc.type  = bgl::QueueType::kGraphics;
+			auto listDesc  = bgpu::CommandListDesc();
+			listDesc.type  = bgpu::QueueType::kGraphics;
 			auto allocator = device->CreateCommandAllocator();
 			auto cmdList   = device->CreateCommandList(listDesc, allocator, resourceManager);
-			auto cmdQueue  = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			auto cmdQueue  = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 			bgl::FrameGraph fg;
 			fg.RegisterQueue("main", cmdQueue, cmdList);
@@ -225,13 +226,14 @@ namespace
 			draw.view      = viewRef;
 			draw.cullState = &view->GetCullState(0);
 			draw.viewState.viewport =
-				bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
-			draw.viewState.viewProj     = viewProj;
-			draw.viewState.prevViewProj = viewProj;
-			draw.viewState.cullView     = bgl::BuildCullView(viewProj);
-			draw.viewState.cameraPos    = eye;
-			draw.viewState.pixelsPerUnit =
-				bgl::PixelsPerUnit(draw.viewState.viewport, draw.viewState.unjitteredViewProj);
+				bgpu::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+			draw.viewState.viewProj      = viewProj;
+			draw.viewState.prevViewProj  = viewProj;
+			draw.viewState.cullView      = bgl::BuildCullView(viewProj);
+			draw.viewState.cameraPos     = eye;
+			draw.viewState.pixelsPerUnit = bgl::PixelsPerUnit(
+				bgl::ToContractViewport(draw.viewState.viewport),
+				draw.viewState.unjitteredViewProj);
 			draw.targets.sceneColor   = targetBase->GetSceneColorRtv();
 			draw.targets.motionVector = targetBase->GetMotionVectorRtv();
 			draw.targets.depth        = targetBase->GetDepthDsv();
@@ -251,8 +253,8 @@ namespace
 					.SetName("Grass Cull Stats Readback")
 					.AddBufferArg(
 						bgl::c_CullStatsName,
-						bgl::BarrierSyncFlag::kCopy,
-						bgl::BarrierAccessFlag::kCopySource)
+						bgpu::BarrierSyncFlag::kCopy,
+						bgpu::BarrierAccessFlag::kCopySource)
 					.SetSideEffect()
 					.SetExec([&](const bgl::PassContext& ctx) {
 						ctx.GetCommandList()->CopyBufferToReadback(

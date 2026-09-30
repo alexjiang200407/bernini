@@ -2,7 +2,7 @@
 #include <bgpu/constants/constants.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	enum class BlendFactor : uint8_t
 	{

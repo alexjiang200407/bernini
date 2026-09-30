@@ -1,7 +1,7 @@
 #pragma once
 #include <bgpu/resource/Readback.h>
 
-namespace bgl
+namespace bgpu
 {
 	// A buffer in the D3D12 readback heap: GPU-writable (as a copy destination) and
 	// CPU-readable via Map(). The destination of GPU->CPU copies.

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * Owns one descriptor heap and hands out indices into it, so which descriptor a resource

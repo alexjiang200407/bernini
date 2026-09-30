@@ -7,7 +7,7 @@
 // The reflection half of a renderer's shader cache entry. The store, the salt and the key are the
 // GPU context's (bgpu::ProgramCache); what an entry contains is each backend's, and a constant
 // buffer's layout is the part both backends write the same way. See docs/shader_cache.md.
-namespace bgl::shader_cache
+namespace bgpu::shader_cache
 {
 	void
 	WriteLayout(core::io::ByteWriter& writer, const ReflectedLayout& layout);

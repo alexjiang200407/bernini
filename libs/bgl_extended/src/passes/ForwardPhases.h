@@ -13,17 +13,24 @@
 #include <string_view>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class PipelineBatch;
+	class IDevice;
+	struct MeshletState;
+}
+
+namespace bgl
+{
 	class ForwardPhases;
 
-	class IDevice;
 	class FrameGraph;
 	class PassContext;
 
 	struct DrawData;
-	struct MeshletState;
 	struct PassDesc;
 
 	/**
@@ -79,11 +86,11 @@ namespace bgl
 		void
 		Release()
 		{
-			for (MeshletKernel& kernel : m_Kernels)
+			for (bgpu::MeshletKernel& kernel : m_Kernels)
 			{
 				kernel.Reset();
 			}
-			for (MeshletKernel& kernel : m_DissolveKernels)
+			for (bgpu::MeshletKernel& kernel : m_DissolveKernels)
 			{
 				kernel.Reset();
 			}
@@ -139,23 +146,23 @@ namespace bgl
 		 * draw, set into `state` with the targets it declares -- colour, velocity and depth. Null,
 		 * and `state` untouched, while it is unbuilt, and for a lane the bucket does not have.
 		 */
-		[[nodiscard]] MeshletKernel*
+		[[nodiscard]] bgpu::MeshletKernel*
 		BindDrawBucketKernel(
-			uint32_t           bucket,
-			DrawLane           lane,
-			MeshletState&      state,
-			const DrawData&    draw,
-			const PassContext& resources);
+			uint32_t            bucket,
+			DrawLane            lane,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources);
 
 		/**
 		 * The shared blend kernel, bound as BindDrawBucketKernel binds, with colour and depth alone:
 		 * a blended surface has no single depth to reproject, so its kernel declares no velocity.
 		 */
-		[[nodiscard]] MeshletKernel*
+		[[nodiscard]] bgpu::MeshletKernel*
 		BindTransparentKernel(
-			MeshletState&      state,
-			const DrawData&    draw,
-			const PassContext& resources);
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources);
 
 	private:
 		[[nodiscard]] const IForwardPhase&
@@ -166,19 +173,19 @@ namespace bgl
 
 		/** Binds the geometry, material, and IBL uniforms common to every forward draw. */
 		void
-		BindKernel(MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
+		BindKernel(bgpu::MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);
 
 		/** The binder-name check over one kernel family; a family with nothing built is skipped. */
 		void
-		CheckKernelNames(std::span<const MeshletKernel> kernels) const;
+		CheckKernelNames(std::span<const bgpu::MeshletKernel> kernels) const;
 
 		// Indexed by bucket id, grown to the table's count as buckets are demanded; the dissolve
 		// lane's stays unbuilt for a bucket that does not dissolve.
-		std::vector<MeshletKernel> m_Kernels;
-		std::vector<MeshletKernel> m_DissolveKernels;
+		std::vector<bgpu::MeshletKernel> m_Kernels;
+		std::vector<bgpu::MeshletKernel> m_DissolveKernels;
 
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
-		MeshletKernel m_TransparentKernel;
+		bgpu::MeshletKernel m_TransparentKernel;
 
 		const DrawBucketTable* m_DrawBucketTable = nullptr;
 

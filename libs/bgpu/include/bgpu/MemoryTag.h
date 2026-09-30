@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The subsystem a tracked allocation is charged to.

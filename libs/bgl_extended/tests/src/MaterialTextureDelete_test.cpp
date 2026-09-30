@@ -164,7 +164,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	REQUIRE(scene != nullptr);
 
 	const bgl::TextureAssetHandle texture    = scene->AddTextureAsset(OneTexel());
-	const bgl::TextureHandle      gpuTexture = bgl::TextureHandleOf(texture);
+	const bgpu::TextureHandle     gpuTexture = bgl::TextureHandleOf(texture);
 	REQUIRE(resourceManager->ValidTextureHandle(gpuTexture));
 
 	SECTION("The handle dies at once; the descriptor slot outlives it, then is reclaimed")
@@ -236,10 +236,10 @@ TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][sc
 	// The flush the next frame would run. Before the fix this wrote through the stale handle and
 	// died on the validity assert.
 	auto* device       = gfxBase->GetDevice();
-	auto  cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto  cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 	auto  cmdAllocator = device->CreateCommandAllocator();
 	auto  cmdList =
-		device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
+		device->CreateCommandList({ bgpu::QueueType::kGraphics }, cmdAllocator, resourceManager);
 
 	cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 	scene->Update(cmdList.Get());

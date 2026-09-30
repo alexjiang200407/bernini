@@ -34,10 +34,10 @@ namespace bgl::test
 
 		auto resourceManager = gfxBase->GetResourceManagerCpy();
 
-		const TextureHandle texture = targetBase->GetMotionVectorTexture();
-		const auto          layout  = resourceManager->GetTextureReadbackLayout(texture);
+		const bgpu::TextureHandle texture = targetBase->GetMotionVectorTexture();
+		const auto                layout  = resourceManager->GetTextureReadbackLayout(texture);
 
-		auto rbDesc      = ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = layout.totalBytes;
 		rbDesc.debugName = "Motion Vector Readback";
 
@@ -45,35 +45,35 @@ namespace bgl::test
 
 		gfxBase->WaitIdle();
 
-		auto cmdListDesc = CommandListDesc();
-		cmdListDesc.type = QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		auto* device       = gfxBase->GetDevice();
 		auto  cmdAllocator = device->CreateCommandAllocator();
 		auto  cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto  cmdQueue     = device->CreateCommandQueue(QueueType::kGraphics);
+		auto  cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);
 
-		const auto accessFor = [](BarrierLayout layout) {
-			if (layout == BarrierLayout::kRenderTarget)
+		const auto accessFor = [](bgpu::BarrierLayout layout) {
+			if (layout == bgpu::BarrierLayout::kRenderTarget)
 			{
-				return BarrierAccessFlag::kRenderTarget;
+				return bgpu::BarrierAccessFlag::kRenderTarget;
 			}
-			if (layout == BarrierLayout::kShaderResource)
+			if (layout == bgpu::BarrierLayout::kShaderResource)
 			{
-				return BarrierAccessFlag::kShaderResource;
+				return bgpu::BarrierAccessFlag::kShaderResource;
 			}
-			return BarrierAccessFlag::kCopySource;
+			return bgpu::BarrierAccessFlag::kCopySource;
 		};
 
-		const auto transition = [&](BarrierLayout before, BarrierLayout after) {
-			auto barrier = TextureBarrierDesc();
-			barrier.AddSyncBefore(BarrierSyncFlag::kAllCommands)
+		const auto transition = [&](bgpu::BarrierLayout before, bgpu::BarrierLayout after) {
+			auto barrier = bgpu::TextureBarrierDesc();
+			barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kAllCommands)
 				.AddAccessBefore(accessFor(before))
 				.SetLayoutBefore(before)
-				.AddSyncAfter(BarrierSyncFlag::kAllCommands)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kAllCommands)
 				.AddAccessAfter(accessFor(after))
 				.SetLayoutAfter(after);
 			cmdList->Barrier(texture, barrier);
@@ -81,12 +81,13 @@ namespace bgl::test
 
 		// The resolve samples the velocity buffer, so a target with TAA leaves it in
 		// shader-resource; without one the forward pass's render-target layout is the last set.
-		const BarrierLayout resident =
-			target->IsTaaEnabled() ? BarrierLayout::kShaderResource : BarrierLayout::kRenderTarget;
+		const bgpu::BarrierLayout resident = target->IsTaaEnabled() ?
+		                                         bgpu::BarrierLayout::kShaderResource :
+		                                         bgpu::BarrierLayout::kRenderTarget;
 
-		transition(resident, BarrierLayout::kCopySource);
+		transition(resident, bgpu::BarrierLayout::kCopySource);
 		cmdList->CopyTextureToReadback(readback, texture);
-		transition(BarrierLayout::kCopySource, resident);
+		transition(bgpu::BarrierLayout::kCopySource, resident);
 
 		cmdList->Close();
 		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));

@@ -60,10 +60,10 @@ namespace
 
 		auto* device = gfx->As<bgl::GraphicsBase>()->GetDevice();
 
-		std::array<bgl::ComputeKernel, 4> compute;
-		std::array<bgl::MeshletKernel, 2> meshlet;
+		std::array<bgpu::ComputeKernel, 4> compute;
+		std::array<bgpu::MeshletKernel, 2> meshlet;
 
-		auto batch = bgl::PipelineBatch(device);
+		auto batch = bgpu::PipelineBatch(device);
 
 		const char* const computeModules[] = { "CSComputeBufferTest",
 			                                   "CSRawLoad",
@@ -73,7 +73,7 @@ namespace
 		{
 			batch.Add(
 				compute[i],
-				bgl::ComputePipelineDesc()
+				bgpu::ComputePipelineDesc()
 					.SetShader(device->CreateShader(computeModules[i]))
 					.SetDebugName(computeModules[i]));
 		}
@@ -83,10 +83,10 @@ namespace
 		{
 			batch.Add(
 				meshlet[i],
-				bgl::MeshletPipelineDesc()
+				bgpu::MeshletPipelineDesc()
 					.SetMeshShader(device->CreateShader(meshletModules[i], "MSMain"))
 					.SetPixelShader(device->CreateShader(meshletModules[i], "PSMain"))
-					.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
+					.AddRtvFormat(bgpu::Format::RGBA32_FLOAT));
 		}
 
 		REQUIRE(batch.Pending() == compute.size() + meshlet.size());

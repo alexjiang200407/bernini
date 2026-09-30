@@ -40,11 +40,11 @@ TEST_CASE("Geometry", "[geometry][render]")
 	REQUIRE(target != nullptr);
 
 	auto device       = gfxBase->GetDevice();
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	auto camera = bgl::Camera();
 	auto aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);

@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	struct ShaderDesc;
 	class ShaderCache;

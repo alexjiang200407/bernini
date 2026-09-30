@@ -173,15 +173,15 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	REQUIRE_FALSE(expected[0].empty());
 	REQUIRE_FALSE(expected[1].empty());
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	auto compactPass = bgl::CompactInstancesPass();
 	{
-		auto pipelines = bgl::PipelineBatch(device);
+		auto pipelines = bgpu::PipelineBatch(device);
 		auto table     = bgl::DrawBucketTable();
 		compactPass.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &table });
 		pipelines.Build();
@@ -192,11 +192,11 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	const uint32_t paddedCount =
 		core::round_up(view->GetInstanceBuffer().Capacity(), bgl::idl::cHistogramGroupSize);
 
-	bgl::ReadbackBufferHandle rbCompacted[2];
-	bgl::ReadbackBufferHandle rbPrefixSum[2];
+	bgpu::ReadbackBufferHandle rbCompacted[2];
+	bgpu::ReadbackBufferHandle rbPrefixSum[2];
 	for (uint32_t cullIdx = 0; cullIdx < 2; ++cullIdx)
 	{
-		auto rbDesc = bgl::ReadbackBufferDesc();
+		auto rbDesc = bgpu::ReadbackBufferDesc();
 		// The whole list: two entries a slot, since a placement dissolving between levels draws both.
 		rbDesc.byteSize      = static_cast<uint64_t>(paddedCount) * 2 * sizeof(uint32_t);
 		rbDesc.debugName     = "Compacted Readback";

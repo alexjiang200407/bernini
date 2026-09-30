@@ -1,6 +1,6 @@
 #pragma once
 
-namespace bgl
+namespace bgpu
 {
 	class UploadManager final
 	{

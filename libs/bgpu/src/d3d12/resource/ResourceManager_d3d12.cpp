@@ -5,7 +5,7 @@
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	ResourceManager::ResourceManager(
 		wrl::ComPtr<ID3D12Device>  device,

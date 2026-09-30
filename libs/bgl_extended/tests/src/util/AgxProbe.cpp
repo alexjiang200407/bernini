@@ -48,31 +48,32 @@ namespace bgl::test
 			auto  resourceManager = gfxBase->GetResourceManagerCpy();
 			auto* device          = gfxBase->GetDevice();
 
-			auto cmdListDesc  = bgl::CommandListDesc();
-			cmdListDesc.type  = bgl::QueueType::kGraphics;
+			auto cmdListDesc  = bgpu::CommandListDesc();
+			cmdListDesc.type  = bgpu::QueueType::kGraphics;
 			auto cmdAllocator = device->CreateCommandAllocator();
 			auto cmdList  = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-			auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+			auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-			auto outDesc         = bgl::ComputeBufferDesc();
+			auto outDesc         = bgpu::ComputeBufferDesc();
 			outDesc.initialCount = 1;
 			outDesc.debugName    = "Probe Result";
 			outDesc.SetElement<glm::vec4>();
-			const bgl::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
+			const bgpu::BufferHandle outBuffer = resourceManager->CreateComputeBuffer(outDesc);
 			REQUIRE(resourceManager->ValidBufferHandle(outBuffer));
 
-			auto rbDesc                        = bgl::ReadbackBufferDesc();
-			rbDesc.byteSize                    = sizeof(glm::vec4);
-			rbDesc.debugName                   = "Probe Readback";
-			const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
+			auto rbDesc                         = bgpu::ReadbackBufferDesc();
+			rbDesc.byteSize                     = sizeof(glm::vec4);
+			rbDesc.debugName                    = "Probe Readback";
+			const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
 			auto lut = TonemapLut();
 			lut.Init(resourceManager, c_TonemapLutFile);
-			const SamplerHandle lutSampler = resourceManager->CreateSampler(
-				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
+			const bgpu::SamplerHandle lutSampler = resourceManager->CreateSampler(
+				bgpu::SamplerDesc().SetAllFilters(true).SetAllAddressModes(
+					bgpu::SamplerAddressMode::kClamp));
 
 			auto kernel = device->CreateComputeKernel(
-				bgl::ComputePipelineDesc()
+				bgpu::ComputePipelineDesc()
 					.SetShader(device->CreateShader(shader))
 					.SetDebugName(shader));
 			REQUIRE(kernel.pipeline != nullptr);
@@ -86,18 +87,18 @@ namespace bgl::test
 			cmdList->Open(cmdQueue, cmdAllocator);
 			lut.Upload(cmdList.Get());
 
-			auto state   = bgl::ComputeState();
+			auto state   = bgpu::ComputeState();
 			state.kernel = &kernel;
 			cmdList->SetComputeState(state);
 			cmdList->Dispatch(1, 1, 1);
 
 			cmdList->Barrier(
 				outBuffer,
-				bgl::BufferBarrierDesc()
-					.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-					.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-					.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-					.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+				bgpu::BufferBarrierDesc()
+					.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+					.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+					.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+					.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 			cmdList->CopyBufferToReadback(rb, outBuffer);
 			cmdList->Close();
@@ -121,7 +122,7 @@ namespace bgl::test
 	glm::vec4
 	RunAgX(bgl::IGraphics& gfx, float sceneLinear)
 	{
-		return RunProbe(gfx, "CSAgxCalibration", [&](Uniforms& uniforms) {
+		return RunProbe(gfx, "CSAgxCalibration", [&](bgpu::Uniforms& uniforms) {
 			uniforms["sceneLinear"] = sceneLinear;
 		});
 	}
@@ -133,7 +134,7 @@ namespace bgl::test
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings)
 	{
-		return RunProbe(gfx, "CSColorGradeProbe", [&](Uniforms& uniforms) {
+		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
 			uniforms["sceneLinear"]  = sceneLinear;
 			uniforms["uv"]           = uv;
 			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);

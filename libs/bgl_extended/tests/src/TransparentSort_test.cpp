@@ -59,11 +59,11 @@ TEST_CASE(
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	// Deliberately not a power of two, and deliberately not already sorted. Each key is paired with
 	// an instance derived from it, so the pairing can be checked after the shuffle.
@@ -77,40 +77,40 @@ TEST_CASE(
 		input[i]           = SortEntry{ key, key ^ 0xA5A5A5A5u };
 	}
 
-	auto entries = bgl::ComputeBuffer();
+	auto entries = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<SortEntry>().SetInitialCount(c_SortCapacity).SetDebugName("Sort Entries");
 		entries.Init(desc, resourceManager);
 	}
 
-	auto counter = bgl::ComputeBuffer();
+	auto counter = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Count");
 		counter.Init(desc, resourceManager);
 	}
 
 	// Written alongside the sorted entries; this case only asserts on the entries, so these exist to
 	// give the shader somewhere legal to write.
-	auto sortedInstances = bgl::ComputeBuffer();
+	auto sortedInstances = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<uint32_t>()
 			.SetInitialCount(c_SortCapacity)
 			.SetDebugName("Sorted Instances");
 		sortedInstances.Init(desc, resourceManager);
 	}
 
-	auto dispatchArgs = bgl::ComputeBuffer();
+	auto dispatchArgs = bgpu::ComputeBuffer();
 	{
-		auto desc = bgl::ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<bgl::idl::DispatchArgs>().SetInitialCount(1).SetDebugName("Dispatch Args");
 		dispatchArgs.Init(desc, resourceManager);
 	}
 
 	auto kernel = device->CreateComputeKernel(
-		bgl::ComputePipelineDesc()
+		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("programs.culling.TransparentSort"))
 			.SetDebugName("Transparent Sort"));
 
@@ -124,11 +124,11 @@ TEST_CASE(
 	cmdList->WriteBuffer(entries.GetBufferHandle(), input.data(), input.size() * sizeof(SortEntry));
 	cmdList->WriteBuffer(counter.GetBufferHandle(), &c_Count, sizeof(c_Count));
 
-	const auto bufferBarrier = [](bgl::BarrierSyncFlag   syncBefore,
-	                              bgl::BarrierAccessFlag accessBefore,
-	                              bgl::BarrierSyncFlag   syncAfter,
-	                              bgl::BarrierAccessFlag accessAfter) {
-		return bgl::BufferBarrierDesc()
+	const auto bufferBarrier = [](bgpu::BarrierSyncFlag   syncBefore,
+	                              bgpu::BarrierAccessFlag accessBefore,
+	                              bgpu::BarrierSyncFlag   syncAfter,
+	                              bgpu::BarrierAccessFlag accessAfter) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(syncBefore)
 		    .AddAccessBefore(accessBefore)
 		    .AddSyncAfter(syncAfter)
@@ -136,15 +136,15 @@ TEST_CASE(
 	};
 
 	const auto toWrite = bufferBarrier(
-		bgl::BarrierSyncFlag::kCopy,
-		bgl::BarrierAccessFlag::kCopyDest,
-		bgl::BarrierSyncFlag::kComputeShader,
-		bgl::BarrierAccessFlag::kUnorderedAccess);
+		bgpu::BarrierSyncFlag::kCopy,
+		bgpu::BarrierAccessFlag::kCopyDest,
+		bgpu::BarrierSyncFlag::kComputeShader,
+		bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 	cmdList->Barrier(entries.GetBufferHandle(), toWrite);
 	cmdList->Barrier(counter.GetBufferHandle(), toWrite);
 
-	auto state   = bgl::ComputeState();
+	auto state   = bgpu::ComputeState();
 	state.kernel = &kernel;
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
@@ -152,12 +152,12 @@ TEST_CASE(
 	cmdList->Barrier(
 		entries.GetBufferHandle(),
 		bufferBarrier(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess,
-			bgl::BarrierSyncFlag::kCopy,
-			bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource));
 
-	auto readbackDesc      = bgl::ReadbackBufferDesc();
+	auto readbackDesc      = bgpu::ReadbackBufferDesc();
 	readbackDesc.byteSize  = sizeof(SortEntry) * c_SortCapacity;
 	readbackDesc.debugName = "Sort Readback";
 	auto readback          = resourceManager->CreateReadbackBuffer(readbackDesc);

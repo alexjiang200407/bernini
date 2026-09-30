@@ -2,7 +2,7 @@
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	class Dsv final
 	{

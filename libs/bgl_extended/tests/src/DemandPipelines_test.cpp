@@ -248,7 +248,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 
 	bgl::ForwardPhases forward;
 
-	auto       pipelines       = bgl::PipelineBatch(device);
+	auto       pipelines       = bgpu::PipelineBatch(device);
 	const auto resourceManager = gfxBase->GetResourceManagerCpy();
 	const auto passes = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 	forward.Init(passes);

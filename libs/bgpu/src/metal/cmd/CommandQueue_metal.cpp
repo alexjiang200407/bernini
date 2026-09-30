@@ -7,7 +7,7 @@
 #include <core/err/util.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	namespace
 	{

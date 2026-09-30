@@ -7,7 +7,7 @@
 #include <string_view>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	namespace
 	{

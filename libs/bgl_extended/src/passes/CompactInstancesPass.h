@@ -7,13 +7,20 @@
 #include <core/ref/SharedRef.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class PipelineBatch;
-
-	class FrameGraph;
 	class IDevice;
 	class IResourceManager;
+}
+
+namespace bgl
+{
+
+	class FrameGraph;
 	class PassContext;
 	struct DrawData;
 
@@ -55,13 +62,13 @@ namespace bgl
 		ExecuteGenerateInstanceDispatchArgs(const PassContext& ctx, const DrawData& draw);
 
 	private:
-		ComputeKernel m_CullInstances;
-		ComputeKernel m_Histogram;
-		ComputeKernel m_PrefixSum;
-		ComputeKernel m_CompactInstances;
+		bgpu::ComputeKernel m_CullInstances;
+		bgpu::ComputeKernel m_Histogram;
+		bgpu::ComputeKernel m_PrefixSum;
+		bgpu::ComputeKernel m_CompactInstances;
 
 		// [tested, frustum-culled], cleared each draw. Debug-only, aggregated nowhere and read by
 		// nothing on the CPU, so it stays device-wide rather than multiplying per frustum.
-		ComputeBuffer m_CullStats;
+		bgpu::ComputeBuffer m_CullStats;
 	};
 }

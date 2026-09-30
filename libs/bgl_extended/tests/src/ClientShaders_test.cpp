@@ -67,9 +67,9 @@ void main()
 	// with the context, not the renderer, so a probe sharing the suite's would see the last probe's.
 	uint32_t
 	ProbeValue(
-		const bgl::test::GraphicsSetup&           opts,
-		const std::string&                        program,
-		const std::function<void(bgl::IDevice&)>& configure = {})
+		const bgl::test::GraphicsSetup&            opts,
+		const std::string&                         program,
+		const std::function<void(bgpu::IDevice&)>& configure = {})
 	{
 		bgl::test::ReleaseGpuContext();
 
@@ -85,27 +85,27 @@ void main()
 		if (configure)
 			configure(*device);
 
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
 
 		auto cmdAllocator = device->CreateCommandAllocator();
 		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-		auto bufDesc = bgl::ComputeBufferDesc();
+		auto bufDesc = bgpu::ComputeBufferDesc();
 		bufDesc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Client Probe Out");
 		auto outBuf = resourceManager->CreateComputeBuffer(bufDesc);
 
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader(program))
 				.SetDebugName(program));
 		kernel["gUniforms"]["outBuffer"] = outBuf;
 
-		auto state   = bgl::ComputeState();
+		auto state   = bgpu::ComputeState();
 		state.kernel = &kernel;
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = sizeof(uint32_t);
 		rbDesc.debugName = "Client Probe Readback";
 		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -115,11 +115,11 @@ void main()
 		cmdList->Dispatch(1, 1, 1);
 		cmdList->Barrier(
 			outBuf,
-			bgl::BufferBarrierDesc()
-				.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 		cmdList->CopyBufferToReadback(rb, outBuf);
 		cmdList->Close();
 
@@ -195,7 +195,7 @@ TEST_CASE(
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 
-	CHECK(ProbeValue(opts, "CSSourceProbe", [](bgl::IDevice& device) {
+	CHECK(ProbeValue(opts, "CSSourceProbe", [](bgpu::IDevice& device) {
 			  device.AddSourceModule(
 				  { "game.probe", "public static const uint kProbeValue = 2u;\n" });
 		  }) == 2u);
@@ -233,7 +233,7 @@ void main()
 }
 )";
 
-	CHECK(ProbeValue(opts, "CSSourceProbe", [&](bgl::IDevice& device) {
+	CHECK(ProbeValue(opts, "CSSourceProbe", [&](bgpu::IDevice& device) {
 			  device.AddSourceModule({ "CSSourceProbe", std::string(c_OnDemand), false });
 		  }) == 3u);
 

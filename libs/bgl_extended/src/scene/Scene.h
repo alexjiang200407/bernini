@@ -73,9 +73,16 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class ICommandList;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 
 	/**
@@ -192,9 +199,9 @@ namespace bgl
 		};
 
 		Scene(
-			SceneDesc                         desc,
-			core::SharedRef<IResourceManager> resourceManager,
-			std::span<const SurfaceType>      surfaces);
+			SceneDesc                               desc,
+			core::SharedRef<bgpu::IResourceManager> resourceManager,
+			std::span<const SurfaceType>            surfaces);
 		~Scene() noexcept override { spdlog::trace("~Scene"); }
 		Scene(const Scene&) noexcept = delete;
 		Scene(Scene&&) noexcept      = delete;
@@ -256,10 +263,11 @@ namespace bgl
 		// The material arena and the typed view of the same allocation, as one binding. A payload
 		// keeps a texture handle's bytes inline and the view is what makes a texture of them; the
 		// arena owns both and re-issues the view inside its own growth, so they cannot disagree.
-		[[nodiscard]] RawArenaBinding
+		[[nodiscard]] bgpu::RawArenaBinding
 		GetMaterialBinding() const noexcept
 		{
-			return RawArenaBinding{ m_Materials.GetBufferHandle(), m_Materials.GetHandleView() };
+			return bgpu::RawArenaBinding{ m_Materials.GetBufferHandle(),
+				                          m_Materials.GetHandleView() };
 		}
 
 		[[nodiscard]] auto&
@@ -379,7 +387,7 @@ namespace bgl
 			return m_Geoms[index].entry;
 		}
 
-		[[nodiscard]] const EntryBuffer<idl::Geom>&
+		[[nodiscard]] const bgpu::EntryBuffer<idl::Geom>&
 		GetGeomBuffer() const noexcept
 		{
 			return m_GeomBuffer;
@@ -461,14 +469,14 @@ namespace bgl
 			return m_NamePrefix;
 		}
 
-		[[nodiscard]] SamplerHandle
+		[[nodiscard]] bgpu::SamplerHandle
 		GetSampler(StandardSampler kind) const noexcept
 		{
 			return m_Samplers[static_cast<size_t>(kind)];
 		}
 
 		// The view this scene created for a texture asset, or a null handle if it created none.
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetTextureSrv(core::slot_handle textureSlot) const noexcept
 		{
 			return m_Textures.GetSrv(textureSlot);
@@ -481,7 +489,7 @@ namespace bgl
 		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
 		void
-		Update(ICommandList* cmdList);
+		Update(bgpu::ICommandList* cmdList);
 
 		GeomHandle
 		AddCubeGeom(MaterialHandle material = {}) override;
@@ -807,9 +815,9 @@ namespace bgl
 		core::slot_vector<GrassMeta> m_Grass;
 		uint64_t                     m_GrassEpoch = 0;
 
-		EntryBuffer<idl::GrassLook>  m_GrassLooks;
-		RangeBuffer<idl::GrassChunk> m_GrassChunks;
-		RangeBuffer<idl::GrassClump> m_GrassClumps;
+		bgpu::EntryBuffer<idl::GrassLook>  m_GrassLooks;
+		bgpu::RangeBuffer<idl::GrassChunk> m_GrassChunks;
+		bgpu::RangeBuffer<idl::GrassClump> m_GrassClumps;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
@@ -817,14 +825,14 @@ namespace bgl
 
 		// One record per live geom, named by every placement of it. Its slot is not m_Geoms' -- the
 		// two are different allocators -- so GeomRecord carries the handle.
-		EntryBuffer<idl::Geom> m_GeomBuffer;
+		bgpu::EntryBuffer<idl::Geom> m_GeomBuffer;
 
-		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
-		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
-		RangeBuffer<idl::MeshletGroup>             m_MeshletGroupBuffer;
-		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
-		RawBuffer<>                                m_VertexDataBuffer;
-		RangeBuffer<uint32_t>                      m_IndexBuffer;
+		bgpu::RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
+		bgpu::RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
+		bgpu::RangeBuffer<idl::MeshletGroup>             m_MeshletGroupBuffer;
+		bgpu::RangeBuffer<uint32_t>                      m_VertexMapBuffer;
+		RawBuffer<>                                      m_VertexDataBuffer;
+		bgpu::RangeBuffer<uint32_t>                      m_IndexBuffer;
 
 		// Every material of every kind, each behind a header naming its MaterialType. One arena
 		// rather than a buffer per kind: a new shading model is a payload and a tag, not a buffer,
@@ -833,11 +841,11 @@ namespace bgl
 
 		// One clip table for every animated tier: a Clip means the same thing to both, so a second
 		// buffer of the same element type would only be two things to grow.
-		RangeBuffer<idl::Clip> m_Clips;
+		bgpu::RangeBuffer<idl::Clip> m_Clips;
 
-		EntryBuffer<idl::Rig, RigMeta> m_Rigs;
-		RangeBuffer<idl::SkinnedBone>  m_SkinnedBones;
-		RangeBuffer<idl::BoneSample>   m_BoneSamples;
+		bgpu::EntryBuffer<idl::Rig, RigMeta> m_Rigs;
+		bgpu::RangeBuffer<idl::SkinnedBone>  m_SkinnedBones;
+		bgpu::RangeBuffer<idl::BoneSample>   m_BoneSamples;
 
 		// Every rig's posed frames, written by RigFramesPass and read by the crowd tier's mesh
 		// shader. The same storage-plus-offset-allocator the per-view palette uses, and it discards
@@ -849,18 +857,18 @@ namespace bgl
 		// Both empty on every scene that holds no rig with an avatar; see AddSkinnedMeshGeom. The
 		// weights are packed four bytes to a uint rather than typed: no backend agrees on a
 		// structured buffer of bytes.
-		RangeBuffer<idl::SkinnedLegChain> m_SkinnedLegs;
-		RangeBuffer<uint32_t>             m_PlantWeights;
+		bgpu::RangeBuffer<idl::SkinnedLegChain> m_SkinnedLegs;
+		bgpu::RangeBuffer<uint32_t>             m_PlantWeights;
 
 		// The node table every rig carries -- one clip node per clip, then its authored spaces --
 		// and the samples those spaces address. Only the samples are empty on a scene whose rigs
 		// author no blend set; a rig always has nodes.
-		RangeBuffer<idl::BlendNode>        m_BlendNodes;
-		RangeBuffer<idl::BlendSpaceSample> m_BlendSamples;
+		bgpu::RangeBuffer<idl::BlendNode>        m_BlendNodes;
+		bgpu::RangeBuffer<idl::BlendSpaceSample> m_BlendSamples;
 
-		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
+		std::array<bgpu::SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
-		core::SharedRef<IResourceManager> m_ResourceManager;
+		core::SharedRef<bgpu::IResourceManager> m_ResourceManager;
 
 		// Scene-owned so one scene's textures never ride another context's timeline -- an upload
 		// must be ordered against the frames that sample it, which is why Update flushes it.

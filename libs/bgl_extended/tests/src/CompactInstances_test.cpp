@@ -62,11 +62,11 @@ TEST_CASE(
 
 	auto device = gfxBase->GetDevice();
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	constexpr uint32_t c_ActiveCount = 4000;
 	constexpr uint32_t c_PaddedCount =
@@ -83,9 +83,9 @@ TEST_CASE(
 	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u, c_CulledBucket };
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
-	auto instanceBuffer = bgl::PackedBuffer<bgl::SubmeshInstance>();
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
 	{
-		auto desc         = bgl::PackedBufferDesc();
+		auto desc         = bgpu::PackedBufferDesc();
 		desc.initialCount = c_PaddedCount;
 		desc.debugName    = "Compact Instances";
 		instanceBuffer.Init(desc, resourceManager);
@@ -132,8 +132,8 @@ TEST_CASE(
 	}
 
 	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {
-		auto buffer = bgl::ComputeBuffer();
-		auto desc   = bgl::ComputeBufferDesc();
+		auto buffer = bgpu::ComputeBuffer();
+		auto desc   = bgpu::ComputeBufferDesc();
 		desc.SetElement<decltype(element)>();
 		desc.initialCount = count;
 		desc.debugName    = name;
@@ -154,7 +154,7 @@ TEST_CASE(
 
 	const auto makeKernel = [&](const char* module, const char* debugName) {
 		auto kernel = device->CreateComputeKernel(
-			bgl::ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(device->CreateShader(module))
 				.SetDebugName(debugName));
 		REQUIRE(kernel.pipeline != nullptr);
@@ -206,9 +206,9 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("HistogramAndPrefixSum")
-			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("drawBucketPrefixSum", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("instanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
@@ -216,7 +216,7 @@ TEST_CASE(
 				histogram["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
 				histogram["gUniforms"]["outBuffer"]      = drawBucketPrefixSum.GetBufferHandle();
 
-				auto state   = bgl::ComputeState();
+				auto state   = bgpu::ComputeState();
 				state.kernel = &histogram;
 				cmd->SetComputeState(state);
 				cmd->Dispatch(c_PaddedCount / bgl::idl::cHistogramGroupSize, 1, 1);
@@ -224,11 +224,11 @@ TEST_CASE(
 				// Both dispatches live in this one pass, so the graph cannot barrier between them.
 				cmd->Barrier(
 					drawBucketPrefixSum.GetBufferHandle(),
-					bgl::BufferBarrierDesc()
-						.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-						.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-						.AddSyncAfter(bgl::BarrierSyncFlag::kComputeShader)
-						.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
+					bgpu::BufferBarrierDesc()
+						.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+						.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 
 				prefixSum["gUniforms"]["inOutBuffer"] = drawBucketPrefixSum.GetBufferHandle();
 
@@ -240,11 +240,11 @@ TEST_CASE(
 	fg.AddPass(
 		bgl::PassDesc()
 			.SetName("Compact")
-			.AddBufferRead("instanceBuffer", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("drawBucketPrefixSum", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("visibility", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("compactedInstances", bgl::BarrierSyncFlag::kComputeShader)
-			.AddBufferReadWrite("dispatchArgs", bgl::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("instanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("compactedInstances", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("dispatchArgs", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
@@ -254,7 +254,7 @@ TEST_CASE(
 				compact["gUniforms"]["compactedInstances"]  = compacted.GetBufferHandle();
 				compact["gUniforms"]["dispatchArgs"]        = dispatchArgs.GetBufferHandle();
 
-				auto state   = bgl::ComputeState();
+				auto state   = bgpu::ComputeState();
 				state.kernel = &compact;
 				cmd->SetComputeState(state);
 				cmd->Dispatch(
@@ -272,14 +272,14 @@ TEST_CASE(
 		const bgl::PassBarriers& barriers = fg.BarriersFor("Compact");
 
 		const bool barriersPrefixSum =
-			std::ranges::any_of(barriers.bufferHandles, [&](bgl::BufferHandle handle) {
+			std::ranges::any_of(barriers.bufferHandles, [&](bgpu::BufferHandle handle) {
 				return handle.slot.index == drawBucketPrefixSum.GetBufferHandle().slot.index;
 			});
 
 		CHECK(barriersPrefixSum);
 	}
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = static_cast<uint64_t>(c_PaddedCount) * sizeof(uint32_t);
 	rbDesc.debugName = "Compacted Readback";
 	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
@@ -297,33 +297,33 @@ TEST_CASE(
 
 	fg.Execute();
 
-	const auto toCopySource = [](bgl::BarrierSyncFlag sync, bgl::BarrierAccessFlag access) {
-		return bgl::BufferBarrierDesc()
+	const auto toCopySource = [](bgpu::BarrierSyncFlag sync, bgpu::BarrierAccessFlag access) {
+		return bgpu::BufferBarrierDesc()
 		    .AddSyncBefore(sync)
 		    .AddAccessBefore(access)
-		    .AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-		    .AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
+		    .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		    .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
 	};
 
 	cmdList->Barrier(
 		compacted.GetBufferHandle(),
 		toCopySource(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->CopyBufferToReadback(rbCompacted, compacted.GetBufferHandle());
 
 	cmdList->Barrier(
 		drawBucketPrefixSum.GetBufferHandle(),
 		toCopySource(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->CopyBufferToReadback(rbPrefixSum, drawBucketPrefixSum.GetBufferHandle());
 
 	cmdList->Barrier(
 		dispatchArgs.GetBufferHandle(),
 		toCopySource(
-			bgl::BarrierSyncFlag::kComputeShader,
-			bgl::BarrierAccessFlag::kUnorderedAccess));
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
 	cmdList->CopyBufferToReadback(rbArgs, dispatchArgs.GetBufferHandle());
 
 	cmdList->Close();

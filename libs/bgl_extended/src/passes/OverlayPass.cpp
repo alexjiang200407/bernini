@@ -52,37 +52,38 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::SBGRA8_UNORM);
+		pipelineDesc.AddRtvFormat(bgpu::Format::SBGRA8_UNORM);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(false);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
 		// Premultiplied, the form the shader returns; the backbuffer's alpha is opaque and stays so.
-		auto blend = BlendState{};
+		auto blend = bgpu::BlendState{};
 		blend.SetRenderTarget(
 			0,
-			BlendState::RenderTarget{}
+			bgpu::BlendState::RenderTarget{}
 				.EnableBlend()
-				.SetSrcBlend(BlendFactor::kOne)
-				.SetDestBlend(BlendFactor::kInvSrcAlpha)
-				.SetBlendOp(BlendOp::kAdd)
-				.SetSrcBlendAlpha(BlendFactor::kOne)
-				.SetDestBlendAlpha(BlendFactor::kInvSrcAlpha)
-				.SetBlendOpAlpha(BlendOp::kAdd));
+				.SetSrcBlend(bgpu::BlendFactor::kOne)
+				.SetDestBlend(bgpu::BlendFactor::kInvSrcAlpha)
+				.SetBlendOp(bgpu::BlendOp::kAdd)
+				.SetSrcBlendAlpha(bgpu::BlendFactor::kOne)
+				.SetDestBlendAlpha(bgpu::BlendFactor::kInvSrcAlpha)
+				.SetBlendOpAlpha(bgpu::BlendOp::kAdd));
 
 		pipelineDesc.renderState =
-			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
+			bgpu::RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
+				depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -107,7 +108,7 @@ namespace bgl
 
 		for (const std::string& source : sources)
 		{
-			desc.AddTextureRead(source, BarrierSyncFlag::kPixelShader);
+			desc.AddTextureRead(source, bgpu::BarrierSyncFlag::kPixelShader);
 		}
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
@@ -118,7 +119,7 @@ namespace bgl
 	void
 	OverlayPass::Execute(const Args& args, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(m_Kernel.pipeline.IsInitialized(), "Overlay pipeline must be initialized");
@@ -155,11 +156,11 @@ namespace bgl
 			uniforms["translation"]   = draw.translation;
 			uniforms["triangleCount"] = draw.triangleCount;
 
-			auto gfxState   = MeshletState();
+			auto gfxState   = bgpu::MeshletState();
 			gfxState.kernel = &m_Kernel;
 			gfxState.viewportState.viewports.push_back(args.viewport);
 			gfxState.viewportState.scissorRects.push_back(draw.scissor);
-			gfxState.frameBuffer = FrameBuffer().AddColorAttachment(args.backBuffer);
+			gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(args.backBuffer);
 
 			cmd->SetMeshletState(gfxState);
 

@@ -2,7 +2,7 @@
 #include <core/containers/enum_set.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	enum class BarrierSyncFlag : uint32_t
 	{

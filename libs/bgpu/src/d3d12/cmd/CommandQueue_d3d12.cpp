@@ -6,7 +6,7 @@
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
 {
 	CommandQueue::CommandQueue(QueueType type, ID3D12Device* device) : m_Type(type)
 	{

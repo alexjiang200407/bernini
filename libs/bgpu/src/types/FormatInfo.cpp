@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	// clang-format off
     static const FormatInfo c_FormatInfo[] = {

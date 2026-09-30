@@ -3,11 +3,18 @@
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <spdlog/spdlog.h>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class PipelineBatch;
-
 	class IDevice;
+}
+
+namespace bgl
+{
+
 	class FrameGraph;
 	class PassContext;
 	struct DrawData;
@@ -47,6 +54,6 @@ namespace bgl
 		Execute(const DrawData& draw, const PassContext& resources);
 
 	private:
-		MeshletKernel m_Kernel;
+		bgpu::MeshletKernel m_Kernel;
 	};
 }

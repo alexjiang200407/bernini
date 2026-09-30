@@ -10,7 +10,7 @@
 
 #include <bgpu/MemoryTag.h>
 
-namespace bgl
+namespace bgpu
 {
 	// The Metal definition of the RHI's forward-declared `Texture`: a private MTL::Texture carrying
 	// the render-target / shader-read usage its TextureUsage implies.
@@ -70,7 +70,7 @@ namespace bgl
 			core::ensure(m_Texture.get() != nullptr, "Metal texture allocation failed");
 
 			// The driver's size: a TextureDesc carries no byte count.
-			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, m_Texture->allocatedSize());
+			m_Tracked = bgpu::TaggedBytes(MemoryTag::kDeviceTexture, m_Texture->allocatedSize());
 			if (!desc.debugName.empty())
 				m_Texture->setLabel(
 					NS::String::string(desc.debugName.c_str(), NS::UTF8StringEncoding));

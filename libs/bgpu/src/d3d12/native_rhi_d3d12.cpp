@@ -8,18 +8,18 @@
 namespace bgpu
 {
 	ID3D12CommandQueue*
-	GetD3d12CommandQueue(const bgl::ICommandQueue& queue) noexcept
+	GetD3d12CommandQueue(const ICommandQueue& queue) noexcept
 	{
-		return static_cast<const bgl::CommandQueue&>(queue).GetD3D12CommandQueue();
+		return static_cast<const CommandQueue&>(queue).GetD3D12CommandQueue();
 	}
 
-	bgl::TextureHandle
+	TextureHandle
 	ImportD3d12Texture(
-		bgl::IResourceManager&  resourceManager,
-		ID3D12Resource*         resource,
-		const bgl::TextureDesc& desc) noexcept
+		IResourceManager&  resourceManager,
+		ID3D12Resource*    resource,
+		const TextureDesc& desc) noexcept
 	{
-		return resourceManager.As<bgl::ResourceManager>()->CreateTexture(
+		return resourceManager.As<ResourceManager>()->CreateTexture(
 			wrl::ComPtr<ID3D12Resource>(resource),
 			desc);
 	}

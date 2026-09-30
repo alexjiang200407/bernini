@@ -3,7 +3,7 @@
 #include <core/containers/multi_slot_handle.h>
 #include <cstdint>
 
-namespace bgl::idl
+namespace bgpu::idl
 {
 	struct RangeWithCount
 	{

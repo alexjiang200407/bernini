@@ -24,13 +24,13 @@ namespace bgl
 
 		ctx.pipelines->Add(
 			m_DepthKeys,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
 		ctx.pipelines->Add(
 			m_Sort,
-			ComputePipelineDesc()
+			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));
 	}
@@ -56,31 +56,37 @@ namespace bgl
 			.AddPass(
 				PassDesc()
 					.SetName("Transparent Depth Keys {}", draw.drawIdx)
-					.AddBufferRead(c_InstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_InstanceVisibilityName, BarrierSyncFlag::kComputeShader)
-					.AddBufferRead(c_DrawBucketFlagsName, BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_InstanceVisibilityName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_DrawBucketFlagsName, bgpu::BarrierSyncFlag::kComputeShader)
 					// Only the transparent instances take a slot, and the count that says how many
 					// is written by this same pass -- so a leftover entry is indistinguishable
 					// from one this frame produced.
 					.AddPoisonedBufferArg(
 						c_TransparentSortEntriesName,
-						BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_TransparentSortCountName, BarrierSyncFlag::kComputeShader)
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_TransparentSortCountName,
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteDepthKeys(ctx, draw); }))
 			.AddPass(
 				PassDesc()
 					.SetName("Transparent Sort {}", draw.drawIdx)
 					.AddBufferReadWrite(
 						c_TransparentSortEntriesName,
-						BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(c_TransparentSortCountName, BarrierSyncFlag::kComputeShader)
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_TransparentSortCountName,
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.AddBufferReadWrite(
 						c_SortedTransparentInstancesName,
-						BarrierSyncFlag::kComputeShader)
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.AddBufferReadWrite(
 						c_TransparentDispatchArgsName,
-						BarrierSyncFlag::kComputeShader)
+						bgpu::BarrierSyncFlag::kComputeShader)
 					.SetExec([draw, this](const PassContext& ctx) { ExecuteSort(ctx, draw); }));
 	}
 
@@ -117,7 +123,7 @@ namespace bgl
 
 		auto cmdList = ctx.GetCommandList();
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_DepthKeys;
 		cmdList->SetComputeState(computeState);
 
@@ -142,7 +148,7 @@ namespace bgl
 
 		auto cmdList = ctx.GetCommandList();
 
-		auto computeState   = ComputeState();
+		auto computeState   = bgpu::ComputeState();
 		computeState.kernel = &m_Sort;
 		cmdList->SetComputeState(computeState);
 

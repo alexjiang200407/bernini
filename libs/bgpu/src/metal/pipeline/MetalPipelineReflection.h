@@ -7,7 +7,7 @@
 #include <slang.h>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	// Where each bindless handle sits in a cbuffer mirror, and which pool resolves it.
 	struct HandleSlot

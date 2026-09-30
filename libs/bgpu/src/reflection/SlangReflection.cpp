@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	UniformValueType
 	ResolveSlangValueType(slang::TypeReflection* type)

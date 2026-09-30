@@ -10,20 +10,20 @@
 namespace bgpu
 {
 	MTL::Texture*
-	GetMtlTexture(const bgl::IResourceManager& resourceManager, bgl::TextureHandle texture) noexcept
+	GetMtlTexture(const IResourceManager& resourceManager, TextureHandle texture) noexcept
 	{
 		return resourceManager.GetTexture(texture).GetMTLResource();
 	}
 
 	MTL::CommandBuffer*
-	NewMtlCommandBuffer(bgl::ICommandQueue& queue) noexcept
+	NewMtlCommandBuffer(ICommandQueue& queue) noexcept
 	{
-		return static_cast<const bgl::CommandQueue&>(queue).NewCommandBuffer();
+		return static_cast<const CommandQueue&>(queue).NewCommandBuffer();
 	}
 
 	MTL::PixelFormat
-	ToMtlPixelFormat(bgl::Format format) noexcept
+	ToMtlPixelFormat(Format format) noexcept
 	{
-		return bgl::ConvertFormat(format);
+		return ConvertFormat(format);
 	}
 }

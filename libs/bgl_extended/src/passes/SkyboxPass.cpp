@@ -48,28 +48,29 @@ namespace bgl
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
+		pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 		pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
-		pipelineDesc.SetDsvFormat(Format::D24S8);
+		pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(true)
 			.SetDepthWriteEnable(false)
-			.SetDepthFunc(ComparisonFunc::kLessOrEqual)
+			.SetDepthFunc(bgpu::ComparisonFunc::kLessOrEqual)
 			.SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -103,7 +104,7 @@ namespace bgl
 	void
 	SkyboxPass::Execute(const DrawData& draw, const PassContext& resources)
 	{
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
 		core::ensure(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
@@ -132,10 +133,10 @@ namespace bgl
 			core::fatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer()
+		gfxState.frameBuffer = bgpu::FrameBuffer()
 		                           .AddColorAttachment(draw.targets.sceneColor)
 		                           .AddColorAttachment(draw.targets.motionVector)
 		                           .SetDepthAttachment(draw.targets.depth);

@@ -5,7 +5,7 @@
 #include <core/containers/static_vector.h>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	struct FrameBuffer
 	{

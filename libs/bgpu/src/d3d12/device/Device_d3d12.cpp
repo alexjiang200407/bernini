@@ -25,7 +25,7 @@
 #include <spdlog/spdlog.h>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	Device::Device(const bgpu::GpuContextRef& context) :
 		m_Context(context), m_Device(bgpu::GetD3d12Device(*context))

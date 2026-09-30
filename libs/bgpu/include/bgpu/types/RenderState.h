@@ -3,7 +3,7 @@
 #include <bgpu/types/DepthStencilState.h>
 #include <bgpu/types/RasterState.h>
 
-namespace bgl
+namespace bgpu
 {
 	struct RenderState
 	{

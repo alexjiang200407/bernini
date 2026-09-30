@@ -7,7 +7,6 @@
 #include "pipeline/MeshletPipeline_metal.h"
 #include "pipeline/MetalPipelineReflection.h"
 #include "resource/ResourceManager_metal.h"
-#include <bgl/Viewport.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>
@@ -42,7 +41,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	namespace
 	{

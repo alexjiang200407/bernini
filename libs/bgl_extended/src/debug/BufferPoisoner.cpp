@@ -12,7 +12,7 @@
 namespace bgl
 {
 	void
-	BufferPoisoner::Init(ResourceManagerRef resourceManager)
+	BufferPoisoner::Init(bgpu::ResourceManagerRef resourceManager)
 	{
 		core::ensure(
 			resourceManager != nullptr,
@@ -21,7 +21,7 @@ namespace bgl
 		m_ResourceManager = std::move(resourceManager);
 		m_PatternUploaded = false;
 		m_Pattern         = m_ResourceManager->CreateStructBuffer(
-			StructBufferDesc()
+			bgpu::StructBufferDesc()
 				.SetElement<uint32_t>()
 				.SetElementCount(c_PatternWords)
 				.SetDebugName("Poison Pattern"));
@@ -39,7 +39,7 @@ namespace bgl
 		if (!m_Pattern.IsNull())
 		{
 			m_ResourceManager->DestroyBuffer(m_Pattern, deferred);
-			m_Pattern = BufferHandle{};
+			m_Pattern = bgpu::BufferHandle{};
 		}
 
 		m_ResourceManager.Reset();
@@ -47,7 +47,7 @@ namespace bgl
 	}
 
 	void
-	BufferPoisoner::Poison(ICommandList* cmdList, BufferHandle buffer) noexcept
+	BufferPoisoner::Poison(bgpu::ICommandList* cmdList, bgpu::BufferHandle buffer) noexcept
 	{
 		core::ensure(cmdList != nullptr, "BufferPoisoner::Poison requires a command list");
 		core::ensure(!m_Pattern.IsNull(), "BufferPoisoner::Poison before Init");
@@ -72,7 +72,7 @@ namespace bgl
 	}
 
 	void
-	BufferPoisoner::EnsurePattern(ICommandList* cmdList) noexcept
+	BufferPoisoner::EnsurePattern(bgpu::ICommandList* cmdList) noexcept
 	{
 		if (m_PatternUploaded)
 		{
@@ -84,11 +84,11 @@ namespace bgl
 
 		cmdList->Barrier(
 			m_Pattern,
-			BufferBarrierDesc()
-				.AddSyncBefore(BarrierSyncFlag::kCopy)
-				.AddAccessBefore(BarrierAccessFlag::kCopyDest)
-				.AddSyncAfter(BarrierSyncFlag::kCopy)
-				.AddAccessAfter(BarrierAccessFlag::kCopySource));
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 
 		m_PatternUploaded = true;
 	}

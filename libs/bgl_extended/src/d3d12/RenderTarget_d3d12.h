@@ -16,22 +16,22 @@ namespace bgl
 {
 	struct TextureRtvHandle
 	{
-		TextureHandle textureHandle;
-		RtvHandle     rtvHandle;
+		bgpu::TextureHandle textureHandle;
+		bgpu::RtvHandle     rtvHandle;
 	};
 
 	struct TextureRtvSrvHandle
 	{
-		TextureHandle textureHandle;
-		RtvHandle     rtvHandle;
-		SrvHandle     srvHandle;
+		bgpu::TextureHandle textureHandle;
+		bgpu::RtvHandle     rtvHandle;
+		bgpu::SrvHandle     srvHandle;
 	};
 
 	struct TextureDsvHandle
 	{
-		TextureHandle textureHandle;
-		DsvHandle     dsvHandle;
-		SrvHandle     srvHandle;
+		bgpu::TextureHandle textureHandle;
+		bgpu::DsvHandle     dsvHandle;
+		bgpu::SrvHandle     srvHandle;
 	};
 
 	/**
@@ -44,11 +44,11 @@ namespace bgl
 	{
 	public:
 		RenderTarget(
-			const RenderTargetDesc& desc,
-			DeviceRef               device,
-			CommandQueueRef         queue,
-			ResourceManagerRef      resourceManager,
-			bool                    enableDebug);
+			const RenderTargetDesc&  desc,
+			bgpu::DeviceRef          device,
+			bgpu::CommandQueueRef    queue,
+			bgpu::ResourceManagerRef resourceManager,
+			bool                     enableDebug);
 
 		~RenderTarget() noexcept override;
 
@@ -93,28 +93,28 @@ namespace bgl
 			m_FenceValues[frameIndex] = fenceValue;
 		}
 
-		[[nodiscard]] ICommandAllocator*
+		[[nodiscard]] bgpu::ICommandAllocator*
 		GetFrameAllocator(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_CommandAllocator[frameIndex].Get();
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].textureHandle;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
 			return m_BackBuffers[frameIndex].rtvHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
@@ -127,73 +127,73 @@ namespace bgl
 			return m_Presented;
 		}
 
-		[[nodiscard]] DsvHandle
+		[[nodiscard]] bgpu::DsvHandle
 		GetDepthDsv() const noexcept override
 		{
 			return m_DepthBuffer.dsvHandle;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetDepthTexture() const noexcept override
 		{
 			return m_DepthBuffer.textureHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetDepthSrv() const noexcept override
 		{
 			return m_DepthBuffer.srvHandle;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetMotionVectorTexture() const noexcept override
 		{
 			return m_MotionVectors.textureHandle;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetMotionVectorRtv() const noexcept override
 		{
 			return m_MotionVectors.rtvHandle;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetSceneColorTexture() const noexcept override
 		{
 			return m_SceneColor.textureHandle;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetSceneColorRtv() const noexcept override
 		{
 			return m_SceneColor.rtvHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetSceneColorSrv() const noexcept override
 		{
 			return m_SceneColor.srvHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetMotionVectorSrv() const noexcept override
 		{
 			return m_MotionVectorSrv;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetOutlineMaskTexture() const noexcept override
 		{
 			return m_OutlineMask.textureHandle;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetOutlineMaskRtv() const noexcept override
 		{
 			return m_OutlineMask.rtvHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetOutlineMaskSrv() const noexcept override
 		{
 			return m_OutlineMask.srvHandle;
@@ -237,21 +237,21 @@ namespace bgl
 			m_TaaEnabled = enabled;
 		}
 
-		[[nodiscard]] TextureHandle
+		[[nodiscard]] bgpu::TextureHandle
 		GetHistoryTexture(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
 			return m_History[index].textureHandle;
 		}
 
-		[[nodiscard]] RtvHandle
+		[[nodiscard]] bgpu::RtvHandle
 		GetHistoryRtv(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
 			return m_History[index].rtvHandle;
 		}
 
-		[[nodiscard]] SrvHandle
+		[[nodiscard]] bgpu::SrvHandle
 		GetHistorySrv(uint32_t index) const noexcept override
 		{
 			core::ensure(index < 2, "History index out of range");
@@ -321,9 +321,9 @@ namespace bgl
 		void
 		DestroyRenderTargets();
 
-		DeviceRef          m_Device;
-		CommandQueueRef    m_CommandQueue;
-		ResourceManagerRef m_ResourceManager;
+		bgpu::DeviceRef          m_Device;
+		bgpu::CommandQueueRef    m_CommandQueue;
+		bgpu::ResourceManagerRef m_ResourceManager;
 
 		bool  m_Headless       = false;
 		bool  m_TaaEnabled     = false;
@@ -341,7 +341,7 @@ namespace bgl
 		TextureDsvHandle    m_DepthBuffer;
 		TextureRtvHandle    m_MotionVectors;
 		TextureRtvSrvHandle m_SceneColor;
-		SrvHandle           m_MotionVectorSrv;
+		bgpu::SrvHandle     m_MotionVectorSrv;
 		TextureRtvSrvHandle m_OutlineMask;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
@@ -351,6 +351,6 @@ namespace bgl
 		bool                               m_HistoryValid                       = false;
 		UINT64                             m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
 
-		CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
+		bgpu::CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
 	};
 }

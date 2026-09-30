@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * A ComputeBuffer is a GPU-only structured buffer that compute shaders fill via

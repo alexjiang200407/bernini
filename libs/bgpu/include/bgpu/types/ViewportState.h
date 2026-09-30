@@ -1,12 +1,11 @@
 #pragma once
-#include <bgl/Viewport.h>
 #include <bgpu/types/Rect.h>
 #include <bgpu/types/Viewport.h>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	struct ViewportState
 	{

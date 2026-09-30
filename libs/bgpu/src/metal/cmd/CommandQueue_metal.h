@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The RHI command queue over an MTL::CommandQueue. The fence-value model is a monotonically

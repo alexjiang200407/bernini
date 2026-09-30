@@ -3,7 +3,7 @@
 #include <bgpu/types/Format.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	enum class FormatKind : uint8_t
 	{

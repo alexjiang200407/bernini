@@ -492,7 +492,7 @@ TEST_CASE(
 	auto forwardPhases = bgl::ForwardPhases();
 	{
 		const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
-		auto                        pipelines = bgl::PipelineBatch(device);
+		auto                        pipelines = bgpu::PipelineBatch(device);
 		const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
 		compactPass.Init(ctx);
 		forwardPhases.Init(ctx);
@@ -501,16 +501,16 @@ TEST_CASE(
 		forwardPhases.CheckBindings();
 	}
 
-	auto rbDesc      = bgl::ReadbackBufferDesc();
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
 	rbDesc.debugName = "Cull Stats Readback";
 	auto rbStats     = resourceManager->CreateReadbackBuffer(rbDesc);
 
-	auto cmdListDesc  = bgl::CommandListDesc();
-	cmdListDesc.type  = bgl::QueueType::kGraphics;
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
 	auto cmdAllocator = device->CreateCommandAllocator();
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 	bgl::FrameGraph fg;
 	fg.RegisterQueue("main", cmdQueue, cmdList);
@@ -527,7 +527,7 @@ TEST_CASE(
 	draw.cullIdx                = 0;
 	draw.view                   = viewRef;
 	draw.cullState              = &view->GetCullState(0);
-	draw.viewState.viewport     = bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+	draw.viewState.viewport     = bgpu::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
 	draw.viewState.viewProj     = viewProj;
 	draw.viewState.prevViewProj = viewProj;
 	draw.viewState.cullView     = bgl::BuildCullView(viewProj);

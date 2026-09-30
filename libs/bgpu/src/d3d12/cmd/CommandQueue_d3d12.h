@@ -3,7 +3,7 @@
 #include <bgpu/types/QueueType.h>
 #include <cstdint>
 
-namespace bgl
+namespace bgpu
 {
 	class CommandQueue : public core::RefCounter<ICommandQueue>
 	{

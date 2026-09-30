@@ -34,7 +34,7 @@ namespace bgl
 		}
 	}
 
-	Overlay::Overlay(ResourceManagerRef resourceManager) :
+	Overlay::Overlay(bgpu::ResourceManagerRef resourceManager) :
 		m_ResourceManager(std::move(resourceManager)), m_Id(NextOverlayId()),
 		m_Images(m_ResourceManager)
 	{
@@ -85,22 +85,22 @@ namespace bgl
 			}
 		}
 
-		auto vertexDesc = StructBufferDesc();
+		auto vertexDesc = bgpu::StructBufferDesc();
 		vertexDesc.SetElement<OverlayVertex>().SetElementCount(
 			static_cast<uint32_t>(vertices.size()));
 		vertexDesc.debugName = "Overlay Vertices";
 
-		const BufferHandle vertexBuffer = m_ResourceManager->CreateStructBuffer(vertexDesc);
+		const bgpu::BufferHandle vertexBuffer = m_ResourceManager->CreateStructBuffer(vertexDesc);
 		if (vertexBuffer.IsNull())
 		{
 			throw GraphicsError("The device could not allocate an overlay vertex buffer");
 		}
 
-		auto indexDesc = StructBufferDesc();
+		auto indexDesc = bgpu::StructBufferDesc();
 		indexDesc.SetElement<uint32_t>().SetElementCount(static_cast<uint32_t>(indices.size()));
 		indexDesc.debugName = "Overlay Indices";
 
-		const BufferHandle indexBuffer = m_ResourceManager->CreateStructBuffer(indexDesc);
+		const bgpu::BufferHandle indexBuffer = m_ResourceManager->CreateStructBuffer(indexDesc);
 		if (indexBuffer.IsNull())
 		{
 			m_ResourceManager->DestroyBuffer(vertexBuffer, /*deferred*/ false);
@@ -227,10 +227,10 @@ namespace bgl
 		return texture.IsValid() && texture.overlay == m_Id && m_Textures.valid(texture.slot);
 	}
 
-	SrvHandle
+	bgpu::SrvHandle
 	Overlay::GetTextureSrv(OverlayTextureHandle texture) const noexcept
 	{
-		const SrvHandle white =
+		const bgpu::SrvHandle white =
 			m_Images.GetSrv(m_Images.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite));
 
 		if (!texture.IsValid())
@@ -266,7 +266,7 @@ namespace bgl
 	}
 
 	void
-	Overlay::Flush(ICommandList* cmdList)
+	Overlay::Flush(bgpu::ICommandList* cmdList)
 	{
 		core::ensure(cmdList != nullptr, "Flush requires a valid ICommandList");
 
@@ -274,8 +274,8 @@ namespace bgl
 		{
 			cmdList->BeginEvent("Overlay Geometry Uploads");
 
-			std::vector<BufferHandle>      buffers;
-			std::vector<BufferBarrierDesc> barriers;
+			std::vector<bgpu::BufferHandle>      buffers;
+			std::vector<bgpu::BufferBarrierDesc> barriers;
 			buffers.reserve(m_PendingGeometry.size() * 2);
 
 			for (const PendingGeometry& pending : m_PendingGeometry)
@@ -299,12 +299,12 @@ namespace bgl
 			// barrier is issued here, as the texture store issues its own.
 			barriers.assign(
 				buffers.size(),
-				BufferBarrierDesc()
-					.AddSyncBefore(BarrierSyncFlag::kCopy)
-					.AddAccessBefore(BarrierAccessFlag::kCopyDest)
-					.AddSyncAfter(BarrierSyncFlag::kVertexShader)
-					.AddSyncAfter(BarrierSyncFlag::kPixelShader)
-					.AddAccessAfter(BarrierAccessFlag::kShaderResource));
+				bgpu::BufferBarrierDesc()
+					.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+					.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+					.AddSyncAfter(bgpu::BarrierSyncFlag::kVertexShader)
+					.AddSyncAfter(bgpu::BarrierSyncFlag::kPixelShader)
+					.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource));
 
 			cmdList->Barrier(buffers, barriers);
 			cmdList->EndEvent();

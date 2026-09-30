@@ -8,6 +8,6 @@ namespace bgl
 	 * The engine format for the format tag a KTX2 container carries. core::fatal on a tag no backend
 	 * supports.
 	 */
-	[[nodiscard]] Format
+	[[nodiscard]] bgpu::Format
 	FromVkFormat(assetlib::VkFormat vkFormat) noexcept;
 }

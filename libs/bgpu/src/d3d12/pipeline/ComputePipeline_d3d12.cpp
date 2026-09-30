@@ -22,7 +22,7 @@ namespace
 #pragma warning(pop)
 // clang-format on
 
-namespace bgl
+namespace bgpu
 {
 	ComputePipeline::ComputePipeline(
 		ID3D12Device*              device,

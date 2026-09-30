@@ -10,7 +10,7 @@
 #include <bgpu/types/TextureDimension.h>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	// An autoreleased NS::String over `s`, valid until the enclosing pool drains.
 	[[nodiscard]] NS::String*

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	class ReadbackBuffer;
 

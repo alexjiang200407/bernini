@@ -25,12 +25,12 @@ TEST_CASE("Flush leaves no command buffer in the enclosing pool", "[teardown]")
 	contextDesc.enableDebugLayer = true;
 	auto context                 = bgpu::CreateGpuContext(contextDesc);
 
-	auto device = bgl::CreateDevice(context);
+	auto device = bgpu::CreateDevice(context);
 
-	bgl::CommandQueueRef queue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+	bgpu::CommandQueueRef queue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 	REQUIRE(queue != nullptr);
 
-	MTL::CommandQueue* mtlQueue = queue->As<bgl::CommandQueue>()->GetMTLCommandQueue();
+	MTL::CommandQueue* mtlQueue = queue->As<bgpu::CommandQueue>()->GetMTLCommandQueue();
 	REQUIRE(mtlQueue != nullptr);
 
 	// A command buffer holds its queue, which holds the device -- the chain the teardown crash walked

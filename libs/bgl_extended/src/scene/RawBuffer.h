@@ -79,7 +79,7 @@ namespace bgl
 	{
 	public:
 		RawBuffer() noexcept = default;
-		RawBuffer(RawBufferDesc desc, ResourceManagerRef resourceManager)
+		RawBuffer(RawBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
@@ -94,7 +94,7 @@ namespace bgl
 		operator=(RawBuffer&&) noexcept = default;
 
 		void
-		Init(RawBufferDesc desc, ResourceManagerRef resourceManager)
+		Init(RawBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
 		{
 			core::ensure(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
 			core::ensure(
@@ -106,10 +106,10 @@ namespace bgl
 			m_ViewDesc.debugName = desc.debugName + " Handles";
 			m_ResourceManager    = resourceManager;
 
-			RangeBufferDesc blockDesc;
+			bgpu::RangeBufferDesc blockDesc;
 			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
 			blockDesc.blockSize    = desc.uploadBlockBytes;
-			blockDesc.maxBytes     = c_MaxRawBufferBytes;
+			blockDesc.maxBytes     = bgpu::c_MaxRawBufferBytes;
 			blockDesc.isRaw        = true;
 			blockDesc.debugName    = desc.debugName;
 
@@ -140,7 +140,7 @@ namespace bgl
 		 * address.
 		 */
 		template <typename T = Tag>
-		[[nodiscard]] idl::RawEntry
+		[[nodiscard]] bgpu::idl::RawEntry
 		AddRecord(T tag, std::span<const std::byte> payload)
 			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
@@ -168,7 +168,7 @@ namespace bgl
 				std::memcpy(record.data() + idl::cRawPayloadOffset, payload.data(), payload.size());
 			}
 
-			return idl::RawEntry{ ToByteOffset(handle) };
+			return bgpu::idl::RawEntry{ ToByteOffset(handle) };
 		}
 
 		/**
@@ -181,7 +181,7 @@ namespace bgl
 		 * @pre `entry` names a live record and `payload` is the length that record was written with.
 		 */
 		void
-		SetRecordPayload(idl::RawEntry entry, std::span<const std::byte> payload)
+		SetRecordPayload(bgpu::idl::RawEntry entry, std::span<const std::byte> payload)
 		{
 			core::ensure(IsOffsetValid(entry.byteOffset), "SetRecordPayload on a dead record");
 
@@ -281,7 +281,7 @@ namespace bgl
 		[[nodiscard]] static constexpr uint64_t
 		GetByteCeiling() noexcept
 		{
-			return c_MaxRawBufferBytes;
+			return bgpu::c_MaxRawBufferBytes;
 		}
 
 		void
@@ -292,19 +292,19 @@ namespace bgl
 		}
 
 		void
-		Update(ICommandList* cmdList)
+		Update(bgpu::ICommandList* cmdList)
 		{
 			m_Blocks.Update(cmdList);
 		}
 
 		// Re-read every frame: growth mints a new handle and retires the old one.
-		[[nodiscard]] DescriptorHandle
+		[[nodiscard]] bgpu::DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
 			return m_Blocks.GetDescriptorHandle();
 		}
 
-		[[nodiscard]] BufferHandle
+		[[nodiscard]] bgpu::BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			return m_Blocks.GetBufferHandle();
@@ -313,7 +313,7 @@ namespace bgl
 		// The arena's second view, for a caller binding the same allocation as handles. Null when
 		// the arena declared no handle stride. Re-issued with the buffer, so it is never a
 		// generation behind the bytes it describes.
-		[[nodiscard]] BufferSrvHandle
+		[[nodiscard]] bgpu::BufferSrvHandle
 		GetHandleView() const noexcept
 		{
 			return m_HandleView;
@@ -327,7 +327,7 @@ namespace bgl
 			if (m_ResourceManager != nullptr && !m_HandleView.IsNull())
 			{
 				m_ResourceManager->DestroyBufferSrv(m_HandleView, deferred);
-				m_HandleView = BufferSrvHandle{};
+				m_HandleView = bgpu::BufferSrvHandle{};
 			}
 			m_Blocks.Release(deferred);
 		}
@@ -374,7 +374,7 @@ namespace bgl
 				return;
 			}
 
-			const BufferHandle arena = m_Blocks.GetBufferHandle();
+			const bgpu::BufferHandle arena = m_Blocks.GetBufferHandle();
 			if (arena.slot == m_ViewedBuffer.slot &&
 			    arena.bindlessIndex == m_ViewedBuffer.bindlessIndex)
 			{
@@ -425,7 +425,7 @@ namespace bgl
 		[[nodiscard]] uint32_t
 		CheckByteSize(uint64_t bytes) const
 		{
-			const uint64_t allocatable = c_MaxRawBufferBytes - GetReservedBytes();
+			const uint64_t allocatable = bgpu::c_MaxRawBufferBytes - GetReservedBytes();
 
 			if (bytes > allocatable)
 			{
@@ -443,17 +443,17 @@ namespace bgl
 			return m_NullRecordBlocks * idl::cRawBlockBytes;
 		}
 
-		RangeBuffer<RawBlock> m_Blocks;
+		bgpu::RangeBuffer<RawBlock> m_Blocks;
 
 		// Kept beside the blocks rather than handed on: the view is the arena's to issue and to
 		// retire, which is what stops it drifting a generation behind the bytes.
-		ResourceManagerRef m_ResourceManager;
-		BufferSrvHandle    m_HandleView;
-		BufferHandle       m_ViewedBuffer;
+		bgpu::ResourceManagerRef m_ResourceManager;
+		bgpu::BufferSrvHandle    m_HandleView;
+		bgpu::BufferHandle       m_ViewedBuffer;
 
 		// Held rather than rebuilt: it is what every re-issue passes, and a stride of 0 is what
 		// says this arena has no view to re-issue.
-		BufferSrvDesc m_ViewDesc;
-		uint32_t      m_NullRecordBlocks = 1;
+		bgpu::BufferSrvDesc m_ViewDesc;
+		uint32_t            m_NullRecordBlocks = 1;
 	};
 }

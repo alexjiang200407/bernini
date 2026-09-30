@@ -1,7 +1,7 @@
 #include "resource/Rtv_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	Rtv::Rtv(
 		ID3D12Device*         device,

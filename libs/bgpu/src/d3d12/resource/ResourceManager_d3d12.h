@@ -12,7 +12,7 @@
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
 
-namespace bgl
+namespace bgpu
 {
 	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
 	// expected over one device. Exceeding it asserts; it is not a hard device limit.

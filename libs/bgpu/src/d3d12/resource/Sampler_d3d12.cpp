@@ -1,7 +1,7 @@
 #include "resource/Sampler_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	Sampler::Sampler(
 		ID3D12Device*         device,

@@ -3,7 +3,7 @@
 #include <bgpu/resource/FrameBuffer.h>
 #include <bgpu/types/ViewportState.h>
 
-namespace bgl
+namespace bgpu
 {
 	struct MeshletKernel;
 

@@ -1,6 +1,6 @@
 #include "cmd/CommandAllocator_d3d12.h"
 
-namespace bgl
+namespace bgpu
 {
 	void
 	CommandAllocator::ResetAllocator() noexcept

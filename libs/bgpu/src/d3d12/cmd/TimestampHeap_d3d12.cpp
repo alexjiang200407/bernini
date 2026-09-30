@@ -7,7 +7,7 @@
 #include <cstring>
 #include <span>
 
-namespace bgl
+namespace bgpu
 {
 	TimestampHeap::TimestampHeap(ID3D12Device* device, uint32_t capacity) : m_Capacity(capacity)
 	{

@@ -13,7 +13,7 @@
 #include <bgpu/types/RasterState.h>
 #include <bgpu/types/TextureDimension.h>
 
-namespace bgl
+namespace bgpu
 {
 	Format
 	ConvertFormat(DXGI_FORMAT dxgiFormat);

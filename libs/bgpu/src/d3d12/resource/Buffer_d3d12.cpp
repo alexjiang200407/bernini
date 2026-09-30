@@ -2,7 +2,7 @@
 #include "ResourceManager_d3d12.h"
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 	Buffer::Buffer(
 		ID3D12Device*         device,
@@ -59,7 +59,7 @@ namespace bgl
 		std::wstring wName(desc.debugName.begin(), desc.debugName.end());
 		m_Buffer->SetName(wName.c_str());
 
-		m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
+		m_Tracked = bgpu::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 	}
 
 }

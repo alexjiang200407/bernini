@@ -28,7 +28,7 @@ namespace bgl
 
 		// Two channels: the integral factors into a scale and a bias on F0, and nothing else is
 		// stored. Half float covers [0,1] with far more precision than the bilinear fetch resolves.
-		constexpr Format c_Format = Format::RG16_FLOAT;
+		constexpr bgpu::Format c_Format = bgpu::Format::RG16_FLOAT;
 	}
 
 	void
@@ -38,79 +38,81 @@ namespace bgl
 
 		m_ResourceManager = ctx.resourceManager;
 
-		auto pipelineDesc        = MeshletPipelineDesc();
+		auto pipelineDesc        = bgpu::MeshletPipelineDesc();
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 		pipelineDesc.AddRtvFormat(c_Format);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(false);
 
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
+		pipelineDesc.renderState =
+			bgpu::RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void
-	BrdfLutGenPass::Generate(ICommandList* cmdList)
+	BrdfLutGenPass::Generate(bgpu::ICommandList* cmdList)
 	{
 		core::ensure(cmdList != nullptr, "Command list must be initialized");
 		core::ensure(m_Kernel.pipeline.IsInitialized(), "BRDF LUT pipeline must be initialized");
 		core::ensure(!Generated(), "BRDF LUT is generated at most once");
 
-		auto textureDesc      = TextureDesc();
-		textureDesc.format    = c_Format;
-		textureDesc.width     = c_Dimension;
-		textureDesc.height    = c_Dimension;
-		textureDesc.dimension = TextureDimension::kTexture2D;
-		textureDesc.debugName = "BRDF LUT";
-		textureDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-		textureDesc.initialLayout = BarrierLayout::kRenderTarget;
-		textureDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+		auto textureDesc          = bgpu::TextureDesc();
+		textureDesc.format        = c_Format;
+		textureDesc.width         = c_Dimension;
+		textureDesc.height        = c_Dimension;
+		textureDesc.dimension     = bgpu::TextureDimension::kTexture2D;
+		textureDesc.debugName     = "BRDF LUT";
+		textureDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+			                                            bgpu::TextureUsageFlag::kSRV };
+		textureDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+		textureDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
 
 		m_Texture = m_ResourceManager->CreateTexture(textureDesc);
 		if (m_Texture.IsNull())
 			throw GraphicsError("BRDF LUT texture could not be created");
 
-		auto srvDesc      = SrvDesc();
+		auto srvDesc      = bgpu::SrvDesc();
 		srvDesc.format    = c_Format;
-		srvDesc.dimension = TextureDimension::kTexture2D;
+		srvDesc.dimension = bgpu::TextureDimension::kTexture2D;
 		srvDesc.debugName = "BRDF LUT SRV";
 
 		m_Srv = m_ResourceManager->CreateSrv(m_Texture, srvDesc);
 		if (m_Srv.IsNull())
 			throw GraphicsError("BRDF LUT SRV could not be created");
 
-		auto rtvDesc      = RtvDesc();
+		auto rtvDesc      = bgpu::RtvDesc();
 		rtvDesc.format    = c_Format;
 		rtvDesc.debugName = "BRDF LUT RTV";
 
-		const RtvHandle rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
+		const bgpu::RtvHandle rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
 
 		cmdList->BeginEvent("BRDF LUT");
 
-		auto gfxState   = MeshletState();
+		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(
-			Viewport(static_cast<float>(c_Dimension), static_cast<float>(c_Dimension)));
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(rtv);
+			bgpu::Viewport(static_cast<float>(c_Dimension), static_cast<float>(c_Dimension)));
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(rtv);
 
 		cmdList->SetMeshletState(gfxState);
 		cmdList->DispatchMesh(1, 1, 1);
 
-		TextureBarrierDesc barrier;
-		barrier.syncBefore   = BarrierSyncFlag::kRenderTarget;
-		barrier.accessBefore = BarrierAccessFlag::kRenderTarget;
-		barrier.layoutBefore = BarrierLayout::kRenderTarget;
-		barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
-		barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-		barrier.layoutAfter  = BarrierLayout::kShaderResource;
+		bgpu::TextureBarrierDesc barrier;
+		barrier.syncBefore   = bgpu::BarrierSyncFlag::kRenderTarget;
+		barrier.accessBefore = bgpu::BarrierAccessFlag::kRenderTarget;
+		barrier.layoutBefore = bgpu::BarrierLayout::kRenderTarget;
+		barrier.syncAfter    = bgpu::BarrierSyncFlag::kPixelShader;
+		barrier.accessAfter  = bgpu::BarrierAccessFlag::kShaderResource;
+		barrier.layoutAfter  = bgpu::BarrierLayout::kShaderResource;
 
 		cmdList->Barrier(m_Texture, barrier);
 		cmdList->EndEvent();

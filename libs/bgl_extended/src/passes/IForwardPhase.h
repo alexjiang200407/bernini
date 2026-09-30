@@ -1,13 +1,20 @@
 #pragma once
 #include <string_view>
 
+namespace bgpu
+{}
+
+namespace bgpu
+{
+	struct MeshletState;
+}
+
 namespace bgl
 {
 	class ForwardPhases;
 	class PassContext;
 
 	struct DrawData;
-	struct MeshletState;
 	struct PassDesc;
 
 	/**
@@ -58,9 +65,9 @@ namespace bgl
 		 */
 		virtual void
 		Record(
-			ForwardPhases&     kernels,
-			MeshletState&      state,
-			const DrawData&    draw,
-			const PassContext& resources) const = 0;
+			ForwardPhases&      kernels,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources) const = 0;
 	};
 }

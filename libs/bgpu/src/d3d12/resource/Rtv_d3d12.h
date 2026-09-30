@@ -3,7 +3,7 @@
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Texture.h>
 
-namespace bgl
+namespace bgpu
 {
 	class Rtv final
 	{

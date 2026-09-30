@@ -58,38 +58,39 @@ namespace bgl
 		// The transparents' blend, but colour only with no depth attachment -- the depth is this
 		// pass's input -- and its own two-stage program: the discs are not instance-pipeline
 		// geometry.
-		auto pipelineDesc = MeshletPipelineDesc();
+		auto pipelineDesc = bgpu::MeshletPipelineDesc();
 
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
 		pipelineDesc.pixelShader = ctx.device->CreateShader(std::string(c_Src), "PSMain");
 
-		pipelineDesc.AddRtvFormat(Format::RGBA16_FLOAT);
+		pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 
-		auto raster = RasterState();
-		raster.SetFillMode(RasterFillMode::kSolid)
-			.SetCullMode(RasterCullMode::kNone)
+		auto raster = bgpu::RasterState();
+		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+			.SetCullMode(bgpu::RasterCullMode::kNone)
 			.SetFrontCounterClockwise(true)
 			.SetDepthClipEnable(true);
 
 		// No test: the depth holds the world alone, so the receiver each fragment reads is exactly
 		// what the pixel shows. A unit in front is drawn after, and covers the decal.
-		auto depth = DepthStencilState{};
+		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
 
-		auto blend = BlendState{};
+		auto blend = bgpu::BlendState{};
 		blend.SetRenderTarget(
 			0,
-			BlendState::RenderTarget{}
+			bgpu::BlendState::RenderTarget{}
 				.EnableBlend()
-				.SetSrcBlend(BlendFactor::kOne)
-				.SetDestBlend(BlendFactor::kInvSrcAlpha)
-				.SetBlendOp(BlendOp::kAdd)
-				.SetSrcBlendAlpha(BlendFactor::kZero)
-				.SetDestBlendAlpha(BlendFactor::kZero)
-				.SetBlendOpAlpha(BlendOp::kAdd));
+				.SetSrcBlend(bgpu::BlendFactor::kOne)
+				.SetDestBlend(bgpu::BlendFactor::kInvSrcAlpha)
+				.SetBlendOp(bgpu::BlendOp::kAdd)
+				.SetSrcBlendAlpha(bgpu::BlendFactor::kZero)
+				.SetDestBlendAlpha(bgpu::BlendFactor::kZero)
+				.SetBlendOpAlpha(bgpu::BlendOp::kAdd));
 
 		pipelineDesc.renderState =
-			RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(depth);
+			bgpu::RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
+				depth);
 
 		ctx.pipelines->Add(m_Kernel, std::move(pipelineDesc));
 	}
@@ -115,10 +116,10 @@ namespace bgl
 
 		desc.SetName("Blob Shadows {}", draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)
-			.AddTextureRead(c_DepthName, BarrierSyncFlag::kPixelShader)
-			.AddBufferRead(c_BlobShadowsName, BarrierSyncFlag::kVertexShader)
-			.AddBufferRead(c_MeshInstanceBufferName, BarrierSyncFlag::kVertexShader)
-			.AddBufferRead(c_BonePaletteName, BarrierSyncFlag::kVertexShader);
+			.AddTextureRead(c_DepthName, bgpu::BarrierSyncFlag::kPixelShader)
+			.AddBufferRead(c_BlobShadowsName, bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead(c_BonePaletteName, bgpu::BarrierSyncFlag::kVertexShader);
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
@@ -148,8 +149,8 @@ namespace bgl
 			const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
 			uniforms["groundNormal"]      = ground.normal;
 
-			const Viewport& viewport = draw.viewState.viewport;
-			uniforms["viewportRect"] = glm::vec4(
+			const bgpu::Viewport& viewport = draw.viewState.viewport;
+			uniforms["viewportRect"]       = glm::vec4(
 				viewport.minX,
 				viewport.minY,
 				1.0f / (viewport.maxX - viewport.minX),
@@ -161,12 +162,12 @@ namespace bgl
 		}
 
 		// Colour alone: the velocity buffer is not the decal's to write, and the depth is read.
-		auto gfxState = MeshletState();
+		auto gfxState = bgpu::MeshletState();
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = FrameBuffer().AddColorAttachment(draw.targets.sceneColor);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.sceneColor);
 		gfxState.kernel      = &m_Kernel;
 
-		ICommandList* cmd = resources.GetCommandList();
+		bgpu::ICommandList* cmd = resources.GetCommandList();
 		cmd->SetMeshletState(gfxState);
 		cmd->DispatchMesh(blobs, 1, 1);
 	}

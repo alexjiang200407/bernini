@@ -4,7 +4,7 @@
 #include <bgpu/types/FormatInfo.h>
 #include <core/err/util.h>
 
-namespace bgl
+namespace bgpu
 {
 #define HANDLE_INVALID_DXGI_FORMAT_CASE(dxgiFormat) \
 	case dxgiFormat:                                \

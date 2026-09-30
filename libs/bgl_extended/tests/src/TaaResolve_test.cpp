@@ -1280,8 +1280,8 @@ TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][re
 
 		// What a scale change must not disturb: the output grid, and so the backbuffers and the two
 		// histories allocated against it.
-		const bgl::TextureHandle backbuffer = base->GetBackbufferTexture(0);
-		const bgl::TextureHandle history    = base->GetHistoryTexture(0);
+		const bgpu::TextureHandle backbuffer = base->GetBackbufferTexture(0);
+		const bgpu::TextureHandle history    = base->GetHistoryTexture(0);
 
 		REQUIRE(base->IsHistoryValid());
 

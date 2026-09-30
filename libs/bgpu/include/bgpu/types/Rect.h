@@ -1,9 +1,8 @@
 #pragma once
-#include <bgl/Viewport.h>
 #include <bgpu/types/Viewport.h>
 #include <cmath>
 
-namespace bgl
+namespace bgpu
 {
 	struct Rect
 	{

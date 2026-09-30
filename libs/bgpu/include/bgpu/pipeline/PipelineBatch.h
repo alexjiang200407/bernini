@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	class IDevice;
 

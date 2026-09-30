@@ -53,9 +53,16 @@
 #include <tuple>
 #include <vector>
 
-namespace bgl
+namespace bgpu
+{}
+
+namespace bgpu
 {
 	class ICommandList;
+}
+
+namespace bgl
+{
 	class FrameGraph;
 	class Scene;
 
@@ -115,10 +122,10 @@ namespace bgl
 	{
 	public:
 		SceneView(
-			const SceneRef&                   scene,
-			uint32_t                          initialInstances,
-			core::SharedRef<IResourceManager> resourceManager,
-			std::shared_ptr<DrawBucketTable>  buckets);
+			const SceneRef&                         scene,
+			uint32_t                                initialInstances,
+			core::SharedRef<bgpu::IResourceManager> resourceManager,
+			std::shared_ptr<DrawBucketTable>        buckets);
 
 		~SceneView() noexcept override;
 
@@ -435,7 +442,7 @@ namespace bgl
 		ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames);
 
 		void
-		Update(ICommandList* cmdList);
+		Update(bgpu::ICommandList* cmdList);
 
 		/**
 		 * Every bucket an instance of this view has ever resolved to. Never cleared: a bucket once
@@ -542,7 +549,7 @@ namespace bgl
 		PlaceRecord(
 			GeomHandle              geom,
 			glm::mat4               transform,
-			idl::RawEntry           record,
+			bgpu::idl::RawEntry     record,
 			core::multi_slot_handle palette,
 			core::multi_slot_handle footIK,
 			uint32_t                nodeCount);
@@ -593,11 +600,11 @@ namespace bgl
 		void
 		SyncInstanceScratch();
 
-		SceneRef                          m_Scene;
-		Scene*                            m_SceneRaw = nullptr;
-		core::SharedRef<IResourceManager> m_ResourceManager;
-		std::string                       m_NamePrefix;
-		uint32_t                          m_InitialInstances = 0;
+		SceneRef                                m_Scene;
+		Scene*                                  m_SceneRaw = nullptr;
+		core::SharedRef<bgpu::IResourceManager> m_ResourceManager;
+		std::string                             m_NamePrefix;
+		uint32_t                                m_InitialInstances = 0;
 
 		// The Scene material epoch these instances were resolved against. See Scene::MaterialEpoch.
 		uint64_t m_SceneEpoch = 0;
@@ -616,8 +623,8 @@ namespace bgl
 		// pick the depth-sorted instances. Assign is a no-op while the table has not grown.
 		UploadBuffer<uint32_t> m_DrawBucketFlags;
 
-		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
-		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
+		bgpu::PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
+		bgpu::EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
 		// stage that draws more than one can ask rather than mirror the draw-bucket table.
 		RawBuffer<idl::PlaybackType> m_Playback;
@@ -627,7 +634,7 @@ namespace bgl
 		// Every hero placement's runtime foot-IK weights, legs.count FootIKLegs apiece. Its own
 		// arena rather than a field of the playback record: the pose pass is the only reader, and
 		// a rig without legs owns no entry at all.
-		RangeBuffer<idl::FootIKLeg> m_FootIK;
+		bgpu::RangeBuffer<idl::FootIKLeg> m_FootIK;
 
 		// The placements the pose pass dispatches over, one workgroup each, with the foot-IK record
 		// of each beside it. Dense and CPU-authored rather than a sweep of the arena: erasing a

@@ -4,7 +4,7 @@
 #include <slang.h>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	Shader::Shader(ShaderDesc desc, bgpu::GpuContextRef context) :
 		m_Desc(std::move(desc)), m_Context(std::move(context))

@@ -1,7 +1,7 @@
 #pragma once
 #include <bgpu/uniforms/UniformLayoutEntry.h>
 
-namespace bgl
+namespace bgpu
 {
 	class IShader;
 	class ShaderCache;

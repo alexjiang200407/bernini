@@ -27,7 +27,7 @@
 #include <span>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	// The most submission timelines that can gate one deferred free. Exceeding it asserts; it is not
 	// a device limit.

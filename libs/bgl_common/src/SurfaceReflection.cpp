@@ -76,7 +76,7 @@ namespace bgl
 				return std::nullopt;
 
 			std::vector<slang::DeclReflection*> structs;
-			CollectStructDecls(slangModule->getModuleReflection(), structs);
+			bgpu::CollectStructDecls(slangModule->getModuleReflection(), structs);
 
 			std::optional<FoundSurface> found;
 			for (slang::DeclReflection* decl : structs)
@@ -97,7 +97,7 @@ namespace bgl
 					core::throw_runtime_error(
 						"surface '{}': '{}' conforms to {} and {}; a surface owns one contract",
 						surfaceName,
-						FullTypeName(type),
+						bgpu::FullTypeName(type),
 						conforms[0]->interfaceName,
 						conforms[1]->interfaceName);
 				}
@@ -108,8 +108,8 @@ namespace bgl
 					core::throw_runtime_error(
 						"surface '{}': '{}' and '{}' both conform to {}; a file declares one",
 						surfaceName,
-						FullTypeName(found->type),
-						FullTypeName(type),
+						bgpu::FullTypeName(found->type),
+						bgpu::FullTypeName(type),
 						found->contract == contract ? contract->interfaceName :
 													  "a surface contract");
 				}
@@ -137,13 +137,13 @@ namespace bgl
 			slang::TypeReflection* params,
 			std::string_view       surfaceName)
 		{
-			slang::TypeLayoutReflection* elementLayout = BufferElementLayout(layout, params);
+			slang::TypeLayoutReflection* elementLayout = bgpu::BufferElementLayout(layout, params);
 			if (elementLayout == nullptr)
 			{
 				core::throw_runtime_error(
 					"surface '{}': failed to lay out '{}' as a record's parameters",
 					surfaceName,
-					FullTypeName(params));
+					bgpu::FullTypeName(params));
 			}
 			return elementLayout;
 		}
@@ -263,7 +263,7 @@ namespace bgl
 
 		slang::TypeReflection* surface = found->type;
 
-		const std::string      paramsName = FullTypeName(surface) + ".MaterialParams";
+		const std::string      paramsName = bgpu::FullTypeName(surface) + ".MaterialParams";
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
 		if (params == nullptr)
 		{
@@ -330,6 +330,6 @@ namespace bgl
 			reflected.params.values.emplace_back(std::move(value));
 		}
 
-		return ReflectedSurface{ std::move(reflected), FullTypeName(surface) };
+		return ReflectedSurface{ std::move(reflected), bgpu::FullTypeName(surface) };
 	}
 }

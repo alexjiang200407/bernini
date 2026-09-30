@@ -54,11 +54,11 @@ namespace bgl
 		operator=(DebugBuffer&&) noexcept = default;
 
 		void
-		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager)
+		Init(uint32_t recordCapacity, bgpu::ResourceManagerRef resourceManager)
 		{
 			m_Capacity = recordCapacity;
 
-			auto desc = ComputeBufferDesc()
+			auto desc = bgpu::ComputeBufferDesc()
 			                .SetElement<uint32_t>()
 			                .SetInitialCount(c_HeaderWords + recordCapacity * c_RecordWords)
 			                .SetDebugName("GPU Debug Buffer");
@@ -72,7 +72,7 @@ namespace bgl
 			return m_Buffer.IsInitialized();
 		}
 
-		[[nodiscard]] BufferHandle
+		[[nodiscard]] bgpu::BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			return m_Buffer.GetBufferHandle();
@@ -96,7 +96,7 @@ namespace bgl
 		 * the header are left stale; a zero counter makes them invisible to readback.
 		 */
 		void
-		Reset(ICommandList* cmd) const noexcept
+		Reset(bgpu::ICommandList* cmd) const noexcept
 		{
 			core::ensure(cmd != nullptr, "Command list cannot be null");
 			core::ensure(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
@@ -112,8 +112,8 @@ namespace bgl
 		}
 
 	private:
-		ComputeBuffer m_Buffer;
-		uint32_t      m_Capacity = 0;
+		bgpu::ComputeBuffer m_Buffer;
+		uint32_t            m_Capacity = 0;
 	};
 }
 #endif  // BERNINI_GPU_DEBUG

@@ -17,11 +17,11 @@ namespace bgl
 	}
 
 	void
-	BonePaletteBuffer::Init(ResourceManagerRef resourceManager)
+	BonePaletteBuffer::Init(bgpu::ResourceManagerRef resourceManager)
 	{
 		m_ResourceManager = std::move(resourceManager);
 
-		auto desc = ComputeBufferDesc();
+		auto desc = bgpu::ComputeBufferDesc();
 		desc.SetElement<glm::vec4>()
 			.SetInitialCount(c_InitialFloat4s)
 			.SetDebugName("Bone Palette Arena");
@@ -57,8 +57,10 @@ namespace bgl
 		auto handle = tryAllocate(float4Count);
 		if (handle.is_null())
 		{
-			const uint32_t grown =
-				NextGpuBufferCapacity(Capacity(), Capacity() + float4Count, sizeof(glm::vec4));
+			const uint32_t grown = bgpu::NextGpuBufferCapacity(
+				Capacity(),
+				Capacity() + float4Count,
+				sizeof(glm::vec4));
 
 			// GPU side first: it is the one that can fail, and it leaves nothing behind when it does,
 			// so the allocator and the buffer cannot end up disagreeing on capacity.

@@ -4,7 +4,7 @@
 #include <format>
 #include <string>
 
-namespace bgl
+namespace bgpu
 {
 	std::string
 	GetErrorDescription(const NS::Error* error)

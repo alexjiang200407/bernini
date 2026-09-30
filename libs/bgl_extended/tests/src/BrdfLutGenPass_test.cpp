@@ -66,7 +66,7 @@ namespace
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
 		auto lut         = bgl::BrdfLutGenPass();
-		auto pipelines   = bgl::PipelineBatch(device);
+		auto pipelines   = bgpu::PipelineBatch(device);
 		auto drawBuckets = bgl::DrawBucketTable();
 		lut.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
 		pipelines.Build();
@@ -75,15 +75,17 @@ namespace
 		// readback below copies is created by the recording itself.
 		REQUIRE_FALSE(lut.Generated());
 
-		auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+		auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
 		// Registered so Generate's deferred RTV free gates on this queue's timeline; without it
 		// the free could reclaim the slot while the submission still draws through it.
 		resourceManager->RegisterQueue(cmdQueue.Get());
 
 		auto cmdAllocator = device->CreateCommandAllocator();
-		auto cmdList =
-			device->CreateCommandList({ bgl::QueueType::kGraphics }, cmdAllocator, resourceManager);
+		auto cmdList      = device->CreateCommandList(
+			{ bgpu::QueueType::kGraphics },
+			cmdAllocator,
+			resourceManager);
 
 		cmdList->Open(cmdQueue.Get(), cmdAllocator.Get());
 		lut.Generate(cmdList.Get());
@@ -91,19 +93,19 @@ namespace
 
 		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
 
-		auto rbDesc      = bgl::ReadbackBufferDesc();
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
 		rbDesc.byteSize  = layout.totalBytes;
 		rbDesc.debugName = "BRDF LUT Readback";
 
 		auto readback = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		auto toCopySource = bgl::TextureBarrierDesc();
-		toCopySource.AddSyncBefore(bgl::BarrierSyncFlag::kAllCommands)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kShaderResource)
-			.SetLayoutBefore(bgl::BarrierLayout::kShaderResource)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource)
-			.SetLayoutAfter(bgl::BarrierLayout::kCopySource);
+		auto toCopySource = bgpu::TextureBarrierDesc();
+		toCopySource.AddSyncBefore(bgpu::BarrierSyncFlag::kAllCommands)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kShaderResource)
+			.SetLayoutBefore(bgpu::BarrierLayout::kShaderResource)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kCopySource);
 		cmdList->Barrier(lut.GetTexture(), toCopySource);
 
 		cmdList->CopyTextureToReadback(readback, lut.GetTexture());

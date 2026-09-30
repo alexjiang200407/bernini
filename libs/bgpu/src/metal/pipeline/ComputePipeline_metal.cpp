@@ -19,7 +19,7 @@
 #include <string>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	namespace
 	{

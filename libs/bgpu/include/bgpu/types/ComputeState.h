@@ -1,6 +1,6 @@
 #pragma once
 
-namespace bgl
+namespace bgpu
 {
 	struct ComputeKernel;
 

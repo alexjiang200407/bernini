@@ -4,7 +4,7 @@
 #include <core/err/util.h>
 #include <core/math.h>
 
-namespace bgl
+namespace bgpu
 {
 	UploadManager::BufferChunk::~BufferChunk()
 	{

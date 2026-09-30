@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <span>
 
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * The RHI timestamp heap over an ID3D12QueryHeap of timestamp queries, with the readback buffer

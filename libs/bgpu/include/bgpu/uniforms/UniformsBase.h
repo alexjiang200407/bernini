@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace bgl
+namespace bgpu
 {
 	namespace detail
 	{
