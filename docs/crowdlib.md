@@ -188,10 +188,12 @@ and at tick 150 one cavalry group merges into the other; a moving group's report
 between its two ends; with `--frames` it steps a tick a frame and marches once. Boxes overlap where
 groups cross, since no constraint keeps agents apart yet. `--units N` multiplies every group (1 is
 136 agents) and grows the field by √N, and the log splits a frame's time into the crowd, posing a
-box per agent, and drawing. Measured on an M-series Mac in a debug build, the crowd's share stays
-under 0.1 ms of CPU from 136 to 35k agents; the frame grows with the posing, one
-`SetInstanceTransform` per agent, because the example reads the crowd back to the CPU (the
-GPU-to-renderer handoff is a later feature). `--frames N` exits non-zero unless
+box per agent, and drawing. In a release build on an M-series Mac the crowd's share stays at
+0.03 ms of CPU from 136 to 139k agents, and the GPU keeps a tick a frame, while the frame grows
+from 0.50 ms to 35 ms with drawing (one placement per agent) and posing (one `SetInstanceTransform`
+per agent): the cost of reading the crowd back to the CPU, which the GPU-to-renderer handoff, a
+later feature, removes. The release preset leaves examples off; measure with
+`-DBERNINI_BUILD_EXAMPLES=ON` in a build directory of its own. `--frames N` exits non-zero unless
 every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
 draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks
 at it.
