@@ -1,5 +1,6 @@
 #include "resource/UploadManager.h"
 #include "cmd/Version.h"
+#include <bgpu/MemoryTag.h>
 #include <bgpu/types/QueueType.h>
 #include <core/err/util.h>
 #include <core/math.h>
@@ -244,6 +245,7 @@ namespace bgpu
 		}
 
 		chunk->bufferSize = size;
+		chunk->tracked    = TaggedBytes(MemoryTag::kDeviceBuffer, size);
 		chunk->gpuVA      = chunk->buffer->GetGPUVirtualAddress();
 		chunk->identifier = uint32_t(m_ChunkPool.size());
 
