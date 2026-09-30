@@ -5,16 +5,12 @@
 #include <vector>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class IDevice;
 }
 
 namespace bgl
 {
-
 	/**
 	 * Reads every surface in `dir`, binds each to a slot, and generates the programs its draw
 	 * buckets draw through: an opaque, alpha-test and hashed colour program, and an arm in the

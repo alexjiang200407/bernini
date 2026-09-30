@@ -16,9 +16,6 @@
 #include <string>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class IDevice;
 	class PipelineBatch;

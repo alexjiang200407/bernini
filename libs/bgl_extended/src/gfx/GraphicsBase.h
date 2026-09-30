@@ -3,9 +3,6 @@
 #include <core/ref/SharedRef.h>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class IDevice;
 	class IResourceManager;

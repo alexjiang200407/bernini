@@ -6,9 +6,6 @@
 #include <spdlog/spdlog.h>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class PipelineBatch;
 	class IDevice;
@@ -17,7 +14,6 @@ namespace bgpu
 
 namespace bgl
 {
-
 	class FrameGraph;
 	class PassContext;
 	struct DrawData;

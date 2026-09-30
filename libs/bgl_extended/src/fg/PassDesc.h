@@ -16,9 +16,6 @@
 #include <vector>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class IResourceManager;
 	class ICommandList;

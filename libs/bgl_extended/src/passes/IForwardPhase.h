@@ -2,9 +2,6 @@
 #include <string_view>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	struct MeshletState;
 }

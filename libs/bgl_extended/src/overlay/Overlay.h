@@ -19,16 +19,12 @@
 #include <vector>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class ICommandList;
 }
 
 namespace bgl
 {
-
 	// A compiled geometry: a vertex buffer and an index buffer, both bindless.
 	struct OverlayGeometry
 	{

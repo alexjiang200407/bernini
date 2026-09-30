@@ -2,9 +2,6 @@
 #include <bgpu/resource/ResourceManager.h>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class IDevice;
 	class PipelineBatch;

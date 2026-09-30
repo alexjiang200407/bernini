@@ -9,9 +9,6 @@
 #include <spdlog/spdlog.h>
 
 namespace bgpu
-{}
-
-namespace bgpu
 {
 	class PipelineBatch;
 	class ICommandList;
@@ -19,7 +16,6 @@ namespace bgpu
 
 namespace bgl
 {
-
 	/**
 	 * The split-sum BRDF lookup table, generated at most once per device -- on the first frame
 	 * that draws a PBR-lit bucket, not at device creation, so a scene shaded entirely by lit
