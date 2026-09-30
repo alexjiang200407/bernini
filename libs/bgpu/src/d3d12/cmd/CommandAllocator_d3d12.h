@@ -1,6 +1,6 @@
 #pragma once
-#include "D3d12ErrorChecker.h"
 #include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/d3d12/D3d12ErrorChecker.h>
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
