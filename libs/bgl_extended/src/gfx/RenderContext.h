@@ -5,6 +5,7 @@
 #include "fg/PassTimer.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
 #include "overlay/Overlay.h"
 #include "passes/BlobShadowPass.h"
 #include "passes/BloomPass.h"

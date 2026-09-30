@@ -1,6 +1,7 @@
 #include "passes/PostProcessPass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "postprocess/color_grade.h"
 #include <array>

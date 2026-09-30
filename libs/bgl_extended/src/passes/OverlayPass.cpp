@@ -1,6 +1,7 @@
 #include "passes/OverlayPass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "overlay/Overlay.h"
 #include "passes/BindingNameCheck.h"
 #include <array>

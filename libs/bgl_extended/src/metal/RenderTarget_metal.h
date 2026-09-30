@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/frame_constants.h"
 #include "metal_cpp.h"
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>

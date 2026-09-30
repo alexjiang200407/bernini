@@ -1,4 +1,5 @@
 #include "RenderTarget_metal.h"
+#include "gfx/frame_constants.h"
 
 #include <CoreFoundation/CFCGTypes.h>
 #include <bgl/IRenderTarget.h>

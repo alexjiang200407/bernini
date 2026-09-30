@@ -1,5 +1,6 @@
 #pragma once
 #include "fg/PassTimer.h"
+#include "gfx/frame_constants.h"
 #include "postprocess/BloomChain.h"
 #include "postprocess/color_grade.h"
 #include <algorithm>

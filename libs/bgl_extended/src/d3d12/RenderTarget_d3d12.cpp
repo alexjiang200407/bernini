@@ -1,4 +1,5 @@
 #include "RenderTarget_d3d12.h"
+#include "gfx/frame_constants.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/d3d12/native_rhi.h>

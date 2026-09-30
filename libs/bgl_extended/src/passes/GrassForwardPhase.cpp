@@ -1,5 +1,6 @@
 #include "passes/GrassForwardPhase.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"

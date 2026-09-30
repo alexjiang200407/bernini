@@ -3,6 +3,7 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"

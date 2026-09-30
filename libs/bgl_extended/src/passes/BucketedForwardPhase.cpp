@@ -1,6 +1,7 @@
 #include "passes/BucketedForwardPhase.h"
 #include "fg/PassDesc.h"
 #include "gfx/DrawBucketTable.h"
+#include "gfx/frame_constants.h"
 #include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"

@@ -1,5 +1,6 @@
 #include "gfx/RenderContext.h"
 #include "fg/PassTimer.h"
+#include "gfx/frame_constants.h"
 #include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/types/FormatInfo.h>
 #include <core/glm.h>

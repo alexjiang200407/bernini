@@ -1,6 +1,7 @@
 #include "passes/BlobShadowPass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
 #include "scene/Scene.h"

@@ -1,5 +1,6 @@
 #pragma once
 #include "gfx/RenderTargetBase.h"
+#include "gfx/frame_constants.h"
 #include <bgl/IGraphics.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandQueue.h>

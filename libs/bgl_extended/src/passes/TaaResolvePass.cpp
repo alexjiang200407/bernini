@@ -1,6 +1,7 @@
 #include "passes/TaaResolvePass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include <algorithm>
 #include <array>

@@ -3,6 +3,7 @@
 #include "passes/OutlineMaskPass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/frame_constants.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "scene/scene_buffer_names.h"
