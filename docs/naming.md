@@ -139,8 +139,8 @@ in its own `.clang-tidy` rather than reporting clean over code nothing examined:
 | Not checked | Why | What lifts it |
 |---|---|---|
 | `libs/bgl_extended` (removals only) | its interfaces are `core::SharedRef<T>` behind `auto` — the row above | a human pass per file |
-| `libs/bgl_extended/src/d3d12`, `libs/core/src/win32`, `libs/core/src/web` | the macOS preset has no compile command for them | `just build --preset windows-clang-dx12-debug`, then `just tidy <dir>` |
-| `bgl_extended/src/cmd/Command{Allocator,List,Queue}.h`, `src/constants/constants.h`, `src/pch.h`, `gamelib/tests/src/util/RigFixture.h` | their directories hold no compiled `.cpp` for `tidy.py` to borrow flags from | a compiled source beside them |
+| `libs/bgl_extended/src/d3d12`, `libs/bgpu/src/d3d12`, `libs/core/src/win32`, `libs/core/src/web` | the macOS preset has no compile command for them | `just build --preset windows-clang-dx12-debug`, then `just tidy <dir>` |
+| `bgpu/include/bgpu/cmd/Command{Allocator,List,Queue}.h`, `bgpu/include/bgpu/constants/constants.h`, `bgl_extended/src/pch.h`, `gamelib/tests/src/util/RigFixture.h` | their directories hold no compiled `.cpp` for `tidy.py` to borrow flags from | a compiled source beside them |
 
 ## Where the config lives
 

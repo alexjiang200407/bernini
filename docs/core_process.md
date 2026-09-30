@@ -38,7 +38,7 @@ it says:
 | default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` | `STATIC` | `STATIC` |
 | `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` | `SHARED` | `SHARED` |
 | `BERNINI_EDITOR_SDK` on — a top-level build with Qt, by default | `SHARED` | `SHARED` | `SHARED` | `SHARED` |
-| `RENDERER_BACKEND=NONE` | not built | the compiler alone, `STATIC` | not built | `STATIC` |
+| `RENDERER_BACKEND=NONE` | not built | the compiler and the RHI's interfaces, no backend, `STATIC` | not built | `STATIC` |
 
 The default is the game that ships as one binary. The editor SDK implies the shared renderer:
 its plugins are DLLs that reach the renderer through shared `gamelib`, and the editor links the

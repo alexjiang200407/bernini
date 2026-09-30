@@ -7,7 +7,7 @@ graph then culls, orders, derives barriers, and records — see [Frame Graph](do
 that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
-[PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) in the
+[PipelineBatch](libs/bgpu/include/bgpu/pipeline/PipelineBatch.h) in the
 [PassInitContext](libs/bgl_extended/src/passes/PassInitContext.h) it is handed -- one argument for
 every pass, holding the device, the batch, the resource manager and the draw-bucket table -- naming
 the member each
@@ -84,7 +84,7 @@ motion-vector and depth handles, and the depth's shader-resource view), `lightin
 skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
 `c_SceneColorName` / `c_DepthName` in
-[constants/constants.h](libs/bgl_extended/src/constants/constants.h) are
+[gfx/frame_constants.h](libs/bgl_extended/src/gfx/frame_constants.h) are
 what both the importer and the passes name them by.
 
 ---

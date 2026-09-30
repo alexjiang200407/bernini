@@ -23,13 +23,12 @@ while (running)
 
 ## Design Choices
 
-* **It links `bgpu`, never `bgl_extended`.** The RHI stays hidden in the renderer, because it
-  assumes the GPU-driven bar and not every renderer clears it ([bgpu.md](bgpu.md) § Design
-  Choices). So this library reaches the device through `<bgpu/d3d12/native_device.h>` and
-  `<bgpu/metal/native_device.h>` and drives each API itself, from `src/d3d12/` and `src/metal/`. It
-  re-implements the small slice of an RHI it needs — a queue, a fence, a pipeline, two buffers — and
-  knowingly: when the crowd work multiplies that slice, sharing the renderer's RHI or keeping two
-  copies is a decision to make again.
+* **It links `bgpu`, never the renderer.** `bgpu` carries the RHI the renderer is built on
+  ([bgpu.md](bgpu.md) § Design Choices), so a device, a compute queue, pipelines and the buffer
+  family of this library's own are one `bgpu::CreateDevice` away, with nothing of `bgl` in the
+  process. The hash-fill job drives each API itself, through `<bgpu/d3d12/native_device.h>` and
+  `<bgpu/metal/native_device.h>`, from `src/d3d12/` and `src/metal/`: the slice of an RHI it wrote
+  before `bgpu` carried one -- a queue, a fence, a pipeline, two buffers.
 * **The async queue is a second queue, on both backends.** On D3D12 it is a
   `D3D12_COMMAND_LIST_TYPE_COMPUTE` queue with a fence. Metal has no compute-typed queue; its form of
   the same thing is a second `MTLCommandQueue`, whose command buffers the GPU may run concurrently

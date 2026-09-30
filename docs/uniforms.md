@@ -23,7 +23,7 @@ doc disagrees, trust the header, then fix this doc.
   way, and a change that "fixes" them to match would remove capability. Three reasons:
 
   1. **The layouts genuinely differ.** An `EntryBuffer<T>` element uses `ScalarDataLayout`
-     ([EntryBuffer.slang](libs/bgl_extended/shaders/src/lib/types/EntryBuffer.slang)), which is what makes the IDL
+     ([EntryBuffer.slang](libs/bgpu/shaders/src/lib/types/EntryBuffer.slang)), which is what makes the IDL
      mirror `memcpy`-compatible. A `ConstantBuffer<T>` rounds vectors to 16-byte boundaries and pads
      between members, so the same struct cannot serve both.
 
@@ -62,7 +62,7 @@ doc disagrees, trust the header, then fix this doc.
   samples nothing. The two accessors are what differ, not the two backends.
 
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
-  ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout
+  ([SlangReflection.h](libs/bgpu/include/bgpu/reflection/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what
   lets it survive into the [shader cache](docs/shader_cache.md) and be rebuilt from disk without
   loading a Slang module. Each `Uniforms` then builds its own node tree and owns its own bytes.
@@ -72,21 +72,21 @@ doc disagrees, trust the header, then fix this doc.
   handle's `bindlessIndex` into an 8-byte `DescriptorHandle` field. D3D12 indexes a directly-indexed
   heap with it; Metal rewrites it to a native address at dispatch. The root signature therefore
   carries only CBVs — one root parameter per cbuffer, no descriptor tables
-  ([PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
+  ([PipelineLayout_d3d12.cpp](libs/bgpu/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
 
 * **The mirror is two halves, and the seam is what a descriptor names.** `UniformsBase`
-  ([bgl_common](libs/bgl_common/include/bgl_common/UniformsBase.h)) holds everything a renderer
-  cannot own: the node tree, the byte buffer, name resolution, and one primitive that writes a
-  descriptor index into a member reflected as one. What a `BufferHandle` or a `SamplerHandle` *is*
-  -- which pool its index names, which smart-buffer member it lands in -- is the renderer's, so each
-  handle type is a `UniformAssign` specialisation in this renderer's `Uniforms.h`, and
-  `DescriptorHandle`, whose alignment is the backend's, reaches the value map the same way. The
-  neutral half compiles against `bgl_common` alone (`bgl_common_selfcheck`), which is the whole
-  point: a second renderer reuses the walk and writes its own leaf.
+  ([UniformsBase.h](libs/bgpu/include/bgpu/uniforms/UniformsBase.h)) holds what no handle type
+  owns: the node tree, the byte buffer, name resolution, and one primitive that writes a descriptor
+  index into a member reflected as one. What a handle *is* -- which pool its index names, which
+  smart-buffer member it lands in -- is its owner's, so each handle type is a `UniformAssign`
+  specialisation beside it: the RHI's in [Uniforms.h](libs/bgpu/include/bgpu/uniforms/Uniforms.h),
+  with `DescriptorHandle`, whose alignment is the backend's, reaching the value map the same way;
+  the renderer's `TextureAssetHandle` beside its `TextureAssetStore`. Both halves are `bgpu`'s, so a
+  compute client binds its own buffers with the same mirror the renderer does.
 
 * **A kernel is a pipeline plus one `Uniforms` per declared cbuffer, keyed by name.**
   `IDevice::CreateComputeKernel` / `CreateMeshletKernel`
-  ([Device.cpp](libs/bgl_extended/src/device/Device.cpp)) enumerate the pipeline's cbuffer names and build a
+  ([Device.cpp](libs/bgpu/src/device/Device.cpp)) enumerate the pipeline's cbuffer names and build a
   mirror for each. Pass code reaches uniforms only through the kernel.
 
 ---
@@ -159,7 +159,7 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 ### Resource assignment
 
 Each handle type finds its destination differently, and the rules are not symmetric. Every rule is
-a `UniformAssign` specialisation in [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h), and every
+a `UniformAssign` specialisation in [Uniforms.h](libs/bgpu/include/bgpu/uniforms/Uniforms.h), and every
 one ends in the accessor's `AssignDescriptorIndex`, which throws unless the member is a descriptor
 value:
 
@@ -194,9 +194,9 @@ only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is
 * **Index 0 is the unbound sentinel; no resource is ever allocated there.** The mirror is zero-filled,
   so an unassigned handle field reads index 0. Every allocator feeding a bindless handle reserves it —
   the D3D12 descriptor heaps
-  ([DescriptorAllocator_d3d12.cpp](libs/bgl_extended/src/d3d12/resource/DescriptorAllocator_d3d12.cpp)) and the
+  ([DescriptorAllocator_d3d12.cpp](libs/bgpu/src/d3d12/resource/DescriptorAllocator_d3d12.cpp)) and the
   Metal buffer/texture/sampler pools
-  ([ResourceManager_metal.cpp](libs/bgl_extended/src/metal/resource/ResourceManager_metal.cpp)) — so "never
+  ([ResourceManager_metal.cpp](libs/bgpu/src/metal/resource/ResourceManager_metal.cpp)) — so "never
   bound" cannot collide with "bound to the first resource handed out". @pre a new bindless-addressable
   pool must reserve `c_UnboundDescriptorIndex` too, or it reopens the hole.
 
@@ -221,7 +221,7 @@ only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is
 Metal reflection cannot report a handle-bearing cbuffer's byte layout: a bindless handle is a
 resource, invisible to the ordinary-data category, so the cbuffer measures zero bytes there while the
 emitted MSL lays each handle out as an 8-byte device pointer. `MetalizeLayout`
-([MetalPipelineReflection.cpp](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.cpp)) therefore
+([MetalPipelineReflection.cpp](libs/bgpu/src/metal/pipeline/MetalPipelineReflection.cpp)) therefore
 **discards the offsets, sizes and strides `ReflectLayoutFromSlang` produced and recomputes them from
 a hand-written model of MSL's alignment rules.**
 
@@ -238,7 +238,7 @@ does. Lifting it needs a test pinning the emitted offsets against the GPU.
 
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or
 `MetalAlign` must bump `c_CacheFormatVersion` in
-[ShaderCache_metal.cpp](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
+[ShaderCache_metal.cpp](libs/bgpu/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
 the old layout and the change appears not to work.
 
 ---

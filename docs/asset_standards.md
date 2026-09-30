@@ -284,7 +284,7 @@ source texture.
   — carries the raw **`vkFormat`** (the KTX2 container's native Vulkan format tag), cube flag, and
   D3D12-ordered (array-major, mip-minor) subresources. This is the API-neutral type between the codec
   (assetlib) and the RHI (bgl_extended): the codec stores KTX2's `vkFormat` verbatim, and `FromVkFormat` in
-  [libs/bgl_extended/src/types/vk_format.h](libs/bgl_extended/src/types/vk_format.h) turns it into a `bgl::Format`
+  [libs/bgl_extended/src/types/vk_format.h](libs/bgl_extended/src/types/vk_format.h) turns it into a `bgpu::Format`
   each backend then maps to its own. No DXGI leaks into assetlib.
 
 ---

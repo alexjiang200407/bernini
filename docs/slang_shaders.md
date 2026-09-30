@@ -1,11 +1,14 @@
 # Slang Shaders
 
-Every shader is one Slang source under one of three trees, and **both backends compile it at runtime**
+Every shader is one Slang source under one of four trees, and **both backends compile it at runtime**
 from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on Metal.
 
 ## The tree: a program has an entry point, a library module does not
 
 ```
+libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
+  idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
+  lib/  types/ debug/                 the buffer family (Entry, Range, Packed and Compute buffers) and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
@@ -13,16 +16,18 @@ libs/bgl_common/shaders/src/          what every renderer shares; names no buffe
   lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's clipped screen bounds, affine transform maths; vertex decode; plain view structs
 libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
-  lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
+  lib/        forward/ types/ screen/                imported, never dispatched; types/ is the rest of the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
 ```
 
-All three are staged into one `./shaders/src` beside the executable, the contract first and
-`bgl_common`'s next, so an `import` never says which tree a module came from. Which tree a module
+All four are staged into one `./shaders/src` beside the executable, `bgpu`'s first, the contract
+next and `bgl_common`'s after it, so an `import` never says which tree a module came from. Which tree a module
 belongs in is checked rather than asked for, and the checks point the way the C++ links:
-`bgl_check_shaders` compiles every contract module with only the contract on the search path;
-`bgl_common_check_shaders` compiles every shared module with the shared tree and the contract, and one
-that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the build with
+`bgpu_check_shaders` compiles every RHI module with only bgpu's tree on the search path, so a
+compute client never imports something a renderer holds; `bgl_check_shaders` compiles every contract
+module with only the contract on the search path;
+`bgl_common_check_shaders` compiles every shared module with the shared tree, the contract and bgpu's
+tree, and one that imports anything from the renderer — a `.Handle` wrapper, `lib.forward.common` — fails the build with
 `cannot open file`. The rule is the same one `bgl_selfcheck` and `bgl_common_selfcheck` hold the C++
 to. A game checks its own modules the same way, with the contract as the one path, and never sees
 the shared tree in the build or in the check.
@@ -109,9 +114,9 @@ let n = gCount.load();
 
 A buffer element works the same way — the element type carries the atomic — through
 `AtomicComputeBuffer<T>` (in
-[`lib/types/ComputeBuffer.slang`](../libs/bgl_extended/shaders/src/lib/types/ComputeBuffer.slang)), the atomic
+[`lib/types/ComputeBuffer.slang`](../libs/bgpu/shaders/src/lib/types/ComputeBuffer.slang)), the atomic
 counterpart of `ComputeBuffer<T>`. The debug record buffer
-([`lib/debug/dbg.slang`](../libs/bgl_extended/shaders/src/lib/debug/dbg.slang)) is the worked example.
+([`lib/debug/dbg.slang`](../libs/bgpu/shaders/src/lib/debug/dbg.slang)) is the worked example.
 
 When the atomic target is a **field of an IDL struct** (e.g. `DispatchArgs.threadCountX`,
 `CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgl_idlgen` maps

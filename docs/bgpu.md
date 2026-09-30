@@ -1,11 +1,13 @@
-# bgpu — the process's GPU device, owned by no renderer
+# bgpu — the process's GPU device and the RHI every owner builds on
 
 The process has one GPU device, and more than one library runs work on it: the renderer, and a
 library that runs its own compute beside the frame — the crowd simulation's, the first
 ([crowdlib.md](crowdlib.md)).
 `bgpu` is that device as an object of its own, with the debug layer that must precede it,
 the Slang sessions that compile for it and the cache of what they compiled: the application creates
-one and hands it to every owner.
+one and hands it to every owner. It is also the RHI each owner drives the device through -- a
+device, queues, resource managers, pipelines and the buffer family of its own
+([rhi.md](rhi.md)).
 
 ```cpp
 auto desc             = bgpu::GpuContextDesc();
@@ -15,7 +17,11 @@ desc.shaderCacheDir   = "shadercache";                  // every owner's compile
 
 auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug layer, bgpu.log
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
-// a compute client is another: it takes the same context
+
+auto device = bgpu::CreateDevice(context);              // another: a compute client's own device
+auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc());
+auto queue  = device->CreateCommandQueue(bgpu::QueueType::kCompute);
+rm->RegisterQueue(queue.Get());
 ```
 
 ## Design Choices
@@ -50,16 +56,32 @@ auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
   `MTL::BinaryArchive` — is one of them: it needs the native device, is dropped under GPU
   validation, and is serialized whole, so one writer per directory holds it
   ([shader_cache.md](shader_cache.md)). Metal's `.gputrace` capture is frame-scoped and stays in `Graphics`.
-* **The RHI is not here.** `IDevice`, `ICommandList`, `IResourceManager` and the rest are
-  `bgl_extended`'s and assume its GPU-driven bar. An owner other than the renderer reaches the
-  device through the backend header — [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),
-  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h) —
-  and drives the API itself.
+* **The RHI is here, and it is shared as classes, never as instances.** `IDevice`,
+  `ICommandList`, `IResourceManager` and the rest are `bgpu`'s, and assume the engine's one bar:
+  bindless resource access and a mesh stage ([rhi.md](rhi.md)). There is no lower tier to hide them
+  from, so a compute client uses them rather than a copy of its own. Each owner calls
+  `bgpu::CreateDevice` on the shared context and makes everything else from that device -- the list
+  above is what keeps owners isolated. A resource manager is not tied to a frame loop: queues
+  register themselves with it, and its owner calls `CleanupExpiredResources` when it likes. What
+  the RHI cannot say portably the backend headers do --
+  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),
+  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h), and `native_rhi.h`
+  beside each, through which the renderer's swapchain reaches a queue or a texture.
+* **Its Slang half is staged first.** The offset primitives (`idl.Entry`, `idl.Range` ...), the
+  buffer family (`lib.types.EntryBuffer` ...) and the GPU assert channel (`lib.debug.dbg`,
+  `idl.ErrorCode`, `idl.DebugRecord`) live under `libs/bgpu/shaders/src` and stage into the one
+  `./shaders/src` every session resolves from, ahead of every tree that imports them; each module is
+  checked against bgpu's tree alone. The sessions define `BERNINI_GPU_DEBUG` for every owner, so an
+  owner whose kernels assert binds an assert buffer of its own (`bgpu::DebugBuffer`,
+  `ICommandList::SetActiveDebugBuffer`); reading the records back is that owner's business.
 * **Built as the renderer is.** It holds process-wide GPU state, so `BERNINI_RENDERER_LIBRARY_TYPE`
   decides its kind exactly as it does `bgl_extended`'s and `core_process`'s
-  ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks the few exports —
-  `CreateGpuContext`, the two native-device accessors, the D3D12 error checker and the Slang error
-  checker; everything else crosses the boundary through virtual calls. On Metal it is
+  ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks what is defined here
+  and called from outside without a virtual call -- `CreateGpuContext`, `CreateDevice`, the native
+  accessors, the error checkers, and the out-of-line members of the RHI's concrete classes (the
+  cbuffer mirror, the growable and compute buffers, the pipeline batch); the interfaces cross the
+  boundary through virtual calls. `bgpu_selfcheck` compiles each public header against `bgpu`
+  alone, so none reaches into a renderer. On Metal it is
   also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
   user in the process links.
 

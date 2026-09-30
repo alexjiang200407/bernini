@@ -19,7 +19,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   compile out of Release. It is a Debug-config define for C++
   ([CMakeLists.txt](CMakeLists.txt), `$<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>`); the runtime Slang
   session forwards the same macro into shaders it compiles at PSO creation, gated by the C++
-  define ([Device_d3d12.cpp](libs/bgl_extended/src/d3d12/device/Device_d3d12.cpp)). In Release, `dbg_raise`
+  define ([Device_d3d12.cpp](libs/bgpu/src/d3d12/device/Device_d3d12.cpp)). In Release, `dbg_raise`
   is an empty function and no handler is ever invoked.
 * **GPU assertions travel through an implicit, engine-bound UAV.** Shaders never declare the
   debug buffer; they `import debug.dbg` and call `dbg_raise(errcode)`, which writes into the
@@ -40,8 +40,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   throw `GraphicsError`/`ApiError` so the caller can handle them. See
   [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md).
 * **The word layout of the debug buffer is duplicated in two places on purpose** — the GPU
-  writer ([dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang)) and the CPU reader
-  ([DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h)) each hardcode `kHeaderWords=4`,
+  writer ([dbg.slang](libs/bgpu/shaders/src/lib/debug/dbg.slang)) and the CPU reader
+  ([DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h)) each hardcode `kHeaderWords=4`,
   `kRecordWords=1`. They **must** stay in sync; there is no shared source for them.
 
 ---
@@ -66,7 +66,7 @@ A GPU→CPU assertion channel. A shader detects a bad condition and calls `dbg_r
 reads the buffer back a few frames later and either crashes (`core::fatal`) or forwards a report to a
 registered handler.
 
-**Shader side** — [libs/bgl_extended/shaders/src/lib/debug/dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang):
+**Shader side** — [libs/bgpu/shaders/src/lib/debug/dbg.slang](libs/bgpu/shaders/src/lib/debug/dbg.slang):
 * `dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)` — atomically
   appends one record; sets the overflow flag if the buffer is full.
 * `dbg_assert(bool condition, ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)`
@@ -77,8 +77,8 @@ registered handler.
   something went wrong, which cannot be traced back to *which* draw. One bad submesh raises once per
   vertex, so a bare errcode arrives a thousand times over and still names nothing.
 * Error codes are the generated enum
-  [idl/ErrorCode.slang](libs/bgl_common/shaders/src/idl/ErrorCode.slang) / C++ mirror
-  `<build>/generated/bgl_common/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
+  [idl/ErrorCode.slang](libs/bgpu/shaders/src/idl/ErrorCode.slang) / C++ mirror
+  `<build>/generated/bgpu_idl/bgpu/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
   new codes there, not inline — and give the new code a name in `ErrorCodeName`
   ([DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h)), which the build enforces. See
   [IDL Codegen](docs/idlgen.md).
@@ -95,9 +95,9 @@ registered handler.
 
 | Type / entry | File | Role |
 |---|---|---|
-| `DebugBuffer` | [libs/bgl_extended/src/debug/DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
+| `DebugBuffer` | [libs/bgpu/include/bgpu/debug/DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
 | `InspectDebugReadback` | [libs/bgl_extended/src/debug/DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h) | Pure decode of a mapped readback → `DebugReport` (`nullopt` if nothing fired) |
-| `ICommandList::SetActiveDebugBuffer` | [libs/bgl_extended/src/cmd/CommandList.h](libs/bgl_extended/src/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
+| `ICommandList::SetActiveDebugBuffer` | [libs/bgpu/include/bgpu/cmd/CommandList.h](libs/bgpu/include/bgpu/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
 | Orchestration | [libs/bgl_extended/src/gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
 
 ### Data flow
@@ -125,8 +125,8 @@ flowchart TD
   own buffer. `gDebug` has no explicit `register()`; its binding is assigned at link time and
   the engine wires the live buffer from reflection, so every shader that imports `debug.dbg`
   gets it auto-bound.
-* **Layout constants must match** between [DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) and
-  [dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
+* **Layout constants must match** between [DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h) and
+  [dbg.slang](libs/bgpu/shaders/src/lib/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
   Changing a record's shape means editing both, plus the `DebugRecord` IDL struct the readback
   decodes over the words. A `static_assert` in `DebugBuffer.h` catches the struct and the word count
   disagreeing; nothing catches `dbg.slang` disagreeing, so change it in the same commit.
@@ -411,5 +411,5 @@ header, barrier to UAV, `SetActiveDebugBuffer()`, `Dispatch()`, barrier to copy-
 The file links in the tables and section headers are the load-bearing part of this doc; they rot
 silently if files move or are renamed. When the debug/logging layout changes — especially the
 buffer word layout duplicated across
-[DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) and
-[dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang) — re-check the links and the constants.
+[DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h) and
+[dbg.slang](libs/bgpu/shaders/src/lib/debug/dbg.slang) — re-check the links and the constants.
