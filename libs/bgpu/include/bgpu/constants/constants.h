@@ -21,9 +21,7 @@ namespace bgpu
 	/**
 	 * The struct member name for the key for the smart buffers
 	 */
-	constexpr std::array<std::string_view, 5> c_SmartBufferUniformIndices = { "entryBuffer",
-		                                                                      "handleBuffer",
-		                                                                      "packedBuffer",
-		                                                                      "rangeBuffer",
-		                                                                      "rawBuffer" };
+	constexpr std::array<std::string_view, 5> c_SmartBufferUniformIndices = {
+		{ "entryBuffer", "handleBuffer", "packedBuffer", "rangeBuffer", "rawBuffer" }
+	};
 }
