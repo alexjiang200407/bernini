@@ -2,13 +2,11 @@
 
 A 3D engine targeting a **battle game**: many skinned, instanced units under a single
 directional sun, forward-rendered, PBR now and an ink/toon path later, with a dedicated
-authoring editor. The game ships cross-platform (Windows / Linux / Xbox), and **iOS through
-Dawn/WebGPU** — which is the `bgl_wgpu` baseline tier under Optional Features, not an RHI backend,
-because a device without a mesh stage misses the bar `bgl_extended` assumes. The editor is
-Windows-only.
+authoring editor. The game ships cross-platform (Windows / Linux / Xbox) on devices with bindless
+resource access and a mesh stage; a device below that bar is out of scope, not a lower tier. The
+editor is Windows-only.
 
-iOS is why memory has a budget rather than a preference: that platform terminates on footprint
-instead of degrading. `docs/profiling.md` § Memory is what measures it, and the Capacity policy
+Memory has a budget rather than a preference. `docs/profiling.md` § Memory is what measures it, and the Capacity policy
 section below is written in exactly those bytes.
 
 This roadmap is a living checklist. Legend:
@@ -34,13 +32,11 @@ and portability.
 - **Instances are the unit of scale.** Thousands of units means per-instance data must be
   compact and GPU-resident; per-unit CPU updates are the enemy.
 - **RHI stays API-agnostic — among APIs with bindless resource access and mesh shaders.** All D3D12
-  lives in `bgl_d3d12`, all Metal in `bgl_metal` — except the device itself, which `bgpu`
-  creates and every owner of GPU work shares. Every feature added to `bgl_extended` must be expressible
+  lives in `bgpu`'s `src/d3d12` and the renderer's `bgl_d3d12`, all Metal in their Metal halves, so
+  every owner of GPU work shares one RHI. Every feature added to `bgl_extended` must be expressible
   without leaking backend types, so Vulkan stays viable. An API that clears that bar is a backend;
-  one that does not is a second renderer above `bgl`'s public interface, not under the RHI. `bgl`
-  names that interface and nothing else; a renderer under it is named for what it is built on, and
-  `bgl_extended` is the tier that assumes the bar above.
-- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_common/idl`). New
+  one that does not is out of scope.
+- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_extended/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
 
@@ -63,7 +59,7 @@ and portability.
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
     dead-pass culling (`libs/bgl_extended/src/fg`)
-  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl_common/idl`)
+  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl_extended/idl`)
   - [x] GPU instance render
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema
@@ -463,15 +459,6 @@ and portability.
 - [ ] Forward++ Shading
 - [ ] Screen space reflections
 - [ ] Gpu Virtual Memory
-- [ ] `bgl_wgpu`, the baseline tier — **not** an RHI backend. Tried once as one and abandoned: WebGPU
-  has no bindless heap, no descriptor indexing and no mesh stage, so the whole port went on emulating
-  what the renderer already had. It is a second renderer above `bgl`'s public interface, where the
-  engine's binding model is not the thing being translated. It serves the browser, and natively it is
-  the fallback for a device that misses the bar `bgl_extended` assumes — so the two ship side by side
-  and neither one is "the native one". What that costs is a renderer, not a device layer: no meshlet
-  pipeline, no GPU-driven material lookup, its own culling and its own shaders. Choosing WebGPU as the
-  substrate buys writing that device layer once instead of once per API; it does not buy the
-  architecture. Whether the tier is picked at configure time or probed at runtime is undecided.
 - [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
 - [ ] Analytic heightfield occlusion — march the height texture from camera to unit, useful only if
   occlusion is needed before Forward World's first phase or on a separate timeline.

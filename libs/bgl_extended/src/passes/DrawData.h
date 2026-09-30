@@ -1,8 +1,8 @@
 #pragma once
 #include "types/EnvironmentMap.h"
+#include <bgl/idl/CullView.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/idl/CullView.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/FrameBuffer.h>

@@ -66,9 +66,8 @@ add_custom_command(
 )
 add_custom_target(bgl_copy_contract_shaders ALL DEPENDS "${BGL_SHADER_STAMP}")
 
-# Membership, enforced the way bgl_common_check_shaders enforces the shared tree's: every module
-# here is compiled with only this tree on the search path, so an import of anything else fails to
-# resolve. A game runs the same check on its own modules with this tree as the one path.
+# Membership: every module here is compiled with only this tree on the search path, so an import of
+# anything else fails to resolve. A game runs the same check on its own modules with this tree as the one path.
 #
 # The port stages slangc beside slangd under vcpkg's tools/, which is not on PATH; the hint is what
 # finds it on a preset whose renderer never runs a build-time shader step of its own. This is the

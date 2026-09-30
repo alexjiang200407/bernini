@@ -1,5 +1,5 @@
 #include "types/SubmeshInstance.h"
-#include <bgl_common/idl/Constants.h>
+#include <bgl/idl/Constants.h>
 #include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

@@ -6,11 +6,11 @@
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <bgl/idl/Geom.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/Geom.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 

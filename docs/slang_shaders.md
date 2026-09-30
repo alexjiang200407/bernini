@@ -1,6 +1,6 @@
 # Slang Shaders
 
-Every shader is one Slang source under one of four trees, and **both backends compile it at runtime**
+Every shader is one Slang source under one of three trees, and **both backends compile it at runtime**
 from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on Metal.
 
 ## The tree: a program has an entry point, a library module does not
@@ -11,36 +11,21 @@ libs/bgpu/shaders/src/                the RHI's: what any owner of the device im
   lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle) and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
-libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
-  idl/                                the IDL modules, the one source bgl_idlgen mirrors to C++; see docs/idlgen.md
-  lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's clipped screen bounds, affine transform maths; vertex decode; plain view structs
-libs/bgl_extended/shaders/src/        this renderer's own
+libs/bgl_extended/shaders/src/        the renderer's
+  idl/                                the IDL modules, the one source bgpu_idlgen mirrors to C++; see docs/idlgen.md
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
-  lib/        forward/ types/ screen/                imported, never dispatched; types/ is the rest of the binding layer, screen/ the post pass's LUT
+  lib/        anim/ math/ geom/ data/                handle-free: the pose walk and vertex blend, the foot-plant solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's screen bounds, transform maths; vertex decode; plain view structs
+              forward/ types/ screen/ culling/        imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
 ```
 
-All four are staged into one `./shaders/src` beside the executable, `bgpu`'s first, the contract
-next and `bgl_common`'s after it, so an `import` never says which tree a module came from. Which tree a module
-belongs in is checked rather than asked for, and the checks point the way the C++ links:
+All three are staged into one `./shaders/src` beside the executable, `bgpu`'s first, the contract
+next and the renderer's after it, so an `import` never says which tree a module came from. Which tree
+a module belongs in is checked rather than asked for, and the checks point the way the C++ links:
 `bgpu_check_shaders` compiles every RHI module with only bgpu's tree on the search path, so a
 compute client never imports something a renderer holds; `bgl_check_shaders` compiles every contract
-module with only the contract on the search path;
-`bgl_common_check_shaders` compiles every shared module with the shared tree, the contract and bgpu's
-tree, and one that imports anything from the renderer — a `.Handle` wrapper, `lib.forward.common` — fails the build with
-`cannot open file`. The rule is the same one `bgl_selfcheck` and `bgl_common_selfcheck` hold the C++
-to. A game checks its own modules the same way, with the contract as the one path, and never sees
-the shared tree in the build or in the check.
-
-Resolving is half of it: the second renderer's target is WGSL, and a module alone lowers to nothing,
-because Slang emits per entry point. So every shared `lib/` module has a **driver** under
-`libs/bgl_common/shaders/wgsl/` — `PS<Module>.slang` or `CS<Module>.slang`, the stage the renderer
-runs the module at, which for one that takes derivatives can only be fragment — a minimal entry at
-that stage calling its public functions, which
-`bgl_common_check_wgsl` compiles `-target wgsl` on every preset. Slang checks stage capabilities as it
-lowers, so `ddx` reached from a compute driver stops the build naming the line. A driver is also the
-readable statement of what a second renderer calls; a module gains a public function, the driver gains
-a call. It is lowering, not validation — nothing here runs tint, which arrives with Dawn.
+module with only the contract on the search path. A game checks its own modules the same way, with
+the contract as the one path, and never sees the renderer's tree in the build or in the check.
 
 **The directory is the module name.** `programs/forward/PBR.slang` is
 `programs.forward.PBR` — what `IDevice::CreateShader` is handed, and what an `import` names. One name
@@ -63,16 +48,15 @@ On a D3D12 build only, there is a build-time pass over the same sources:
 each program's entry points out of its `[shader("…")]` attributes, and invokes `slangc` once per
 entry point — so a construct the target rejects is a build failure rather than a runtime surprise.
 The `.dxil` it produces is validation output only, and nothing loads it. A Metal build does not run
-this step at all — `libs/bgl_extended/CMakeLists.txt:128-129` adds the `shaders` subdirectory under
+this step at all — `libs/bgl_extended/CMakeLists.txt` adds the `shaders` subdirectory under
 `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when the
 pass that needs it is first built, not at compile time.
 
-## Shared math is handle-free: three rules for a module under `lib/`
+## Shading math is handle-free: three rules for `lib/anim`, `lib/math`, `lib/geom`, `lib/data`
 
-The shared tree is where the look is defined — the BRDF, the skinning, the vertex decode, the TAA
-resolve — and both renderers run one body of it so the image is the same on each. A module gets
-there by never naming what it reads from. Three rules, applied to any function a second renderer
-could want:
+These modules are where the look is defined — the BRDF, the skinning, the vertex decode, the TAA
+resolve — and each is called from more than one program, and from the test kernels that pin its
+numbers. A module stays callable from all of them by never naming what it reads from:
 
 1. **An interface never takes a binding type as a parameter.** A method that needs a sampler or a
    buffer takes it from the implementation that holds it, not from the caller —
@@ -86,18 +70,14 @@ could want:
    nothing more.
 3. **Buffer access lives in thin named accessors, never inline in the math.** The struct that
    conforms — `TaaResolveData`, `SkinnedPose`, `SurfaceEnv`, `TonemapLut` — is where a `.Handle` is dereferenced,
-   one line per read. So a renderer without bindless writes those lines and none of the math, and a
-   changed read changes in one place.
+   one line per read. So a test kernel supplies its reads without a scene, and a changed read
+   changes in one place.
 
-The build holds a module to it mechanically: `bgl_common_check_shaders` fails a module that imports
-anything neither the shared tree nor the contract below it holds, and `bgl_common_check_wgsl` fails
-one that does not lower to WGSL at the stage its driver names. What the rules add is the judgement
-the gates cannot make — a function that takes a `Texture2D.Handle` resolves fine and lowers fine,
-and is still the one thing the second renderer cannot call. And a module can pass both and still
-belong to this renderer: `lib/forward/common.slang` names no handle, and `ForwardVSOut` in it is the
-forward path's interpolant contract, `SV_Position` and a `MATERIAL` semantic included. What is
-shared is what every renderer computes; what one renderer's passes agree on between themselves stays
-with them, however clean it looks.
+No build check holds a module to these; they are judgement. A module can keep all three and still
+belong to one path: `lib/forward/common.slang` names no handle, and `ForwardVSOut` in it is the
+forward path's interpolant contract, `SV_Position` and a `MATERIAL` semantic included. What goes in
+the handle-free directories is what several passes compute; what one path's passes agree on between
+themselves stays with them, however clean it looks.
 
 
 ## Atomics: `Atomic<T>`, never a plain field + `InterlockedAdd`
@@ -119,7 +99,7 @@ counterpart of `ComputeBuffer<T>`. The debug record buffer
 ([`lib/debug/dbg.slang`](../libs/bgpu/shaders/src/lib/debug/dbg.slang)) is the worked example.
 
 When the atomic target is a **field of an IDL struct** (e.g. `DispatchArgs.threadCountX`,
-`CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgl_idlgen` maps
+`CullStats.tested`), make that field `Atomic<uint>` in the IDL source. `bgpu_idlgen` maps
 `Atomic<uint>` to a plain `uint32_t` in the C++ mirror — layout-identical, so `sizeof`/`offsetof` are
 unchanged and all CPU code is untouched. A non-atomic writer of the same struct writes the field
 through `.store`: a positional aggregate initializer cannot fill an atomic member.
@@ -132,7 +112,7 @@ never carries a `register(tN, spaceM)`: `pipeline_util::BuildPipelineLayout` lin
 points into one program, so bytecode and reflection come from the same link and always agree.
 
 `EntryBuffer<T>` additionally asks for `ScalarDataLayout`, giving tight C-compatible packing so its
-element matches the CPU mirror `bgl_idlgen` emits — the default structured-buffer layout
+element matches the CPU mirror `bgpu_idlgen` emits — the default structured-buffer layout
 16-byte-aligns nested handle structs, which the mirror does not.
 
 ## A raw buffer holds bytes, and never a resource handle

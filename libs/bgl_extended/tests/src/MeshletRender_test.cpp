@@ -5,8 +5,8 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl/idl/DispatchArgs.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/idl/DispatchArgs.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

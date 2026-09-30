@@ -22,13 +22,13 @@
 #include <vector>
 
 /**
- * bgl_idlgen - generate C++ POD structs, enums, and constants from an `.slang` IDL module, keeping
+ * bgpu_idlgen - generate C++ POD structs, enums, and constants from an `.slang` IDL module, keeping
  * the CPU definitions in lockstep with the module the shaders import.
  *
  * Usage:
- *   bgl_idlgen --src-root <dir> --cpp-out-dir <dir>
- *              [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]...
- *              [--extern <dir>=<namespace>]... <input.slang>
+ *   bgpu_idlgen --src-root <dir> --cpp-out-dir <dir>
+ *               [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]...
+ *               [--extern <dir>=<namespace>]... <input.slang>
  */
 
 using Slang::ComPtr;

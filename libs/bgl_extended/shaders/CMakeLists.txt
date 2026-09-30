@@ -18,11 +18,9 @@ set(SLANG_DXC "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>")
 
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
-# The shared tree: idl.* resolves from here, and nothing under it is this renderer's to compile.
-set(SLANG_COMMON_ROOT "${BERNINI_ROOT}/libs/bgl_common/shaders/src")
-# The contract below both: bgl.* resolves from here.
+# The contract below it: bgl.* resolves from here.
 set(SLANG_CONTRACT_ROOT "${BGL_SHADER_CONTRACT_ROOT}")
-# The RHI's tree below all three: the offset primitives, the buffer family and the assert channel.
+# The RHI's tree below both: the offset primitives, the buffer family and the assert channel.
 set(SLANG_BGPU_ROOT "${BGPU_SHADER_ROOT}")
 
 
@@ -60,7 +58,7 @@ foreach(SHADER ${SLANG_PROGRAM_SOURCES})
             TARGET       "dxil"
             STAGE        "${ENTRY_PROFILE}"
             DXC          "${SLANG_DXC}"
-            INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT} ${SLANG_BGPU_ROOT} ${SLANG_BGPU_ROOT}/idl
+            INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_CONTRACT_ROOT} ${SLANG_BGPU_ROOT} ${SLANG_BGPU_ROOT}/idl
             ENTRY_POINTS "${ENTRY_NAME}"
         )
     endforeach()
@@ -91,7 +89,7 @@ if (BUILD_TESTS)
             OUT_DIR  "${SHADER_OUT_DIR}"
             TARGET   "dxil"
             DXC      "${SLANG_DXC}"
-            INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT} ${SLANG_BGPU_ROOT} ${SLANG_BGPU_ROOT}/idl
+            INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_CONTRACT_ROOT} ${SLANG_BGPU_ROOT} ${SLANG_BGPU_ROOT}/idl
         )
 
         list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")

@@ -1,8 +1,8 @@
-#include <bgl_common/SurfaceReflection.h>
+#include "gfx/SurfaceReflection.h"
 
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
-#include <bgl_common/idl/GameSurfaceRecord.h>
+#include <bgl/idl/GameSurfaceRecord.h>
 #include <bgpu/reflection/SlangReflection.h>
 
 #include <algorithm>
@@ -127,7 +127,7 @@ namespace bgl
 		}
 
 		// A record is read with RawBuffer.Load<T>, which reconstructs its type from scalar loads,
-		// so these are the offsets under the scalar rules -- the same ones bgl_idlgen mirrors every
+		// so these are the offsets under the scalar rules -- the same ones bgpu_idlgen mirrors every
 		// other record under. The caller's session decides: on a DXIL target this is that layout,
 		// on a Metal one it is MSL's, which belongs to a structured buffer's element and not to a
 		// raw load. See the header.

@@ -1,9 +1,9 @@
 #pragma once
 #include <bgl/GeomType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
-#include <bgl_common/idl/DrawBucket.h>
 #include <cstdint>
 #include <span>
 #include <unordered_map>

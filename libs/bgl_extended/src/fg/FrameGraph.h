@@ -1,8 +1,8 @@
 #pragma once
 #include "debug/BufferPoisoner.h"
 #include "fg/PassDesc.h"
+#include "fg/PassScheduler.h"
 #include "fg/PassTimer.h"
-#include <bgl_common/PassScheduler.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/resource/Buffer.h>

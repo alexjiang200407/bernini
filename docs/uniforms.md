@@ -3,7 +3,7 @@
 The uniforms layer is the CPU side of every constant buffer a shader declares. One `Uniforms` holds
 a flat byte mirror of one cbuffer plus the reflected tree used to address it, so pass code writes
 `kernel["cbuffer"]["member"] = value` and the backend uploads the bytes at draw or dispatch time. It
-covers **constant buffers only** — structured-buffer contents go through `bgl_idlgen` instead, and
+covers **constant buffers only** — structured-buffer contents go through `bgpu_idlgen` instead, and
 [Design Choices](#design-choices) is where that split is justified.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the non-obvious
@@ -17,7 +17,7 @@ doc disagrees, trust the header, then fix this doc.
 ## Design Choices
 
 * **Bernini solves CPU/GPU layout parity twice, deliberately. Do not unify them.** Structured
-  buffers go through [bgl_idlgen](docs/idlgen.md): one Slang IDL struct becomes a generated C++
+  buffers go through [bgpu_idlgen](docs/idlgen.md): one Slang IDL struct becomes a generated C++
   mirror carrying `static_assert(sizeof(...))` and per-field `static_assert(offsetof(...))`, and the
   CPU `memcpy`s it straight in — parity proven at compile time. Constant buffers do **not** work this
   way, and a change that "fixes" them to match would remove capability. Three reasons:
@@ -46,7 +46,7 @@ doc disagrees, trust the header, then fix this doc.
 
 * **A third regime, for a struct the engine does not own.** A game surface declares its parameters
   in its own Slang module, so there is nothing to generate a mirror from at build time:
-  `ReflectSurface` ([SurfaceReflection.h](libs/bgl_common/include/bgl_common/SurfaceReflection.h))
+  `ReflectSurface` ([SurfaceReflection.h](libs/bgl_extended/src/gfx/SurfaceReflection.h))
   walks the parameter struct's *structured-buffer* element layout instead, and the packer writes
   each field by the offset that walk returned. It is the cbuffer regime's reflection applied to the
   IDL regime's layout, and it exists because the third choice — a manifest the game commits beside
@@ -54,7 +54,7 @@ doc disagrees, trust the header, then fix this doc.
 
   The layout it walks must be the **scalar** one, which means reflecting on a DXIL target whatever
   backend will draw the surface. A record is read with `RawBuffer.Load<T>`, and a raw load
-  reconstructs its type from scalar loads on every backend — the same rules `bgl_idlgen` mirrors
+  reconstructs its type from scalar loads on every backend — the same rules `bgpu_idlgen` mirrors
   every other record under. A Metal target reflects a structured-buffer *element* instead, under
   MSL's rules, where a `float3` aligns to 16 rather than packing at 4. That is a true layout for
   `EntryBuffer<T>` and the wrong one here, and it fails quietly: every field after the first vector

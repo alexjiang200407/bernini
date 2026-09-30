@@ -1,14 +1,14 @@
 #include "gfx/surface_registry.h"
 
 #include "gfx/DrawBucketTable.h"
+#include "gfx/SurfaceReflection.h"
 #include "passes/draw_bucket_config.h"
 #include "util/util.h"
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bgl/types/LayerType.h>
-#include <bgl_common/SurfaceReflection.h>
-#include <bgl_common/idl/DrawBucket.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/device/Device.h>
 #include <core/err/util.h>
@@ -294,8 +294,8 @@ namespace bgl
 			}
 			catch (const std::exception& e)
 			{
-				// The reflection answers to bgl_common, which cannot throw the API's error; this is
-				// the seam where a bad module becomes one the client catches.
+				// The reflection throws a plain error; this is the seam where a bad module becomes
+				// one the client catches.
 				throw ApiError(e.what());
 			}
 

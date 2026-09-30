@@ -11,7 +11,7 @@ We don't want to duplicate the structs shared shader and cpu side. We can forget
 # Struct Example
 
 ```
-// libs/bgl_common/shaders/src/idl/A.slang
+// libs/bgl_extended/shaders/src/idl/A.slang
 
 import a.C;
 import D;
@@ -43,7 +43,7 @@ namespace idl {
 };
 ```
 
-In `<build>/generated/bgl_common/idl/A.h`
+In `<build>/generated/bgl_idl/bgl/idl/A.h`
 
 ```slang
 // THIS IS A FILE GENERATED FROM A.slang. DO NOT EDIT MANUALLY

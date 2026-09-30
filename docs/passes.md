@@ -95,7 +95,7 @@ Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the ren
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
-[lib/math/Tonemap.slang](libs/bgl_common/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
+[lib/math/Tonemap.slang](libs/bgl_extended/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
@@ -107,7 +107,7 @@ converted by `scripts/gen_agx_lut.py` into
 `TonemapLut` ([postprocess/TonemapLut.h](libs/bgl_extended/src/postprocess/TonemapLut.h)) uploads it once at device
 init. The file is a 2D strip of 57 slices rather than a 3D texture because neither backend's
 `WriteTexture` fills one yet; `StripLutTaps3D` in the same module is the trilinear read over that
-layout, shared so a second renderer's `ITonemapLut` does not re-derive it. The datafile reaches the
+layout, beside the curve it samples. The datafile reaches the
 tree under Blender's GPL-2-or-later. `AgxCalibration_test` pins the result to a twelve-point sweep
 measured off Blender itself, middle grey at display 0.461 — where sRGB puts it, not 0.5 — and
 `BlenderParity_test` checks a lit sphere against Blender's Cycles pixels. Regenerate the strip when
@@ -274,7 +274,7 @@ and returns a `SurfaceLobes` (diffuse, specular, the reflectance the specular lo
 emissive) instead of a summed colour, and the callers weight it. `MaterialData::ShadeSurface` sums
 them into RGB radiance; opaque, cutout and hashed callers attach the TAA depth-validity alpha.
 `MaterialData::ShadeSurfaceBlended` is the only caller of `BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
-[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Those two are the
+[lib/math/PbrShading.slang](libs/bgl_extended/shaders/src/lib/math/PbrShading.slang). Those two are the
 only BRDF entries; the four shading entry points the programs call (`Shade`, `ShadeBlended`,
 `ShadeAlphaTested`, `ShadeHashedAlpha`) each fill a `PbrSurface` from the engine's record and hand it to
 one of them. All of it is in
@@ -298,7 +298,7 @@ surface writes depth and participates, and the correct blend is what the ensembl
 It resolves to a hashed draw bucket per (tier, material kind), which is **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the draw-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
-threshold ([lib/math/HashedAlpha.slang](libs/bgl_common/shaders/src/lib/math/HashedAlpha.slang)) instead of the
+threshold ([lib/math/HashedAlpha.slang](libs/bgl_extended/shaders/src/lib/math/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
 self-occluding surface writes real depth.
 
@@ -336,7 +336,7 @@ view twice in a frame reports the same history to both draws rather than letting
 the first as history.
 
 When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
-`HaltonJitter` ([bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h)) that `RenderContext::Draw`
+`HaltonJitter` ([gfx/jitter.h](libs/bgl_extended/src/gfx/jitter.h)) that `RenderContext::Draw`
 left-multiplies onto it, so the sample grid walks a *render* pixel's footprint. Across eight frames
 where the render and output grids coincide; across more when the output grid is denser and each of
 its sub-pixels wants that walk of its own ([Temporal Antialiasing](docs/taa.md)). The client's
@@ -515,7 +515,7 @@ many instances turn out to be transparent; only the sort itself is bounded.
 Writes every skinned instance's bone palette: one workgroup per instance, one thread per bone
 (striding when a rig has more bones than `cPoseGroupSize`). Once per group it resolves the record's
 `cBlendSlots` weighted slots at `ViewData::time` — each slot's weight from its ramp
-([blend_slots.slang](libs/bgl_common/shaders/src/lib/anim/blend_slots.slang)), and each slot's
+([blend_slots.slang](libs/bgl_extended/shaders/src/lib/anim/blend_slots.slang)), and each slot's
 `node` through the rig's node table, which holds one node per clip in clip order and then the
 authored blend spaces.
 
@@ -524,7 +524,7 @@ two samples straddling its parameter, at one shared normalized phase — its sam
 different lengths, so a frame number means nothing between them, and what is shared is the fraction
 of a cycle. The phase wraps, so every sample cycles with the space whatever its clip's own `loop` says. That phase advances at the reciprocal of the weighted cycle length, which is
 itself moving while the parameter ramps, so it is an integral rather than a quotient and is
-evaluated in closed form ([blend_space.slang](libs/bgl_common/shaders/src/lib/anim/blend_space.slang))
+evaluated in closed form ([blend_space.slang](libs/bgl_extended/shaders/src/lib/anim/blend_space.slang))
 — exact mid-ramp, and needing no state, which is what keeps a pose a pure function of the clock. A
 space therefore costs two of the `cMaxPoseClips` a pose holds, which is why that is twice the slot
 count. The live weights are normalized to one across whatever the slots resolved to. Per bone it
@@ -567,7 +567,7 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 
 * **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
   and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
-  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_common/shaders/src/lib/anim/pose_walk.slang) is shared by both).
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is shared by both).
   A crowd instance then reads a pose rather than computing one.
 * **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's
@@ -926,7 +926,7 @@ contour no thicker on screen.
 
 #### The colour grade
 
-`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl_common/shaders/src/lib/math/ColorGrade.slang)
+`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl_extended/shaders/src/lib/math/ColorGrade.slang)
 runs `AgX`'s two halves — `AgXLogEncode` and `AgXFormation` — with the `ColorGradeSettings` steps
 between and before them:
 

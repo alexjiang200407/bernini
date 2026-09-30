@@ -14,11 +14,11 @@
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/idl/Geom.h>
+#include <bgl/idl/LodSubmeshRange.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/Geom.h>
-#include <bgl_common/idl/LodSubmeshRange.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

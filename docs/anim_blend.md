@@ -85,7 +85,7 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
   ```
 
   with `D` the weighted cycle in seconds at parameter `p`. It is evaluated in closed form
-  ([`blend_space.slang`](libs/bgl_common/shaders/src/lib/anim/blend_space.slang)), split at the
+  ([`blend_space.slang`](libs/bgl_extended/shaders/src/lib/anim/blend_space.slang)), split at the
   ramp's ends and at each sample the parameter crosses, because `D` is only linear *between* two
   adjacent samples and kinks at each one. The approximation `(t − tRef) / D(p(t))` is cheaper by a
   few logarithms and wrong for the ramp's whole duration.

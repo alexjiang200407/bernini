@@ -2,11 +2,11 @@
 #include "fg/FrameGraph.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
-#include <bgl_common/idl/CullView.h>
-#include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/InstanceLod.h>
-#include <bgl_common/idl/InstanceVisibility.h>
+#include <bgl/idl/CullView.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgl/idl/DrawBucket.h>
+#include <bgl/idl/InstanceLod.h>
+#include <bgl/idl/InstanceVisibility.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>

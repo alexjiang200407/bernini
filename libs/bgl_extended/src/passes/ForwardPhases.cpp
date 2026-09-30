@@ -10,7 +10,7 @@
 #include "scene/scene_buffer_names.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl_common/idl/BaseTable.h>
+#include <bgl/idl/BaseTable.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

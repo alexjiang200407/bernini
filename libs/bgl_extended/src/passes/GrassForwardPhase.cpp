@@ -11,8 +11,8 @@
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
+#include <bgl/idl/Constants.h>
 #include <bgl/types/WindDesc.h>
-#include <bgl_common/idl/Constants.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/pipeline/MeshletKernel.h>

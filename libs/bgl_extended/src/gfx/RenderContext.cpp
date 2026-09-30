@@ -8,7 +8,9 @@
 
 #include "debug/DebugReadback.h"
 #include "fg/FrameGraph.h"
+#include "gfx/Frustum.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/jitter.h"
 #include "overlay/Overlay.h"
 #include "passes/BloomPass.h"
 #include "passes/ClearPass.h"
@@ -31,8 +33,6 @@
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/jitter.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/idl/DebugRecord.h>

@@ -52,7 +52,7 @@ if (BERNINI_EDITOR_SDK)
 	add_dependencies(gamelib bgl_extended)
 	target_link_libraries(gamelib PRIVATE "$<TARGET_LINKER_FILE:bgl_extended>")
 	target_include_directories(gamelib PRIVATE
-		$<TARGET_PROPERTY:bgl_common,INTERFACE_INCLUDE_DIRECTORIES>)
+		$<TARGET_PROPERTY:bgl_idl,INTERFACE_INCLUDE_DIRECTORIES>)
 
 	# RmlUi and its Lua plugin hold process-wide state. Pull every object into gamelib, which owns
 	# UiRuntime's one-per-process guard, and pass only their headers to plugin clients.
@@ -119,7 +119,7 @@ if (BUILD_TESTS)
 	target_link_libraries(gamelib_tests
 		PRIVATE
 			gamelib
-			bgl_common
+			bgl_idl
 			bgl_extended
 			core
 			Catch2::Catch2

@@ -1,3 +1,4 @@
+#include "gfx/Frustum.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
@@ -5,13 +6,12 @@
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
 #include <bgl/error.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/CullView.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/CullView.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>

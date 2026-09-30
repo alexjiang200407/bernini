@@ -7,8 +7,7 @@
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/Submesh.h>
-#include <bgl_common/idl/idl.h>
+#include <bgl/idl/Submesh.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

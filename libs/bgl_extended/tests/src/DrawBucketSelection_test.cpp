@@ -4,10 +4,10 @@
 #include <array>
 #include <bgl/GeomType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
-#include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/DrawBucket.h>
 #include <bgpu/types/RasterState.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

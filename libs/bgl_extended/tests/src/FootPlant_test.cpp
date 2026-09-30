@@ -16,14 +16,14 @@
 #include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <bgl/IGraphics.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/FootIKLeg.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/RigHandle.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/FootIKLeg.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

@@ -7,9 +7,9 @@
 #include "passes/SceneBindings.h"
 #include "passes/draw_bucket_config.h"
 #include "scene/scene_buffer_names.h"
-#include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/LodDrawMode.h>
+#include <bgl/idl/BaseTable.h>
+#include <bgl/idl/DrawBucket.h>
+#include <bgl/idl/LodDrawMode.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/pipeline/MeshletKernel.h>

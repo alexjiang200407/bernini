@@ -32,8 +32,7 @@ rm->RegisterQueue(queue.Get());
   asked, and enabling the debug layer once that device exists removes it, so a second context could
   never be independent of the first. `CreateGpuContext` refuses while one is live, on Metal too,
   so a program is portable; another may follow once the last holder has dropped it.
-  `IGraphics` neither creates nor lends a device: `bgl` stays a rendering contract, and a renderer
-  that has no native device to offer — `bgl_wgpu`, should it exist — is not asked for one.
+  `IGraphics` neither creates nor lends a device: `bgl` stays a rendering contract.
 * **What lives here is what must precede the device or be shared through it.** The D3D12 debug
   layer, GPU-based validation, the DXGI and D3D12 info queues and the callback that routes their
   messages into the log, the PIX capturer load, Metal's validation-from-environment detection, the

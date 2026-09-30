@@ -26,7 +26,7 @@ def tree(tmp_path):
         "libs/bgl_extended/src/types/Rect.h",
         "libs/bgl_extended/src/scene/Scene.h",
         "examples/util/DemoWindow.h",
-        "build/generated/bgl_common/idl/RawEntry.h",
+        "build/generated/bgl_idl/bgl/idl/Geom.h",
         "build/vcpkg_installed/include/Metal/MTLBuffer.hpp",
     ]:
         path = tmp_path / relative
@@ -37,7 +37,7 @@ def tree(tmp_path):
         "libs/bgl_extended/src",
         "libs/bgl/include",
         "examples/util",
-        "build/generated",
+        "build/generated/bgl_idl",
         "build/vcpkg_installed/include",
     )]
     return tmp_path, dirs
@@ -70,8 +70,8 @@ def test_a_src_header_written_angled_is_corrected(tree):
 
 def test_third_party_and_generated_headers_are_angled(tree):
     """Nothing under build/ is ours -- vcpkg's tree and the generated IDL mirrors alike."""
-    fixed, _ = restyle(tree, '#include "Metal/MTLBuffer.hpp"\n#include "bgl_common/idl/RawEntry.h"\n')
-    assert fixed == "#include <Metal/MTLBuffer.hpp>\n#include <bgl_common/idl/RawEntry.h>\n"
+    fixed, _ = restyle(tree, '#include "Metal/MTLBuffer.hpp"\n#include "bgl/idl/Geom.h"\n')
+    assert fixed == "#include <Metal/MTLBuffer.hpp>\n#include <bgl/idl/Geom.h>\n"
 
 
 def test_a_header_the_convention_does_not_reach_is_left_alone(tree):

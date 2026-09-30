@@ -1,6 +1,6 @@
+#include "gfx/SurfaceReflection.h"
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
-#include <bgl_common/SurfaceReflection.h>
 
 #include <bgl/glm.h>
 #include <catch2/catch_message.hpp>

@@ -8,8 +8,8 @@
 #include "passes/SceneBindings.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
-#include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/LodDrawMode.h>
+#include <bgl/idl/BaseTable.h>
+#include <bgl/idl/LodDrawMode.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>

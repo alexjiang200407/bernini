@@ -3,7 +3,7 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/Constants.h>
+#include <bgl/idl/Constants.h>
 #include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
 #include <bgpu/buffer/RawBuffer.h>

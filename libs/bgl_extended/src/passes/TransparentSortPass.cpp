@@ -5,8 +5,8 @@
 #include "passes/DrawData.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>  // IWYU pragma: keep
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DispatchArgs.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/PipelineBatch.h>
 #include <bgpu/types/Barrier.h>

@@ -8,11 +8,10 @@
 #include <algorithm>
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/idl.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgl/idl/DrawBucket.h>
+#include <bgl/idl/InstanceVisibility.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>

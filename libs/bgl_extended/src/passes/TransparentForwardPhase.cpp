@@ -3,8 +3,8 @@
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
 #include "scene/scene_buffer_names.h"
-#include <bgl_common/idl/BaseTable.h>
-#include <bgl_common/idl/LodDrawMode.h>
+#include <bgl/idl/BaseTable.h>
+#include <bgl/idl/LodDrawMode.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/types/Barrier.h>

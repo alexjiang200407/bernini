@@ -8,10 +8,10 @@
 #include <bgl/ISceneView.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/idl/MeshInstance.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/MeshInstance.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 

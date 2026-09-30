@@ -211,7 +211,6 @@ add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
 add_subdirectory(libs/bgl)
 # Between the contract and the renderer: what every renderer needs and no renderer owns.
-add_subdirectory(libs/bgl_common)
 add_subdirectory(libs/bgpu)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/bgl_extended)
@@ -238,7 +237,6 @@ if (BERNINI_BUILD_EXAMPLES AND TARGET bgl_extended)
 endif()
 
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"             "misc")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl_common"       "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgpu"   "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl_extended"           "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
@@ -325,7 +323,7 @@ endif()
 if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
-        core_process core assetlib_structs bgl bgl_common bgpu bgl_extended_objects
+        core_process core assetlib_structs bgl bgl_idl bgpu bgl_extended_objects
         bgl_extended assetlib gamelib crowdlib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")

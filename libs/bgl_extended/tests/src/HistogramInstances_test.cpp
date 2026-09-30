@@ -5,9 +5,8 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/idl.h>
+#include <bgl/idl/DrawBucket.h>
+#include <bgl/idl/InstanceVisibility.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>

@@ -1,7 +1,7 @@
 #include "scene/TransparentSortState.h"
 #include "fg/FrameGraph.h"
 #include "scene/scene_buffer_names.h"
-#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl/idl/DispatchArgs.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <string_view>

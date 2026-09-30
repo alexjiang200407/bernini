@@ -1,5 +1,6 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/Frustum.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
@@ -26,6 +27,11 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialType.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/CullStats.h>
+#include <bgl/idl/Meshlet.h>
+#include <bgl/idl/MeshletGroup.h>
+#include <bgl/idl/Submesh.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
@@ -35,12 +41,6 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/CullStats.h>
-#include <bgl_common/idl/Meshlet.h>
-#include <bgl_common/idl/MeshletGroup.h>
-#include <bgl_common/idl/Submesh.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

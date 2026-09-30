@@ -1,5 +1,6 @@
 #include "fg/FrameGraph.h"
 #include "gfx/DrawBucketTable.h"
+#include "gfx/Frustum.h"
 #include "gfx/GraphicsBase.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
@@ -14,11 +15,9 @@
 #include <algorithm>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bgl/types/Camera.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/DrawBucket.h>
-#include <bgl_common/idl/idl.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

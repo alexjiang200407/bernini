@@ -12,13 +12,13 @@
 #include <bgl/IScene.h>
 #include <bgl/LodLevel.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/Meshlet.h>
+#include <bgl/idl/MeshletGroup.h>
+#include <bgl/idl/VertexLayout.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/RigHandle.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/Meshlet.h>
-#include <bgl_common/idl/MeshletGroup.h>
-#include <bgl_common/idl/VertexLayout.h>
 #include <bgpu/idl/RawRange.h>
 #include <cmath>
 #include <core/containers/multi_slot_handle.h>

@@ -7,7 +7,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
-#include <bgl_common/idl/DrawBucket.h>
+#include <bgl/idl/DrawBucket.h>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>

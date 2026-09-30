@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/jitter.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/HalfFloat.h"
@@ -20,7 +21,6 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/jitter.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

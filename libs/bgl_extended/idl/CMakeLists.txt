@@ -1,33 +1,15 @@
-find_package(slang CONFIG REQUIRED)
-find_package(CLI11 CONFIG REQUIRED)
-
-
-add_executable(bgl_idlgen
-    ${CMAKE_CURRENT_SOURCE_DIR}/idlgen.cpp
-)
-
-target_precompile_headers(bgl_idlgen
-	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
-)
-
-target_link_libraries(bgl_idlgen PUBLIC slang::slang CLI11::CLI11 core)
-
-# No enable_strict_compiler here. This switches over slang's reflection enums and handles the subset
-# it generates for, throwing on the rest -- so /Wall's C4061 fires once per unhandled enumerator, and
-# naming them all would break the build on every slang bump to add cases that reach the same throw.
-# The warning earns its keep on our own enums, where a new one falling into `default:` is a bug.
-
-# The IDL modules are Slang sources in the shared shader tree, where the shaders import them as
+# The IDL modules are Slang sources in the renderer's shader tree, where the shaders import them as
 # idl.<Name>; nothing is copied. What is generated is the C++ mirror, into the build tree, because a
 # struct's layout follows the backend it is generated for, so a committed copy would be right for one
 # and silently wrong for the other.
-set(IDL_SRC_ROOT           "${BERNINI_ROOT}/libs/bgl_common/shaders/src/idl")
+set(IDL_SRC_ROOT           "${BERNINI_ROOT}/libs/bgl_extended/shaders/src/idl")
 # The offset primitives (Entry, Range ...) and ErrorCode are bgpu's: a module here imports them as
 # siblings, which they are once staged, so the generator searches both.
 set(IDL_BGPU_ROOT          "${BERNINI_ROOT}/libs/bgpu/shaders/src/idl")
-set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/bgl_common/idl")
+set(IDL_CPP_OUT_ROOT       "${CMAKE_BINARY_DIR}/generated/bgl_idl")
+set(IDL_CPP_OUT_DIR        "${IDL_CPP_OUT_ROOT}/bgl/idl")
 # The public headers stay in the source tree, and stay committed: a consumer includes <bgl/...>
-# without building bgl_common. Safe because --public refuses a struct whose size or field offsets differ
+# without building the renderer. Safe because --public refuses a struct whose size or field offsets differ
 # between MSL and the C/C++ rules, and emits no alignas, so every backend generates the same bytes.
 set(IDL_PUBLIC_CPP_OUT_DIR "${BERNINI_ROOT}/libs/bgl/include/bgl")
 
@@ -41,7 +23,7 @@ file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${IDL_SRC_ROOT}/*.slang")
 # for the interface- and generic-only modules -- IMaterial, IPbrMaterial, IAlphaTestMaterial, and the
 # `Entry<T>` / `Range<T>` / `RangeWithCount<T>` / `RawEntry<T>` offset primitives. A generic has no
 # concrete layout to mirror, so idlgen skips it (and says so); their C++ counterparts in
-# include/bgl_common/idl are **hand-written** and carry no generated banner. Listing one here would
+# bgpu's include/bgpu/idl are **hand-written** and carry no generated banner. Listing one here would
 # declare a CMake OUTPUT nothing produces.
 
 # Internal: namespace `bgl::idl`, emitted into IDL_CPP_OUT_DIR (the build tree).
@@ -157,14 +139,14 @@ foreach(src ${IDL_SOURCES})
 
     add_custom_command(
         OUTPUT  "${output}"
-        COMMAND bgl_idlgen
+        COMMAND bgpu_idlgen
                 --src-root "${IDL_SRC_ROOT}"
                 ${IDL_LAYOUT_ARGS}
                 ${cpp_args}
                 -I "${IDL_SRC_ROOT}"
                 --extern "${IDL_BGPU_ROOT}=bgpu::idl"
                 "${src}"
-        DEPENDS bgl_idlgen "${src}" ${import_deps}
+        DEPENDS bgpu_idlgen "${src}" ${import_deps}
         COMMENT "idlgen ${rel}"
         VERBATIM
     )
@@ -173,3 +155,11 @@ foreach(src ${IDL_SOURCES})
 endforeach()
 
 add_custom_target(bgl_idl_generate ALL DEPENDS ${IDL_GENERATED_OUTPUTS})
+
+# The internal mirrors, <bgl/idl/<Module>.h>: the renderer's and nobody else's, reached by what links
+# the renderer's objects. The second root because a generated header includes its imports as
+# siblings ("Geom.h").
+add_library(bgl_idl INTERFACE)
+target_include_directories(bgl_idl INTERFACE ${IDL_CPP_OUT_ROOT} ${IDL_CPP_OUT_DIR})
+target_link_libraries(bgl_idl INTERFACE bgpu)
+add_dependencies(bgl_idl bgl_idl_generate)

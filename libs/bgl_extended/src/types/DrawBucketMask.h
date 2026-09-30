@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl_common/idl/DrawBucket.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bitset>
 
 namespace bgl

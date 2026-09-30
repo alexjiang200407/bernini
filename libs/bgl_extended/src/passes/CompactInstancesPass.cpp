@@ -6,11 +6,11 @@
 #include "scene/scene_buffer_names.h"
 #include <array>
 #include <bgl/ISceneView.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/CullStats.h>
-#include <bgl_common/idl/CullView.h>
-#include <bgl_common/idl/DispatchArgs.h>
-#include <bgl_common/idl/DrawBucket.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/CullStats.h>
+#include <bgl/idl/CullView.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgl/idl/DrawBucket.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/PipelineBatch.h>

@@ -1,3 +1,7 @@
+# The IDL first: bgl_idl_generate must exist before anything below can depend on it. Its Slang
+# modules live under shaders/src/idl with the rest of the renderer's tree; it generates only C++.
+add_subdirectory(idl)
+
 file(GLOB_RECURSE BGL_EXTENDED_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -51,7 +55,7 @@ target_include_directories(bgl_extended_objects PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(bgl_extended_objects
 	PUBLIC
 		bgl
-		bgl_common
+		bgl_idl
 		bgpu
 		core
 		assetlib_structs
@@ -152,7 +156,7 @@ endif()
 # compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-	add_dependencies(bgl_copy_shader_src bgl_common_copy_shaders)
+	add_dependencies(bgl_copy_shader_src bgl_copy_contract_shaders)
 	add_dependencies(bgl_extended bgl_copy_shaders bgl_copy_shader_src)
 
 	target_compile_definitions(bgl_d3d12 PRIVATE
@@ -201,7 +205,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		VERBATIM
 	)
 	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
-	add_dependencies(bgl_metal_copy_shaders bgl_common_copy_shaders)
+	add_dependencies(bgl_metal_copy_shaders bgl_copy_contract_shaders)
 	add_dependencies(bgl_extended bgl_metal_copy_shaders)
 endif()
 

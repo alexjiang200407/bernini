@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/jitter.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
@@ -17,7 +18,6 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/jitter.h>
 #include <bgpu/resource/Texture.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>

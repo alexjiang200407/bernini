@@ -27,7 +27,7 @@ namespace
 	/**
 	 * A tag enum of this suite's own, which is the whole point: `core` owns the mechanism and
 	 * never the taxonomy, so a test declares what it charges to exactly as the engine does in
-	 * `bgl_common/MemoryTag.h`.
+	 * `bgpu/MemoryTag.h`.
 	 */
 	enum class TestTag : uint8_t
 	{

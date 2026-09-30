@@ -6,7 +6,7 @@
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/LodLevel.h>
-#include <bgl_common/idl/InstanceLod.h>
+#include <bgl/idl/InstanceLod.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>

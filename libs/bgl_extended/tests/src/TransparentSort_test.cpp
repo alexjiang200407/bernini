@@ -4,8 +4,8 @@
 #include "util/TestOptions.h"
 #include <algorithm>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DispatchArgs.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>

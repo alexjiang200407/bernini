@@ -12,9 +12,7 @@ abstracts the *renderer*, in the vocabulary of geometry, materials, textures, in
 
 `bgl` is the target that carries these headers and nothing else. A renderer implementing them is
 named for what it is built on and is a target of its own: `bgl_extended` is the tier that assumes
-bindless resource access and a mesh stage, and it is the only one that ships today. `bgl_wgpu`, the
-baseline tier for the browser and for a device that misses that bar, is recorded in `ROADMAP.md` and
-not built.
+bindless resource access and a mesh stage, and it is the only one.
 
 **Keep it that way.** No descriptor, meshlet, heap or pipeline-object vocabulary in a name, a field
 or a throw contract here — state what a caller is guaranteed, not the machinery that currently

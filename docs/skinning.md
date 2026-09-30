@@ -75,7 +75,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   `RigFramesPass` runs the same walk over every frame of a rig's clip set and writes the result to
   `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
   is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
-  reimplemented — [pose_walk.slang](libs/bgl_common/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
+  reimplemented — [pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
   so the two producers cannot drift. The walk is generic over `IPoseTables` and names no buffer type;
   [PoseTables](libs/bgl_extended/shaders/src/lib/types/PoseTables.slang) is the bindless implementation
   both kernels hand it.
@@ -268,7 +268,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice; on a rig with legs, its foot-IK record too, at weight one until `SetFootIK` rewrites it |
 | Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored by the baked weight and the instance's own, multiply by inverse bind |
-| Draw | `lib/forward/skinned_vertex.slang`, blend in [`lib/anim/skinning.slang`](libs/bgl_common/shaders/src/lib/anim/skinning.slang) | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
+| Draw | `lib/forward/skinned_vertex.slang`, blend in [`lib/anim/skinning.slang`](libs/bgl_extended/shaders/src/lib/anim/skinning.slang) | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
 
@@ -572,7 +572,7 @@ folded through the inverse binds. Nothing else in the frame changes: the plant i
 compute step inside `PoseSkinned.slang`, and the forward shaders never learn it happened, because
 the palette was already the whole interface between the two. The geometry it is built on --
 `GroundPlaneInModel`, `SampleGround`, `OnSolePlane`, `SolveTwoBone` -- is
-[`lib/anim/foot_plant.slang`](libs/bgl_common/shaders/src/lib/anim/foot_plant.slang) in the shared
+[`lib/anim/foot_plant.slang`](libs/bgl_extended/shaders/src/lib/anim/foot_plant.slang) in the shared
 tier, over values alone; what stays in the program is what reads a buffer or the groupshared solved
 table.
 
@@ -702,7 +702,7 @@ weight is what a game sets.
 and a *rotation* weight scaling the sole's turn onto the slope — `SetIKPositionWeight` and
 `SetIKRotationWeight` per foot, each multiplying the baked weight so a foot the animator lifted
 stays lifted whatever a caller asks. Each is a ramp in `RenderJob::time` (`idl.Ramp`, read by
-`RampAt` in [`lib/anim/ramp.slang`](libs/bgl_common/shaders/src/lib/anim/ramp.slang)): the record
+`RampAt` in [`lib/anim/ramp.slang`](libs/bgl_extended/shaders/src/lib/anim/ramp.slang)): the record
 holds what to evaluate, never the evaluated value, so the pose at any clock stays a function of the
 record and the two palettes a frame writes agree with the frames that drew them. That is the
 caller's one rule — start a ramp at or after now and let `from` be what the leg holds now, which

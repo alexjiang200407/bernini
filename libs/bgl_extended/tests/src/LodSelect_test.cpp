@@ -13,6 +13,8 @@
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
 #include <bgl/glm.h>
+#include <bgl/idl/InstanceLod.h>
+#include <bgl/idl/InstanceVisibility.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/LodSelectionDesc.h>
@@ -21,8 +23,6 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/idl/InstanceLod.h>
-#include <bgl_common/idl/InstanceVisibility.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

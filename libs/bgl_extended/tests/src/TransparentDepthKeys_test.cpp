@@ -8,11 +8,10 @@
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/InstanceVisibility.h>
+#include <bgl/idl/MeshInstance.h>
 #include <bgl/types/LayerType.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/InstanceVisibility.h>
-#include <bgl_common/idl/MeshInstance.h>
-#include <bgl_common/idl/idl.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>

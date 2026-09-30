@@ -4,8 +4,8 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/CullView.h>
-#include <bgl_common/idl/SkinnedTableState.h>
+#include <bgl/idl/CullView.h>
+#include <bgl/idl/SkinnedTableState.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -40,7 +40,7 @@ namespace
 /**
  * A raw buffer loads back the records and the loose attributes the CPU wrote into it.
  *
- * `Load<T>` must see the layout `bgl_idlgen`'s C++ mirror asserts, or a struct memcpy'd in comes
+ * `Load<T>` must see the layout `bgpu_idlgen`'s C++ mirror asserts, or a struct memcpy'd in comes
  * back shuffled -- `CullView` carries the matrix and the fixed array where a target's own packing
  * rules would diverge first. The loose loads are the vertex path's case: a 4-aligned,
  * non-16-aligned address is the only alignment an attribute has.

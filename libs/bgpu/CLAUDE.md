@@ -15,7 +15,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
 - **Nothing here names the renderer.** `bgpu_selfcheck` compiles every public header alone, with no
-  PCH, against `bgpu` only, so an `#include <bgl/...>` or `<bgl_common/...>` — or an include a header
+  PCH, against `bgpu` only, so an `#include <bgl/...>` — or an include a header
   leaned on the PCH for — stops the build. `bgpu_check_shaders` does the same for every Slang module
   under `./shaders/src`.
 - Error handling: `core::ensure` for internal problems; throw for the caller's.

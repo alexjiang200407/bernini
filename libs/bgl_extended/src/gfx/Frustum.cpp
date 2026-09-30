@@ -1,7 +1,7 @@
+#include "gfx/Frustum.h"
 #include <algorithm>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/CullView.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/CullView.h>
 #include <limits>
 
 namespace bgl

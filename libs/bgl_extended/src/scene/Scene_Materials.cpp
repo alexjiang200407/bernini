@@ -10,6 +10,11 @@
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/GameSurfaceRecord.h>
+#include <bgl/idl/LoosePbrMaterial.h>
+#include <bgl/idl/PbrMaterial.h>
+#include <bgl/idl/RawTextureHandle.h>
 #include <bgl/types/ChannelRouteDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/LayerType.h>
@@ -18,11 +23,6 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/GameSurfaceRecord.h>
-#include <bgl_common/idl/LoosePbrMaterial.h>
-#include <bgl_common/idl/PbrMaterial.h>
-#include <bgl_common/idl/RawTextureHandle.h>
 #include <bgpu/idl/RawArena.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>

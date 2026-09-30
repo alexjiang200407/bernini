@@ -1,6 +1,6 @@
 #pragma once
 #include <array>
-#include <bgl_common/idl/CullView.h>
+#include <bgl/idl/CullView.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/resource/ResourceManager.h>

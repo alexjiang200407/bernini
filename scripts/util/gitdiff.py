@@ -18,7 +18,7 @@ SOURCE_EXTS = HEADER_EXTS | frozenset([".c", ".cc", ".cpp", ".cxx"])
 # _deps checkouts, build output -- is somebody else's to name and to cover.
 SOURCE_ROOTS = ("libs", "apps", "examples")
 
-# bgl_idlgen stamps this on every file it writes. A generated file is the generator's
+# bgpu_idlgen stamps this on every file it writes. A generated file is the generator's
 # to name and to format: any edit only lasts until the next build.
 GENERATED_BANNER = b"DO NOT EDIT MANUALLY"
 
@@ -107,7 +107,7 @@ def categorize(path, ref=None):
     Order is the rule: a test is a test wherever it lives, so `shaders/tests/` is
     Tests and not Shaders, and a generated file is the generator's whatever its
     extension says. Only a source or shader file is probed for the banner, because
-    that is all `bgl_idlgen` writes and the probe costs a `git show` each.
+    that is all `bgpu_idlgen` writes and the probe costs a `git show` each.
     """
     parts = path.split("/")
     ext = os.path.splitext(path)[1].lower()

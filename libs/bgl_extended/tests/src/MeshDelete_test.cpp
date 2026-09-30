@@ -16,7 +16,6 @@
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl_common/idl/idl.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

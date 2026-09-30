@@ -5,11 +5,11 @@
 #include <bgl/MeshInstanceFlag.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
+#include <bgl/idl/CullView.h>
+#include <bgl/idl/InstanceLod.h>
+#include <bgl/idl/MeshInstance.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
-#include <bgl_common/idl/CullView.h>
-#include <bgl_common/idl/InstanceLod.h>
-#include <bgl_common/idl/MeshInstance.h>
 #include <cstdint>
 #include <optional>
 

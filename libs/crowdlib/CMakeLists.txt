@@ -51,7 +51,7 @@ endif()
 
 # The kernels are compiled at runtime through the context's sessions, which resolve modules from
 # ./shaders/src, so they are staged there -- under crowd/, which no other copier writes. Ordered
-# after the shared tree's copier so the root's make_directory never races.
+# after bgpu's copier, whose tree they import, so the root's make_directory never races.
 file(GLOB_RECURSE CROWDLIB_SHADER_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
 )
@@ -69,7 +69,7 @@ add_custom_command(
 	VERBATIM
 )
 add_custom_target(crowdlib_copy_shaders ALL DEPENDS "${CROWDLIB_SHADER_STAMP}")
-add_dependencies(crowdlib_copy_shaders bgl_common_copy_shaders)
+add_dependencies(crowdlib_copy_shaders bgpu_copy_shaders)
 add_dependencies(crowdlib crowdlib_copy_shaders)
 
 # DXIL validation at build time, as the renderer's programs have: nothing loads the output, and a

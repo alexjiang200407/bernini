@@ -1,7 +1,7 @@
+#include "gfx/Frustum.h"
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/CullView.h>
 #include <bgl/types/Camera.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/CullView.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>

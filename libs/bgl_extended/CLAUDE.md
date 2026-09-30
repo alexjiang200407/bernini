@@ -117,10 +117,10 @@ and is a target of its own; nothing here is part of it.
   files are in the cache salt like the engine's, and a program imports its modules by name the same
   way. Four trees are staged into the engine's: the RHI's `libs/bgpu/shaders/src` (the offset
   primitives under `idl/`, `lib/types/*Buffer`, `lib/debug/`) by `bgpu_copy_shaders`, first; the
-  contract `libs/bgl/shaders/src` (`bgl/`) by `bgl_copy_contract_shaders`, `libs/bgl_common/shaders/src` (`idl/`, `lib/anim/`, `lib/math/`,
-  `lib/data/`) by `bgl_common_copy_shaders` ordered after it, and this renderer's own by a target
-  `bgl_extended` itself depends on — `bgl_copy_shader_src` on D3D12, `bgl_metal_copy_shaders` on
-  Metal, each ordered after the shared one — so anything that brings a device up has the sources,
+  contract `libs/bgl/shaders/src` (`bgl/`) by `bgl_copy_contract_shaders`, and this renderer's own
+  (`idl/`, `lib/`, `programs/`, `luts/`) by a target `bgl_extended` itself depends on —
+  `bgl_copy_shader_src` on D3D12, `bgl_metal_copy_shaders` on Metal, each ordered after the
+  contract's — so anything that brings a device up has the sources,
   and a build that stages none aborts on the first program-cache miss with "cannot open file".
   `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_metal_copy_test_shaders`). A new
   `.slang` placed under `libs/bgl_extended/shaders/src` is therefore usable at runtime by its module name

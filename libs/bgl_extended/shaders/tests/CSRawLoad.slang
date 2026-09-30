@@ -5,7 +5,7 @@ import lib.types.RawBuffer;
 
 // Loads out of one raw buffer, reported for a CPU comparison against the bytes it wrote.
 //
-// The two record loads answer whether a raw Load<T> lays T out the way bgl_idlgen's C++ mirror
+// The two record loads answer whether a raw Load<T> lays T out the way bgpu_idlgen's C++ mirror
 // asserts: SkinnedTableState is a real playback record of packed scalars, CullView adds a matrix, a
 // fixed array and scalars trailing a float4, which are where a target's own packing rules would
 // show up first.

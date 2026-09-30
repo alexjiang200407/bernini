@@ -163,8 +163,10 @@ foreach(MODULE ${BGPU_SHADER_SOURCES})
 endforeach()
 add_custom_target(bgpu_check_shaders ALL DEPENDS ${BGPU_SHADER_CHECKS})
 
+add_subdirectory(idl)
+
 # The C++ mirrors of bgpu's IDL, generated per backend into the build tree as the renderer's are
-# (libs/bgl_common/idl/CMakelists.txt, which defines the generator). Only the modules with a concrete
+# (libs/bgl_extended/idl/CMakeLists.txt). Only the modules with a concrete
 # layout: the offset primitives are generics, and their C++ halves are hand-written in include/bgpu/idl.
 set(BGPU_IDL_ROOT "${BGPU_SHADER_ROOT}/idl")
 set(BGPU_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/bgpu_idl")
@@ -186,14 +188,14 @@ foreach(module ${BGPU_IDL_CPP_SOURCES})
 	set(output "${BGPU_IDL_OUT_ROOT}/bgpu/idl/${name}.h")
 	add_custom_command(
 		OUTPUT  "${output}"
-		COMMAND bgl_idlgen
+		COMMAND bgpu_idlgen
 				--src-root "${BGPU_IDL_ROOT}"
 				${BGPU_IDL_LAYOUT_ARGS}
 				--cpp-out-dir "${BGPU_IDL_OUT_ROOT}/bgpu/idl"
 				--namespace "bgpu::idl"
 				-I "${BGPU_IDL_ROOT}"
 				"${BGPU_IDL_ROOT}/${module}"
-		DEPENDS bgl_idlgen "${BGPU_IDL_ROOT}/${module}"
+		DEPENDS bgpu_idlgen "${BGPU_IDL_ROOT}/${module}"
 		COMMENT "idlgen bgpu ${module}"
 		VERBATIM
 	)
@@ -205,7 +207,7 @@ add_dependencies(bgpu bgpu_idl_generate)
 target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT} ${BGPU_IDL_OUT_ROOT}/bgpu/idl)
 
 # What this target does NOT link is the point: every public header compiles alone -- no PCH, and
-# bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_common, bgl_extended) or
+# bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_extended) or
 # leans on an include it never wrote stops the build here, rather than in a compute client that
 # includes it first. A header per translation unit, generated from the glob, so a new header is
 # checked without anyone listing it.
@@ -279,9 +281,9 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	# The session cases load modules from ./shaders/src beside the suite, staged by the contract and
-	# the shared tree exactly as a renderer resolves them.
-	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders bgl_common_copy_shaders)
+	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu and the
+	# contract exactly as a renderer resolves them.
+	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders)
 
 	# The suite's own kernels, under bgpu/ in the tests root the sessions search, which no other
 	# copier writes.

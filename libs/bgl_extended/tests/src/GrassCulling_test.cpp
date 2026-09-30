@@ -1,5 +1,6 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "gfx/Frustum.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/RenderTargetBase.h"
@@ -25,14 +26,13 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/idl/CullStats.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/Frustum.h>
-#include <bgl_common/idl/CullStats.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

@@ -2,10 +2,10 @@
 // idl::SkinnedState arrived through the idl.h umbrella this sweep removed.
 #include "gfx/GraphicsBase.h"
 #include "scene/SceneView.h"
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/MeshInstance.h>
+#include <bgl/idl/SkinnedState.h>
 #include <bgl/types/MeshInstanceHandle.h>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/MeshInstance.h>
-#include <bgl_common/idl/SkinnedState.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>

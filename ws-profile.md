@@ -49,7 +49,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   § Precheck), and the API catalog, `build/api/*.md` ([docs/api_catalog.md](docs/api_catalog.md)).
   The duplicate is never called the same thing.
 - **Which layer owns it?** A request that needs a layering violation is a wrong request — find the
-  seam (`gamelib`, `bgl_common`, `assetlib` for a question about a container) and say so.
+  seam (`gamelib`, `bgpu`, `assetlib` for a question about a container) and say so.
 - **Which Guiding Constraint does it touch?** GPU-driven by default, one dominant light, instances
   as the unit of scale, an API-agnostic RHI, the IDL as single source of truth, data-oriented state.
   Breaking one is a roadmap decision, the user's to make knowingly.
@@ -64,7 +64,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
 
 ## Implement
 
-- **Slice by layer, bottom-up:** `bgl_common`/`bgl_extended`, then `assetlib`, then `gamelib`, then
+- **Slice by layer, bottom-up:** `bgpu`, then `bgl`/`bgl_extended`, then `assetlib`, then `gamelib`, then
   `apps/editor` — the direction the dependencies point. A refactor that enables the change is its
   own commit ahead of it.
 - **New sources need no CMake edit.** Every glob is `CONFIGURE_DEPENDS`; place the file beside its
@@ -91,7 +91,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   repo, codes against. Here that is three kinds:
   - **public interfaces**, the ones between subsystems, backends and plugins, and the ones out-of-tree
     consumers use: a game links `gamelib`, `assetlib` and `bgl`;
-  - **every shader IDL change** in `libs/bgl_common/shaders/src/idl/`, which is the CPU↔GPU
+  - **every shader IDL change** in `libs/bgl_extended/shaders/src/idl/`, which is the CPU↔GPU
     agreement `idlgen` compiles on both sides;
   - **internal interfaces** that several tasks implement or call, like `IForwardPhase`.
 

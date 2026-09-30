@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Generate the C++ headers from the .slang IDL modules.
 
-Drives the built `bgl_idlgen` tool over the modules in `bgl_common/shaders/src/idl` -- the
+Drives the built `bgpu_idlgen` tool over the modules in `bgl_extended/shaders/src/idl` -- the
 shaders import those directly; nothing is copied -- writing a C++ header to one of two roots:
       * bgl/include/bgl/<rel>.h  in namespace `bgl`      (IDL_PUBLIC_CPP_SOURCES)
-      * <build>/generated/bgl_common/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
+      * <build>/generated/bgl_idl/bgl/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
     A module in neither list is shader-only and is skipped -- correct for the
     interface/generic-only modules, which carry no concrete layout to mirror.
 
 A header is written under its output root at the SAME path the module has relative to
 the source root, so the import path, the #include and the .h location stay in lockstep
-(see bgl_common/idl/idlgen.cpp).
+(see bgpu/idl/idlgen.cpp).
 
-**The two lists are read from `bgl_common/idl/CMakelists.txt`, not restated here.**
+**The two lists are read from `bgl_extended/idl/CMakeLists.txt`, not restated here.**
 This must produce byte-for-byte the same tree as the `bgl_idl_generate` CMake
 target, and the only way to guarantee that is to route from the same source. A
 copy of the lists here drifted once already: it emitted a `bgl::idl::PsoType`
@@ -24,9 +24,9 @@ The tool path is resolved from the CMake File API codemodel
 Usage:
     just idl                                # regenerate everything
     just idl --config Release               # pick a configuration
-    just idl --build                        # build bgl_idlgen first
+    just idl --build                        # build bgpu_idlgen first
     just idl --dry-run                      # print commands, don't run
-    just idl libs/bgl_common/shaders/src/idl/Meshlet.slang  # only these modules
+    just idl libs/bgl_extended/shaders/src/idl/Meshlet.slang  # only these modules
 """
 
 import argparse
@@ -38,11 +38,11 @@ import sys
 import util.cmake_tools as ct
 import util.config as cfg
 
-TOOL = "bgl_idlgen"
-SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_common", "shaders", "src", "idl")
-# The offset primitives a module imports as siblings are bgpu's (libs/bgl_common/idl/CMakelists.txt).
+TOOL = "bgpu_idlgen"
+SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "shaders", "src", "idl")
+# The offset primitives a module imports as siblings are bgpu's (libs/bgl_extended/idl/CMakeLists.txt).
 BGPU_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgpu", "shaders", "src", "idl")
-# Mirrors libs/bgl_common/idl/CMakelists.txt: the private headers are a build artifact, because a
+# Mirrors libs/bgl_extended/idl/CMakeLists.txt: the private headers are a build artifact, because a
 # struct's layout follows the backend it was generated for. Resolved per build dir.
 def layout_args(build_dir):
     """--metal-layout when this build dir was configured for Metal: the C++ mirror follows the
@@ -57,13 +57,13 @@ def layout_args(build_dir):
 
 
 def cpp_out_dir(tool):
-    """<build>/generated/bgl_common/idl, derived from the tool so the headers land beside the binary that
+    """<build>/generated/bgl_idl/bgl/idl, derived from the tool so the headers land beside the binary that
     wrote them -- one build dir per backend, each with its own layout."""
-    return os.path.join(os.path.dirname(os.path.dirname(tool)), "generated", "bgl_common", "idl")
+    return os.path.join(os.path.dirname(os.path.dirname(tool)), "generated", "bgl_idl", "bgl", "idl")
 
 
 PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
-IDL_CMAKE = os.path.join(ct.REPO_ROOT, "libs", "bgl_common", "idl", "CMakelists.txt")
+IDL_CMAKE = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "idl", "CMakeLists.txt")
 
 
 def cmake_list(text, name):
@@ -112,7 +112,7 @@ def cpp_args_for(module, public, internal, tool):
 
 
 def resolve_tool(build_dir, config):
-    """Absolute path to the built bgl_idlgen, via the File API (or None)."""
+    """Absolute path to the built bgpu_idlgen, via the File API (or None)."""
     candidates = []
     for bd in ct.find_build_dirs(build_dir):
         ct.ensure_query(bd)
@@ -146,7 +146,7 @@ def main():
     parser.add_argument("modules", nargs="*", help="Specific .slang modules (default: all).")
     parser.add_argument("--build-dir", help="Build directory (default: the configured preset's).")
     parser.add_argument("--config", help="Configuration to use (e.g. Debug, Release; default: config.json).")
-    parser.add_argument("--build", action="store_true", help="Build bgl_idlgen first.")
+    parser.add_argument("--build", action="store_true", help="Build bgpu_idlgen first.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without running.")
     args = parser.parse_args()
 

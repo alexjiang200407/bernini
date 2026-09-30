@@ -16,6 +16,7 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
+#include <bgl/idl/Constants.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -29,7 +30,6 @@
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
-#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
