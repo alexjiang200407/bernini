@@ -4,6 +4,7 @@
 #include "cmd/CommandQueue_d3d12.h"
 #include "cmd/TimestampHeap_d3d12.h"
 #include "convert_d3d12.h"
+#include "native_device_d3d12.h"
 #include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "resource/ResourceManager_d3d12.h"
@@ -14,7 +15,6 @@
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>
-#include <bgpu/d3d12/native_device.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/MeshletPipeline.h>
 #include <bgpu/resource/ResourceManager.h>

@@ -1,6 +1,7 @@
 #include "resource/ResourceManager_metal.h"
 #include "autorelease_scope.h"
 #include "convert_metal.h"
+#include "resource/BoundedPool.h"
 #include "resource/Dsv_metal.h"
 #include "resource/ReadbackBuffer_metal.h"
 #include "resource/Rtv_metal.h"
@@ -62,18 +63,15 @@ namespace bgpu
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
 		// concurrent reader. Exhaustion returns a null handle instead, which every Create* reports.
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
-		core::ensure(desc.maxSrvs > 0, "maxSrvs must be greater than zero");
-		core::ensure(desc.maxTextures > 0, "maxTextures must be greater than zero");
-		core::ensure(desc.maxReadbackBuffers > 0, "maxReadbackBuffers must be greater than zero");
-		core::ensure(desc.maxRtvs > 0, "maxRtvs must be greater than zero");
-		core::ensure(desc.maxDsvs > 0, "maxDsvs must be greater than zero");
-		core::ensure(desc.maxSamplers > 0, "maxSamplers must be greater than zero");
 
 		// The three pools a bindless handle in a cbuffer resolves through -- an SRV carries its
-		// texture's slot, so reserving the texture pool covers it too.
+		// texture's slot, so reserving the texture pool covers it too. A pool of zero, a compute
+		// owner's, hands out no slot at all, the unbound one included.
 		ReserveUnboundSlot(m_Buffers);
-		ReserveUnboundSlot(m_Textures);
-		ReserveUnboundSlot(m_Samplers);
+		if (desc.maxTextures > 0)
+			ReserveUnboundSlot(m_Textures);
+		if (desc.maxSamplers > 0)
+			ReserveUnboundSlot(m_Samplers);
 	}
 
 	BufferHandle
@@ -81,7 +79,7 @@ namespace bgpu
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
-		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, desc);
+		const auto slot = TryAllocateBounded(m_Buffers, m_Device, desc);
 		if (slot.is_null())
 		{
 			spdlog::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
@@ -138,7 +136,7 @@ namespace bgpu
 		// shader declares -- so the view resolves to the buffer's own bindless index and describes
 		// nothing else. It still takes a slot: a view outlives the buffer it views, which is the
 		// contract the interface states and which CreateSrv keeps here for the same reason.
-		const auto slot = m_BufferSrvs.try_allocate_and_emplace(buffer.bindlessIndex);
+		const auto slot = TryAllocateBounded(m_BufferSrvs, buffer.bindlessIndex);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateBufferSrv '{}': buffer view pool exhausted", desc.debugName);
@@ -194,7 +192,7 @@ namespace bgpu
 		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
-		const auto slot = m_Readbacks.try_allocate_and_emplace(m_Device, desc);
+		const auto slot = TryAllocateBounded(m_Readbacks, m_Device, desc);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateReadbackBuffer '{}': readback pool exhausted", desc.debugName);
@@ -419,7 +417,7 @@ namespace bgpu
 		m_LiveTexturesDirty = true;
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
-		const auto slot = m_Textures.try_allocate_and_emplace(m_Device, desc);
+		const auto slot = TryAllocateBounded(m_Textures, m_Device, desc);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
@@ -436,7 +434,7 @@ namespace bgpu
 		core::ensure(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		const auto                  slot = m_Srvs.try_allocate_and_emplace(desc, textureHandle);
+		const auto                  slot = TryAllocateBounded(m_Srvs, desc, textureHandle);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
@@ -462,7 +460,7 @@ namespace bgpu
 		core::ensure(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		const auto                  slot = m_Rtvs.try_allocate_and_emplace(desc, textureHandle);
+		const auto                  slot = TryAllocateBounded(m_Rtvs, desc, textureHandle);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
@@ -614,7 +612,7 @@ namespace bgpu
 		const auto                  pool = ScopeAutoreleasePool();
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 
-		const auto slot = m_Samplers.try_allocate_and_emplace(m_Device, desc);
+		const auto slot = TryAllocateBounded(m_Samplers, m_Device, desc);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateSampler: sampler pool exhausted");
@@ -662,7 +660,7 @@ namespace bgpu
 		core::ensure(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
 
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		const auto                  slot = m_Dsvs.try_allocate_and_emplace(desc, textureHandle);
+		const auto                  slot = TryAllocateBounded(m_Dsvs, desc, textureHandle);
 		if (slot.is_null())
 		{
 			spdlog::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);

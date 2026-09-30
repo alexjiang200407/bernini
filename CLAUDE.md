@@ -174,7 +174,7 @@ creates it and hands it to every owner, and the lifetime and session rules every
 
 The crowd simulation's library: compute on a second queue beside the renderer's frame, on the device
 the application's context owns. Why it links `bgpu` and never the renderer, what the async queue is on D3D12
-and on Metal, a job's submit-then-poll with one submission in flight, and how its kernels compile and bind.
+and on Metal, and how its kernels compile.
 Then `ICrowd`, the group-level interface a game drives the crowd through: why it never names an
 agent, why commands wait for a fixed tick, and how a backend proves it keeps the contract.
 

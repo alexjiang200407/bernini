@@ -88,9 +88,8 @@ endif()
 if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx-headers CONFIG REQUIRED)
 	find_package(winpixevent CONFIG REQUIRED)
-	# PUBLIC: what a caller does with a native pointer bgpu hands out -- the renderer's swapchain,
-	# crowdlib's own D3D12 job -- needs these headers, though bgpu's own public headers only
-	# forward-declare the interfaces.
+	# PUBLIC: what a caller does with a native pointer bgpu hands out -- the renderer's swapchain --
+	# needs these headers, though bgpu's own public headers only forward-declare the interfaces.
 	target_link_libraries(bgpu
 		PUBLIC  Microsoft::DirectX-Headers
 		PRIVATE d3d12 dxgi dxguid Microsoft::WinPixEventRuntime)
@@ -266,6 +265,42 @@ set_target_properties(bgpu_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 add_dependencies(bgpu_selfcheck bgpu_idl_generate)
 enable_strict_compiler(bgpu_selfcheck)
 
+# The context half -- the device, the Slang sessions, the program cache -- never includes the RHI
+# (docs/bgpu.md). bgpu_selfcheck cannot see that: it compiles against all of bgpu. This one stages only the
+# context's headers into a tree of their own and compiles each against it, so an include of an RHI
+# header fails to resolve. A new context header is added to the list; one left off is RHI by default.
+set(BGPU_CONTEXT_HEADERS
+	api.h
+	GpuContext.h
+	MemoryTag.h
+	ProgramCache.h
+	SlangErrorChecker.h
+	d3d12/D3d12ErrorChecker.h
+)
+if(RENDERER_BACKEND STREQUAL "METAL")
+	list(APPEND BGPU_CONTEXT_HEADERS metal/MetalErrorChecker.h)
+endif()
+set(BGPU_CONTEXT_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/context_include")
+set(BGPU_CONTEXT_SELFCHECK_SOURCES "")
+foreach(header ${BGPU_CONTEXT_HEADERS})
+	configure_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/${header}"
+		"${BGPU_CONTEXT_INCLUDE}/bgpu/${header}"
+		COPYONLY)
+	string(MAKE_C_IDENTIFIER "bgpu/${header}" check_name)
+	set(check_source "${CMAKE_CURRENT_BINARY_DIR}/context_selfcheck/${check_name}.cpp")
+	file(GENERATE OUTPUT ${check_source} CONTENT "#include <bgpu/${header}>\n")
+	list(APPEND BGPU_CONTEXT_SELFCHECK_SOURCES ${check_source})
+endforeach()
+add_library(bgpu_context_selfcheck STATIC ${BGPU_CONTEXT_SELFCHECK_SOURCES})
+# Not bgpu: its include directories are the ones this check exists to withhold.
+target_include_directories(bgpu_context_selfcheck PRIVATE ${BGPU_CONTEXT_INCLUDE})
+target_link_libraries(bgpu_context_selfcheck PRIVATE core slang::slang)
+target_compile_definitions(bgpu_context_selfcheck
+	PRIVATE $<TARGET_PROPERTY:bgpu,INTERFACE_COMPILE_DEFINITIONS>)
+set_target_properties(bgpu_context_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+enable_strict_compiler(bgpu_context_selfcheck)
+
 # The suite needs a device, so there is none without a backend.
 if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	find_package(Catch2 CONFIG REQUIRED)
@@ -313,9 +348,9 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu and the
-	# contract exactly as a renderer resolves them.
-	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders)
+	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu exactly as a
+	# renderer resolves them.
+	add_dependencies(bgpu_tests bgpu_copy_shaders)
 
 	# The suite's own kernels, under bgpu/ in the tests root the sessions search, which no other
 	# copier writes.

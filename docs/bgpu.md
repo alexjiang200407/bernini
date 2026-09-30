@@ -19,7 +19,7 @@ auto context  = bgpu::CreateGpuContext(desc);         // the device, the debug l
 auto graphics = bgl::CreateGraphics(context, gfxOpts);  // one owner
 
 auto device = bgpu::CreateDevice(context);              // another: a compute client's own device
-auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc());
+auto rm     = device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
 auto queue  = device->CreateCommandQueue(bgpu::QueueType::kCompute);
 rm->RegisterQueue(queue.Get());
 ```
@@ -50,7 +50,7 @@ rm->RegisterQueue(queue.Get());
   one walk of the shader tree per context, taken by the first key; the source modules fold in at
   every key, so a text another owner changed moves it ([shader_cache.md](shader_cache.md)).
 * **The D3D12 pipeline states every owner built.** `FindPipelineState` / `SharePipelineState` in
-  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h) hold PSOs for the
+  [native_device_d3d12.h](../libs/bgpu/src/d3d12/native_device_d3d12.h), private to the backend, hold PSOs for the
   context's life, keyed by the root signature and the owner's identity for everything else. A PSO
   is immutable and the device's, so a second renderer on the context reuses the first one's
   instead of building its own. It matters most under GPU-based validation, which patches each new
@@ -70,11 +70,8 @@ rm->RegisterQueue(queue.Get());
   above is what keeps owners isolated. A resource manager is not tied to a frame loop: queues
   register themselves with it, and its owner calls `CleanupExpiredResources` when it likes. What
   the RHI cannot say portably its objects hand out as `GetNativeObject(NativeObjectType)` -- an
-  untyped pointer, so no RHI header names a backend type ([rhi.md](rhi.md)). The context's device
-  is also reachable without an `IDevice`, through
-  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h) and
-  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h), which forward-declare
-  the native type rather than include the SDK.
+  untyped pointer, so no RHI header names a backend type ([rhi.md](rhi.md)). That is the only way
+  out to the native device: no public header hands it out without an `IDevice`.
 * **Its Slang half is staged first.** The offset primitives (`idl.Entry`, `idl.Range` ...), the
   buffer family (`lib.types.EntryBuffer` ...) and the GPU assert channel (`lib.debug.dbg`,
   `idl.ErrorCode`, `idl.DebugRecord`) live under `libs/bgpu/shaders/src` and stage into the one
@@ -89,9 +86,13 @@ rm->RegisterQueue(queue.Get());
   accessors, the error checkers, and the out-of-line members of the RHI's concrete classes (the
   cbuffer mirror, the growable and compute buffers, the pipeline batch); the interfaces cross the
   boundary through virtual calls. `bgpu_selfcheck` compiles each public header against `bgpu`
-  alone, so none reaches into a renderer. On Metal it is
-  also the one translation unit that emits metal-cpp's symbols, since it is the library every Metal
-  user in the process links.
+  alone, so none reaches into a renderer. On Metal it is also the one translation unit that emits
+  metal-cpp's symbols, since it is the library every Metal user in the process links.
+* **The context never includes the RHI.** The RHI depends on the context and never the reverse, so
+  a consumer of the context alone could take it by a CMake split, with no code moved.
+  `bgpu_context_selfcheck` holds that: it stages the context's headers (`BGPU_CONTEXT_HEADERS` in
+  `libs/bgpu/CMakeLists.txt`) into a tree of their own and compiles each against it, so an include
+  of an RHI header fails to resolve. A new context header joins that list.
 
 ## Threading & Synchronization
 

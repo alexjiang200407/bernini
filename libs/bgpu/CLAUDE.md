@@ -18,6 +18,8 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   PCH, against `bgpu` only, so an `#include <bgl/...>` — or an include a header
   leaned on the PCH for — stops the build. `bgpu_check_shaders` does the same for every Slang module
   under `./shaders/src`.
+- **The context never includes the RHI.** `bgpu_context_selfcheck` compiles the headers listed in
+  `BGPU_CONTEXT_HEADERS` against those headers alone; a new context header joins the list.
 - Error handling: `core::ensure` for internal problems; throw for the caller's.
 - Verification: `just test bgpu` — `[compute]` is an owner with no renderer in the process — then the
   renderer's suite, `bgl_tests`, which drives the same RHI harder.

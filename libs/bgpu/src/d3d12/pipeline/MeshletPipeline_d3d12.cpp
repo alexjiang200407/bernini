@@ -1,9 +1,9 @@
 #include "pipeline/MeshletPipeline_d3d12.h"
 #include "convert_d3d12.h"
+#include "native_device_d3d12.h"
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
 #include <bgpu/GpuContext.h>
-#include <bgpu/d3d12/native_device.h>
 #include <bgpu/resource/Shader.h>
 #include <core/err/util.h>
 #include <core/math.h>

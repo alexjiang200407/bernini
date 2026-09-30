@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/MemoryTag.h>
 
 namespace bgpu
 {
@@ -17,8 +18,19 @@ namespace bgpu
 			void*                       cpuVA        = nullptr;
 			D3D12_GPU_VIRTUAL_ADDRESS   gpuVA        = 0;
 			uint32_t                    identifier   = 0;
+			TaggedBytes                 tracked;
 
+			BufferChunk() = default;
 			~BufferChunk();
+
+			BufferChunk(const BufferChunk&) = delete;
+			BufferChunk(BufferChunk&&)      = delete;
+
+			BufferChunk&
+			operator=(const BufferChunk&) = delete;
+
+			BufferChunk&
+			operator=(BufferChunk&&) = delete;
 		};
 
 	public:

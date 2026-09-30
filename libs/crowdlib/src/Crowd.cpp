@@ -147,8 +147,9 @@ namespace crowd
 		m_Device = bgpu::CreateDevice(m_Context);
 		if (m_Device == nullptr)
 			core::throw_runtime_error("The crowd could not create its device");
-		m_ResourceManager = m_Device->CreateResourceManager(bgpu::ResourceManagerDesc());
-		m_Queue           = m_Device->CreateCommandQueue(bgpu::QueueType::kCompute);
+		m_ResourceManager =
+			m_Device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
+		m_Queue = m_Device->CreateCommandQueue(bgpu::QueueType::kCompute);
 		if (m_ResourceManager == nullptr || m_Queue == nullptr)
 			core::throw_runtime_error("The crowd could not create its compute queue");
 		m_ResourceManager->RegisterQueue(m_Queue.Get());

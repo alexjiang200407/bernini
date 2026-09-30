@@ -268,6 +268,10 @@ Everything else is self-explanatory from the header.
   null handle rather than an exception — these methods are `noexcept`, so a throwing allocation
   failure would terminate. Check `IsNull()`; do not assume success. On the OOM path the descriptor
   slot is released again, so a failed create costs nothing.
+* **A pool sized at zero has no heap.** Every `ResourceManagerDesc` pool but `maxBuffers` may be
+  zero, and a create from it fails as exhaustion does. The defaults are the renderer's;
+  `ResourceManagerDesc::ComputeOnly()` zeroes every texture pool and sizes `maxCbvSrvUavs` to the
+  buffers alone, and is what crowdlib's `Crowd` passes.
 * **`CreateRtv` / `CreateDsv`** require the source texture to have been created with the
   matching usage flag (`TextureUsageFlag::kRenderTarget` / `kDepthStencil`).
 * **`CreateSampler` / `DestroySampler` / `GetSampler`** — samplers draw from their own

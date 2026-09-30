@@ -1,11 +1,6 @@
 #pragma once
 
-// Windows only, and empty elsewhere, as <bgpu/d3d12/D3d12ErrorChecker.h> is: a public header has to
-// parse on every host the tools run on.
-#if defined(_WIN32)
-
-#	include <bgpu/api.h>
-#	include <cstdint>
+#include <cstdint>
 
 // Declared, not defined: a caller that dereferences one includes <directx/d3d12.h> itself.
 struct ID3D12Device;
@@ -19,10 +14,10 @@ namespace bgpu
 	class GpuContext;
 
 	/**
-	 * The D3D12 device behind a context. Borrowed: the context holds the reference, and an owner
-	 * that needs the device past the context's life retains it.
+	 * The D3D12 device behind a context, for the RHI's own objects; an owner asks its IDevice
+	 * (`GetNativeObject(kD3D12Device)`). Borrowed: the context holds the reference.
 	 */
-	BGPU_API ID3D12Device*
+	ID3D12Device*
 	GetD3d12Device(const GpuContext& context) noexcept;
 
 	/**
@@ -34,7 +29,7 @@ namespace bgpu
 	 *
 	 * @return an added reference the caller releases, or null on a miss.
 	 */
-	[[nodiscard]] BGPU_API ID3D12PipelineState*
+	[[nodiscard]] ID3D12PipelineState*
 	FindPipelineState(
 		const GpuContext&    context,
 		ID3D12RootSignature* rootSignature,
@@ -45,7 +40,7 @@ namespace bgpu
 	 * key is kept. The context holds it and its root signature until the context is destroyed.
 	 * Safe from any thread: pipelines are built in parallel.
 	 */
-	BGPU_API void
+	void
 	SharePipelineState(
 		const GpuContext&    context,
 		ID3D12RootSignature* rootSignature,
@@ -53,5 +48,3 @@ namespace bgpu
 		ID3D12PipelineState* pipelineState) noexcept;
 }
 // NOLINTEND(misc-include-cleaner)
-
-#endif

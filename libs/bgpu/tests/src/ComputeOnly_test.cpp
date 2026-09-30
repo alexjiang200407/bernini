@@ -10,10 +10,16 @@
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/ComputeState.h>
+#include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/containers/slot_handle.h>
@@ -33,7 +39,7 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 	auto device = bgpu::CreateDevice(context);
 	REQUIRE(device != nullptr);
 
-	auto rm = device->CreateResourceManager(bgpu::ResourceManagerDesc());
+	auto rm = device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
 	REQUIRE(rm != nullptr);
 
 	auto queue = device->CreateCommandQueue(bgpu::QueueType::kCompute);
@@ -143,4 +149,70 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 	// An owner drains the queues it made before it lets go of them (docs/bgpu.md, Teardown).
 	queue->Flush();
 	rm->UnregisterQueue(queue.Get());
+}
+
+// A pool of zero is a kind the owner makes none of: the manager is built without its heap, and a
+// create from it fails as an exhausted pool does rather than touching a heap that does not exist.
+TEST_CASE("A resource pool of zero refuses every create from it", "[compute][render]")
+{
+	auto context = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
+	auto device  = bgpu::CreateDevice(context);
+
+	SECTION("no textures")
+	{
+		auto rm = device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
+		REQUIRE(rm != nullptr);
+
+		auto textureDesc   = bgpu::TextureDesc();
+		textureDesc.format = bgpu::Format::RGBA8_UNORM;
+		CHECK_FALSE(rm->ValidTextureHandle(rm->CreateTexture(textureDesc)));
+		CHECK_FALSE(rm->ValidSamplerHandle(rm->CreateSampler(bgpu::SamplerDesc())));
+
+		auto bufferDesc = bgpu::ComputeBufferDesc();
+		bufferDesc.SetElement<uint32_t>().SetInitialCount(4).SetDebugName("Zero-pool buffer");
+		const bgpu::BufferHandle buffer = rm->CreateComputeBuffer(bufferDesc);
+		CHECK(rm->ValidBufferHandle(buffer));
+		rm->DestroyBuffer(buffer, false);
+	}
+
+	SECTION("textures, but no view, target, depth or readback")
+	{
+		auto desc               = bgpu::ResourceManagerDesc::ComputeOnly();
+		desc.maxTextures        = 3;
+		desc.maxReadbackBuffers = 0;
+		auto rm                 = device->CreateResourceManager(desc);
+		REQUIRE(rm != nullptr);
+
+		auto colorDesc   = bgpu::TextureDesc();
+		colorDesc.format = bgpu::Format::RGBA8_UNORM;
+		colorDesc.usage  = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kSRV,
+			                                   bgpu::TextureUsageFlag::kRenderTarget };
+		const auto color = rm->CreateTexture(colorDesc);
+		REQUIRE(rm->ValidTextureHandle(color));
+
+		auto depthDesc   = bgpu::TextureDesc();
+		depthDesc.format = bgpu::Format::D32;
+		depthDesc.usage  = bgpu::TextureUsageFlag::kDepthStencil;
+		const auto depth = rm->CreateTexture(depthDesc);
+		REQUIRE(rm->ValidTextureHandle(depth));
+
+		auto srvDesc   = bgpu::SrvDesc();
+		srvDesc.format = bgpu::Format::RGBA8_UNORM;
+		CHECK_FALSE(rm->ValidSrvHandle(rm->CreateSrv(color, srvDesc)));
+
+		auto rtvDesc   = bgpu::RtvDesc();
+		rtvDesc.format = bgpu::Format::RGBA8_UNORM;
+		CHECK_FALSE(rm->ValidRtvHandle(rm->CreateRtv(color, rtvDesc)));
+
+		auto dsvDesc   = bgpu::DsvDesc();
+		dsvDesc.format = bgpu::Format::D32;
+		CHECK_FALSE(rm->ValidDsvHandle(rm->CreateDsv(depth, dsvDesc)));
+
+		auto readbackDesc     = bgpu::ReadbackBufferDesc();
+		readbackDesc.byteSize = 16;
+		CHECK_FALSE(rm->ValidReadbackBufferHandle(rm->CreateReadbackBuffer(readbackDesc)));
+
+		rm->DestroyTexture(color, false);
+		rm->DestroyTexture(depth, false);
+	}
 }

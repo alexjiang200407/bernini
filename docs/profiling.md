@@ -453,7 +453,7 @@ no second spelling for a call site to get wrong.
 
 | Layer | Tagged |
 |---|---|
-| `bgl` | every buffer and texture created through the RHI's `ResourceManager` — the buffer at the size asked for, the texture at the size the driver reports — in both backends. A swap-chain texture is adopted rather than allocated, so it is deliberately not charged |
+| `bgpu` | every buffer and texture created through the RHI's `ResourceManager` — the buffer at the size asked for, the texture at the size the driver reports — in both backends, and D3D12's per-command-list upload ring, whose chunks are charged to `device buffer` for as long as the list keeps them. A swap-chain texture is adopted rather than allocated, so it is deliberately not charged |
 | `gamelib` | `AssetManager`'s stamped container cache — the `.bmesh` under `mesh`, the `.banim` and `.bskel` under `animation` |
 
 Nothing else, and the gaps below are what the residual is currently made of:
@@ -462,11 +462,9 @@ Nothing else, and the gaps below are what the residual is currently made of:
   below say so plainly.
 - **The editor's thumbnail cache does not read through `AssetManager`**, so the `.bmesh` files it
   loads are not charged to `mesh`.
-- **Device memory taken outside `ResourceManager` is untagged.** Three paths ask the device
-  directly: D3D12's `UploadManager` chunk pool (which already counts its own bytes in
-  `m_AllocatedMemory` and simply never hands them over), `ReadbackBuffer_d3d12`, and Metal's
-  staging buffers in `CommandList_metal`. So `device buffer` is the RHI's buffers, not the
-  process's.
+- **Device memory taken outside `ResourceManager` is untagged**, but for the upload ring. Two paths
+  ask the device directly: `ReadbackBuffer_d3d12`, and Metal's per-write staging buffers in
+  `CommandList_metal`. So `device buffer` is the RHI's buffers and D3D12's ring, not the process's.
 
 ### What a run costs
 
