@@ -180,8 +180,10 @@ namespace crowd
 		m_Ranges.Init(
 			{ .initialCount = crowdDesc.maxGroups, .debugName = "Crowd agent ranges" },
 			m_ResourceManager);
-		m_Agents[0] = CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents A");
-		m_Agents[1] = CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents B");
+		m_AgentsPingPong[0] =
+			CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents A");
+		m_AgentsPingPong[1] =
+			CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents B");
 		m_GroupSums =
 			CreateComputeBuffer<idl::GroupSum>(rm, crowdDesc.maxGroups, "Crowd group sums");
 		if (crowdDesc.debugAgentReadback)
@@ -236,7 +238,8 @@ namespace crowd
 			if (!slot.agents.IsNull())
 				rm.DestroyReadbackBuffer(slot.agents, false);
 		}
-		for (const auto buffer : { m_Agents[0], m_Agents[1], m_GroupSums, m_AgentReadback })
+		for (const auto buffer :
+		     { m_AgentsPingPong[0], m_AgentsPingPong[1], m_GroupSums, m_AgentReadback })
 		{
 			if (!buffer.IsNull())
 				rm.DestroyBuffer(buffer, false);
@@ -405,8 +408,8 @@ namespace crowd
 	Crowd::Record(TickSlot& slot, uint64_t tick, const TickPlan& plan)
 	{
 		// Ping-pong: each tick reads the buffer the tick before it wrote.
-		const auto agents   = m_Agents[tick % c_AgentBuffers];
-		const auto previous = m_Agents[(tick + 1) % c_AgentBuffers];
+		const auto agents   = m_AgentsPingPong[tick % 2];
+		const auto previous = m_AgentsPingPong[(tick + 1) % 2];
 
 		slot.allocator->ResetAllocator();
 		auto& list = *slot.list;

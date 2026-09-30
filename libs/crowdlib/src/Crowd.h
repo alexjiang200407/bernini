@@ -36,8 +36,6 @@ namespace crowd
 	 */
 	class Crowd final : public core::RefCounter<ICrowd>
 	{
-		static constexpr uint32_t c_AgentBuffers = 2;
-
 	public:
 		/** @throws std::runtime_error for a description a crowd refuses, or a device that fails. */
 		Crowd(bgpu::GpuContextRef context, CrowdDesc desc);
@@ -150,9 +148,8 @@ namespace crowd
 
 		bgpu::UploadBuffer<idl::Group>      m_Groups;
 		bgpu::UploadBuffer<idl::AgentRange> m_Ranges;
-		// GPU-only, written by one tick and read by the next: each tick reads the one the tick before
-		// it wrote, so a tick's copies never race its own writes.
-		bgpu::BufferHandle m_Agents[c_AgentBuffers];
+		// GPU-only: each tick reads the one the tick before it wrote, and writes the other.
+		bgpu::BufferHandle m_AgentsPingPong[2];
 
 		// CSReduce's output, one idl::GroupSum per group row, copied into the tick's report readback.
 		bgpu::BufferHandle m_GroupSums;
