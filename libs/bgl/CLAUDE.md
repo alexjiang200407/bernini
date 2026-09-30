@@ -1,18 +1,23 @@
-# bgl_extended
+# bgl
 
-bgl_extended is the extended-tier renderer: the implementation of the `bgl` contract for devices that
-offer bindless resource access and a mesh stage. It provides higher level abstractions of Mesh,
-Light and Material while hiding the graphics api. The contract it implements lives in `libs/bgl`
-and is a target of its own; nothing here is part of it.
+bgl is the renderer, for devices that offer bindless resource access and a mesh stage. It
+provides higher level abstractions of Mesh, Light and Material while hiding the graphics api.
+`./include/bgl` is its public surface — what a game compiles against, [docs/bgl_api.md](../../docs/bgl_api.md)
+— and `./src` the implementation behind it, which no client sees.
 
-- CMake target: bgl_extended
-- It is compiled to a Dynamic Linked Library.
-- bgl_extended is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: `Graphics_*` and `RenderTarget_*`, in `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any other source here; the backend's native objects are reached through the RHI's `GetNativeObject` / `GetNativeTexture` / `ImportNativeTexture`.
-- Put all plain old data inside `./libs/bgl_extended/src/types`
-- PCH is `./libs/bgl_extended/src/pch.h`. Don't `#include` the headers in here.
-- Error Handling: For internal problems, use `core::ensure`. For caller (code that links to bgl_extended) problems, throw an exception so the caller can handle them
+- CMake target: bgl, built as `BERNINI_RENDERER_LIBRARY_TYPE` says (a DLL in an editor build).
+  `bgl_headers` is the public surface's usage requirements alone, for what compiles against the
+  headers without linking the renderer: the backends' object libraries, `bgl_selfcheck`, an SDK
+  gamelib.
+- A public header never includes anything under `./src`; `bgl_selfcheck` compiles every one against
+  `bgl_headers` alone. The shaders split the same way: `./shaders/include` is the contract a game's
+  surface conforms to, checked alone by `bgl_check_shaders`, and `./shaders/src` the renderer's.
+- bgl is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: `Graphics_*` and `RenderTarget_*`, in `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any other source here; the backend's native objects are reached through the RHI's `GetNativeObject` / `GetNativeTexture` / `ImportNativeTexture`.
+- Put all plain old data inside `./libs/bgl/src/types`
+- PCH is `./libs/bgl/src/pch.h`. Don't `#include` the headers in here.
+- Error Handling: For internal problems, use `core::ensure`. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
 - CMake: `./CMakeLists.txt`
-- Verification: Check logs, bgl_extended_tests
+- Verification: Check logs, bgl_tests
 
 
 # Subsystems
@@ -21,7 +26,7 @@ and is a target of its own; nothing here is part of it.
 
 - The renderer's D3D12 half: `Graphics_d3d12` (the façade `CreateGraphics` returns), `RenderTarget_d3d12`
   (the swapchain and the frame's attachments). The RHI's D3D12 backend is `bgpu`'s.
-- PCH is `./libs/bgl_extended/src/d3d12/pch.h`. Don't `#include` the headers in here.
+- PCH is `./libs/bgl/src/d3d12/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_d3d12` suffix.
 - CMake: `./src/d3d12/CMakeLists.txt`
 - The DLLs a D3D12 device and a shader compile load by name, and the Agility SDK's exports
@@ -33,7 +38,7 @@ and is a target of its own; nothing here is part of it.
   frame's attachments) and the thread's autorelease net. The RHI's Metal backend is `bgpu`'s, and so
   are the metal-cpp, error-checking, autorelease-pool and flush rules it follows
   ([libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md)).
-- PCH is `./libs/bgl_extended/src/metal/pch.h`. Don't `#include` the headers in here.
+- PCH is `./libs/bgl/src/metal/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_metal` suffix.
 - `Graphics` holds a share of the thread's one long-lived net for stray autoreleased objects
   (`AutoreleaseNet_metal.h`: pools are a stack, so two renderers on one thread cannot each hold a
@@ -42,11 +47,11 @@ and is a target of its own; nothing here is part of it.
   creating an autoreleased object scopes its own pool, as the RHI does —
   `RenderTarget::PresentToLayer`.
 - CMake: `./src/metal/CMakeLists.txt`
-- Verification: Check logs, bgl_extended_tests
+- Verification: Check logs, bgl_tests
 
-## bgl_extended_tests
+## bgl_tests
 
-- After running bgl_extended_tests always check the log to see the warnings, errors and basic info.
+- After running bgl_tests always check the log to see the warnings, errors and basic info.
 - The suite is slow: nearly all of its runtime is `CreateGraphics`, which every test does at least
   once (and Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section test pays it again
   each time). Budget minutes, not seconds, and do not mistake that for a hang.
@@ -54,8 +59,8 @@ and is a target of its own; nothing here is part of it.
   D3D12's GBV does:
 
   ```bash
-  METAL_DEVICE_WRAPPER_TYPE=1 just run bgl_extended_tests                        # API validation
-  METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_extended_tests  # + GPU validation
+  METAL_DEVICE_WRAPPER_TYPE=1 just run bgl_tests                        # API validation
+  METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_tests  # + GPU validation
   ```
 
   `--gpu-validation` does nothing here — it is read only by `Graphics_d3d12`. The shader cache's
@@ -65,8 +70,8 @@ and is a target of its own; nothing here is part of it.
 - **D3D12 GPU-based validation is opt-in**, via `--gpu-validation`:
 
   ```bash
-  just run bgl_extended_tests                       # ~5 min: debug layer on, GPU validation off
-  just run bgl_extended_tests -- --gpu-validation   # ~10 min: for a final verification run
+  just run bgl_tests                       # ~5 min: debug layer on, GPU validation off
+  just run bgl_tests -- --gpu-validation   # ~10 min: for a final verification run
   ```
 
   It patches every shader, which takes device creation from ~3s to ~18s and doubles the suite. The
@@ -113,15 +118,15 @@ and is a target of its own; nothing here is part of it.
   files are in the cache salt like the engine's, and a program imports its modules by name the same
   way. Four trees are staged into the engine's: the RHI's `libs/bgpu/shaders/src` (the offset
   primitives under `idl/`, `lib/types/*Buffer`, `lib/debug/`) by `bgpu_copy_shaders`, first; the
-  contract `libs/bgl/shaders/src` (`bgl/`) by `bgl_copy_contract_shaders`, and this renderer's own
-  (`idl/`, `lib/`, `programs/`, `luts/`) by a target `bgl_extended` itself depends on —
+  contract `libs/bgl/shaders/include` (`bgl/`) by `bgl_copy_contract_shaders`, and this renderer's own
+  (`idl/`, `lib/`, `programs/`, `luts/`) by a target `bgl` itself depends on —
   `bgl_copy_shader_src` on D3D12, `bgl_metal_copy_shaders` on Metal, each ordered after the
   contract's — so anything that brings a device up has the sources,
   and a build that stages none aborts on the first program-cache miss with "cannot open file".
   `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_metal_copy_test_shaders`). A new
-  `.slang` placed under `libs/bgl_extended/shaders/src` is therefore usable at runtime by its module name
+  `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its module name
   without any CMake change.
-- The `compile_shader(...)` entries in `libs/bgl_extended/shaders/CMakeLists.txt` are now **build-time
+- The `compile_shader(...)` entries in `libs/bgl/shaders/CMakeLists.txt` are now **build-time
   validation only** — they invoke `slangc` per entry point to fail the build on shader errors early;
   the resulting `.dxil` files are not loaded at runtime. Add an entry when you want that validation:
 

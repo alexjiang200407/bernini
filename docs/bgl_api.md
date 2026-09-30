@@ -2,7 +2,7 @@
 
 Everything under [libs/bgl/include/bgl](libs/bgl/include/bgl) is bgl's public surface: the interfaces
 an application (the editor, the examples, `gamelib`) uses to put a scene on screen. It is a strict
-subset of what bgl_extended contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
+subset of what bgl contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
 documented separately in [Render Hardware Interface](docs/rhi.md); neither shipped backend,
 `bgl_d3d12` or `bgl_metal`, is ever visible here.
 
@@ -10,16 +10,15 @@ The two are seams at different heights. The RHI abstracts a *graphics API*, and 
 D3D12 and Metal share — bindless resource access and mesh shaders. This surface sits above it and
 abstracts the *renderer*, in the vocabulary of geometry, materials, textures, instances and cameras.
 
-`bgl` is the target that carries these headers and nothing else. A renderer implementing them is
-named for what it is built on and is a target of its own: `bgl_extended` is the tier that assumes
-bindless resource access and a mesh stage, and it is the only one.
+These headers are `include/bgl` of the `bgl` library, whose `src/` is the renderer behind them —
+one renderer, for devices with bindless resource access and a mesh stage.
 
 **Keep it that way.** No descriptor, meshlet, heap or pipeline-object vocabulary in a name, a field
 or a throw contract here — state what a caller is guaranteed, not the machinery that currently
-provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into a
-renderer's internals fails the build); the wording half is review's.
+provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into
+`src/` fails the build); the wording half is review's.
 
-The same surface has a Slang half, [libs/bgl/shaders/src/bgl](libs/bgl/shaders/src/bgl): what a
+The same surface has a Slang half, [libs/bgl/shaders/include/bgl](libs/bgl/shaders/include/bgl): what a
 surface written outside the engine conforms to and reads through, and nothing that names a handle,
 an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
 only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
@@ -41,7 +40,7 @@ disagrees, trust the header, then fix this doc.
   `bgpu::GpuContext` ([bgpu.md](bgpu.md)), created once per process and shared
   with every other owner of the device; several renderers may sit on one.
 
-* **Interfaces are pure-virtual and intrusively refcounted, because bgl_extended is a DLL.** Every `I*` derives
+* **Interfaces are pure-virtual and intrusively refcounted, because bgl is a DLL.** Every `I*` derives
   from `core::Ref` and is held behind `core::SharedRef<T>` (`GraphicsRef`, `SceneRef`, `SceneViewRef`,
   `RenderTargetRef`), with copy and move deleted — they are never value types. Each header ends with an
   explicit `template class BGL_API core::SharedRef<...>` instantiation so the refcount machinery
@@ -141,8 +140,8 @@ disagrees, trust the header, then fix this doc.
 * **A material's draw bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
-  therefore part of the handle, not just the desc. Which draw bucket a pair resolves to is bgl_extended's own
-  business: its `DrawBucketTable` ([libs/bgl_extended/src/gfx/DrawBucketTable.h](libs/bgl_extended/src/gfx/DrawBucketTable.h))
+  therefore part of the handle, not just the desc. Which draw bucket a pair resolves to is bgl's own
+  business: its `DrawBucketTable` ([libs/bgl/src/gfx/DrawBucketTable.h](libs/bgl/src/gfx/DrawBucketTable.h))
   hands the ids out on first use, and nothing on this surface names one.
 
 * **Failures are exceptions, not return codes.** Everything derives from
@@ -497,7 +496,7 @@ auto view  = graphics->CreateSceneView(scene, 100);
 
 // One .benv carries the prefilter, irradiance and skybox of an environment, plus its exposure. The
 // split-sum BRDF table is not among them: it integrates a white environment, so it belongs to the
-// shading model, and bgl_extended generates its own at device init.
+// shading model, and bgl generates its own at device init.
 auto env = assetlib::loadBenv("assets/forest.benv");
 view->SetEnvironmentMap(
     { scene->AddTextureAsset(std::move(env.irradiance)),

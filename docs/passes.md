@@ -4,11 +4,11 @@ A *pass* is a small type that knows how to add one (or a few) `PassDesc`s to a `
 owns whatever GPU objects it needs across frames (kernels, scratch buffers) and exposes an
 `AttachToFrameGraph(fg, …)` that declares its resource accesses and sets an `exec` callback. The
 graph then culls, orders, derives barriers, and records — see [Frame Graph](docs/framegraph.md) for
-that machinery. This page is the catalog of the passes `bgl_extended` ships.
+that machinery. This page is the catalog of the passes `bgl` ships.
 
 A pass's `Init` does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgpu/include/bgpu/pipeline/PipelineBatch.h) in the
-[PassInitContext](libs/bgl_extended/src/passes/PassInitContext.h) it is handed -- one argument for
+[PassInitContext](libs/bgl/src/passes/PassInitContext.h) it is handed -- one argument for
 every pass, holding the device, the batch, the resource manager and the draw-bucket table -- naming
 the member each
 lands in, and `RenderContext` builds each batch's requests at once across threads (see
@@ -25,7 +25,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 ## The frame
 
-`RenderContext` ([gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp)) drives the frame and
+`RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
 `m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
@@ -69,14 +69,14 @@ source — plus the finished `bloomUp0` when bloom ran — and writes the backbu
 last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
 transitions the backbuffer — and each of those borrowed backbuffers — to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
-by [Scene](libs/bgl_extended/src/scene/Scene.cpp)/[SceneView](libs/bgl_extended/src/scene/SceneView.cpp)'s own
+by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
 resource namespace, `v{n}:`; a view's **cull outputs** sit one scope further in, at `v{n}:c{k}:`,
 one `k` per frustum it is culled against. `Compact Instances`, `Transparent Sort` and `Forward` are
 recorded under the frustum's scope and reach the view's own buffers by the outward walk (see
 [Frame Graph](docs/framegraph.md)). Today `k` is only ever 0, the camera.
 
-`DrawData` ([passes/DrawData.h](libs/bgl_extended/src/passes/DrawData.h)) is the per-draw parameter bundle
+`DrawData` ([passes/DrawData.h](libs/bgl/src/passes/DrawData.h)) is the per-draw parameter bundle
 handed to `Skybox`/`Transparent Sort`/`Compact Instances`/`Forward`. Beside the view and its cull
 state it carries four groups: `viewState` (viewport, this frame's and the previous frame's
 view-projection, jitter, camera position, the derived frustum), `targets` (scene-colour,
@@ -84,7 +84,7 @@ motion-vector and depth handles, and the depth's shader-resource view), `lightin
 skybox) and `samplers`. The graph
 resource *names* are not in it — they are fixed, so `c_BackbufferName` / `c_MotionVectorsName` /
 `c_SceneColorName` / `c_DepthName` in
-[gfx/frame_constants.h](libs/bgl_extended/src/gfx/frame_constants.h) are
+[gfx/frame_constants.h](libs/bgl/src/gfx/frame_constants.h) are
 what both the importer and the passes name them by.
 
 ---
@@ -95,7 +95,7 @@ Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the ren
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
-[lib/math/Tonemap.slang](libs/bgl_extended/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
+[lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
@@ -103,8 +103,8 @@ view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec
 that is what `AgX` does: the Rec.709-to-E-Gamut matrix and the 25-stop log encoding are the OCIO
 config's view transform written out, the LUT is `AgX_Base_sRGB.cube` from the Blender install
 converted by `scripts/gen_agx_lut.py` into
-[shaders/src/luts/agx_base_srgb.bin](libs/bgl_extended/shaders/src/luts/agx_base_srgb.bin), and
-`TonemapLut` ([postprocess/TonemapLut.h](libs/bgl_extended/src/postprocess/TonemapLut.h)) uploads it once at device
+[shaders/src/luts/agx_base_srgb.bin](libs/bgl/shaders/src/luts/agx_base_srgb.bin), and
+`TonemapLut` ([postprocess/TonemapLut.h](libs/bgl/src/postprocess/TonemapLut.h)) uploads it once at device
 init. The file is a 2D strip of 57 slices rather than a 3D texture because neither backend's
 `WriteTexture` fills one yet; `StripLutTaps3D` in the same module is the trilinear read over that
 layout, beside the curve it samples. The datafile reaches the
@@ -191,7 +191,7 @@ and `AnyMesh` (the transparent list, the outline mask) cull nothing below the in
 meshlet leaves its bind-pose sphere.
 
 The survivors are **compacted** in the amplification group (`CullMeshlets` in
-[lib/forward/mesh_stage.slang](libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang)): one
+[lib/forward/mesh_stage.slang](libs/bgl/shaders/src/lib/forward/mesh_stage.slang)): one
 lane per group marks a bit, one lane writes a running count per mask word, and the group dispatches
 `cMeshletsPerGroup` mesh groups per survivor, each finding its group by a binary search over the
 counts and its meshlet within that group by the remainder. They are dispatched in meshlet order, the
@@ -269,16 +269,16 @@ environment art is what it is for, and a bake is only right in the pose it was b
 fragment input, and the pipeline is refused.
 
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `PbrSurface` — the
-material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
+material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/include/bgl/PbrSurface.slang)) —
 and returns a `SurfaceLobes` (diffuse, specular, the reflectance the specular lobe returns, and the
 emissive) instead of a summed colour, and the callers weight it. `MaterialData::ShadeSurface` sums
 them into RGB radiance; opaque, cutout and hashed callers attach the TAA depth-validity alpha.
 `MaterialData::ShadeSurfaceBlended` is the only caller of `BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
-[lib/math/PbrShading.slang](libs/bgl_extended/shaders/src/lib/math/PbrShading.slang). Those two are the
+[lib/math/PbrShading.slang](libs/bgl/shaders/src/lib/math/PbrShading.slang). Those two are the
 only BRDF entries; the four shading entry points the programs call (`Shade`, `ShadeBlended`,
 `ShadeAlphaTested`, `ShadeHashedAlpha`) each fill a `PbrSurface` from the engine's record and hand it to
 one of them. All of it is in
-[lib/forward/MaterialShading.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang), which
+[lib/forward/MaterialShading.slang](libs/bgl/shaders/src/lib/forward/MaterialShading.slang), which
 extends the material constant buffer.
 
 Emissive follows the specular lobe, not the diffuse: it is light leaving the surface itself rather
@@ -298,7 +298,7 @@ surface writes depth and participates, and the correct blend is what the ensembl
 It resolves to a hashed draw bucket per (tier, material kind), which is **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the draw-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
-threshold ([lib/math/HashedAlpha.slang](libs/bgl_extended/shaders/src/lib/math/HashedAlpha.slang)) instead of the
+threshold ([lib/math/HashedAlpha.slang](libs/bgl/shaders/src/lib/math/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
 self-occluding surface writes real depth.
 
@@ -336,7 +336,7 @@ view twice in a frame reports the same history to both draws rather than letting
 the first as history.
 
 When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
-`HaltonJitter` ([gfx/jitter.h](libs/bgl_extended/src/gfx/jitter.h)) that `RenderContext::Draw`
+`HaltonJitter` ([gfx/jitter.h](libs/bgl/src/gfx/jitter.h)) that `RenderContext::Draw`
 left-multiplies onto it, so the sample grid walks a *render* pixel's footprint. Across eight frames
 where the render and output grids coincide; across more when the output grid is denser and each of
 its sub-pixels wants that walk of its own ([Temporal Antialiasing](docs/taa.md)). The client's
@@ -358,7 +358,7 @@ rotation-only view-projection; the sky is at infinity, so a camera translation d
 
 ## Catalog
 
-### Clear — [passes/ClearPass.h](libs/bgl_extended/src/passes/ClearPass.h)
+### Clear — [passes/ClearPass.h](libs/bgl/src/passes/ClearPass.h)
 
 Clears a set of color render targets and an optional depth target. Each target — depth included —
 is declared as a `TextureArg` in its write state so the graph transitions it; the pass's `exec`
@@ -368,7 +368,7 @@ inline each frame. It is the first pass of the frame, added in `BeginFrame`.
 * **In:** each color target + the depth target, transitioned to render-target / depth-write.
 * **Out:** the cleared attachments (via clears, not declared writes).
 
-### Skybox — [passes/SkyboxPass.{h,cpp}](libs/bgl_extended/src/passes/SkyboxPass.cpp)
+### Skybox — [passes/SkyboxPass.{h,cpp}](libs/bgl/src/passes/SkyboxPass.cpp)
 
 Draws the environment cube behind the scene as a single full-screen triangle. Its `MeshletKernel`
 is mesh + pixel only (no amplification shader), built from the `programs.env.Skybox` module; `DispatchMesh(1, 1,
@@ -398,11 +398,11 @@ culling, so it fills only where nothing has been drawn.
   every silhouette against it. `MotionVectors_test` pins the composed form at that size.
 * Attached per draw, before `Compact Instances` and `Forward`.
 
-### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl_extended/src/passes/CompactInstancesPass.cpp)
+### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
 
 Frustum-culls the view's instances, then groups the survivors by draw bucket into contiguous ranges
 and builds the per-draw-bucket indirect dispatch arguments that `Forward` consumes. The ids come
-from the renderer's `DrawBucketTable` ([gfx/DrawBucketTable.h](libs/bgl_extended/src/gfx/DrawBucketTable.h)),
+from the renderer's `DrawBucketTable` ([gfx/DrawBucketTable.h](libs/bgl/src/gfx/DrawBucketTable.h)),
 dense from 0 in first-use order; nothing in this chain derives or assumes one. Owns four compute kernels, all
 under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
 `CompactInstances`), and one
@@ -474,7 +474,7 @@ It adds **four sub-passes**:
   `drawBucketPrefixSumBuffer`, `compactDispatchArgs` (and `cull.stats` in debug) — all UAV /
   indirect-args downstream.
 
-### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl_extended/src/passes/TransparentSortPass.cpp)
+### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl/src/passes/TransparentSortPass.cpp)
 
 Depth-sorts the transparent instances on the GPU, in three sub-passes, from two kernels under
 `programs/culling/`. Runs **after** `Compact Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
@@ -510,12 +510,12 @@ many instances turn out to be transparent; only the sort itself is bounded.
   `Forward`. The pass itself owns no buffers, only its two kernels.
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
 
-### Pose Skinned — [passes/SkinnedPosePass.{h,cpp}](libs/bgl_extended/src/passes/SkinnedPosePass.cpp)
+### Pose Skinned — [passes/SkinnedPosePass.{h,cpp}](libs/bgl/src/passes/SkinnedPosePass.cpp)
 
 Writes every skinned instance's bone palette: one workgroup per instance, one thread per bone
 (striding when a rig has more bones than `cPoseGroupSize`). Once per group it resolves the record's
 `cBlendSlots` weighted slots at `ViewData::time` — each slot's weight from its ramp
-([blend_slots.slang](libs/bgl_extended/shaders/src/lib/anim/blend_slots.slang)), and each slot's
+([blend_slots.slang](libs/bgl/shaders/src/lib/anim/blend_slots.slang)), and each slot's
 `node` through the rig's node table, which holds one node per clip in clip order and then the
 authored blend spaces.
 
@@ -524,7 +524,7 @@ two samples straddling its parameter, at one shared normalized phase — its sam
 different lengths, so a frame number means nothing between them, and what is shared is the fraction
 of a cycle. The phase wraps, so every sample cycles with the space whatever its clip's own `loop` says. That phase advances at the reciprocal of the weighted cycle length, which is
 itself moving while the parameter ramps, so it is an integral rather than a quotient and is
-evaluated in closed form ([blend_space.slang](libs/bgl_extended/shaders/src/lib/anim/blend_space.slang))
+evaluated in closed form ([blend_space.slang](libs/bgl/shaders/src/lib/anim/blend_space.slang))
 — exact mid-ramp, and needing no state, which is what keeps a pose a pure function of the clock. A
 space therefore costs two of the `cMaxPoseClips` a pose holds, which is why that is twice the slot
 count. The live weights are normalized to one across whatever the slots resolved to. Per bone it
@@ -567,7 +567,7 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 
 * **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
   and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
-  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is shared by both).
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is shared by both).
   A crowd instance then reads a pose rather than computing one.
 * **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's
@@ -583,7 +583,7 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
   a table is written once and a discarded one would otherwise stay discarded.
 
-### Forward — [passes/ForwardPhases.{h,cpp}](libs/bgl_extended/src/passes/ForwardPhases.cpp)
+### Forward — [passes/ForwardPhases.{h,cpp}](libs/bgl/src/passes/ForwardPhases.cpp)
 
 The main geometry render: a mesh-shader forward render, attached as one graph pass per
 `ForwardPhase`. `ForwardPhases` owns what every phase shares -- the kernels, the uniforms bound to
@@ -604,7 +604,7 @@ two-phase occlusion culling will be built (ROADMAP.md § Culling). One object ow
 tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
-[passes/draw_bucket_config.h](libs/bgl_extended/src/passes/draw_bucket_config.h) (pixel-shader module,
+[passes/draw_bucket_config.h](libs/bgl/src/passes/draw_bucket_config.h) (pixel-shader module,
 mesh-shader module, cull mode). The desc's geometry axis is the renderer's own `GeometryStage`,
 not the client's `GeomType`: it names the mesh-stage program a bucket's triangles come from, which a
 client's geom kind maps to (`GeometryStageOf`) but need not be one of — each built by the first `Draw` whose view demands the draw bucket
@@ -650,7 +650,7 @@ actually resolves to, with the loose material type static-only and `kNull`/`kAss
 whatever the layer. A draw bucket exists only once something resolves to it: the table hands ids out on
 first use, so a scene pays for the combinations it draws, not for the product. A surface's
 programs, and the shared blend program's arm for it, are generated when it registers, each a call
-into [lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)
+into [lib/forward/GameSurface.slang](libs/bgl/shaders/src/lib/forward/GameSurface.slang)
 on the surface its slot's `game.slotN` binding aliases — the engine-lit family for a surface on
 `ISurfaceSource`, the lit family (`ShadeGameLit*`, which never calls `ShadeSurface`) for one on
 `ILitSurfaceSource` or either toon contract, a toon surface bound as its model's adapter -- see
@@ -735,7 +735,7 @@ use, so moved grass moves in the motion vectors and still grass writes none.
 * **Out:** scene colour, the velocity buffer, depth.
 * **Skipped** -- no pass attached -- when no drawn geom has grass.
 
-### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl_extended/src/passes/BlobShadowPass.cpp)
+### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 
 Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
 per disc (`ISceneView::SetBlobShadow`), off the view's dense
@@ -784,7 +784,7 @@ be darkest.
 * **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
 
-### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl_extended/src/passes/OutlineMaskPass.cpp)
+### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl/src/passes/OutlineMaskPass.cpp)
 
 Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) into the target's
 R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
@@ -809,7 +809,7 @@ contours the pose it is drawn in.
   (`UploadBufferDesc::unorderedAccessView`); an SRV there is a descriptor-type mismatch.
 * **Out:** the outline mask.
 
-### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl_extended/src/passes/TaaResolvePass.cpp)
+### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl/src/passes/TaaResolvePass.cpp)
 
 Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
 through the velocity buffer, clamps it to the 3x3 neighbourhood in YCoCg, and blends. A single
@@ -843,7 +843,7 @@ has always been.
 * The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
   declaration in `programs/screen/TaaResolve.slang`.
 
-### Bloom — [passes/BloomPass.{h,cpp}](libs/bgl_extended/src/passes/BloomPass.cpp)
+### Bloom — [passes/BloomPass.{h,cpp}](libs/bgl/src/passes/BloomPass.cpp)
 
 Renders the glow the [PostProcess](#postprocess) combine adds: a ladder of half-resolution levels
 (`postprocess/BloomChain.h`, starting at half the *output* size, halving to a floor of eight texels or six
@@ -885,7 +885,7 @@ set this way, so a stylized material wants little specular. Glow colour also goe
 which pulls very bright colours toward white — a saturated emissive glows paler than it is
 authored.
 
-### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl_extended/src/passes/PostProcessPass.cpp)
+### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
@@ -926,13 +926,13 @@ contour no thicker on screen.
 
 #### The colour grade
 
-`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl_extended/shaders/src/lib/math/ColorGrade.slang)
+`AgXGraded` in [lib/math/ColorGrade.slang](libs/bgl/shaders/src/lib/math/ColorGrade.slang)
 runs `AgX`'s two halves — `AgXLogEncode` and `AgXFormation` — with the `ColorGradeSettings` steps
 between and before them:
 
 1. **White balance**, in scene linear: a von Kries scale in CAT02 LMS. `temperature` and `tint`
    pick a white on the CIE daylight locus as Unity does, and `WhiteBalanceLmsScale`
-   ([postprocess/color_grade.h](libs/bgl_extended/src/postprocess/color_grade.h)) turns it into
+   ([postprocess/color_grade.h](libs/bgl/src/postprocess/color_grade.h)) turns it into
    three gains on the CPU once per frame.
 2. **Vignette**, in scene linear: Unity's frame-shaped falloff, `vignetteIntensity` reaching a black
    corner at 1 and `vignetteSmoothness` the exponent's share of 5.
@@ -950,7 +950,7 @@ grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's 
 Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
 work this pass does in a few dozen ALU.
 
-### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl_extended/src/passes/OverlayPass.cpp)
+### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl/src/passes/OverlayPass.cpp)
 
 Draws the frame's 2D output — what a client submitted through `IGraphics::DrawOverlay` — onto the
 backbuffer after PostProcess, in submission order. Attached only on a frame that submitted draws,
@@ -982,7 +982,7 @@ off, and the backbuffer's opaque alpha stays opaque.
   Metal's natural device-struct layout and the scalar layout D3D12 reads agree, which idlgen's
   `--public` checks.
 
-### PreparePresent — [passes/PreparePresentPass.h](libs/bgl_extended/src/passes/PreparePresentPass.h)
+### PreparePresent — [passes/PreparePresentPass.h](libs/bgl/src/passes/PreparePresentPass.h)
 
 A barrier-only pass with no `exec`: it declares the backbuffer with `BarrierLayout::kPresent` so the
 graph transitions it out of render-target state and into present, and every `overlay_source_{n}`

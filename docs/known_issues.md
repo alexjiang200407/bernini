@@ -160,10 +160,10 @@ needs:
 
 **Fixed by** `Flush` owning the pool its buffer drains into and ending on `waitUntilCompleted`, and
 by `Graphics::m_Pool` being declared below the device. The two rules that came out of it are in
-[`libs/bgl_extended/CLAUDE.md`](../libs/bgl_extended/CLAUDE.md) § bgl_metal, which is where to read them before writing
+[`libs/bgl/CLAUDE.md`](../libs/bgl/CLAUDE.md) § bgl_metal, which is where to read them before writing
 Metal code — not here.
 
-**Gates.** `just run bgl_extended_tests -- "[teardown]"`. Two cases, both deterministic where the crash is
+**Gates.** `just run bgl_tests -- "[teardown]"`. Two cases, both deterministic where the crash is
 not, and each failed before its fix: the queue's retain count must not scale with the number of
 flushes (131 retains after 128 flushes, unfixed), and nothing executed before a `Flush` may still be
 unretired when it returns (31 of 64, unfixed).
@@ -211,13 +211,13 @@ of payload memory. Both count to constants now — 32 bits in a mask word, 8 hal
 words a payload can hold. The preconditions that bound them were checked to hold while the hang
 happened, so this is not a data fault: a trip count that is a payload read is the thing to avoid.
 
-**Gates.** `just run bgl_extended_tests -- "[culling],[pbr],[meshlet]"`. The first case compares a
+**Gates.** `just run bgl_tests -- "[culling],[pbr],[meshlet]"`. The first case compares a
 culled render against an unculled one pixel for pixel, and the `[culling][view]` case pins the tested
 and culled counts, so an all-zero mask fails both rather than quietly drawing less.
 
 **If it comes back.** Check the gates first: if they are green, the mesh is missing for another
 reason. If they fail with everything culled, look for an atomic or a loop bound that reads payload
-memory — `bgrep -n "Interlocked" libs/bgl_extended/shaders/src/lib/forward/mesh_stage.slang` should
+memory — `bgrep -n "Interlocked" libs/bgl/shaders/src/lib/forward/mesh_stage.slang` should
 find none addressing `gCulledPayload`. A shader-only change needs no C++ rebuild, so iterate on it
 directly.
 
@@ -225,7 +225,7 @@ directly.
 
 ## `--gpu-validation` removes the device, in a case that passes without it
 
-**Symptom.** `just run bgl_extended_tests -- "[culling],[pbr],[meshlet]" --gpu-validation` dies with
+**Symptom.** `just run bgl_tests -- "[culling],[pbr],[meshlet]" --gpu-validation` dies with
 `PIX detected a Device Removal` and `DXGI_ERROR_DEVICE_HUNG` in the log, followed by ten
 `ID3D12GraphicsCommandList::*: This API cannot be called on a closed command list` as the frame graph
 runs on past it. The stack is `CommandList::Barrier` under `FrameGraph::Execute`, in
@@ -238,7 +238,7 @@ Any case that draws a static mesh through the renderer does it: `[capture]`, `[t
 adapter, so every other shard dies with it and the failures look scattered.
 
 **Cause.** The static tier's mesh shaders (`MSMain` and `MSDissolve` in
-[StaticMesh.slang](../libs/bgl_extended/shaders/src/programs/forward/StaticMesh.slang)) returned
+[StaticMesh.slang](../libs/bgl/shaders/src/programs/forward/StaticMesh.slang)) returned
 early for a culled meshlet and then reached the backface cull's `GroupMemoryBarrierWithGroupSync`.
 `visible` is uniform across the group in practice, but a barrier after a return the compiler cannot
 prove uniform is undefined, and instrumented it deadlocks: the `Forward World` pass never finishes
@@ -254,7 +254,7 @@ ones that do not are instrumented anyway — whenever one that does ran first. T
 that never asks, which is why it survives alone and hangs behind `[compute]`. Minimal repro, two
 cases:
 
-    bgl_extended_tests.exe "Compute dispatch writes a bindless buffer,A metal is lit by a directional light" --gpu-validation
+    bgl_tests.exe "Compute dispatch writes a bindless buffer,A metal is lit by a directional light" --gpu-validation
 
 **Ruled out**, each by measurement: a stale driver pipeline library replayed into a validating device
 (it hangs the same with the cache directory emptied); a second device in the process (two cases that
@@ -263,7 +263,7 @@ first explanation here: a single frame of one cube hung, and it stops hanging on
 is edited alone -- a constant pixel shader still hangs, and so does clamping every loop in the mesh
 stage to its constant maximum.
 
-**Gates.** `bgl_extended_tests.exe "[capture]" --gpu-validation` hangs the device within one frame
+**Gates.** `bgl_tests.exe "[capture]" --gpu-validation` hangs the device within one frame
 if the barrier is behind a return again, and the minimal repro above does too.
 `bgpu::GpuContext::GpuValidationActive`
 ([GpuContext_d3d12.cpp](../libs/bgpu/src/d3d12/GpuContext_d3d12.cpp)) pins the scope half: it

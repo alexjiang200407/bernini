@@ -25,7 +25,7 @@ naming domains, comments. This file does not restate them; it says how a flow ap
 ## Map
 
 - **Docs:** the Documentation Index in `CLAUDE.md`. Subsystems carry their own `CLAUDE.md`
-  (`libs/bgl_extended/`, `libs/gamelib/`, `libs/assetlib/`, `libs/core/`, `libs/editor_plugin_api/`,
+  (`libs/bgl/`, `libs/gamelib/`, `libs/assetlib/`, `libs/core/`, `libs/editor_plugin_api/`,
   `apps/editor/`) with rules the root one does not.
 - **Roadmap:** `ROADMAP.md` § Guiding Constraints — design rules, not aspirations. Every grill reads
   them, and every precheck reads the diff back against them.
@@ -64,7 +64,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
 
 ## Implement
 
-- **Slice by layer, bottom-up:** `bgpu`, then `bgl`/`bgl_extended`, then `assetlib`, then `gamelib`, then
+- **Slice by layer, bottom-up:** `bgpu`, then `bgl`, then `assetlib`, then `gamelib`, then
   `apps/editor` — the direction the dependencies point. A refactor that enables the change is its
   own commit ahead of it.
 - **New sources need no CMake edit.** Every glob is `CONFIGURE_DEPENDS`; place the file beside its
@@ -74,13 +74,13 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   runs it with `just format`.
 - **Tests are Catch2.** A new `*_tests` executable target is discovered by `just test` with no
   listing. Name a case for the behaviour it pins, tag every case, and prefer a test that proves a
-  negative. `bgl_extended_tests` renders headlessly against golden images; `editor_tests` creates a
+  negative. `bgl_tests` renders headlessly against golden images; `editor_tests` creates a
   device too. Tag GPU cases `[render]`; `[perf]` pins a scaling shape, never a wall-clock ceiling.
 - **Verify:** `just build`, then `just test` or the suites the change reaches (`just test editor
   gamelib`). Never two builds against one build dir at once. A run is not green until the logs
   beside the executable have been read — `bgpu.log`, and the newest `<exe>_crash_<stamp>.log`, since
   crash logs accumulate.
-- **Shaders, barriers or descriptors** also run `just run bgl_extended_tests -- --gpu-validation`
+- **Shaders, barriers or descriptors** also run `just run bgl_tests -- --gpu-validation`
   before the PR: the only thing that catches a bad barrier.
 - **Docs change in the same commit** as the behaviour they describe (`CLAUDE.md` § Documentation
   Index). Look for the stated constraint the change made false.
@@ -91,7 +91,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   repo, codes against. Here that is three kinds:
   - **public interfaces**, the ones between subsystems, backends and plugins, and the ones out-of-tree
     consumers use: a game links `gamelib`, `assetlib` and `bgl`;
-  - **every shader IDL change** in `libs/bgl_extended/shaders/src/idl/`, which is the CPU↔GPU
+  - **every shader IDL change** in `libs/bgl/shaders/src/idl/`, which is the CPU↔GPU
     agreement `idlgen` compiles on both sides;
   - **internal interfaces** that several tasks implement or call, like `IForwardPhase`.
 
@@ -106,7 +106,7 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   Its first commit pins current behaviour in tests wherever coverage is thin.
 - **A seam found mid-way** lands as its own commit before its first user. It does not reopen the
   merged contract.
-- **Dead scaffolding** is the one thing that lands unused: a `bgl_extended` interface nothing calls
+- **Dead scaffolding** is the one thing that lands unused: a `bgl` interface nothing calls
   yet, provided its tests call it.
 - **The landing is where the Windows box is written**, once for the whole feature (§ Pull request).
 
@@ -251,12 +251,12 @@ GPU. Never say a change passes or fails tests.
 absent). A compile failure is caught for free; a Windows *behaviour* difference by nothing. Built on
 macOS, the change earns a Windows box when it reaches:
 
-- D3D12 in `libs/bgl_extended` — the RHI, barriers, descriptors, PSOs, the Agility SDK;
+- D3D12 in `libs/bgl` — the RHI, barriers, descriptors, PSOs, the Agility SDK;
 - shaders — DXIL is not the Metal path, and no runner compares a `[render]` golden image;
 - paths and files — `libs/core/file`, separators, case, the mount-key rule in `STYLE.md` § Paths;
 - `apps/editor` — nothing builds it in CI.
 
-Name the command, not the need: *"`just run bgl_extended_tests -- "[taa]" --gpu-validation` on
+Name the command, not the need: *"`just run bgl_tests -- "[taa]" --gpu-validation` on
 Windows"*. Otherwise state the negative with its reason. A red Windows build reproduces with
 `just build --preset windows-ninja-msvc-dx12-debug`.
 

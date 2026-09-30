@@ -89,7 +89,7 @@ each refuses; what follows is why it is shaped as it is.
   command that would exceed one throws rather than growing it.
 * **Plain C++ types, not IDL.** The descriptions carry validation rules and `std::vector`s; the
   GPU records they are packed into belong to the implementation, and go through the IDL with it.
-* **Each backend implements `ICrowd` directly**, as `bgl_extended`'s backends implement the RHI's
+* **Each backend implements `ICrowd` directly**, as `bgl`'s backends implement the RHI's
   interfaces. There is no `CreateCrowd` yet: it arrives with the first backend, since a factory with
   nothing to create would only fail at link time.
 * **The contract is a test suite.** `tests/src/Crowd_test.cpp` runs every case against each factory

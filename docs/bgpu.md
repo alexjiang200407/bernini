@@ -83,7 +83,7 @@ rm->RegisterQueue(queue.Get());
   owner whose kernels assert binds an assert buffer of its own (`bgpu::DebugBuffer`,
   `ICommandList::SetActiveDebugBuffer`); reading the records back is that owner's business.
 * **Built as the renderer is.** It holds process-wide GPU state, so `BERNINI_RENDERER_LIBRARY_TYPE`
-  decides its kind exactly as it does `bgl_extended`'s and `core_process`'s
+  decides its kind exactly as it does `bgl`'s and `core_process`'s
   ([core_process.md § Linkage](core_process.md#linkage)). `BGPU_API` marks what is defined here
   and called from outside without a virtual call -- `CreateGpuContext`, `CreateDevice`, the native
   accessors, the error checkers, and the out-of-line members of the RHI's concrete classes (the
@@ -120,7 +120,7 @@ recreated by the next load, a source module seen by a thread that never compiled
 asked for being validation active. `[shadercache]`: no directory, no cache; a program compiled on a
 miss and loaded on every later hit; two owners never sharing a key; a registered module moving
 every key; a key stable across contexts until a file under the search paths changes; a torn,
-altered or misplaced entry missed. `bgl_extended_tests` `[device]` covers the renderer as an owner:
+altered or misplaced entry missed. `bgl_tests` `[device]` covers the renderer as an owner:
 a renderer built on a context, a second renderer on the same context, two renderers binding one
 surface directory once, a source module re-registered under its name replacing the text with the
 cache key following, and a second owner compiling through the sessions the renderer dropped.

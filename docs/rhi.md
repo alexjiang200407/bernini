@@ -16,7 +16,7 @@ this interface is drawn at, not a general one: the only graphics pipeline object
 — `DispatchMeshIndirectCount` is the same dispatch with a GPU count an API may ignore (see
 § ICommandList). An API without the three cannot implement this interface.
 
-Every owner of the device builds on it — the renderer, `bgl_extended`, and a compute client beside it
+Every owner of the device builds on it — the renderer, `bgl`, and a compute client beside it
 such as `crowdlib` — each through a device of its own (`bgpu::CreateDevice` on the shared
 `GpuContext`), so their queues, resource managers and heaps never meet ([bgpu.md](docs/bgpu.md)).
 `bgpu_selfcheck` compiles each public header against `bgpu` alone, and `bgpu_tests` runs a compute

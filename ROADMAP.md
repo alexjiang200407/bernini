@@ -33,10 +33,10 @@ and portability.
   compact and GPU-resident; per-unit CPU updates are the enemy.
 - **RHI stays API-agnostic — among APIs with bindless resource access and mesh shaders.** All D3D12
   lives in `bgpu`'s `src/d3d12` and the renderer's `bgl_d3d12`, all Metal in their Metal halves, so
-  every owner of GPU work shares one RHI. Every feature added to `bgl_extended` must be expressible
+  every owner of GPU work shares one RHI. Every feature added to `bgl` must be expressible
   without leaking backend types, so Vulkan stays viable. An API that clears that bar is a backend;
   one that does not is out of scope.
-- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_extended/idl`). New
+- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
 
@@ -58,8 +58,8 @@ and portability.
   - [ ] Pipeline eviction -- a built pipeline lives for the run.
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
-    dead-pass culling (`libs/bgl_extended/src/fg`)
-  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl_extended/idl`)
+    dead-pass culling (`libs/bgl/src/fg`)
+  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl/idl`)
   - [x] GPU instance render
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema

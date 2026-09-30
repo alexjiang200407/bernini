@@ -96,7 +96,7 @@ there is none — so this needs nothing done by hand. If yours lives somewhere u
 ### slangd (Slang LSP)
 
 Gives Claude Code go-to-definition, hover and document symbols across the `.slang` sources under
-`libs/bgl_extended`, which grep answers badly because every cross-file reference is a module import. Nothing
+`libs/bgl`, which grep answers badly because every cross-file reference is a module import. Nothing
 depends on it: skip this and the build, the tests and the editor are unchanged.
 
 Those three are the whole of it. slangd advertises no `referencesProvider` and no

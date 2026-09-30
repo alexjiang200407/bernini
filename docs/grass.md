@@ -43,7 +43,7 @@ the clumps go is the mesh source's, and is not edited there.
 ## A blade
 
 A blade is a quadratic Bézier strip, built from its clump and a hash of its index
-([lib/forward/grass.slang](../libs/bgl_extended/shaders/src/lib/forward/grass.slang)): its root is a
+([lib/forward/grass.slang](../libs/bgl/shaders/src/lib/forward/grass.slang)): its root is a
 uniform point on the clump's disc (`clumpRadius`), its height is between `minHeight` and `maxHeight`
 times the clump's scale, and it faces a random way around the clump's ground normal. Its width
 tapers from `rootWidth` to `rootWidth * tipWidth`.
@@ -145,7 +145,7 @@ costs nothing where a flat attribute for it cost the pass a third more on Apple 
 
 ## Cost
 
-`[.grasscost]` (`libs/bgl_extended/tests/src/GrassCost_test.cpp`, run by hand) draws an 82,176-clump
+`[.grasscost]` (`libs/bgl/tests/src/GrassCost_test.cpp`, run by hand) draws an 82,176-clump
 verge at 4K with 0.667 render scale and prints the `Forward Grass 0` row. The cost follows the blades
 emitted, about half of it in the mesh stage and half in rasterizing them -- distant blades are
 thinner than a pixel, the worst case for a rasterizer -- while the amplification stage is near free.

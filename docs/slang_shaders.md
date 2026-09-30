@@ -9,9 +9,9 @@ from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on
 libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
   idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
   lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle) and the GPU assert channel (dbg)
-libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
+libs/bgl/shaders/include/             the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
-libs/bgl_extended/shaders/src/        the renderer's
+libs/bgl/shaders/src/                 the renderer's
   idl/                                the IDL modules, the one source bgpu_idlgen mirrors to C++; see docs/idlgen.md
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
   lib/        anim/ math/ geom/ data/                handle-free: the pose walk and vertex blend, the foot-plant solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's screen bounds, transform maths; vertex decode; plain view structs
@@ -44,11 +44,11 @@ A program is named for what it draws, not for where it lives — `programs/forwa
 `Forward_PBR.slang`. The directory already said `forward`.
 
 On a D3D12 build only, there is a build-time pass over the same sources:
-[`libs/bgl_extended/shaders/CMakeLists.txt`](../libs/bgl_extended/shaders/CMakeLists.txt) globs `programs/`, reads
+[`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) globs `programs/`, reads
 each program's entry points out of its `[shader("…")]` attributes, and invokes `slangc` once per
 entry point — so a construct the target rejects is a build failure rather than a runtime surprise.
 The `.dxil` it produces is validation output only, and nothing loads it. A Metal build does not run
-this step at all — `libs/bgl_extended/CMakeLists.txt` adds the `shaders` subdirectory under
+this step at all — `libs/bgl/CMakeLists.txt` adds the `shaders` subdirectory under
 `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when the
 pass that needs it is first built, not at compile time.
 
@@ -170,7 +170,7 @@ declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
 `unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`.
 
 This is worth knowing because the check that catches it runs in one place only:
-[libs/bgl_extended/shaders/CMakeLists.txt](../libs/bgl_extended/shaders/CMakeLists.txt) validates to DXIL at build
+[libs/bgl/shaders/CMakeLists.txt](../libs/bgl/shaders/CMakeLists.txt) validates to DXIL at build
 time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
 run, and a Windows build is what catches this class of bug.
 
@@ -223,7 +223,7 @@ The struct body holds the buffer's own accessors — what reads a member, or pac
 a value, as `MaterialData::GetTextureAt` and `GetSurfaceEnv` do. An **algorithm** that happens to run
 on the buffer goes in an `extension` of the struct, in a module of its own, so the data file stays
 readable on its own.
-[lib/forward/MaterialShading.slang](../libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang) is the
+[lib/forward/MaterialShading.slang](../libs/bgl/shaders/src/lib/forward/MaterialShading.slang) is the
 worked example: it extends `MaterialData` with the four shading entry points the forward pixel
 programs call as `materialData.Shade<PbrMaterialRecord>(…)`.
 

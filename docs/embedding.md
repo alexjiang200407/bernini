@@ -1,7 +1,7 @@
 # Embedding the engine
 
 A game is a repository of its own — its own source, its own assets, its own `.bproj`, and a `main()`
-that links `gamelib`, `assetlib`, `bgl_extended` and `core`, and creates the `bgpu::GpuContext` the
+that links `gamelib`, `assetlib`, `bgl` and `core`, and creates the `bgpu::GpuContext` the
 renderer runs on ([bgpu.md](bgpu.md)). It is the top-level CMake project, and
 it pulls the engine in the way any project pulls in a library it builds from source:
 
@@ -58,11 +58,11 @@ Everything else has a host-derived default and is only worth naming to change it
 | | |
 |---|---|
 | `PLATFORM` | `WINDOWS`, `MACOS` or `WEB` — which platform layer `core` compiles. Defaults from `CMAKE_SYSTEM_NAME`. |
-| `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_extended_objects` alone with no runtime, shaders or tests. Defaults from the host. |
+| `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_objects` alone with no runtime, shaders or tests. Defaults from the host. |
 | `IS_DEBUG` | Shader debug info and the `dbg_raise()` bodies. Defaults from `CMAKE_BUILD_TYPE`; a multi-config generator has none, so there it is a choice. |
 | `BERNINI_PROFILING` | Tracy zones and the client that opens a socket. `OFF`. |
 | `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. Implies `BERNINI_SHARED_RENDERER`. |
-| `BERNINI_SHARED_RENDERER` | `bgl_extended`, and with it `bgpu` and `core_process`, as shared libraries. `OFF`: a game is one binary. See [core_process.md](core_process.md#linkage). |
+| `BERNINI_SHARED_RENDERER` | `bgl`, and with it `bgpu` and `core_process`, as shared libraries. `OFF`: a game is one binary. See [core_process.md](core_process.md#linkage). |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 
@@ -154,7 +154,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(subway CXX)
 find_package(Bernini CONFIG REQUIRED)             # Bernini_DIR=<engine build>/bernini_sdk
 add_executable(subway main.cpp)
-target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl_extended)  # bgpu comes with the renderer
+target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl)  # bgpu comes with the renderer
 # Bernini::crowdlib too, for compute on the async queue beside the frame (docs/crowdlib.md).
 # D3D12 only: the Agility SDK's exports must live in the executable.
 if (TARGET Bernini::bgpu_d3d12_agility)
@@ -176,7 +176,7 @@ at link on MSVC and a Debug engine silently inside a Release game elsewhere. `BE
 needs no check: `TRACY_ENABLE` rides on the link interface, so the consumer inherits the engine's.
 
 **The library shapes are the build's.** A top-level build with Qt turns
-`BERNINI_EDITOR_SDK` on, and with it `assetlib`, `gamelib`, `bgl_extended`, `bgpu`, `crowdlib`
+`BERNINI_EDITOR_SDK` on, and with it `assetlib`, `gamelib`, `bgl`, `bgpu`, `crowdlib`
 and `core_process` become shared; without Qt they are static unless `BERNINI_SHARED_RENDERER` makes the renderer shared. The
 package exports whichever this build made, and nothing on the consumer's side changes.
 

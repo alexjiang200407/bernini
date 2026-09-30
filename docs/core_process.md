@@ -30,10 +30,10 @@ thread, so it has no counter to share.
 ## Linkage
 
 **Shared exactly where the renderer is.** The root [CMakeLists.txt](../CMakeLists.txt) makes one
-decision, `BERNINI_RENDERER_LIBRARY_TYPE`, and `bgl_extended` and `core_process` are both built as
+decision, `BERNINI_RENDERER_LIBRARY_TYPE`, and `bgl` and `core_process` are both built as
 it says:
 
-| Build | `bgl_extended` | `bgpu` | `crowdlib` | `core_process` |
+| Build | `bgl` | `bgpu` | `crowdlib` | `core_process` |
 |---|---|---|---|---|
 | default — a game embedding the engine, a build without Qt | `STATIC` | `STATIC` | `STATIC` | `STATIC` |
 | `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` | `SHARED` | `SHARED` |
@@ -54,7 +54,7 @@ device and the Slang sessions themselves ([bgpu.md](bgpu.md)), and `crowdlib` sh
 `BGL_API` follows `CORE_PROCESS_API`: it exports and imports only under `BGL_SHARED`, which
 `bgl`'s interface carries when the renderer is shared, and is empty otherwise.
 
-Shared, it is one more library a binary loads. In the build tree it sits next to `bgl_extended`: the
+Shared, it is one more library a binary loads. In the build tree it sits next to `bgl`: the
 runtime directory on Windows, `lib/` on macOS, found through the build rpath. `just install` stages
 it next to `assetlib_cli` ([libs/assetlib/CMakeLists.txt](../libs/assetlib/CMakeLists.txt)).
 
@@ -80,7 +80,7 @@ holds, on every platform. The cases check that its charges reach this binary's r
 from this binary's sequence, its default logger is this binary's, and its `init_file_logger` opens
 no second file.
 
-The editor alone proves nothing on macOS. There, `libbgl_extended.dylib` exports every `core` symbol
+The editor alone proves nothing on macOS. There, `libbgl.dylib` exports every `core` symbol
 it links, and ld64 binds the executable to those exports before looking in `libcore.a`, so even a
 split `core` looks single. `nm -m build/<preset>/bin/editor` shows where each symbol came from: after
 this change, `register_table` and `tracy::GetProfiler` read `(from libcore_process)`.

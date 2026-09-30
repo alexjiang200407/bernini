@@ -123,19 +123,19 @@ find build/<preset> -name 'cmake_pch.hxx.pch' -exec ls -lh {} \;
 
 ### What cannot come out of one
 
-`libs/bgl_extended/src/pch.h` is load-bearing, not an optimisation. bgl_extended's internal headers are written
+`libs/bgl/src/pch.h` is load-bearing, not an optimisation. bgl's internal headers are written
 against it: `ViewportState.h` uses `core::ensure`, `Shader.h` uses `slang`, `Srv.h` uses
 `DescriptorHandle`, and none of them includes what it uses. So every target
-that compiles bgl_extended's internals — `bgl_extended_objects`, `bgl_metal`, `bgl_extended_tests` — must carry that header,
-however it reaches them. `bgl_extended_tests` gets it by `target_force_include`; removing it there to make
+that compiles bgl's internals — `bgl_objects`, `bgl_metal`, `bgl_tests` — must carry that header,
+however it reaches them. `bgl_tests` gets it by `target_force_include`; removing it there to make
 the suite cheaper does not compile.
 
-`libs/bgl_extended/src/metal/pch.h` is the same case and is documented as such in
-[libs/bgl_extended/CLAUDE.md](../libs/bgl_extended/CLAUDE.md): `metal_cpp.h`, the slang headers and the two error
+`libs/bgl/src/metal/pch.h` is the same case and is documented as such in
+[libs/bgl/CLAUDE.md](../libs/bgl/CLAUDE.md): `metal_cpp.h`, the slang headers and the two error
 checkers are all used with no `#include` at the use site.
 
 That is the cost of writing against a subsystem PCH, which is why [CLAUDE.md](../CLAUDE.md) says not
-to. Both are being unpicked by the include sweep; until `libs/bgl_extended` carries
+to. Both are being unpicked by the include sweep; until `libs/bgl` carries
 `misc-include-cleaner` in its `.clang-tidy`, this section is still the truth about it.
 
 ## ccache

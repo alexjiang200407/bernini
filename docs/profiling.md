@@ -146,7 +146,7 @@ every task rather than needing a thread body to put it in. Four are named: `bgl-
 | `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the prefilter, the whole-project bounds rebake |
 | `assetlib` reads | a whole container through a mount, a selective chunk read, a KTX2 decode/transcode |
 | `assetlib` doors | `Migrate`, `Reimport`, `RefreshImportedTextures`, and the two staleness scans a project pays on every open |
-| `bgl_extended` | reserving a rig's bone anim table — the only one here, because it is a device allocation of tens of megabytes rather than work the renderer does, and the dispatch that fills it has no timestamp query to measure it |
+| `bgl` | reserving a rig's bone anim table — the only one here, because it is a device allocation of tens of megabytes rather than work the renderer does, and the dispatch that fills it has no timestamp query to measure it |
 | `gamelib` | every `AssetManager::Acquire*`, and the UI runtime's load doors: a document, a font face, and each texture a document names or generates |
 | `apps/editor` | the whole start-up, the device and pipeline build, the mount, each half of opening a project, the explorer root, the thumbnail pool, and an import split into its worker and UI halves |
 
@@ -165,7 +165,7 @@ daily:
 | Scenario | `editor startup` | Where it goes |
 |---|---:|---|
 | Everything warm | **0.90 s** | `assetlib scan stale textures` 0.39 s (43%), `editor create graphics` 0.29 s (32%) |
-| Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%). Captured before the pipelines were built in parallel; since then a cold `CreateGraphics` measures 1.5 s against 3.7 s in `bgl_extended_tests`, and this row has not been re-captured |
+| Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%). Captured before the pipelines were built in parallel; since then a cold `CreateGraphics` measures 1.5 s against 3.7 s in `bgl_tests`, and this row has not been re-captured |
 | Derived containers absent | **24.2 s** | `assetlib reimport` 22.6 s (94%), of which `assetlib glTF parse` ×7 = 10.1 s |
 | Materials stale | **26.5 s** | `assetlib migrate resave walk` 22.0 s (83%) |
 
@@ -453,7 +453,7 @@ no second spelling for a call site to get wrong.
 
 | Layer | Tagged |
 |---|---|
-| `bgl_extended` | every buffer and texture created through the RHI's `ResourceManager` — the buffer at the size asked for, the texture at the size the driver reports — in both backends. A swap-chain texture is adopted rather than allocated, so it is deliberately not charged |
+| `bgl` | every buffer and texture created through the RHI's `ResourceManager` — the buffer at the size asked for, the texture at the size the driver reports — in both backends. A swap-chain texture is adopted rather than allocated, so it is deliberately not charged |
 | `gamelib` | `AssetManager`'s stamped container cache — the `.bmesh` under `mesh`, the `.banim` and `.bskel` under `animation` |
 
 Nothing else, and the gaps below are what the residual is currently made of:

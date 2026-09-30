@@ -1,7 +1,7 @@
 # bgpu
 
 The process's GPU device, the Slang sessions that compile for it, and the RHI every owner of the
-device builds on — the renderer (`bgl_extended`) and a compute client beside it (`crowdlib`). What
+device builds on — the renderer (`bgl`) and a compute client beside it (`crowdlib`). What
 each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); how the RHI is used is
 [docs/rhi.md](../../docs/rhi.md).
 
@@ -20,7 +20,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   under `./shaders/src`.
 - Error handling: `core::ensure` for internal problems; throw for the caller's.
 - Verification: `just test bgpu` — `[compute]` is an owner with no renderer in the process — then the
-  renderer's suite, `bgl_extended_tests`, which drives the same RHI harder.
+  renderer's suite, `bgl_tests`, which drives the same RHI harder.
 
 ## D3D12 (`./src/d3d12`)
 
@@ -56,7 +56,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   releases one holds its own pool (`ScopeAutoreleasePool()`, `src/metal/autorelease_scope.h`) — the
   device's factories, the resource manager's creates and destroys, the queue's submit and waits,
   `CommandList::Open`..`Close` — and a caller needs no pool of its own: the renderer's net
-  (`AutoreleaseNet_metal.h`, in `bgl_extended`) catches nothing from here, and a compute client with
+  (`AutoreleaseNet_metal.h`, in `bgl`) catches nothing from here, and a compute client with
   no net leaks nothing. A forgotten one is silent, so `scripts_tests` runs all of `bgpu_tests` --
   the RHI with no renderer, `RhiEntryPoints_test` reaching every factory -- under
   `OBJC_DEBUG_MISSING_POOLS=YES`, and fails on anything of ours autoreleased with no pool. A new

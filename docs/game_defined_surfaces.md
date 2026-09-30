@@ -6,7 +6,7 @@ sets its parameters by name. Nothing about it is compiled into the engine and no
 generated: the shader is the only declaration of what a material may say.
 
 This page is the map. The contract is
-[`libs/bgl/shaders/src/bgl/SurfaceSource.slang`](../libs/bgl/shaders/src/bgl/SurfaceSource.slang)
+[`libs/bgl/shaders/include/bgl/SurfaceSource.slang`](../libs/bgl/shaders/include/bgl/SurfaceSource.slang)
 and the reader beside it, and when this page disagrees with those, trust them.
 
 ## Writing one
@@ -122,7 +122,7 @@ They are the one asset category no codec reads. Slang opens them itself, so the 
 a **host path** rather than a mount key — `bgpu::GpuContextDesc::clientShaderDir`, since the
 directory is also a Slang search path for every owner of the device — and the directory is read by
 the `Graphics` constructor
-([`surface_registry.cpp`](../libs/bgl_extended/src/gfx/surface_registry.cpp)). The consequences
+([`surface_registry.cpp`](../libs/bgl/src/gfx/surface_registry.cpp)). The consequences
 follow from that and are worth stating plainly:
 
 * **Registration happens once, inside `CreateGraphics`.** Each surface found then is bound to a
@@ -215,7 +215,7 @@ The hash reads coverage one level finer than the pixel's footprint, where a sub-
 has shape, and the mean it is steepened about an octave coarser than that. A surface answers with
 arithmetic rather than a texel, so the engine cannot sample two levels of it — it evaluates the
 *function* at two levels instead, by handing `Coverage` a `BiasedArenaReader`
-([GameSurface.slang](../libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)). The surface
+([GameSurface.slang](../libs/bgl/shaders/src/lib/forward/GameSurface.slang)). The surface
 is written once and says nothing about any of it; a shader that never heard of a mip gets the
 correction.
 

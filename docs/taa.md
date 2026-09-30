@@ -258,7 +258,7 @@ catalog](docs/api_catalog.md).
 
   `[taaghosting]` covers a first-frame reveal over fine stripes against the same jittered frame
   with history discarded, plus depth-space, coverage, invalid-history and reconstruction cases in
-  [TaaHistory_test.cpp](libs/bgl_extended/tests/src/TaaHistory_test.cpp). The depth SRV and history
+  [TaaHistory_test.cpp](libs/bgl/tests/src/TaaHistory_test.cpp). The depth SRV and history
   resources retain their existing frame-graph tracking; see [Passes Overview](passes.md).
 
 * **Velocity-dilated by the nearest surface in the cross.** This is the standard rule: UE4

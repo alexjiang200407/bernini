@@ -11,7 +11,7 @@ We don't want to duplicate the structs shared shader and cpu side. We can forget
 # Struct Example
 
 ```
-// libs/bgl_extended/shaders/src/idl/A.slang
+// libs/bgl/shaders/src/idl/A.slang
 
 import a.C;
 import D;

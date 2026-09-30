@@ -33,20 +33,20 @@ doc disagrees, trust the header, then fix this doc.
   3. **Reflection lets one binder serve a family of PSO variants.** The load-bearing reason. The pass
      *asks the layout* whether a field exists instead of being compiled against a fixed struct, so
      variants declaring different subsets share one binder.
-     [ForwardPhases::BindKernel](libs/bgl_extended/src/passes/ForwardPhases.cpp) binds every draw bucket's kernel
-     through one function even though [programs/forward/Null.slang](libs/bgl_extended/shaders/src/programs/forward/Null.slang)
+     [ForwardPhases::BindKernel](libs/bgl/src/passes/ForwardPhases.cpp) binds every draw bucket's kernel
+     through one function even though [programs/forward/Null.slang](libs/bgl/shaders/src/programs/forward/Null.slang)
      imports no `MaterialData` and has no `materialData` cbuffer at all. A `memcpy`'d IDL struct
      structurally cannot express "this variant has no such field".
 
 * **The two regimes meet inside one shader struct.**
-  [MaterialData.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialData.slang) holds an
+  [MaterialData.slang](libs/bgl/shaders/src/lib/forward/MaterialData.slang) holds an
   `RawBuffer` of material records alongside ordinary `float3`/`float2` members: the outer struct is
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
 * **A third regime, for a struct the engine does not own.** A game surface declares its parameters
   in its own Slang module, so there is nothing to generate a mirror from at build time:
-  `ReflectSurface` ([SurfaceReflection.h](libs/bgl_extended/src/gfx/SurfaceReflection.h))
+  `ReflectSurface` ([SurfaceReflection.h](libs/bgl/src/gfx/SurfaceReflection.h))
   walks the parameter struct's *structured-buffer* element layout instead, and the packer writes
   each field by the offset that walk returned. It is the cbuffer regime's reflection applied to the
   IDL regime's layout, and it exists because the third choice — a manifest the game commits beside
@@ -143,7 +143,7 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
   typo, absent from some is a per-variant field. @pre resolve a binder's names once per batch of
-  kernels built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl_extended/src/passes/BindingNameCheck.h)) is what every pass
+  kernels built — `BindingNameCheck` ([BindingNameCheck.h](libs/bgl/src/passes/BindingNameCheck.h)) is what every pass
   checks its cbuffers through from `CheckBindings`, run after every batch over the kernels built so
   far, and `SetIfValid` is the per-draw guard it licenses. A
   binder never validated this way has no protection against a shader rename.
@@ -226,14 +226,14 @@ emitted MSL lays each handle out as an 8-byte device pointer. `MetalizeLayout`
 a hand-written model of MSL's alignment rules.**
 
 The consequence to carry: **`ReflectedField::offset` has two provenances** — what Slang reported on
-D3D12, what bgl_extended *predicted* the Metal compiler will do on Metal. There is no `static_assert`
+D3D12, what bgl *predicted* the Metal compiler will do on Metal. There is no `static_assert`
 equivalent; the IDL layer proves its parity, this one asserts it, and only golden-image tests catch
 drift.
 
 **`bool` is rejected rather than guessed at.** Slang's MSL `bool` ABI is unverified and a wrong
 alignment displaces every member after the field, so `MetalAlign` calls `core::fatal` on `kBool` instead of
 falling through to its 4-byte default. @post a `bool` in a constant buffer aborts on Metal with a
-message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl_extended/shaders/src/programs/screen/TaaResolve.slang)
+message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl/shaders/src/programs/screen/TaaResolve.slang)
 does. Lifting it needs a test pinning the emitted offsets against the GPU.
 
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or
@@ -273,10 +273,10 @@ cmd->SetMeshletState(state);
 
 For a table-driven binder over a fixed set of scene buffers — preferable to repeated guarded
 assignments — see `BindSceneBuffers` in
-[SceneBindings.h](libs/bgl_extended/src/passes/SceneBindings.h). The fullest call site is
-[ForwardPhases.cpp](libs/bgl_extended/src/passes/ForwardPhases.cpp); offsets and types are pinned in
-[Uniforms_test.cpp](libs/bgl_extended/tests/src/Uniforms_test.cpp) and
-[BindlessIndex_test.cpp](libs/bgl_extended/tests/src/BindlessIndex_test.cpp).
+[SceneBindings.h](libs/bgl/src/passes/SceneBindings.h). The fullest call site is
+[ForwardPhases.cpp](libs/bgl/src/passes/ForwardPhases.cpp); offsets and types are pinned in
+[Uniforms_test.cpp](libs/bgl/tests/src/Uniforms_test.cpp) and
+[BindlessIndex_test.cpp](libs/bgl/tests/src/BindlessIndex_test.cpp).
 
 ---
 

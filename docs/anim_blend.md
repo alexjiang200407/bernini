@@ -85,7 +85,7 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
   ```
 
   with `D` the weighted cycle in seconds at parameter `p`. It is evaluated in closed form
-  ([`blend_space.slang`](libs/bgl_extended/shaders/src/lib/anim/blend_space.slang)), split at the
+  ([`blend_space.slang`](libs/bgl/shaders/src/lib/anim/blend_space.slang)), split at the
   ramp's ends and at each sample the parameter crosses, because `D` is only linear *between* two
   adjacent samples and kinks at each one. The approximation `(t − tRef) / D(p(t))` is cheaper by a
   few logarithms and wrong for the ramp's whole duration.
@@ -102,7 +102,7 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
 
   That is why `BlendSpaceInfo` carries its samples: the rebase runs on the CPU and needs their cycle
   lengths. It is a twin of the pass's own integral, and deliberately — a shader cannot be called from
-  gamelib, and `bgl_extended` cannot depend on it. Nothing mechanically holds the two in step, so a
+  gamelib, and `bgl` cannot depend on it. Nothing mechanically holds the two in step, so a
   change to either is a change to both.
 
 ## The path, end to end
