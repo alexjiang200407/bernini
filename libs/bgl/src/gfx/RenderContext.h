@@ -26,21 +26,26 @@
 #include "types/DrawBucketMask.h"
 #include <array>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/InstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/cmd/QueuePoint.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/debug/DebugBuffer.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -176,6 +181,18 @@ namespace bgl
 
 		[[nodiscard]] PassTimings
 		GetPassTimings(const RenderTargetRef& target);
+
+		InstanceWriterRef
+		CreateInstanceWriter(const InstanceWriterDesc& desc);
+
+		ExternalBufferRef
+		ImportBuffer(const bgpu::NativeBufferDesc& desc);
+
+		void
+		WaitBeforeNextFrame(const bgpu::QueuePoint& point);
+
+		[[nodiscard]] bgpu::QueuePoint
+		GetLastFrameDone() const;
 
 	private:
 		/**
@@ -324,6 +341,9 @@ namespace bgl
 		// The other targets this frame's overlay draws sample. Each one's last-presented backbuffer
 		// is imported for the overlay pass and returned to present by PreparePresent.
 		std::vector<core::SharedRef<RenderTargetBase>> m_FrameSources;
+
+		// Given by WaitBeforeNextFrame, inserted ahead of the next frame's list and cleared.
+		std::vector<bgpu::QueuePoint> m_NextFrameWaits;
 
 		// Frames begun by this context, counting up forever. Unrelated to a render target's
 		// FrameIndex, which cycles over the backbuffer ring.

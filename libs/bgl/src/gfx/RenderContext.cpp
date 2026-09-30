@@ -8,9 +8,11 @@
 
 #include "debug/DebugReadback.h"
 #include "fg/FrameGraph.h"
+#include "gfx/ExternalBuffer.h"
 #include "gfx/Frustum.h"
 #include "gfx/RenderTargetBase.h"
 #include "gfx/jitter.h"
+#include "instance_block/InstanceWriter.h"
 #include "overlay/Overlay.h"
 #include "passes/BloomPass.h"
 #include "passes/ClearPass.h"
@@ -36,6 +38,7 @@
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/idl/DebugRecord.h>
+#include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/pipeline/PipelineBatch.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -546,6 +549,12 @@ namespace bgl
 		ResolvePassTimings(rt, index);
 
 		rt.GetFrameAllocator(index)->ResetAllocator();
+
+		for (const bgpu::QueuePoint& wait : m_NextFrameWaits)
+		{
+			m_CommandQueue->InsertWaitForQueueFence(wait.queue.Get(), wait.value);
+		}
+		m_NextFrameWaits.clear();
 
 		m_CommandList->Open(m_CommandQueue.Get(), rt.GetFrameAllocator(index));
 
@@ -1558,5 +1567,101 @@ namespace bgl
 	RenderContext::ScreenshotToMemory(const RenderTargetRef& target)
 	{
 		return CaptureBackbuffer(target, "ScreenshotToMemory");
+	}
+
+	InstanceWriterRef
+	RenderContext::CreateInstanceWriter(const InstanceWriterDesc& desc)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError(
+				"CreateInstanceWriter cannot be called between BeginFrame and EndFrame");
+		}
+		if (!IsInstanceWriterDescValid(desc))
+		{
+			throw GraphicsError(
+				std::format(
+					"CreateInstanceWriter: '{}' is not a module name or '{}' not a type name",
+					desc.module,
+					desc.type));
+		}
+
+		const std::string programName = InstanceWriterProgramName(desc);
+		m_Device->AddSourceModule({ programName, InstanceWriterProgramSource(desc), false });
+
+		bgpu::GpuContext& context = m_Device->GetGpuContext();
+		{
+			std::string diagnostic;
+			if (context.LoadScalarLayoutModule(programName, diagnostic) == nullptr)
+			{
+				context.ReleaseSlangSessions();
+				throw GraphicsError(
+					std::format(
+						"CreateInstanceWriter: '{}' in '{}' is not an instance writer\n{}",
+						desc.type,
+						desc.module,
+						diagnostic));
+			}
+		}
+
+		auto kernel = m_Device->CreateComputeKernel(
+			bgpu::ComputePipelineDesc()
+				.SetShader(m_Device->CreateShader(programName))
+				.SetDebugName(std::format("Place Blocks ({})", desc.type)));
+		context.ReleaseSlangSessions();
+
+		return core::SharedRef<InstanceWriter>::Make(
+			desc,
+			std::move(kernel),
+			m_ResourceManager.Get());
+	}
+
+	ExternalBufferRef
+	RenderContext::ImportBuffer(const bgpu::NativeBufferDesc& desc)
+	{
+		if (desc.IsNull() || desc.stride == 0 || desc.elementCount == 0)
+		{
+			throw GraphicsError("ImportBuffer: the buffer is null or has no elements");
+		}
+
+		const bgpu::BufferHandle handle = m_ResourceManager->ImportNativeBuffer(desc);
+		if (handle.IsNull())
+		{
+			throw GraphicsError("ImportBuffer: this backend cannot adopt the buffer");
+		}
+
+		return core::SharedRef<ExternalBuffer>::Make(m_ResourceManager, handle);
+	}
+
+	void
+	RenderContext::WaitBeforeNextFrame(const bgpu::QueuePoint& point)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError(
+				"WaitBeforeNextFrame cannot be called between BeginFrame and EndFrame");
+		}
+		if (point.IsNull())
+		{
+			throw GraphicsError("WaitBeforeNextFrame: the point names no queue");
+		}
+
+		m_NextFrameWaits.emplace_back(point);
+	}
+
+	bgpu::QueuePoint
+	RenderContext::GetLastFrameDone() const
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError(
+				"GetLastFrameDone cannot be called between BeginFrame and EndFrame");
+		}
+		if (m_FrameCounter == 0)
+		{
+			return {};
+		}
+
+		return { m_CommandQueue, m_CommandQueue->GetNextFenceValue() - 1 };
 	}
 }

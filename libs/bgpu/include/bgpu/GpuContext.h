@@ -158,8 +158,9 @@ namespace bgpu
 
 		/**
 		 * The named module compiled for a DXIL target whatever this device draws with, so a layout
-		 * read from it is the scalar one a raw load reads a record at on every backend. Null, with
-		 * the compiler's diagnostic, when the module does not compile.
+		 * read from it is the scalar one a raw load reads a record at on every backend. A registered
+		 * module nothing imports is loaded from its text, as LoadModule loads it. Null, with the
+		 * compiler's diagnostic, when the module does not compile.
 		 *
 		 * @post as LoadModule's: the module belongs to the calling thread's session.
 		 */

@@ -2,6 +2,7 @@
 #include <bgpu/device/Device.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>
@@ -269,6 +270,40 @@ namespace bgpu
 		{
 			(void)type;
 			(void)object;
+			(void)desc;
+			return {};
+		}
+
+		/**
+		 * The native buffer behind `handle` as `type`, or null when this backend has none of that
+		 * type. Borrowed: destroying the buffer ends it. What another owner's ImportNativeBuffer
+		 * adopts -- see NativeBufferDesc.
+		 */
+		[[nodiscard]] virtual NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept
+		{
+			(void)handle;
+			(void)type;
+			return {};
+		}
+
+		/**
+		 * Adopts a buffer another owner on the same native device made, as a read-only structured
+		 * buffer of `desc.elementCount` elements of `desc.stride` bytes. The bytes are shared, not
+		 * copied: this manager adds its own reference and a descriptor in its own heap, so the
+		 * memory outlives the producer's release until this handle is destroyed too. Null when this
+		 * backend cannot adopt a `desc.type`.
+		 *
+		 * Nothing orders the producer's writes against this owner's reads. A reader waits on the
+		 * producer's queue (ICommandQueue::InsertWaitForQueueFence) before it reads, and a producer
+		 * that reuses the memory waits on the reader's -- see docs/rhi.md.
+		 *
+		 * @pre `desc.object` is a buffer on this manager's native device, at least
+		 *      `desc.stride * desc.elementCount` bytes long.
+		 */
+		[[nodiscard]] virtual BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept
+		{
 			(void)desc;
 			return {};
 		}

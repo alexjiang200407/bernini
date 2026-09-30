@@ -1,4 +1,5 @@
 #pragma once
+#include <bgl/IInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/api.h>
 #include <bgl/types/BlobShadowDesc.h>
@@ -9,9 +10,12 @@
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceBlockDesc.h>
+#include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/WindDesc.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -384,6 +388,54 @@ namespace bgl
 		/** The record SetLodSelection last wrote, or the default. */
 		[[nodiscard]] virtual LodSelectionDesc
 		GetLodSelection() const noexcept = 0;
+
+		/**
+		 * Reserves `desc.capacity` placements of one static geom that a GPU kernel places every
+		 * frame -- see SetBlockWriter -- and the CPU never writes again: a crowd, or mesh
+		 * particles. Its placements have no handles, so nothing here moves, flags or deletes one
+		 * alone. Every placement starts hidden, and a block with no writer stays hidden.
+		 *
+		 * Moves the temporal epoch once, as one placement's creation does. Nothing the writer does
+		 * moves it: a placement it shows or hides writes its own motion.
+		 *
+		 * Like a placement, the block names its geom and does not own it: deleting the geom first
+		 * leaves the block reading whatever record takes its slot.
+		 *
+		 * @throws SceneError if `desc.geom` is not a live kStaticMesh geom, or `desc.capacity` is 0 or
+		 *         past c_MaxMeshInstanceBlockCapacity.
+		 */
+		virtual MeshInstanceBlockHandle
+		CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc) = 0;
+
+		/**
+		 * Releases a block's placements, moving the temporal epoch once.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		DeleteMeshInstanceBlock(MeshInstanceBlockHandle block) = 0;
+
+		/**
+		 * Binds the kernel that places `block` from the next frame this view is drawn, or unbinds it
+		 * with null, which hides every placement again. Rebinding replaces the block's parameters
+		 * with a fresh set, every value zero and every handle null.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, or `writer` was created by another
+		 *         IGraphics.
+		 */
+		virtual void
+		SetBlockWriter(MeshInstanceBlockHandle block, const InstanceWriterRef& writer) = 0;
+
+		/**
+		 * The block's copy of its writer's `Params`: what the writer reads for this block, written
+		 * by name as any constant buffer is -- `params["agents"] = buffer->GetHandle()`. Kept across
+		 * frames; a frame draws whatever it holds when the view is drawn. Valid until the block is
+		 * deleted or rebound.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, or the block has no writer.
+		 */
+		[[nodiscard]] virtual bgpu::UniformsBase::Accessor
+		GetBlockParams(MeshInstanceBlockHandle block) = 0;
 
 	protected:
 		ISceneView() noexcept = default;

@@ -235,7 +235,8 @@ namespace bgpu
 		// from, exist once it returns.
 		static_cast<void>(ForThisThread());
 
-		slang::ISession* session = nullptr;
+		slang::ISession*           session = nullptr;
+		std::optional<std::string> onDemandSource;
 		{
 			const auto      held = std::lock_guard(m_Mutex);
 			ThreadSessions& mine = m_ByThread.at(std::this_thread::get_id());
@@ -243,9 +244,30 @@ namespace bgpu
 				mine.scalarLayout = CreateSession(mine.global.get(), m_Desc, SLANG_DXIL);
 
 			session = mine.scalarLayout.get();
+
+			const auto found =
+				std::ranges::find_if(m_Desc.sourceModules, [&](const SlangSourceModule& candidate) {
+					return !candidate.imported && candidate.name == moduleName;
+				});
+			if (found != m_Desc.sourceModules.end())
+				onDemandSource = found->source;
 		}
 
-		return LoadReporting(session, moduleName, diagnostic);
+		if (!onDemandSource.has_value())
+			return LoadReporting(session, moduleName, diagnostic);
+
+		const std::string           path = SlangModulePath(moduleName);
+		Slang::ComPtr<slang::IBlob> blob;
+		slang::IModule*             slangModule = session->loadModuleFromSourceString(
+			path.c_str(),
+			(path + ".slang").c_str(),
+			onDemandSource->c_str(),
+			blob.writeRef());
+
+		if (blob != nullptr)
+			diagnostic = static_cast<const char*>(blob->getBufferPointer());
+
+		return slangModule;
 	}
 
 	void
