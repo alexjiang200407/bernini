@@ -1,8 +1,8 @@
 #pragma once
 #include <array>
-#include <bgl_common/idl/DebugRecord.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/cmd/CommandList.h>
+#include <bgpu/idl/DebugRecord.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <core/err/util.h>
@@ -10,11 +10,11 @@
 #include <utility>
 
 #if defined(BERNINI_GPU_DEBUG)
-namespace bgl
+namespace bgpu
 {
 	/**
 	 * CPU side of the GPU-assertion buffer written by dbg_raise()
-	 * (bgl/shaders/src/debug/dbg.slang). It is a uint UAV laid out as a small
+	 * (lib.debug.dbg, libs/bgpu/shaders/src/lib/debug/dbg.slang). It is a uint UAV laid out as a small
 	 * header followed by fixed-size records:
 	 *
 	 *   [0] record counter (atomic append cursor)
@@ -54,11 +54,11 @@ namespace bgl
 		operator=(DebugBuffer&&) noexcept = default;
 
 		void
-		Init(uint32_t recordCapacity, bgpu::ResourceManagerRef resourceManager)
+		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager)
 		{
 			m_Capacity = recordCapacity;
 
-			auto desc = bgpu::ComputeBufferDesc()
+			auto desc = ComputeBufferDesc()
 			                .SetElement<uint32_t>()
 			                .SetInitialCount(c_HeaderWords + recordCapacity * c_RecordWords)
 			                .SetDebugName("GPU Debug Buffer");
@@ -72,7 +72,7 @@ namespace bgl
 			return m_Buffer.IsInitialized();
 		}
 
-		[[nodiscard]] bgpu::BufferHandle
+		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			return m_Buffer.GetBufferHandle();
@@ -96,7 +96,7 @@ namespace bgl
 		 * the header are left stale; a zero counter makes them invisible to readback.
 		 */
 		void
-		Reset(bgpu::ICommandList* cmd) const noexcept
+		Reset(ICommandList* cmd) const noexcept
 		{
 			core::ensure(cmd != nullptr, "Command list cannot be null");
 			core::ensure(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
@@ -112,8 +112,8 @@ namespace bgl
 		}
 
 	private:
-		bgpu::ComputeBuffer m_Buffer;
-		uint32_t            m_Capacity = 0;
+		ComputeBuffer m_Buffer;
+		uint32_t      m_Capacity = 0;
 	};
 }
 #endif  // BERNINI_GPU_DEBUG

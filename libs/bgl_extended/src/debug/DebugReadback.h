@@ -1,8 +1,8 @@
 #pragma once
-#include "debug/DebugBuffer.h"
 #include <algorithm>
-#include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/idl/ErrorCode.h>
+#include <bgpu/debug/DebugBuffer.h>
+#include <bgpu/idl/DebugRecord.h>
 #include <cstdint>
 #include <cstring>
 #include <optional>
@@ -66,7 +66,7 @@ namespace bgl
 		bool     overflow = false;
 
 		// Decoded records, capped at the buffer's capacity.
-		std::vector<idl::DebugRecord> records;
+		std::vector<bgpu::idl::DebugRecord> records;
 	};
 
 	/**
@@ -80,8 +80,8 @@ namespace bgl
 	{
 		const auto* words = static_cast<const uint32_t*>(mapped);
 
-		const uint32_t count    = words[DebugBuffer::c_CounterWord];
-		const uint32_t overflow = words[DebugBuffer::c_OverflowWord];
+		const uint32_t count    = words[bgpu::DebugBuffer::c_CounterWord];
+		const uint32_t overflow = words[bgpu::DebugBuffer::c_OverflowWord];
 
 		if (count == 0 && overflow == 0)
 		{
@@ -96,10 +96,11 @@ namespace bgl
 		report.records.reserve(valid);
 		for (uint32_t i = 0; i < valid; ++i)
 		{
-			const uint32_t base = DebugBuffer::c_HeaderWords + i * DebugBuffer::c_RecordWords;
+			const uint32_t base =
+				bgpu::DebugBuffer::c_HeaderWords + i * bgpu::DebugBuffer::c_RecordWords;
 
-			idl::DebugRecord rec{};
-			std::memcpy(&rec, words + base, sizeof(idl::DebugRecord));
+			bgpu::idl::DebugRecord rec{};
+			std::memcpy(&rec, words + base, sizeof(bgpu::idl::DebugRecord));
 			report.records.push_back(rec);
 		}
 

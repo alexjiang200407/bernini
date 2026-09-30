@@ -57,7 +57,6 @@ set(IDL_CPP_SOURCES
     InstanceLod.slang
     LodSubmeshRange.slang
     MeshInstance.slang
-    DebugRecord.slang
     Constants.slang
     Clip.slang
     ClipPlayback.slang

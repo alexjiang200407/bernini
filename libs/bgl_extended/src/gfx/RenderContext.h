@@ -1,6 +1,5 @@
 #pragma once
 #include "debug/BufferPoisoner.h"
-#include "debug/DebugBuffer.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassTimer.h"
 #include "gfx/DrawBucketTable.h"
@@ -37,6 +36,7 @@
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
+#include <bgpu/debug/DebugBuffer.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
@@ -343,7 +343,7 @@ namespace bgl
 		// Installed on the frame graph, which drives it for the buffer args passes declare poisoned.
 		BufferPoisoner m_BufferPoisoner;
 
-		DebugBuffer                m_DebugBuffer;
+		bgpu::DebugBuffer          m_DebugBuffer;
 		bgpu::ReadbackBufferHandle m_DebugReadbacks[c_SwapchainImageCount];
 		bool                       m_DebugReadbackPending[c_SwapchainImageCount] = {};
 

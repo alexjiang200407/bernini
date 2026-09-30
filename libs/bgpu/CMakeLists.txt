@@ -167,6 +167,7 @@ add_custom_target(bgpu_check_shaders ALL DEPENDS ${BGPU_SHADER_CHECKS})
 set(BGPU_IDL_ROOT "${BGPU_SHADER_ROOT}/idl")
 set(BGPU_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/bgpu_idl")
 set(BGPU_IDL_CPP_SOURCES
+	DebugRecord.slang
 	ErrorCode.slang
 )
 if(RENDERER_BACKEND STREQUAL "METAL")
@@ -196,6 +197,31 @@ endforeach()
 add_custom_target(bgpu_idl_generate ALL DEPENDS ${BGPU_IDL_OUTPUTS})
 add_dependencies(bgpu bgpu_idl_generate)
 target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT})
+
+# What this target does NOT link is the point: every public header compiles alone -- no PCH, and
+# bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_common, bgl_extended) or
+# leans on an include it never wrote stops the build here, rather than in a compute client that
+# includes it first. A header per translation unit, generated from the glob, so a new header is
+# checked without anyone listing it.
+file(GLOB_RECURSE BGPU_PUBLIC_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/*.h)
+# The D3D12 ones compile empty off Windows; metal-cpp exists only on a Metal build.
+if(NOT RENDERER_BACKEND STREQUAL "METAL")
+	list(FILTER BGPU_PUBLIC_HEADERS EXCLUDE REGEX ".*/include/bgpu/metal/.*")
+endif()
+set(BGPU_SELFCHECK_SOURCES "")
+foreach(header ${BGPU_PUBLIC_HEADERS})
+	file(RELATIVE_PATH header_rel "${CMAKE_CURRENT_SOURCE_DIR}/include" "${header}")
+	string(MAKE_C_IDENTIFIER "${header_rel}" check_name)
+	set(check_source "${CMAKE_CURRENT_BINARY_DIR}/selfcheck/${check_name}.cpp")
+	file(GENERATE OUTPUT ${check_source} CONTENT "#include <${header_rel}>\n")
+	list(APPEND BGPU_SELFCHECK_SOURCES ${check_source})
+endforeach()
+add_library(bgpu_selfcheck STATIC ${BGPU_SELFCHECK_SOURCES})
+# PRIVATE, and bgpu only: linking anything else would defeat the check.
+target_link_libraries(bgpu_selfcheck PRIVATE bgpu)
+set_target_properties(bgpu_selfcheck PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+add_dependencies(bgpu_selfcheck bgpu_idl_generate)
+enable_strict_compiler(bgpu_selfcheck)
 
 # The suite needs a device, so there is none without a backend.
 if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
@@ -245,6 +271,24 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	# The session cases load modules from ./shaders/src beside the suite, staged by the contract and
 	# the shared tree exactly as a renderer resolves them.
 	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders bgl_common_copy_shaders)
+
+	# The suite's own kernels, under bgpu/ in the tests root the sessions search, which no other
+	# copier writes.
+	file(GLOB_RECURSE BGPU_TEST_SHADER_SOURCES CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests/*.slang)
+	set(BGPU_TEST_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/test_shaders.stamp")
+	add_custom_command(
+		OUTPUT  "${BGPU_TEST_SHADER_STAMP}"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests/bgpu"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests/bgpu"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGPU_TEST_SHADER_STAMP}"
+		DEPENDS ${BGPU_TEST_SHADER_SOURCES}
+		COMMENT "Staging bgpu's test shaders"
+		VERBATIM
+	)
+	add_custom_target(bgpu_copy_test_shaders DEPENDS "${BGPU_TEST_SHADER_STAMP}")
+	add_dependencies(bgpu_tests bgpu_copy_test_shaders)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files"
 		FILES ${BGPU_TESTS_SOURCES})

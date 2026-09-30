@@ -33,10 +33,10 @@
 #include <bgl/Viewport.h>
 #include <bgl/lod_select.h>
 #include <bgl_common/Frustum.h>
-#include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/jitter.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/idl/DebugRecord.h>
 #include <bgpu/pipeline/PipelineBatch.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -396,10 +396,10 @@ namespace bgl
 		// Identical records are the norm rather than the exception: one bad submesh raises once per
 		// vertex, so the interesting thing is which distinct failures happened, not a thousand copies
 		// of one. Ordered by first appearance, because that is the one that has a cause.
-		auto seen = std::vector<std::pair<idl::DebugRecord, uint32_t>>();
-		for (const idl::DebugRecord& rec : report->records)
+		auto seen = std::vector<std::pair<bgpu::idl::DebugRecord, uint32_t>>();
+		for (const bgpu::idl::DebugRecord& rec : report->records)
 		{
-			const auto same = [&rec](const std::pair<idl::DebugRecord, uint32_t>& entry) {
+			const auto same = [&rec](const std::pair<bgpu::idl::DebugRecord, uint32_t>& entry) {
 				return entry.first.errcode == rec.errcode && entry.first.value == rec.value &&
 				       entry.first.limit == rec.limit && entry.first.context == rec.context;
 			};
@@ -427,7 +427,7 @@ namespace bgl
 
 			std::vector<uint32_t> errcodes;
 			errcodes.reserve(report->records.size());
-			for (const idl::DebugRecord& rec : report->records)
+			for (const bgpu::idl::DebugRecord& rec : report->records)
 			{
 				errcodes.push_back(rec.errcode);
 			}

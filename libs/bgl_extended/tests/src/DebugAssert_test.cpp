@@ -1,4 +1,3 @@
-#include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
 #include "gfx/GraphicsBase.h"
 #include "util/GpuValidation.h"
@@ -13,6 +12,7 @@
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/debug/DebugBuffer.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
@@ -35,11 +35,11 @@ namespace
 	MakeDebugImage(uint32_t count, uint32_t overflow, uint32_t capacity)
 	{
 		std::vector<uint32_t> words(
-			bgl::DebugBuffer::c_HeaderWords + capacity * bgl::DebugBuffer::c_RecordWords,
+			bgpu::DebugBuffer::c_HeaderWords + capacity * bgpu::DebugBuffer::c_RecordWords,
 			0u);
-		words[bgl::DebugBuffer::c_CounterWord]  = count;
-		words[bgl::DebugBuffer::c_OverflowWord] = overflow;
-		words[bgl::DebugBuffer::c_CapacityWord] = capacity;
+		words[bgpu::DebugBuffer::c_CounterWord]  = count;
+		words[bgpu::DebugBuffer::c_OverflowWord] = overflow;
+		words[bgpu::DebugBuffer::c_CapacityWord] = capacity;
 		return words;
 	}
 
@@ -52,11 +52,12 @@ namespace
 		uint32_t               limit = 0,
 		uint32_t               job   = 0)
 	{
-		const uint32_t base = bgl::DebugBuffer::c_HeaderWords + i * bgl::DebugBuffer::c_RecordWords;
-		words[base + 0]     = errcode;
-		words[base + 1]     = value;
-		words[base + 2]     = limit;
-		words[base + 3]     = job;
+		const uint32_t base =
+			bgpu::DebugBuffer::c_HeaderWords + i * bgpu::DebugBuffer::c_RecordWords;
+		words[base + 0] = errcode;
+		words[base + 1] = value;
+		words[base + 2] = limit;
+		words[base + 3] = job;
 	}
 }
 
@@ -174,7 +175,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgl::DebugBuffer();
+	auto debugBuffer = bgpu::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	auto kernel = device->CreateComputeKernel(
@@ -371,7 +372,7 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgl::DebugBuffer();
+	auto debugBuffer = bgpu::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	auto kernel = device->CreateComputeKernel(

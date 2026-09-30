@@ -1,5 +1,6 @@
 #pragma once
-#include "metal_cpp.h"
+#include <Foundation/Foundation.hpp>
+#include <string>
 
 namespace bgpu
 {

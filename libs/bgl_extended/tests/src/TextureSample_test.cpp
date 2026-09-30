@@ -1,4 +1,3 @@
-#include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
 #include "gfx/GraphicsBase.h"
 #include "util/GpuValidation.h"
@@ -10,6 +9,7 @@
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/debug/DebugBuffer.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
@@ -64,7 +64,7 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgl::DebugBuffer();
+	auto debugBuffer = bgpu::DebugBuffer();
 	debugBuffer.Init(c_Capacity, resourceManager);
 
 	// A 1x1 RGBA8 texture we will upload a known red texel into.
