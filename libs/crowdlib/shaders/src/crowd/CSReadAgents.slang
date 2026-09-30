@@ -1,5 +1,6 @@
 import crowd.idl.Agent;
 import crowd.idl.AgentReadback;
+import crowd.idl.Constants;
 import crowd.idl.TickParams;
 import lib.types.ComputeBuffer;
 
@@ -14,7 +15,7 @@ struct Uniforms
 ConstantBuffer<Uniforms> gUniforms;
 
 [shader("compute")]
-[numthreads(64, 1, 1)]
+[numthreads(c_ThreadsPerGroup, 1, 1)]
 void main(uint3 id: SV_DispatchThreadID)
 {
     let index = id.x;

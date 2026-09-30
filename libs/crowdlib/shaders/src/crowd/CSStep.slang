@@ -75,7 +75,7 @@ float2 PlanVelocity(Agent agent, Group group)
 }
 
 [shader("compute")]
-[numthreads(64, 1, 1)]
+[numthreads(c_ThreadsPerGroup, 1, 1)]
 void main(uint3 id: SV_DispatchThreadID)
 {
     let index = id.x;

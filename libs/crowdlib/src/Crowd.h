@@ -36,6 +36,8 @@ namespace crowd
 	 */
 	class Crowd final : public core::RefCounter<ICrowd>
 	{
+		static constexpr uint32_t c_AgentBuffers = 2;
+
 	public:
 		/** @throws std::runtime_error for a description a crowd refuses, or a device that fails. */
 		Crowd(bgpu::GpuContextRef context, CrowdDesc desc);
@@ -103,15 +105,15 @@ namespace crowd
 			uint64_t                        fence = 0;
 			bgpu::CommandAllocatorRef       allocator;
 			bgpu::CommandListRef            list;
-			bgpu::ReadbackBufferHandle      sums;
+			bgpu::ReadbackBufferHandle      groupSums;
 			bgpu::ReadbackBufferHandle      agents;
 			uint32_t                        agentCount = 0;
 			std::vector<GroupHandle>        rows;
 			std::vector<debug::GroupAgents> groups;
 
 			// Mapped on first read, and unmapped before the slot is recorded into again.
-			const void* mappedSums   = nullptr;
-			const void* mappedAgents = nullptr;
+			const void* mappedGroupSums = nullptr;
+			const void* mappedAgents    = nullptr;
 		};
 
 		/** Everything made from the device after its queue; on a throw, what was made is released. */
@@ -134,7 +136,10 @@ namespace crowd
 		// Declared first so it is released last, after every queue on it is drained.
 		bgpu::GpuContextRef m_Context;
 
-		CrowdPlan                m_Plan;
+		CrowdPlan m_Plan;
+
+		// The crowd's own, made on m_Context by bgpu::CreateDevice: the queue, resource manager and
+		// kernels below are all built from it, apart from every other owner's (docs/bgpu.md).
 		bgpu::DeviceRef          m_Device;
 		bgpu::ResourceManagerRef m_ResourceManager;
 		bgpu::CommandQueueRef    m_Queue;
@@ -145,9 +150,13 @@ namespace crowd
 
 		bgpu::UploadBuffer<idl::Group>      m_Groups;
 		bgpu::UploadBuffer<idl::AgentRange> m_Ranges;
-		bgpu::BufferHandle                  m_Agents[2];
-		bgpu::BufferHandle                  m_Sums;
-		bgpu::BufferHandle                  m_AgentReadback;
+		// GPU-only, written by one tick and read by the next: each tick reads the one the tick before
+		// it wrote, so a tick's copies never race its own writes.
+		bgpu::BufferHandle m_Agents[c_AgentBuffers];
+
+		// CSReduce's output, one idl::GroupSum per group row, copied into the tick's report readback.
+		bgpu::BufferHandle m_GroupSums;
+		bgpu::BufferHandle m_AgentReadback;
 
 		mutable std::vector<TickSlot> m_Slots;
 		uint64_t                      m_SubmittedTick = 0;

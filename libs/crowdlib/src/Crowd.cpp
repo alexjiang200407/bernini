@@ -1,6 +1,7 @@
 #include "Crowd.h"
 #include "CrowdPlan.h"
 #include "idl/Agent.h"
+#include "idl/Constants.h"
 #include "idl/GroupSum.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/buffer/UploadBuffer.h>
@@ -38,8 +39,6 @@ namespace crowd
 {
 	namespace
 	{
-		constexpr uint32_t c_ThreadsPerGroup = 64;
-
 		bgpu::ComputeKernel
 		LoadKernel(const bgpu::IDevice& device, const std::string& name)
 		{
@@ -183,7 +182,8 @@ namespace crowd
 			m_ResourceManager);
 		m_Agents[0] = CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents A");
 		m_Agents[1] = CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents B");
-		m_Sums      = CreateComputeBuffer<idl::GroupSum>(rm, crowdDesc.maxGroups, "Crowd sums");
+		m_GroupSums =
+			CreateComputeBuffer<idl::GroupSum>(rm, crowdDesc.maxGroups, "Crowd group sums");
 		if (crowdDesc.debugAgentReadback)
 		{
 			m_AgentReadback = CreateComputeBuffer<debug::AgentReadback>(
@@ -201,7 +201,7 @@ namespace crowd
 		{
 			slot.allocator = m_Device->CreateCommandAllocator(bgpu::QueueType::kCompute);
 			slot.list = m_Device->CreateCommandList(listDesc, slot.allocator, m_ResourceManager);
-			slot.sums = CreateReadback(
+			slot.groupSums = CreateReadback(
 				rm,
 				uint64_t{ crowdDesc.maxGroups } * sizeof(idl::GroupSum),
 				"Crowd report readback");
@@ -231,12 +231,12 @@ namespace crowd
 		for (auto& slot : m_Slots)
 		{
 			Unmap(slot);
-			if (!slot.sums.IsNull())
-				rm.DestroyReadbackBuffer(slot.sums, false);
+			if (!slot.groupSums.IsNull())
+				rm.DestroyReadbackBuffer(slot.groupSums, false);
 			if (!slot.agents.IsNull())
 				rm.DestroyReadbackBuffer(slot.agents, false);
 		}
-		for (const auto buffer : { m_Agents[0], m_Agents[1], m_Sums, m_AgentReadback })
+		for (const auto buffer : { m_Agents[0], m_Agents[1], m_GroupSums, m_AgentReadback })
 		{
 			if (!buffer.IsNull())
 				rm.DestroyBuffer(buffer, false);
@@ -370,9 +370,9 @@ namespace crowd
 		{
 			if (slot.rows[row] != group)
 				continue;
-			if (slot.mappedSums == nullptr)
-				slot.mappedSums = m_ResourceManager->MapReadback(slot.sums);
-			const auto& sum = static_cast<const idl::GroupSum*>(slot.mappedSums)[row];
+			if (slot.mappedGroupSums == nullptr)
+				slot.mappedGroupSums = m_ResourceManager->MapReadback(slot.groupSums);
+			const auto& sum = static_cast<const idl::GroupSum*>(slot.mappedGroupSums)[row];
 			return GroupReport{ .tick         = tick,
 				                .agentCount   = sum.agentCount,
 				                .meanPosition = sum.meanPosition,
@@ -405,8 +405,8 @@ namespace crowd
 	Crowd::Record(TickSlot& slot, uint64_t tick, const TickPlan& plan)
 	{
 		// Ping-pong: each tick reads the buffer the tick before it wrote.
-		const auto agents   = m_Agents[tick % 2];
-		const auto previous = m_Agents[(tick + 1) % 2];
+		const auto agents   = m_Agents[tick % c_AgentBuffers];
+		const auto previous = m_Agents[(tick + 1) % c_AgentBuffers];
 
 		slot.allocator->ResetAllocator();
 		auto& list = *slot.list;
@@ -417,7 +417,7 @@ namespace crowd
 		list.Barrier(m_Groups.GetBufferHandle(), c_ReadToUpload);
 		list.Barrier(m_Ranges.GetBufferHandle(), c_ReadToUpload);
 		list.Barrier(agents, c_UavToUav);
-		list.Barrier(m_Sums, c_CopyToWrite);
+		list.Barrier(m_GroupSums, c_CopyToWrite);
 		if (!m_AgentReadback.IsNull())
 			list.Barrier(m_AgentReadback, c_CopyToWrite);
 		m_Groups.Update(&list);
@@ -434,22 +434,22 @@ namespace crowd
 			m_Step["gUniforms"]["ranges"]   = m_Ranges.GetBufferHandle();
 			m_Step["gUniforms"]["previous"] = previous;
 			m_Step["gUniforms"]["agents"]   = agents;
-			Dispatch(list, m_Step, core::div_ceil(agentCount, c_ThreadsPerGroup));
+			Dispatch(list, m_Step, core::div_ceil(agentCount, idl::c_ThreadsPerGroup));
 			list.Barrier(agents, c_UavToUav);
 
-			m_Reduce["gUniforms"]["groups"] = m_Groups.GetBufferHandle();
-			m_Reduce["gUniforms"]["agents"] = agents;
-			m_Reduce["gUniforms"]["sums"]   = m_Sums;
+			m_Reduce["gUniforms"]["groups"]    = m_Groups.GetBufferHandle();
+			m_Reduce["gUniforms"]["agents"]    = agents;
+			m_Reduce["gUniforms"]["groupSums"] = m_GroupSums;
 			Dispatch(list, m_Reduce, groupCount);
-			list.Barrier(m_Sums, c_WriteToCopy);
-			list.CopyBufferToReadback(slot.sums, m_Sums);
+			list.Barrier(m_GroupSums, c_WriteToCopy);
+			list.CopyBufferToReadback(slot.groupSums, m_GroupSums);
 
 			if (GetDesc().debugAgentReadback)
 			{
 				SetTickParams(m_ReadAgents, plan);
 				m_ReadAgents["gUniforms"]["agents"]   = agents;
 				m_ReadAgents["gUniforms"]["readback"] = m_AgentReadback;
-				Dispatch(list, m_ReadAgents, core::div_ceil(agentCount, c_ThreadsPerGroup));
+				Dispatch(list, m_ReadAgents, core::div_ceil(agentCount, idl::c_ThreadsPerGroup));
 				list.Barrier(m_AgentReadback, c_WriteToCopy);
 				list.CopyBufferToReadback(slot.agents, m_AgentReadback);
 			}
@@ -468,12 +468,12 @@ namespace crowd
 	void
 	Crowd::Unmap(TickSlot& slot) const noexcept
 	{
-		if (slot.mappedSums != nullptr)
-			m_ResourceManager->UnmapReadback(slot.sums);
+		if (slot.mappedGroupSums != nullptr)
+			m_ResourceManager->UnmapReadback(slot.groupSums);
 		if (slot.mappedAgents != nullptr)
 			m_ResourceManager->UnmapReadback(slot.agents);
-		slot.mappedSums   = nullptr;
-		slot.mappedAgents = nullptr;
+		slot.mappedGroupSums = nullptr;
+		slot.mappedAgents    = nullptr;
 	}
 
 	CrowdRef
