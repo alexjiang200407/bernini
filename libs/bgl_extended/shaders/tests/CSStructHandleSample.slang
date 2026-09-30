@@ -1,11 +1,11 @@
 import lib.types.ComputeBuffer;
-import lib.types.HandleElement;
+import lib.types.BoxedHandle;
 
 struct Uniforms
 {
     // The handle under test lives in this buffer, not in the cbuffer: a cbuffer handle is rewritten
     // per dispatch, so it proves nothing about one the CPU wrote into GPU memory once.
-    ComputeBuffer<HandleElement<Texture2D.Handle> > materials;
+    ComputeBuffer<BoxedHandle<Texture2D.Handle> > materials;
     SamplerState.Handle sampler;
     ComputeBuffer<float4> outColor;
 };

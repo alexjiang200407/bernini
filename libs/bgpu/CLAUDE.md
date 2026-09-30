@@ -74,7 +74,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 ## Shaders (`./shaders`)
 
 - `./shaders/src` is the RHI's Slang half — the IDL offset primitives (`idl.Entry`, `idl.Range` …),
-  `idl.ErrorCode` and `idl.DebugRecord`, the buffer family (`lib.types.*Buffer`), the bindless texture helpers (`lib.types.Texture`) and the GPU assert
+  `idl.ErrorCode` and `idl.DebugRecord`, the buffer family (`lib.types.*Buffer`, and `lib.types.BoxedHandle` for a buffer of handles), the bindless texture helpers (`lib.types.Texture`) and the GPU assert
   channel (`lib.debug.dbg`) — staged into `./shaders/src` beside the executables by
   `bgpu_copy_shaders`, first of every copier, since every other tree imports it. An import name is the
   path under that root, so a module here keeps its name wherever it is staged from.

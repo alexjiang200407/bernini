@@ -6,7 +6,7 @@
 // holding one handle is accepted, and lays out identically.
 //
 // A constant buffer's own member is the handle itself; this is for the element type alone.
-public struct HandleElement<T>
+public struct BoxedHandle<T>
 {
     public T handle;
 }

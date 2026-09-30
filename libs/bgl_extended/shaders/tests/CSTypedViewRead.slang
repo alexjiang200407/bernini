@@ -1,7 +1,7 @@
 import idl.RawTextureHandle;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
-import lib.types.HandleElement;
+import lib.types.BoxedHandle;
 import lib.types.RawBuffer;
 
 // A record with no resource type in it, so a raw Load<T> is legal on every backend. The eight bytes
@@ -14,8 +14,8 @@ struct ViewedRecord
 
 struct Uniforms
 {
-    RawBuffer arena;                                       // the allocation, as bytes
-    EntryBuffer<HandleElement<Texture2D.Handle> > handles; // the same allocation, as handles
+    RawBuffer arena;                                     // the allocation, as bytes
+    EntryBuffer<BoxedHandle<Texture2D.Handle> > handles; // the same allocation, as handles
     ComputeBuffer<float4> outValues;
     SamplerState.Handle samp;
     uint recordOffset;

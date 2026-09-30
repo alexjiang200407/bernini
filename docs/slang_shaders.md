@@ -8,7 +8,7 @@ from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on
 ```
 libs/bgpu/shaders/src/                the RHI's: what any owner of the device imports, with no renderer in its build
   idl/                                the offset primitives (Entry, Range, RangeWithCount, RawEntry), ErrorCode, DebugRecord
-  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers), bindless texture helpers, and the GPU assert channel (dbg)
+  lib/  types/ debug/                 the buffer family (Entry, Range, Packed, Compute and Upload buffers, BoxedHandle), bindless texture helpers, and the GPU assert channel (dbg)
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
   bgl/                                PbrSurface, the material's half of shading as the PBR model reads it; ISurfaceSource and IMaterialReader, what fills one and what it reads through
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
@@ -170,7 +170,7 @@ inside it.
 
 `RawHandleView<T>` ([lib/types/RawHandleView.slang](../libs/bgl_extended/shaders/src/lib/types/RawHandleView.slang))
 is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
-stride divide inside the type. Its elements are `HandleElement<T>` rather than `T`, for the reason
+stride divide inside the type. Its elements are `BoxedHandle<T>` rather than `T`, for the reason
 below. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
 allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
 one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
@@ -224,8 +224,8 @@ out-parameter form, which both backends accept.
 **A buffer's element type is the one place the handle may not stand bare.**
 `StructuredBuffer<Texture2D.Handle>.Handle` lowers to `device texture2d*`, and MSL refuses a pointer
 to a resource anywhere inside what a constant buffer points at — which is where every such view is
-bound. `HandleElement<T>`
-([lib/types/HandleElement.slang](../libs/bgl_extended/shaders/src/lib/types/HandleElement.slang)) is the one-field
+bound. `BoxedHandle<T>`
+([lib/types/BoxedHandle.slang](../libs/bgpu/shaders/src/lib/types/BoxedHandle.slang)) is the one-field
 struct that makes it declarable, laid out identically; `RawHandleView<T>` applies it internally, so
 only a buffer of handles declared by hand names it. `slangc` will not catch this — it emits MSL
 rather than compiling it, so the error arrives from `newLibraryWithSource` at runtime.

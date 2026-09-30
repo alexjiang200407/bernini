@@ -1,4 +1,4 @@
-import lib.types.HandleElement;
+import lib.types.BoxedHandle;
 
 // The second view of a raw arena: the same allocation, read as handles of T.
 //
@@ -14,8 +14,8 @@ public struct RawHandleView<T>
 {
     // ScalarDataLayout: tight, C-compatible packing, so an element is the bytes the payload stored.
     // The default structured layout 16-byte-aligns nested handle structs, which a payload does not.
-    // Boxed because a buffer of bare handles is not declarable on Metal -- see HandleElement.
-    StructuredBuffer<HandleElement<T>, ScalarDataLayout>.Handle handleBuffer;
+    // Boxed because a buffer of bare handles is not declarable on Metal -- see BoxedHandle.
+    StructuredBuffer<BoxedHandle<T>, ScalarDataLayout>.Handle handleBuffer;
 
     // Handle `index` of the payload at `byteOffset`.
     //
