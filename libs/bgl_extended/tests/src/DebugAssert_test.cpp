@@ -8,11 +8,11 @@
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl_common/idl/ErrorCode.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/debug/DebugBuffer.h>
+#include <bgpu/idl/ErrorCode.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
@@ -466,12 +466,12 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullEntryDeref)) == 1);
+			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullEntryDeref)) == 1);
 	CHECK(
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgl::idl::ErrorCode::kNullRangeDeref)) == 1);
+			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullRangeDeref)) == 1);
 
 	resourceManager->UnmapReadback(rb);
 

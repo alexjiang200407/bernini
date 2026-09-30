@@ -5,11 +5,11 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
-#include <bgl_common/idl/ErrorCode.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/debug/DebugBuffer.h>
+#include <bgpu/idl/ErrorCode.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
@@ -165,7 +165,7 @@ TEST_CASE(
 	CHECK(report->count == 1);
 	CHECK_FALSE(report->overflow);
 	REQUIRE(report->records.size() == 1);
-	CHECK(report->records[0].errcode == static_cast<uint32_t>(bgl::idl::ErrorCode::kUnknown));
+	CHECK(report->records[0].errcode == static_cast<uint32_t>(bgpu::idl::ErrorCode::kUnknown));
 
 	resourceManager->UnmapReadback(rb);
 
