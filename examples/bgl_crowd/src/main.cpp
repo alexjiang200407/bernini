@@ -35,11 +35,14 @@
 // and drawn by the renderer as one box per agent from the crowd's debug readback -- the only
 // per-agent read the crowd has, and the one a game would never drive itself with. The frame draws
 // whatever tick last completed. Partway through, a group splits off its rear and a cavalry group
-// merges into another; the log prints each moving group's report as it goes.
+// merges into another; the log prints each moving group's report as it goes. Agents do not yet keep
+// out of each other's way -- the crowd only plans velocities so far -- so boxes overlap wherever
+// groups cross.
 //
 // Run until closed, the crowd steps its fixed tick at the wall clock's pace and every group marches
 // back and forth between its two ends. With --frames it steps one tick a frame and marches once,
-// so the run is the same every time and its end can be checked.
+// so the run is the same every time and its end can be checked. --units multiplies the crowd, and
+// the log splits each frame's time into the crowd, posing a box per agent, and the renderer.
 
 namespace
 {
@@ -52,12 +55,19 @@ namespace
 		uint32_t    frames   = 0;
 		bool        headless = false;
 		std::string screenshot;
+
+		// Every group holds this many times its agents, and the field grows by its square root so
+		// the blocks keep their shape and do not start on top of each other.
+		uint32_t units = 1;
 	};
 
 	constexpr float c_Tick = 1.0f / 30.0f;
 
 	// Long enough for the slowest group to cross the field and stand before it turns around.
 	constexpr uint64_t c_MarchTicks = 540;
+
+	// The four groups' agents at --units 1.
+	constexpr uint32_t c_BaseAgents = 60 + 40 + 20 + 16;
 
 	constexpr auto c_Infantry =
 		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
@@ -116,9 +126,16 @@ namespace
 		auto context             = bgpu::CreateGpuContext(ctxDesc);
 		auto graphics            = bgl::CreateGraphics(context, bgl::GraphicsOptions{});
 
+		const uint32_t units = opts.units;
+		const float    scale = std::sqrt(static_cast<float>(units));
+		const auto     widen = std::max(1u, static_cast<uint32_t>(std::lround(scale)));
+		const auto     at    = [scale](float x, float z) { return glm::vec2(x, z) * scale; };
+		// A march is longer by the field's growth, so its time is too.
+		const auto marchTicks = static_cast<uint64_t>(static_cast<float>(c_MarchTicks) * scale);
+
 		auto crowdDesc               = crowd::CrowdDesc();
 		crowdDesc.agentTypes         = { c_Infantry, c_Cavalry };
-		crowdDesc.maxAgents          = 256;
+		crowdDesc.maxAgents          = 256 * opts.units;
 		crowdDesc.maxGroups          = 8;
 		crowdDesc.tickSeconds        = c_Tick;
 		crowdDesc.debugAgentReadback = true;
@@ -145,24 +162,24 @@ namespace
 		};
 		add("left foot",
 		    0,
-		    60,
-		    { -15.0f, -6.0f },
-		    Orders({ -15.0f, 6.0f }, { 0.0f, 1.0f }, 10, 1.0f));
+		    60 * units,
+		    at(-15.0f, -6.0f),
+		    Orders(at(-15.0f, 6.0f), { 0.0f, 1.0f }, 10 * widen, 1.0f));
 		add("right foot",
 		    0,
-		    40,
-		    { 15.0f, 6.0f },
-		    Orders({ 15.0f, -6.0f }, { 0.0f, -1.0f }, 8, 1.0f));
+		    40 * units,
+		    at(15.0f, 6.0f),
+		    Orders(at(15.0f, -6.0f), { 0.0f, -1.0f }, 8 * widen, 1.0f));
 		add("north horse",
 		    1,
-		    20,
-		    { -10.0f, 15.0f },
-		    Orders({ 10.0f, 15.0f }, { 1.0f, 0.0f }, 5, 2.0f));
+		    20 * units,
+		    at(-10.0f, 15.0f),
+		    Orders(at(10.0f, 15.0f), { 1.0f, 0.0f }, 5 * widen, 2.0f));
 		add("south horse",
 		    1,
-		    16,
-		    { 10.0f, -15.0f },
-		    Orders({ -10.0f, -15.0f }, { -1.0f, 0.0f }, 4, 2.0f));
+		    16 * units,
+		    at(10.0f, -15.0f),
+		    Orders(at(-10.0f, -15.0f), { -1.0f, 0.0f }, 4 * widen, 2.0f));
 		crowd->Step();
 		for (const auto& group : groups) crowd->SetOrders(group.handle, group.orders);
 
@@ -187,7 +204,7 @@ namespace
 		view->CreateStaticMeshInstance(
 			scene->AddCubeGeom(ground),
 			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.05f, 0.0f)) *
-				glm::scale(glm::mat4(1.0f), glm::vec3(60.0f, 0.05f, 60.0f)));
+				glm::scale(glm::mat4(1.0f), glm::vec3(60.0f * scale, 0.05f, 60.0f * scale)));
 
 		// One pool of boxes per type, as many as the type's agents: a split or a merge keeps a type's
 		// count, so each frame hands a type's agents to its pool in readback order.
@@ -196,7 +213,7 @@ namespace
 		// Whole extents; AddCubeGeom's cube spans -1..1, so it is scaled by half of each.
 		const glm::vec3 sizes[] = { glm::vec3(0.5f, 1.7f, 0.4f), glm::vec3(0.8f, 1.6f, 1.5f) };
 		std::vector<bgl::MeshInstanceHandle> pools[2];
-		uint32_t                             counts[2] = { 100, 36 };
+		uint32_t                             counts[2] = { 100 * units, 36 * units };
 		for (uint32_t type = 0; type < 2; ++type)
 		{
 			// Below the ground until an agent takes it: a degenerate matrix has no inverse for the
@@ -209,12 +226,16 @@ namespace
 		}
 
 		auto camera = bgl::Camera();
-		camera.LookAt(glm::vec3(0.0f, 38.0f, 30.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		camera
+			.LookAt(
+				glm::vec3(0.0f, 38.0f, 30.0f) * scale,
+				glm::vec3(0.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(
 				glm::radians(50.0f),
 				static_cast<float>(opts.width) / static_cast<float>(opts.height),
 				0.1f,
-				200.0f);
+				200.0f * scale);
 
 		auto renderJob   = bgl::RenderJob{};
 		renderJob.view   = view;
@@ -226,6 +247,20 @@ namespace
 		auto       lastMeans = std::vector<glm::vec2>(groups.size() + 1, glm::vec2(INFINITY));
 		auto       clock     = std::chrono::steady_clock::now();
 		float      owed      = 0.0f;
+
+		const auto started    = std::chrono::steady_clock::now();
+		auto       spanStart  = started;
+		uint32_t   spanFrames = 0;
+
+		// Where a frame's time goes: stepping the crowd and reading it back, posing a box per agent
+		// on the CPU, and the renderer's frame.
+		using Clock          = std::chrono::steady_clock;
+		double     crowdTime = 0.0;
+		double     poseTime  = 0.0;
+		double     drawTime  = 0.0;
+		const auto since     = [](Clock::time_point from) {
+			return std::chrono::duration<double>(Clock::now() - from).count();
+		};
 
 		uint64_t drawnTick = 0;
 		uint32_t frame     = 0;
@@ -243,14 +278,15 @@ namespace
 			const auto now = std::chrono::steady_clock::now();
 			owed =
 				std::min(owed + std::chrono::duration<float>(now - clock).count(), 4.0f * c_Tick);
-			clock          = now;
-			const bool due = !live || owed >= c_Tick;
+			clock                 = now;
+			const bool due        = !live || owed >= c_Tick;
+			const auto crowdStart = Clock::now();
 
 			if (due && crowd->CanStep())
 			{
 				owed -= live ? c_Tick : 0.0f;
 				const uint64_t next = crowd->GetSubmittedTick() + 1;
-				if (live && next % c_MarchTicks == 0)
+				if (live && next % marchTicks == 0)
 				{
 					for (auto& group : groups)
 					{
@@ -264,13 +300,13 @@ namespace
 				}
 				if (next == 60)
 				{
-					auto orders = Orders({ -6.0f, 0.0f }, { 1.0f, 0.0f }, 5, 1.0f);
+					auto orders = Orders(at(-6.0f, 0.0f), { 1.0f, 0.0f }, 5 * widen, 1.0f);
 					groups.push_back(
 						{ .name   = "left rear",
-					      .handle = crowd->SplitGroup(groups[0].handle, 20),
+					      .handle = crowd->SplitGroup(groups[0].handle, 20 * units),
 					      .type   = 0,
 					      .orders = orders,
-					      .home   = { -15.0f, -3.0f } });
+					      .home   = at(-15.0f, -3.0f) });
 					crowd->SetOrders(groups.back().handle, orders);
 					std::cout << std::format(
 						"tick {}: left foot splits off its rear twenty\n",
@@ -285,6 +321,8 @@ namespace
 			}
 
 			const auto readback = crowd->ReadDebugAgents();
+			crowdTime += since(crowdStart);
+			const auto poseStart = Clock::now();
 			if (readback && readback->tick != drawnTick)
 			{
 				drawnTick        = readback->tick;
@@ -332,13 +370,44 @@ namespace
 				}
 			}
 
+			poseTime += since(poseStart);
+			const auto drawStart = Clock::now();
 			graphics->DrawFrame(target, renderJob);
+			drawTime += since(drawStart);
+
+			// Frame time over each few seconds: what --units is for.
+			if (++spanFrames == 300)
+			{
+				const auto now     = std::chrono::steady_clock::now();
+				const auto seconds = std::chrono::duration<double>(now - spanStart).count();
+				std::cout << std::format(
+					"{} agents: {:.2f} ms a frame over the last {} frames\n",
+					c_BaseAgents * units,
+					1000.0 * seconds / spanFrames,
+					spanFrames);
+				spanStart  = now;
+				spanFrames = 0;
+			}
 		}
 
 		crowd->Wait();
 		graphics->WaitIdle();
 		if (!opts.screenshot.empty())
 			graphics->ScreenshotPng(target, opts.screenshot);
+
+		const auto seconds =
+			std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+		std::cout << std::format(
+			"{} agents, {} frames, {} ticks in {:.2f} s: {:.2f} ms a frame -- crowd {:.2f}, posing "
+			"{:.2f}, drawing {:.2f}\n",
+			c_BaseAgents * units,
+			frame,
+			crowd->GetCompletedTick(),
+			seconds,
+			frame > 0 ? 1000.0 * seconds / frame : 0.0,
+			frame > 0 ? 1000.0 * crowdTime / frame : 0.0,
+			frame > 0 ? 1000.0 * poseTime / frame : 0.0,
+			frame > 0 ? 1000.0 * drawTime / frame : 0.0);
 		if (opts.frames == 0)
 			return 0;
 
@@ -359,7 +428,6 @@ namespace
 				arrived ? "reached" : "DID NOT REACH",
 				miss);
 		}
-		std::cout << std::format("{} frames, {} ticks\n", frame, crowd->GetCompletedTick());
 		return failed == 0 ? 0 : 1;
 	}
 }
@@ -385,6 +453,8 @@ main(int argc, char** argv)
 		"closed");
 	app.add_flag("--headless", opts.headless, "Render offscreen, with no window");
 	app.add_option("--screenshot", opts.screenshot, "Write the last frame drawn to this PNG");
+	app.add_option("--units", opts.units, "Multiply every group's agents by this; 1 is 136 agents")
+		->check(CLI::PositiveNumber);
 
 	CLI11_PARSE(app, argc, argv);
 
