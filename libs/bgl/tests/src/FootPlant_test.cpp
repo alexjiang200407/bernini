@@ -1,0 +1,1819 @@
+#include "gfx/GraphicsBase.h"
+#include "scene/Scene.h"
+#include "scene/SceneView.h"
+#include "util/GoldenImage.h"
+#include "util/PaletteReadback.h"
+#include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
+#include "util/TestOptions.h"
+#include "util/VelocityReadback.h"
+#include <algorithm>
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/IGraphics.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/FootIKLeg.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/FootIKDesc.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/MaterialHandle.h>
+#include <bgl/types/RigHandle.h>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <format>
+#include <limits>
+#include <optional>
+#include <span>
+#include <vector>
+
+// What the foot-plant solve writes into the palette, read straight off the GPU. A golden image can
+// say a foot is in the wrong place; only this can say whether the two-bone solve, the sole tilt or
+// the descendant fixup is what put it there.
+//
+// The rig is a leg hanging off a pelvis, posed at its own bind pose by a clip that never moves. So
+// every palette entry would be identity if the solve did nothing, and anything not identity here is
+// the solve and nothing else.
+
+namespace
+{
+	constexpr uint32_t c_Pelvis = 0;
+	constexpr uint32_t c_Hip    = 1;
+	constexpr uint32_t c_Knee   = 2;
+	constexpr uint32_t c_Ankle  = 3;
+	constexpr uint32_t c_Toe    = 4;
+	constexpr uint32_t c_Bones  = 5;
+
+	constexpr uint32_t c_Frames = 2;
+
+	// The ankle sits this far above its sole: the sole plane is `c_SolePoint` in ankle-local space
+	// with `c_SoleNormal` up, and the ankle's bind is the model origin.
+	constexpr float c_FootHeight = 0.1f;
+
+	const auto c_SolePoint  = glm::vec3(0.0f, -c_FootHeight, 0.0f);
+	const auto c_SoleNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	// Model-space bind positions. The knee is carried forward in +X so the leg has a bend plane at
+	// all -- a chain that is already straight has no plane to bend in, and the solve says so by
+	// leaving it alone -- and far enough forward that the leg has travel: hip to ankle is 2 against
+	// a 2.33 reach, so it can extend a third of a unit before it runs out and wants the pelvis drop
+	// that is a later stage.
+	//
+	// Lifted by c_FootHeight so the sole rests on y = 0, which is where a clip that has been
+	// through `groundClips` stands: the plant applies the ground's departure from that floor, so a
+	// fixture hanging below it would be measuring a clip the cook never produces.
+	const std::array<glm::vec3, c_Bones> c_Bind = { {
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),  // pelvis
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),  // hip
+		glm::vec3(0.6f, 1.0f + c_FootHeight, 0.0f),  // knee
+		glm::vec3(0.0f, 0.0f + c_FootHeight, 0.0f),  // ankle
+		glm::vec3(0.2f, 0.0f + c_FootHeight, 0.0f),  // toe
+	} };
+
+	/**
+	 * A bone's local TRS with the rig's root scaled by `rootScale`: the root carries the scale and
+	 * every child is authored in the units that scale produces, which is how a rig exported in
+	 * centimetres arrives -- a 0.01 on the root and a hundredfold in every inverse bind below it.
+	 */
+	assetlib::Transform
+	LocalOf(uint32_t bone, float rootScale)
+	{
+		const glm::vec3 parent = bone == 0 ? glm::vec3(0.0f) : c_Bind[bone - 1];
+		return { (c_Bind[bone] - parent) / (bone == 0 ? 1.0f : rootScale),
+			     glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			     glm::vec3(bone == 0 ? rootScale : 1.0f) };
+	}
+
+	assetlib::Skeleton
+	MakeLegRig(float rootScale = 1.0f)
+	{
+		auto skeleton = assetlib::Skeleton();
+		for (uint32_t i = 0; i < c_Bones; ++i)
+		{
+			auto bone        = assetlib::Bone();
+			bone.bindPose    = LocalOf(i, rootScale);
+			bone.inverseBind = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / rootScale)) *
+			                   glm::translate(glm::mat4(1.0f), -c_Bind[i]);
+			bone.parent      = i == 0 ? assetlib::c_InvalidIndex : i - 1;
+			bone.nameOffset  = skeleton.stringPool.add(std::format("Bone{}", i));
+			skeleton.bones.push_back(bone);
+		}
+		return skeleton;
+	}
+
+	/**
+	 * Frame 0 is the bind pose itself, so at rate 0 nothing but the solve can move a bone. Frame 1
+	 * swings the hip, which only a case that runs the clock ever reaches.
+	 *
+	 * `lift` raises the whole rig off the floor `groundClips` rested it on, in the clip and not in
+	 * the bind, which is what a frame mid-swing looks like: the foot is that far above the floor it
+	 * was authored over, and the bind the palette is read against has not moved.
+	 */
+	assetlib::AnimationSet
+	MakeStillClip(float rootScale = 1.0f, float lift = 0.0f)
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = c_Bones;
+
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			for (uint32_t b = 0; b < c_Bones; ++b)
+			{
+				// Rz(25) as w-first, on the hip of frame 1 alone.
+				const auto swung = glm::quat(0.97437f, 0.0f, 0.0f, 0.22495f);
+
+				assetlib::Transform sample = LocalOf(b, rootScale);
+				if (b == 0)
+					sample.translation.y += lift;
+				if (f == 1 && b == c_Hip)
+					sample.rotation = swung;
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = c_Frames;
+		clip.sampleRate  = 30.0f;
+		clip.duration    = 1.0f / 30.0f;
+		clip.loop        = 0;
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
+	/** What a case varies beyond the ground and the weight. */
+	struct PoseOptions
+	{
+		glm::mat4 world      = glm::mat4(1.0f);
+		glm::vec3 solePoint  = c_SolePoint;  // the sole's offset from the ankle, model units
+		glm::vec3 soleNormal = c_SoleNormal;
+		float     rootScale  = 1.0f;
+		float     lift       = 0.0f;  // how far the clip holds the rig off its authored floor
+		bool      plantFeet  = true;
+
+		// The instance's own foot-IK record, written after the spawn; none leaves the default of
+		// weight one. And the clock the frame is drawn at, which is what a ramp is read against.
+		std::optional<bgl::FootIKDesc> footIK;
+		float                          time = 0.0f;
+
+		// The blended cases only: a clip set and plant table of their own, and the multi-slot
+		// record to spawn with. None of the three leaves the single still clip and its one slot.
+		std::optional<assetlib::AnimationSet>   clips;
+		std::optional<bgl::FootPlantDesc>       plant;
+		std::optional<bgl::SkinnedPlaybackDesc> playback;
+	};
+
+	bgl::FootPlantDesc
+	MakeLeg(uint8_t weight, const PoseOptions& options = {})
+	{
+		auto leg       = bgl::FootPlantLegDesc();
+		leg.hip        = c_Hip;
+		leg.knee       = c_Knee;
+		leg.ankle      = c_Ankle;
+		leg.toe        = c_Toe;
+		leg.solePoint  = options.solePoint / options.rootScale;
+		leg.soleNormal = options.soleNormal;
+
+		auto plant         = bgl::FootPlantDesc();
+		plant.legs         = { leg };
+		plant.plantWeights = std::vector<uint8_t>(c_Frames, weight);
+		return plant;
+	}
+}
+
+namespace
+{
+	/** One triangle carrying skin binding; the geometry is irrelevant, the rig is the subject. */
+	assetlib::BMesh
+	MakeSkinnedTriangle()
+	{
+		constexpr uint16_t c_Stride = 12 + 8 + 8;
+
+		auto mesh = assetlib::BMesh();
+		mesh.vertexData.resize(size_t(3) * c_Stride);
+
+		auto meshlet           = assetlib::Meshlet();
+		meshlet.vertexCount    = 3;
+		meshlet.triangleCount  = 1;
+		meshlet.boundingRadius = 4.0f;
+		mesh.meshlets.push_back(meshlet);
+
+		for (uint32_t v = 0; v < 3; ++v) mesh.meshletVertices.push_back(v);
+		for (uint8_t t = 0; t < 3; ++t) mesh.meshletTriangles.push_back(t);
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 3;
+		submesh.layout.stride         = c_Stride;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kJoints0,
+			                              assetlib::VertexFormat::kUint16x4,
+			                              12 };
+		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kWeights0,
+			                              assetlib::VertexFormat::kUnorm16x4,
+			                              20 };
+		submesh.vertexCount           = 3;
+		submesh.meshletCount          = 1;
+		submesh.material              = 0;
+		submesh.aabbMin               = glm::vec3(-1.0f);
+		submesh.aabbMax               = glm::vec3(3.0f);
+		mesh.submeshes.push_back(submesh);
+
+		auto entry         = assetlib::Mesh();
+		entry.submeshCount = 1;
+		mesh.meshes.push_back(entry);
+
+		return mesh;
+	}
+
+	/**
+	 * One posed instance of the leg rig, read back. `world` places the instance, so a case can prove
+	 * the ground is sampled in world space rather than in the rig's own.
+	 */
+	struct Posed
+	{
+		bgl::test::Palette palette;
+
+		[[nodiscard]] glm::vec3
+		Bone(uint32_t bone) const
+		{
+			return palette.Apply(bone, c_Bind[bone]);
+		}
+
+		/** Where the sole's contact point ends up, in the rig's model space. */
+		glm::vec3 solePoint  = c_SolePoint;
+		glm::vec3 soleNormal = c_SoleNormal;
+
+		[[nodiscard]] glm::vec3
+		Sole() const
+		{
+			return palette.Apply(c_Ankle, c_Bind[c_Ankle] + solePoint);
+		}
+
+		/** The sole's normal after posing, in the rig's model space. */
+		[[nodiscard]] glm::vec3
+		SoleNormal() const
+		{
+			return glm::normalize(
+				palette.Apply(c_Ankle, c_Bind[c_Ankle] + solePoint + soleNormal) - Sole());
+		}
+	};
+
+	/** A device, a scene standing on `ground`, and a view, with the leg rig added as one geom. */
+	struct LegScene
+	{
+		bgl::GraphicsRef  gfx;
+		bgl::SceneRef     scene;
+		bgl::SceneViewRef view;
+		bgl::GeomHandle   geom;
+	};
+
+	LegScene
+	MakeLegScene(
+		const bgl::GroundPlaneDesc& ground,
+		uint8_t                     weight,
+		const PoseOptions&          options = {})
+	{
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
+
+		auto legScene = LegScene();
+		legScene.gfx  = bgl::test::CreateGraphics(opts);
+		REQUIRE(legScene.gfx != nullptr);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 8;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 4096;
+		sceneDesc.initialIndices              = 64;
+		sceneDesc.initialPbrMaterials         = 4;
+
+		legScene.scene = legScene.gfx->CreateScene(sceneDesc);
+		legScene.scene->SetGround(ground);
+		legScene.scene->SetFootPlanting(options.plantFeet);
+
+		legScene.view = legScene.gfx->CreateSceneView(legScene.scene, 4);
+		bgl::test::ApplyEnvironment(legScene.scene.Get(), legScene.view.Get());
+
+		const std::array<bgl::MaterialHandle, 1> materials = { { legScene.scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc()) } };
+
+		const bgl::RigHandle rig = legScene.scene->AddRig(
+			MakeLegRig(options.rootScale),
+			options.clips ? *options.clips : MakeStillClip(options.rootScale, options.lift),
+			options.plant ? *options.plant : MakeLeg(weight, options));
+		REQUIRE(rig.IsValid());
+
+		legScene.geom = legScene.scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			rig,
+			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		REQUIRE(legScene.geom.IsValid());
+		return legScene;
+	}
+
+	Posed
+	PoseLeg(const bgl::GroundPlaneDesc& ground, uint8_t weight, const PoseOptions& options = {})
+	{
+		const LegScene legScene = MakeLegScene(ground, weight, options);
+		auto&          gfx      = legScene.gfx;
+		auto&          view     = legScene.view;
+
+		auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+		REQUIRE(gfxBase != nullptr);
+
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = 64;
+		targetDesc.height   = 64;
+		targetDesc.headless = true;
+		auto target         = gfx->CreateRenderTarget(targetDesc);
+
+		auto* viewRaw = view->As<bgl::SceneView>();
+		REQUIRE(viewRaw != nullptr);
+
+		// rate 0, so the clip holds frame 0 and the clock cannot move the pose between the two
+		// palettes -- the solve is then the only thing that differs from the bind pose.
+		const auto instance =
+			options.playback ?
+				view->CreateSkinnedMeshInstance(legScene.geom, options.world, *options.playback) :
+				view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
+		if (options.footIK)
+		{
+			view->SetFootIK(instance, *options.footIK);
+		}
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = options.time;
+		gfx->DrawFrame(target, job);
+
+		auto posed       = Posed();
+		posed.solePoint  = options.solePoint;
+		posed.soleNormal = options.soleNormal;
+		posed.palette    = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			2 * bgl::idl::cFloat4sPerBone * c_Bones);
+		return posed;
+	}
+
+	const auto c_Flat = bgl::GroundPlaneDesc{ glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	void
+	CheckBindPose(const Posed& posed)
+	{
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone]);
+		}
+	}
+}
+
+TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][render]")
+{
+	SECTION("a foot already standing on the floor is not moved")
+	{
+		const Posed posed = PoseLeg(c_Flat, 255);
+
+		// The rig already stands on y = 0, which is where groundClips puts a clip's lowest sole, so
+		// the contact is on the ground before the solve runs and the solve has nothing to do. This
+		// is what a plant on a *grounded* clip costs: nothing. It used to cost a small leg stretch,
+		// because the floor was measured at the lowest vertex and the sole sits a band above it.
+		CheckBindPose(posed);
+
+		bgl::test::CheckNear(posed.Sole(), glm::vec3(0.0f, 0.0f, 0.0f));
+		CHECK(posed.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
+
+		// Nothing above the hip moves: lowering the rig when a leg cannot reach is a separate
+		// stage, and this leg reaches.
+		bgl::test::CheckNear(posed.Bone(c_Pelvis), c_Bind[c_Pelvis]);
+		bgl::test::CheckNear(posed.Bone(c_Hip), c_Bind[c_Hip]);
+	}
+
+	SECTION("ground below the foot lowers it the same way")
+	{
+		// Within the leg's reach: a plane it cannot stretch to is the pelvis-drop case, which this
+		// stage deliberately leaves alone.
+		const auto low =
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+		const Posed posed = PoseLeg(low, 255);
+
+		bgl::test::CheckNear(posed.Sole(), glm::vec3(0.0f, -0.2f, 0.0f));
+		bgl::test::CheckNear(posed.Bone(c_Hip), c_Bind[c_Hip]);
+	}
+
+	SECTION("a weight of zero leaves every bone at its bind pose")
+	{
+		const Posed posed = PoseLeg(c_Flat, 0);
+
+		CheckBindPose(posed);
+	}
+
+	SECTION("half a weight seats a lifted foot half way")
+	{
+		// A foot the clip holds off its floor, on the floor itself: the ground has not departed from
+		// where the clip was authored, so the lift is zero and the seat -- the distance down onto the
+		// floor -- is the whole correction. What the weight scales is then exactly that distance.
+		constexpr float c_Lift = 0.2f;
+
+		const Posed none = PoseLeg(c_Flat, 0, { .lift = c_Lift });
+		const Posed half = PoseLeg(c_Flat, 128, { .lift = c_Lift });
+		const Posed full = PoseLeg(c_Flat, 255, { .lift = c_Lift });
+
+		CHECK(none.Sole().y == Catch::Approx(c_Lift).margin(1e-3));
+		CHECK(full.Sole().y == Catch::Approx(0.0f).margin(1e-3));
+
+		// 128/255 of the way, which is what a weight interpolates -- not a threshold.
+		const float fraction = 128.0f / 255.0f;
+		CHECK(half.Sole().y == Catch::Approx(c_Lift * (1.0f - fraction)).margin(2e-3));
+	}
+}
+
+// Every swing arc and the three ramp frames either side of every planted run are weighted below one:
+// the cook drops the weight the moment a sole leaves the floor and ramps it back as it lands. Such a
+// foot used to hang wherever the clip's own floor put it, which on any ground but that floor is the
+// wrong height -- and on ground above it, inside the ground.
+TEST_CASE(
+	"a foot below full weight is carried by the ground under it",
+	"[skinned][pose][plant][render]")
+{
+	// The rig held a fifth of a unit off the floor it was authored over: one frame of a swing.
+	constexpr float c_Lift = 0.2f;
+
+	SECTION("on the floor it was authored over the pose is untouched")
+	{
+		const Posed posed = PoseLeg(c_Flat, 0, { .lift = c_Lift });
+
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone] + glm::vec3(0.0f, c_Lift, 0.0f));
+		}
+	}
+
+	SECTION("over a slope it keeps its authored height above the ground beneath it")
+	{
+		// The foot does not stand over the plane's origin, so the height under it is the slope's
+		// rather than the origin's: a solve that sampled the wrong point passes on flat ground and
+		// fails here.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  origin  = glm::vec3(-0.5f, 0.25f, 0.0f);
+
+		const Posed posed = PoseLeg(bgl::GroundPlaneDesc{ origin, normal }, 0, { .lift = c_Lift });
+
+		// Where the plane sits under the contact, which is directly below the ankle at x = 0.
+		const float ground = origin.y - 0.5f * std::tan(radians);
+
+		CHECK(posed.Sole().y == Catch::Approx(ground + c_Lift).margin(2e-3));
+
+		// So the sole is above the plane and not through it. It used to sit at c_Lift, which is
+		// below a ground at 0.116, and drawing a foot inside the slope is the whole of the bug.
+		CHECK(glm::dot(posed.Sole() - origin, normal) > 0.0f);
+	}
+
+	SECTION("and it does not pull the rig down after it when it cannot reach")
+	{
+		// Ground far past the leg's reach. A *planted* foot there lowers the whole rig, which is
+		// what the drop exists for; a swinging one must not, or a foot passing out over a ledge
+		// would sink the body it hangs off. So the leg stops short, in the air, and the pelvis is
+		// exactly where the clip left it.
+		const auto below =
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -4.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+		const Posed posed = PoseLeg(below, 0, { .lift = c_Lift });
+
+		bgl::test::CheckNear(
+			posed.Bone(c_Pelvis),
+			c_Bind[c_Pelvis] + glm::vec3(0.0f, c_Lift, 0.0f));
+	}
+
+	SECTION("a full weight still seats it on the ground, so the lift is under the seat")
+	{
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  origin  = glm::vec3(-0.5f, 0.25f, 0.0f);
+
+		const Posed posed =
+			PoseLeg(bgl::GroundPlaneDesc{ origin, normal }, 255, { .lift = c_Lift });
+
+		CHECK(glm::dot(posed.Sole() - origin, normal) == Catch::Approx(0.0f).margin(2e-3));
+	}
+}
+
+// The Coyote's root is scaled 0.01 -- the rig is authored in centimetres -- so its ankle-local sole
+// sits twenty bone units from the joint. Read as metres, that put the target seven metres up and
+// swung the leg over the rig's head.
+TEST_CASE("a rig authored in centimetres plants the same foot", "[skinned][pose][plant][render]")
+{
+	const Posed metres      = PoseLeg(c_Flat, 255);
+	const Posed centimetres = PoseLeg(c_Flat, 255, { .rootScale = 0.01f });
+
+	bgl::test::CheckNear(centimetres.Sole(), glm::vec3(0.0f));
+	CHECK(centimetres.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
+
+	for (uint32_t bone = 0; bone < c_Bones; ++bone)
+	{
+		INFO("bone " << bone);
+		bgl::test::CheckNear(centimetres.Bone(bone), metres.Bone(bone));
+	}
+}
+
+TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][plant][render]")
+{
+	SECTION("a flat sole comes onto the ground normal, and stays on the plane")
+	{
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+		const Posed posed = PoseLeg(slope, 255);
+
+		bgl::test::CheckNear(posed.SoleNormal(), normal);
+
+		// On the plane, which for a slope through the origin means perpendicular to its normal.
+		CHECK(glm::dot(posed.Sole(), normal) == Catch::Approx(0.0f).margin(1e-4));
+	}
+
+	SECTION("a foot posed on its toe keeps its heel up: the turn is the slope's, not the sole's")
+	{
+		// The Coyote's Success stands one foot heel-up 28 degrees. A tilt that brought the sole
+		// onto the ground forced it flat on level ground, where the plant should change nothing.
+		const float heel = glm::radians(20.0f);
+		const auto  toe =
+			PoseOptions{ .soleNormal = glm::vec3(-std::sin(heel), std::cos(heel), 0.0f) };
+
+		const Posed level = PoseLeg(c_Flat, 255, toe);
+		bgl::test::CheckNear(level.SoleNormal(), toe.soleNormal);
+
+		// It lands on its lowest point -- the sole plane under the heel or under the toe -- and not
+		// on the plane's centre, which would put the low end of the foot through the floor.
+		const auto onSole = [&level](const glm::vec3& joint) {
+			return joint - glm::dot(joint - level.Sole(), level.SoleNormal()) * level.SoleNormal();
+		};
+		const float heelY = onSole(level.Bone(c_Ankle)).y;
+		const float ballY = onSole(level.Bone(c_Toe)).y;
+		CHECK(std::min(heelY, ballY) == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(std::max(heelY, ballY) > 0.01f);
+
+		// On a slope the heel comes up by the slope on top of what the animator gave it.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+		const Posed sloped = PoseLeg(slope, 255, toe);
+		const float turned =
+			std::acos(std::clamp(glm::dot(sloped.SoleNormal(), level.SoleNormal()), -1.0f, 1.0f));
+		CHECK(turned == Catch::Approx(radians).margin(1e-3));
+	}
+
+	SECTION("past thirty degrees the ankle stops turning")
+	{
+		// The sole point sits on the ankle joint and the plane passes through it -- through the
+		// ankle's own bind, since a grounded rig stands its sole on the floor rather than its joint
+		// -- so the position target is the joint itself and the chain does not move at all. What is
+		// left is the tilt alone, which is the only way to read the clamp off a palette: anywhere
+		// else the shin's own rotation is folded into the same number.
+		const float radians = glm::radians(45.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ c_Bind[c_Ankle], normal };
+
+		const Posed posed = PoseLeg(slope, 255, { .solePoint = glm::vec3(0.0f) });
+		bgl::test::CheckNear(posed.Bone(c_Ankle), c_Bind[c_Ankle]);
+
+		const float turned =
+			std::acos(std::clamp(glm::dot(posed.SoleNormal(), c_SoleNormal), -1.0f, 1.0f));
+		CHECK(turned == Catch::Approx(bgl::idl::cSoleClampRadians).margin(1e-3));
+
+		// Short of the slope by exactly what the clamp withheld.
+		const float shortfall =
+			std::acos(std::clamp(glm::dot(posed.SoleNormal(), normal), -1.0f, 1.0f));
+		CHECK(shortfall == Catch::Approx(radians - bgl::idl::cSoleClampRadians).margin(1e-3));
+	}
+}
+
+TEST_CASE(
+	"with planting off a rig with legs poses as one without",
+	"[skinned][pose][plant][render]")
+{
+	const Posed off = PoseLeg(c_Flat, 255, { .plantFeet = false });
+
+	for (uint32_t bone = 0; bone < c_Bones; ++bone)
+	{
+		INFO("bone " << bone);
+		bgl::test::CheckNear(off.Bone(bone), c_Bind[bone]);
+	}
+}
+
+TEST_CASE("what hangs off a planted foot follows it", "[skinned][pose][plant][render]")
+{
+	const Posed posed = PoseLeg(c_Flat, 255);
+
+	// The toe is not solved; it is carried. So it must hold its bind offset from the ankle exactly,
+	// and it must have moved -- a fixup that did nothing would leave it at its bind position while
+	// the ankle rose, which is the failure this pins.
+	const glm::vec3 offset = posed.Bone(c_Toe) - posed.Bone(c_Ankle);
+	bgl::test::CheckNear(offset, c_Bind[c_Toe] - c_Bind[c_Ankle]);
+
+	CHECK(posed.Bone(c_Toe).y == Catch::Approx(c_FootHeight).margin(1e-4));
+}
+
+TEST_CASE(
+	"the ground is sampled where the instance stands, not where the rig is authored",
+	"[skinned][pose][plant][render]")
+{
+	// Lifted: the plane stays at world y = 0, so in the rig's own space it is now that far *below*
+	// the origin and the foot has to reach down to it.
+	constexpr float c_Lift = 0.2f;
+	const auto      world  = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_Lift, 0.0f));
+
+	const Posed posed = PoseLeg(c_Flat, 255);
+	const Posed moved = PoseLeg(c_Flat, 255, { .world = world });
+
+	// A pass that sampled the ground in the rig's own space would put both soles in the same place.
+	CHECK(posed.Sole().y == Catch::Approx(0.0f).margin(1e-4));
+	CHECK(moved.Sole().y == Catch::Approx(-c_Lift).margin(1e-3));
+}
+
+// ADR-6: an instance's transform is fixed for its lifetime and the ground stands, so both palettes
+// solve against the same placement against the same plane -- and the pose `prevTime` produces is the
+// pose that was drawn. A planted foot writing a velocity it never moved through is what this rules
+// out; the motion-vector suite proves the other end of it.
+TEST_CASE(
+	"a held, planted instance poses the same at prevTime as at time",
+	"[skinned][pose][plant][render]")
+{
+	const Posed posed = PoseLeg(c_Flat, 255);
+
+	const size_t stride = size_t(bgl::idl::cFloat4sPerBone) * c_Bones;
+	REQUIRE(posed.palette.rows.size() == 2 * stride);
+
+	for (size_t row = 0; row < stride; ++row)
+	{
+		INFO("row " << row);
+		const glm::vec4 now  = posed.palette.rows[row];
+		const glm::vec4 then = posed.palette.rows[stride + row];
+
+		CHECK(now.x == Catch::Approx(then.x).margin(1e-5));
+		CHECK(now.y == Catch::Approx(then.y).margin(1e-5));
+		CHECK(now.z == Catch::Approx(then.z).margin(1e-5));
+		CHECK(now.w == Catch::Approx(then.w).margin(1e-5));
+	}
+}
+
+namespace
+{
+	constexpr uint16_t c_RenderStride = 64;
+
+	void
+	PutFloats(std::vector<std::byte>& bytes, size_t at, std::span<const float> values)
+	{
+		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(float));
+	}
+
+	void
+	PutU16x4(std::vector<std::byte>& bytes, size_t at, const std::array<uint16_t, 4>& values)
+	{
+		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(uint16_t));
+	}
+
+	/**
+	 * A quad around the ankle, bound entirely to it, in the full renderable layout. Bound to one
+	 * bone on purpose: what this draws is where the plant put the foot, and a strip spanning two
+	 * bones would mix that with the shin.
+	 */
+	assetlib::BMesh
+	MakeFootQuad()
+	{
+		const std::array<glm::vec3, 4> positions = { {
+			{ -0.4f, -0.3f, 0.0f },
+			{ 0.4f, -0.3f, 0.0f },
+			{ -0.4f, 0.3f, 0.0f },
+			{ 0.4f, 0.3f, 0.0f },
+		} };
+
+		auto mesh = assetlib::BMesh();
+		mesh.vertexData.assign(size_t(4) * c_RenderStride, std::byte{ 0 });
+
+		for (uint32_t v = 0; v < 4; ++v)
+		{
+			const size_t base = size_t(v) * c_RenderStride;
+
+			const std::array<float, 3> pos = { { positions[v].x, positions[v].y, positions[v].z } };
+			const std::array<float, 3> normal = { { 0.0f, 0.0f, 1.0f } };
+			const std::array<float, 2> uv  = { { positions[v].x + 0.5f, positions[v].y + 0.5f } };
+			const std::array<float, 4> tan = { { 1.0f, 0.0f, 0.0f, 1.0f } };
+
+			PutFloats(mesh.vertexData, base + 0, pos);
+			PutFloats(mesh.vertexData, base + 12, normal);
+			PutFloats(mesh.vertexData, base + 24, uv);
+			PutFloats(mesh.vertexData, base + 32, tan);
+
+			// unorm16 0xFFFF is exactly 1.0.
+			PutU16x4(mesh.vertexData, base + 48, { { uint16_t(c_Ankle), 0, 0, 0 } });
+			PutU16x4(mesh.vertexData, base + 56, { { 0xFFFF, 0, 0, 0 } });
+		}
+
+		auto meshlet           = assetlib::Meshlet();
+		meshlet.vertexCount    = 4;
+		meshlet.triangleCount  = 2;
+		meshlet.boundingRadius = 4.0f;
+		mesh.meshlets.push_back(meshlet);
+
+		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
+		// Typed, not a braced list of ints: that deduces initializer_list<int> and narrows on the
+		// way out, which MSVC treats as an error.
+		constexpr std::array<uint8_t, 6> c_Indices = { { 0, 1, 2, 2, 1, 3 } };
+		for (uint8_t i : c_Indices) mesh.meshletTriangles.push_back(i);
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 6;
+		submesh.layout.stride         = c_RenderStride;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kNormal,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              12 };
+		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kTexCoord0,
+			                              assetlib::VertexFormat::kFloat32x2,
+			                              24 };
+		submesh.layout.attributes[3]  = { assetlib::VertexSemantic::kTangent,
+			                              assetlib::VertexFormat::kFloat32x4,
+			                              32 };
+		submesh.layout.attributes[4]  = { assetlib::VertexSemantic::kJoints0,
+			                              assetlib::VertexFormat::kUint16x4,
+			                              48 };
+		submesh.layout.attributes[5]  = { assetlib::VertexSemantic::kWeights0,
+			                              assetlib::VertexFormat::kUnorm16x4,
+			                              56 };
+		submesh.vertexCount           = 4;
+		submesh.meshletCount          = 1;
+		submesh.material              = 0;
+		submesh.aabbMin               = glm::vec3(-3.0f);
+		submesh.aabbMax               = glm::vec3(3.0f);
+		mesh.submeshes.push_back(submesh);
+
+		auto entry         = assetlib::Mesh();
+		entry.submeshCount = 1;
+		mesh.meshes.push_back(entry);
+
+		return mesh;
+	}
+}
+
+// The other end of ADR-6, through the draw rather than off the palette: a foot that is planted and
+// held must write no velocity, because both palettes solved against one placement on one plane. A
+// plant that read the clock, or a ground that moved between the two, would shimmer here.
+TEST_CASE(
+	"a planted, held foot writes no velocity on a slope",
+	"[skinned][pose][plant][motionvectors][render]")
+{
+	constexpr uint32_t c_Width  = 128;
+	constexpr uint32_t c_Height = 128;
+
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	const float radians = glm::radians(15.0f);
+	scene->SetGround({ glm::vec3(0.0f), glm::vec3(std::sin(radians), std::cos(radians), 0.0f) });
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc()) } };
+
+	const bgl::RigHandle rig = scene->AddRig(MakeLegRig(), MakeStillClip(), MakeLeg(255));
+	REQUIRE(rig.IsValid());
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeFootQuad(),
+		0,
+		materials,
+		rig,
+		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	REQUIRE(geom.IsValid());
+
+	auto camera = bgl::Camera();
+	camera.LookAt(glm::vec3(0.0f, 0.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
+
+	// Two frames either way: prevTime equals time on the first by construction, so only the second
+	// can carry a velocity at all.
+	const auto peakVelocity = [&](float rate) {
+		auto localView = gfx->CreateSceneView(scene, 4);
+		bgl::test::ApplyEnvironment(scene.Get(), localView.Get());
+		localView->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, rate });
+
+		auto job     = bgl::RenderJob();
+		job.view     = localView;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		job.time = 0.0f;
+		gfx->DrawFrame(target, job);
+
+		job.time = 1.0f / 30.0f;
+		gfx->DrawFrame(target, job);
+
+		float peak = 0.0f;
+		for (const glm::vec2& v :
+		     bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), c_Width, c_Height))
+		{
+			peak = std::max(peak, glm::length(v));
+		}
+		return peak;
+	};
+
+	const float animating = peakVelocity(1.0f);
+	const float held      = peakVelocity(0.0f);
+
+	INFO("animating peak = " << animating << ", held peak = " << held);
+
+	// The control: the case can see motion at all, so the zero below is a fact about the plant and
+	// not about the camera or the readback.
+	CHECK(animating > 1e-3f);
+	CHECK(held < 1e-5f);
+}
+
+// The one check the palette cannot make: that the planted pose reaches the screen looking right.
+// A readback pins where the sole is to four decimal places and still says nothing about a foot
+// clipping through the slope it stands on, or about the silhouette the new bone matrices skin.
+TEST_CASE("a planted foot on a slope draws", "[skinned][pose][plant][render]")
+{
+	constexpr uint32_t c_Width  = 256;
+	constexpr uint32_t c_Height = 256;
+
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	const float radians = glm::radians(15.0f);
+	scene->SetGround({ glm::vec3(0.0f), glm::vec3(std::sin(radians), std::cos(radians), 0.0f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.6f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	const bgl::RigHandle rig = scene->AddRig(MakeLegRig(), MakeStillClip(), MakeLeg(255));
+	REQUIRE(rig.IsValid());
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeFootQuad(),
+		0,
+		materials,
+		rig,
+		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	REQUIRE(geom.IsValid());
+
+	view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	auto camera = bgl::Camera();
+	camera.LookAt(glm::vec3(0.0f, 0.3f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(45.0f), 1.0f, 0.1f, 100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	gfx->DrawFrame(target, job);
+
+	gfx->ScreenshotPng(target, "assets/golden/foot_plant_slope.got.png");
+
+	// The quad is bound wholly to the ankle, so its centre is where the plant put the foot: lifted
+	// and turned onto the slope. A sample that hit the background instead would mean the solve
+	// carried the foot out of frame.
+	const bgl::test::Rgba foot =
+		bgl::test::MeanColor("assets/golden/foot_plant_slope.got.png", 118, 118, 20, 20);
+	CHECK(foot.Luma() > 0.01f);
+
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/foot_plant_slope.exp.png",
+			"assets/golden/foot_plant_slope.got.png"));
+}
+
+namespace
+{
+	// A pelvis with two legs hanging off it, each the same shape as the one-leg rig and mirrored
+	// across X. Two, because the drop is a property of the *rig*: the largest deficit across every
+	// leg is what the whole body comes down by, and one leg cannot show that.
+	constexpr uint32_t c_TwoLegBones = 9;
+
+	// The ankles are splayed outward from the hips, and by different amounts, which lets this rig
+	// say two things a straight-down rig cannot. Different amounts, so the legs fall short by
+	// different distances and the *largest* is observably what the body comes down by. Splayed at
+	// all, because a target off to one side of its hip is the case a drop sized as the straight-line
+	// shortfall gets wrong -- and on flat ground the target does not move when the rig drops, so
+	// nothing downstream rescues an estimate that came up short.
+	//
+	// Lifted by c_FootHeight for the same reason c_Bind is: both soles rest on y = 0, the floor a
+	// grounded clip stands on and the one the plant measures departure from.
+	const std::array<glm::vec3, c_TwoLegBones> c_TwoLegBind = { {
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),   // 0 pelvis
+		glm::vec3(-0.4f, 2.0f + c_FootHeight, 0.0f),  // 1 hip   L
+		glm::vec3(-0.3f, 1.0f + c_FootHeight, 0.0f),  // 2 knee  L
+		glm::vec3(-1.0f, 0.0f + c_FootHeight, 0.0f),  // 3 ankle L
+		glm::vec3(-1.2f, 0.0f + c_FootHeight, 0.0f),  // 4 toe   L
+		glm::vec3(0.4f, 2.0f + c_FootHeight, 0.0f),   // 5 hip   R
+		glm::vec3(0.5f, 1.0f + c_FootHeight, 0.0f),   // 6 knee  R
+		glm::vec3(1.3f, 0.0f + c_FootHeight, 0.0f),   // 7 ankle R
+		glm::vec3(1.5f, 0.0f + c_FootHeight, 0.0f),   // 8 toe   R
+	} };
+
+	const std::array<uint32_t, c_TwoLegBones> c_TwoLegParent = { {
+		assetlib::c_InvalidIndex,
+		0,
+		1,
+		2,
+		3,
+		0,
+		5,
+		6,
+		7,
+	} };
+
+	assetlib::Skeleton
+	MakeTwoLegRig()
+	{
+		auto skeleton = assetlib::Skeleton();
+		for (uint32_t i = 0; i < c_TwoLegBones; ++i)
+		{
+			const uint32_t  parent = c_TwoLegParent[i];
+			const glm::vec3 origin =
+				parent == assetlib::c_InvalidIndex ? glm::vec3(0.0f) : c_TwoLegBind[parent];
+
+			auto bone        = assetlib::Bone();
+			bone.bindPose    = { c_TwoLegBind[i] - origin,
+				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				                 glm::vec3(1.0f) };
+			bone.inverseBind = glm::translate(glm::mat4(1.0f), -c_TwoLegBind[i]);
+			bone.parent      = parent;
+			bone.nameOffset  = skeleton.stringPool.add(std::format("Bone{}", i));
+			skeleton.bones.push_back(bone);
+		}
+		return skeleton;
+	}
+
+	assetlib::AnimationSet
+	MakeTwoLegClip()
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = c_TwoLegBones;
+
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			for (uint32_t b = 0; b < c_TwoLegBones; ++b)
+			{
+				const uint32_t  parent = c_TwoLegParent[b];
+				const glm::vec3 origin =
+					parent == assetlib::c_InvalidIndex ? glm::vec3(0.0f) : c_TwoLegBind[parent];
+
+				auto sample        = assetlib::Transform();
+				sample.translation = c_TwoLegBind[b] - origin;
+				sample.rotation    = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale       = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = c_Frames;
+		clip.sampleRate  = 30.0f;
+		clip.duration    = 1.0f / 30.0f;
+		clip.loop        = 0;
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
+	bgl::FootPlantDesc
+	MakeTwoLegs(uint8_t weight)
+	{
+		auto plant = bgl::FootPlantDesc();
+		for (uint32_t hip : { 1u, 5u })
+		{
+			auto leg       = bgl::FootPlantLegDesc();
+			leg.hip        = hip;
+			leg.knee       = hip + 1;
+			leg.ankle      = hip + 2;
+			leg.toe        = hip + 3;
+			leg.solePoint  = c_SolePoint;
+			leg.soleNormal = c_SoleNormal;
+			plant.legs.push_back(leg);
+		}
+		plant.plantWeights = std::vector<uint8_t>(size_t(c_Frames) * 2, weight);
+		return plant;
+	}
+
+	/** The two-leg rig posed against `ground`, read back. */
+	bgl::test::Palette
+	PoseTwoLegs(const bgl::GroundPlaneDesc& ground)
+	{
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
+
+		auto gfx = bgl::test::CreateGraphics(opts);
+		REQUIRE(gfx != nullptr);
+
+		auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+		REQUIRE(gfxBase != nullptr);
+
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = 64;
+		targetDesc.height   = 64;
+		targetDesc.headless = true;
+		auto target         = gfx->CreateRenderTarget(targetDesc);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 8;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 4096;
+		sceneDesc.initialIndices              = 64;
+		sceneDesc.initialPbrMaterials         = 4;
+
+		auto scene = gfx->CreateScene(sceneDesc);
+		scene->SetGround(ground);
+
+		auto view = gfx->CreateSceneView(scene, 4);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc()) } };
+
+		const bgl::RigHandle rig =
+			scene->AddRig(MakeTwoLegRig(), MakeTwoLegClip(), MakeTwoLegs(255));
+		REQUIRE(rig.IsValid());
+
+		const auto geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			rig,
+			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		REQUIRE(geom.IsValid());
+
+		auto* viewRaw = view->As<bgl::SceneView>();
+		REQUIRE(viewRaw != nullptr);
+
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		gfx->DrawFrame(target, job);
+
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			bgl::idl::cFloat4sPerBone * c_TwoLegBones);
+	}
+}
+
+TEST_CASE(
+	"a rig whose legs cannot reach comes down to meet the ground",
+	"[skinned][pose][plant][render]")
+{
+	// Both legs reach about 2.2 from a hip standing 2 above the origin, so a floor at -0.5 is past
+	// either of them -- and past the right one, whose ankle is splayed further out, by the more.
+	constexpr float c_Floor = -0.5f;
+
+	const auto ground =
+		bgl::GroundPlaneDesc{ glm::vec3(0.0f, c_Floor, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	const bgl::test::Palette posed = PoseTwoLegs(ground);
+
+	const auto sole = [&](uint32_t ankle) {
+		return posed.Apply(ankle, c_TwoLegBind[ankle] + c_SolePoint);
+	};
+
+	SECTION("both soles rest on the floor, so the drop was the larger leg's")
+	{
+		// The right leg needs the bigger drop; sized by the left one it would still hang above the
+		// floor. Sized as a straight-line shortfall it would hang there too, by less -- which is
+		// what makes this an assertion about the drop and not merely about planting.
+		CHECK(sole(3).y == Catch::Approx(c_Floor).margin(3e-3));
+		CHECK(sole(7).y == Catch::Approx(c_Floor).margin(3e-3));
+	}
+
+	SECTION("the rig came straight down, and it did move")
+	{
+		const glm::vec3 moved = posed.Apply(0, c_TwoLegBind[0]) - c_TwoLegBind[0];
+
+		REQUIRE(moved.y < -1e-3f);
+		CHECK(moved.x == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(moved.z == Catch::Approx(0.0f).margin(1e-4));
+	}
+
+	SECTION("a rig that can reach is not lowered at all")
+	{
+		// The same rig on a floor inside its reach: the legs stretch and the pelvis stays put, which
+		// is what makes the drop above a consequence of the deficit rather than of planting at all.
+		const bgl::test::Palette easy = PoseTwoLegs(
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.1f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) });
+
+		bgl::test::CheckNear(easy.Apply(0, c_TwoLegBind[0]), c_TwoLegBind[0]);
+		CHECK(easy.Apply(3, c_TwoLegBind[3] + c_SolePoint).y == Catch::Approx(-0.1f).margin(1e-3));
+		CHECK(easy.Apply(7, c_TwoLegBind[7] + c_SolePoint).y == Catch::Approx(-0.1f).margin(1e-3));
+	}
+}
+
+// A slope gives the two legs different work to do: the feet sit either side of the centre line, so
+// one is much further above the ground than the other. That is what makes the *largest* deficit the
+// subject -- on a flat floor both legs need the same drop and a solve that used each leg's own
+// would look identical.
+//
+// It is also the geometry a drop sized as the straight-line shortfall gets wrong: the target is off
+// to one side of the hip, so dropping by `|v| - reach` leaves the foot short. Both soles landing on
+// the plane is what says the drop is solved for rather than estimated.
+TEST_CASE(
+	"on a slope the whole rig drops by the leg that falls furthest short",
+	"[skinned][pose][plant][render]")
+{
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  origin  = glm::vec3(0.0f, -0.6f, 0.0f);
+
+	const bgl::test::Palette posed = PoseTwoLegs(bgl::GroundPlaneDesc{ origin, normal });
+
+	const auto sole = [&](uint32_t ankle) {
+		return posed.Apply(ankle, c_TwoLegBind[ankle] + c_SolePoint);
+	};
+
+	// On the plane, both of them. The right foot starts much further above it than the left, so a
+	// drop sized by the left leg would leave the right one hanging.
+	CHECK(glm::dot(sole(3) - origin, normal) == Catch::Approx(0.0f).margin(3e-3));
+	CHECK(glm::dot(sole(7) - origin, normal) == Catch::Approx(0.0f).margin(3e-3));
+
+	// The rig came down along the ground's up and nothing else, so the pelvis moved antiparallel to
+	// the normal rather than straight down.
+	const glm::vec3 moved = posed.Apply(0, c_TwoLegBind[0]) - c_TwoLegBind[0];
+	REQUIRE(glm::length(moved) > 1e-3f);
+	CHECK(glm::dot(glm::normalize(moved), normal) == Catch::Approx(-1.0f).margin(1e-3));
+}
+
+// The runtime weight a caller sets over the baked plant: one FootIKLeg per leg of the rig, in an
+// arena of the view's, reached through the pose list. Nothing on the GPU reads it yet; these cases
+// pin the record itself -- what a spawn writes, what a write stores, and what a delete frees.
+
+namespace
+{
+	bgl::WeightRamp
+	Ramp(float from, float to, float start, float end)
+	{
+		return { from, to, start, end };
+	}
+
+	void
+	CheckRamp(const bgl::WeightRamp& actual, const bgl::WeightRamp& expected)
+	{
+		CHECK(actual.from == expected.from);
+		CHECK(actual.to == expected.to);
+		CHECK(actual.start == expected.start);
+		CHECK(actual.end == expected.end);
+	}
+}
+
+TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][plant][footik]")
+{
+	const LegScene legScene = MakeLegScene(c_Flat, 255);
+	auto&          view     = legScene.view;
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	const bgl::FootIKDesc read = view->GetFootIK(instance);
+	for (const bgl::FootIKLegDesc& leg : read.leg)
+	{
+		CheckRamp(leg.position, bgl::WeightRamp());
+		CheckRamp(leg.rotation, bgl::WeightRamp());
+	}
+
+	// The pose list carries the record beside the placement, sized by the rig's legs: this is the
+	// one place the pose pass will read it from.
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+	const auto& meta = viewRaw->GetMeshBuffer().MetaAt(instance.handle.index);
+	REQUIRE(meta.footIK);
+	CHECK(meta.footIK.count == 1);
+
+	SECTION("a write stores every field of the rig's legs and reads them back")
+	{
+		auto desc            = bgl::FootIKDesc();
+		desc.leg[0].position = Ramp(1.0f, 0.25f, 2.0f, 2.5f);
+		desc.leg[0].rotation = Ramp(0.0f, 1.0f, 3.0f, 3.0f);
+
+		// Past the rig's one leg: not stored, and read back as the default.
+		desc.leg[1].position = Ramp(0.5f, 0.5f, 0.0f, 0.0f);
+
+		view->SetFootIK(instance, desc);
+
+		const bgl::FootIKDesc stored = view->GetFootIK(instance);
+		CheckRamp(stored.leg[0].position, desc.leg[0].position);
+		CheckRamp(stored.leg[0].rotation, desc.leg[0].rotation);
+		CheckRamp(stored.leg[1].position, bgl::WeightRamp());
+
+		const bgl::idl::FootIKLeg record = viewRaw->GetFootIKArena().Get(meta.footIK, 0);
+		CHECK(record.position.to == 0.25f);
+		CHECK(record.rotation.start == 3.0f);
+	}
+
+	SECTION("a refused write leaves the record as it was")
+	{
+		const auto before = bgl::FootIKDesc::Constant(0.5f, 0.5f);
+		view->SetFootIK(instance, before);
+
+		auto outside            = before;
+		outside.leg[0].position = Ramp(0.0f, 1.5f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, outside), bgl::SceneError);
+
+		auto negative            = before;
+		negative.leg[0].rotation = Ramp(-0.1f, 1.0f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, negative), bgl::SceneError);
+
+		auto backwards            = before;
+		backwards.leg[0].position = Ramp(0.0f, 1.0f, 2.0f, 1.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, backwards), bgl::SceneError);
+
+		auto nan            = before;
+		nan.leg[0].rotation = Ramp(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, nan), bgl::SceneError);
+
+		// A field past the rig's legs is not judged, since it is not stored.
+		auto ignored            = before;
+		ignored.leg[1].position = Ramp(7.0f, 7.0f, 0.0f, 0.0f);
+		CHECK_NOTHROW(view->SetFootIK(instance, ignored));
+
+		const bgl::FootIKDesc stored = view->GetFootIK(instance);
+		CheckRamp(stored.leg[0].position, before.leg[0].position);
+		CheckRamp(stored.leg[0].rotation, before.leg[0].rotation);
+	}
+
+	SECTION("a placement without a record is refused")
+	{
+		auto crowd       = bgl::SkinnedInstanceDesc();
+		crowd.source     = bgl::PoseSource::kBoneAnimTable;
+		const auto table = view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), crowd);
+		CHECK_THROWS_AS(view->GetFootIK(table), bgl::SceneError);
+		CHECK_THROWS_AS(view->SetFootIK(table, bgl::FootIKDesc()), bgl::SceneError);
+
+		const auto cube = legScene.scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto stat = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		CHECK_THROWS_AS(view->GetFootIK(stat), bgl::SceneError);
+
+		// HasFootIK answers exactly the question the two calls throw on.
+		CHECK(view->HasFootIK(instance));
+		CHECK_FALSE(view->HasFootIK(table));
+		CHECK_FALSE(view->HasFootIK(stat));
+
+		view->DeleteMeshInstance(instance);
+		CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
+		CHECK_FALSE(view->HasFootIK(instance));
+	}
+
+	SECTION("deleting the instance frees its record, and the next spawn starts clean")
+	{
+		view->SetFootIK(instance, bgl::FootIKDesc::Constant(0.0f, 0.0f));
+		const auto handle = meta.footIK;
+		view->DeleteMeshInstance(instance);
+		CHECK_FALSE(viewRaw->GetFootIKArena().IsValid(handle));
+
+		const auto next =
+			view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const bgl::FootIKDesc fresh = view->GetFootIK(next);
+		CheckRamp(fresh.leg[0].position, bgl::WeightRamp());
+		CheckRamp(fresh.leg[0].rotation, bgl::WeightRamp());
+	}
+}
+
+TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+	auto scene                            = gfx->CreateScene(sceneDesc);
+	auto view                             = gfx->CreateSceneView(scene, 4);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc()) } };
+	const bgl::RigHandle                     rig  = scene->AddRig(MakeLegRig(), MakeStillClip());
+	const auto                               geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		rig,
+		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	REQUIRE(geom.IsValid());
+
+	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+	CHECK_FALSE(viewRaw->GetMeshBuffer().MetaAt(instance.handle.index).footIK);
+
+	CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
+	CHECK_THROWS_AS(view->SetFootIK(instance, bgl::FootIKDesc()), bgl::SceneError);
+	CHECK_FALSE(view->HasFootIK(instance));
+}
+
+TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")
+{
+	const auto ramp = Ramp(0.2f, 1.0f, 2.0f, 4.0f);
+	CHECK(ramp.At(1.0f) == 0.2f);
+	CHECK(ramp.At(2.0f) == 0.2f);
+	CHECK(ramp.At(3.0f) == Catch::Approx(0.6f));
+	CHECK(ramp.At(4.0f) == 1.0f);
+	CHECK(ramp.At(9.0f) == 1.0f);
+
+	// A window of no width is a step at its start.
+	const auto step = Ramp(0.0f, 1.0f, 5.0f, 5.0f);
+	CHECK(step.At(4.999f) == 0.0f);
+	CHECK(step.At(5.0f) == 1.0f);
+
+	// A fade starts from what the ramp holds now, so a write built from it changes nothing before
+	// now -- which is what keeps the pose the previous frame drew, and its motion vector, exact.
+	const auto fade = ramp.FadeTo(0.0f, 3.0f, 1.0f);
+	CheckRamp(fade, Ramp(0.6f, 0.0f, 3.0f, 4.0f));
+
+	const auto whole = bgl::FootIKDesc::Constant(1.0f, 0.5f).FadeTo(0.0f, 0.0f, 3.0f, 0.25f);
+	CheckRamp(whole.leg[3].position, Ramp(1.0f, 0.0f, 3.0f, 3.25f));
+	CheckRamp(whole.leg[3].rotation, Ramp(0.5f, 0.0f, 3.0f, 3.25f));
+}
+
+// The instance's own weights over the baked plant: Unity's SetIKPositionWeight and
+// SetIKRotationWeight, per leg, each a ramp in the render clock. Read straight off the palette like
+// the plant itself, since a weight that scaled the wrong half of the solve draws a foot in a place
+// a golden image cannot name.
+
+namespace
+{
+	// Ground the rig has to reach down to: on the authored floor the plant is an identity, and a
+	// weight over an identity would compare nothing with nothing.
+	const auto c_Low =
+		bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	/** The ankle's height under a fraction of the full plant onto `c_Low`. */
+	float
+	AnkleAt(const Posed& full, float fraction)
+	{
+		const float bind = c_Bind[c_Ankle].y;
+		return bind + fraction * (full.Bone(c_Ankle).y - bind);
+	}
+}
+
+TEST_CASE("an instance's IK weight scales the plant", "[skinned][pose][plant][footik][render]")
+{
+	SECTION("position weight zero leaves every bone at its bind pose")
+	{
+		CheckBindPose(PoseLeg(c_Low, 255, { .footIK = bgl::FootIKDesc::Constant(0.0f, 1.0f) }));
+	}
+
+	SECTION("half a position weight moves the foot half way, like half a baked weight does")
+	{
+		const Posed full = PoseLeg(c_Low, 255);
+		const Posed half = PoseLeg(c_Low, 255, { .footIK = bgl::FootIKDesc::Constant(0.5f, 1.0f) });
+		CHECK(half.Bone(c_Ankle).y == Catch::Approx(AnkleAt(full, 0.5f)).margin(2e-3));
+	}
+
+	SECTION("the two weights multiply: a baked weight of zero is not overridden by weight one")
+	{
+		// A clip holding the foot off its floor, on that floor: the lift is zero and the seat is the
+		// whole correction, and a baked weight of zero withholds the seat whatever the instance asks.
+		const Posed posed =
+			PoseLeg(c_Flat, 0, { .lift = 0.2f, .footIK = bgl::FootIKDesc::Constant(1.0f, 1.0f) });
+		CHECK(posed.Sole().y == Catch::Approx(0.2f).margin(1e-3));
+	}
+
+	SECTION("the two weights compose by product, not by whichever is smaller")
+	{
+		// 128/255 baked by 0.5 asked: a quarter of the seat. A min() would take half of it. On the
+		// lifted clip over its own floor, since the lift on lowered ground is the instance weight's
+		// alone and would show no product at all.
+		constexpr float c_Lift  = 0.2f;
+		const Posed     quarter = PoseLeg(
+			c_Flat,
+			128,
+			{ .lift = c_Lift, .footIK = bgl::FootIKDesc::Constant(0.5f, 1.0f) });
+		CHECK(
+			quarter.Sole().y ==
+			Catch::Approx(c_Lift * (1.0f - 0.5f * 128.0f / 255.0f)).margin(2e-3));
+
+		// And the turn: the slope's angle by the same product.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+		const Posed turned =
+			PoseLeg(slope, 128, { .footIK = bgl::FootIKDesc::Constant(1.0f, 0.5f) });
+		const float angle =
+			std::acos(std::clamp(glm::dot(turned.SoleNormal(), c_SoleNormal), -1.0f, 1.0f));
+		CHECK(angle == Catch::Approx(radians * 0.5f * 128.0f / 255.0f).margin(2e-3));
+	}
+
+	SECTION("the instance's position weight scales the lift as well as the seat")
+	{
+		// The lift is every baked weight's, but not every instance's: a unit standing on something
+		// the ground does not describe turns the whole correction off, terrain and all.
+		const Posed posed =
+			PoseLeg(c_Low, 0, { .lift = 0.2f, .footIK = bgl::FootIKDesc::Constant(0.0f, 1.0f) });
+		CHECK(posed.Sole().y == Catch::Approx(0.2f).margin(1e-3));
+	}
+
+	SECTION("rotation weight zero seats the contact on a slope without turning the sole")
+	{
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+		const Posed posed =
+			PoseLeg(slope, 255, { .footIK = bgl::FootIKDesc::Constant(1.0f, 0.0f) });
+
+		// Unturned: the sole keeps the +Y the bind gave it.
+		bgl::test::CheckNear(posed.SoleNormal(), c_SoleNormal);
+
+		// And still on the ground: the heel is the lower end of a flat sole on ground rising
+		// toward +X, so the sole point under the ankle is what lands on the plane.
+		CHECK(glm::dot(posed.Sole(), normal) == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+TEST_CASE(
+	"an IK weight ramp is read against the render clock",
+	"[skinned][pose][plant][footik][render]")
+{
+	// Fully planted until t = 1, gone by t = 2, linear between.
+	auto fade            = bgl::FootIKDesc();
+	fade.leg[0].position = bgl::WeightRamp{ 1.0f, 0.0f, 1.0f, 2.0f };
+
+	const Posed full = PoseLeg(c_Low, 255);
+
+	SECTION("before the window the ramp holds its start")
+	{
+		const Posed before = PoseLeg(c_Low, 255, { .footIK = fade, .time = 0.5f });
+		bgl::test::CheckNear(before.Bone(c_Ankle), full.Bone(c_Ankle));
+	}
+
+	SECTION("inside the window it is the lerp")
+	{
+		const Posed inside = PoseLeg(c_Low, 255, { .footIK = fade, .time = 1.5f });
+		CHECK(inside.Bone(c_Ankle).y == Catch::Approx(AnkleAt(full, 0.5f)).margin(2e-3));
+	}
+
+	SECTION("past the window it holds its end")
+	{
+		CheckBindPose(PoseLeg(c_Low, 255, { .footIK = fade, .time = 2.5f }));
+	}
+}
+
+// A write that starts at or after now changes nothing before now, so the palette the pose pass
+// re-evaluates at prevTime after the write is the palette it drew before it -- which is what keeps
+// the motion vector of the frame that straddles the write honest.
+TEST_CASE(
+	"a fade written now leaves the prevTime palette exact",
+	"[skinned][pose][plant][footik][render]")
+{
+	const LegScene legScene = MakeLegScene(c_Low, 255);
+	auto&          gfx      = legScene.gfx;
+	auto&          view     = legScene.view;
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	const size_t stride = size_t(bgl::idl::cFloat4sPerBone) * c_Bones;
+	const auto   readAt = [&](float time) {
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = time;
+		gfx->DrawFrame(target, job);
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			2 * stride);
+	};
+
+	// Drawn planted at t = 1, then told to fade out over the next second starting from exactly
+	// then. The frame at t = 2 re-evaluates prevTime = 1 through the new record.
+	const bgl::test::Palette planted = readAt(1.0f);
+	view->SetFootIK(instance, view->GetFootIK(instance).FadeTo(0.0f, 0.0f, 1.0f, 1.0f));
+	const bgl::test::Palette faded = readAt(2.0f);
+
+	for (size_t row = 0; row < stride; ++row)
+	{
+		INFO("row " << row);
+		const glm::vec4 drawn = planted.rows[row];
+		const glm::vec4 then  = faded.rows[stride + row];
+		CHECK(drawn.x == Catch::Approx(then.x).margin(1e-5));
+		CHECK(drawn.y == Catch::Approx(then.y).margin(1e-5));
+		CHECK(drawn.z == Catch::Approx(then.z).margin(1e-5));
+		CHECK(drawn.w == Catch::Approx(then.w).margin(1e-5));
+	}
+
+	// And at t = 2 the fade has run out: the bind pose.
+	auto posed    = Posed();
+	posed.palette = faded;
+	CheckBindPose(posed);
+}
+
+// The pose pass solves the plant twice, at `time` and at `prevTime`, and the ground crosses into
+// model space through the placement. Once a placement can move, the previous solve has to use the
+// previous placement -- on a slope, where the ground height under a foot depends on where it
+// stands, the two answers differ and the previous half of the palette is the evidence.
+TEST_CASE(
+	"a moved placement plants its previous feet where it previously stood",
+	"[skinned][pose][plant][transform][render]")
+{
+	// A slope, so moving along X changes the ground under the foot. On flat ground both solves
+	// agree and the case could not fail.
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+	constexpr float c_From = 0.0f;
+	constexpr float c_To   = 3.0f;
+
+	const LegScene legScene = MakeLegScene(slope, 255);
+	auto&          gfx      = legScene.gfx;
+	auto&          view     = legScene.view;
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	const auto at = [](float x) {
+		return glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f));
+	};
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, at(c_From), { 0, 0.0f, 0.0f });
+
+	const auto draw = [&]() {
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = 0.0f;
+		gfx->DrawFrame(target, job);
+	};
+
+	draw();
+	view->SetInstanceTransform(instance, at(c_To));
+	draw();
+
+	const uint32_t base   = bgl::test::PaletteBaseOf(viewRaw, instance);
+	const uint32_t stride = bgl::idl::cFloat4sPerBone * c_Bones;
+
+	auto current     = Posed();
+	current.palette  = bgl::test::ReadPalette(gfxBase, viewRaw, base, stride);
+	auto previous    = Posed();
+	previous.palette = bgl::test::ReadPalette(gfxBase, viewRaw, base + stride, stride);
+
+	// The plant is solved in model space, so a correct pair differs: each sole sits on the slope
+	// under its own placement, and those are different heights in the world.
+	const glm::vec3 currentSole  = glm::vec3(at(c_To) * glm::vec4(current.Sole(), 1.0f));
+	const glm::vec3 previousSole = glm::vec3(at(c_From) * glm::vec4(previous.Sole(), 1.0f));
+
+	// Both land on the one plane through the origin, each under where its own placement stood.
+	CHECK(glm::dot(currentSole, normal) == Catch::Approx(0.0f).margin(1e-3));
+	CHECK(glm::dot(previousSole, normal) == Catch::Approx(0.0f).margin(1e-3));
+
+	// And they are not the same solve: planted against the current transform, the previous half
+	// would be identical to the current half in model space, which is the bug this pins.
+	CHECK(glm::distance(current.Sole(), previous.Sole()) > 1e-3f);
+}
+
+// The counterpart, and the one that would hide a rollover that never resets: a placement standing
+// still poses both halves identically, so nothing about moving one leaks into one that does not.
+TEST_CASE(
+	"a placement that has not moved plants both halves alike",
+	"[skinned][pose][plant][transform][render]")
+{
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+	const Posed posed = PoseLeg(
+		slope,
+		255,
+		PoseOptions{ .world = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)) });
+
+	const uint32_t stride = bgl::idl::cFloat4sPerBone * c_Bones;
+
+	auto previous = Posed();
+	previous.palette.rows.assign(
+		posed.palette.rows.begin() + stride,
+		posed.palette.rows.begin() + 2 * stride);
+
+	bgl::test::CheckNear(previous.Sole(), posed.Sole());
+}
+
+namespace
+{
+	/** How far the lifted clip holds the sole off its floor; the seat is what a weight scales. */
+	constexpr float c_BlendLift = 0.2f;
+
+	/**
+	 * Two still clips back to back over one sample pool, posing identically. A blend of them is an
+	 * identity on every bone, so the only thing a case built on them can measure is the plant
+	 * weight -- which is the point: the pose and the weight are blended by the same sum, and only
+	 * one of them is under test here.
+	 */
+	assetlib::AnimationSet
+	MakeTwoStillClips()
+	{
+		assetlib::AnimationSet set     = MakeStillClip(1.0f, c_BlendLift);
+		const size_t           samples = set.samples.size();
+
+		// Copied out first: inserting a vector's own range into itself invalidates the source
+		// iterators the moment it reallocates.
+		const std::vector<assetlib::Transform> first = set.samples;
+		set.samples.insert(set.samples.end(), first.begin(), first.end());
+
+		assetlib::AnimationClip second = set.clips[0];
+		second.firstSample             = static_cast<uint32_t>(samples);
+		set.clips.push_back(second);
+		return set;
+	}
+
+	/** One leg, baked at `first` across clip 0's frames and `second` across clip 1's. */
+	bgl::FootPlantDesc
+	MakeTwoClipLeg(uint8_t first, uint8_t second)
+	{
+		bgl::FootPlantDesc plant = MakeLeg(first);
+		plant.plantWeights.resize(size_t(c_Frames) * 2, second);
+		return plant;
+	}
+
+	/** A slot holding node `nodeIndex` at a constant `weight`, frame 0 at every clock. */
+	bgl::PlaybackSlot
+	HeldSlot(uint32_t nodeIndex, float weight)
+	{
+		auto slot      = bgl::PlaybackSlot();
+		slot.nodeIndex = nodeIndex;
+		slot.rate      = 0.0f;
+		slot.weight0   = weight;
+		slot.weight1   = weight;
+		return slot;
+	}
+
+	/**
+	 * The sole's height under the two clips blended `firstWeight` / `1 - firstWeight`.
+	 *
+	 * On the flat floor with a lifted clip, so the *seat* is the whole correction and the baked
+	 * weight is what scales it: on lowered ground every baked weight is carried by the lift alike
+	 * and the weight would not show at all.
+	 */
+	float
+	BlendedSole(uint8_t bakedFirst, uint8_t bakedSecond, float firstWeight)
+	{
+		auto record    = bgl::SkinnedPlaybackDesc();
+		record.slot[0] = HeldSlot(0, firstWeight);
+		record.slot[1] = HeldSlot(1, 1.0f - firstWeight);
+
+		return PoseLeg(
+				   c_Flat,
+				   0,
+				   { .lift     = c_BlendLift,
+		             .clips    = MakeTwoStillClips(),
+		             .plant    = MakeTwoClipLeg(bakedFirst, bakedSecond),
+		             .playback = record })
+		    .Sole()
+		    .y;
+	}
+}
+
+// The gate foot_ik_blending.md asks for and nothing had: every plant case before this one holds a
+// single clip, and every blend case runs on a rig with no legs, so the product of the two -- the
+// weighted sum PlantWeight(rig, pose, leg) computes -- was reasoned about and never measured.
+TEST_CASE(
+	"a blended plant weight is the slots' weighted sum",
+	"[skinned][pose][plant][blend][render]")
+{
+	SECTION("a foot planted in one clip and free in the other seats by that slot's weight")
+	{
+		// The Run -> Jump_Up shape: clip 0 plants, clip 1 is airborne and the avatar zeroes it. An
+		// average would answer half at every one of these, and reading slot 0 alone the full seat.
+		for (const float weight : { 0.25f, 0.5f, 0.75f })
+		{
+			INFO("slot weight " << weight);
+			CHECK(
+				BlendedSole(255, 0, weight) ==
+				Catch::Approx(c_BlendLift * (1.0f - weight)).margin(2e-3));
+		}
+	}
+
+	SECTION("a foot planted in both clips holds the full seat through the crossfade")
+	{
+		// Weights that sum to one over two fully planted clips must not dip: the case a mean over
+		// the live slots gets right and a mean over all four slots gets wrong.
+		for (const float weight : { 0.0f, 0.5f, 1.0f })
+		{
+			INFO("slot weight " << weight);
+			CHECK(BlendedSole(255, 255, weight) == Catch::Approx(0.0f).margin(2e-3));
+		}
+	}
+
+	SECTION("one live slot is the un-blended weight")
+	{
+		// The reduction the single-clip path depends on: all the weight on one slot must seat
+		// exactly as that clip's own baked weight says, and nothing of the other clip's.
+		CHECK(BlendedSole(255, 0, 1.0f) == Catch::Approx(0.0f).margin(1e-3));
+		CHECK(BlendedSole(0, 255, 1.0f) == Catch::Approx(c_BlendLift).margin(1e-3));
+	}
+}

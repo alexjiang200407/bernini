@@ -772,7 +772,7 @@ def refresh(libraries, compile_db, out_dir, root=ct.REPO_ROOT, force=False, log=
 
     summary, parsed = generate(libraries, compile_db, out_dir, root, log, only=stale, previous=known)
     # A parse with errors is not stamped either: a configure-only tree lacks the headers the build
-    # generates (bgl_common's idl/), and the first build must parse that library again.
+    # generates (the renderer's idl/), and the first build must parse that library again.
     current = {name: digests[name] if name in parsed and not summary[name]["errors"] else known[name]
                for name in summary if (name in parsed and not summary[name]["errors"]) or name in known}
     _write(os.path.join(out_dir, STAMP), json.dumps({**identity, "libraries": current}, indent=1) + "\n")

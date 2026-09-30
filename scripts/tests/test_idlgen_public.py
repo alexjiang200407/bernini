@@ -1,4 +1,4 @@
-"""What `bgl_idlgen --public` accepts into a committed header, and what it refuses.
+"""What `bgpu_idlgen --public` accepts into a committed header, and what it refuses.
 
 A public header is generated on whichever backend built last and committed, so a struct in one must
 come out byte-for-byte the same with and without `--metal-layout`. These run the built tool, and skip
@@ -19,9 +19,9 @@ def idlgen():
     try:
         tool = gen_idl.resolve_tool(cfg.build_dir(None), cfg.artifact_config(None))
     except Exception as err:  # no configured build dir at all
-        pytest.skip(f"no build to find bgl_idlgen in: {err}")
+        pytest.skip(f"no build to find bgpu_idlgen in: {err}")
     if not tool or not os.path.isfile(tool):
-        pytest.skip("bgl_idlgen is not built (`just build bgl_idlgen`)")
+        pytest.skip("bgpu_idlgen is not built (`just build bgpu_idlgen`)")
     return tool
 
 

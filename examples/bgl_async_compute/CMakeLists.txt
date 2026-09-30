@@ -6,10 +6,10 @@ add_executable(bgl_async_compute ${BGL_ASYNC_COMPUTE_SOURCES})
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_async_compute PRIVATE core bgpu bgl_extended crowdlib CLI11::CLI11 example_util)
+target_link_libraries(bgl_async_compute PRIVATE core bgpu bgl crowdlib CLI11::CLI11 example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
-    target_link_libraries(bgl_async_compute PRIVATE bgl_d3d12_agility)
+    target_link_libraries(bgl_async_compute PRIVATE bgpu_d3d12_agility)
 endif()
 
 enable_strict_compiler(bgl_async_compute)

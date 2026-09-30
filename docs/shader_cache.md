@@ -71,7 +71,7 @@ when this doc disagrees, trust the source, then fix this doc.
   miss path, and read it back off the module. The renderer builds in batches — the always-on set
   inside the `Graphics` constructor, then one batch per `Draw` that demands draw buckets with no
   kernels yet — and each batch ends by calling `Device::ReleaseSlangSession()`; a pipeline created
-  outside a batch (every `bgl_extended_tests` case that builds its own kernel) transparently gets a new
+  outside a batch (every `bgl_tests` case that builds its own kernel) transparently gets a new
   session on whichever thread asks. The salt reads the compiler version through the free
   `spGetBuildTagString()` rather than `IGlobalSession::getBuildTagString()` — the two return the
   same string, and only the free one avoids creating a session just to key the cache.
@@ -268,7 +268,7 @@ auto gfx            = bgl::CreateGraphics(context, bgl::GraphicsOptions());
 ```
 
 See [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp) for a full runnable example,
-and [libs/bgl_extended/tests/src/ShaderCache_test.cpp](libs/bgl_extended/tests/src/ShaderCache_test.cpp) for the
+and [libs/bgl/tests/src/ShaderCache_test.cpp](libs/bgl/tests/src/ShaderCache_test.cpp) for the
 cold/warm/corrupt behaviour the cache guarantees.
 
 ---

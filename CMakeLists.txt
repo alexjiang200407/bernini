@@ -57,11 +57,11 @@ set(PLATFORM "${_bernini_platform}" CACHE STRING
     "Platform layer core compiles: WINDOWS, MACOS or WEB")
 set_property(CACHE PLATFORM PROPERTY STRINGS WINDOWS MACOS WEB)
 
-# NONE is a configuration, not a failure: bgl_extended_objects compiles without a backend and
+# NONE is a configuration, not a failure: bgl_objects compiles without a backend and
 # nothing that needs CreateGraphics is declared. It is spelled rather than left unset because the
 # default above means unset is no longer reachable.
 set(RENDERER_BACKEND "${_bernini_backend}" CACHE STRING
-    "Graphics backend bgl_extended builds: DX12, METAL, or NONE for the objects alone")
+    "Graphics backend bgl builds: DX12, METAL, or NONE for the objects alone")
 set_property(CACHE RENDERER_BACKEND PROPERTY STRINGS DX12 METAL NONE)
 
 # Shader debug info and the dbg_raise() bodies, in lockstep with BERNINI_GPU_DEBUG below. A
@@ -161,7 +161,7 @@ endif()
 # are DLLs that reach the renderer through shared gamelib, and the editor links the renderer too,
 # so a static one would be two. core_process follows, since it is shared exactly where something
 # beside the executable needs it. See docs/core_process.md, "Linkage".
-option(BERNINI_SHARED_RENDERER "Build bgl_extended as a shared library (BERNINI_EDITOR_SDK implies it)"
+option(BERNINI_SHARED_RENDERER "Build bgl as a shared library (BERNINI_EDITOR_SDK implies it)"
     OFF)
 if (BERNINI_SHARED_RENDERER AND RENDERER_BACKEND STREQUAL "NONE")
     message(FATAL_ERROR "BERNINI_SHARED_RENDERER needs a renderer, and RENDERER_BACKEND is NONE")
@@ -172,7 +172,7 @@ if (BERNINI_SHARED_RENDERER OR BERNINI_EDITOR_SDK)
 endif()
 # Cached so a script can read what a build directory made of it (scripts/embed.py).
 set(BERNINI_RENDERER_LIBRARY_TYPE ${_bernini_renderer_library_type} CACHE INTERNAL
-    "STATIC or SHARED: what bgl_extended and core_process are built as")
+    "STATIC or SHARED: what bgl and core_process are built as")
 
 if (BERNINI_EDITOR_SDK)
     set(_bernini_build_id_file "${CMAKE_BINARY_DIR}/bernini-editor-build-id.txt")
@@ -209,38 +209,34 @@ endif()
 
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
-add_subdirectory(libs/bgl)
 # Between the contract and the renderer: what every renderer needs and no renderer owns.
-add_subdirectory(libs/bgl_common)
 add_subdirectory(libs/bgpu)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
-add_subdirectory(libs/bgl_extended)
+add_subdirectory(libs/bgl)
 add_subdirectory(libs/assetlib)
 # gamelib is the seam: the only library that links both the renderer and the asset layer.
-if (TARGET bgl_extended)
+if (TARGET bgl)
     add_subdirectory(libs/gamelib)
-    # Compute beside the renderer on the device they share; it links bgpu, never bgl_extended.
+    # Compute beside the renderer on the device they share; it links bgpu, never bgl.
     add_subdirectory(libs/crowdlib)
 endif()
 
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
 # for and occasionally find it.
 if (PROJECT_IS_TOP_LEVEL)
-    if (Qt6_FOUND AND TARGET bgl_extended)
+    if (Qt6_FOUND AND TARGET bgl)
         add_subdirectory(apps/editor)
     elseif (NOT Qt6_FOUND)
         message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")
     endif()
 endif()
 
-if (BERNINI_BUILD_EXAMPLES AND TARGET bgl_extended)
+if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     add_subdirectory(examples)
 endif()
 
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/core"             "misc")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl_common"       "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgpu"   "gfx")
-assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/bgl_extended"           "gfx")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib"         "editor")
 assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/assetlib_structs" "editor")
 
@@ -250,7 +246,7 @@ endif()
 if (TARGET crowdlib)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/crowdlib" "gfx")
 endif()
-if (BERNINI_BUILD_EXAMPLES AND TARGET bgl_extended)
+if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
 endif()
 if (TARGET editor)
@@ -325,11 +321,11 @@ endif()
 if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
-        core_process core assetlib_structs bgl bgl_common bgpu bgl_extended_objects
-        bgl_extended assetlib gamelib crowdlib)
+        core_process core assetlib_structs bgpu bgl_headers bgl_idl bgl_objects
+        bgl assetlib gamelib crowdlib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
-        list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12_agility)
+        list(APPEND BERNINI_PACKAGE_TARGETS bgpu_d3d12_agility)
         # A static renderer's PRIVATE link of its backend is part of what it exports: the consumer
         # links the backend's system libraries itself.
         if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "STATIC")

@@ -1,8 +1,6 @@
-# bgl's public surface: the contract a renderer implements, owned by no renderer.
-#
-# bgl names the contract and nothing else, which is what every client source file already spells --
-# <bgl/...>, bgl::, BGL_API. A renderer implementing it is named for what it is built on and lives
-# elsewhere: bgl_extended for the bindless, mesh-shader tier.
+# bgl, the renderer. include/bgl is its public surface -- what a game compiles against, <bgl/...>,
+# bgl::, BGL_API -- and src/ its implementation, with a backend per binary under src/d3d12 and
+# src/metal. The RHI and the device beneath it are bgpu's (libs/bgpu).
 
 file(GLOB_RECURSE BGL_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -12,23 +10,26 @@ file(GLOB_RECURSE BGL_HEADERS CONFIGURE_DEPENDS
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/bgl" PREFIX "Header Files"
 	FILES ${BGL_HEADERS})
 
-add_library(bgl INTERFACE)
+# The public surface's usage requirements and nothing else: what the backends' object libraries and
+# the selfcheck compile against without linking the renderer they are part of, and what an SDK
+# gamelib -- which links the renderer's file, not its target (libs/gamelib/CMakeLists.txt) -- passes
+# on to its clients.
+add_library(bgl_headers INTERFACE)
 
-target_include_directories(bgl INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(bgl_headers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # The entire closure: core carries Ref/SharedRef/slot_handle, assetlib_structs the decoded PODs, bgpu
 # the GPU context CreateGraphics takes. glm is reached through <core/glm.h>, and core links glm::glm
 # PUBLIC, so it needs no entry of its own. bgpu links core and Slang only, never back up here.
-target_link_libraries(bgl INTERFACE core assetlib_structs bgpu)
+target_link_libraries(bgl_headers INTERFACE core assetlib_structs bgpu)
 
-# On the contract rather than the renderer: an SDK gamelib links the renderer's file, not its target
-# (libs/gamelib/CMakeLists.txt), so a definition on bgl_extended would never reach it.
+# Here rather than on bgl: an SDK gamelib never sees bgl's own usage requirements.
 if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
-	target_compile_definitions(bgl INTERFACE BGL_SHARED)
+	target_compile_definitions(bgl_headers INTERFACE BGL_SHARED)
 endif()
 
-# An INTERFACE target compiles nothing, so on its own it enforces nothing. This one TU is the
-# enforcement -- see src/selfcheck.cpp for why it is a library and not an executable.
+# Every public header compiled against the public surface alone, so one that reaches into src/ stops
+# the build -- see src/selfcheck.cpp for why it is a library and not an executable.
 add_library(bgl_selfcheck STATIC
 	${CMAKE_CURRENT_SOURCE_DIR}/src/selfcheck.cpp
 	${BGL_HEADERS}
@@ -36,22 +37,20 @@ add_library(bgl_selfcheck STATIC
 
 target_precompile_headers(bgl_selfcheck PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 
-# PRIVATE, and bgl only: linking anything else would defeat the check.
-target_link_libraries(bgl_selfcheck PRIVATE bgl)
+# PRIVATE, and the surface only: linking the renderer would defeat the check.
+target_link_libraries(bgl_selfcheck PRIVATE bgl_headers)
 
 enable_strict_compiler(bgl_selfcheck)
 
 # The contract's Slang half: what a game surface conforms to and reads through, and nothing that
 # names a handle, an arena or a bucket -- the rule docs/bgl_api.md holds headers to, held for shaders.
-# Staged into the one ./shaders/src every renderer resolves from, owning bgl/ there; the shared tree's
-# copier is ordered after this one so the root's make_directory never races.
-set(BGL_SHADER_CONTRACT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src")
+# Its own root, shaders/include, as the C++ half has include/: staged into the one ./shaders/src every
+# owner resolves from, owning bgl/ there, after bgpu's tree and before the renderer's so the root's
+# make_directory never races.
+set(BGL_SHADER_CONTRACT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/include")
 file(GLOB_RECURSE BGL_SHADER_CONTRACT_SOURCES CONFIGURE_DEPENDS
 	${BGL_SHADER_CONTRACT_ROOT}/*.slang
 )
-# The trees above this one compile against the contract, so both are theirs to read.
-set(BGL_SHADER_CONTRACT_ROOT "${BGL_SHADER_CONTRACT_ROOT}" PARENT_SCOPE)
-set(BGL_SHADER_CONTRACT_SOURCES "${BGL_SHADER_CONTRACT_SOURCES}" PARENT_SCOPE)
 
 set(BGL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/shaders.stamp")
 add_custom_command(
@@ -65,15 +64,15 @@ add_custom_command(
 	VERBATIM
 )
 add_custom_target(bgl_copy_contract_shaders ALL DEPENDS "${BGL_SHADER_STAMP}")
+add_dependencies(bgl_copy_contract_shaders bgpu_copy_shaders)
 
-# Membership, enforced the way bgl_common_check_shaders enforces the shared tree's: every module
-# here is compiled with only this tree on the search path, so an import of anything else fails to
-# resolve. A game runs the same check on its own modules with this tree as the one path.
+# Membership: every module here is compiled with only this tree on the search path, so an import of
+# anything else -- the renderer's tree included -- fails to resolve. A game runs the same check on its own modules with this tree as the one path.
 #
 # The port stages slangc beside slangd under vcpkg's tools/, which is not on PATH; the hint is what
 # finds it on a preset whose renderer never runs a build-time shader step of its own. This is the
-# first find_program of slangc in the tree, so it fills the cache entry the shared tree's checks and
-# the D3D12 shader step's own find_program of the same name then read back.
+# first find_program of slangc in the tree, so it fills the cache entry the D3D12 shader step's own
+# find_program of the same name then reads back.
 #
 # slangc by name, never slang: the port stages a `slang` beside it that is a different CLI, and on
 # Windows nothing but the name tells the two apart. Every flag the checks and the DXIL step pass
@@ -103,3 +102,321 @@ foreach(MODULE ${BGL_SHADER_CONTRACT_SOURCES})
 	list(APPEND BGL_SHADER_CONTRACT_CHECKS "${MODULE_OUT}")
 endforeach()
 add_custom_target(bgl_check_shaders ALL DEPENDS ${BGL_SHADER_CONTRACT_CHECKS})
+
+# The IDL first: bgl_idl_generate must exist before anything below can depend on it. Its Slang
+# modules live under shaders/src/idl with the rest of the renderer's tree; it generates only C++.
+add_subdirectory(idl)
+
+# The renderer: every source under src/ but the backends' and the selfcheck, compiled once into objects
+# the library and the suite both take.
+file(GLOB_RECURSE BGL_SOURCES CONFIGURE_DEPENDS
+	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+)
+list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(REMOVE_ITEM BGL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/selfcheck.cpp)
+
+file(GLOB_RECURSE BGL_PRIVATE_HEADERS CONFIGURE_DEPENDS
+	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
+)
+list(FILTER BGL_PRIVATE_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_SOURCES} ${BGL_PRIVATE_HEADERS})
+
+add_library(bgl_objects OBJECT
+	${BGL_SOURCES}
+	${BGL_PRIVATE_HEADERS}
+)
+
+target_include_directories(bgl_objects
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+
+target_compile_definitions(bgl_objects PRIVATE
+	BGL_EXPORTS
+)
+
+target_precompile_headers(bgl_objects
+	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
+	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
+)
+
+find_package(slang CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(Stb REQUIRED)  # stb_image_write, for RenderContext's screenshot PNG encode
+
+target_include_directories(bgl_objects PRIVATE ${Stb_INCLUDE_DIR})
+
+target_link_libraries(bgl_objects
+	PUBLIC
+		bgl_headers
+		bgl_idl
+		bgpu
+		core
+		assetlib_structs
+		slang::slang
+		glm::glm
+)
+
+if(RENDERER_BACKEND STREQUAL "DX12")
+	add_subdirectory(src/d3d12)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_subdirectory(src/metal)
+endif()
+
+add_dependencies(bgl_objects bgl_idl_generate)
+if(RENDERER_BACKEND STREQUAL "DX12")
+	add_dependencies(bgl_d3d12 bgl_idl_generate)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_dependencies(bgl_metal bgl_idl_generate)
+endif()
+
+enable_strict_compiler(bgl_objects)
+enable_coverage(bgl_objects)
+
+# CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
+# backend's IR, so nothing below can be built without one.
+if(RENDERER_BACKEND STREQUAL "NONE")
+	message(STATUS "RENDERER_BACKEND=NONE - bgl_objects only (no bgl runtime, shaders or tests)")
+	return()
+endif()
+
+# STATIC unless the build asks for the renderer as a DLL (the root CMakeLists.txt decides, for
+# core_process too). Either way it is the same objects; only the last step differs.
+if(RENDERER_BACKEND STREQUAL "DX12")
+	add_library(bgl ${BERNINI_RENDERER_LIBRARY_TYPE}
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_d3d12>
+		${BGL_HEADERS}
+	)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	add_library(bgl ${BERNINI_RENDERER_LIBRARY_TYPE}
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_metal>
+		${BGL_HEADERS}
+	)
+else()
+	message(FATAL_ERROR "RENDERER_BACKEND must be DX12, METAL or NONE (got '${RENDERER_BACKEND}')")
+endif()
+
+target_include_directories(bgl
+	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+add_dependencies(bgl bgl_idl_generate)
+
+target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
+
+enable_strict_compiler(bgl)
+
+target_compile_definitions(bgl PRIVATE
+	BGL_EXPORTS
+)
+
+# The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal backend
+# compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
+if(RENDERER_BACKEND STREQUAL "DX12")
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_dependencies(bgl_copy_shader_src bgl_copy_contract_shaders)
+	add_dependencies(bgl bgl_copy_shaders bgl_copy_shader_src)
+
+	target_compile_definitions(bgl_d3d12 PRIVATE
+		BGL_EXPORTS
+	)
+
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_DX12)
+	target_link_libraries(bgl PRIVATE bgl_d3d12)
+
+	enable_strict_compiler(bgl_d3d12)
+	enable_coverage(bgl_d3d12)
+elseif(RENDERER_BACKEND STREQUAL "METAL")
+	target_compile_definitions(bgl_metal PRIVATE BGL_EXPORTS)
+	# bgl_objects too, not just the backend: DescriptorHandle's alignment is per-backend, and
+	# bgl_objects is what compiles the scene code that puts one in a GPU struct.
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_METAL)
+	target_compile_definitions(bgl_objects PRIVATE RENDERER_BACKEND_METAL)
+	# bgl embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
+	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
+	enable_strict_compiler(bgl_metal)
+	enable_coverage(bgl_metal)
+
+	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit beside the
+	# executable -- Device_metal's session resolves modules from "./shaders/src", and a build that
+	# staged none aborts on the first program-cache miss with "cannot open file". Hung off bgl, the
+	# way the D3D12 build hangs bgl_copy_shader_src off it, so every consumer of a device gets them.
+	#
+	# A target of its own rather than a POST_BUILD step: POST_BUILD only runs when the library
+	# relinks, so editing a .slang alone would leave the staged copy stale.
+	file(GLOB_RECURSE BGL_METAL_SHADER_SOURCES CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.bin
+	)
+
+	set(BGL_METAL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_shaders.stamp")
+	add_custom_command(
+		OUTPUT  "${BGL_METAL_SHADER_STAMP}"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_SHADER_STAMP}"
+		DEPENDS ${BGL_METAL_SHADER_SOURCES}
+		COMMENT "Staging Slang sources for runtime Metal compilation"
+		VERBATIM
+	)
+	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
+	add_dependencies(bgl_metal_copy_shaders bgl_copy_contract_shaders)
+	add_dependencies(bgl bgl_metal_copy_shaders)
+endif()
+
+
+# The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
+# backend from one glob. What differs is the backend objects it embeds.
+if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
+    find_package(Catch2 CONFIG REQUIRED)
+	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
+
+    file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+    )
+    
+    add_executable(bgl_tests
+        ${BGL_TESTS_SOURCE}
+        $<TARGET_OBJECTS:bgl_objects>
+    )
+    
+    target_include_directories(bgl_tests
+        PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+            ${Stb_INCLUDE_DIR}
+            # gamelib's header-only LOD math, which LodSelect_test holds the GPU's choice against.
+            ${BERNINI_ROOT}/libs/gamelib/include
+    )
+
+    target_force_include(bgl_tests
+        PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+    )
+    
+    target_link_libraries(
+			bgl_tests
+		PRIVATE
+			bgl_objects
+			assetlib
+			Catch2::Catch2
+			Catch2::Catch2WithMain
+			core
+	)
+
+	# The DLLs a compile loads are bgpu's to stage, which the suite links through bgl_objects.
+	add_dependencies(bgl_tests bgl_copy_shaders bgl_copy_shader_src bgl_copy_shader_tests bgl_idl_generate)
+
+	target_precompile_headers(bgl_tests
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+	)
+
+	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${BGL_TESTS_SOURCE})
+
+    if(RENDERER_BACKEND STREQUAL "DX12")
+        target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_DX12)
+		target_link_libraries(bgl_tests PRIVATE bgl_d3d12 bgpu_d3d12_agility)
+		target_sources(bgl_tests PRIVATE $<TARGET_OBJECTS:bgl_d3d12>)
+    endif()
+
+	target_compile_definitions(bgl_tests PRIVATE
+		BGL_EXPORTS
+	)
+
+	set_target_properties(bgl_tests PROPERTIES
+		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+	)
+
+	# Deploy the shared asset directory next to the test exe (cwd at run time), so
+	# tests resolve maps/meshes as "assets/Data/<name>" and golden refs as
+	# "assets/golden/<name>.png" -- the goldens are test fixtures, not project assets, so they sit
+	# beside the project rather than inside it. copy_assets (root CMakeLists.txt) stages it once
+	# for every consumer.
+	add_dependencies(bgl_tests copy_assets)
+
+	enable_strict_compiler(bgl_tests)
+	enable_coverage(bgl_tests)
+endif()
+
+if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
+	find_package(Catch2 CONFIG REQUIRED)
+	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
+
+	file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+	)
+
+	add_executable(bgl_tests
+		${BGL_TESTS_SOURCE}
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_metal>
+	)
+
+	target_include_directories(bgl_tests
+		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
+		PRIVATE
+			${CMAKE_CURRENT_SOURCE_DIR}/src
+			# The backend's own root: its headers include each other unprefixed, so a Metal-only
+			# case cannot reach one without it.
+			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
+			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+			${Stb_INCLUDE_DIR}
+			# gamelib's header-only LOD math, which LodSelect_test holds the GPU's choice against.
+			${BERNINI_ROOT}/libs/gamelib/include
+	)
+
+	target_force_include(bgl_tests
+		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+	)
+
+	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
+	target_link_libraries(bgl_tests
+		PRIVATE
+			bgl_objects
+			bgl_metal
+			assetlib
+			core
+			Catch2::Catch2
+			Catch2::Catch2WithMain
+			"-framework Metal" "-framework Foundation" "-framework QuartzCore"
+	)
+
+	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
+
+	# Only the test shaders: the src tree beside them is staged by bgl_metal_copy_shaders, which the
+	# suite depends on as well because it links the backend's objects rather than bgl. One writer per
+	# directory -- two targets copying into the same one can run at once.
+	file(GLOB_RECURSE BGL_METAL_TEST_SHADER_SOURCES CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests/*.slang
+	)
+
+	set(BGL_METAL_TEST_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_test_shaders.stamp")
+	add_custom_command(
+		OUTPUT  "${BGL_METAL_TEST_SHADER_STAMP}"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_TEST_SHADER_STAMP}"
+		DEPENDS ${BGL_METAL_TEST_SHADER_SOURCES}
+		COMMENT "Staging Slang test shaders for runtime Metal compilation"
+		VERBATIM
+	)
+	add_custom_target(bgl_metal_copy_test_shaders DEPENDS "${BGL_METAL_TEST_SHADER_STAMP}")
+	add_dependencies(bgl_tests bgl_metal_copy_shaders bgl_metal_copy_test_shaders)
+
+	target_precompile_headers(bgl_tests
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+	)
+
+	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_METAL BGL_EXPORTS)
+
+	enable_strict_compiler(bgl_tests)
+	enable_coverage(bgl_tests)
+endif()

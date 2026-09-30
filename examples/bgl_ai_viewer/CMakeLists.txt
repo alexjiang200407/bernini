@@ -15,10 +15,10 @@ add_executable(bgl_ai_viewer
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_ai_viewer PRIVATE core bgl_extended gamelib assetlib CLI11::CLI11 example_headless)
+target_link_libraries(bgl_ai_viewer PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_headless)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
-    target_link_libraries(bgl_ai_viewer PRIVATE bgl_d3d12_agility Shell32)
+    target_link_libraries(bgl_ai_viewer PRIVATE bgpu_d3d12_agility Shell32)
 endif()
 
 enable_strict_compiler(bgl_ai_viewer)

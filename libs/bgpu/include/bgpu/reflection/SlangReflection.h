@@ -14,7 +14,7 @@ namespace bgpu
 	BGPU_API ReflectedLayout
 	ReflectLayoutFromSlang(slang::TypeLayoutReflection* typeLayout);
 
-	// Every struct a module declares, namespaces walked into. bgl_idlgen keeps a copy of this walk
+	// Every struct a module declares, namespaces walked into. bgpu_idlgen keeps a copy of this walk
 	// rather than calling it: the generator produces the headers this library is compiled against,
 	// so it is built first and links none of it.
 	BGPU_API void
@@ -26,7 +26,7 @@ namespace bgpu
 
 	// How a struct lays out as the element of a buffer -- the arena's rules, not a constant
 	// buffer's. Null when the type does not resolve as one. The rules belong to the layout's
-	// target and the targets disagree; see bgl_common/SurfaceReflection.h.
+	// target and the targets disagree; see the renderer's SurfaceReflection.
 	BGPU_API slang::TypeLayoutReflection*
 			 BufferElementLayout(slang::ProgramLayout* layout, slang::TypeReflection* type);
 

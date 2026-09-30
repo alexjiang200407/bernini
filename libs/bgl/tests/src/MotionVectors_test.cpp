@@ -1,0 +1,889 @@
+#include "gfx/GraphicsBase.h"
+#include "gfx/RenderTargetBase.h"
+#include "gfx/jitter.h"
+#include "util/GoldenImage.h"
+#include "util/GpuValidation.h"
+#include "util/HalfFloat.h"
+#include "util/SkinnedSynth.h"
+#include "util/TestEnvironment.h"
+#include "util/TestGraphics.h"
+#include "util/TestOptions.h"
+#include "util/VelocityReadback.h"
+#include <algorithm>
+#include <assetlib/image_io.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Texture.h>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <vector>
+
+namespace
+{
+	// Square, so a sign error in one screen axis cannot hide behind the aspect ratio.
+	constexpr uint32_t c_Width  = 256;
+	constexpr uint32_t c_Height = 256;
+
+	// The quad's plane. The camera looks down -Z at it from c_CameraZ, which at a 60-degree vertical
+	// field of view sees about 11.5 units either side of centre -- so a quad half that wide covers
+	// the middle of the frame and leaves its corners empty.
+	constexpr float c_PlaneZ     = 0.0f;
+	constexpr float c_CameraZ    = 20.0f;
+	constexpr float c_QuadExtent = 6.0f;
+
+	const float     c_Fov  = glm::radians(60.0f);
+	constexpr float c_Near = 0.5f;
+	constexpr float c_Far  = 500.0f;
+
+	// Looks along -Z, yawed left by `yaw` about +Y.
+	bgl::Camera
+	CameraAt(glm::vec3 eye, float yaw = 0.0f)
+	{
+		const glm::vec3 forward{ -std::sin(yaw), 0.0f, -std::cos(yaw) };
+
+		auto camera = bgl::Camera();
+		camera.LookAt(eye, eye + forward, glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				c_Fov,
+				static_cast<float>(c_Width) / static_cast<float>(c_Height),
+				c_Near,
+				c_Far);
+		return camera;
+	}
+
+	// The world point the centre of pixel (px, py) sees, by unprojecting that pixel's ray through
+	// `camera` and intersecting it with the quad's plane. Derived independently of the shader, so
+	// agreeing with it is evidence rather than tautology.
+	glm::vec3
+	SurfacePointAt(const bgl::Camera& camera, glm::vec3 eye, uint32_t px, uint32_t py)
+	{
+		const float ndcX = 2.0f * ((static_cast<float>(px) + 0.5f) / c_Width) - 1.0f;
+		const float ndcY = 1.0f - 2.0f * ((static_cast<float>(py) + 0.5f) / c_Height);
+
+		const glm::vec4 unprojected =
+			glm::inverse(camera.GetViewProjection()) * glm::vec4(ndcX, ndcY, 0.0f, 1.0f);
+		const glm::vec3 onRay = glm::vec3(unprojected) / unprojected.w;
+
+		const float t = (c_PlaneZ - eye.z) / (onRay.z - eye.z);
+		return eye + t * (onRay - eye);
+	}
+
+	// Where `worldPos` lands in screen UV under `camera` -- the same [0,1] space the shader's motion
+	// vectors are expressed in.
+	glm::vec2
+	ProjectToUv(const bgl::Camera& camera, glm::vec3 worldPos)
+	{
+		const glm::vec4 clip = camera.GetViewProjection() * glm::vec4(worldPos, 1.0f);
+		const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
+		return glm::vec2(ndc.x * 0.5f + 0.5f, ndc.y * -0.5f + 0.5f);
+	}
+
+	// Drives frames against one target and reads its velocity buffer back as floats.
+	struct MotionFixture
+	{
+		bgl::GraphicsRef       gfx;
+		bgl::RenderTargetRef   target;
+		bgl::SceneRef          scene;
+		bgl::SceneViewRef      view;
+		bgl::RenderTargetBase* targetBase = nullptr;
+
+		uint32_t width  = c_Width;
+		uint32_t height = c_Height;
+
+		explicit MotionFixture(
+			bool     taaEnabled = false,
+			uint32_t w          = c_Width,
+			uint32_t h          = c_Height) : width(w), height(h)
+		{
+			auto opts                                = bgl::test::GraphicsSetup();
+			opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+			opts.gpuContext.enableDebugLayer         = true;
+			opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+			gfx = bgl::test::CreateGraphics(opts);
+			REQUIRE(gfx != nullptr);
+
+			auto targetDesc       = bgl::RenderTargetDesc();
+			targetDesc.width      = static_cast<int>(width);
+			targetDesc.height     = static_cast<int>(height);
+			targetDesc.headless   = true;
+			targetDesc.taaEnabled = taaEnabled;
+
+			target = gfx->CreateRenderTarget(targetDesc);
+			REQUIRE(target != nullptr);
+
+			targetBase = target->As<bgl::RenderTargetBase>();
+			REQUIRE(targetBase != nullptr);
+
+			auto sceneDesc                        = bgl::SceneDesc();
+			sceneDesc.initialGeom                 = 4;
+			sceneDesc.initialMeshlets             = 64;
+			sceneDesc.initialSubmeshes            = 4;
+			sceneDesc.initialVertexBufferByteSize = 8192;
+			sceneDesc.initialIndices              = 256;
+
+			scene = gfx->CreateScene(sceneDesc);
+			view  = gfx->CreateSceneView(scene, 4);
+		}
+
+		// A quad facing the camera, spanning c_QuadExtent about the origin -- wide enough to cover
+		// screen centre from every camera these tests use, narrow enough to leave the corners empty.
+		// No material: the Null PSO shades flat white and needs no IBL, leaving the velocity output
+		// as the only thing under test.
+		bgl::MeshInstanceHandle
+		AddQuad()
+		{
+			auto plane = scene->AddPlaneGeom(1, 1, c_QuadExtent * 2.0f, c_QuadExtent * 2.0f);
+			return view->CreateStaticMeshInstance(
+				plane,
+				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }));
+		}
+
+		// The synthesised sliding quad, on the per-instance pose source so its palette carries both
+		// this frame's pose and the previous one. `rate` 0 holds it on frame 0, which is what lets a
+		// case move the placement and read the placement's contribution alone.
+		bgl::MeshInstanceHandle
+		AddSkinnedQuad(float rate)
+		{
+			bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+			const auto geom = bgl::test::skinned_synth::AddSlidingQuadGeom(
+				*scene,
+				scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+
+			return view->CreateSkinnedMeshInstance(
+				geom,
+				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }),
+				bgl::SkinnedInstanceDesc{ bgl::test::skinned_synth::c_LoopClip, 0.0f, rate });
+		}
+
+		void
+		AddSkybox()
+		{
+			view->SetSkyBox(bgl::SkyboxDesc{ bgl::test::LoadSkybox(scene.Get()) });
+		}
+
+		void
+		RenderFrom(const bgl::Camera& camera)
+		{
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.camera   = camera;
+			job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+
+			gfx->DrawFrame(target, job);
+		}
+
+		std::vector<glm::vec2>
+		ReadMotionVectors()
+		{
+			return bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), width, height);
+		}
+
+		std::vector<glm::vec2>
+		ReadOwnMotion()
+		{
+			return bgl::test::ReadOwnMotion(gfx.Get(), target.Get(), width, height);
+		}
+	};
+
+	glm::vec2
+	CentrePixel(
+		const std::vector<glm::vec2>& motion,
+		uint32_t                      width  = c_Width,
+		uint32_t                      height = c_Height)
+	{
+		return motion[static_cast<size_t>(height / 2) * width + (width / 2)];
+	}
+}
+
+// The first frame has no history to reproject through, so every pixel must read as static. If the
+// previous view-projection defaulted to identity instead of the current camera, the quad would come
+// out with a large bogus velocity on the very frame a consumer starts accumulating from.
+TEST_CASE("The first frame a view is drawn has no motion", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+
+	const auto motion = fixture.ReadMotionVectors();
+
+	for (const glm::vec2& texel : motion)
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// A camera that does not move leaves static geometry with no screen-space velocity. This is the
+// case a stale or mis-plumbed prevViewProj breaks first: any drift between the two matrices shows
+// up here as motion on a scene where nothing happened.
+TEST_CASE("A still camera leaves static geometry with no motion", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+	const auto camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
+
+	fixture.RenderFrom(camera);
+	fixture.RenderFrom(camera);
+
+	const auto motion = fixture.ReadMotionVectors();
+
+	for (const glm::vec2& texel : motion)
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// The load-bearing one: the velocity written for a pixel must be the displacement from where that
+// pixel's surface point sat on screen last frame. The expectation is computed on the CPU by
+// unprojecting the pixel through the new camera onto the quad and re-projecting that world point
+// through the old one -- so a wrong matrix, a missing perspective divide, or a flipped screen axis
+// all produce a mismatch rather than a plausible-looking number.
+//
+// The camera moves on both screen axes at once, so a sign error in either is caught.
+TEST_CASE(
+	"Camera motion reprojects static geometry to its previous screen position",
+	"[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
+	const glm::vec3 eyeAfter{ 1.0f, 0.8f, c_CameraZ };
+
+	const bgl::Camera before = CameraAt(eyeBefore);
+	const bgl::Camera after  = CameraAt(eyeAfter);
+
+	fixture.RenderFrom(before);
+	fixture.RenderFrom(after);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(after, surface) - ProjectToUv(before, surface);
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	// The signal has to be well clear of the tolerance, or the check above would pass on zeros.
+	CHECK(std::abs(expected.x) > 1e-2f);
+	CHECK(std::abs(expected.y) > 1e-2f);
+
+	// Panning the camera up and to the right drags the surface down and to the left.
+	CHECK(measured.x < 0.0f);
+	CHECK(measured.y > 0.0f);
+}
+
+// The sky is infinitely far, so a camera rotation is the only thing that displaces it -- but it
+// displaces all of it, which is most of a typical frame. Left at zero the sky would read as static
+// through every pan.
+//
+// A pure yaw has a closed form: a direction that now sits at the screen's centre sat at
+// tan(yaw)/tan(halfFov) in NDC before, which owes nothing to the matrices the shader uses. Turning
+// left drags the sky right, and nothing moves vertically.
+TEST_CASE("A camera yaw displaces the skybox horizontally", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddSkybox();
+
+	const float yaw = glm::radians(5.0f);
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }, yaw));
+
+	// No quad, so the sky is what shaded every pixel including this one.
+	const glm::vec2 sky = CentrePixel(fixture.ReadMotionVectors());
+
+	const float expectedX = 0.5f * std::tan(yaw) / std::tan(c_Fov * 0.5f);
+
+	INFO("sky = " << sky.x << ", " << sky.y << "  expectedX = " << expectedX);
+
+	// Turning left drags what was ahead of the camera off to the right.
+	CHECK(sky.x == Catch::Approx(expectedX).margin(2e-3));
+	CHECK(sky.x > 0.0f);
+
+	// A yaw is horizontal; any vertical component means an axis got crossed.
+	CHECK(sky.y == Catch::Approx(0.0f).margin(2e-3));
+}
+
+// The sky's ray is unprojected through a matrix built on the CPU. Inverting the composed
+// rotation-and-projection in one go mixes the projection's near-scaled rows into the rotation, and
+// which way the garbage rounds depends on the jitter folded into the projection -- so at some
+// target sizes the ray a pixel gets differs between jitter phases by up to half a texel: a still
+// sky reporting motion, which the resolve turns into a blur along every silhouette against it. This
+// is the size and field of view the report came from -- half render scale on a 1080p panel -- where
+// the composed inverse measured 0.25 texel on average and 0.5 at worst; the square fixture never
+// showed it. Every phase pair is read, since the residue is the phase's.
+TEST_CASE(
+	"Jitter leaves a still, turned camera's sky reporting no motion",
+	"[jitter][motionvectors][render]")
+{
+	constexpr uint32_t c_PanelWidth  = 960;
+	constexpr uint32_t c_PanelHeight = 540;
+
+	// Nearer than the fixture's plane: a game camera's few thousand to one, which is what
+	// sharpens the ill-conditioning under test.
+	constexpr float c_PanelNear = 0.1f;
+
+	auto fixture = MotionFixture(true, c_PanelWidth, c_PanelHeight);
+	fixture.AddSkybox();
+
+	// Yawed and pitched, so no axis of the view lines up with the projection's.
+	const glm::vec3 eye{ 4.0f, 2.0f, 7.0f };
+	auto            camera = bgl::Camera();
+	camera.LookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(45.0f),
+			static_cast<float>(c_PanelWidth) / static_cast<float>(c_PanelHeight),
+			c_PanelNear,
+			c_Far);
+
+	float maxTexels = 0.0f;
+	int   nanTexels = 0;
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		fixture.RenderFrom(camera);
+		if (frame == 0)
+		{
+			continue;
+		}
+
+		for (const glm::vec2& texel : fixture.ReadMotionVectors())
+		{
+			if (std::isnan(texel.x) || std::isnan(texel.y))
+			{
+				++nanTexels;
+				continue;
+			}
+			maxTexels =
+				std::max(maxTexels, glm::length(texel * glm::vec2(c_PanelWidth, c_PanelHeight)));
+		}
+	}
+
+	INFO("largest resting sky motion = " << maxTexels << " texels, NaN texels = " << nanTexels);
+
+	// Composed from the pieces: 1e-4 texel. Inverse of the composition: 0.5.
+	CHECK(nanTexels == 0);
+	CHECK(maxTexels < 0.01f);
+}
+
+// Nothing drew the background, so it keeps the cleared value. A consumer reads that as "did not
+// move" rather than as garbage left over from whatever the texture held before.
+TEST_CASE("Pixels no geometry covered stay at zero motion", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 3.0f, 2.0f, c_CameraZ }));
+
+	const auto motion = fixture.ReadMotionVectors();
+
+	// No skybox and a quad that reaches only c_QuadExtent, so the frame's corners are background.
+	const glm::vec2 corner = motion[0];
+	CHECK(corner.x == Catch::Approx(0.0f).margin(1e-4));
+	CHECK(corner.y == Catch::Approx(0.0f).margin(1e-4));
+
+	// ...while the centre, which the quad does cover, moved.
+	CHECK(glm::length(CentrePixel(motion)) > 1e-2f);
+}
+
+// A surface that was off-screen last frame still has a previous position -- it just is not one the
+// history buffer holds. The velocity must carry the pixel out past the frame edge, because that is
+// the only signal a consumer has that there is nothing to reproject into; a clamped or zeroed
+// vector would read as "this was here all along" and blend against whatever occupied that texel.
+TEST_CASE("Geometry entering the frame reprojects to outside it", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	// Yawed well past the 30-degree half-angle, so the quad is outside the frustum entirely.
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(60.0f)));
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+
+	const glm::vec2 motion = CentrePixel(fixture.ReadMotionVectors());
+
+	// Where the consumer would go looking for this pixel's history.
+	const glm::vec2 previousUv = glm::vec2(0.5f, 0.5f) - motion;
+
+	INFO("motion = " << motion.x << ", " << motion.y);
+	INFO("previousUv = " << previousUv.x << ", " << previousUv.y);
+
+	CHECK((previousUv.x < 0.0f || previousUv.x > 1.0f));
+}
+
+// The velocity buffer is cleared every frame, so a frame that draws nothing reports nothing. Were
+// it not, the frame after geometry left would still be carrying that geometry's last velocity, and
+// a consumer would reproject the background through it.
+TEST_CASE("Geometry leaving the frame leaves no motion behind", "[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) < 1e-4f);
+
+	// Moving and then turning away: the frame before this one had motion everywhere the quad was.
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }, glm::radians(60.0f)));
+
+	for (const glm::vec2& texel : fixture.ReadMotionVectors())
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// Same guarantee as leaving the frame, reached the other way: the instance is gone rather than
+// merely unseen, so this exercises the erase path instead of the cull. A velocity that outlived
+// its instance would be reprojecting pixels through geometry that no longer exists.
+TEST_CASE("A deleted instance stops contributing motion", "[motionvectors][render]")
+{
+	auto                          fixture = MotionFixture();
+	const bgl::MeshInstanceHandle quad    = fixture.AddQuad();
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	fixture.view->DeleteMeshInstance(quad);
+
+	// The camera keeps moving, so anything still drawing would still be writing velocity.
+	fixture.RenderFrom(CameraAt({ 2.0f, 1.6f, c_CameraZ }));
+
+	for (const glm::vec2& texel : fixture.ReadMotionVectors())
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// The sequence itself, away from the GPU. A jitter that never leaves the pixel it started on
+// antialiases nothing, and one that wanders past the footprint smears -- so the span matters as
+// much as the variation, and neither is visible in a velocity readback.
+TEST_CASE("The jitter sequence walks one pixel and repeats", "[jitter]")
+{
+	constexpr float c_W = 256.0f;
+	constexpr float c_H = 128.0f;
+
+	// One pixel in NDC, which is what the offsets are expressed in.
+	const float pixelX = 2.0f / c_W;
+	const float pixelY = 2.0f / c_H;
+
+	std::vector<glm::vec2> offsets;
+	for (uint64_t frame = 0; frame < bgl::c_JitterSequenceLength; ++frame)
+	{
+		offsets.push_back(bgl::HaltonJitter(frame, c_W, c_H));
+	}
+
+	auto mean = glm::vec2(0.0f);
+	for (const glm::vec2& offset : offsets)
+	{
+		CHECK(std::abs(offset.x) <= pixelX * 0.5f);
+		CHECK(std::abs(offset.y) <= pixelY * 0.5f);
+		mean += offset;
+	}
+	mean /= static_cast<float>(offsets.size());
+
+	// Every term distinct, or the sequence spends frames re-sampling where it has already been.
+	for (size_t i = 0; i < offsets.size(); ++i)
+	{
+		for (size_t j = i + 1; j < offsets.size(); ++j)
+		{
+			CHECK(glm::distance(offsets[i], offsets[j]) > 1e-6f);
+		}
+	}
+
+	// No term is the zero offset: that frame would sample exactly where an unjittered one does and
+	// contribute nothing new to the accumulation.
+	for (const glm::vec2& offset : offsets)
+	{
+		CHECK(glm::length(offset) > 1e-6f);
+	}
+
+	// Balanced about the pixel centre, or the resolved image sits off-centre from the geometry.
+	CHECK(mean.x == Catch::Approx(0.0f).margin(pixelX * 0.15f));
+	CHECK(mean.y == Catch::Approx(0.0f).margin(pixelY * 0.15f));
+
+	// It is a cycle, so the frame after the last term repeats the first.
+	CHECK(
+		glm::distance(bgl::HaltonJitter(bgl::c_JitterSequenceLength, c_W, c_H), offsets[0]) <
+		1e-6f);
+}
+
+// Proof the offset reaches the rasterizer, which no velocity assertion can give: velocity is
+// de-jittered by construction, so a jitter that was computed and then dropped on the floor would
+// leave every motion test below passing.
+//
+// Two frames from one camera differ only if the sample grid moved between them.
+TEST_CASE("Jitter moves the sampling grid", "[jitter][render]")
+{
+	const std::string first  = "assets/golden/jitter_frame0.got.png";
+	const std::string second = "assets/golden/jitter_frame1.got.png";
+
+	const auto renderTwice = [&](bool taaEnabled) {
+		auto fixture = MotionFixture(taaEnabled);
+		fixture.AddQuad();
+
+		// Rotated off-axis so the quad's edges cross pixels diagonally; an axis-aligned edge can
+		// land on a pixel boundary and survive a sub-pixel shift unchanged.
+		const bgl::Camera camera = CameraAt({ 0.0f, 0.0f, c_CameraZ }, glm::radians(12.0f));
+
+		fixture.RenderFrom(camera);
+		fixture.gfx->ScreenshotPng(fixture.target, first);
+		fixture.RenderFrom(camera);
+		fixture.gfx->ScreenshotPng(fixture.target, second);
+	};
+
+	SECTION("with temporal AA the two frames differ")
+	{
+		renderTwice(true);
+
+		// Tighter than the default, because what reaches the screen is not the difference between two
+		// sample grids but `c_BlendWeight` of it -- the second frame is mostly the first, by design.
+		// The tolerance therefore has to sit below the smallest weight the resolve ships with, or this
+		// stops being a test of the jitter and becomes a test of the blend.
+		CHECK_FALSE(bgl::test::MatchesGolden(first, second, 1e-5f));
+	}
+
+	SECTION("without it they are the same frame twice")
+	{
+		renderTwice(false);
+		CHECK(bgl::test::MatchesGolden(first, second));
+	}
+}
+
+// The assertion the whole task turns on. Both clip positions carry a jitter, and the two are
+// different offsets, so a velocity that forgot to remove them reports the difference between two
+// sample patterns on a scene where nothing moved. The margin is the RG16_FLOAT floor, and a missed
+// subtraction is a whole pixel -- 2/256 in NDC, an order of magnitude above it.
+TEST_CASE("Jitter leaves a still camera reporting no motion", "[jitter][motionvectors][render]")
+{
+	auto fixture = MotionFixture(true);
+	fixture.AddQuad();
+	const auto camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
+
+	// Four frames, so the pair being differenced is two distinct terms of the sequence rather than
+	// the first frame's history-equals-current special case.
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		fixture.RenderFrom(camera);
+	}
+
+	const auto motion = fixture.ReadMotionVectors();
+
+	for (const glm::vec2& texel : motion)
+	{
+		REQUIRE(texel.x == Catch::Approx(0.0f).margin(1e-4));
+		REQUIRE(texel.y == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+// And the moving case: the velocity a camera translation produces must be the one the CPU computes
+// from the unjittered cameras, because that is the surface's motion. Same expectation as the
+// unjittered reprojection test above, which is the point -- jitter must not show up in the answer.
+TEST_CASE(
+	"Jitter does not change the velocity a camera translation reports",
+	"[jitter][motionvectors][render]")
+{
+	auto fixture = MotionFixture(true);
+	fixture.AddQuad();
+
+	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
+	const glm::vec3 eyeAfter{ 1.0f, 0.8f, c_CameraZ };
+
+	const bgl::Camera before = CameraAt(eyeBefore);
+	const bgl::Camera after  = CameraAt(eyeAfter);
+
+	fixture.RenderFrom(before);
+	fixture.RenderFrom(after);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(after, surface) - ProjectToUv(before, surface);
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	CHECK(std::abs(expected.x) > 1e-2f);
+	CHECK(std::abs(expected.y) > 1e-2f);
+}
+
+// A moving surface under a camera that does not move. Before SetInstanceTransform existed the
+// velocity buffer could only ever describe the camera, so this case read exactly zero -- which is
+// what makes it evidence rather than a restatement of the shader.
+TEST_CASE("A moved instance writes its own velocity", "[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	// Across the screen, not along the view axis: a shift in Z would change the surface point the
+	// centre pixel sees and confound the displacement with the reprojection.
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	// The surface now under the centre pixel was one shift to the left on the previous frame.
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	// Guards the assertion against passing on a zero it was supposed to detect.
+	CHECK(std::abs(expected.x) > 1e-2f);
+}
+
+// The TAA resolve reads a surface's own motion to tell an animating silhouette from the backdrop
+// the camera drags past it. A camera move must therefore leave it at exactly zero -- not merely
+// small -- on everything that did not move, sky included, however large the velocity it reports.
+TEST_CASE(
+	"A moving camera gives static geometry and the sky no motion of their own",
+	"[motionvectors][render]")
+{
+	auto fixture = MotionFixture();
+	fixture.AddQuad();
+	fixture.AddSkybox();
+
+	fixture.RenderFrom(CameraAt({ 0.0f, 0.0f, c_CameraZ }));
+	fixture.RenderFrom(CameraAt({ 1.0f, 0.8f, c_CameraZ }));
+
+	REQUIRE(glm::length(CentrePixel(fixture.ReadMotionVectors())) > 1e-2f);
+
+	for (const glm::vec2& texel : fixture.ReadOwnMotion())
+	{
+		REQUIRE(texel.x == 0.0f);
+		REQUIRE(texel.y == 0.0f);
+	}
+}
+
+// Both movers at once: the instance slides and the camera pans. Its own motion is its velocity less
+// the camera's contribution, which is the displacement the slide alone makes on screen.
+TEST_CASE(
+	"A moved instance's own motion excludes the camera's",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3 eyeBefore{ 0.0f, 0.0f, c_CameraZ };
+	const glm::vec3 eyeAfter{ 0.4f, 0.3f, c_CameraZ };
+
+	fixture.RenderFrom(CameraAt(eyeBefore));
+
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	const bgl::Camera after = CameraAt(eyeAfter);
+	fixture.RenderFrom(after);
+
+	const glm::vec2 own      = CentrePixel(fixture.ReadOwnMotion());
+	const glm::vec2 velocity = CentrePixel(fixture.ReadMotionVectors());
+
+	// Under the previous camera: the point now under the centre, against where it sat before the
+	// slide.
+	const bgl::Camera before   = CameraAt(eyeBefore);
+	const glm::vec3   surface  = SurfacePointAt(after, eyeAfter, c_Width / 2, c_Height / 2);
+	const glm::vec2   expected = ProjectToUv(before, surface) -
+	                             ProjectToUv(before, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("own = " << own.x << ", " << own.y << "; velocity = " << velocity.x << ", " << velocity.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(own.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(own.y == Catch::Approx(expected.y).margin(1e-3));
+
+	// The camera's share is large, so an own motion that merely copied the velocity would fail.
+	CHECK(std::abs(velocity.x - own.x) > 1e-2f);
+	CHECK(std::abs(expected.x) > 1e-2f);
+}
+
+TEST_CASE(
+	"A placement that stopped moving reports no velocity",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const bgl::Camera camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
+
+	fixture.RenderFrom(camera);
+
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { 0.35f, 0.0f, c_PlaneZ }));
+	fixture.RenderFrom(camera);
+
+	// A third frame with no write. Velocity must be exactly zero rather than repeating the motion
+	// the previous frame already described -- the wobble a rollover that never resets would leave.
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	CHECK(measured.x == Catch::Approx(0.0f).margin(1e-4));
+	CHECK(measured.y == Catch::Approx(0.0f).margin(1e-4));
+}
+
+TEST_CASE(
+	"Writing a placement twice in one frame reports one frame of motion",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	// A caller that recomputes a position mid-frame. Only the last of these is ever drawn, so the
+	// velocity must describe the whole move and not the final leg of it.
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift * 0.5f, 0.0f, c_PlaneZ }));
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+}
+
+// A placement moved every frame -- a walking unit, which is what the setter exists for. Every other
+// case here writes at most once before a draw, and a rollover that loses track of an already-moving
+// placement passes all of them while reporting zero velocity from the second frame onward.
+TEST_CASE(
+	"A continuously moving instance keeps writing velocity",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	constexpr float c_Step = 0.4f;
+
+	fixture.RenderFrom(camera);
+
+	// Four frames of motion, checked on each: the bug this pins appears on the second and every
+	// frame after, not the first.
+	for (uint32_t step = 1; step <= 4; ++step)
+	{
+		fixture.view->SetInstanceTransform(
+			instance,
+			glm::translate(glm::mat4(1.0f), { c_Step * static_cast<float>(step), 0.0f, c_PlaneZ }));
+		fixture.RenderFrom(camera);
+
+		const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+		const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+		const glm::vec2 expected = ProjectToUv(camera, surface) -
+		                           ProjectToUv(camera, surface - glm::vec3(c_Step, 0.0f, 0.0f));
+
+		INFO("step " << step << " measured = " << measured.x << " expected = " << expected.x);
+		CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+		CHECK(std::abs(expected.x) > 1e-2f);
+	}
+}
+
+// The skinned tier's half of the same claim, and the one nothing else reaches: a skinned vertex is
+// placed by the instance transform *after* it is posed, so its previous position needs the previous
+// pose through the previous placement. Getting only the pose right leaves a moving unit reporting
+// the velocity of its animation and none of its travel -- and with the pose held still, none at all.
+//
+// The pose is held (`rate` 0) deliberately, which splits the acceptance item's "moves and animates"
+// into two single-variable cases: this one, and SkinnedRender_test's "an animating skinned mesh
+// writes motion vectors and a held one does not" for the pose. Deriving an expected velocity for a
+// vertex doing both at once would mean replicating the shader's own blend to stay independent of
+// it, which is what the derivation above exists to avoid.
+TEST_CASE(
+	"A moved skinned instance writes its placement's velocity",
+	"[motionvectors][transform][skinned][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddSkinnedQuad(0.0f);
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	CHECK(std::abs(expected.x) > 1e-2f);
+}

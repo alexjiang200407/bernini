@@ -43,9 +43,9 @@ if (Bernini_DIR)
 
     add_executable(bernini_embed main.cpp)
     target_link_libraries(bernini_embed PRIVATE
-        Bernini::core Bernini::bgl_extended Bernini::gamelib Bernini::assetlib)
-    if (TARGET Bernini::bgl_d3d12_agility)
-        target_link_libraries(bernini_embed PRIVATE Bernini::bgl_d3d12_agility)
+        Bernini::core Bernini::bgl Bernini::gamelib Bernini::assetlib)
+    if (TARGET Bernini::bgpu_d3d12_agility)
+        target_link_libraries(bernini_embed PRIVATE Bernini::bgpu_d3d12_agility)
     endif()
 
     bernini_stage_runtime(bernini_embed)
@@ -53,7 +53,7 @@ else()
     add_subdirectory(${BERNINI_DIR} ${CMAKE_BINARY_DIR}/bernini)
 
     add_executable(bernini_embed main.cpp)
-    target_link_libraries(bernini_embed PRIVATE core bgl_extended gamelib assetlib)
+    target_link_libraries(bernini_embed PRIVATE core bgl gamelib assetlib)
     add_dependencies(bernini_embed copy_assets)
 endif()
 

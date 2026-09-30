@@ -41,8 +41,8 @@ namespace
 	bgl::GraphicsRef
 	MakeGraphics()
 	{
-		// The suite's shape: the debug layer on, GPU-based validation left to the bgl_extended
-		// suite, which is where --gpu-validation is plumbed.
+		// The suite's shape: the debug layer on, GPU-based validation left to bgl_tests, which is
+		// where --gpu-validation is plumbed.
 		auto opts                        = bgl::test::GraphicsSetup();
 		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.gpuContext.enableDebugLayer = true;
@@ -315,7 +315,7 @@ TEST_CASE("An RCSS transform moves a box where the matrix says", "[ui][render]")
 
 // Alpha crosses three conversions between a stylesheet and the backbuffer: RmlUi premultiplies a
 // colour in sRGB, the renderer packs it, and the shader divides the alpha out to decode and
-// multiplies it back. bgl_extended pins that arithmetic on a hand-built vertex; this pins the half
+// multiplies it back. bgl pins that arithmetic on a hand-built vertex; this pins the half
 // of it that a document actually drives.
 TEST_CASE("A translucent element blends against what is under it", "[ui][render]")
 {
@@ -360,7 +360,7 @@ TEST_CASE("A translucent element blends against what is under it", "[ui][render]
 	const bgl::test::Rgba veil  = bgl::test::MeanColor(png, 124, 124, 24, 24);
 
 	// White at 50% over black is 0.5 in linear, which the sRGB backbuffer encodes as ~0.735 --
-	// the same value bgl_extended's overlay case pins, reached here through RCSS instead. Decoding
+	// the same value bgl's overlay case pins, reached here through RCSS instead. Decoding
 	// the premultiplied bytes as-is would land ~0.5, and ignoring alpha would land 1.0.
 	CHECK(veil.r == Catch::Approx(0.735f).margin(0.03));
 	CHECK(veil.g == Catch::Approx(0.735f).margin(0.03));

@@ -15,12 +15,11 @@ they apply. See [docs/ai-coding.md](docs/ai-coding.md).
 - **Never drop an `#include` because a PCH has it.** `./PCH/pch.h` and the subsystem PCHs (`libs/<lib>/src/pch.h`, `apps/editor/src/pch.h`) are build optimisations, never interfaces: they make an include free, they do not stand in for one. A PCH that reaches every target still cannot be seen by a reader, by clangd, or by any tool that parses one file — and the subsystem ones do not even reach every target, since assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it. See [docs/build_performance.md](./docs/build_performance.md).
 - **An include the tools cannot see the point of gets a pragma, never a deletion.** `// IWYU pragma: keep` for one held for a side effect — a subsystem `pch.h` entry, whose contents are unused where they sit by construction. `// IWYU pragma: export` for a header that exists to re-export another, which is the stronger claim and the right one for `<core/glm.h>`: `keep` would only silence the report, while `export` says that including it is how you get glm.
 - `just tidy` enforces this with clang-tidy's `misc-include-cleaner`, and [`.clangd`](./.clangd) underlines it live in the editor; `just tidy --fix` writes the includes and gives them the brackets the rule below asks for. See [docs/naming.md](./docs/naming.md).
-- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgl_common`, `./libs/bgpu`, `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`, `./libs/crowdlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
-- **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
-- **`assetlib_structs` is data, and `assetlib` holds the answers.** Structs, the constants that address them and the `static_assert`s that pin their layout -- no function lives there. A question about a container is a free function one library up: `toMatrix` in `assetlib/transform.h`, `findAttribute` in `assetlib/vertex_layout.h`, `channelIndex` in `assetlib/bmaterial.h`. The rule is about who links what: `bgl` and `bgl_extended` link `assetlib_structs` and never `assetlib`, so anything placed there is something the renderer may call, and keeping the surface to data is what makes *the renderer cannot ask a container anything* true by construction instead of true until someone moves a file. The renderer pays for it in the open -- `Scene_Geometry.cpp` spells its own joints/weights check and `Scene_Materials.cpp` its own `static_cast<size_t>` -- and that cost is the rule working, not the rule failing. `assetlib_structs` is an INTERFACE target with nothing to compile; `assetlib_structs_selfcheck` compiles its whole public surface against it alone, so a header reaching into `assetlib` fails the build.
-- **`bgpu` owns the process's GPU device, the Slang sessions and the RHI**, and the application creates the device and hands it to every library that runs work on it -- `bgl_extended`, and a client that runs its own compute beside the frame. Each owner makes a device of its own on it (`bgpu::CreateDevice`) and builds its queues, resource managers, pipelines and buffers from that, so the RHI is shared as classes and never as instances ([docs/rhi.md](./docs/rhi.md)). It names both backends and implements the RHI for each (`src/d3d12`, `src/metal`); it knows nothing of rendering and links only `core`, glm and Slang, so `bgl`'s contract can include `<bgpu/GpuContext.h>` without a cycle, and `bgpu_selfcheck` compiles every public header against `bgpu` alone. It owns the Slang diagnostic checker (`bgpu::SlangErrorChecker`), the program cache every owner stores its compiled shaders in (`bgpu::ProgramCache`), the Slang reflection walk and the constant-buffer mirror (`UniformsBase`, `Uniforms`), the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the Slang tree every other one imports: the IDL offset primitives, the buffer family and the GPU assert channel. `bgl` neither creates nor lends a device: `CreateGraphics` takes a `bgpu::GpuContextRef`. See [docs/bgpu.md](./docs/bgpu.md).
-- **`crowdlib` runs the crowd simulation's compute on a queue of its own**, on the device a `bgpu::GpuContext` owns. It links `bgpu` and never the renderer (`bgl`, `bgl_common`, `bgl_extended`); the editor does not link it. See [docs/crowdlib.md](./docs/crowdlib.md).
-- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor a backend of its own. It holds what every renderer needs and no renderer owns — the TAA jitter sequence, frustum-plane extraction, and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
+- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgpu`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`, `./libs/crowdlib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
+- **`assetlib_structs` is data, and `assetlib` holds the answers.** Structs, the constants that address them and the `static_assert`s that pin their layout -- no function lives there. A question about a container is a free function one library up: `toMatrix` in `assetlib/transform.h`, `findAttribute` in `assetlib/vertex_layout.h`, `channelIndex` in `assetlib/bmaterial.h`. The rule is about who links what: `bgl` links `assetlib_structs` and never `assetlib`, so anything placed there is something the renderer may call, and keeping the surface to data is what makes *the renderer cannot ask a container anything* true by construction instead of true until someone moves a file. The renderer pays for it in the open -- `Scene_Geometry.cpp` spells its own joints/weights check and `Scene_Materials.cpp` its own `static_cast<size_t>` -- and that cost is the rule working, not the rule failing. `assetlib_structs` is an INTERFACE target with nothing to compile; `assetlib_structs_selfcheck` compiles its whole public surface against it alone, so a header reaching into `assetlib` fails the build.
+- **`bgpu` owns the process's GPU device, the Slang sessions and the RHI**, and the application creates the device and hands it to every library that runs work on it -- `bgl`, and a client that runs its own compute beside the frame. Each owner makes a device of its own on it (`bgpu::CreateDevice`) and builds its queues, resource managers, pipelines and buffers from that, so the RHI is shared as classes and never as instances ([docs/rhi.md](./docs/rhi.md)). It names both backends and implements the RHI for each (`src/d3d12`, `src/metal`); it knows nothing of rendering and links only `core`, glm and Slang, so `bgl`'s contract can include `<bgpu/GpuContext.h>` without a cycle, and `bgpu_selfcheck` compiles every public header against `bgpu` alone. It owns the Slang diagnostic checker (`bgpu::SlangErrorChecker`), the program cache every owner stores its compiled shaders in (`bgpu::ProgramCache`), the Slang reflection walk and the constant-buffer mirror (`UniformsBase`, `Uniforms`), the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the Slang tree every other one imports: the IDL offset primitives, the buffer family and the GPU assert channel. `bgl` neither creates nor lends a device: `CreateGraphics` takes a `bgpu::GpuContextRef`. See [docs/bgpu.md](./docs/bgpu.md).
+- **`crowdlib` runs the crowd simulation's compute on a queue of its own**, on the device a `bgpu::GpuContext` owns. It links `bgpu` and never the renderer (`bgl`); the editor does not link it. See [docs/crowdlib.md](./docs/crowdlib.md).
 - **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
@@ -101,7 +100,7 @@ are right for the rest of the tree and wrong for C++ symbols and C++ edits.
 
 ## The bar each subsystem is held to
 
-Everything under `./libs` — `bgl`, `bgl_common`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
+Everything under `./libs` — `bgl`, `bgpu`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
 held to a **strict** bar. These are libraries: their headers are the interface a reader learns the
 system from, and a client cannot route around a bad one. So the public surface must be readable on
 its own — one obvious seam per concern, a rule stated in one place, no second way to do the same
@@ -208,7 +207,7 @@ client drives directly, one layer below `bgl`'s public API.
 **[Uniforms](./docs/uniforms.md)**
 
 The CPU-side mirror of a constant buffer: why cbuffers are reflected at runtime while structured
-buffers are generated by `bgl_idlgen`, how a name resolves to bytes, what assigning a resource
+buffers are generated by `bgpu_idlgen`, how a name resolves to bytes, what assigning a resource
 handle actually writes, and why a name that resolves to nothing is silent.
 
 **[Graphics Debug](./docs/gfx_debug.md)**
@@ -272,14 +271,14 @@ The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are 
 
 **[IDL Codegen](./docs/idlgen.md)**
 
-How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
+How `bgpu_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
 **[Skinned Meshes](./docs/skinning.md)**
 
 A rig posed on the GPU and drawn from a per-instance palette or a shared bone anim table: the
 compute pass and its barrier-per-depth-level walk, why the previous pose is re-evaluated rather than
 remembered, where the skeleton signature is checked and why the culling box cannot be measured (both
-for the same reason — `bgl_extended` does not link `assetlib`), how a foot is planted on the ground
+for the same reason — `bgl` does not link `assetlib`), how a foot is planted on the ground
 in the one window where a bone is in model space, and what the editor's Animation panel does with
 the tier.
 
@@ -442,9 +441,9 @@ so `just test -- "[tag]"` skips it and says so. It needs `pytest` (pinned in
 runs it: `.github/workflows/ci.yml` compiles and runs no suite at all.
 
 Every suite is Catch2, so they all take the same flags. A full run is minutes, nearly all of it
-`bgl_extended_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
+`bgl_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
 suite does not stop the others; the summary at the end says which failed. To pass a flag to one
-suite, use `just run`, which forwards it — `just run bgl_extended_tests -- --gpu-validation`, or
+suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
 `just run editor_tests -- "[materialgraph]"` to run one tag.
 
 One tag is not about behaviour: **`[perf]`** pins what a cook costs as its inputs grow — a read count
@@ -486,7 +485,7 @@ Use `just build`. It builds the preset from `config.json` (or `windows-vs2026-ms
 
 ```bash
 just build                                  # configured preset, all targets
-just build bgl_extended_tests                        # one target
+just build bgl_tests                        # one target
 just build --preset windows-ninja-msvc-dx12-debug
 just build --preset windows-clang-dx12-debug # clang (Ninja generator)
 just build --config Release                 # multi-config generators

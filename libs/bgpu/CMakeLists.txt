@@ -1,6 +1,6 @@
 # The GPU layer, owned by no renderer: the process's device and the compiler for it, which the
 # application creates and hands to every library that runs work on the device, and the RHI each of
-# them builds its own queues, resource managers and pipelines from -- bgl_extended, and a client that
+# them builds its own queues, resource managers and pipelines from -- bgl, and a client that
 # runs its own compute beside the frame. It names both backends, and it holds process-wide state, so
 # it is built as the renderer is (docs/core_process.md, "Linkage").
 file(GLOB_RECURSE BGPU_SOURCES CONFIGURE_DEPENDS
@@ -16,7 +16,7 @@ list(FILTER BGPU_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 # The backend's half: the device creation, the RHI's implementation, and on Metal the one
 # translation unit that emits metal-cpp's symbols for the whole process. Without a backend only the
-# compiler and the RHI's neutral half are built -- bgl_extended_objects still compiles against them
+# compiler and the RHI's neutral half are built -- bgl_objects still compiles against them
 # -- and CreateGpuContext and CreateDevice have no definition.
 set(BGPU_BACKEND_DIR "")
 if(RENDERER_BACKEND STREQUAL "DX12")
@@ -26,6 +26,8 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 endif()
 if(BGPU_BACKEND_DIR)
 	file(GLOB_RECURSE BGPU_BACKEND_SOURCES CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.cpp)
+	# The Agility SDK's exports are the executable's, never this library's: bgpu_d3d12_agility below.
+	list(FILTER BGPU_BACKEND_SOURCES EXCLUDE REGEX ".*/agility/.*")
 	file(GLOB_RECURSE BGPU_BACKEND_HEADERS CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.h)
 endif()
 
@@ -118,6 +120,40 @@ endif()
 enable_strict_compiler(bgpu)
 enable_coverage(bgpu)
 
+# What a D3D12 device and a shader compile load by name goes beside the executables -- here, because
+# creating the device and compiling for it are bgpu's, so every owner of it (a renderer, a compute
+# client, bgpu_tests) gets them by linking bgpu. The runtime directory is named rather than
+# $<TARGET_FILE_DIR:bgpu>, which a static bgpu does not share with the executables.
+if(RENDERER_BACKEND STREQUAL "DX12")
+	# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
+	# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
+	# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so both
+	# are copied by hand, as the Agility SDK's are. Found here, before anything that validates shaders
+	# at build time with the same DXC; the port's config cannot be found twice.
+	#
+	# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
+	# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
+	# both from one directory also keeps the compiler and its validator a matched pair, which they
+	# have to be: a validator older than the compiler rejects the container.
+	find_package(directx-dxc CONFIG REQUIRED)
+	find_package(directx12-agility CONFIG REQUIRED)
+	add_custom_command(TARGET bgpu POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
+				"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
+				"$<TARGET_FILE:Microsoft::DirectX12-Core>"
+				"$<TARGET_FILE:Microsoft::DirectX12-Layers>"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMENT "Staging what the D3D12 device and the shader compiler load by name"
+		VERBATIM)
+
+	# The Agility SDK finds its DLLs through two symbols the *executable* exports, so they cannot live
+	# in bgpu: every D3D12 executable links this OBJECT library itself.
+	add_library(bgpu_d3d12_agility OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/agility/D3D12Agility.cpp)
+	enable_strict_compiler(bgpu_d3d12_agility)
+endif()
+
 # The RHI's Slang half: the offset primitives (idl.Entry, idl.Range ...), the buffer family that reads
 # through them and the GPU assert channel they report to. Staged into the one ./shaders/src every
 # owner's session resolves from, so an import names the same module in the renderer and beside it.
@@ -141,7 +177,6 @@ add_custom_command(
 )
 add_custom_target(bgpu_copy_shaders ALL DEPENDS "${BGPU_SHADER_STAMP}")
 add_dependencies(bgpu bgpu_copy_shaders)
-add_dependencies(bgl_copy_contract_shaders bgpu_copy_shaders)
 
 # Membership: every module here compiles with only this tree on the search path, so an import that
 # reaches into a renderer fails to resolve and stops the build -- what bgpu_selfcheck is for the
@@ -163,8 +198,10 @@ foreach(MODULE ${BGPU_SHADER_SOURCES})
 endforeach()
 add_custom_target(bgpu_check_shaders ALL DEPENDS ${BGPU_SHADER_CHECKS})
 
+add_subdirectory(idl)
+
 # The C++ mirrors of bgpu's IDL, generated per backend into the build tree as the renderer's are
-# (libs/bgl_common/idl/CMakelists.txt, which defines the generator). Only the modules with a concrete
+# (libs/bgl/idl/CMakeLists.txt). Only the modules with a concrete
 # layout: the offset primitives are generics, and their C++ halves are hand-written in include/bgpu/idl.
 set(BGPU_IDL_ROOT "${BGPU_SHADER_ROOT}/idl")
 set(BGPU_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/bgpu_idl")
@@ -186,14 +223,14 @@ foreach(module ${BGPU_IDL_CPP_SOURCES})
 	set(output "${BGPU_IDL_OUT_ROOT}/bgpu/idl/${name}.h")
 	add_custom_command(
 		OUTPUT  "${output}"
-		COMMAND bgl_idlgen
+		COMMAND bgpu_idlgen
 				--src-root "${BGPU_IDL_ROOT}"
 				${BGPU_IDL_LAYOUT_ARGS}
 				--cpp-out-dir "${BGPU_IDL_OUT_ROOT}/bgpu/idl"
 				--namespace "bgpu::idl"
 				-I "${BGPU_IDL_ROOT}"
 				"${BGPU_IDL_ROOT}/${module}"
-		DEPENDS bgl_idlgen "${BGPU_IDL_ROOT}/${module}"
+		DEPENDS bgpu_idlgen "${BGPU_IDL_ROOT}/${module}"
 		COMMENT "idlgen bgpu ${module}"
 		VERBATIM
 	)
@@ -205,7 +242,7 @@ add_dependencies(bgpu bgpu_idl_generate)
 target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT} ${BGPU_IDL_OUT_ROOT}/bgpu/idl)
 
 # What this target does NOT link is the point: every public header compiles alone -- no PCH, and
-# bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_common, bgl_extended) or
+# bgpu's own closure only -- so one that reaches into the renderer (bgl) or
 # leans on an include it never wrote stops the build here, rather than in a compute client that
 # includes it first. A header per translation unit, generated from the glob, so a new header is
 # checked without anyone listing it.
@@ -248,11 +285,8 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	)
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
-		# The Agility SDK's two exports must be the executable's, and the DLLs a device and a compile
-		# load (D3D12Core, dxcompiler, dxil) are staged beside the executables by bgl_extended's build
-		# -- a staging dependency, not a link: nothing here links the renderer.
-		target_link_libraries(bgpu_tests PRIVATE d3d12 bgl_d3d12_agility)
-		add_dependencies(bgpu_tests bgl_extended)
+		# The Agility SDK's two exports must be the executable's.
+		target_link_libraries(bgpu_tests PRIVATE d3d12 bgpu_d3d12_agility)
 		# A shared bgpu exports only what BGPU_API marks, and the allocator it tests directly is not
 		# part of that surface, so the case compiles its own copy.
 		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
@@ -279,9 +313,9 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
-	# The session cases load modules from ./shaders/src beside the suite, staged by the contract and
-	# the shared tree exactly as a renderer resolves them.
-	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders bgl_common_copy_shaders)
+	# The session cases load modules from ./shaders/src beside the suite, staged by bgpu and the
+	# contract exactly as a renderer resolves them.
+	add_dependencies(bgpu_tests bgpu_copy_shaders bgl_copy_contract_shaders)
 
 	# The suite's own kernels, under bgpu/ in the tests root the sessions search, which no other
 	# copier writes.

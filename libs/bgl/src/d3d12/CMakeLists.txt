@@ -1,0 +1,45 @@
+file(GLOB_RECURSE BGL_DX12_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.c
+)
+file(GLOB_RECURSE BGL_DX12_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
+)
+
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files" FILES ${BGL_DX12_SOURCES} ${BGL_DX12_HEADERS})
+
+add_library(bgl_d3d12 OBJECT
+    ${BGL_DX12_SOURCES}
+    ${BGL_DX12_HEADERS}
+)
+
+find_package(directx-headers CONFIG REQUIRED)
+
+# bgpu found it first, and the port's config refuses to define its target twice.
+if(NOT TARGET Microsoft::WinPixEventRuntime)
+	find_package(winpixevent CONFIG REQUIRED)
+endif()
+
+find_package(Stb REQUIRED)  # stb_image_write for screenshot capture
+
+target_include_directories(bgl_d3d12
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${Stb_INCLUDE_DIR}
+)
+
+target_precompile_headers(bgl_d3d12
+    PRIVATE ${BERNINI_ROOT}/PCH/pch.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/../pch.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
+)
+
+target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12 $<$<CONFIG:Debug>:USE_PIX>)
+
+target_link_libraries(bgl_d3d12
+    PUBLIC bgl_headers bgl_idl bgpu core assetlib_structs glm::glm
+    PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers
+            Microsoft::WinPixEventRuntime
+)

@@ -1,6 +1,6 @@
 {
   "name": "slang-lsp",
-  "description": "Slang language server (slangd) for the shaders under libs/bgl_extended",
+  "description": "Slang language server (slangd) for the shaders under libs/bgl",
   "version": "1.0.0",
   "author": {
     "name": "Bernini"

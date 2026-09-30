@@ -1,6 +1,6 @@
-# IDL Codegen (`bgl_idlgen`) — one Slang source, CPU + GPU definitions in lockstep
+# IDL Codegen (`bgpu_idlgen`) — one Slang source, CPU + GPU definitions in lockstep
 
-`bgl_idlgen` is a build-time code generator that turns a `.slang` **IDL module** — a Slang module
+`bgpu_idlgen` is a build-time code generator that turns a `.slang` **IDL module** — a Slang module
 the shaders `import` as it is written — into the C++ header the CPU `#include`s. Its job is to keep
 the CPU-side struct/enum/constant definitions byte-for-byte identical to the GPU-side ones so a CPU
 struct can be `memcpy`'d straight into a GPU buffer. It is
@@ -8,7 +8,7 @@ an executable tool, not a runtime library — there are no `I*` interfaces here.
 
 **This document is a map, not a mirror.** It captures the design choices, the generation
 topology, and the *non-obvious* contracts — not the tool's internals. The generator source
-[libs/bgl_common/idl/idlgen.cpp](libs/bgl_common/idl/idlgen.cpp) and each IDL module under [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/)
+[libs/bgpu/idl/idlgen.cpp](libs/bgpu/idl/idlgen.cpp) and each IDL module under [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/)
 are the source of truth; when this doc disagrees, trust them, then fix this doc.
 
 ---
@@ -16,8 +16,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 ## Design Choices
 
 * **A module's identity is its path relative to `--src-root`, and that one path drives
-  everything.** The modules live in the shared shader tree, under
-  [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/), so the relative path (minus
+  everything.** The modules live in the renderer's shader tree, under
+  [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/), so the relative path (minus
   extension) is the Slang `import` name (`idl.<Name>`), the `.h` sub-path under the output root,
   and the C++ namespace (each sub-directory appends a `::` segment onto the base `bgl::idl`). The
   import path, the `#include` and the `.h` location cannot drift. **To move a module, rename it
@@ -25,9 +25,9 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   with its import name.**
 
 * **The module is the shader source; nothing is copied, and only C++ is generated.** The shaders
-  import the module where it is written, staged with the rest of the shared tree. A module produces
-  a C++ header under `<build>/generated/bgl_common/idl/` **only if it is listed in
-  `IDL_CPP_SOURCES`** ([libs/bgl_common/idl/CMakelists.txt](libs/bgl_common/idl/CMakelists.txt));
+  import the module where it is written, staged with the rest of the renderer's tree. A module produces
+  a C++ header under `<build>/generated/bgl_idl/bgl/idl/` **only if it is listed in
+  `IDL_CPP_SOURCES`** ([libs/bgl/idl/CMakeLists.txt](libs/bgl/idl/CMakeLists.txt));
   interface/generic-only modules carry no concrete layout and are skipped. The tool also self-skips
   the header when a module has no structs, enums, or constants. *Rejected: a banner-stamped copy of
   every module under the shader tree*, which this once did — a generated file that is also the
@@ -99,7 +99,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   Enums with an explicit underlying type (`MaterialType`, `MeshInstanceFlag`) pass by construction.
 
   A public *struct* a shader also reads is written as a module in that list:
-  [OverlayVertex.slang](libs/bgl_common/shaders/src/idl/OverlayVertex.slang) is imported by the
+  [OverlayVertex.slang](libs/bgl/shaders/src/idl/OverlayVertex.slang) is imported by the
   overlay shader, and its generated `<bgl/OverlayVertex.h>` is the type a client fills. Its
   contract is documented on the module, since that is the source. The generated struct has **no
   default member initialisers**, so a brace list names every field, `reserved` included: one that
@@ -109,7 +109,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   The list is also what keeps renderer-shaped data off the public surface, which is the other half
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
   describes *this* renderer's pipelines — a renderer's pipeline permutations belong in `bgl::idl`
-  with the rest of bgl_extended's internals, or nowhere.
+  with the rest of bgl's internals, or nowhere.
 
 * **Generated headers are write-only build artifacts.** Each `.h` carries a
   `// THIS IS A FILE GENERATED FROM ... DO NOT EDIT MANUALLY` banner. Edit the IDL module and
@@ -122,14 +122,14 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 ### IDL constructs (what you can write in a module)
 | Construct | Example | Generates (C++) | Notes |
 |---|---|---|---|
-| `public struct` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | `struct` + `sizeof`/`offsetof` asserts | Layout via host reflection. |
-| `public enum` | [VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) | `enum class : <underlying>` + `sizeof` assert | Values parsed textually; see contracts. |
-| `public static const` | [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim, except that a `float` gains an `f` suffix; `public` needed for shader import. |
-| `import <Module>` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | `#include "<Module>.h"` (a sibling) | Only emitted for referenced types. |
-| a `float3`/`float4x4`/… field | [BoneSample.slang](libs/bgl_common/shaders/src/idl/BoneSample.slang) | `#include <core/glm.h>` | A header names what it uses; a renderer's PCH must not be what makes it compile. |
-| `interface` / generic-only | [IMaterial.slang](libs/bgl_common/shaders/src/idl/IMaterial.slang), [RangeWithCount.slang](libs/bgpu/shaders/src/idl/RangeWithCount.slang) | *(none)* | Shader-only; no concrete layout. |
+| `public struct` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | `struct` + `sizeof`/`offsetof` asserts | Layout via host reflection. |
+| `public enum` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | `enum class : <underlying>` + `sizeof` assert | Values parsed textually; see contracts. |
+| `public static const` | [Constants.slang](libs/bgl/shaders/src/idl/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim, except that a `float` gains an `f` suffix; `public` needed for shader import. |
+| `import <Module>` | [MeshInstance.slang](libs/bgl/shaders/src/idl/MeshInstance.slang) | `#include "<Module>.h"` (a sibling) | Only emitted for referenced types. |
+| a `float3`/`float4x4`/… field | [BoneSample.slang](libs/bgl/shaders/src/idl/BoneSample.slang) | `#include <core/glm.h>` | A header names what it uses; a renderer's PCH must not be what makes it compile. |
+| `interface` / generic-only | [IMaterial.slang](libs/bgl/shaders/src/idl/IMaterial.slang), [RangeWithCount.slang](libs/bgpu/shaders/src/idl/RangeWithCount.slang) | *(none)* | Shader-only; no concrete layout. |
 
-### CLI options ([libs/bgl_common/idl/idlgen.cpp](libs/bgl_common/idl/idlgen.cpp))
+### CLI options ([libs/bgpu/idl/idlgen.cpp](libs/bgpu/idl/idlgen.cpp))
 | Option | Role |
 |---|---|
 | `<input.slang>` | The single IDL module to process (positional, required). |
@@ -144,18 +144,18 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 ### Files & build wiring
 | Path | Role |
 |---|---|
-| [libs/bgl_common/idl/idlgen.cpp](libs/bgl_common/idl/idlgen.cpp) | The generator (target `bgl_idlgen`). |
-| [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/) | The IDL modules (`--src-root`), which the shaders `import idl.<Name>`. |
-| [libs/bgl_common/idl/CMakelists.txt](libs/bgl_common/idl/CMakelists.txt) | The `bgl_idlgen` tool, the per-module `add_custom_command`s and the `bgl_idl_generate` target; `IDL_CPP_SOURCES` gates C++ output. |
+| [libs/bgpu/idl/idlgen.cpp](libs/bgpu/idl/idlgen.cpp) | The generator (target `bgpu_idlgen`). |
+| [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) | The IDL modules (`--src-root`), which the shaders `import idl.<Name>`. |
+| [libs/bgl/idl/CMakeLists.txt](libs/bgl/idl/CMakeLists.txt) | The per-module `add_custom_command`s, the `bgl_idl_generate` target and `bgl_idl`, the INTERFACE target that puts the mirrors on a consumer's include path; `IDL_CPP_SOURCES` gates C++ output. |
+| [libs/bgpu/idl/CMakeLists.txt](libs/bgpu/idl/CMakeLists.txt) | The `bgpu_idlgen` tool, beside the lowest tree that runs it. |
 | [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand, via `just idl` (mirrors the CMake target; resolves the built tool via the CMake File API). |
-| `<build>/generated/bgl_common/idl/` | Generated C++ headers (`bgl::idl::<Name>`). A build artifact, not committed — see below. |
-| [libs/bgl_common/include/bgl_common/idl/](libs/bgl_common/include/bgl_common/idl/) | `idl.h`, the renderer's aggregate. |
+| `<build>/generated/bgl_idl/bgl/idl/` | Generated C++ headers (`bgl::idl::<Name>`). A build artifact, not committed — see below. |
 | [libs/bgpu/include/bgpu/idl/](libs/bgpu/include/bgpu/idl/) | The **hand-written** offset primitives, `bgpu::idl::Entry`, `Range`, `RangeWithCount`, `RawEntry` — generic, and so with no concrete layout to generate. |
 | `<build>/generated/bgpu_idl/bgpu/idl/` | `ErrorCode.h`, `DebugRecord.h`: bgpu's generated mirrors (`bgpu::idl::<Name>`). |
 
 **Generated headers are never clang-formatted.** `scripts/format.py` skips any file whose first line
 carries the generator's `DO NOT EDIT MANUALLY` banner, so the one committed header is byte-for-byte
-what `bgl_idlgen` emits. Formatting them instead makes the tree disagree with the generator, and since
+what `bgpu_idlgen` emits. Formatting them instead makes the tree disagree with the generator, and since
 `bgl_idl_generate` runs as part of an ordinary build, every build then reports the files as dirty.
 
 ---
@@ -164,16 +164,16 @@ what `bgl_idlgen` emits. Formatting them instead makes the tree disagree with th
 
 ```mermaid
 flowchart TD
-    IDL["libs/bgl_common/shaders/src/idl/&lt;rel&gt;.slang<br/>(one IDL module)"]
-    TOOL["bgl_idlgen<br/>(host-target reflection + text parse)"]
-    CPP["&lt;build&gt;/generated/bgl_common/idl/&lt;rel&gt;.h<br/>(bgl::idl::*, static_asserts)"]
+    IDL["libs/bgl/shaders/src/idl/&lt;rel&gt;.slang<br/>(one IDL module)"]
+    TOOL["bgpu_idlgen<br/>(host-target reflection + text parse)"]
+    CPP["&lt;build&gt;/generated/bgl_idl/bgl/idl/&lt;rel&gt;.h<br/>(bgl::idl::*, static_asserts)"]
     SH["Shaders"]
-    CX["CPU code (bgl_extended)"]
+    CX["CPU code (bgl)"]
 
     IDL -- "iff in IDL_CPP_SOURCES" --> TOOL
     TOOL -- "--cpp-out-dir" --> CPP
     IDL -- "import idl.&lt;Name&gt;" --> SH
-    CPP -- "#include (via idl/idl.h)" --> CX
+    CPP -- "#include &lt;bgl/idl/&lt;rel&gt;.h&gt;" --> CX
     CMAKE["bgl_idl_generate target<br/>/ just idl"] -- "runs per module" --> TOOL
 ```
 
@@ -228,7 +228,7 @@ flowchart TD
 
 ## Usage Sketch
 
-Author a module `libs/bgl_common/shaders/src/idl/Foo.slang`:
+Author a module `libs/bgl/shaders/src/idl/Foo.slang`:
 
 ```slang
 import Range;                                   // pulls in idl/Range.h on the C++ side
@@ -246,7 +246,7 @@ public struct Foo
 ```
 
 Register it for a C++ header (skip this for shader-only modules) in
-[libs/bgl_common/idl/CMakelists.txt](libs/bgl_common/idl/CMakelists.txt):
+[libs/bgl/idl/CMakeLists.txt](libs/bgl/idl/CMakeLists.txt):
 
 ```cmake
 set(IDL_CPP_SOURCES
@@ -258,18 +258,18 @@ set(IDL_CPP_SOURCES
 Regenerate (or just let the `bgl_idl_generate` target run during a build):
 
 ```bash
-just idl libs/bgl_common/shaders/src/idl/Foo.slang    # or: just idl  (all modules)
+just idl libs/bgl/shaders/src/idl/Foo.slang    # or: just idl  (all modules)
 ```
 
 Consume it — shader side imports the module, CPU side includes the mirror:
 
 ```cpp
 // shader:  import idl.Foo;  then use Foo / FooKind / cFooCapacity
-#include <bgl_common/idl/Foo.h>                   // or <bgl_common/idl/idl.h> for all modules
+#include <bgl/idl/Foo.h>
 auto n = bgl::idl::cFooCapacity;                  // same value the shader sees
 ```
 
-See [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) → `<build>/generated/bgl_common/idl/Constants.h` for a
+See [Constants.slang](libs/bgl/shaders/src/idl/Constants.slang) → `<build>/generated/bgl_idl/bgl/idl/Constants.h` for a
 constants-only module, and [Geometry Layout](docs/geometry_layout.md) for how these structs form
 the GPU geometry model.
 

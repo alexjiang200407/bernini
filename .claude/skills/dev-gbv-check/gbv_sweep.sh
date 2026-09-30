@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Runs bgl_extended_tests under D3D12 GPU-based validation, one source file per process, in series.
+# Runs bgl_tests under D3D12 GPU-based validation, one source file per process, in series.
 #
 # One file per process, never sharded: a TDR resets the adapter and kills every process on it, so a
 # parallel run blames the wrong cases; and every process truncates bin/bgpu.log on start, so only a
 # serial run leaves a log per file.
 #
 # Usage: gbv_sweep.sh <bin-dir> <out-dir> [TestFile_test ...]
-#   <bin-dir>  the build's runtime dir (just exes --target bgl_extended_tests, its dirname)
+#   <bin-dir>  the build's runtime dir (just exes --target bgl_tests, its dirname)
 #   <out-dir>  where <file>.out, <file>.bgpu.log, summary.txt and events.log land
-#   files      optional; default is every libs/bgl_extended/tests/src/*_test.cpp
+#   files      optional; default is every libs/bgl/tests/src/*_test.cpp
 #
 # events.log gets one line per problem and nothing else -- it is what a Monitor tails:
 #   FAIL <file> rc=<n> <last lines>        the file's process failed (22 = abort, usually a TDR)
@@ -31,7 +31,7 @@ fi
 if [ "$#" -gt 0 ]; then
 	files="$*"
 else
-	files="$(ls "$repo"/libs/bgl_extended/tests/src/*_test.cpp | xargs -n1 basename | sed 's/\.cpp$//')"
+	files="$(ls "$repo"/libs/bgl/tests/src/*_test.cpp | xargs -n1 basename | sed 's/\.cpp$//')"
 fi
 
 mkdir -p "$out"
@@ -48,7 +48,7 @@ for f in $files; do
 	marker="$(mktemp)"
 	start=$(date +%s)
 
-	timeout "$per_file_timeout" ./bgl_extended_tests.exe -# "[#$f]" --gpu-validation > "$out/$f.out" 2>&1
+	timeout "$per_file_timeout" ./bgl_tests.exe -# "[#$f]" --gpu-validation > "$out/$f.out" 2>&1
 	rc=$?
 	secs=$(( $(date +%s) - start ))
 
@@ -69,7 +69,7 @@ for f in $files; do
 			| sed "s/^/GBV $f /" >> "$out/events.log"
 	fi
 
-	for crash in $(find . -maxdepth 1 -name 'bgl_extended_tests_crash_*.log' -newer "$marker" 2>/dev/null); do
+	for crash in $(find . -maxdepth 1 -name 'bgl_tests_crash_*.log' -newer "$marker" 2>/dev/null); do
 		cp "$crash" "$out/"
 		echo "CRASH $f $out/$(basename "$crash")" >> "$out/events.log"
 	done

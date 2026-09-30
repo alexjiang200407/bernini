@@ -15,10 +15,10 @@ add_executable(bgl_grass
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_grass PRIVATE core bgl_extended gamelib assetlib CLI11::CLI11 example_util example_headless)
+target_link_libraries(bgl_grass PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_util example_headless)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
-    target_link_libraries(bgl_grass PRIVATE bgl_d3d12_agility Shell32)
+    target_link_libraries(bgl_grass PRIVATE bgpu_d3d12_agility Shell32)
 endif()
 
 enable_strict_compiler(bgl_grass)

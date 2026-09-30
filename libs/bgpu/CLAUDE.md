@@ -1,7 +1,7 @@
 # bgpu
 
 The process's GPU device, the Slang sessions that compile for it, and the RHI every owner of the
-device builds on — the renderer (`bgl_extended`) and a compute client beside it (`crowdlib`). What
+device builds on — the renderer (`bgl`) and a compute client beside it (`crowdlib`). What
 each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); how the RHI is used is
 [docs/rhi.md](../../docs/rhi.md).
 
@@ -15,12 +15,12 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
 - **Nothing here names the renderer.** `bgpu_selfcheck` compiles every public header alone, with no
-  PCH, against `bgpu` only, so an `#include <bgl/...>` or `<bgl_common/...>` — or an include a header
+  PCH, against `bgpu` only, so an `#include <bgl/...>` — or an include a header
   leaned on the PCH for — stops the build. `bgpu_check_shaders` does the same for every Slang module
   under `./shaders/src`.
 - Error handling: `core::ensure` for internal problems; throw for the caller's.
 - Verification: `just test bgpu` — `[compute]` is an owner with no renderer in the process — then the
-  renderer's suite, `bgl_extended_tests`, which drives the same RHI harder.
+  renderer's suite, `bgl_tests`, which drives the same RHI harder.
 
 ## D3D12 (`./src/d3d12`)
 
@@ -30,9 +30,9 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Implementation files take a `_d3d12` suffix: `IDevice` is implemented by `Device_d3d12.cpp`.
 - **A target that compiles shaders needs `dxcompiler.dll` and `dxil.dll` beside the executable.**
   Slang loads both with `GetProcAddress`, so nothing imports them and vcpkg's applocal deployment
-  does not stage them. `bgl_extended`'s build stages them, with the Agility SDK's `D3D12Core.dll`,
-  so a target that brings up a device depends on `bgl_extended` for the staging even when it links
-  no renderer — `bgpu_tests` does — and links `bgl_d3d12_agility` for the SDK's exports.
+  does not stage them. bgpu's build stages them, with the Agility SDK's `D3D12Core.dll`, beside
+  the executables, so linking bgpu is enough; an executable also links `bgpu_d3d12_agility`, the
+  SDK's two exports, which must be its own.
 - GPU-based validation is opt-in through `GpuContextDesc::enableGPUValidationLayer`; the debug layer
   is separate and stays on with `enableDebugLayer`.
 
@@ -56,7 +56,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   releases one holds its own pool (`ScopeAutoreleasePool()`, `src/metal/autorelease_scope.h`) — the
   device's factories, the resource manager's creates and destroys, the queue's submit and waits,
   `CommandList::Open`..`Close` — and a caller needs no pool of its own: the renderer's net
-  (`AutoreleaseNet_metal.h`, in `bgl_extended`) catches nothing from here, and a compute client with
+  (`AutoreleaseNet_metal.h`, in `bgl`) catches nothing from here, and a compute client with
   no net leaks nothing. A forgotten one is silent, so `scripts_tests` runs all of `bgpu_tests` --
   the RHI with no renderer, `RhiEntryPoints_test` reaching every factory -- under
   `OBJC_DEBUG_MISSING_POOLS=YES`, and fails on anything of ours autoreleased with no pool. A new

@@ -11,7 +11,7 @@ touched, and the bracket becomes a fact about the header rather than an artefact
 tool wrote the line.
 
 The decision is the resolved path, never the spelling: the same `"util.h"` is core's public
-header from one directory and bgl_extended's internal one from another. Resolution uses the
+header from one directory and bgl's internal one from another. Resolution uses the
 translation unit's own search path out of `compile_commands.json`, in the order the compiler
 would, so a spelling this preset cannot resolve -- a Windows-only header on macOS -- is left
 exactly as it was rather than guessed at.
@@ -62,7 +62,7 @@ def wanted_quoted(target, repo_root):
     CLAUDE.md draws the line at the directory: a subsystem's `include/` is what it publishes
     and is `<>`, its `src/` is internal and is `""`. Anything that is not our source at all --
     vcpkg, the standard library, and the IDL headers generated under `build/` that this tree
-    already spells `<bgl_common/idl/DrawBucket.h>` -- is an interface by construction.
+    already spells `<bgl/idl/DrawBucket.h>` -- is an interface by construction.
 
     None means the convention does not reach this header, and the spelling is then left
     exactly as written. `examples/util` is the case that forces it: its headers sit beside

@@ -1,0 +1,157 @@
+// A SharedRef<ISceneView> is dereferenced and destroyed here, both of which need the
+// complete type -- include-cleaner sees only the declaration.
+#include "passes/TransparentSortPass.h"
+#include "fg/FrameGraph.h"
+#include "passes/DrawData.h"
+#include "scene/scene_buffer_names.h"
+#include <bgl/ISceneView.h>  // IWYU pragma: keep
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/pipeline/PipelineBatch.h>
+#include <bgpu/types/Barrier.h>
+#include <core/err/util.h>
+#include <core/math.h>
+#include <cstdint>
+#include <spdlog/spdlog.h>
+
+namespace bgl
+{
+	void
+	TransparentSortPass::Init(const PassInitContext& ctx)
+	{
+		core::ensure(ctx.device != nullptr, "Device pointer is null");
+
+		ctx.pipelines->Add(
+			m_DepthKeys,
+			bgpu::ComputePipelineDesc()
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentDepthKeys"))
+				.SetDebugName("Transparent Depth Keys"));
+
+		ctx.pipelines->Add(
+			m_Sort,
+			bgpu::ComputePipelineDesc()
+				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))
+				.SetDebugName("Transparent Sort"));
+	}
+
+	void
+	TransparentSortPass::Release()
+	{
+		spdlog::trace("TransparentSortPass::Release");
+
+		m_DepthKeys.Reset();
+		m_Sort.Reset();
+	}
+
+	void
+	TransparentSortPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
+	{
+		fg.AddPass(
+			  PassDesc()
+				  .SetName("Transparent Sort Clear {}", draw.drawIdx)
+				  .AddCopyDest(c_TransparentSortCountName)
+				  .AddCopyDest(c_TransparentDispatchArgsName)
+				  .SetExec([this](const PassContext& ctx) { ExecuteClear(ctx); }))
+			.AddPass(
+				PassDesc()
+					.SetName("Transparent Depth Keys {}", draw.drawIdx)
+					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_InstanceVisibilityName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferRead(c_DrawBucketFlagsName, bgpu::BarrierSyncFlag::kComputeShader)
+					// Only the transparent instances take a slot, and the count that says how many
+					// is written by this same pass -- so a leftover entry is indistinguishable
+					// from one this frame produced.
+					.AddPoisonedBufferArg(
+						c_TransparentSortEntriesName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_TransparentSortCountName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.SetExec([draw, this](const PassContext& ctx) { ExecuteDepthKeys(ctx, draw); }))
+			.AddPass(
+				PassDesc()
+					.SetName("Transparent Sort {}", draw.drawIdx)
+					.AddBufferReadWrite(
+						c_TransparentSortEntriesName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_TransparentSortCountName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_SortedTransparentInstancesName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.AddBufferReadWrite(
+						c_TransparentDispatchArgsName,
+						bgpu::BarrierSyncFlag::kComputeShader)
+					.SetExec([draw, this](const PassContext& ctx) { ExecuteSort(ctx, draw); }));
+	}
+
+	void
+	TransparentSortPass::ExecuteClear(const PassContext& ctx)
+	{
+		auto cmd = ctx.GetCommandList();
+
+		static constexpr uint32_t c_Zero = 0;
+		cmd->WriteBuffer(ctx.GetBuffer(c_TransparentSortCountName), &c_Zero, sizeof(c_Zero));
+
+		// Seeded rather than zeroed: a frame with no transparent instances still has the forward pass
+		// issue its indirect dispatch, and a zeroed y/z would be an invalid dispatch.
+		static constexpr idl::DispatchArgs c_Seed = { 0u, 1u, 1u };
+
+		cmd->WriteBuffer(ctx.GetBuffer(c_TransparentDispatchArgsName), &c_Seed, sizeof(c_Seed));
+	}
+
+	void
+	TransparentSortPass::ExecuteDepthKeys(const PassContext& ctx, const DrawData& draw)
+	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
+		m_DepthKeys["gUniforms"]["instanceBuffer"]  = ctx.GetBuffer(c_InstanceBufferName);
+		m_DepthKeys["gUniforms"]["meshBuffer"]      = ctx.GetBuffer(c_MeshInstanceBufferName);
+		m_DepthKeys["gUniforms"]["visibility"]      = ctx.GetBuffer(c_InstanceVisibilityName);
+		m_DepthKeys["gUniforms"]["drawBucketFlags"] = ctx.GetBuffer(c_DrawBucketFlagsName);
+		m_DepthKeys["gUniforms"]["outEntries"]      = ctx.GetBuffer(c_TransparentSortEntriesName);
+		m_DepthKeys["gUniforms"]["outCount"]        = ctx.GetBuffer(c_TransparentSortCountName);
+		m_DepthKeys["gUniforms"]["cameraPos"]       = draw.viewState.cameraPos;
+
+		auto cmdList = ctx.GetCommandList();
+
+		auto computeState   = bgpu::ComputeState();
+		computeState.kernel = &m_DepthKeys;
+		cmdList->SetComputeState(computeState);
+
+		cmdList->Dispatch(
+			core::div_ceil(draw.view->GetInstanceCount(), idl::cHistogramGroupSize),
+			1,
+			1);
+	}
+
+	void
+	TransparentSortPass::ExecuteSort(const PassContext& ctx, const DrawData& draw)
+	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
+		m_Sort["gUniforms"]["entries"]         = ctx.GetBuffer(c_TransparentSortEntriesName);
+		m_Sort["gUniforms"]["count"]           = ctx.GetBuffer(c_TransparentSortCountName);
+		m_Sort["gUniforms"]["sortedInstances"] = ctx.GetBuffer(c_SortedTransparentInstancesName);
+		m_Sort["gUniforms"]["dispatchArgs"]    = ctx.GetBuffer(c_TransparentDispatchArgsName);
+
+		auto cmdList = ctx.GetCommandList();
+
+		auto computeState   = bgpu::ComputeState();
+		computeState.kernel = &m_Sort;
+		cmdList->SetComputeState(computeState);
+
+		cmdList->Dispatch(1, 1, 1);
+	}
+}

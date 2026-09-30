@@ -15,10 +15,10 @@ add_executable(bgl_moving
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_moving PRIVATE core bgl_extended gamelib assetlib CLI11::CLI11 example_util )
+target_link_libraries(bgl_moving PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_util )
 
 if(RENDERER_BACKEND STREQUAL "DX12")
-    target_link_libraries(bgl_moving PRIVATE bgl_d3d12_agility Shell32)
+    target_link_libraries(bgl_moving PRIVATE bgpu_d3d12_agility Shell32)
 endif()
 
 enable_strict_compiler(bgl_moving)

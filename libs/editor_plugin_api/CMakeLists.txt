@@ -34,7 +34,7 @@ if(BERNINI_EDITOR_SDK)
         "Build-tree package directory for native editor plugins")
     file(MAKE_DIRECTORY "${BERNINI_EDITOR_SDK_DIR}")
     export(TARGETS
-        core_process core assetlib_structs bgpu bgl assetlib assetlib_plugin_api gamelib editor_localize editor_plugin_api
+        core_process core assetlib_structs bgpu bgl_headers assetlib assetlib_plugin_api gamelib editor_localize editor_plugin_api
         editor_sdk
         NAMESPACE Bernini::
         FILE "${BERNINI_EDITOR_SDK_DIR}/BerniniEditorSDKTargets.cmake")

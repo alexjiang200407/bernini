@@ -1,12 +1,12 @@
 ---
 name: dev-gbv-check
-description: Check origin/dev end to end on Windows/D3D12 - build it in a gitignored worktree, run every suite, run bgl_extended_tests under GPU-based validation one file at a time with a Monitor on errors only, fix what it finds, and open a bugfix PR against dev. Use when asked to check, verify or GBV-test the dev branch.
+description: Check origin/dev end to end on Windows/D3D12 - build it in a gitignored worktree, run every suite, run bgl_tests under GPU-based validation one file at a time with a Monitor on errors only, fix what it finds, and open a bugfix PR against dev. Use when asked to check, verify or GBV-test the dev branch.
 ---
 
 # Check origin/dev under GPU-based validation
 
 The goal is a PR against `dev` that fixes every bug the build, the suites and a `--gpu-validation`
-run of `bgl_extended_tests` turn up. Work in a worktree so the user's checkout is never touched.
+run of `bgl_tests` turn up. Work in a worktree so the user's checkout is never touched.
 
 ## 1. Worktree
 
@@ -57,7 +57,7 @@ cat > "$wt/CMakeUserPresets.json" <<'JSON'
   ]
 }
 JSON
-(cd "$wt" && just build bgl_extended_tests --preset gbv-release)   # run_in_background
+(cd "$wt" && just build bgl_tests --preset gbv-release)   # run_in_background
 ```
 
 A release build defines no `BERNINI_GPU_DEBUG`, so the GPU `dbg_assert`s are gone, and any test file
@@ -65,23 +65,23 @@ wrapped in `#if defined(BERNINI_GPU_DEBUG)` has no cases in it. Sweep those file
 build as well (step 4); list them with:
 
 ```bash
-grep -ln "^#if defined(BERNINI_GPU_DEBUG)" "$wt"/libs/bgl_extended/tests/src/*_test.cpp | xargs -n1 basename | sed 's/\.cpp$//'
+grep -ln "^#if defined(BERNINI_GPU_DEBUG)" "$wt"/libs/bgl/tests/src/*_test.cpp | xargs -n1 basename | sed 's/\.cpp$//'
 ```
 
 ## 3. The other suites, plainly
 
 ```bash
-just test --no-build assetlib bgl_common bgl_tests bgpu core crowdlib editor_plugin editor_tests gamelib scripts
+just test --no-build assetlib bgl_tests bgpu core crowdlib editor_plugin editor_tests gamelib scripts
 ```
 
-Only `bgl_extended_tests` takes `--gpu-validation`. Check `just test --list` for new suites first
+Only `bgl_tests` takes `--gpu-validation`. Check `just test --list` for new suites first
 and add any the list above misses.
 
 ## 4. The GPU-validation sweep, with a Monitor on errors
 
 ```bash
 bin="$wt/build/gbv-release/bin"     # the release build from step 2b
-dbg=$(dirname "$(cd "$wt" && just exes --target bgl_extended_tests | tail -1)")
+dbg=$(dirname "$(cd "$wt" && just exes --target bgl_tests | tail -1)")
 out="$wt/.gbv"                      # inside the worktree, so it goes when the worktree does
 bash "$root/.claude/skills/dev-gbv-check/gbv_sweep.sh" "$bin" "$out"   # run_in_background
 # then, once it is DONE, the debug-only files from step 2b against the debug build:
@@ -147,7 +147,7 @@ payload memory (`docs/known_issues.md` has both). Revert the diagnostic before c
 
 **Bisect shaders without rebuilding.** Slang compiles from `$bin/shaders/src` at run time, so edit
 that copy, back up the original, and rerun one case:
-`./bgl_extended_tests.exe "<case name>" --gpu-validation`.
+`./bgl_tests.exe "<case name>" --gpu-validation`.
 Warnings are errors, and DXC rejects a second `SetMeshOutputCounts` call site, so keep edits
 branch-free. The next build overwrites the copy; put the real fix in `libs/`.
 
@@ -170,13 +170,13 @@ Revert it afterwards.
 
 ## 6. Verify, then PR
 
-1. `just build`, and `just build bgl_extended_tests --preset gbv-release`.
+1. `just build`, and `just build bgl_tests --preset gbv-release`.
 2. Re-run the sweep over only the files that had events: `gbv_sweep.sh "$bin" "$out/rerun" A_test B_test`.
    Every one must be free of `FAIL`, `GBV` and `CRASH`.
 3. Run the whole suite the way CI's users do: `just test` (all suites, debug), then the validated
    suite sharded from the release build:
-   `(cd "$bin" && ./bgl_extended_tests.exe --gpu-validation --shard-count 4 --shard-index N)`
-   for each N, or `just test bgl_extended -- --gpu-validation` against the debug build. A single
+   `(cd "$bin" && ./bgl_tests.exe --gpu-validation --shard-count 4 --shard-index N)`
+   for each N, or `just test bgl_tests -- --gpu-validation` against the debug build. A single
    TDR anywhere fails every shard, so this run is the proof that no hang is left. Sharded output is
    held until each shard exits; judge progress by fresh files in `bin/assets/golden/` and by CPU,
    not by the console.

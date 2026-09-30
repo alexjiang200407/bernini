@@ -14,7 +14,7 @@ endif()
 target_include_directories(editor_sdk PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}/include)
-target_link_libraries(editor_sdk PUBLIC assetlib bgl Qt6::Widgets)
+target_link_libraries(editor_sdk PUBLIC assetlib bgl_headers Qt6::Widgets)
 set_target_properties(editor_sdk PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 enable_strict_compiler(editor_sdk)
 # What Qt costs the strict set, and nothing more: a QObject is non-copyable, so every Q_OBJECT class

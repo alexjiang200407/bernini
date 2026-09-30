@@ -242,7 +242,7 @@ regimes were always pointing at is available:
 | **Derived, and committed anyway** | Only an environment imported before its source was copied into `Authored/EnvSources/`: with no `.bimport` beside a source, nothing puts its `.bsky` or `.benvl` back. Re-importing it — from wherever its `.hdr` is — writes the source and the document, and from then on it is ignorable like everything else. Environments imported since are covered by the row above. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
-tree that `bgl_extended_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
+tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
 as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 

@@ -114,10 +114,10 @@ disagrees, trust the header, then fix this doc.
   `BEnv::skyMipLevel`, authored on the document and clamped at resolve to what the baked chain holds.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
-  not of any environment. bgl_extended renders its own 256² `RG16_FLOAT` copy at most once per
+  not of any environment. bgl renders its own 256² `RG16_FLOAT` copy at most once per
   device — on the first frame that draws a PBR-lit bucket, so a scene shaded entirely by lit game
   surfaces never builds it
-  ([libs/bgl_extended/src/passes/BrdfLutGenPass.cpp](libs/bgl_extended/src/passes/BrdfLutGenPass.cpp)) — so there is no file to ship, to
+  ([libs/bgl/src/passes/BrdfLutGenPass.cpp](libs/bgl/src/passes/BrdfLutGenPass.cpp)) — so there is no file to ship, to
   configure, or to get out of step with the shader that samples it.
 
 ## Topology
@@ -153,11 +153,11 @@ flowchart TD
   `HasSky` below, and `editor::ApplyEnvironment`, which guards both.
 * **A view that was never given an environment is lit by black, not by nothing.** The renderer binds
   a 1×1 black cube for the irradiance and prefilter maps, and a black BRDF LUT for a frame that
-  generated none (`BlackEnvironment`, [libs/bgl_extended/src/gfx/BlackEnvironment.h](libs/bgl_extended/src/gfx/BlackEnvironment.h)).
+  generated none (`BlackEnvironment`, [libs/bgl/src/gfx/BlackEnvironment.h](libs/bgl/src/gfx/BlackEnvironment.h)).
   So a surface that samples the environment in a scene without one reads zero rather than an
   invalid descriptor index, which is out of the heap and only happened to read as black.
 * The prefilter chain must be **7 mips**. `MAX_REFLECTION_LOD = 6` in
-  [libs/bgl_common/shaders/src/lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang), and
+  [libs/bgl/shaders/src/lib/math/PbrShading.slang](libs/bgl/shaders/src/lib/math/PbrShading.slang), and
   roughness is `mip / (mipLevels - 1)` — a different count silently remaps roughness rather than
   failing.
 
@@ -381,7 +381,7 @@ the `.bimport` beside it records the parameters the shipped maps were made at.
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
     --python scripts/blender_probe.py -- --out probe.png     # Blender's half, by hand
-just run bgl_extended_tests -- "[parity]"                      # ours, in the suite
+just run bgl_tests -- "[parity]"                      # ours, in the suite
 ```
 
 The script builds the same sphere and camera under Blender's own `forest.exr` at strength 1.0,

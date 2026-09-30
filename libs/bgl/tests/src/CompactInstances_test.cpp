@@ -1,0 +1,421 @@
+#include "fg/FrameGraph.h"
+#include "fg/PassDesc.h"
+#include "gfx/GraphicsBase.h"
+#include "types/SubmeshInstance.h"
+#include "util/GpuValidation.h"
+#include "util/TestGraphics.h"
+#include "util/TestOptions.h"
+#include <algorithm>
+#include <array>
+#include <bgl/IGraphics.h>
+#include <bgl/idl/Constants.h>
+#include <bgl/idl/DispatchArgs.h>
+#include <bgl/idl/DrawBucket.h>
+#include <bgl/idl/InstanceVisibility.h>
+#include <bgpu/buffer/ComputeBuffer.h>
+#include <bgpu/buffer/PackedBuffer.h>
+#include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
+#include <bgpu/types/QueueType.h>
+#include <bgpu/uniforms/Uniforms.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <iterator>
+#include <numeric>
+#include <vector>
+
+// Drives the whole counting sort -- histogram, scan, compaction -- through a real FrameGraph, with
+// the same pass declarations CompactInstancesPass makes, and checks every instance landed inside its
+// own bucket.
+//
+// The scan and the compaction both declare drawBucketPrefixSum as a UAV, so the graph sees no state change
+// between them. It must still barrier: the compaction reads the bases the scan writes, and without
+// one the two dispatches overlap and the compaction scatters against a pre-scan prefix sum. Only a
+// bucket whose base is non-zero can detect that -- a lone bucket's base is the sum of empty buckets
+// before it, which is 0 either way -- so the instances below span three buckets.
+TEST_CASE(
+	"Compact instances: every instance lands in its own bucket exactly once",
+	"[compute][compact]")
+{
+	auto opts                                = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer         = true;
+	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto resourceManager = gfxBase->GetResourceManagerCpy();
+	REQUIRE(resourceManager != nullptr);
+
+	auto device = gfxBase->GetDevice();
+
+	auto cmdListDesc  = bgpu::CommandListDesc();
+	cmdListDesc.type  = bgpu::QueueType::kGraphics;
+	auto cmdAllocator = device->CreateCommandAllocator();
+	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+
+	constexpr uint32_t c_ActiveCount = 4000;
+	constexpr uint32_t c_PaddedCount =
+		((c_ActiveCount + bgl::idl::cHistogramGroupSize - 1) / bgl::idl::cHistogramGroupSize) *
+		bgl::idl::cHistogramGroupSize;
+
+	// Bucket 1's base is the (empty) bucket 0: 0 before the scan and 0 after. 130 and the top of the
+	// ceiling are the ones with something to get wrong -- the second a second lap of the 128-thread
+	// reservation stride, so nothing may assume ids stop short.
+	// The last is a demanded bucket every instance of which the cull rejected: it must come out
+	// exactly as empty as a bucket nothing names -- a zero grid, which the geometry passes also read
+	// as its command count (DrawBucketCountIndex), so it issues no command where that is honoured.
+	constexpr uint32_t c_CulledBucket = 64u;
+	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u, c_CulledBucket };
+	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
+
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
+	{
+		auto desc         = bgpu::PackedBufferDesc();
+		desc.initialCount = c_PaddedCount;
+		desc.debugName    = "Compact Instances";
+		instanceBuffer.Init(desc, resourceManager);
+	}
+
+	// The lane each instance index belongs in, so a compacted index can be checked against the
+	// lane it was filed under. Every third instance of bucket 130 is dissolving, so it files under
+	// that bucket's dissolve lane, past the ceiling of bucket ids.
+	std::vector<uint32_t>                         bucketOf(c_ActiveCount);
+	std::vector<uint32_t>                         visibleOf(c_PaddedCount, 1u);
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedCount{};
+
+	for (uint32_t i = 0; i < c_ActiveCount; ++i)
+	{
+		const uint32_t bucket = c_Buckets[i % c_BucketCount];
+
+		// Any non-null mesh entry: offset 0 is the null one, so the first element past it will do.
+		auto instance                = bgl::SubmeshInstance();
+		instance.meshInstance.offset = 1;
+		instance.submeshIndex        = 0u;
+		instance.drawBucket          = bucket;
+		instanceBuffer.Add(instance);
+
+		const bool dissolving = bucket == 130u && i % 3u == 0u;
+		bucketOf[i]           = dissolving ? bucket + bgl::idl::cDissolveLane : bucket;
+		visibleOf[i] = bucket == c_CulledBucket ? 0u :
+		               dissolving ? bgl::idl::cVisibleCurrentBit | bgl::idl::cVisibleDissolvingBit :
+		                            bgl::idl::cVisibleCurrentBit;
+		expectedCount[bucketOf[i]] += visibleOf[i] != 0u ? 1u : 0u;
+	}
+	for (uint32_t i = c_ActiveCount; i < c_PaddedCount; ++i)
+	{
+		// A default SubmeshInstance names no mesh; the shader skips it.
+		instanceBuffer.Add(bgl::SubmeshInstance());
+	}
+
+	// Exclusive base of each bucket -- where the compaction should have put it.
+	std::array<uint32_t, bgl::idl::cMaxDrawLanes> expectedBase{};
+	uint32_t                                      running = 0;
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
+	{
+		expectedBase[p] = running;
+		running += expectedCount[p];
+	}
+
+	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {
+		auto buffer = bgpu::ComputeBuffer();
+		auto desc   = bgpu::ComputeBufferDesc();
+		desc.SetElement<decltype(element)>();
+		desc.initialCount = count;
+		desc.debugName    = name;
+		buffer.Init(desc, resourceManager);
+		return buffer;
+	};
+
+	auto drawBucketPrefixSum =
+		makeCompute(uint32_t{}, bgl::idl::cMaxDrawLanes, "Bucket Prefix Sum");
+	auto dispatchArgs =
+		makeCompute(bgl::idl::DispatchArgs{}, bgl::idl::cMaxDrawLanes, "Compacted Dispatch Args");
+	auto compacted = makeCompute(uint32_t{}, c_PaddedCount, "Compacted Instances");
+
+	// The histogram and compaction gate on a per-instance visibility word the cull pass writes. This
+	// test isolates the counting sort, so it stands in for a cull that passed everything but
+	// c_CulledBucket's instances. Frustum culling has its own test.
+	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, c_PaddedCount, "Visibility");
+
+	const auto makeKernel = [&](const char* module, const char* debugName) {
+		auto kernel = device->CreateComputeKernel(
+			bgpu::ComputePipelineDesc()
+				.SetShader(device->CreateShader(module))
+				.SetDebugName(debugName));
+		REQUIRE(kernel.pipeline != nullptr);
+		return kernel;
+	};
+
+	auto histogram = makeKernel("programs.culling.HistogramInstances", "Histogram Instances");
+	auto prefixSum = makeKernel("programs.culling.PrefixSumInstances", "Prefix-Sum Instances");
+	auto compact   = makeKernel("programs.culling.CompactInstances", "Compact Instances");
+
+	bgl::FrameGraph fg;
+	fg.RegisterQueue("main", cmdQueue, cmdList);
+
+	fg.ImportBuffer("instanceBuffer", instanceBuffer.GetBufferHandle());
+	fg.ImportBuffer("drawBucketPrefixSum", drawBucketPrefixSum.GetBufferHandle());
+	fg.ImportBuffer("dispatchArgs", dispatchArgs.GetBufferHandle());
+	fg.ImportBuffer("compactedInstances", compacted.GetBufferHandle());
+	fg.ImportBuffer("visibility", visibility.GetBufferHandle());
+
+	// Pass declarations mirror CompactInstancesPass. Diverge from them and this test stops standing
+	// in for the renderer.
+	fg.AddPass(
+		bgl::PassDesc()
+			.SetName("Clear")
+			.AddCopyDest("instanceBuffer")
+			.AddCopyDest("drawBucketPrefixSum")
+			.AddCopyDest("dispatchArgs")
+			.AddCopyDest("compactedInstances")
+			.AddCopyDest("visibility")
+			.SetExec([&](const bgl::PassContext& ctx) {
+				auto* cmd = ctx.GetCommandList();
+				instanceBuffer.Update(cmd);
+				drawBucketPrefixSum.Clear(cmd);
+				compacted.Clear(cmd);
+
+				cmd->WriteBuffer(
+					visibility.GetBufferHandle(),
+					visibleOf.data(),
+					visibleOf.size() * sizeof(uint32_t));
+
+				std::array<bgl::idl::DispatchArgs, bgl::idl::cMaxDrawLanes> seed{};
+				for (bgl::idl::DispatchArgs& args : seed)
+				{
+					args = { 0u, 1u, 1u };
+				}
+				cmd->WriteBuffer(dispatchArgs.GetBufferHandle(), seed.data(), sizeof(seed));
+			}));
+
+	fg.AddPass(
+		bgl::PassDesc()
+			.SetName("HistogramAndPrefixSum")
+			.AddBufferRead("instanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgpu::BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const bgl::PassContext& ctx) {
+				auto* cmd = ctx.GetCommandList();
+
+				histogram["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
+				histogram["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
+				histogram["gUniforms"]["outBuffer"]      = drawBucketPrefixSum.GetBufferHandle();
+
+				auto state   = bgpu::ComputeState();
+				state.kernel = &histogram;
+				cmd->SetComputeState(state);
+				cmd->Dispatch(c_PaddedCount / bgl::idl::cHistogramGroupSize, 1, 1);
+
+				// Both dispatches live in this one pass, so the graph cannot barrier between them.
+				cmd->Barrier(
+					drawBucketPrefixSum.GetBufferHandle(),
+					bgpu::BufferBarrierDesc()
+						.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+						.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
+
+				prefixSum["gUniforms"]["inOutBuffer"] = drawBucketPrefixSum.GetBufferHandle();
+
+				state.kernel = &prefixSum;
+				cmd->SetComputeState(state);
+				cmd->Dispatch(1, 1, 1);
+			}));
+
+	fg.AddPass(
+		bgl::PassDesc()
+			.SetName("Compact")
+			.AddBufferRead("instanceBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawBucketPrefixSum", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("visibility", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("compactedInstances", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("dispatchArgs", bgpu::BarrierSyncFlag::kComputeShader)
+			.SetExec([&](const bgl::PassContext& ctx) {
+				auto* cmd = ctx.GetCommandList();
+
+				compact["gUniforms"]["instanceBuffer"]      = instanceBuffer.GetBufferHandle();
+				compact["gUniforms"]["visibility"]          = visibility.GetBufferHandle();
+				compact["gUniforms"]["drawBucketPrefixSum"] = drawBucketPrefixSum.GetBufferHandle();
+				compact["gUniforms"]["compactedInstances"]  = compacted.GetBufferHandle();
+				compact["gUniforms"]["dispatchArgs"]        = dispatchArgs.GetBufferHandle();
+
+				auto state   = bgpu::ComputeState();
+				state.kernel = &compact;
+				cmd->SetComputeState(state);
+				cmd->Dispatch(
+					(c_ActiveCount + bgl::idl::cCompactGroupSize - 1) / bgl::idl::cCompactGroupSize,
+					1,
+					1);
+			}));
+
+	fg.Compile(resourceManager.Get());
+
+	// The compaction reads the bases the scan wrote. Both declare drawBucketPrefixSum as a UAV, so this
+	// barrier is the only thing separating the two dispatches -- assert on that buffer specifically,
+	// not merely that the pass barriers something (it always transitions compactedInstances).
+	{
+		const bgl::PassBarriers& barriers = fg.BarriersFor("Compact");
+
+		const bool barriersPrefixSum =
+			std::ranges::any_of(barriers.bufferHandles, [&](bgpu::BufferHandle handle) {
+				return handle.slot.index == drawBucketPrefixSum.GetBufferHandle().slot.index;
+			});
+
+		CHECK(barriersPrefixSum);
+	}
+
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize  = static_cast<uint64_t>(c_PaddedCount) * sizeof(uint32_t);
+	rbDesc.debugName = "Compacted Readback";
+	auto rbCompacted = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	rbDesc.byteSize  = static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(uint32_t);
+	rbDesc.debugName = "Prefix-Sum Readback";
+	auto rbPrefixSum = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	rbDesc.byteSize =
+		static_cast<uint64_t>(bgl::idl::cMaxDrawLanes) * sizeof(bgl::idl::DispatchArgs);
+	rbDesc.debugName = "Dispatch Args Readback";
+	auto rbArgs      = resourceManager->CreateReadbackBuffer(rbDesc);
+
+	cmdList->Open(cmdQueue, cmdAllocator);
+
+	fg.Execute();
+
+	const auto toCopySource = [](bgpu::BarrierSyncFlag sync, bgpu::BarrierAccessFlag access) {
+		return bgpu::BufferBarrierDesc()
+		    .AddSyncBefore(sync)
+		    .AddAccessBefore(access)
+		    .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		    .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
+	};
+
+	cmdList->Barrier(
+		compacted.GetBufferHandle(),
+		toCopySource(
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
+	cmdList->CopyBufferToReadback(rbCompacted, compacted.GetBufferHandle());
+
+	cmdList->Barrier(
+		drawBucketPrefixSum.GetBufferHandle(),
+		toCopySource(
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
+	cmdList->CopyBufferToReadback(rbPrefixSum, drawBucketPrefixSum.GetBufferHandle());
+
+	cmdList->Barrier(
+		dispatchArgs.GetBufferHandle(),
+		toCopySource(
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess));
+	cmdList->CopyBufferToReadback(rbArgs, dispatchArgs.GetBufferHandle());
+
+	cmdList->Close();
+
+	auto fence = cmdQueue->ExecuteCommandList(cmdList);
+	cmdQueue->WaitForFenceCPUBlocking(fence);
+
+	const auto* prefixSumOut =
+		static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
+	REQUIRE(prefixSumOut != nullptr);
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
+	{
+		const uint32_t exclusive = (p == 0) ? 0u : prefixSumOut[p - 1];
+		CHECK(exclusive == expectedBase[p]);
+	}
+	// The scan is inclusive, so the last row carries the full total.
+	CHECK(
+		prefixSumOut[bgl::idl::cMaxDrawLanes - 1] ==
+		std::accumulate(expectedCount.begin(), expectedCount.end(), 0u));
+	resourceManager->UnmapReadback(rbPrefixSum);
+
+	// The reservation loop strides the whole ceiling (two laps of a 128-thread group), but only a
+	// bucket something filled may touch its args -- every other row must still hold the
+	// { 0, 1, 1 } seed.
+	const auto* argsOut = static_cast<const uint32_t*>(resourceManager->MapReadback(rbArgs));
+	REQUIRE(argsOut != nullptr);
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
+	{
+		INFO("bucket " << p);
+		CHECK(argsOut[p * 3 + 0] == expectedCount[p]);
+		CHECK(argsOut[p * 3 + 1] == 1u);
+		CHECK(argsOut[p * 3 + 2] == 1u);
+	}
+	resourceManager->UnmapReadback(rbArgs);
+
+	const auto* compactedOut =
+		static_cast<const uint32_t*>(resourceManager->MapReadback(rbCompacted));
+	REQUIRE(compactedOut != nullptr);
+
+	// A racing compaction scatters against a pre-scan prefix sum: every bucket whose base should be
+	// non-zero lands on top of an earlier one, so its slots hold foreign instances and its own are
+	// nowhere.
+	uint32_t misfiled = 0;
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
+	{
+		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
+		{
+			const uint32_t instanceIdx = compactedOut[slot];
+			if (instanceIdx >= c_ActiveCount || bucketOf[instanceIdx] != p)
+			{
+				++misfiled;
+			}
+		}
+	}
+	CHECK(misfiled == 0);
+
+	// The compaction reserves one contiguous run per bucket per thread group, so an error in that
+	// arithmetic overlaps two groups' runs: one instance gets written twice and another is dropped.
+	// Both sit in the right bucket, so the misfiled count above cannot see it. 4000 instances is 32
+	// groups of 128, the last one partial, so the runs actually have to abut.
+	std::vector<uint32_t> occurrences(c_ActiveCount, 0u);
+	for (uint32_t p = 0; p < bgl::idl::cMaxDrawLanes; ++p)
+	{
+		for (uint32_t slot = expectedBase[p]; slot < expectedBase[p] + expectedCount[p]; ++slot)
+		{
+			const uint32_t instanceIdx = compactedOut[slot];
+			if (instanceIdx < c_ActiveCount)
+			{
+				++occurrences[instanceIdx];
+			}
+		}
+	}
+
+	// A visible instance is written exactly once, a culled one never.
+	uint32_t notWrittenExactlyOnce = 0;
+	for (uint32_t i = 0; i < c_ActiveCount; ++i)
+	{
+		if (occurrences[i] != (visibleOf[i] != 0u ? 1u : 0u))
+		{
+			++notWrittenExactlyOnce;
+		}
+	}
+	CHECK(notWrittenExactlyOnce == 0);
+	CHECK(expectedCount[c_CulledBucket] == 0u);
+
+	resourceManager->UnmapReadback(rbCompacted);
+
+	instanceBuffer.Release(false);
+	drawBucketPrefixSum.Release(false);
+	dispatchArgs.Release(false);
+	compacted.Release(false);
+	visibility.Release(false);
+	resourceManager->DestroyReadbackBuffer(rbCompacted, false);
+	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
+	resourceManager->DestroyReadbackBuffer(rbArgs, false);
+}

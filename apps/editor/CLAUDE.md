@@ -12,7 +12,7 @@ editor imports it (via assetlib) and converts it into the game-ready format.
   `find_package(Qt6 ...)`; there is no manual `BUILD_EDITOR` flag.
 - Builds on Windows (D3D12) and macOS (Metal). macOS needs Qt on `CMAKE_PREFIX_PATH`.
 - CMake: `./CMakeLists.txt`
-- Links `gamelib` as well as `bgl_extended` and `assetlib`. `gamelib` is the seam that owns "load this
+- Links `gamelib` as well as `bgl` and `assetlib`. `gamelib` is the seam that owns "load this
   asset into a scene", and its `AssetManager` holds the **only** implementation of the
   baked-vs-loose branch that turns an `assetlib::BMaterial` into a `bgl::MaterialHandle`.
   Reach for it rather than rebuilding that branch — a material must render the same however
@@ -29,7 +29,7 @@ Two things the licence does **not** cover, because both leak out of the app:
 
 - [STYLE.md](../../STYLE.md) still applies in full, and so does the layering rule.
 - **Never work around a library's shape from here.** When the editor has to restate something
-  `assetlib` or `bgl_extended` already owns — join a data root to a key by hand, re-derive a naming
+  `assetlib` or `bgl` already owns — join a data root to a key by hand, re-derive a naming
   convention, branch on a case the library should be answering — that is a seam to fix down there,
   not a helper to add up here. The editor is the biggest client of both, so a workaround written
   here is the reason the library's shape never gets fixed.
@@ -54,7 +54,7 @@ step with the menus.
 With a project in hand, `main.cpp` shows an `editor::StartupScreen` **before** it constructs
 `MainWindow`, because constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
 ever use, which on a cold shader cache is tens of seconds. The screen takes a
-`background::ProgressSink`; `MainWindow` reports one step for the shaders — bgl_extended builds them all
+`background::ProgressSink`; `MainWindow` reports one step for the shaders — bgl builds them all
 inside `CreateGraphics`, and a warm cache makes the whole stretch milliseconds — then one per file
 for the project's rebuild, and drops the sink once `Build()` returns.
 
@@ -301,7 +301,7 @@ What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
 reaching for a fake — and only where there is a rule worth pinning, not to give a passive
 value somewhere else to live.
 
-A **device alone is fine**. `editor_tests` links `bgl_d3d12_agility` (on the executable — see
+A **device alone is fine**. `editor_tests` links `bgpu_d3d12_agility` (on the executable — see
 `tests/CMakeLists.txt` for why an OBJECT library cannot carry it through `editor_lib`), so a
 test may call `CreateGraphics` and render headlessly. `AssetThumbnailCache` is the one renderer
 built that way — it owns a headless target and needs no `winId()` — and is covered end to end
