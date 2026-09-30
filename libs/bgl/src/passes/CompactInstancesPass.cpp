@@ -25,8 +25,11 @@
 
 namespace bgl
 {
-	void
-	CompactInstancesPass::Init(const PassInitContext& ctx)
+	CompactInstancesPass::CompactInstancesPass(const PassInitContext& ctx) :
+		m_CullStats(
+			ctx.resourceManager,
+			bgpu::ComputeBufferDesc().SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName(
+				"Cull Stats"))
 	{
 		core::ensure(ctx.device != nullptr, "Device pointer is null");
 
@@ -53,26 +56,6 @@ namespace bgl
 			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));
-
-		{
-			auto desc = bgpu::ComputeBufferDesc();
-			desc.SetElement<idl::CullStats>().SetInitialCount(1).SetDebugName("Cull Stats");
-
-			m_CullStats.Init(desc, ctx.resourceManager);
-		}
-	}
-
-	void
-	CompactInstancesPass::Release(bool deferred)
-	{
-		spdlog::trace("CompactInstancesPass::Release");
-
-		m_CullInstances.Reset();
-		m_Histogram.Reset();
-		m_PrefixSum.Reset();
-		m_CompactInstances.Reset();
-
-		m_CullStats.Release(deferred);
 	}
 
 	void

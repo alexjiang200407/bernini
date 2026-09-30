@@ -26,28 +26,31 @@ namespace bgpu
 	class GrowableGpuBuffer
 	{
 	public:
-		GrowableGpuBuffer() noexcept = default;
-
-		GrowableGpuBuffer(const GrowableGpuBuffer&)     = delete;
-		GrowableGpuBuffer(GrowableGpuBuffer&&) noexcept = default;
-
-		GrowableGpuBuffer&
-		operator=(const GrowableGpuBuffer&) = delete;
-
-		GrowableGpuBuffer&
-		operator=(GrowableGpuBuffer&&) noexcept = default;
-
 		/**
 		 * @throws std::runtime_error if the device cannot allocate the initial resource.
 		 */
-		BGPU_API void
-		Init(
+		BGPU_API
+		GrowableGpuBuffer(
 			ResourceManagerRef resourceManager,
 			std::string        debugName,
 			uint32_t           stride,
 			uint32_t           capacity,
 			bool               isUav,
 			bool               isRaw = false);
+
+		// Hands the storage to the manager's deferred destroy, so a frame still in flight may
+		// keep reading it.
+		BGPU_API ~GrowableGpuBuffer() noexcept;
+
+		GrowableGpuBuffer(const GrowableGpuBuffer&) = delete;
+		BGPU_API
+		GrowableGpuBuffer(GrowableGpuBuffer&& other) noexcept;
+
+		GrowableGpuBuffer&
+		operator=(const GrowableGpuBuffer&) = delete;
+
+		BGPU_API GrowableGpuBuffer&
+		operator=(GrowableGpuBuffer&& other) noexcept;
 
 		/**
 		 * Replaces the storage with one holding `newCapacity` elements, preserving the contents of
@@ -84,16 +87,10 @@ namespace bgpu
 			return m_Capacity;
 		}
 
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return !m_Handle.IsNull();
-		}
-
-		BGPU_API void
-		Release(bool deferred) noexcept;
-
 	private:
+		void
+		Free() noexcept;
+
 		ResourceManagerRef m_ResourceManager;
 		BufferHandle       m_Handle;
 		std::string        m_DebugName;

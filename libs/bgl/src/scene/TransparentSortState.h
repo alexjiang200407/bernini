@@ -25,7 +25,16 @@ namespace bgl
 	class TransparentSortState
 	{
 	public:
-		TransparentSortState() noexcept = default;
+		/**
+		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
+		 *        size. The keys buffer is sized off it rather than off the sort's capacity so the
+		 *        depth-key pass, which appends without knowing how many instances are transparent,
+		 *        cannot run past the end; only the sort itself is capped.
+		 * @throws std::runtime_error if the device cannot allocate.
+		 */
+		TransparentSortState(
+			const bgpu::ResourceManagerRef& resourceManager,
+			uint32_t                        paddedInstances);
 
 		TransparentSortState(const TransparentSortState&)     = delete;
 		TransparentSortState(TransparentSortState&&) noexcept = default;
@@ -36,22 +45,9 @@ namespace bgl
 		TransparentSortState&
 		operator=(TransparentSortState&&) noexcept = default;
 
-		/**
-		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
-		 *        size. The keys buffer is sized off it rather than off the sort's capacity so the
-		 *        depth-key pass, which appends without knowing how many instances are transparent,
-		 *        cannot run past the end; only the sort itself is capped.
-		 * @throws std::runtime_error if the device cannot allocate.
-		 */
-		void
-		Init(uint32_t paddedInstances, bgpu::ResourceManagerRef resourceManager);
-
 		/** @throws std::runtime_error if the device cannot allocate; the buffers are left intact. */
 		void
 		Resize(uint32_t paddedInstances);
-
-		void
-		Release(bool deferred = true) noexcept;
 
 		// Retires the resources a Resize superseded; nothing is carried forward.
 		void

@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace bgpu
 {
@@ -67,26 +68,21 @@ namespace bgpu
 		                                                      std::numeric_limits<uint32_t>::max();
 	}
 
-	void
-	GrowableGpuBuffer::Init(
+	GrowableGpuBuffer::GrowableGpuBuffer(
 		ResourceManagerRef resourceManager,
 		std::string        debugName,
 		uint32_t           stride,
 		uint32_t           capacity,
 		bool               isUav,
-		bool               isRaw)
+		bool               isRaw) :
+		m_ResourceManager(std::move(resourceManager)), m_DebugName(std::move(debugName)),
+		m_Stride(stride), m_IsUav(isUav), m_IsRaw(isRaw)
 	{
 		core::ensure(
-			resourceManager != nullptr,
+			m_ResourceManager != nullptr,
 			"GrowableGpuBuffer requires a valid ResourceManager");
 		core::ensure(stride > 0, "GrowableGpuBuffer requires a positive stride");
 		core::ensure(capacity > 0, "GrowableGpuBuffer requires a positive capacity");
-
-		m_ResourceManager = std::move(resourceManager);
-		m_DebugName       = std::move(debugName);
-		m_Stride          = stride;
-		m_IsUav           = isUav;
-		m_IsRaw           = isRaw;
 
 		m_Handle =
 			CreateStorage(m_ResourceManager, m_DebugName, m_Stride, capacity, m_IsUav, m_IsRaw);
@@ -106,8 +102,6 @@ namespace bgpu
 	void
 	GrowableGpuBuffer::Grow(uint32_t newCapacity, bool preserveContents)
 	{
-		core::ensure(IsInitialized(), "GrowableGpuBuffer is uninitialized; call Init() first");
-
 		if (newCapacity <= m_Capacity)
 			return;
 
@@ -180,22 +174,53 @@ namespace bgpu
 		m_CopyBytes = 0;
 	}
 
+	GrowableGpuBuffer::~GrowableGpuBuffer() noexcept { Free(); }
+
+	GrowableGpuBuffer::GrowableGpuBuffer(GrowableGpuBuffer&& other) noexcept :
+		m_ResourceManager(std::move(other.m_ResourceManager)),
+		m_Handle(std::exchange(other.m_Handle, {})), m_DebugName(std::move(other.m_DebugName)),
+		m_Superseded(std::exchange(other.m_Superseded, {})),
+		m_CopyBytes(std::exchange(other.m_CopyBytes, 0)),
+		m_Capacity(std::exchange(other.m_Capacity, 0)), m_Stride(other.m_Stride),
+		m_IsUav(other.m_IsUav), m_IsRaw(other.m_IsRaw)
+	{}
+
+	GrowableGpuBuffer&
+	GrowableGpuBuffer::operator=(GrowableGpuBuffer&& other) noexcept
+	{
+		if (this != &other)
+		{
+			Free();
+			m_ResourceManager = std::move(other.m_ResourceManager);
+			m_Handle          = std::exchange(other.m_Handle, {});
+			m_DebugName       = std::move(other.m_DebugName);
+			m_Superseded      = std::exchange(other.m_Superseded, {});
+			m_CopyBytes       = std::exchange(other.m_CopyBytes, 0);
+			m_Capacity        = std::exchange(other.m_Capacity, 0);
+			m_Stride          = other.m_Stride;
+			m_IsUav           = other.m_IsUav;
+			m_IsRaw           = other.m_IsRaw;
+		}
+		return *this;
+	}
+
+	// A moved-from buffer has no manager and nothing to free.
 	void
-	GrowableGpuBuffer::Release(bool deferred) noexcept
+	GrowableGpuBuffer::Free() noexcept
 	{
 		if (m_ResourceManager == nullptr)
 			return;
 
 		for (BufferHandle superseded : m_Superseded)
 		{
-			m_ResourceManager->DestroyBuffer(superseded, deferred);
+			m_ResourceManager->DestroyBuffer(superseded);
 		}
 		m_Superseded.clear();
 		m_CopyBytes = 0;
 
 		if (!m_Handle.IsNull())
 		{
-			m_ResourceManager->DestroyBuffer(m_Handle, deferred);
+			m_ResourceManager->DestroyBuffer(m_Handle);
 			m_Handle = {};
 		}
 

@@ -51,6 +51,35 @@ namespace crowd
 			return kernel;
 		}
 
+		bgpu::DeviceRef
+		CreateCrowdDevice(const bgpu::GpuContextRef& context)
+		{
+			core::ensure(context != nullptr, "A crowd needs a GPU context");
+
+			auto device = bgpu::CreateDevice(context);
+			if (device == nullptr)
+				core::throw_runtime_error("The crowd could not create its device");
+			return device;
+		}
+
+		bgpu::ResourceManagerRef
+		CreateCrowdResourceManager(bgpu::IDevice& device)
+		{
+			auto rm = device.CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
+			if (rm == nullptr)
+				core::throw_runtime_error("The crowd could not create its resource manager");
+			return rm;
+		}
+
+		bgpu::CommandQueueRef
+		CreateCrowdQueue(bgpu::IDevice& device)
+		{
+			auto queue = device.CreateCommandQueue(bgpu::QueueType::kCompute);
+			if (queue == nullptr)
+				core::throw_runtime_error("The crowd could not create its compute queue");
+			return queue;
+		}
+
 		template <typename T>
 		bgpu::BufferHandle
 		CreateComputeBuffer(bgpu::IResourceManager& rm, uint32_t count, const std::string& name)
@@ -140,18 +169,20 @@ namespace crowd
 	}
 
 	Crowd::Crowd(bgpu::GpuContextRef context, CrowdDesc desc) :
-		m_Context(std::move(context)), m_Plan(std::move(desc))
+		m_Context(std::move(context)), m_Plan(std::move(desc)),
+		m_Device(CreateCrowdDevice(m_Context)),
+		m_ResourceManager(CreateCrowdResourceManager(*m_Device)),
+		m_Queue(CreateCrowdQueue(*m_Device)), m_Groups(
+												  m_ResourceManager,
+												  bgpu::UploadBufferDesc()
+													  .SetInitialCount(m_Plan.GetDesc().maxGroups)
+													  .SetDebugName("Crowd groups")),
+		m_Ranges(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc()
+				.SetInitialCount(m_Plan.GetDesc().maxGroups)
+				.SetDebugName("Crowd agent ranges"))
 	{
-		core::ensure(m_Context != nullptr, "A crowd needs a GPU context");
-
-		m_Device = bgpu::CreateDevice(m_Context);
-		if (m_Device == nullptr)
-			core::throw_runtime_error("The crowd could not create its device");
-		m_ResourceManager =
-			m_Device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
-		m_Queue = m_Device->CreateCommandQueue(bgpu::QueueType::kCompute);
-		if (m_ResourceManager == nullptr || m_Queue == nullptr)
-			core::throw_runtime_error("The crowd could not create its compute queue");
 		m_ResourceManager->RegisterQueue(m_Queue.Get());
 
 		try
@@ -175,12 +206,6 @@ namespace crowd
 		m_ReadAgents = LoadKernel(*m_Device, "crowd.CSReadAgents");
 
 		auto& rm = *m_ResourceManager;
-		m_Groups.Init(
-			{ .initialCount = crowdDesc.maxGroups, .debugName = "Crowd groups" },
-			m_ResourceManager);
-		m_Ranges.Init(
-			{ .initialCount = crowdDesc.maxGroups, .debugName = "Crowd agent ranges" },
-			m_ResourceManager);
 		m_AgentsPingPong[0] =
 			CreateComputeBuffer<idl::Agent>(rm, crowdDesc.maxAgents, "Crowd agents A");
 		m_AgentsPingPong[1] =
@@ -245,8 +270,6 @@ namespace crowd
 			if (!buffer.IsNull())
 				rm.DestroyBuffer(buffer, false);
 		}
-		m_Groups.Release(false);
-		m_Ranges.Release(false);
 		rm.UnregisterQueue(m_Queue.Get());
 	}
 

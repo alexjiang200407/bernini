@@ -19,11 +19,11 @@ namespace bgpu
 	class ComputeBuffer
 	{
 	public:
-		ComputeBuffer() noexcept = default;
-		ComputeBuffer(ComputeBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			Init(std::move(desc), std::move(resourceManager));
-		}
+		/**
+		 * @throws std::runtime_error if the device cannot allocate the buffer.
+		 */
+		BGPU_API
+		ComputeBuffer(ResourceManagerRef resourceManager, ComputeBufferDesc desc);
 
 		ComputeBuffer(const ComputeBuffer&)     = delete;
 		ComputeBuffer(ComputeBuffer&&) noexcept = default;
@@ -34,9 +34,6 @@ namespace bgpu
 		ComputeBuffer&
 		operator=(ComputeBuffer&&) noexcept = default;
 
-		BGPU_API void
-		Init(ComputeBufferDesc desc, ResourceManagerRef resourceManager);
-
 		/**
 		 * Reallocates at `newCount` elements, discarding the contents: this is per-frame scratch
 		 * that its producing pass overwrites, so there is nothing to carry forward.
@@ -46,17 +43,9 @@ namespace bgpu
 		BGPU_API void
 		Resize(uint32_t newCount);
 
-		// True once Init() has created the GPU buffer and before Release().
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
-
 		[[nodiscard]] const ComputeBufferDesc&
 		GetDesc() const noexcept
 		{
-			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return m_Desc;
 		}
 
@@ -65,7 +54,6 @@ namespace bgpu
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -79,7 +67,6 @@ namespace bgpu
 		[[nodiscard]] uint64_t
 		ByteSize() const noexcept
 		{
-			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 			return static_cast<uint64_t>(m_Desc.initialCount) * m_Desc.elementSize;
 		}
 
@@ -87,16 +74,9 @@ namespace bgpu
 		Clear(ICommandList* cmd) noexcept
 		{
 			core::ensure(cmd != nullptr, "Command list cannot be null");
-			core::ensure(IsInitialized(), "ComputeBuffer is uninitialized; call Init() first");
 
 			const auto zeros = std::vector<std::byte>(ByteSize(), std::byte{ 0 });
 			cmd->WriteBuffer(m_Storage.GetHandle(), zeros.data(), zeros.size());
-		}
-
-		void
-		Release(bool deferred = true) noexcept
-		{
-			m_Storage.Release(deferred);
 		}
 
 	private:

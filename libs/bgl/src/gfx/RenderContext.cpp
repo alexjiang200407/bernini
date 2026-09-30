@@ -205,8 +205,29 @@ namespace bgl
 		std::shared_ptr<DrawBucketTable> buckets,
 		std::span<const SurfaceType>     surfaceTypes,
 		bool                             enableDebug) :
+		RenderContext(
+			device,
+			std::move(resourceManager),
+			std::move(buckets),
+			surfaceTypes,
+			enableDebug,
+			bgpu::PipelineBatch(device.Get()))
+	{}
+
+	RenderContext::RenderContext(
+		bgpu::DeviceRef                  device,
+		bgpu::ResourceManagerRef         resourceManager,
+		std::shared_ptr<DrawBucketTable> buckets,
+		std::span<const SurfaceType>     surfaceTypes,
+		bool                             enableDebug,
+		bgpu::PipelineBatch&&            pipelines) :
 		m_Device(std::move(device)), m_DrawBucketTable(std::move(buckets)),
-		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug)
+		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug),
+		m_CompactInstances(MakePassInitContext(pipelines))
+#if defined(BERNINI_GPU_DEBUG)
+		,
+		m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
+#endif
 	{
 		m_GameSurfaceShading.reserve(surfaceTypes.size());
 		for (const SurfaceType& type : surfaceTypes)
@@ -228,12 +249,7 @@ namespace bgl
 		// The always-on pipelines -- compute, post, and the per-pass fixtures -- requested here and
 		// built at once. The per-bucket meshlet kernels are not among them: EnsureDrawBucketPipelinesExist
 		// builds each bucket the first Draw that demands it, so a scene pays only for what it uses.
-		auto       pipelines = bgpu::PipelineBatch(m_Device.Get());
-		const auto passes    = PassInitContext{ m_Device.Get(),
-			                                    &pipelines,
-			                                    m_ResourceManager,
-			                                    m_DrawBucketTable.get() };
-		m_CompactInstances.Init(passes);
+		const auto passes = MakePassInitContext(pipelines);
 		m_RigFrames.Init(passes);
 		m_SkinnedPose.Init(passes);
 		m_TransparentSort.Init(passes);
@@ -274,7 +290,6 @@ namespace bgl
 		m_BufferPoisoner.Init(m_ResourceManager);
 		m_FrameGraph.SetBufferPoisoner(&m_BufferPoisoner);
 
-		m_DebugBuffer.Init(c_DebugBufferCapacity, m_ResourceManager);
 		for (auto& readback : m_DebugReadbacks)
 		{
 			auto rbDesc      = bgpu::ReadbackBufferDesc();
@@ -283,6 +298,15 @@ namespace bgl
 			readback         = m_ResourceManager->CreateReadbackBuffer(rbDesc);
 		}
 #endif
+	}
+
+	PassInitContext
+	RenderContext::MakePassInitContext(bgpu::PipelineBatch& pipelines) const noexcept
+	{
+		return PassInitContext{ m_Device.Get(),
+			                    &pipelines,
+			                    m_ResourceManager,
+			                    m_DrawBucketTable.get() };
 	}
 
 	RenderContext::~RenderContext() noexcept
@@ -322,7 +346,6 @@ namespace bgl
 		m_BrdfLut.Release();
 		m_TonemapLut.Release();
 		m_BlackEnvironment.Release();
-		m_CompactInstances.Release(false);
 		m_RigFrames.Release();
 		m_SkinnedPose.Release();
 		m_TransparentSort.Release();
@@ -338,7 +361,6 @@ namespace bgl
 		{
 			m_ResourceManager->DestroyReadbackBuffer(readback, false);
 		}
-		m_DebugBuffer.Release(false);
 
 		m_FrameGraph.SetBufferPoisoner(nullptr);
 		m_BufferPoisoner.Release(false);
@@ -732,12 +754,8 @@ namespace bgl
 
 		// The same demand shape as the bucket kernels above: built by the first Draw that needs
 		// it, so a scene shaded entirely by lit surfaces never builds the pipeline or the texture.
-		auto       pipelines = bgpu::PipelineBatch(m_Device.Get());
-		const auto passes    = PassInitContext{ m_Device.Get(),
-			                                    &pipelines,
-			                                    m_ResourceManager,
-			                                    m_DrawBucketTable.get() };
-		m_BrdfLut.Init(passes);
+		auto pipelines = bgpu::PipelineBatch(m_Device.Get());
+		m_BrdfLut.Init(MakePassInitContext(pipelines));
 		pipelines.Build();
 		m_Device->ReleaseSlangSession();
 

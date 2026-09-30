@@ -178,13 +178,11 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto compactPass = bgl::CompactInstancesPass();
-	{
-		auto pipelines = bgpu::PipelineBatch(device);
-		auto table     = bgl::DrawBucketTable();
-		compactPass.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &table });
-		pipelines.Build();
-	}
+	auto pipelines   = bgpu::PipelineBatch(device);
+	auto table       = bgl::DrawBucketTable();
+	auto compactPass = bgl::CompactInstancesPass(
+		bgl::PassInitContext{ device, &pipelines, resourceManager, &table });
+	pipelines.Build();
 
 	// Off the instance buffer's capacity, which is what CullState sizes against -- a readback
 	// smaller than its source overruns, since the copy is bounded by the source's byte size.
@@ -288,6 +286,4 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		CHECK(CompactedSet(compacted, visible) == expected[cullIdx]);
 		resourceManager->UnmapReadback(rbCompacted[cullIdx]);
 	}
-
-	compactPass.Release(false);
 }

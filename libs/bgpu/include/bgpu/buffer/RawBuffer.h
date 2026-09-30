@@ -112,51 +112,64 @@ namespace bgpu
 	class RawBuffer
 	{
 	public:
-		RawBuffer() noexcept = default;
-		RawBuffer(RawBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			Init(std::move(desc), std::move(resourceManager));
-		}
-
-		RawBuffer(const RawBuffer&)     = delete;
-		RawBuffer(RawBuffer&&) noexcept = default;
-
-		RawBuffer&
-		operator=(const RawBuffer&) = delete;
-
-		RawBuffer&
-		operator=(RawBuffer&&) noexcept = default;
-
-		void
-		Init(RawBufferDesc desc, ResourceManagerRef resourceManager)
+		/**
+		 * @throws std::runtime_error if the device cannot allocate the initial arena.
+		 */
+		RawBuffer(ResourceManagerRef resourceManager, const RawBufferDesc& desc) :
+			m_Blocks(
+				resourceManager,
+				RangeBufferDesc()
+					.SetInitialCount(
+						ToBlockCount(desc.initialBytes) + ToBlockCount(desc.nullRecordBytes))
+					.SetBlockSize(desc.uploadBlockBytes)
+					.SetMaxBytes(c_MaxRawBufferBytes)
+					.SetRaw(true)
+					.SetDebugName(desc.debugName)),
+			m_ResourceManager(std::move(resourceManager)),
+			m_NullRecordBlocks(ToBlockCount(desc.nullRecordBytes))
 		{
 			core::ensure(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
 			core::ensure(
 				desc.nullRecordBytes >= idl::cRawPayloadOffset,
 				"The null record must cover at least a header");
 
-			m_NullRecordBlocks   = ToBlockCount(desc.nullRecordBytes);
 			m_ViewDesc.stride    = desc.handleStride;
 			m_ViewDesc.debugName = desc.debugName + " Handles";
-			m_ResourceManager    = resourceManager;
-
-			RangeBufferDesc blockDesc;
-			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
-			blockDesc.blockSize    = desc.uploadBlockBytes;
-			blockDesc.maxBytes     = c_MaxRawBufferBytes;
-			blockDesc.isRaw        = true;
-			blockDesc.debugName    = desc.debugName;
-
-			m_Blocks.Init(std::move(blockDesc), std::move(resourceManager));
 
 			ReserveNullRecord();
 			RefreshHandleView();
 		}
 
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
+		// The view goes to the manager's deferred destroy beside the arena it describes.
+		~RawBuffer() noexcept { DestroyHandleView(); }
+
+		RawBuffer(const RawBuffer&) = delete;
+
+		RawBuffer(RawBuffer&& other) noexcept :
+			m_Blocks(std::move(other.m_Blocks)),
+			m_ResourceManager(std::move(other.m_ResourceManager)),
+			m_HandleView(std::exchange(other.m_HandleView, {})),
+			m_ViewedBuffer(std::exchange(other.m_ViewedBuffer, {})),
+			m_ViewDesc(std::move(other.m_ViewDesc)), m_NullRecordBlocks(other.m_NullRecordBlocks)
+		{}
+
+		RawBuffer&
+		operator=(const RawBuffer&) = delete;
+
+		RawBuffer&
+		operator=(RawBuffer&& other) noexcept
 		{
-			return m_Blocks.IsInitialized();
+			if (this != &other)
+			{
+				DestroyHandleView();
+				m_Blocks           = std::move(other.m_Blocks);
+				m_ResourceManager  = std::move(other.m_ResourceManager);
+				m_HandleView       = std::exchange(other.m_HandleView, {});
+				m_ViewedBuffer     = std::exchange(other.m_ViewedBuffer, {});
+				m_ViewDesc         = std::move(other.m_ViewDesc);
+				m_NullRecordBlocks = other.m_NullRecordBlocks;
+			}
+			return *this;
 		}
 
 		[[nodiscard]] uint64_t
@@ -178,8 +191,6 @@ namespace bgpu
 		AddRecord(T tag, std::span<const std::byte> payload)
 			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
-			core::ensure(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
-
 			// ADR-6's invariant, and the one place the payload and the head's size meet: a record
 			// bigger than the null record makes a null dereference read the first live one.
 			core::ensure(
@@ -238,7 +249,6 @@ namespace bgpu
 		[[nodiscard]] idl::RawRange
 		AddBytes(std::span<const std::byte> bytes)
 		{
-			core::ensure(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
 			core::ensure(!bytes.empty(), "AddBytes requires a non-empty range");
 
 			const auto handle = Allocate(MeasureRange(bytes));
@@ -353,20 +363,18 @@ namespace bgpu
 			return m_HandleView;
 		}
 
+	private:
+		// A moved-from arena has no manager and no view.
 		void
-		Release(bool deferred = true) noexcept
+		DestroyHandleView() noexcept
 		{
-			// A moved-from arena keeps the view's bits -- a defaulted move copies POD members -- but
-			// loses the manager that would retire it. GrowableGpuBuffer guards the same way.
 			if (m_ResourceManager != nullptr && !m_HandleView.IsNull())
 			{
-				m_ResourceManager->DestroyBufferSrv(m_HandleView, deferred);
+				m_ResourceManager->DestroyBufferSrv(m_HandleView);
 				m_HandleView = BufferSrvHandle{};
 			}
-			m_Blocks.Release(deferred);
 		}
 
-	private:
 		[[nodiscard]] static uint32_t
 		ToBlockCount(uint64_t bytes) noexcept
 		{
@@ -415,10 +423,7 @@ namespace bgpu
 				return;
 			}
 
-			if (!m_HandleView.IsNull())
-			{
-				m_ResourceManager->DestroyBufferSrv(m_HandleView);
-			}
+			DestroyHandleView();
 
 			m_HandleView   = m_ResourceManager->CreateBufferSrv(arena, m_ViewDesc);
 			m_ViewedBuffer = arena;

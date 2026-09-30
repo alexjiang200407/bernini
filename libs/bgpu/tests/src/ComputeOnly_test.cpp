@@ -53,10 +53,9 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 
 	constexpr uint32_t c_Count = 8;
 
-	auto valuesDesc         = bgpu::EntryBufferDesc();
-	valuesDesc.initialCount = c_Count;
-	valuesDesc.debugName    = "Compute-only values";
-	auto values             = bgpu::EntryBuffer<uint32_t>(valuesDesc, rm);
+	auto values = bgpu::EntryBuffer<uint32_t>(
+		rm,
+		bgpu::EntryBufferDesc().SetInitialCount(c_Count).SetDebugName("Compute-only values"));
 
 	std::vector<core::slot_handle> handles;
 	for (uint32_t i = 0; i < c_Count; ++i)
@@ -90,8 +89,7 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 #if defined(BERNINI_GPU_DEBUG)
 	// The buffer family asserts through gDebug, and the sessions define BERNINI_GPU_DEBUG for every
 	// owner, so a second owner binds an assert buffer of its own exactly as the renderer does.
-	auto debugBuffer = bgpu::DebugBuffer();
-	debugBuffer.Init(16, rm);
+	auto debugBuffer = bgpu::DebugBuffer(rm, 16);
 	debugBuffer.Reset(list.Get());
 	list->Barrier(
 		debugBuffer.GetBufferHandle(),
@@ -142,10 +140,6 @@ TEST_CASE("A compute owner dispatches and reads back without a renderer", "[comp
 
 	rm->DestroyReadbackBuffer(rb, false);
 	rm->DestroyBuffer(out, false);
-	values.Release(false);
-#if defined(BERNINI_GPU_DEBUG)
-	debugBuffer.Release(false);
-#endif
 	// An owner drains the queues it made before it lets go of them (docs/bgpu.md, Teardown).
 	queue->Flush();
 	rm->UnregisterQueue(queue.Get());

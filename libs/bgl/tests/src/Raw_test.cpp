@@ -84,8 +84,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	desc.uploadBlockBytes = sizeof(bgpu::RawBlock);
 	desc.debugName        = "Raw Arena Test";
 
-	auto arena = bgpu::RawBuffer<TestTag>(desc, resourceManager);
-	REQUIRE(arena.IsInitialized());
+	auto arena = bgpu::RawBuffer<TestTag>(resourceManager, desc);
 
 	// ADR-4: an arena is capped at what its view addresses, not at what the device could allocate.
 	CHECK(arena.GetByteCeiling() == bgpu::c_MaxRawBufferBytes);
@@ -171,8 +170,6 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 			CHECK(arena.GetTagAt(record.byteOffset) == TestTag::kLarge);
 		}
 	}
-
-	arena.Release(false);
 }
 
 /**
@@ -205,7 +202,7 @@ TEST_CASE("A range buffer refuses to grow past its byte ceiling", "[raw][scene]"
 	desc.blockSize    = sizeof(uint32_t);
 	desc.debugName    = "Capped Range";
 
-	auto capped = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+	auto capped = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 	// Fills the initial capacity exactly, so the next allocation is the one that must grow.
 	CHECK_NOTHROW(capped.AllocateRange(16));
@@ -217,8 +214,6 @@ TEST_CASE("A range buffer refuses to grow past its byte ceiling", "[raw][scene]"
 
 	// Past it the buffer says so, rather than handing back an offset a uint cannot address.
 	CHECK_THROWS_AS(capped.AllocateRange(1), std::runtime_error);
-
-	capped.Release(false);
 }
 
 /**
@@ -325,7 +320,7 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 	desc.nullRecordBytes = bgpu::idl::cRawPayloadOffset + sizeof(glm::vec4);
 	desc.debugName       = "Raw Arena Read";
 
-	auto arena = bgpu::RawBuffer<TestTag>(desc, resourceManager);
+	auto arena = bgpu::RawBuffer<TestTag>(resourceManager, desc);
 
 	const auto payloadA = glm::vec4(1.0f, 2.0f, 3.0f, 4.0f);
 	const auto payloadB = glm::vec4(5.0f, 6.0f, 7.0f, 8.0f);
@@ -411,5 +406,4 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroyBuffer(outValues, false);
-	arena.Release(false);
 }

@@ -81,25 +81,120 @@ namespace bgl
 					static_cast<uint32_t>(
 						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
 		}
+
+		uint32_t
+		AtLeastOne(uint32_t n) noexcept
+		{
+			return n != 0 ? n : 1;
+		}
+
+		bgpu::RawBufferDesc
+		MaterialArenaDesc(const SceneDesc& desc, std::span<const SurfaceType> surfaces)
+		{
+			const uint64_t surfaceRecordBytes = SurfaceRecordBytes(surfaces);
+			const uint64_t materialBytes      = MaterialArenaBytes(desc, surfaceRecordBytes);
+
+			// Clamped, not truncated: a budget past what a raw view addresses would otherwise wrap
+			// to a small arena, which is the wrap the arena's own checks exist to make loud.
+			return bgpu::RawBufferDesc()
+			    .SetInitialBytes(AtLeastOne(
+					static_cast<uint32_t>(
+						std::min<uint64_t>(materialBytes, bgpu::c_MaxRawBufferBytes - 1))))
+			    .SetDebugName("Material Arena")
+			    // A material payload keeps its texture handles inline, so the arena carries the typed
+			    // view that makes textures of them -- and re-issues it inside its own growth.
+			    .SetHandleStride(sizeof(bgpu::DescriptorHandle))
+			    .SetNullRecordBytes(MaterialNullRecordBytes(surfaceRecordBytes));
+		}
 	}
 
+	// The animated and grass buffers start at one entry each rather than from a SceneDesc knob: most
+	// scenes hold neither, and the arenas grow on the first that does.
 	Scene::Scene(
 		SceneDesc                               desc,
 		core::SharedRef<bgpu::IResourceManager> resourceManager,
-		std::span<const SurfaceType>            surfaces) :
+		std::span<const SurfaceType>            surfaces)
+	try :
 		m_Desc(std::move(desc)), m_Surfaces(surfaces.begin(), surfaces.end()),
+		m_GrassLooks(
+			resourceManager,
+			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Grass Look Buffer")),
+		m_GrassChunks(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Grass Chunk Buffer")),
+		m_GrassClumps(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Grass Clump Buffer")),
+		m_GeomBuffer(
+			resourceManager,
+			bgpu::EntryBufferDesc()
+				.SetInitialCount(AtLeastOne(m_Desc.initialGeom))
+				.SetDebugName("Geom Buffer")),
+		m_SubmeshBuffer(
+			resourceManager,
+			bgpu::RangeBufferDesc()
+				.SetInitialCount(AtLeastOne(
+					m_Desc.initialSubmeshes != 0 ? m_Desc.initialSubmeshes :
+												   m_Desc.initialMeshlets))
+				.SetDebugName("Submesh Buffer")),
+		m_MeshletBuffer(
+			resourceManager,
+			bgpu::RangeBufferDesc()
+				.SetInitialCount(AtLeastOne(m_Desc.initialMeshlets))
+				.SetDebugName("Meshlet Buffer")),
+		m_MeshletGroupBuffer(
+			resourceManager,
+			bgpu::RangeBufferDesc()
+				.SetInitialCount(AtLeastOne(m_Desc.initialMeshlets / idl::cMeshletsPerGroup))
+				.SetDebugName("Meshlet Group Buffer")),
+		m_VertexMapBuffer(
+			resourceManager,
+			bgpu::RangeBufferDesc()
+				.SetInitialCount(AtLeastOne(m_Desc.initialIndices))
+				.SetDebugName("Vertex Map Buffer")),
+		// Ranges alone: a vertex stream's kind is its submesh's VertexLayout, recorded once per
+		// submesh rather than once per vertex, so no record here carries a header.
+		m_VertexDataBuffer(
+			resourceManager,
+			bgpu::RawBufferDesc()
+				.SetInitialBytes(AtLeastOne(m_Desc.initialVertexBufferByteSize))
+				.SetDebugName("Vertex Data Buffer")),
+		m_IndexBuffer(
+			resourceManager,
+			bgpu::RangeBufferDesc()
+				.SetInitialCount(AtLeastOne(m_Desc.initialIndices))
+				.SetDebugName("Index Buffer")),
+		m_Materials(resourceManager, MaterialArenaDesc(m_Desc, m_Surfaces)),
+		m_Clips(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Clip Buffer")),
+		m_Rigs(
+			resourceManager,
+			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Rig Buffer")),
+		m_SkinnedBones(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Skinned Bone Buffer")),
+		m_BoneSamples(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Bone Sample Buffer")),
+		m_BoneAnimTables(resourceManager),
+		m_SkinnedLegs(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Skinned Leg Buffer")),
+		m_PlantWeights(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Plant Weight Buffer")),
+		m_BlendNodes(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Blend Node Buffer")),
+		m_BlendSamples(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Blend Sample Buffer")),
 		m_ResourceManager(std::move(resourceManager)), m_Textures(m_ResourceManager)
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
-		try
-		{
-			InitBuffers();
-		}
-		catch (const std::runtime_error& e)
-		{
-			throw SceneError(e.what());
-		}
+		m_Geoms.reset(AtLeastOne(m_Desc.initialGeom));
 
 		m_Samplers[static_cast<size_t>(StandardSampler::kAnisoLinearWrap)] =
 			m_ResourceManager->CreateSampler(
@@ -111,183 +206,14 @@ namespace bgl
 				bgpu::SamplerDesc().SetAllFilters(true).SetAllAddressModes(
 					bgpu::SamplerAddressMode::kClamp));
 	}
-
-	void
-	Scene::InitBuffers()
+	// A device that cannot allocate a buffer reaches the caller as the documented type.
+	catch (const SceneError&)
 	{
-		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
-
-		const uint32_t initialSubmeshes =
-			m_Desc.initialSubmeshes != 0 ? m_Desc.initialSubmeshes : m_Desc.initialMeshlets;
-
-		m_Geoms.reset(atLeastOne(m_Desc.initialGeom));
-
-		{
-			auto geomBufferDesc         = bgpu::EntryBufferDesc();
-			geomBufferDesc.initialCount = atLeastOne(m_Desc.initialGeom);
-			geomBufferDesc.debugName    = "Geom Buffer";
-
-			m_GeomBuffer.Init(std::move(geomBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto submeshBufferDesc         = bgpu::RangeBufferDesc();
-			submeshBufferDesc.initialCount = atLeastOne(initialSubmeshes);
-			submeshBufferDesc.debugName    = "Submesh Buffer";
-
-			m_SubmeshBuffer.Init(std::move(submeshBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto meshletBufferDesc         = bgpu::RangeBufferDesc();
-			meshletBufferDesc.initialCount = atLeastOne(m_Desc.initialMeshlets);
-			meshletBufferDesc.debugName    = "Meshlet Buffer";
-
-			m_MeshletBuffer.Init(std::move(meshletBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto groupBufferDesc = bgpu::RangeBufferDesc();
-			groupBufferDesc.initialCount =
-				atLeastOne(m_Desc.initialMeshlets / idl::cMeshletsPerGroup);
-			groupBufferDesc.debugName = "Meshlet Group Buffer";
-
-			m_MeshletGroupBuffer.Init(std::move(groupBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto vertexMapBufferDesc         = bgpu::RangeBufferDesc();
-			vertexMapBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
-			vertexMapBufferDesc.debugName    = "Vertex Map Buffer";
-
-			m_VertexMapBuffer.Init(std::move(vertexMapBufferDesc), m_ResourceManager);
-		}
-
-		{
-			// Ranges alone: a vertex stream's kind is its submesh's VertexLayout, recorded once per
-			// submesh rather than once per vertex, so no record here carries a header.
-			auto vertexDataBufferDesc         = bgpu::RawBufferDesc();
-			vertexDataBufferDesc.initialBytes = atLeastOne(m_Desc.initialVertexBufferByteSize);
-			vertexDataBufferDesc.debugName    = "Vertex Data Buffer";
-
-			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto indexBufferDesc         = bgpu::RangeBufferDesc();
-			indexBufferDesc.initialCount = atLeastOne(m_Desc.initialIndices);
-			indexBufferDesc.debugName    = "Index Buffer";
-
-			m_IndexBuffer.Init(std::move(indexBufferDesc), m_ResourceManager);
-		}
-
-		{
-			const uint64_t surfaceRecordBytes = SurfaceRecordBytes(m_Surfaces);
-			const uint64_t materialBytes      = MaterialArenaBytes(m_Desc, surfaceRecordBytes);
-
-			auto materialDesc = bgpu::RawBufferDesc();
-
-			// Clamped, not truncated: a budget past what a raw view addresses would otherwise wrap
-			// to a small arena, which is the wrap the arena's own checks exist to make loud.
-			materialDesc.initialBytes = atLeastOne(
-				static_cast<uint32_t>(
-					std::min<uint64_t>(materialBytes, bgpu::c_MaxRawBufferBytes - 1)));
-			materialDesc.debugName = "Material Arena";
-
-			// A material payload keeps its texture handles inline, so the arena carries the typed
-			// view that makes textures of them -- and re-issues it inside its own growth.
-			materialDesc.handleStride = sizeof(bgpu::DescriptorHandle);
-
-			materialDesc.nullRecordBytes = MaterialNullRecordBytes(surfaceRecordBytes);
-
-			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
-		}
-
-		// The animated buffers start at one entry each rather than from a SceneDesc knob: most scenes
-		// hold no animated geometry at all, and the arenas grow on the first that does.
-		{
-			auto clipBufferDesc         = bgpu::RangeBufferDesc();
-			clipBufferDesc.initialCount = 1;
-			clipBufferDesc.debugName    = "Clip Buffer";
-
-			m_Clips.Init(std::move(clipBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto rigBufferDesc         = bgpu::EntryBufferDesc();
-			rigBufferDesc.initialCount = 1;
-			rigBufferDesc.debugName    = "Rig Buffer";
-
-			m_Rigs.Init(std::move(rigBufferDesc), m_ResourceManager);
-		}
-
-		m_BoneAnimTables.Init(m_ResourceManager);
-
-		{
-			auto skinnedBoneBufferDesc         = bgpu::RangeBufferDesc();
-			skinnedBoneBufferDesc.initialCount = 1;
-			skinnedBoneBufferDesc.debugName    = "Skinned Bone Buffer";
-
-			m_SkinnedBones.Init(std::move(skinnedBoneBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto boneSampleBufferDesc         = bgpu::RangeBufferDesc();
-			boneSampleBufferDesc.initialCount = 1;
-			boneSampleBufferDesc.debugName    = "Bone Sample Buffer";
-
-			m_BoneSamples.Init(std::move(boneSampleBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto skinnedLegBufferDesc         = bgpu::RangeBufferDesc();
-			skinnedLegBufferDesc.initialCount = 1;
-			skinnedLegBufferDesc.debugName    = "Skinned Leg Buffer";
-
-			m_SkinnedLegs.Init(std::move(skinnedLegBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto plantWeightBufferDesc         = bgpu::RangeBufferDesc();
-			plantWeightBufferDesc.initialCount = 1;
-			plantWeightBufferDesc.debugName    = "Plant Weight Buffer";
-
-			m_PlantWeights.Init(std::move(plantWeightBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto blendNodeBufferDesc         = bgpu::RangeBufferDesc();
-			blendNodeBufferDesc.initialCount = 1;
-			blendNodeBufferDesc.debugName    = "Blend Node Buffer";
-
-			m_BlendNodes.Init(std::move(blendNodeBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto blendSampleBufferDesc         = bgpu::RangeBufferDesc();
-			blendSampleBufferDesc.initialCount = 1;
-			blendSampleBufferDesc.debugName    = "Blend Sample Buffer";
-
-			m_BlendSamples.Init(std::move(blendSampleBufferDesc), m_ResourceManager);
-		}
-
-		// Like the animated buffers: most scenes hold no grass, and these grow on the first field.
-		{
-			auto grassLookDesc         = bgpu::EntryBufferDesc();
-			grassLookDesc.initialCount = 1;
-			grassLookDesc.debugName    = "Grass Look Buffer";
-			m_GrassLooks.Init(std::move(grassLookDesc), m_ResourceManager);
-
-			auto grassChunkDesc         = bgpu::RangeBufferDesc();
-			grassChunkDesc.initialCount = 1;
-			grassChunkDesc.debugName    = "Grass Chunk Buffer";
-			m_GrassChunks.Init(std::move(grassChunkDesc), m_ResourceManager);
-
-			auto grassClumpDesc         = bgpu::RangeBufferDesc();
-			grassClumpDesc.initialCount = 1;
-			grassClumpDesc.debugName    = "Grass Clump Buffer";
-			m_GrassClumps.Init(std::move(grassClumpDesc), m_ResourceManager);
-		}
+		throw;
+	}
+	catch (const std::runtime_error& e)
+	{
+		throw SceneError(e.what());
 	}
 
 	core::slot_handle
@@ -322,10 +248,7 @@ namespace bgl
 	Scene::Update(bgpu::ICommandList* cmdList)
 	{
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
-			if (buffer.IsInitialized())
-			{
-				buffer.Update(cmdList);
-			}
+			buffer.Update(cmdList);
 		});
 
 		// Outside the tuple, so it needs saying here. No copy is recorded -- the arena discards on

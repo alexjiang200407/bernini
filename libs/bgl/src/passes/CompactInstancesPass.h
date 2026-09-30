@@ -23,7 +23,7 @@ namespace bgl
 	class CompactInstancesPass
 	{
 	public:
-		CompactInstancesPass() = default;
+		explicit CompactInstancesPass(const PassInitContext& ctx);
 		~CompactInstancesPass() noexcept { spdlog::trace("~CompactInstancesPass"); }
 
 		CompactInstancesPass(const CompactInstancesPass&) noexcept = delete;
@@ -34,12 +34,6 @@ namespace bgl
 
 		CompactInstancesPass&
 		operator=(CompactInstancesPass&&) noexcept = delete;
-
-		void
-		Init(const PassInitContext& ctx);
-
-		void
-		Release(bool deferred = true);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

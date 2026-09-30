@@ -10,44 +10,32 @@
 
 namespace bgl
 {
-	void
-	TransparentSortState::Init(uint32_t paddedInstances, bgpu::ResourceManagerRef resourceManager)
-	{
-		{
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = paddedInstances;
-			desc.debugName    = "Sorted Transparent Instances";
-			desc.SetElement<uint32_t>();
-
-			m_SortedInstances.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = paddedInstances;
-			desc.debugName    = "Transparent Sort Entries";
-			desc.SetElement<glm::uvec2>();
-
-			m_Entries.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = 1;
-			desc.debugName    = "Transparent Sort Count";
-			desc.SetElement<uint32_t>();
-
-			m_Count.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc = bgpu::ComputeBufferDesc();
-			desc.SetElement<idl::DispatchArgs>().SetInitialCount(1).SetDebugName(
-				"Transparent Dispatch Args");
-
-			m_DispatchArgs.Init(std::move(desc), std::move(resourceManager));
-		}
-	}
+	TransparentSortState::TransparentSortState(
+		const bgpu::ResourceManagerRef& resourceManager,
+		uint32_t                        paddedInstances) :
+		m_SortedInstances(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Sorted Transparent Instances")),
+		m_Entries(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<glm::uvec2>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Transparent Sort Entries")),
+		m_Count(
+			resourceManager,
+			bgpu::ComputeBufferDesc().SetElement<uint32_t>().SetInitialCount(1).SetDebugName(
+				"Transparent Sort Count")),
+		m_DispatchArgs(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<idl::DispatchArgs>()
+				.SetInitialCount(1)
+				.SetDebugName("Transparent Dispatch Args"))
+	{}
 
 	void
 	TransparentSortState::Resize(uint32_t paddedInstances)
@@ -59,15 +47,6 @@ namespace bgl
 
 		m_SortedInstances.Resize(paddedInstances);
 		m_Entries.Resize(paddedInstances);
-	}
-
-	void
-	TransparentSortState::Release(bool deferred) noexcept
-	{
-		m_SortedInstances.Release(deferred);
-		m_Entries.Release(deferred);
-		m_Count.Release(deferred);
-		m_DispatchArgs.Release(deferred);
 	}
 
 	void

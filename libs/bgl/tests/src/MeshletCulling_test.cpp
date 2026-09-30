@@ -488,18 +488,15 @@ TEST_CASE(
 	REQUIRE(surelyCulled > groups / 2u);
 	REQUIRE(surelyCulled < groups);
 
-	auto compactPass   = bgl::CompactInstancesPass();
-	auto forwardPhases = bgl::ForwardPhases();
-	{
-		const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
-		auto                        pipelines = bgpu::PipelineBatch(device);
-		const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
-		compactPass.Init(ctx);
-		forwardPhases.Init(ctx);
-		forwardPhases.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
-		pipelines.Build();
-		forwardPhases.CheckBindings();
-	}
+	const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
+	auto                        pipelines = bgpu::PipelineBatch(device);
+	const auto ctx           = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
+	auto       compactPass   = bgl::CompactInstancesPass(ctx);
+	auto       forwardPhases = bgl::ForwardPhases();
+	forwardPhases.Init(ctx);
+	forwardPhases.AddDrawBucketKernels(ctx, view->DemandedDrawBuckets());
+	pipelines.Build();
+	forwardPhases.CheckBindings();
 
 	auto rbDesc      = bgpu::ReadbackBufferDesc();
 	rbDesc.byteSize  = sizeof(bgl::idl::CullStats);
@@ -572,7 +569,6 @@ TEST_CASE(
 	CHECK(stats->meshletGroupsCulled <= surelyCulled + borderline);
 
 	resourceManager->UnmapReadback(rbStats);
-	compactPass.Release(false);
 	forwardPhases.Release();
 }
 

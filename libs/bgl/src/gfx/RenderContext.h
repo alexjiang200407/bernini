@@ -14,6 +14,7 @@
 #include "passes/ForwardPhases.h"
 #include "passes/OutlineMaskPass.h"
 #include "passes/OverlayPass.h"
+#include "passes/PassInitContext.h"
 #include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/RigFramesPass.h"
@@ -39,6 +40,7 @@
 #include <bgpu/constants/constants.h>
 #include <bgpu/debug/DebugBuffer.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/pipeline/PipelineBatch.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -247,6 +249,19 @@ namespace bgl
 
 		CaptureTicket
 		SubmitCaptureImpl(const RenderTargetRef& target, std::string_view caller);
+
+		// Takes the start-up batch so every pass can request into it from the member-init list;
+		// the batch outlives them all because it is a parameter of this constructor.
+		RenderContext(
+			bgpu::DeviceRef                  device,
+			bgpu::ResourceManagerRef         resourceManager,
+			std::shared_ptr<DrawBucketTable> buckets,
+			std::span<const SurfaceType>     surfaceTypes,
+			bool                             enableDebug,
+			bgpu::PipelineBatch&&            pipelines);
+
+		[[nodiscard]] PassInitContext
+		MakePassInitContext(bgpu::PipelineBatch& pipelines) const noexcept;
 
 		bgpu::DeviceRef                  m_Device;
 		std::shared_ptr<DrawBucketTable> m_DrawBucketTable;

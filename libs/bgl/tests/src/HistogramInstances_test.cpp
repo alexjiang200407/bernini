@@ -74,13 +74,11 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	// differently, which is exactly what a per-instance material override is.
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
-	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
-	{
-		auto desc         = bgpu::PackedBufferDesc();
-		desc.initialCount = c_PaddedCount;
-		desc.debugName    = "Histogram Instances";
-		instanceBuffer.Init(desc, resourceManager);
-	}
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>(
+		resourceManager,
+		bgpu::PackedBufferDesc()
+			.SetInitialCount(c_PaddedCount)
+			.SetDebugName("Histogram Instances"));
 
 	const auto addInstance = [&](uint32_t bucketIdx) {
 		auto instance = bgl::SubmeshInstance();
@@ -117,26 +115,22 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	// Ceiling-sized, not count-sized: the scan is one thread group of cMaxDrawLanes threads and
 	// touches every element.
-	auto outBuffer = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::idl::cMaxDrawLanes;
-		desc.debugName    = "Histogram Output";
-		outBuffer.Init(desc, resourceManager);
-	}
+	auto outBuffer = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<uint32_t>()
+			.SetInitialCount(bgl::idl::cMaxDrawLanes)
+			.SetDebugName("Histogram Output"));
 
 	// The histogram now gates on a per-instance visibility word the cull pass writes. This test
 	// isolates the counting sort, so it stands in for a cull that passed everything: seeded
 	// all-visible below.
-	auto visibility = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<bgl::idl::InstanceVisibility>();
-		desc.initialCount = c_PaddedCount;
-		desc.debugName    = "Visibility";
-		visibility.Init(desc, resourceManager);
-	}
+	auto visibility = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<bgl::idl::InstanceVisibility>()
+			.SetInitialCount(c_PaddedCount)
+			.SetDebugName("Visibility"));
 
 	auto histogramKernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()
@@ -275,9 +269,6 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	CHECK(prefixSum[bgl::idl::cMaxDrawLanes - 1] == c_ActiveCount);
 	resourceManager->UnmapReadback(rbPrefixSum);
 
-	outBuffer.Release(false);
-	visibility.Release(false);
-	instanceBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rbHistogram, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
 }

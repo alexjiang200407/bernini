@@ -115,25 +115,17 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	// One submesh, a unit sphere at its own origin, shared by every mesh. Each instance's world
 	// bound is that sphere pushed out by its mesh transform.
-	auto submeshBuffer = bgpu::RangeBuffer<bgl::idl::Submesh>();
-	{
-		auto desc         = bgpu::RangeBufferDesc();
-		desc.initialCount = 1;
-		desc.debugName    = "Cull Submesh";
-		submeshBuffer.Init(desc, resourceManager);
-	}
+	auto submeshBuffer = bgpu::RangeBuffer<bgl::idl::Submesh>(
+		resourceManager,
+		bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Cull Submesh"));
 
 	auto submesh            = bgl::idl::Submesh();
 	submesh.boundingSphere  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	const auto submeshRange = submeshBuffer.Add(std::span<const bgl::idl::Submesh>(&submesh, 1));
 
-	auto geomBuffer = bgpu::EntryBuffer<bgl::idl::Geom>();
-	{
-		auto desc         = bgpu::EntryBufferDesc();
-		desc.initialCount = 1;
-		desc.debugName    = "Cull Geom";
-		geomBuffer.Init(desc, resourceManager);
-	}
+	auto geomBuffer = bgpu::EntryBuffer<bgl::idl::Geom>(
+		resourceManager,
+		bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Cull Geom"));
 
 	auto geomRecord                   = bgl::idl::Geom();
 	geomRecord.submeshes.range        = submeshRange;
@@ -142,21 +134,13 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	const auto geomHandle = geomBuffer.Add(geomRecord);
 
-	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>();
-	{
-		auto desc         = bgpu::EntryBufferDesc();
-		desc.initialCount = c_LiveCount;
-		desc.debugName    = "Cull Mesh";
-		meshBuffer.Init(desc, resourceManager);
-	}
+	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>(
+		resourceManager,
+		bgpu::EntryBufferDesc().SetInitialCount(c_LiveCount).SetDebugName("Cull Mesh"));
 
-	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
-	{
-		auto desc         = bgpu::PackedBufferDesc();
-		desc.initialCount = padded;
-		desc.debugName    = "Cull Instances";
-		instanceBuffer.Init(desc, resourceManager);
-	}
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>(
+		resourceManager,
+		bgpu::PackedBufferDesc().SetInitialCount(padded).SetDebugName("Cull Instances"));
 
 	for (const Placement& p : placements)
 	{
@@ -180,22 +164,17 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	}
 
 	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {
-		auto buffer = bgpu::ComputeBuffer();
-		auto desc   = bgpu::ComputeBufferDesc();
-		desc.SetElement<decltype(element)>();
-		desc.initialCount = count;
-		desc.debugName    = name;
-		buffer.Init(desc, resourceManager);
-		return buffer;
+		return bgpu::ComputeBuffer(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<decltype(element)>()
+				.SetInitialCount(count)
+				.SetDebugName(name));
 	};
 
-	auto cullView = bgpu::UploadBuffer<bgl::idl::CullView>();
-	{
-		auto desc         = bgpu::UploadBufferDesc();
-		desc.initialCount = 1;
-		desc.debugName    = "Cull View";
-		cullView.Init(desc, resourceManager);
-	}
+	auto cullView = bgpu::UploadBuffer<bgl::idl::CullView>(
+		resourceManager,
+		bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Cull View"));
 	cullView.Assign(std::span(&cullViewData, 1));
 
 	auto visibility = makeCompute(bgl::idl::InstanceVisibility{}, padded, "Visibility");
@@ -349,11 +328,4 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	resourceManager->DestroyReadbackBuffer(rbVisibility, false);
 	resourceManager->DestroyReadbackBuffer(rbStats, false);
-
-	instanceBuffer.Release(false);
-	meshBuffer.Release(false);
-	submeshBuffer.Release(false);
-	cullView.Release(false);
-	visibility.Release(false);
-	stats.Release(false);
 }

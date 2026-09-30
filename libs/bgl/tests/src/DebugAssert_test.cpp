@@ -175,8 +175,7 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgpu::DebugBuffer();
-	debugBuffer.Init(c_Capacity, resourceManager);
+	auto debugBuffer = bgpu::DebugBuffer(resourceManager, c_Capacity);
 
 	auto kernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()
@@ -254,7 +253,6 @@ TEST_CASE("dbg_raise records a GPU assertion end-to-end", "[debug][gpu-assert][c
 
 	resourceManager->UnmapReadback(rb);
 
-	debugBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rb, false);
 }
 
@@ -372,8 +370,7 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgpu::DebugBuffer();
-	debugBuffer.Init(c_Capacity, resourceManager);
+	auto debugBuffer = bgpu::DebugBuffer(resourceManager, c_Capacity);
 
 	auto kernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()
@@ -481,7 +478,6 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 
 	resourceManager->UnmapReadback(rb);
 
-	debugBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroyBuffer(entryBuf);
 	resourceManager->DestroyBuffer(rangeBuf);

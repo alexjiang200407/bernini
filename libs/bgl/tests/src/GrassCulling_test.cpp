@@ -45,6 +45,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <optional>
 
 // What the grass stage's amplification groups decided, read off cull.stats: every chunk of a field
 // in view is tested and none culled, a field behind the camera is culled whole, and one past the fade
@@ -110,19 +111,19 @@ namespace
 
 	struct Harness
 	{
-		bgl::GraphicsRef                        gfx;
-		bgl::GraphicsBase*                      gfxBase = nullptr;
-		core::SharedRef<bgpu::IResourceManager> resourceManager;
-		bgpu::IDevice*                          device = nullptr;
-		bgl::RenderTargetRef                    target;
-		bgl::RenderTargetBase*                  targetBase = nullptr;
-		bgl::SceneRef                           sceneRef;
-		bgl::SceneViewRef                       viewRef;
-		bgl::Scene*                             scene = nullptr;
-		bgl::SceneView*                         view  = nullptr;
-		bgl::CompactInstancesPass               compactPass;
-		bgl::ForwardPhases                      forwardPhases;
-		bgl::BrdfLutGenPass                     brdfLut;
+		bgl::GraphicsRef                         gfx;
+		bgl::GraphicsBase*                       gfxBase = nullptr;
+		core::SharedRef<bgpu::IResourceManager>  resourceManager;
+		bgpu::IDevice*                           device = nullptr;
+		bgl::RenderTargetRef                     target;
+		bgl::RenderTargetBase*                   targetBase = nullptr;
+		bgl::SceneRef                            sceneRef;
+		bgl::SceneViewRef                        viewRef;
+		bgl::Scene*                              scene = nullptr;
+		bgl::SceneView*                          view  = nullptr;
+		std::optional<bgl::CompactInstancesPass> compactPass;
+		bgl::ForwardPhases                       forwardPhases;
+		bgl::BrdfLutGenPass                      brdfLut;
 
 		Harness()
 		{
@@ -173,7 +174,7 @@ namespace
 			const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
 			auto                        pipelines = bgpu::PipelineBatch(device);
 			const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
-			compactPass.Init(ctx);
+			compactPass.emplace(ctx);
 			forwardPhases.Init(ctx);
 			forwardPhases.AddDrawBucketKernels(ctx, view->GrassDrawBuckets());
 			brdfLut.Init(ctx);
@@ -204,7 +205,6 @@ namespace
 
 		~Harness()
 		{
-			compactPass.Release(false);
 			forwardPhases.Release();
 			brdfLut.Release();
 		}
@@ -262,7 +262,7 @@ namespace
 			draw.lighting.env.brdfLut = brdfLut.GetSrv();
 
 			fg.SetResourceNamespace(view->GetCullNamespace(0));
-			compactPass.AttachToFrameGraph(fg, draw);
+			compactPass->AttachToFrameGraph(fg, draw);
 			forwardPhases.AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kGrass);
 
 			fg.AddPass(

@@ -743,15 +743,6 @@ namespace bgl
 		[[nodiscard]] RigMeta*
 		FindRig(RigHandle rig) noexcept;
 
-		/**
-		 * Sizes every GPU-mirrored buffer to its SceneDesc starting point.
-		 *
-		 * @throws std::runtime_error if the device cannot allocate one; the constructor converts it
-		 *         to SceneError, so a caller only ever sees the documented type.
-		 */
-		void
-		InitBuffers();
-
 		// Claims a geom slot, growing the table when it is full. Unlike the GPU arenas this is a
 		// pure CPU side table, so it cannot fail on device memory.
 		[[nodiscard]] core::slot_handle

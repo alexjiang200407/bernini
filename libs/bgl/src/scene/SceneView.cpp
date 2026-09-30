@@ -146,15 +146,82 @@ namespace bgl
 			ValidateWeightRamp(desc.position, leg, "position");
 			ValidateWeightRamp(desc.rotation, leg, "rotation");
 		}
+
+		uint32_t
+		PaddedInstances(uint32_t instances) noexcept
+		{
+			return core::round_up(instances, idl::cHistogramGroupSize);
+		}
+
+		// One record of each kind: most views hold no animated placement at all, and the arena
+		// grows on the first that does. The null record must cover the largest payload as well as
+		// its header, so a null reference reads zeros for a whole record rather than the first
+		// live one.
+		bgpu::RawBufferDesc
+		PlaybackArenaDesc()
+		{
+			return bgpu::RawBufferDesc()
+			    .SetInitialBytes(
+					2 * bgpu::idl::cRawPayloadOffset +
+					static_cast<uint32_t>(
+						sizeof(idl::SkinnedState) + sizeof(idl::SkinnedTableState)))
+			    .SetNullRecordBytes(
+					bgpu::idl::cRawPayloadOffset +
+					static_cast<uint32_t>(
+						std::max(sizeof(idl::SkinnedState), sizeof(idl::SkinnedTableState))))
+			    .SetDebugName("Playback Arena");
+		}
 	}
 
 	SceneView::SceneView(
 		const SceneRef&                         scene,
 		uint32_t                                initialInstances,
 		core::SharedRef<bgpu::IResourceManager> resourceManager,
-		std::shared_ptr<DrawBucketTable>        buckets) :
+		std::shared_ptr<DrawBucketTable>        buckets)
+	try :
 		m_Scene(scene), m_ResourceManager(std::move(resourceManager)),
-		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets))
+		m_InitialInstances(initialInstances), m_DrawBucketTable(std::move(buckets)),
+		m_DrawBucketFlags(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc()
+				.SetInitialCount(idl::cMaxDrawBuckets)
+				.SetDebugName("Draw Bucket Flags")),
+		m_InstanceBuffer(
+			m_ResourceManager,
+			bgpu::PackedBufferDesc()
+				.SetInitialCount(PaddedInstances(m_InitialInstances))
+				.SetCapacityAlignment(idl::cHistogramGroupSize)
+				.SetBlockSize(sizeof(SubmeshInstance) * 256)
+				.SetDebugName("Instance Buffer")),
+		m_MeshBuffer(
+			m_ResourceManager,
+			bgpu::EntryBufferDesc()
+				.SetInitialCount(m_InitialInstances)
+				.SetBlockSize(sizeof(idl::MeshInstance) * 256)
+				.SetDebugName("Mesh Buffer")),
+		m_Playback(m_ResourceManager, PlaybackArenaDesc()), m_Palettes(m_ResourceManager),
+		m_FootIK(
+			m_ResourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Foot IK Buffer")),
+		m_PosedInstances(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Posed Instances")),
+		m_BlobShadows(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Blob Shadows")),
+		m_GrassDraws(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Grass Draws")),
+		m_GrassChunkRefs(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Grass Chunk Refs")),
+		m_TransparentSort(m_ResourceManager, PaddedInstances(m_InitialInstances)),
+		// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
+		m_CurrentSelectedInstances(
+			m_ResourceManager,
+			bgpu::UploadBufferDesc()
+				.SetDebugName("Selected Instances")
+				.SetUnorderedAccessView(true))
 	{
 		core::ensure(
 			m_DrawBucketTable != nullptr,
@@ -165,119 +232,16 @@ namespace bgl
 
 		m_NamePrefix = std::format("v{}:", g_NextViewId.fetch_add(1));
 
-		try
-		{
-			InitBuffers();
-		}
-		catch (const std::runtime_error& e)
-		{
-			throw SceneError(e.what());
-		}
-	}
-
-	void
-	SceneView::InitBuffers()
-	{
-		const uint32_t paddedInstances =
-			core::round_up(m_InitialInstances, idl::cHistogramGroupSize);
-
-		{
-			auto instanceBufferDesc              = bgpu::PackedBufferDesc();
-			instanceBufferDesc.initialCount      = paddedInstances;
-			instanceBufferDesc.capacityAlignment = idl::cHistogramGroupSize;
-			instanceBufferDesc.debugName         = "Instance Buffer";
-			instanceBufferDesc.blockSize         = sizeof(SubmeshInstance) * 256;
-
-			m_InstanceBuffer.Init(std::move(instanceBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto flagsDesc         = bgpu::UploadBufferDesc();
-			flagsDesc.initialCount = idl::cMaxDrawBuckets;
-			flagsDesc.debugName    = "Draw Bucket Flags";
-
-			m_DrawBucketFlags.Init(std::move(flagsDesc), m_ResourceManager);
-		}
-
-		{
-			auto meshBufferDesc         = bgpu::EntryBufferDesc();
-			meshBufferDesc.initialCount = m_InitialInstances;
-			meshBufferDesc.debugName    = "Mesh Buffer";
-			meshBufferDesc.blockSize    = sizeof(idl::MeshInstance) * 256;
-
-			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
-		}
-
-		{
-			auto playbackDesc = bgpu::RawBufferDesc();
-
-			// One record of each kind: most views hold no animated placement at all, and the arena
-			// grows on the first that does.
-			playbackDesc.initialBytes =
-				2 * bgpu::idl::cRawPayloadOffset +
-				static_cast<uint32_t>(sizeof(idl::SkinnedState) + sizeof(idl::SkinnedTableState));
-
-			// The null record must cover the largest payload as well as its header, so a null
-			// reference reads zeros for a whole record rather than the first live one.
-			playbackDesc.nullRecordBytes =
-				bgpu::idl::cRawPayloadOffset +
-				static_cast<uint32_t>(
-					std::max(sizeof(idl::SkinnedState), sizeof(idl::SkinnedTableState)));
-
-			playbackDesc.debugName = "Playback Arena";
-
-			m_Playback.Init(std::move(playbackDesc), m_ResourceManager);
-		}
-
-		m_Palettes.Init(m_ResourceManager);
-
-		{
-			auto footIKDesc         = bgpu::RangeBufferDesc();
-			footIKDesc.initialCount = 1;
-			footIKDesc.debugName    = "Foot IK Buffer";
-
-			m_FootIK.Init(std::move(footIKDesc), m_ResourceManager);
-		}
-
-		{
-			auto desc         = bgpu::UploadBufferDesc();
-			desc.initialCount = 1;
-			desc.debugName    = "Posed Instances";
-
-			m_PosedInstances.Init(std::move(desc), m_ResourceManager);
-		}
-
-		{
-			auto desc         = bgpu::UploadBufferDesc();
-			desc.initialCount = 1;
-			desc.debugName    = "Blob Shadows";
-
-			m_BlobShadows.Init(std::move(desc), m_ResourceManager);
-		}
-
-		{
-			auto draws         = bgpu::UploadBufferDesc();
-			draws.initialCount = 1;
-			draws.debugName    = "Grass Draws";
-			m_GrassDraws.Init(std::move(draws), m_ResourceManager);
-
-			auto refs         = bgpu::UploadBufferDesc();
-			refs.initialCount = 1;
-			refs.debugName    = "Grass Chunk Refs";
-			m_GrassChunkRefs.Init(std::move(refs), m_ResourceManager);
-		}
-
 		EnsureCullStateCount(1);
-		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
-
-		{
-			// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
-			auto desc                = bgpu::UploadBufferDesc();
-			desc.debugName           = "Selected Instances";
-			desc.unorderedAccessView = true;
-
-			m_CurrentSelectedInstances.Init(std::move(desc), m_ResourceManager);
-		}
+	}
+	// A device that cannot allocate a buffer reaches the caller as the documented type.
+	catch (const SceneError&)
+	{
+		throw;
+	}
+	catch (const std::runtime_error& e)
+	{
+		throw SceneError(e.what());
 	}
 
 	void
@@ -288,20 +252,7 @@ namespace bgl
 
 		while (m_CullStates.size() < count)
 		{
-			// Init part-way through leaves buffers behind that no destructor reclaims, and the
-			// entry must not join the vector either: a later call would count it as already made.
-			auto cullState = CullState();
-			try
-			{
-				cullState.Init(padded, m_MeshBuffer.Capacity(), m_ResourceManager);
-			}
-			catch (...)
-			{
-				cullState.Release();
-				throw;
-			}
-
-			m_CullStates.push_back(std::move(cullState));
+			m_CullStates.emplace_back(m_ResourceManager, padded, m_MeshBuffer.Capacity());
 		}
 	}
 
@@ -319,35 +270,7 @@ namespace bgl
 		m_TransparentSort.Resize(padded);
 	}
 
-	SceneView::~SceneView() noexcept
-	{
-		// Nothing to release back to the Scene: instances reference geometry by value and keep
-		// nothing alive. The GPU buffers are another matter -- none of these types has a
-		// destructor, so a view that is not released here holds its resource-manager slots until
-		// the manager itself goes, and a session that opens and closes views exhausts the pools.
-		//
-		// Deferred: frames recorded against this view may still be in flight.
-		m_InstanceBuffer.Release();
-		m_MeshBuffer.Release();
-		m_Playback.Release();
-		m_Palettes.Release();
-		m_FootIK.Release();
-		m_PosedInstances.Release();
-		m_BlobShadows.Release();
-		m_GrassDraws.Release();
-		m_GrassChunkRefs.Release();
-
-		for (CullState& cullState : m_CullStates)
-		{
-			cullState.Release();
-		}
-
-		m_TransparentSort.Release();
-		m_DrawBucketFlags.Release();
-		m_CurrentSelectedInstances.Release();
-
-		spdlog::trace("~SceneView");
-	}
+	SceneView::~SceneView() noexcept { spdlog::trace("~SceneView"); }
 
 	ViewMatrices
 	SceneView::AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept
