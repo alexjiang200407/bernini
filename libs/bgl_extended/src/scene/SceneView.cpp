@@ -36,6 +36,7 @@
 #include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
+#include <bgpu/idl/RawArena.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
@@ -208,18 +209,18 @@ namespace bgl
 		}
 
 		{
-			auto playbackDesc = RawBufferDesc();
+			auto playbackDesc = bgpu::RawBufferDesc();
 
 			// One record of each kind: most views hold no animated placement at all, and the arena
 			// grows on the first that does.
 			playbackDesc.initialBytes =
-				2 * idl::cRawPayloadOffset +
+				2 * bgpu::idl::cRawPayloadOffset +
 				static_cast<uint32_t>(sizeof(idl::SkinnedState) + sizeof(idl::SkinnedTableState));
 
 			// The null record must cover the largest payload as well as its header, so a null
 			// reference reads zeros for a whole record rather than the first live one.
 			playbackDesc.nullRecordBytes =
-				idl::cRawPayloadOffset +
+				bgpu::idl::cRawPayloadOffset +
 				static_cast<uint32_t>(
 					std::max(sizeof(idl::SkinnedState), sizeof(idl::SkinnedTableState)));
 

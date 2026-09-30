@@ -1,5 +1,4 @@
-import idl.Constants;
-import idl.IVertexSource;
+import idl.RawArena;
 import idl.RawEntry;
 import idl.RawRange;
 import idl.RecordHeader;
@@ -10,8 +9,8 @@ import lib.debug.dbg;
 // EntryBuffer<T> / RangeBuffer<T>, where the element type is checked once.
 //
 // A byte offset is a uint on every target, so one of these addresses at most 4 GiB
-// (bgl::c_MaxRawBufferBytes); the CPU arena refuses to grow past it.
-public struct RawBuffer : IVertexSource
+// (bgpu::c_MaxRawBufferBytes); the CPU arena refuses to grow past it.
+public struct RawBuffer
 {
     ByteAddressBuffer.Handle rawBuffer;
 

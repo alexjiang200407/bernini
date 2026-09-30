@@ -171,6 +171,9 @@ set(BGPU_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/bgpu_idl")
 set(BGPU_IDL_CPP_SOURCES
 	DebugRecord.slang
 	ErrorCode.slang
+	RawArena.slang
+	RawRange.slang
+	RecordHeader.slang
 )
 if(RENDERER_BACKEND STREQUAL "METAL")
 	set(BGPU_IDL_LAYOUT_ARGS --metal-layout)
@@ -198,7 +201,8 @@ foreach(module ${BGPU_IDL_CPP_SOURCES})
 endforeach()
 add_custom_target(bgpu_idl_generate ALL DEPENDS ${BGPU_IDL_OUTPUTS})
 add_dependencies(bgpu bgpu_idl_generate)
-target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT})
+# The second root: a renderer's generated mirror includes the ones it embeds as siblings ("RawRange.h").
+target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT} ${BGPU_IDL_OUT_ROOT}/bgpu/idl)
 
 # What this target does NOT link is the point: every public header compiles alone -- no PCH, and
 # bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_common, bgl_extended) or

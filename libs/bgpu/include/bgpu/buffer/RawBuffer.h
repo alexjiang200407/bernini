@@ -1,12 +1,11 @@
 #pragma once
-#include <RawEntry.h>
 #include <algorithm>
-#include <bgl_common/idl/Constants.h>
-#include <bgl_common/idl/RawRange.h>
-#include <bgl_common/idl/RecordHeader.h>
-#include <bgl_common/idl/idl.h>
 #include <bgpu/buffer/RangeBuffer.h>
 #include <bgpu/cmd/CommandList.h>
+#include <bgpu/idl/RawArena.h>
+#include <bgpu/idl/RawEntry.h>
+#include <bgpu/idl/RawRange.h>
+#include <bgpu/idl/RecordHeader.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
@@ -19,7 +18,7 @@
 #include <string>
 #include <utility>
 
-namespace bgl
+namespace bgpu
 {
 	// The unit a raw arena allocates in. Its size is the alignment every record and every range
 	// starts on, so a payload's float4 lands where a whole-struct load can reach it.
@@ -79,7 +78,7 @@ namespace bgl
 	{
 	public:
 		RawBuffer() noexcept = default;
-		RawBuffer(RawBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
+		RawBuffer(RawBufferDesc desc, ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
@@ -94,7 +93,7 @@ namespace bgl
 		operator=(RawBuffer&&) noexcept = default;
 
 		void
-		Init(RawBufferDesc desc, bgpu::ResourceManagerRef resourceManager)
+		Init(RawBufferDesc desc, ResourceManagerRef resourceManager)
 		{
 			core::ensure(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
 			core::ensure(
@@ -106,10 +105,10 @@ namespace bgl
 			m_ViewDesc.debugName = desc.debugName + " Handles";
 			m_ResourceManager    = resourceManager;
 
-			bgpu::RangeBufferDesc blockDesc;
+			RangeBufferDesc blockDesc;
 			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
 			blockDesc.blockSize    = desc.uploadBlockBytes;
-			blockDesc.maxBytes     = bgpu::c_MaxRawBufferBytes;
+			blockDesc.maxBytes     = c_MaxRawBufferBytes;
 			blockDesc.isRaw        = true;
 			blockDesc.debugName    = desc.debugName;
 
@@ -140,7 +139,7 @@ namespace bgl
 		 * address.
 		 */
 		template <typename T = Tag>
-		[[nodiscard]] bgpu::idl::RawEntry
+		[[nodiscard]] idl::RawEntry
 		AddRecord(T tag, std::span<const std::byte> payload)
 			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
@@ -168,7 +167,7 @@ namespace bgl
 				std::memcpy(record.data() + idl::cRawPayloadOffset, payload.data(), payload.size());
 			}
 
-			return bgpu::idl::RawEntry{ ToByteOffset(handle) };
+			return idl::RawEntry{ ToByteOffset(handle) };
 		}
 
 		/**
@@ -181,7 +180,7 @@ namespace bgl
 		 * @pre `entry` names a live record and `payload` is the length that record was written with.
 		 */
 		void
-		SetRecordPayload(bgpu::idl::RawEntry entry, std::span<const std::byte> payload)
+		SetRecordPayload(idl::RawEntry entry, std::span<const std::byte> payload)
 		{
 			core::ensure(IsOffsetValid(entry.byteOffset), "SetRecordPayload on a dead record");
 
@@ -281,7 +280,7 @@ namespace bgl
 		[[nodiscard]] static constexpr uint64_t
 		GetByteCeiling() noexcept
 		{
-			return bgpu::c_MaxRawBufferBytes;
+			return c_MaxRawBufferBytes;
 		}
 
 		void
@@ -292,19 +291,19 @@ namespace bgl
 		}
 
 		void
-		Update(bgpu::ICommandList* cmdList)
+		Update(ICommandList* cmdList)
 		{
 			m_Blocks.Update(cmdList);
 		}
 
 		// Re-read every frame: growth mints a new handle and retires the old one.
-		[[nodiscard]] bgpu::DescriptorHandle
+		[[nodiscard]] DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
 			return m_Blocks.GetDescriptorHandle();
 		}
 
-		[[nodiscard]] bgpu::BufferHandle
+		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
 			return m_Blocks.GetBufferHandle();
@@ -313,7 +312,7 @@ namespace bgl
 		// The arena's second view, for a caller binding the same allocation as handles. Null when
 		// the arena declared no handle stride. Re-issued with the buffer, so it is never a
 		// generation behind the bytes it describes.
-		[[nodiscard]] bgpu::BufferSrvHandle
+		[[nodiscard]] BufferSrvHandle
 		GetHandleView() const noexcept
 		{
 			return m_HandleView;
@@ -327,7 +326,7 @@ namespace bgl
 			if (m_ResourceManager != nullptr && !m_HandleView.IsNull())
 			{
 				m_ResourceManager->DestroyBufferSrv(m_HandleView, deferred);
-				m_HandleView = bgpu::BufferSrvHandle{};
+				m_HandleView = BufferSrvHandle{};
 			}
 			m_Blocks.Release(deferred);
 		}
@@ -374,7 +373,7 @@ namespace bgl
 				return;
 			}
 
-			const bgpu::BufferHandle arena = m_Blocks.GetBufferHandle();
+			const BufferHandle arena = m_Blocks.GetBufferHandle();
 			if (arena.slot == m_ViewedBuffer.slot &&
 			    arena.bindlessIndex == m_ViewedBuffer.bindlessIndex)
 			{
@@ -425,7 +424,7 @@ namespace bgl
 		[[nodiscard]] uint32_t
 		CheckByteSize(uint64_t bytes) const
 		{
-			const uint64_t allocatable = bgpu::c_MaxRawBufferBytes - GetReservedBytes();
+			const uint64_t allocatable = c_MaxRawBufferBytes - GetReservedBytes();
 
 			if (bytes > allocatable)
 			{
@@ -443,17 +442,17 @@ namespace bgl
 			return m_NullRecordBlocks * idl::cRawBlockBytes;
 		}
 
-		bgpu::RangeBuffer<RawBlock> m_Blocks;
+		RangeBuffer<RawBlock> m_Blocks;
 
 		// Kept beside the blocks rather than handed on: the view is the arena's to issue and to
 		// retire, which is what stops it drifting a generation behind the bytes.
-		bgpu::ResourceManagerRef m_ResourceManager;
-		bgpu::BufferSrvHandle    m_HandleView;
-		bgpu::BufferHandle       m_ViewedBuffer;
+		ResourceManagerRef m_ResourceManager;
+		BufferSrvHandle    m_HandleView;
+		BufferHandle       m_ViewedBuffer;
 
 		// Held rather than rebuilt: it is what every re-issue passes, and a stride of 0 is what
 		// says this arena has no view to re-issue.
-		bgpu::BufferSrvDesc m_ViewDesc;
-		uint32_t            m_NullRecordBlocks = 1;
+		BufferSrvDesc m_ViewDesc;
+		uint32_t      m_NullRecordBlocks = 1;
 	};
 }

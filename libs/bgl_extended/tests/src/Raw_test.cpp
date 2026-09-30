@@ -1,5 +1,4 @@
 #include "gfx/GraphicsBase.h"
-#include "scene/RawBuffer.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -7,9 +6,11 @@
 #include <bgl_common/idl/Constants.h>
 #include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/RawBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/idl/RawArena.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
@@ -77,13 +78,13 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	auto resourceManager = gfxBase->GetResourceManagerCpy();
 	REQUIRE(resourceManager != nullptr);
 
-	auto desc             = bgl::RawBufferDesc();
+	auto desc             = bgpu::RawBufferDesc();
 	desc.initialBytes     = 256;
-	desc.nullRecordBytes  = bgl::idl::cRawPayloadOffset + sizeof(LargePayload);
-	desc.uploadBlockBytes = sizeof(bgl::RawBlock);
+	desc.nullRecordBytes  = bgpu::idl::cRawPayloadOffset + sizeof(LargePayload);
+	desc.uploadBlockBytes = sizeof(bgpu::RawBlock);
 	desc.debugName        = "Raw Arena Test";
 
-	auto arena = bgl::RawBuffer<TestTag>(desc, resourceManager);
+	auto arena = bgpu::RawBuffer<TestTag>(desc, resourceManager);
 	REQUIRE(arena.IsInitialized());
 
 	// ADR-4: an arena is capped at what its view addresses, not at what the device could allocate.
@@ -105,16 +106,16 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 		const auto b = arena.AddRecord(TestTag::kLarge, BytesOf(LargePayload{}));
 		const auto c = arena.AddBytes(BytesOf(SmallPayload{ 5, 6 }));
 
-		CHECK(a.byteOffset % bgl::idl::cRawBlockBytes == 0);
-		CHECK(b.byteOffset % bgl::idl::cRawBlockBytes == 0);
-		CHECK(c.byteStart % bgl::idl::cRawBlockBytes == 0);
+		CHECK(a.byteOffset % bgpu::idl::cRawBlockBytes == 0);
+		CHECK(b.byteOffset % bgpu::idl::cRawBlockBytes == 0);
+		CHECK(c.byteStart % bgpu::idl::cRawBlockBytes == 0);
 
 		// Distinct allocations never overlap: a's record rounds up to whole blocks, and b starts
 		// past all of them.
 		constexpr uint32_t c_RecordBlocks =
-			((bgl::idl::cRawPayloadOffset + sizeof(SmallPayload) + bgl::idl::cRawBlockBytes - 1) /
-		     bgl::idl::cRawBlockBytes);
-		CHECK(b.byteOffset >= a.byteOffset + c_RecordBlocks * bgl::idl::cRawBlockBytes);
+			((bgpu::idl::cRawPayloadOffset + sizeof(SmallPayload) + bgpu::idl::cRawBlockBytes - 1) /
+		     bgpu::idl::cRawBlockBytes);
+		CHECK(b.byteOffset >= a.byteOffset + c_RecordBlocks * bgpu::idl::cRawBlockBytes);
 	}
 
 	SECTION("a record carries the tag it was written with")
@@ -254,10 +255,10 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
 	// The blocks a range lands in are computed in the same width, so the last elements of a full
 	// arena mark the last block rather than one below the first.
 	constexpr uint32_t c_LastPair =
-		static_cast<uint32_t>((bgpu::c_MaxRawBufferBytes / bgl::idl::cRawBlockBytes) - 2);
+		static_cast<uint32_t>((bgpu::c_MaxRawBufferBytes / bgpu::idl::cRawBlockBytes) - 2);
 
 	CHECK(
-		bgpu::FindDirtyBlocks(c_LastPair, 2, bgl::idl::cRawBlockBytes, c_BlockSize) ==
+		bgpu::FindDirtyBlocks(c_LastPair, 2, bgpu::idl::cRawBlockBytes, c_BlockSize) ==
 		bgpu::DirtyBlockSpan{ c_Blocks - 1, c_Blocks - 1 });
 	CHECK(bgpu::FindDirtyBlocks(4, 3, 16, 16) == bgpu::DirtyBlockSpan{ 4, 6 });
 }
@@ -270,7 +271,7 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
  */
 TEST_CASE("Growth stops at what a raw view can address", "[raw][scene]")
 {
-	constexpr uint64_t c_Block     = bgl::idl::cRawBlockBytes;
+	constexpr uint64_t c_Block     = bgpu::idl::cRawBlockBytes;
 	constexpr uint32_t c_LastBlock = static_cast<uint32_t>(bgpu::c_MaxRawBufferBytes / c_Block);
 
 	// Exactly at the ceiling is allowed: a uint addresses 0 .. 2^32-1, so the last byte is reachable.
@@ -319,12 +320,12 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto desc            = bgl::RawBufferDesc();
+	auto desc            = bgpu::RawBufferDesc();
 	desc.initialBytes    = 256;
-	desc.nullRecordBytes = bgl::idl::cRawPayloadOffset + sizeof(glm::vec4);
+	desc.nullRecordBytes = bgpu::idl::cRawPayloadOffset + sizeof(glm::vec4);
 	desc.debugName       = "Raw Arena Read";
 
-	auto arena = bgl::RawBuffer<TestTag>(desc, resourceManager);
+	auto arena = bgpu::RawBuffer<TestTag>(desc, resourceManager);
 
 	const auto payloadA = glm::vec4(1.0f, 2.0f, 3.0f, 4.0f);
 	const auto payloadB = glm::vec4(5.0f, 6.0f, 7.0f, 8.0f);

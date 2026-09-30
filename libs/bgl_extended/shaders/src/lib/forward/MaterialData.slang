@@ -6,6 +6,7 @@ import idl.IPbrMaterial;
 import idl.LoosePbrMaterial;
 import idl.MaterialType;
 import idl.PbrMaterial;
+import idl.RawArena;
 import idl.RawEntry;
 import idl.ISurfaceEnv;
 import idl.ShadingParams;

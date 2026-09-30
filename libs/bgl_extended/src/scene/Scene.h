@@ -1,7 +1,6 @@
 #pragma once
 #include "scene/BonePaletteBuffer.h"
 #include "scene/NamedBuffer.h"
-#include "scene/RawBuffer.h"
 #include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
@@ -53,6 +52,7 @@
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/RawBuffer.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -828,13 +828,13 @@ namespace bgl
 		bgpu::RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
 		bgpu::RangeBuffer<idl::MeshletGroup>             m_MeshletGroupBuffer;
 		bgpu::RangeBuffer<uint32_t>                      m_VertexMapBuffer;
-		RawBuffer<>                                      m_VertexDataBuffer;
+		bgpu::RawBuffer<>                                m_VertexDataBuffer;
 		bgpu::RangeBuffer<uint32_t>                      m_IndexBuffer;
 
 		// Every material of every kind, each behind a header naming its MaterialType. One arena
 		// rather than a buffer per kind: a new shading model is a payload and a tag, not a buffer,
 		// a binding and a uniform key.
-		RawBuffer<MaterialType> m_Materials;
+		bgpu::RawBuffer<MaterialType> m_Materials;
 
 		// One clip table for every animated tier: a Clip means the same thing to both, so a second
 		// buffer of the same element type would only be two things to grow.

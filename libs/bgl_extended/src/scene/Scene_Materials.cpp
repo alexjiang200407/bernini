@@ -23,6 +23,7 @@
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/RawTextureHandle.h>
+#include <bgpu/idl/RawArena.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
@@ -479,10 +480,10 @@ namespace bgl
 			offsetof(idl::GameSurfaceRecord, routeTextures) ==
 			sizeof(idl::GameSurfaceRecord::textures));
 		static_assert(
-			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
+			bgpu::idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
 			idl::cGameSurfaceRouteChannelsByteOffset);
 		static_assert(
-			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routedMask) ==
+			bgpu::idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routedMask) ==
 			idl::cGameSurfaceRoutedMaskByteOffset);
 		// The contract's route array is four wide because a sample is; the record agrees.
 		static_assert(
@@ -491,14 +492,14 @@ namespace bgl
 		// A game surface's parameters follow the fixed part at an offset the shader holds as a
 		// constant; the struct growing without it is a record read one field late.
 		static_assert(
-			idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
+			bgpu::idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
 			idl::cGameSurfaceParamsByteOffset);
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
 		// strided by the handle itself, and a payload offset that is not a whole number of handles
 		// truncates the division into the middle of a neighbouring one.
 		static_assert(sizeof(bgpu::DescriptorHandle) == sizeof(idl::RawTextureHandle));
-		static_assert(idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
+		static_assert(bgpu::idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
 
 		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They
 		// describe the same nine routes, so a mismatch would silently sample the wrong map -- roughness

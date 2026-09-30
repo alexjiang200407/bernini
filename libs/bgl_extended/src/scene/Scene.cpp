@@ -19,6 +19,7 @@
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgpu/cmd/CommandList.h>
+#include <bgpu/idl/RawArena.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
@@ -55,7 +56,7 @@ namespace bgl
 			for (const SurfaceType& surface : surfaces)
 				largestParams = std::max(largestParams, surface.params.byteSize);
 
-			return idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestParams;
+			return bgpu::idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestParams;
 		}
 
 		// The three material kinds share one arena, so their budgets add up into it.
@@ -63,9 +64,9 @@ namespace bgl
 		MaterialArenaBytes(const SceneDesc& desc, uint64_t surfaceRecordBytes) noexcept
 		{
 			return (static_cast<uint64_t>(desc.initialPbrMaterials) *
-			        (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
+			        (bgpu::idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
 			       (static_cast<uint64_t>(desc.initialLoosePbrMaterials) *
-			        (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
+			        (bgpu::idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
 			       (static_cast<uint64_t>(desc.initialSurfaceMaterials) * surfaceRecordBytes);
 		}
 
@@ -76,7 +77,7 @@ namespace bgl
 		{
 			return std::max(
 				static_cast<uint32_t>(surfaceRecordBytes),
-				idl::cRawPayloadOffset +
+				bgpu::idl::cRawPayloadOffset +
 					static_cast<uint32_t>(
 						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
 		}
@@ -165,7 +166,7 @@ namespace bgl
 		{
 			// Ranges alone: a vertex stream's kind is its submesh's VertexLayout, recorded once per
 			// submesh rather than once per vertex, so no record here carries a header.
-			auto vertexDataBufferDesc         = RawBufferDesc();
+			auto vertexDataBufferDesc         = bgpu::RawBufferDesc();
 			vertexDataBufferDesc.initialBytes = atLeastOne(m_Desc.initialVertexBufferByteSize);
 			vertexDataBufferDesc.debugName    = "Vertex Data Buffer";
 
@@ -184,7 +185,7 @@ namespace bgl
 			const uint64_t surfaceRecordBytes = SurfaceRecordBytes(m_Surfaces);
 			const uint64_t materialBytes      = MaterialArenaBytes(m_Desc, surfaceRecordBytes);
 
-			auto materialDesc = RawBufferDesc();
+			auto materialDesc = bgpu::RawBufferDesc();
 
 			// Clamped, not truncated: a budget past what a raw view addresses would otherwise wrap
 			// to a small arena, which is the wrap the arena's own checks exist to make loud.

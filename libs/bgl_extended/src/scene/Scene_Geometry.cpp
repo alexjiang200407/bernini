@@ -19,8 +19,8 @@
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/MeshletGroup.h>
-#include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/VertexLayout.h>
+#include <bgpu/idl/RawRange.h>
 #include <cmath>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>

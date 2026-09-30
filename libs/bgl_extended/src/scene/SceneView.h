@@ -3,7 +3,6 @@
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/NamedBuffer.h"
-#include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/scene_buffer_names.h"
 #include "types/DrawBucketMask.h"
@@ -36,6 +35,7 @@
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
+#include <bgpu/buffer/RawBuffer.h>
 #include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <core/containers/multi_slot_handle.h>
@@ -624,7 +624,7 @@ namespace bgl
 		bgpu::EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
 		// stage that draws more than one can ask rather than mirror the draw-bucket table.
-		RawBuffer<idl::PlaybackType> m_Playback;
+		bgpu::RawBuffer<idl::PlaybackType> m_Playback;
 
 		BonePaletteBuffer m_Palettes;
 

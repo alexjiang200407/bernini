@@ -87,8 +87,6 @@ set(IDL_CPP_SOURCES
     BlendSlot.slang
     SkinnedState.slang
     SkinnedTableState.slang
-    RawRange.slang
-    RecordHeader.slang
     PlaybackType.slang
 )
 

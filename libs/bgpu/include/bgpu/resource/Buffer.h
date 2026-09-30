@@ -167,7 +167,7 @@ namespace bgpu
 	// decides the type at each load, which is what a payload whose layout varies per record needs.
 	//
 	// Named for the view rather than the buffer, unlike its siblings, because RawBuffer is the
-	// CPU-mirrored arena over one (scene/RawBuffer.h) and the Slang wrapper that reads it.
+	// CPU-mirrored arena over one (<bgpu/buffer/RawBuffer.h>) and the Slang wrapper that reads it.
 	struct RawViewDesc
 	{
 		uint64_t    byteSize  = 0;

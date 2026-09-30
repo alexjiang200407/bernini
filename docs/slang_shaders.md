@@ -137,7 +137,7 @@ element matches the CPU mirror `bgl_idlgen` emits — the default structured-buf
 
 ## A raw buffer holds bytes, and never a resource handle
 
-`RawBuffer` ([lib/types/RawBuffer.slang](../libs/bgl_extended/shaders/src/lib/types/RawBuffer.slang)) wraps
+`RawBuffer` ([lib/types/RawBuffer.slang](../libs/bgpu/shaders/src/lib/types/RawBuffer.slang)) wraps
 `ByteAddressBuffer.Handle`; `RawComputeBuffer` is its writable counterpart. The buffer must have been
 created by `CreateRawBuffer` — a view is chosen once, so binding a structured buffer here reads
 undefined bytes rather than failing.
@@ -168,7 +168,7 @@ bytes with no texture in the type — and samples them through a **second, typed
 allocation**. The raw view reads the record; the typed view is what makes a texture of the bytes
 inside it.
 
-`RawHandleView<T>` ([lib/types/RawHandleView.slang](../libs/bgl_extended/shaders/src/lib/types/RawHandleView.slang))
+`RawHandleView<T>` ([lib/types/RawHandleView.slang](../libs/bgpu/shaders/src/lib/types/RawHandleView.slang))
 is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
 stride divide inside the type. Its elements are `BoxedHandle<T>` rather than `T`, for the reason
 below. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an

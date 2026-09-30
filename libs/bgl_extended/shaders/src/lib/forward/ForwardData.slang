@@ -10,7 +10,12 @@ import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
 import lib.types.RangeBuffer;
 import lib.types.RawBuffer;
+import idl.IVertexSource;
 import lib.data.SubmeshInstance;
+
+// The vertex decode reads through IVertexSource, the renderer's interface; the arena is bgpu's, so
+// the conformance is declared where the renderer binds one as its vertex data.
+public extension RawBuffer : IVertexSource {}
 
 public struct ForwardData
 {
