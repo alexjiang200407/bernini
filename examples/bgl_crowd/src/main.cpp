@@ -378,14 +378,14 @@ namespace
 			// Frame time over each few seconds: what --units is for.
 			if (++spanFrames == 300)
 			{
-				const auto now     = std::chrono::steady_clock::now();
-				const auto seconds = std::chrono::duration<double>(now - spanStart).count();
+				const auto spanEnd = std::chrono::steady_clock::now();
+				const auto seconds = std::chrono::duration<double>(spanEnd - spanStart).count();
 				std::cout << std::format(
 					"{} agents: {:.2f} ms a frame over the last {} frames\n",
 					c_BaseAgents * units,
 					1000.0 * seconds / spanFrames,
 					spanFrames);
-				spanStart  = now;
+				spanStart  = spanEnd;
 				spanFrames = 0;
 			}
 		}
