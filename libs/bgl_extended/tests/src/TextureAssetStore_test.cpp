@@ -91,7 +91,7 @@ TEST_CASE("An added texture is uploaded once, on the first flush", "[textures]")
 
 	fixture.store.Flush(cmdList.Get());
 
-	CHECK(cmdList->WroteTexture(TextureHandle::From(texture)));
+	CHECK(cmdList->WroteTexture(TextureHandleOf(texture)));
 	CHECK(cmdList->textureWrites.size() == Fixture::c_DefaultCount + 1);
 
 	// The queue is consumed, not replayed: a second flush would re-upload into a texture the
@@ -118,12 +118,11 @@ TEST_CASE("A texture deleted before the flush never reaches the command list", "
 
 	// The slot retired on delete, so writing it would write whatever now owns it. This is the
 	// assertion the whole store exists to make provable.
-	CHECK_FALSE(cmdList->WroteTexture(TextureHandle::From(doomed)));
-	CHECK(cmdList->WroteTexture(TextureHandle::From(kept)));
+	CHECK_FALSE(cmdList->WroteTexture(TextureHandleOf(doomed)));
+	CHECK(cmdList->WroteTexture(TextureHandleOf(kept)));
 
 	// Nor may it be barriered: a barrier names the retired slot just as a write does.
-	const auto barriered =
-		std::ranges::find(cmdList->barrieredTextures, TextureHandle::From(doomed));
+	const auto barriered = std::ranges::find(cmdList->barrieredTextures, TextureHandleOf(doomed));
 	CHECK(barriered == cmdList->barrieredTextures.end());
 }
 

@@ -1,6 +1,6 @@
 #pragma once
-#include <bgl/IRenderTarget.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/api.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/types/QueueType.h>
@@ -25,7 +25,6 @@ namespace bgl
 	class ICommandQueue;
 	class ITimestampHeap;
 	struct ShaderDesc;
-	struct ReflectedSurface;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
 	struct CommandListDesc;
@@ -48,7 +47,7 @@ namespace bgl
 		virtual core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept = 0;
 
-		[[nodiscard]] core::SharedRef<IShader>
+		[[nodiscard]] BGPU_API core::SharedRef<IShader>
 		CreateShader(std::string slangModuleName, std::string entryPointName = "main")
 			const noexcept;
 
@@ -79,19 +78,6 @@ namespace bgl
 		[[nodiscard]] virtual bgpu::GpuContext&
 		GetGpuContext() const noexcept = 0;
 
-		/**
-		 * The surface a game's module declares, read through this device's compiler and so at the
-		 * offsets this backend will read a record at.
-		 *
-		 * Empty when the module is not a surface at all -- it does not import the contract.
-		 *
-		 * @pre no compile is in flight; runs on the thread that will register the surface.
-		 * @throws std::runtime_error if the module does not compile, or imports the contract and
-		 *         declares no single surface.
-		 */
-		[[nodiscard]] std::optional<ReflectedSurface>
-		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) const;
-
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>
 		CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept = 0;
@@ -100,10 +86,10 @@ namespace bgl
 		virtual core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept = 0;
 
-		[[nodiscard]] ComputeKernel
+		[[nodiscard]] BGPU_API ComputeKernel
 		CreateComputeKernel(const ComputePipelineDesc& desc) const noexcept;
 
-		[[nodiscard]] MeshletKernel
+		[[nodiscard]] BGPU_API MeshletKernel
 		CreateMeshletKernel(const MeshletPipelineDesc& desc) const noexcept;
 
 		virtual core::SharedRef<ICommandList>
@@ -113,8 +99,8 @@ namespace bgl
 			core::SharedRef<IResourceManager>  resourceManager) const noexcept = 0;
 
 		[[nodiscard]]
-		core::SharedRef<ICommandQueue>
-		CreateGraphicsCommandQueue() const noexcept;
+		BGPU_API core::SharedRef<ICommandQueue>
+				 CreateGraphicsCommandQueue() const noexcept;
 
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandAllocator>
@@ -137,20 +123,6 @@ namespace bgl
 		virtual core::SharedRef<IResourceManager>
 		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept = 0;
 
-		/**
-		 * The target presents on `queue`, so it must be the queue of the context that will drive
-		 * the target.
-		 *
-		 * @throws GraphicsError on swapchain or backbuffer creation failure.
-		 */
-		[[nodiscard]]
-		virtual RenderTargetRef
-		CreateRenderTarget(
-			const RenderTargetDesc&           desc,
-			core::SharedRef<ICommandQueue>    queue,
-			core::SharedRef<IResourceManager> resourceManager,
-			bool                              enableDebug) const = 0;
-
 		[[nodiscard]]
 		virtual Uniforms
 		CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
@@ -163,4 +135,14 @@ namespace bgl
 	};
 
 	using DeviceRef = core::SharedRef<IDevice>;
+
+	/**
+	 * A device on `context`'s GPU for one owner. Everything made through it -- queues, resource
+	 * managers, pipelines -- is that owner's, so two owners on one context stay isolated; the
+	 * context is shared, the device is not.
+	 *
+	 * @pre the build has a backend (RENDERER_BACKEND is DX12 or METAL).
+	 */
+	[[nodiscard]] BGPU_API DeviceRef
+	CreateDevice(bgpu::GpuContextRef context);
 }

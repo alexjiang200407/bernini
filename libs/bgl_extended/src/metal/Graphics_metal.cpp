@@ -1,6 +1,4 @@
 #include "AutoreleaseNet_metal.h"
-#include "cmd/CommandQueue_metal.h"
-#include "device/Device_metal.h"
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
@@ -15,6 +13,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/metal/MetalErrorChecker.h>
+#include <bgpu/metal/native_device.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -131,8 +130,7 @@ namespace bgl
 	public:
 		Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 		{
-			core::SharedRef<Device> device = core::SharedRef<Device>::Make(std::move(context));
-			m_Device                       = device;
+			m_Device = CreateDevice(std::move(context));
 
 			auto rmDesc               = ResourceManagerDesc();
 			rmDesc.maxCbvSrvUavs      = opts.maxCbvSrvUavs;
@@ -149,7 +147,7 @@ namespace bgl
 			// Before the context: it builds every pipeline, and a slot's pipelines compile against
 			// whatever module this bound to that slot.
 			m_SurfaceTypes =
-				RegisterSurfaces(*m_Device, device->GetGpuContext().GetDesc().clientShaderDir);
+				RegisterSurfaces(*m_Device, m_Device->GetGpuContext().GetDesc().clientShaderDir);
 
 			m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 			m_Context         = std::make_unique<RenderContext>(
@@ -157,12 +155,12 @@ namespace bgl
 				m_ResourceManager,
 				m_DrawBucketTable,
 				m_SurfaceTypes,
-				device->GetGpuContext().GetDesc().enableDebugLayer);
+				m_Device->GetGpuContext().GetDesc().enableDebugLayer);
 
 			// The always-on set is built by the RenderContext above; the per-bucket kernels are built
 			// by the first Draw that demands each, and that path drops the sessions again after
 			// every batch. This release covers the start-up build.
-			device->ReleaseSlangSession();
+			m_Device->ReleaseSlangSession();
 
 			spdlog::info("BGL initialized successfully.");
 		}
@@ -235,7 +233,9 @@ namespace bgl
 		BeginFrame(const RenderTargetRef& target) override
 		{
 			if (!m_Opts.gpuCapturePath.empty() && m_Capture.Wanted())
-				m_Capture.Begin(m_Device->As<Device>()->GetMTLDevice(), m_Opts.gpuCapturePath);
+				m_Capture.Begin(
+					bgpu::GetMtlDevice(m_Device->GetGpuContext()),
+					m_Opts.gpuCapturePath);
 
 			m_Context->BeginFrame(target);
 		}

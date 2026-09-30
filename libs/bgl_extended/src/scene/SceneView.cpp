@@ -3,6 +3,7 @@
 #include "fg/PassDesc.h"
 #include "scene/NamedBuffer.h"
 #include "scene/Scene.h"
+#include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -1457,7 +1458,7 @@ namespace bgl
 	{
 		// Resolve an asset handle to the view the scene created for it, optionally requiring a cube map.
 		const auto resolve = [this](TextureAssetHandle asset, const char* name, bool requireCube) {
-			const auto texHandle = TextureHandle::From(asset);
+			const auto texHandle = TextureHandleOf(asset);
 			if (!m_ResourceManager->ValidTextureHandle(texHandle))
 			{
 				throw SceneError(
@@ -1572,7 +1573,7 @@ namespace bgl
 	void
 	SceneView::SetSkyBox(SkyboxDesc desc)
 	{
-		auto cubeTex = TextureHandle::From(desc.skyboxCubeTex);
+		auto cubeTex = TextureHandleOf(desc.skyboxCubeTex);
 		if (!m_ResourceManager->ValidTextureHandle(cubeTex))
 		{
 			throw SceneError("SetSkyBox: invalid skybox texture asset handle");

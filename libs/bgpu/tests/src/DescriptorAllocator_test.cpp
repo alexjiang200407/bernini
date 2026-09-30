@@ -1,7 +1,7 @@
 // Exercises the allocator against a real device but never wires it into a frame: these pin the
 // index-management contract the descriptor migration (D4 of the plan) will rely on.
 //
-// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a D3D12-only case has to exclude
+// bgpu_tests globs every .cpp under tests/ whatever the backend, so a D3D12-only case has to exclude
 // itself: the headers below do not exist on a Metal build.
 #if defined(RENDERER_BACKEND_DX12)
 
@@ -11,7 +11,7 @@
 namespace wrl = Microsoft::WRL;
 
 #	include <bgpu/constants/constants.h>
-#	include "d3d12/resource/DescriptorAllocator_d3d12.h"
+#	include "resource/DescriptorAllocator_d3d12.h"
 
 #	include <catch2/catch_test_macros.hpp>
 

@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/ImageData.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>

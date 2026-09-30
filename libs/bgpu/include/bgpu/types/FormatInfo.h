@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/api.h>
 #include <bgpu/types/Format.h>
 #include <cstdint>
 
@@ -28,4 +29,8 @@ namespace bgl
 		bool        isSigned  : 1;
 		bool        isSRGB    : 1;
 	};
+
+	/** The row for `format`; UNKNOWN's for a value past the table. */
+	[[nodiscard]] BGPU_API FormatInfo
+	GetFormatInfo(Format format);
 }

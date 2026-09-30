@@ -1,6 +1,5 @@
 #pragma once
 #include "metal_cpp.h"
-#include <bgl/IRenderTarget.h>
 #include <core/ref/SharedRef.h>
 
 #include <bgpu/GpuContext.h>
@@ -72,13 +71,6 @@ namespace bgl
 
 		core::SharedRef<IResourceManager>
 		CreateResourceManager(const ResourceManagerDesc& desc) const noexcept override;
-
-		RenderTargetRef
-		CreateRenderTarget(
-			const RenderTargetDesc&           desc,
-			core::SharedRef<ICommandQueue>    queue,
-			core::SharedRef<IResourceManager> resourceManager,
-			bool                              enableDebug) const override;
 
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;

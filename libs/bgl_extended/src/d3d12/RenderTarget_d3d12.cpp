@@ -1,9 +1,7 @@
 #include "RenderTarget_d3d12.h"
-#include "cmd/CommandAllocator_d3d12.h"
-#include "cmd/CommandQueue_d3d12.h"
-#include "resource/ResourceManager_d3d12.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
+#include <bgpu/d3d12/native_rhi.h>
 #include <bgpu/device/Device.h>
 #include <spdlog/spdlog.h>
 
@@ -86,7 +84,7 @@ namespace bgl
 
 		wrl::ComPtr<IDXGISwapChain1> swap;
 
-		auto d3d12CommandQueue = m_CommandQueue->As<CommandQueue>()->GetD3D12CommandQueue();
+		auto* d3d12CommandQueue = bgpu::GetD3d12CommandQueue(*m_CommandQueue);
 		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
 			d3d12ErrChecker;
 
@@ -118,9 +116,7 @@ namespace bgl
 				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
 				m_BackBuffers[i].textureHandle =
-					m_ResourceManager->As<ResourceManager>()->CreateTexture(
-						std::move(backBuffer),
-						textureDesc);
+					bgpu::ImportD3d12Texture(*m_ResourceManager, backBuffer.Get(), textureDesc);
 
 				RtvDesc rtvDesc;
 				rtvDesc.format    = Format::SBGRA8_UNORM;
@@ -554,5 +550,21 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
 		}
 		m_OutlineMask = {};
+	}
+
+	RenderTargetRef
+	CreateBackendRenderTarget(
+		const RenderTargetDesc& desc,
+		DeviceRef               device,
+		CommandQueueRef         queue,
+		ResourceManagerRef      resourceManager,
+		bool                    enableDebug)
+	{
+		return core::SharedRef<RenderTarget>::Make(
+			desc,
+			std::move(device),
+			std::move(queue),
+			std::move(resourceManager),
+			enableDebug);
 	}
 }

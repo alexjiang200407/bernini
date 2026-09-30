@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
+#include "scene/TextureAssetStore.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
@@ -163,7 +164,7 @@ TEST_CASE("DeleteTextureAsset defers the release to the GPU", "[texture][delete]
 	REQUIRE(scene != nullptr);
 
 	const bgl::TextureAssetHandle texture    = scene->AddTextureAsset(OneTexel());
-	const bgl::TextureHandle      gpuTexture = bgl::TextureHandle::From(texture);
+	const bgl::TextureHandle      gpuTexture = bgl::TextureHandleOf(texture);
 	REQUIRE(resourceManager->ValidTextureHandle(gpuTexture));
 
 	SECTION("The handle dies at once; the descriptor slot outlives it, then is reclaimed")
@@ -246,5 +247,5 @@ TEST_CASE("Deleting a texture cancels its pending upload", "[texture][delete][sc
 	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList.Get()));
 
 	// The survivor was untouched by the cancellation.
-	CHECK(resourceManager->ValidTextureHandle(bgl::TextureHandle::From(kept)));
+	CHECK(resourceManager->ValidTextureHandle(bgl::TextureHandleOf(kept)));
 }

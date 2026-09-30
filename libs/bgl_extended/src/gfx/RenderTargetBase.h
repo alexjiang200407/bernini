@@ -8,9 +8,12 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/PassTiming.h>
 #include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/constants/constants.h>
+#include <bgpu/device/Device.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
@@ -530,4 +533,17 @@ namespace bgl
 		std::vector<PassTiming>                        m_PassTimings;
 		uint64_t                                       m_PassTimingFrame = 0;
 	};
+
+	/**
+	 * The backend's target, presenting on `queue` -- the queue of the context that will drive it.
+	 *
+	 * @throws GraphicsError on swapchain or backbuffer creation failure.
+	 */
+	[[nodiscard]] RenderTargetRef
+	CreateBackendRenderTarget(
+		const RenderTargetDesc& desc,
+		DeviceRef               device,
+		CommandQueueRef         queue,
+		ResourceManagerRef      resourceManager,
+		bool                    enableDebug);
 }

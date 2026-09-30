@@ -1,7 +1,5 @@
 #include "device/Device_metal.h"
 
-#include "RenderTarget_metal.h"
-
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
@@ -10,7 +8,6 @@
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 #include "shadercache/ShaderCache_metal.h"
-#include <bgl/IRenderTarget.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/device/Device.h>
@@ -154,20 +151,6 @@ namespace bgl
 		return core::SharedRef<ResourceManager>::Make(m_Device.get(), desc);
 	}
 
-	RenderTargetRef
-	Device::CreateRenderTarget(
-		const RenderTargetDesc&           desc,
-		core::SharedRef<ICommandQueue>    queue,
-		core::SharedRef<IResourceManager> resourceManager,
-		bool) const
-	{
-		return core::SharedRef<RenderTarget>::Make(
-			desc,
-			core::SharedRef<IDevice>(const_cast<Device*>(this)),
-			std::move(queue),
-			std::move(resourceManager));
-	}
-
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
@@ -198,5 +181,11 @@ namespace bgl
 		const noexcept
 	{
 		return Uniforms(pipeline, cbufferName);
+	}
+
+	DeviceRef
+	CreateDevice(bgpu::GpuContextRef context)
+	{
+		return core::SharedRef<Device>::Make(std::move(context));
 	}
 }

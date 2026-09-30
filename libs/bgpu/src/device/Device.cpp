@@ -1,4 +1,3 @@
-#include <bgl_common/SurfaceReflection.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/device/Device.h>
@@ -7,9 +6,7 @@
 #include <bgpu/resource/Shader.h>
 #include <bgpu/types/QueueType.h>
 #include <core/err/util.h>
-#include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 
 namespace bgl
@@ -53,24 +50,5 @@ namespace bgl
 			kernel.uniforms.try_emplace(name, CreateUniforms(kernel.pipeline.Get(), name));
 		}
 		return kernel;
-	}
-
-	std::optional<ReflectedSurface>
-	IDevice::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) const
-	{
-		// Loaded and reflected here rather than handed back, because a slang::IModule only lives as
-		// long as the session that parsed it, and the next AddSourceModule drops that.
-		std::string     diagnostic;
-		slang::IModule* slangModule =
-			GetGpuContext().LoadScalarLayoutModule(moduleName, diagnostic);
-		if (slangModule == nullptr)
-		{
-			core::throw_runtime_error(
-				"surface '{}': its module did not compile\n{}",
-				surfaceName,
-				diagnostic);
-		}
-
-		return ReflectSurface(slangModule, surfaceName);
 	}
 }

@@ -1,6 +1,7 @@
 #include "gfx/RenderContext.h"
 #include "fg/PassTimer.h"
 #include <bgpu/cmd/TimestampHeap.h>
+#include <bgpu/types/FormatInfo.h>
 #include <core/glm.h>
 
 #include "debug/DebugReadback.h"
@@ -442,8 +443,12 @@ namespace bgl
 	RenderTargetRef
 	RenderContext::CreateRenderTarget(const RenderTargetDesc& desc)
 	{
-		RenderTargetRef target =
-			m_Device->CreateRenderTarget(desc, m_CommandQueue, m_ResourceManager, m_EnableDebug);
+		RenderTargetRef target = CreateBackendRenderTarget(
+			desc,
+			m_Device,
+			m_CommandQueue,
+			m_ResourceManager,
+			m_EnableDebug);
 
 		// Every target gets its slots at creation, so timing can be switched on between frames with
 		// nothing to allocate; a device that cannot sample leaves the heap null and is never armed.

@@ -10,16 +10,11 @@
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/InstanceLod.h>
 #include <bgl_common/idl/MeshInstance.h>
-#include <bgpu/types/Format.h>
-#include <bgpu/types/FormatInfo.h>
 #include <cstdint>
 #include <optional>
 
 namespace bgl
 {
-	FormatInfo
-	GetFormatInfo(Format format);
-
 	/** The game slot a kind names -- its surface's registration index -- or empty for an engine kind. */
 	[[nodiscard]] std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept;

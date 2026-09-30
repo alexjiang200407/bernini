@@ -1,10 +1,8 @@
-#include "device/Device_d3d12.h"
 #include "gfx/DrawBucketTable.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
 #include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
-#include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
@@ -209,8 +207,7 @@ namespace bgl
 {
 	Graphics::Graphics(bgpu::GpuContextRef context, const GraphicsOptions& opts) : m_Opts(opts)
 	{
-		auto device = core::SharedRef<Device>::Make(std::move(context));
-		m_Device    = device;
+		m_Device = CreateDevice(std::move(context));
 
 		{
 			auto resourceManagerDesc               = ResourceManagerDesc();
@@ -230,7 +227,7 @@ namespace bgl
 		// Before the context: it builds every pipeline, and a slot's pipelines compile against
 		// whatever module this bound to that slot.
 		m_SurfaceTypes =
-			RegisterSurfaces(*m_Device, device->GetGpuContext().GetDesc().clientShaderDir);
+			RegisterSurfaces(*m_Device, m_Device->GetGpuContext().GetDesc().clientShaderDir);
 
 		m_DrawBucketTable = std::make_shared<DrawBucketTable>();
 		m_Context         = std::make_unique<RenderContext>(
@@ -238,12 +235,12 @@ namespace bgl
 			m_ResourceManager,
 			m_DrawBucketTable,
 			m_SurfaceTypes,
-			device->GetGpuContext().GetDesc().enableDebugLayer);
+			m_Device->GetGpuContext().GetDesc().enableDebugLayer);
 
 		// The always-on set is built by the RenderContext above; the per-bucket kernels are built by
 		// the first Draw that demands each, and that path drops the sessions again after every
 		// batch. This release covers the start-up build.
-		device->ReleaseSlangSession();
+		m_Device->ReleaseSlangSession();
 	}
 
 	Graphics::~Graphics() noexcept

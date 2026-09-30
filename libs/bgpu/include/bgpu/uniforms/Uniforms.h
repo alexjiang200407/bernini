@@ -1,5 +1,4 @@
 #pragma once
-#include <bgl/TextureAssetHandle.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Sampler.h>
@@ -129,16 +128,6 @@ namespace bgl
 		Assign(UniformsBase::Accessor accessor, SrvHandle handle)
 		{
 			accessor.AssignDescriptorIndex(handle.bindlessIndex);
-		}
-	};
-
-	template <>
-	struct UniformAssign<TextureAssetHandle>
-	{
-		static void
-		Assign(UniformsBase::Accessor accessor, TextureAssetHandle handle)
-		{
-			accessor.AssignDescriptorIndex(handle.shaderIndex);
 		}
 	};
 }

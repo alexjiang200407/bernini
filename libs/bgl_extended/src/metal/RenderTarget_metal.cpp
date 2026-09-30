@@ -1,15 +1,14 @@
 #include "RenderTarget_metal.h"
 
-#include "cmd/CommandQueue_metal.h"
-#include "convert_metal.h"
-#include "device/Device_metal.h"
-#include "resource/ResourceManager_metal.h"
 #include <CoreFoundation/CFCGTypes.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/metal/native_device.h>
+#include <bgpu/metal/native_rhi.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
@@ -60,11 +59,11 @@ namespace bgl
 			}
 
 			m_Layer = static_cast<CA::MetalLayer*>(desc.wnd);
-			m_Layer->setDevice(m_Device->As<Device>()->GetMTLDevice());
+			m_Layer->setDevice(bgpu::GetMtlDevice(m_Device->GetGpuContext()));
 
 			// Must match the ring's colour format: the present path is a blit, and Metal requires
 			// both sides of one to agree.
-			m_Layer->setPixelFormat(ConvertFormat(c_BackbufferFormat));
+			m_Layer->setPixelFormat(bgpu::ToMtlPixelFormat(c_BackbufferFormat));
 
 			// A drawable is a blit destination here, not only an attachment, which framebufferOnly
 			// would forbid.
@@ -355,13 +354,12 @@ namespace bgl
 		if (drawable == nullptr)
 			return;
 
-		auto*               rm   = m_ResourceManager->As<ResourceManager>();
 		const TextureHandle src  = m_Backbuffers[m_FrameIndex].texture;
-		MTL::Texture*       from = rm->GetTexture(src).GetMTLResource();
+		MTL::Texture*       from = bgpu::GetMtlTexture(*m_ResourceManager, src);
 		MTL::Texture*       to   = drawable->texture();
 
 		// Encoded on the renderer's queue, so it is ordered after the frame that filled the ring.
-		MTL::CommandBuffer*      cmd  = m_Queue->As<CommandQueue>()->NewCommandBuffer();
+		MTL::CommandBuffer*      cmd  = bgpu::NewMtlCommandBuffer(*m_Queue);
 		MTL::BlitCommandEncoder* blit = cmd->blitCommandEncoder();
 		blit->copyFromTexture(from, to);
 		blit->endEncoding();
@@ -415,5 +413,20 @@ namespace bgl
 		ReleaseRenderAttachments();
 		SetSize(GetWidth(), GetHeight(), scale);
 		CreateRenderAttachments();
+	}
+
+	RenderTargetRef
+	CreateBackendRenderTarget(
+		const RenderTargetDesc& desc,
+		DeviceRef               device,
+		CommandQueueRef         queue,
+		ResourceManagerRef      resourceManager,
+		bool)
+	{
+		return core::SharedRef<RenderTarget>::Make(
+			desc,
+			std::move(device),
+			std::move(queue),
+			std::move(resourceManager));
 	}
 }

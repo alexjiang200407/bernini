@@ -1,5 +1,4 @@
 #include "device/Device_d3d12.h"
-#include "RenderTarget_d3d12.h"
 #include "cmd/CommandAllocator_d3d12.h"
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue_d3d12.h"
@@ -74,21 +73,6 @@ namespace bgl
 		return core::SharedRef<ResourceManager>::Make(m_Device, desc);
 	}
 
-	RenderTargetRef
-	Device::CreateRenderTarget(
-		const RenderTargetDesc&           desc,
-		core::SharedRef<ICommandQueue>    queue,
-		core::SharedRef<IResourceManager> resourceManager,
-		bool                              enableDebug) const
-	{
-		return core::SharedRef<RenderTarget>::Make(
-			desc,
-			DeviceRef(const_cast<Device*>(this)),
-			std::move(queue),
-			std::move(resourceManager),
-			enableDebug);
-	}
-
 	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
@@ -146,5 +130,11 @@ namespace bgl
 	{
 		core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);
+	}
+
+	DeviceRef
+	CreateDevice(bgpu::GpuContextRef context)
+	{
+		return core::SharedRef<Device>::Make(std::move(context));
 	}
 }

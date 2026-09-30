@@ -22,6 +22,9 @@ target_link_libraries(bgl_idlgen PUBLIC slang::slang CLI11::CLI11 core)
 # struct's layout follows the backend it is generated for, so a committed copy would be right for one
 # and silently wrong for the other.
 set(IDL_SRC_ROOT           "${BERNINI_ROOT}/libs/bgl_common/shaders/src/idl")
+# The offset primitives (Entry, Range ...) and ErrorCode are bgpu's: a module here imports them as
+# siblings, which they are once staged, so the generator searches both.
+set(IDL_BGPU_ROOT          "${BERNINI_ROOT}/libs/bgpu/shaders/src/idl")
 set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/bgl_common/idl")
 # The public headers stay in the source tree, and stay committed: a consumer includes <bgl/...>
 # without building bgl_common. Safe because --public refuses a struct whose size or field offsets differ
@@ -62,7 +65,6 @@ set(IDL_CPP_SOURCES
     LoosePbrMaterial.slang
     GameSurfaceRecord.slang
     RawTextureHandle.slang
-    ErrorCode.slang
     DrawBucket.slang
     DispatchArgs.slang
     BaseTable.slang
@@ -148,7 +150,11 @@ foreach(src ${IDL_SOURCES})
         string(REGEX REPLACE "^[ \t]*import[ \t]+([A-Za-z0-9_.]+)[ \t]*;.*$" "\\1" imported "${import_line}")
         string(REPLACE "." "/" imported_path "${imported}")
         if(NOT "${imported_path}" STREQUAL "${rel_stem}")
-            list(APPEND import_deps "${IDL_SRC_ROOT}/${imported_path}.slang")
+            if(EXISTS "${IDL_SRC_ROOT}/${imported_path}.slang")
+                list(APPEND import_deps "${IDL_SRC_ROOT}/${imported_path}.slang")
+            else()
+                list(APPEND import_deps "${IDL_BGPU_ROOT}/${imported_path}.slang")
+            endif()
         endif()
     endforeach()
 
@@ -159,6 +165,7 @@ foreach(src ${IDL_SOURCES})
                 ${IDL_LAYOUT_ARGS}
                 ${cpp_args}
                 -I "${IDL_SRC_ROOT}"
+                -I "${IDL_BGPU_ROOT}"
                 "${src}"
         DEPENDS bgl_idlgen "${src}" ${import_deps}
         COMMENT "idlgen ${rel}"

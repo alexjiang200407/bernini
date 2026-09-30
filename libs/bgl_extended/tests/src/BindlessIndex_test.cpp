@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "scene/TextureAssetStore.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -56,7 +57,7 @@ TEST_CASE("Only a view carries a bindless index", "[uniforms][bindless]")
 	{
 		const auto asset = bgl::TextureAssetHandle{ core::slot_handle{ 7u, 3u }, 1007u };
 
-		CHECK(bgl::TextureHandle::From(asset).slot.index == 7u);
+		CHECK(bgl::TextureHandleOf(asset).slot.index == 7u);
 	}
 }
 

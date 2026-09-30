@@ -3,6 +3,7 @@
 #include "fg/PassDesc.h"
 #include "passes/BindingNameCheck.h"
 #include "passes/DrawData.h"
+#include "scene/TextureAssetStore.h"
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgpu/cmd/CommandList.h>

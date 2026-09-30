@@ -113,7 +113,7 @@ namespace bgl
 	{
 		// Destroying retires the slot at once, so a texture already deleted fails this check even
 		// while the GPU is still finishing with it. There is nothing to remember here.
-		const TextureHandle handle = TextureHandle::From(texture);
+		const TextureHandle handle = TextureHandleOf(texture);
 		if (handle.IsNull() || !m_ResourceManager->ValidTextureHandle(handle))
 		{
 			throw SceneError(

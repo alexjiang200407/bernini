@@ -1,19 +1,14 @@
-// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
+// bgpu_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: autorelease pools are the Metal backend's problem alone.
-#include "util/TestGraphics.h"
-#include <bgpu/types/QueueType.h>
-#include <catch2/catch_test_macros.hpp>
-#include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
+#	include "cmd/CommandQueue_metal.h"
+#	include <bgpu/GpuContext.h>
 #	include <bgpu/cmd/CommandQueue.h>
 #	include <bgpu/device/Device.h>
-#	include "gfx/GraphicsBase.h"
-#	include "metal/cmd/CommandQueue_metal.h"
-#	include "util/GpuValidation.h"
-#	include "util/TestOptions.h"
-
-#	include <bgl/IGraphics.h>
+#	include <bgpu/types/QueueType.h>
+#	include <catch2/catch_test_macros.hpp>
+#	include <cstdint>
 
 namespace
 {
@@ -26,19 +21,13 @@ namespace
 
 TEST_CASE("Flush leaves no command buffer in the enclosing pool", "[teardown]")
 {
-	auto opts                                = bgl::test::GraphicsSetup();
-	opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
-	opts.gpuContext.enableDebugLayer         = true;
-	opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+	auto contextDesc             = bgpu::GpuContextDesc();
+	contextDesc.enableDebugLayer = true;
+	auto context                 = bgpu::CreateGpuContext(contextDesc);
 
-	auto gfx = bgl::test::CreateGraphics(opts);
-	REQUIRE(gfx != nullptr);
+	auto device = bgl::CreateDevice(context);
 
-	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
-	REQUIRE(gfxBase != nullptr);
-
-	bgl::CommandQueueRef queue =
-		gfxBase->GetDevice()->CreateCommandQueue(bgl::QueueType::kGraphics);
+	bgl::CommandQueueRef queue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 	REQUIRE(queue != nullptr);
 
 	MTL::CommandQueue* mtlQueue = queue->As<bgl::CommandQueue>()->GetMTLCommandQueue();

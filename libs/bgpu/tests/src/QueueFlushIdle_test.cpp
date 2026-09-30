@@ -1,23 +1,18 @@
-// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
+// bgpu_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: a command buffer's retirement is only observable through metal-cpp.
-// Held through SharedRef via `auto`, and dereferenced: both need the complete type, which
-// include-cleaner cannot see through the template.
-#include "util/TestGraphics.h"
-#include <bgpu/cmd/CommandAllocator.h>  // IWYU pragma: keep
-#include <bgpu/cmd/CommandQueue.h>      // IWYU pragma: keep
-#include <bgpu/resource/Buffer.h>
-#include <bgpu/types/QueueType.h>
-#include <catch2/catch_test_macros.hpp>
-#include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
+#	include "cmd/CommandList_metal.h"
+#	include <bgpu/GpuContext.h>
+#	include <bgpu/cmd/CommandAllocator.h>  // IWYU pragma: keep
 #	include <bgpu/cmd/CommandList.h>
+#	include <bgpu/cmd/CommandQueue.h>  // IWYU pragma: keep
 #	include <bgpu/device/Device.h>
-#	include "gfx/GraphicsBase.h"
-#	include "metal/cmd/CommandList_metal.h"
-#	include "util/TestOptions.h"
-
-#	include <bgl/IGraphics.h>
+#	include <bgpu/resource/Buffer.h>
+#	include <bgpu/resource/ResourceManager.h>
+#	include <bgpu/types/QueueType.h>
+#	include <catch2/catch_test_macros.hpp>
+#	include <cstdint>
 
 namespace
 {
@@ -33,18 +28,12 @@ namespace
 
 TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 {
-	auto opts                        = bgl::test::GraphicsSetup();
-	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
-	opts.gpuContext.enableDebugLayer = true;
+	auto contextDesc             = bgpu::GpuContextDesc();
+	contextDesc.enableDebugLayer = true;
+	auto context                 = bgpu::CreateGpuContext(contextDesc);
 
-	auto gfx = bgl::test::CreateGraphics(opts);
-	REQUIRE(gfx != nullptr);
-
-	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
-	REQUIRE(gfxBase != nullptr);
-
-	auto  rm     = gfxBase->GetResourceManagerCpy();
-	auto* device = gfxBase->GetDevice();
+	auto device = bgl::CreateDevice(context);
+	auto rm     = device->CreateResourceManager(bgl::ResourceManagerDesc());
 
 	auto queue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 	rm->RegisterQueue(queue.Get());
@@ -92,6 +81,7 @@ TEST_CASE("Flush leaves nothing for the driver to retire", "[teardown]")
 	rm->DestroyBuffer(dst, false);
 	rm->DestroyBuffer(src, false);
 	rm->UnregisterQueue(queue.Get());
+	queue->Flush();
 }
 
 #endif

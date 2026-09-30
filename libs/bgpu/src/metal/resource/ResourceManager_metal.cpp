@@ -4,7 +4,6 @@
 #include "resource/ReadbackBuffer_metal.h"
 #include "resource/Rtv_metal.h"
 #include "resource/Sampler_metal.h"
-#include "util/util.h"
 #include <bgpu/constants/constants.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
@@ -25,10 +24,8 @@
 #include <core/math.h>
 
 #include "cmd/CommandList_metal.h"
-#include "util/util.h"
 #include <bgpu/cmd/CommandQueue.h>
 
-#include "util/util.h"
 #include <core/math.h>
 
 #include <core/math.h>

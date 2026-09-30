@@ -6,6 +6,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/SharedRef.h>
 #include <cstddef>
@@ -18,6 +19,24 @@
 namespace bgl
 {
 	class ICommandList;
+
+	/** The texture resource a scene's texture asset names. */
+	[[nodiscard]] inline TextureHandle
+	TextureHandleOf(TextureAssetHandle asset) noexcept
+	{
+		return { asset.textureSlot };
+	}
+
+	// A texture asset binds as the view the scene made for it, which the handle carries.
+	template <>
+	struct UniformAssign<TextureAssetHandle>
+	{
+		static void
+		Assign(UniformsBase::Accessor accessor, TextureAssetHandle handle)
+		{
+			accessor.AssignDescriptorIndex(handle.shaderIndex);
+		}
+	};
 
 	/**
 	 * Every texture asset a scene owns: the resource, the shader resource view that reaches it, and

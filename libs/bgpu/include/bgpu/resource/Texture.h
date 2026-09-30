@@ -1,5 +1,4 @@
 #pragma once
-#include <bgl/TextureAssetHandle.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/ClearValue.h>
 #include <bgpu/types/Format.h>
@@ -103,8 +102,7 @@ namespace bgl
 		BarrierLayout initialLayout = BarrierLayout::kCommon;
 	};
 
-	// Different from TextureAssetHandle, this is a handle refers to a
-	// texture resource in the GPU, which is managed by the renderer.
+	/** A texture resource on the GPU, owned by the resource manager that made it. */
 	struct TextureHandle
 	{
 		core::slot_handle slot;
@@ -113,12 +111,6 @@ namespace bgl
 		IsNull() const
 		{
 			return slot.is_null();
-		}
-
-		static TextureHandle
-		From(TextureAssetHandle assetHandle)
-		{
-			return { core::slot_handle(assetHandle.textureSlot) };
 		}
 
 		[[nodiscard]] bool

@@ -5,7 +5,6 @@
 #include "convert_metal.h"
 #include "pipeline/MetalPipelineReflection.h"
 #include "shadercache/ShaderCache_metal.h"
-#include "util/util.h"
 #include <algorithm>
 #include <array>
 #include <bgpu/SlangErrorChecker.h>
@@ -13,6 +12,7 @@
 #include <bgpu/types/BlendState.h>
 #include <bgpu/types/DepthStencilState.h>
 #include <bgpu/types/Format.h>
+#include <bgpu/types/FormatInfo.h>
 #include <bgpu/types/ShaderStage.h>
 #include <bgpu/uniforms/UniformLayoutEntry.h>
 

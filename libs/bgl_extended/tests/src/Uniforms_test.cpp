@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "scene/TextureAssetStore.h"
 #include "util/GpuValidation.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"

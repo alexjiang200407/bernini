@@ -11,7 +11,9 @@
 #include <bgl_common/idl/DrawBucket.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/device/Device.h>
+#include <core/err/util.h>
 #include <core/log/log.h>
+#include <slang.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -42,6 +44,31 @@ namespace bgl
 			return std::ranges::all_of(stem, [](char c) {
 				return (std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_';
 			});
+		}
+
+		/**
+		 * The surface `moduleName` declares, read through the context's compiler and so at the
+		 * offsets this backend will read a record at. Empty when the module does not import the
+		 * contract. Loaded and reflected in one call, because a slang::IModule only lives as long as
+		 * the session that parsed it, and the next AddSourceModule drops that.
+		 *
+		 * @throws std::runtime_error if the module does not compile, or imports the contract and
+		 *         declares no single surface.
+		 */
+		std::optional<ReflectedSurface>
+		ReflectSurfaceModule(bgpu::GpuContext& context, const std::string& moduleName)
+		{
+			std::string     diagnostic;
+			slang::IModule* slangModule = context.LoadScalarLayoutModule(moduleName, diagnostic);
+			if (slangModule == nullptr)
+			{
+				core::throw_runtime_error(
+					"surface '{}': its module did not compile\n{}",
+					moduleName,
+					diagnostic);
+			}
+
+			return ReflectSurface(slangModule, moduleName);
 		}
 
 		constexpr uint32_t c_MaxSurfaces = idl::cMaxDrawBuckets - 1;
@@ -263,7 +290,7 @@ namespace bgl
 			std::optional<ReflectedSurface> reflected;
 			try
 			{
-				reflected = device.ReflectSurfaceModule(stem, stem);
+				reflected = ReflectSurfaceModule(device.GetGpuContext(), stem);
 			}
 			catch (const std::exception& e)
 			{

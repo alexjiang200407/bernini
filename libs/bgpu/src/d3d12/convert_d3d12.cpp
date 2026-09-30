@@ -1,7 +1,7 @@
 #include "convert_d3d12.h"
-#include "util/util.h"
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Color.h>
+#include <bgpu/types/FormatInfo.h>
 #include <core/err/util.h>
 
 namespace bgl
