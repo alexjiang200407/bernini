@@ -5,6 +5,7 @@
 // or a group reported standing at its goal the tick it is ordered there. The debug readback is
 // checked on a group's first tick, when every backend has it standing in its slots.
 #include "FakeCrowd.h"
+#include "formation.h"
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>

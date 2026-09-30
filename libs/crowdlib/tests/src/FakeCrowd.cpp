@@ -1,4 +1,5 @@
 #include "FakeCrowd.h"
+#include "formation.h"
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>

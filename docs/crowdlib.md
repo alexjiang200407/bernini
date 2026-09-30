@@ -96,10 +96,11 @@ each refuses; what follows is why it is shaped as it is.
   The debug record is public, so its module is generated with `--public` into the committed
   `include/crowdlib/debug/AgentReadback.h`, `crowd::debug`, and has no private twin. Not the
   renderer's tree: its mirrors belong to `bgl`, which crowdlib does not link.
-* **A formation has one CPU reference.** `SlotPosition` (`GroupOrders.h`) is where each slot of a
-  group stands — ranks front to back, files from the facing's left, the block centred on the goal
+* **A formation has one CPU reference.** `SlotPosition` (`src/formation.h`) is where each slot of
+  a group stands — ranks front to back, files from the facing's left, the block centred on the goal
   and each rank across the facing — and the kernels compute the same function, as
-  `HashFillReference` is `CSHashFill`'s CPU half.
+  `HashFillReference` is `CSHashFill`'s CPU half. It is internal: a game orders a formation and
+  reads its report, and never needs a slot's position.
 * **One per-agent read, for seeing the crowd.** `ReadDebugAgents` hands back every agent's position
   and facing and each group's range of them, as the last completed tick left them. It is in every
   build and off unless `CrowdDesc::debugAgentReadback` asks for it, so a crowd that does not pays no

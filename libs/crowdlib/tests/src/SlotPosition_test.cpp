@@ -1,5 +1,6 @@
 // crowd::SlotPosition, the CPU half of the formation layout the crowd's kernels compute: these pin
 // the layout itself, not that the kernels agree with it -- the GPU movement cases do that.
+#include "formation.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>

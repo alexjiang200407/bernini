@@ -1,6 +1,5 @@
 #pragma once
 #include <core/glm.h>
-#include <crowdlib/api.h>
 #include <cstdint>
 
 namespace crowd
@@ -28,15 +27,4 @@ namespace crowd
 		Formation formation;
 		float     pace = 1.0f;
 	};
-
-	/**
-	 * Where slot `slot` of a group of `agentCount` agents stands under `orders`: the CPU half of the
-	 * crowd's kernels, which must stay the same function. Slots fill ranks front to back and each
-	 * rank from the facing's left, `(-facing.y, facing.x)`, to its right; the block is centred on the
-	 * goal, and each rank across the facing, so a short last rank stands centred behind the others.
-	 *
-	 * @pre `slot < agentCount` and `orders` valid (GroupOrders).
-	 */
-	[[nodiscard]] CROWD_API glm::vec2
-	SlotPosition(const GroupOrders& orders, uint32_t agentCount, uint32_t slot) noexcept;
 }

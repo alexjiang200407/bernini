@@ -173,9 +173,11 @@ if (BUILD_TESTS)
 
 	add_executable(crowdlib_tests ${CROWDLIB_TESTS_SOURCES})
 
-	# The generated IDL too: the tests pin the public debug record against its IDL twin.
+	# The library's src/ and generated IDL too: the tests check its internals, the formation's CPU
+	# reference and the GPU records, directly.
 	target_include_directories(crowdlib_tests
-		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src ${CROWDLIB_IDL_OUT_ROOT}
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src ${CMAKE_CURRENT_SOURCE_DIR}/src
+				${CROWDLIB_IDL_OUT_ROOT}
 	)
 	add_dependencies(crowdlib_tests crowdlib_idl_generate)
 
