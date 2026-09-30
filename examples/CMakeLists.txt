@@ -15,8 +15,9 @@ add_subdirectory(bgl_ui)
 add_subdirectory(bgl_pass_timings)
 add_subdirectory(bgl_ai_viewer)
 add_subdirectory(bgl_async_compute)
+add_subdirectory(bgl_crowd)
 
-foreach(_ex bgl_base bgl_sphere bgl_moving bgl_blob_shadow bgl_directional_light bgl_two_windows bgl_gpu_assert bgl_ui bgl_pass_timings bgl_ai_viewer bgl_async_compute)
+foreach(_ex bgl_base bgl_sphere bgl_moving bgl_blob_shadow bgl_directional_light bgl_two_windows bgl_gpu_assert bgl_ui bgl_pass_timings bgl_ai_viewer bgl_async_compute bgl_crowd)
     set_target_properties(${_ex} PROPERTIES
         VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 endforeach()

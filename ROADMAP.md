@@ -257,14 +257,17 @@ and portability.
     - [ ] Differential test harness — exact hash for integer and fixed-point state, epsilon comparison
       for float state, bisecting to the first diverging pass.
     - [ ] CPU path runs single-threaded for debugging and `parallel_for` for hero-tier production.
-  - [~] Group orchestration interface — the one contract between CPU AI and GPU simulation, declared
-    as `crowd::ICrowd` (`docs/crowdlib.md` § The crowd interface). Only a test fake implements it.
+  - [~] Group orchestration interface — the one contract between CPU AI and GPU simulation,
+    `crowd::ICrowd` (`docs/crowdlib.md` § The crowd interface), implemented on the GPU by
+    `crowd::CreateCrowd` over `bgpu`'s RHI, and by a test fake. `examples/bgl_crowd` draws it.
     - [~] CPU → GPU per group: a goal, facing and formation are declared, and the flow field behind a
       goal is the implementation's; stance, engagement rules and target group are left.
     - [~] GPU → CPU per group: **aggregate reduction only** — agent count and mean position and facing
-      are declared; casualties, cohesion, melee contact fraction, morale and fatigue are left.
-    - [ ] Group ID as a first-class per-unit field. Units change group only when their group is split
-      or merged (`ICrowd::SplitGroup`, `MergeGroup`, declared), never by a per-unit rewrite.
+      are reduced on the GPU in a fixed order and read back without blocking; casualties, cohesion,
+      melee contact fraction, morale and fatigue are left.
+    - [x] Group ID as a first-class per-unit field. Units change group only when their group is split
+      or merged (`ICrowd::SplitGroup`, `MergeGroup`), never by a per-unit rewrite: a tick moves the
+      layout by one record per run of agents, never one per agent.
   - [ ] Navigation
     - [ ] Navmesh or nav-grid bake (offline).
     - [ ] Flow field generation (GPU Eikonal/wavefront, one field per group destination).
@@ -276,9 +279,11 @@ and portability.
     and corpse placement, so it is its own node.
     - [ ] Per-cell agent cap with clamped writes and high-water reporting.
   - [ ] Simulation passes (shared source, compiled both ways)
-    - [ ] Velocity Planning — position-based, as GPU Zen 3 ch. 13 (Weiss, "Real-Time Simulation of
-      Massive Crowds") does it; its inputs are declared on `ICrowd` (`docs/crowdlib.md`).
-      - [~] Per-type kinematic limits — preferred and max speed are declared (`crowd::AgentType`);
+    - [x] Velocity Planning — position-based, as GPU Zen 3 ch. 13 (Weiss, "Real-Time Simulation of
+      Massive Crowds") does it: toward each agent's formation slot at its group's speed, blended by
+      inertia and capped (`crowd.CSStep`, `docs/crowdlib.md`). One kernel body, not yet compiled
+      both ways.
+      - [~] Per-type kinematic limits — preferred and max speed are enforced (`crowd::AgentType`);
         acceleration and turn rate wait for mounts, since velocity blending is the smoothing.
       - [ ] Non-holonomic constraint for mounts — no strafing, minimum turn radius, speed-dependent
         turn rate.

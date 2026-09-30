@@ -4,8 +4,9 @@ The crowd simulation's library (`libs/crowdlib`, namespace `crowd`). Every item 
 § Crowd Simulation & Pathfinding is GPU work, and none of it belongs to the renderer's frame, so it
 lives here: on the device the application's `bgpu::GpuContext` owns, compiled through that
 context's Slang sessions, and submitted to a queue the renderer does not know about. Today it holds
-the foundation — one kernel, its buffer and its readback on the async queue — and the crowd's public
-interface, `crowd::ICrowd`, which only a test fake implements so far (§ The crowd interface).
+the foundation — one kernel, its buffer and its readback on the async queue — and the crowd:
+`crowd::ICrowd`, created by `crowd::CreateCrowd` on `bgpu`'s RHI, whose agents walk to their
+formation slots but do not yet keep out of each other's way (§ The crowd interface).
 
 ```cpp
 auto context  = bgpu::CreateGpuContext(ctxDesc);
@@ -51,7 +52,7 @@ while (running)
   pipeline library, so Metal's MSL compile is paid every run ([shader_cache.md](shader_cache.md)).
 * **Built as the renderer is.** It shares the context's process-wide state, so
   `BERNINI_RENDERER_LIBRARY_TYPE` decides its kind as it does `bgpu`'s
-  ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its one export. It
+  ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its two exports, `CreateHashFillJob` and `CreateCrowd`. It
   is in the build-tree package; the editor does not link it.
 
 ## The crowd interface
@@ -71,6 +72,9 @@ each refuses; what follows is why it is shaped as it is.
   the avoidance horizon; the links that hold a formation at its `spacing` — before the velocity is
   clamped to `maxSpeed`. The constraints and their order are the crowd's. A game tunes them
   (`SolverDesc`) and cannot add its own, which would need a GPU plug-in model nothing asks for yet.
+  **Only the velocity planning exists today**: no constraint is projected, so agents pass through
+  each other and through obstacles, and `SolverDesc`'s iterations and stiffnesses are validated but
+  change nothing.
 * **Obstacles are segments**, replaced whole by `SetObstacles` and applied at the next `Step`. They
   keep agents out, but an agent plans straight toward its slot, so it presses against a wall rather
   than walking round it until a planner — the roadmap's flow fields — replaces the straight line.
@@ -107,13 +111,35 @@ each refuses; what follows is why it is shaped as it is.
   copy. It is a method rather than an interface of its own because it keeps no state of its own:
   its copies ride each tick and are reused on the crowd's tick ring. Debug data that did keep its
   own state would earn a separate interface.
-* **Each backend implements `ICrowd` directly**, as `bgl`'s backends implement the RHI's
-  interfaces. There is no `CreateCrowd` yet: it arrives with the first backend, since a factory with
-  nothing to create would only fail at link time.
+* **One crowd, on `bgpu`'s RHI** (`src/Crowd.cpp`). `CreateCrowd` gives it a device, a resource
+  manager and a compute queue of its own on the application's context, as `bgpu`'s compute-only test
+  does, so the same code runs on D3D12 and Metal and crowdlib holds no crowd code per backend. Its
+  CPU half is `CrowdPlan` (`src/CrowdPlan.h`): the handles, every refusal, and the layout each tick
+  uploads, tested on the CPU alone.
+* **A tick moves the layout by O(groups) records.** Agents are stored group by group, each group's
+  in slot order, so a split is a cut and a merge an append. `CrowdPlan` keeps each group's agents
+  as runs of the previous tick's buffer (or spawned), and each `Step` uploads a `Group` record per
+  group and an `AgentRange` per run; the step kernel (`crowd.CSStep`) finds each agent's range by a
+  binary search, copies it from the previous buffer or spawns it in its slot, plans its velocity and
+  moves it, writing the other of two agent buffers. There is no per-agent upload, ever.
+* **Movement.** An agent heads for its slot (`crowd.formation`, the Slang half of `SlotPosition`) at
+  its group's speed, slowing to `distance / tickSeconds` so it stops in the slot rather than passing
+  it; that is blended with its last velocity by `velocityInertia` and capped at `maxSpeed`. It faces
+  its velocity above `c_WalkingSpeedShare` of its group's speed, and its orders' front below it.
+* **Reports are reduced in a fixed order.** `crowd.CSReduce` runs one thread group per group: each
+  thread sums a fixed stride of its agents and the sums are halved in a fixed order, so the same
+  agents give the same bits. No atomics: D3D12 has no float ones, and their order is the
+  scheduler's. `meanFacing` is the orders' front when the agents' facings cancel.
+* **A ring of ticks, never a wait.** Tick `t` records into slot `t % (maxTicksInFlight + 1)`: its
+  command list, and readbacks of the group sums and (with the debug readback on) every agent. The
+  extra slot is the last completed tick's, which reads return while `maxTicksInFlight` newer ticks
+  run, so what a read returns outlives the next `Step`. `GetCompletedTick` polls the queue's fence; nothing but `Wait`
+  and teardown blocks.
 * **The contract is a test suite.** `tests/src/Crowd_test.cpp` runs every case against each factory
-  in `CrowdFactories`; a backend joins by adding its own. The cases tagged `[fake]` need what only
-  the fake (`tests/src/FakeCrowd.h`) can promise: a tick held in flight, or a group reported standing
-  at its goal the tick it is ordered there.
+  in `CrowdFactories`: the fake and the GPU crowd. The cases tagged `[fake]` need what only the fake
+  (`tests/src/FakeCrowd.h`) can promise: a tick held in flight, or a group reported standing at its
+  goal the tick it is ordered there. The fake keeps its own validation rather than sharing
+  `CrowdPlan`'s, so the suite checks two implementations, not one twice.
 
 ## Threading & Synchronization
 
@@ -134,15 +160,40 @@ count that is not a multiple of the kernel's group, and a second seed replaces t
 job runs its queue while a renderer on the same context draws a cube, each polled and neither
 waiting; and a job destroyed mid-flight lets its context go, so the next context can be created.
 `[shadercache]`: the kernel stored once cold, loaded on a fresh context with no entry rewritten, and
-a torn entry compiled again. `[crowd]`: `ICrowd`'s contract, against the fake — a group absent from
+a torn entry compiled again. `[crowd]`: `ICrowd`'s contract, against the fake and the GPU crowd — a group absent from
 every report until a tick that includes it completes, handles refused once released and after their
 slot is reused, capacities and invalid descriptions refused (agent types, the solver, pace,
 obstacles), a split and a merge conserving agents
 and refusing to empty a group or mix types, `Step` refused past `maxTicksInFlight`, and the debug
 readback refused unless asked for and holding every agent in its slot on its group's first tick.
 `[formation]` pins `SlotPosition`'s layout, and `[idl]` the records' round trip through a buffer.
+`[crowdplan]`: each command's layout — a spawn, a split's rear, a merge's append, a destroy's
+close-up — and a randomized run of commands against a model that follows every agent by identity.
+`[movement]`, on the GPU through the debug readback: a group walks to new orders and stands in its
+slots, at its group's speed and facing its way, never past `maxSpeed`; inertia keeps its share of a
+turned velocity; a standing group faces its front; a split, a merge and a destroy move no agent
+further than a tick's walk; reports arrive by polling with ticks in flight; and the same commands
+give the same bits twice. On Metal the suite also runs clean under
+`METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1`.
 
 `examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
 kernel runs on the async queue, the fence logged before and after each draw, and every readback's
 checksum against the CPU's. `--frames N` exits non-zero on a mismatch or no readback at all, and
 `--headless` draws offscreen.
+
+`examples/bgl_crowd` draws the crowd: two infantry and two cavalry groups march across a field,
+one box per agent from the debug readback. At tick 60 a group splits off its rear under new orders,
+and at tick 150 one cavalry group merges into the other; a moving group's report is logged every
+60 ticks. Run until closed, it steps at the wall clock's pace and every group marches back and forth
+between its two ends; with `--frames` it steps a tick a frame and marches once. Boxes overlap where
+groups cross, since no constraint keeps agents apart yet. `--units N` multiplies every group (1 is
+136 agents) and grows the field by √N, and the log splits a frame's time into the crowd, posing a
+box per agent, and drawing. In a release build on an M-series Mac the crowd's share stays at
+0.03 ms of CPU from 136 to 139k agents, and the GPU keeps a tick a frame, while the frame grows
+from 0.50 ms to 35 ms with drawing (one placement per agent) and posing (one `SetInstanceTransform`
+per agent): the cost of reading the crowd back to the CPU, which the GPU-to-renderer handoff, a
+later feature, removes. The release preset leaves examples off; measure with
+`-DBERNINI_BUILD_EXAMPLES=ON` in a build directory of its own. `--frames N` exits non-zero unless
+every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
+draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks
+at it.

@@ -1,11 +1,12 @@
-// ICrowd's contract, run against every implementation in CrowdFactories: the handle lifetime, the
-// capacities, the refusals, and that commands and reports move one fixed tick at a time. Only the
-// fake implements it so far, so none of this proves anything about movement, a real queue's timing
-// or GPU memory. The cases tagged [fake] need what only the fake can promise: a tick held in flight,
-// or a group reported standing at its goal the tick it is ordered there. The debug readback is
-// checked on a group's first tick, when every backend has it standing in its slots.
+// ICrowd's contract, run against every implementation in CrowdFactories -- the fake and the GPU
+// crowd: the handle lifetime, the capacities, the refusals, and that commands and reports move one
+// fixed tick at a time. Movement is CrowdMovement_test's. The cases tagged [fake] need what only the
+// fake can promise: a tick held in flight, or a group reported standing at its goal the tick it is
+// ordered there. The debug readback is checked on a group's first tick, when every implementation
+// has it standing in its slots.
 #include "FakeCrowd.h"
 #include "formation.h"
+#include <bgpu/GpuContext.h>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -39,7 +40,20 @@ namespace
 		}
 	};
 
-	using CrowdFactories = std::tuple<FakeCrowdFactory>;
+	// The GPU crowd on a context of its own, which it keeps until it is released: one context is
+	// live per process, and no case holds two crowds.
+	struct GpuCrowdFactory
+	{
+		static crowd::CrowdRef
+		Create(crowd::CrowdDesc desc)
+		{
+			auto contextDesc             = bgpu::GpuContextDesc();
+			contextDesc.enableDebugLayer = true;
+			return crowd::CreateCrowd(bgpu::CreateGpuContext(contextDesc), std::move(desc));
+		}
+	};
+
+	using CrowdFactories = std::tuple<FakeCrowdFactory, GpuCrowdFactory>;
 
 	constexpr auto c_Infantry =
 		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
