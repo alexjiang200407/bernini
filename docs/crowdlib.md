@@ -180,3 +180,10 @@ give the same bits twice. On Metal the suite also runs clean under
 kernel runs on the async queue, the fence logged before and after each draw, and every readback's
 checksum against the CPU's. `--frames N` exits non-zero on a mismatch or no readback at all, and
 `--headless` draws offscreen.
+
+`examples/bgl_crowd` draws the crowd: two infantry and two cavalry groups march across a field,
+one box per agent from the debug readback, while the crowd steps a tick a frame on its own queue.
+At tick 60 a group splits off its rear under new orders, and at tick 150 one cavalry group merges
+into the other; every group's report is logged every 60 ticks. `--frames N` exits non-zero unless
+every group's mean stands within one spacing of its goal by then (450 is enough), and `--headless`
+draws offscreen.
