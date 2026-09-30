@@ -4,6 +4,7 @@
 #include "CrowdPlan.h"
 #include "idl/AgentRange.h"
 #include "idl/Constants.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <core/glm.h>
@@ -88,13 +89,9 @@ namespace
 	uint32_t
 	RowOf(const crowd::TickPlan& plan, crowd::GroupHandle group)
 	{
-		for (uint32_t row = 0; row < plan.rows.size(); ++row)
-		{
-			if (plan.rows[row] == group)
-				return row;
-		}
-		FAIL("the group has no row");
-		return 0;
+		const auto row = std::ranges::find(plan.rows, group);
+		REQUIRE(row != plan.rows.end());
+		return static_cast<uint32_t>(row - plan.rows.begin());
 	}
 
 	std::vector<crowd::idl::AgentRange>

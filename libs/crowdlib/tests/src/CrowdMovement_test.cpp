@@ -3,6 +3,7 @@
 // maximum, faces where it walks and its orders' front once it stands. What the contract suite cannot
 // see, since the fake teleports every group to its goal.
 #include "formation.h"
+#include <algorithm>
 #include <bgpu/GpuContext.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -66,16 +67,11 @@ namespace
 	{
 		const auto readback = crowd.ReadDebugAgents();
 		REQUIRE(readback.has_value());
-		for (const auto& range : readback->groups)
-		{
-			if (range.group == group)
-			{
-				const auto agents = readback->agents.subspan(range.first, range.count);
-				return { agents.begin(), agents.end() };
-			}
-		}
-		FAIL("the group is not in the readback");
-		return {};
+		const auto range =
+			std::ranges::find(readback->groups, group, &crowd::debug::GroupAgents::group);
+		REQUIRE(range != readback->groups.end());
+		const auto agents = readback->agents.subspan(range->first, range->count);
+		return { agents.begin(), agents.end() };
 	}
 
 	void
