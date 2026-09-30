@@ -327,7 +327,7 @@ if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
         bgl_extended assetlib gamelib crowdlib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
-        list(APPEND BERNINI_PACKAGE_TARGETS bgl_d3d12_agility)
+        list(APPEND BERNINI_PACKAGE_TARGETS bgpu_d3d12_agility)
         # A static renderer's PRIVATE link of its backend is part of what it exports: the consumer
         # links the backend's system libraries itself.
         if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "STATIC")

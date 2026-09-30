@@ -301,7 +301,7 @@ What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
 reaching for a fake — and only where there is a rule worth pinning, not to give a passive
 value somewhere else to live.
 
-A **device alone is fine**. `editor_tests` links `bgl_d3d12_agility` (on the executable — see
+A **device alone is fine**. `editor_tests` links `bgpu_d3d12_agility` (on the executable — see
 `tests/CMakeLists.txt` for why an OBJECT library cannot carry it through `editor_lib`), so a
 test may call `CreateGraphics` and render headlessly. `AssetThumbnailCache` is the one renderer
 built that way — it owns a headless target and needs no `winId()` — and is covered end to end

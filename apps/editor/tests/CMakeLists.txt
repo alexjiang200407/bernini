@@ -56,7 +56,7 @@ if(BERNINI_EDITOR_SDK)
 endif()
 
 if(RENDERER_BACKEND STREQUAL "DX12")
-	target_link_libraries(editor_tests PRIVATE bgl_d3d12_agility)
+	target_link_libraries(editor_tests PRIVATE bgpu_d3d12_agility)
 endif()
 
 # No enable_strict_compiler, for the reason editor_lib has none: this links Qt and moc output too.

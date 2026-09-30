@@ -44,8 +44,8 @@ if (Bernini_DIR)
     add_executable(bernini_embed main.cpp)
     target_link_libraries(bernini_embed PRIVATE
         Bernini::core Bernini::bgl_extended Bernini::gamelib Bernini::assetlib)
-    if (TARGET Bernini::bgl_d3d12_agility)
-        target_link_libraries(bernini_embed PRIVATE Bernini::bgl_d3d12_agility)
+    if (TARGET Bernini::bgpu_d3d12_agility)
+        target_link_libraries(bernini_embed PRIVATE Bernini::bgpu_d3d12_agility)
     endif()
 
     bernini_stage_runtime(bernini_embed)

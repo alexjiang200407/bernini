@@ -157,8 +157,8 @@ add_executable(subway main.cpp)
 target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl_extended)  # bgpu comes with the renderer
 # Bernini::crowdlib too, for compute on the async queue beside the frame (docs/crowdlib.md).
 # D3D12 only: the Agility SDK's exports must live in the executable.
-if (TARGET Bernini::bgl_d3d12_agility)
-    target_link_libraries(subway PRIVATE Bernini::bgl_d3d12_agility)
+if (TARGET Bernini::bgpu_d3d12_agility)
+    target_link_libraries(subway PRIVATE Bernini::bgpu_d3d12_agility)
 endif()
 target_precompile_headers(subway PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 bernini_stage_runtime(subway)

@@ -120,7 +120,7 @@ if (BUILD_TESTS)
 	)
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
-		target_link_libraries(crowdlib_tests PRIVATE bgl_d3d12_agility)
+		target_link_libraries(crowdlib_tests PRIVATE bgpu_d3d12_agility)
 	endif()
 
 	target_precompile_headers(crowdlib_tests

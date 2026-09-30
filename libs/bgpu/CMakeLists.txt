@@ -26,6 +26,8 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 endif()
 if(BGPU_BACKEND_DIR)
 	file(GLOB_RECURSE BGPU_BACKEND_SOURCES CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.cpp)
+	# The Agility SDK's exports are the executable's, never this library's: bgpu_d3d12_agility below.
+	list(FILTER BGPU_BACKEND_SOURCES EXCLUDE REGEX ".*/agility/.*")
 	file(GLOB_RECURSE BGPU_BACKEND_HEADERS CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.h)
 endif()
 
@@ -117,6 +119,40 @@ endif()
 
 enable_strict_compiler(bgpu)
 enable_coverage(bgpu)
+
+# What a D3D12 device and a shader compile load by name goes beside the executables -- here, because
+# creating the device and compiling for it are bgpu's, so every owner of it (a renderer, a compute
+# client, bgpu_tests) gets them by linking bgpu. The runtime directory is named rather than
+# $<TARGET_FILE_DIR:bgpu>, which a static bgpu does not share with the executables.
+if(RENDERER_BACKEND STREQUAL "DX12")
+	# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
+	# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
+	# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so both
+	# are copied by hand, as the Agility SDK's are. Found here, before anything that validates shaders
+	# at build time with the same DXC; the port's config cannot be found twice.
+	#
+	# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
+	# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
+	# both from one directory also keeps the compiler and its validator a matched pair, which they
+	# have to be: a validator older than the compiler rejects the container.
+	find_package(directx-dxc CONFIG REQUIRED)
+	find_package(directx12-agility CONFIG REQUIRED)
+	add_custom_command(TARGET bgpu POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
+				"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
+				"$<TARGET_FILE:Microsoft::DirectX12-Core>"
+				"$<TARGET_FILE:Microsoft::DirectX12-Layers>"
+				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+		COMMENT "Staging what the D3D12 device and the shader compiler load by name"
+		VERBATIM)
+
+	# The Agility SDK finds its DLLs through two symbols the *executable* exports, so they cannot live
+	# in bgpu: every D3D12 executable links this OBJECT library itself.
+	add_library(bgpu_d3d12_agility OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/agility/D3D12Agility.cpp)
+	enable_strict_compiler(bgpu_d3d12_agility)
+endif()
 
 # The RHI's Slang half: the offset primitives (idl.Entry, idl.Range ...), the buffer family that reads
 # through them and the GPU assert channel they report to. Staged into the one ./shaders/src every
@@ -250,11 +286,8 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	)
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
-		# The Agility SDK's two exports must be the executable's, and the DLLs a device and a compile
-		# load (D3D12Core, dxcompiler, dxil) are staged beside the executables by bgl_extended's build
-		# -- a staging dependency, not a link: nothing here links the renderer.
-		target_link_libraries(bgpu_tests PRIVATE d3d12 bgl_d3d12_agility)
-		add_dependencies(bgpu_tests bgl_extended)
+		# The Agility SDK's two exports must be the executable's.
+		target_link_libraries(bgpu_tests PRIVATE d3d12 bgpu_d3d12_agility)
 		# A shared bgpu exports only what BGPU_API marks, and the allocator it tests directly is not
 		# part of that surface, so the case compiles its own copy.
 		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")

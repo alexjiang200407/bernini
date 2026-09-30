@@ -30,9 +30,9 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Implementation files take a `_d3d12` suffix: `IDevice` is implemented by `Device_d3d12.cpp`.
 - **A target that compiles shaders needs `dxcompiler.dll` and `dxil.dll` beside the executable.**
   Slang loads both with `GetProcAddress`, so nothing imports them and vcpkg's applocal deployment
-  does not stage them. `bgl_extended`'s build stages them, with the Agility SDK's `D3D12Core.dll`,
-  so a target that brings up a device depends on `bgl_extended` for the staging even when it links
-  no renderer — `bgpu_tests` does — and links `bgl_d3d12_agility` for the SDK's exports.
+  does not stage them. bgpu's build stages them, with the Agility SDK's `D3D12Core.dll`, beside
+  the executables, so linking bgpu is enough; an executable also links `bgpu_d3d12_agility`, the
+  SDK's two exports, which must be its own.
 - GPU-based validation is opt-in through `GpuContextDesc::enableGPUValidationLayer`; the debug layer
   is separate and stays on with `enableDebugLayer`.
 

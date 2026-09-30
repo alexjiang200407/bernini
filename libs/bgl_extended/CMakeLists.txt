@@ -122,36 +122,6 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 	BGL_EXPORTS
 )
 
-# What the renderer loads by name goes beside the executables, which is where the renderer's DLL
-# is too -- but not a static renderer's archive, so the runtime directory is named rather than
-# $<TARGET_FILE_DIR:bgl_extended>. A step on bgl_extended still, so it runs when the renderer does.
-function(stage_renderer_runtime)
-	add_custom_command(TARGET bgl_extended POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ARGN} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-		COMMENT "Staging what the renderer loads by name beside the executables"
-		VERBATIM)
-endfunction()
-
-# Slang reaches DXC through GetProcAddress -- dxcompiler.dll to emit DXIL, dxil.dll to sign it --
-# so nothing imports either, and vcpkg's applocal deployment stages a DLL by walking the import
-# table. The Slang release carries neither. Unsigned bytecode loads only in Developer Mode, so
-# both are copied by hand, for the same reason as the Agility SDK below. Found before the shaders
-# subdirectory, whose build-time validation compiles with the same DXC; the port's config cannot be
-# found twice.
-#
-# dxil.dll is taken from beside dxcompiler.dll rather than through Microsoft::DXIL, whose config
-# sets IMPORTED_LOCATION_RELASE -- so that target resolves to nothing in a Release build. Reading
-# both from one directory also keeps the compiler and its validator a matched pair, which they
-# have to be: a validator older than the compiler rejects the container.
-if(WIN32)
-	find_package(directx-dxc CONFIG REQUIRED)
-	stage_renderer_runtime(
-		"$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
-		"$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"
-	)
-endif()
-
 # The build-time Slang step emits DXIL; only the D3D12 backend consumes it. The Metal backend
 # compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
@@ -166,8 +136,6 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	target_compile_definitions(bgl_extended PRIVATE RENDERER_BACKEND_DX12)
 	target_link_libraries(bgl_extended PRIVATE bgl_d3d12)
 
-	find_package(directx12-agility CONFIG REQUIRED)
-	stage_renderer_runtime("$<TARGET_FILE:Microsoft::DirectX12-Core>" "$<TARGET_FILE:Microsoft::DirectX12-Layers>")
 	enable_strict_compiler(bgl_d3d12)
 	enable_coverage(bgl_d3d12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
@@ -263,7 +231,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 
     if(RENDERER_BACKEND STREQUAL "DX12")
         target_compile_definitions(bgl_extended_tests PRIVATE RENDERER_BACKEND_DX12)
-		target_link_libraries(bgl_extended_tests PRIVATE bgl_d3d12 bgl_d3d12_agility)
+		target_link_libraries(bgl_extended_tests PRIVATE bgl_d3d12 bgpu_d3d12_agility)
 		target_sources(bgl_extended_tests PRIVATE $<TARGET_OBJECTS:bgl_d3d12>)
     endif()
 

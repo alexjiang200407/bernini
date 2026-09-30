@@ -20,16 +20,12 @@ and is a target of its own; nothing here is part of it.
 ## bgl_d3d12
 
 - The renderer's D3D12 half: `Graphics_d3d12` (the façade `CreateGraphics` returns), `RenderTarget_d3d12`
-  (the swapchain and the frame's attachments) and the Agility SDK's exports (`bgl_d3d12_agility`, an
-  OBJECT library each executable links so the two symbols are its own). The RHI's D3D12 backend is
-  `bgpu`'s.
+  (the swapchain and the frame's attachments). The RHI's D3D12 backend is `bgpu`'s.
 - PCH is `./libs/bgl_extended/src/d3d12/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_d3d12` suffix.
 - CMake: `./src/d3d12/CMakeLists.txt`
-- **On Windows a target that compiles shaders needs `dxcompiler.dll` and `dxil.dll` beside the
-  executable**, and the Agility SDK's DLLs. `bgl_extended` stages them (`./CMakeLists.txt`), so a
-  target that brings up a device depends on `bgl_extended` even when it links only the backend's
-  objects or no renderer at all — `bgl_extended_tests` and `bgpu_tests` do.
+- The DLLs a D3D12 device and a shader compile load by name, and the Agility SDK's exports
+  (`bgpu_d3d12_agility`), are bgpu's ([libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md)).
 
 ## bgl_metal
 

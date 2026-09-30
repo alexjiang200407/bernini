@@ -2,11 +2,6 @@ file(GLOB_RECURSE BGL_DX12_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/*.c
 )
-# The agility/ sources export the D3D12 Agility SDK symbols and must live in the
-# consuming executable, not the bgl_extended DLL, so keep them out of the bgl_d3d12 object
-# library (see the bgl_d3d12_agility target below).
-list(FILTER BGL_DX12_SOURCES EXCLUDE REGEX ".*/agility/.*")
-
 file(GLOB_RECURSE BGL_DX12_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
@@ -48,9 +43,3 @@ target_link_libraries(bgl_d3d12
     PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers
             Microsoft::WinPixEventRuntime
 )
-
-add_library(bgl_d3d12_agility OBJECT
-    ${CMAKE_CURRENT_SOURCE_DIR}/agility/D3D12Agility.cpp
-)
-
-enable_strict_compiler(bgl_d3d12_agility)
