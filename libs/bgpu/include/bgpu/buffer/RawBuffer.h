@@ -51,6 +51,41 @@ namespace bgpu
 		uint32_t handleStride = 0;
 
 		std::string debugName;
+
+		RawBufferDesc&
+		SetInitialBytes(uint32_t value) noexcept
+		{
+			initialBytes = value;
+			return *this;
+		}
+
+		RawBufferDesc&
+		SetNullRecordBytes(uint32_t value) noexcept
+		{
+			nullRecordBytes = value;
+			return *this;
+		}
+
+		RawBufferDesc&
+		SetUploadBlockBytes(uint32_t value) noexcept
+		{
+			uploadBlockBytes = value;
+			return *this;
+		}
+
+		RawBufferDesc&
+		SetHandleStride(uint32_t value) noexcept
+		{
+			handleStride = value;
+			return *this;
+		}
+
+		RawBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	// What an arena names its record kinds by: its own enum, or void for an arena of ranges alone,

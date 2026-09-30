@@ -25,6 +25,27 @@ namespace bgpu
 		// bound where a shader declares a ComputeBuffer it only reads: the descriptor's type must
 		// match the declaration, or the read is undefined.
 		bool unorderedAccessView = false;
+
+		UploadBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		UploadBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
+
+		UploadBufferDesc&
+		SetUnorderedAccessView(bool value) noexcept
+		{
+			unorderedAccessView = value;
+			return *this;
+		}
 	};
 
 	/**

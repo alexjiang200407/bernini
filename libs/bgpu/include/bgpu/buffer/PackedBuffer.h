@@ -32,6 +32,34 @@ namespace bgpu
 		// Every capacity, grown ones included, is rounded up to this.
 		uint32_t    capacityAlignment = 1;
 		std::string debugName;
+
+		PackedBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetBlockSize(uint32_t value) noexcept
+		{
+			blockSize = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetCapacityAlignment(uint32_t value) noexcept
+		{
+			capacityAlignment = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	template <typename T>

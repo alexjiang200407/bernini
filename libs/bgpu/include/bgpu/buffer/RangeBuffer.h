@@ -41,6 +41,41 @@ namespace bgpu
 		bool isRaw = false;
 
 		std::string debugName;
+
+		RangeBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetBlockSize(uint32_t value) noexcept
+		{
+			blockSize = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetMaxBytes(uint64_t value) noexcept
+		{
+			maxBytes = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetRaw(bool value) noexcept
+		{
+			isRaw = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	template <typename T>
