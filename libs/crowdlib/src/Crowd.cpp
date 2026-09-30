@@ -54,11 +54,11 @@ namespace crowd
 
 		template <typename T>
 		bgpu::BufferHandle
-		CreateComputeBuffer(bgpu::IResourceManager& rm, uint32_t count, std::string name)
+		CreateComputeBuffer(bgpu::IResourceManager& rm, uint32_t count, const std::string& name)
 		{
 			const auto handle = rm.CreateComputeBuffer(
 				bgpu::ComputeBufferDesc().SetElement<T>().SetInitialCount(count).SetDebugName(
-					std::move(name)));
+					name));
 			if (handle.IsNull())
 				core::throw_runtime_error("The crowd could not allocate its {} buffer", name);
 			return handle;
@@ -95,7 +95,7 @@ namespace crowd
 			bgpu::BarrierAccessFlag::kCopyDest,
 			bgpu::BarrierSyncFlag::kComputeShader,
 			bgpu::BarrierAccessFlag::kShaderResource);
-		const auto c_WriteToRead = Transition(
+		const auto c_UavToUav = Transition(
 			bgpu::BarrierSyncFlag::kComputeShader,
 			bgpu::BarrierAccessFlag::kUnorderedAccess,
 			bgpu::BarrierSyncFlag::kComputeShader,
@@ -105,6 +105,19 @@ namespace crowd
 			bgpu::BarrierAccessFlag::kUnorderedAccess,
 			bgpu::BarrierSyncFlag::kCopy,
 			bgpu::BarrierAccessFlag::kCopySource);
+
+		// A tick's first use of each buffer after the last tick's, which may still be running on
+		// the queue: nothing else orders one list's work after another's.
+		const auto c_ReadToUpload = Transition(
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kShaderResource,
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopyDest);
+		const auto c_CopyToWrite = Transition(
+			bgpu::BarrierSyncFlag::kCopy,
+			bgpu::BarrierAccessFlag::kCopySource,
+			bgpu::BarrierSyncFlag::kComputeShader,
+			bgpu::BarrierAccessFlag::kUnorderedAccess);
 
 		void
 		SetTickParams(bgpu::ComputeKernel& kernel, const TickPlan& plan)
@@ -131,7 +144,6 @@ namespace crowd
 		m_Context(std::move(context)), m_Plan(std::move(desc))
 	{
 		core::ensure(m_Context != nullptr, "A crowd needs a GPU context");
-		const auto& crowdDesc = m_Plan.GetDesc();
 
 		m_Device = bgpu::CreateDevice(m_Context);
 		if (m_Device == nullptr)
@@ -141,6 +153,22 @@ namespace crowd
 		if (m_ResourceManager == nullptr || m_Queue == nullptr)
 			core::throw_runtime_error("The crowd could not create its compute queue");
 		m_ResourceManager->RegisterQueue(m_Queue.Get());
+
+		try
+		{
+			CreateResources();
+		}
+		catch (...)
+		{
+			FreeResources();
+			throw;
+		}
+	}
+
+	void
+	Crowd::CreateResources()
+	{
+		const auto& crowdDesc = m_Plan.GetDesc();
 
 		m_Step       = LoadKernel(*m_Device, "crowd.CSStep");
 		m_Reduce     = LoadKernel(*m_Device, "crowd.CSReduce");
@@ -164,7 +192,9 @@ namespace crowd
 				"Crowd debug agents");
 		}
 
-		m_Slots.resize(crowdDesc.maxTicksInFlight);
+		// One more slot than ticks in flight: CanStep lets a Step start while the last completed
+		// tick's readbacks are still the ones a read returns, so that slot must not be the next.
+		m_Slots.resize(crowdDesc.maxTicksInFlight + 1);
 		auto listDesc = bgpu::CommandListDesc();
 		listDesc.type = bgpu::QueueType::kCompute;
 		for (auto& slot : m_Slots)
@@ -188,24 +218,31 @@ namespace crowd
 	Crowd::~Crowd()
 	{
 		Wait();
+		FreeResources();
+	}
+
+	void
+	Crowd::FreeResources() noexcept
+	{
+		// An owner drains the queues it made before it lets go of them (docs/bgpu.md, Teardown).
+		m_Queue->Flush();
+
 		auto& rm = *m_ResourceManager;
 		for (auto& slot : m_Slots)
 		{
 			Unmap(slot);
-			rm.DestroyReadbackBuffer(slot.sums, false);
+			if (!slot.sums.IsNull())
+				rm.DestroyReadbackBuffer(slot.sums, false);
 			if (!slot.agents.IsNull())
 				rm.DestroyReadbackBuffer(slot.agents, false);
 		}
-		rm.DestroyBuffer(m_Agents[0], false);
-		rm.DestroyBuffer(m_Agents[1], false);
-		rm.DestroyBuffer(m_Sums, false);
-		if (!m_AgentReadback.IsNull())
-			rm.DestroyBuffer(m_AgentReadback, false);
+		for (const auto buffer : { m_Agents[0], m_Agents[1], m_Sums, m_AgentReadback })
+		{
+			if (!buffer.IsNull())
+				rm.DestroyBuffer(buffer, false);
+		}
 		m_Groups.Release(false);
 		m_Ranges.Release(false);
-
-		// An owner drains the queues it made before it lets go of them (docs/bgpu.md, Teardown).
-		m_Queue->Flush();
 		rm.UnregisterQueue(m_Queue.Get());
 	}
 
@@ -377,6 +414,12 @@ namespace crowd
 
 		m_Groups.Assign(plan.groups);
 		m_Ranges.Assign(plan.ranges);
+		list.Barrier(m_Groups.GetBufferHandle(), c_ReadToUpload);
+		list.Barrier(m_Ranges.GetBufferHandle(), c_ReadToUpload);
+		list.Barrier(agents, c_UavToUav);
+		list.Barrier(m_Sums, c_CopyToWrite);
+		if (!m_AgentReadback.IsNull())
+			list.Barrier(m_AgentReadback, c_CopyToWrite);
 		m_Groups.Update(&list);
 		m_Ranges.Update(&list);
 		list.Barrier(m_Groups.GetBufferHandle(), c_UploadToRead);
@@ -392,7 +435,7 @@ namespace crowd
 			m_Step["gUniforms"]["previous"] = previous;
 			m_Step["gUniforms"]["agents"]   = agents;
 			Dispatch(list, m_Step, core::div_ceil(agentCount, c_ThreadsPerGroup));
-			list.Barrier(agents, c_WriteToRead);
+			list.Barrier(agents, c_UavToUav);
 
 			m_Reduce["gUniforms"]["groups"] = m_Groups.GetBufferHandle();
 			m_Reduce["gUniforms"]["agents"] = agents;

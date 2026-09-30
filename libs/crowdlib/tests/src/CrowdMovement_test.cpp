@@ -8,6 +8,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <chrono>
 #include <core/glm.h>
 #include <crowdlib/AgentType.h>
 #include <crowdlib/CrowdDesc.h>
@@ -35,15 +36,15 @@ namespace
 		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
 
 	crowd::CrowdRef
-	MakeCrowd(float velocityInertia = 0.01f)
+	MakeCrowd(float velocityInertia = 0.01f, uint32_t maxAgents = 1000, uint32_t maxGroups = 8)
 	{
 		auto contextDesc             = bgpu::GpuContextDesc();
 		contextDesc.enableDebugLayer = true;
 
 		auto desc                   = crowd::CrowdDesc();
 		desc.agentTypes             = { c_Infantry };
-		desc.maxAgents              = 1000;
-		desc.maxGroups              = 8;
+		desc.maxAgents              = maxAgents;
+		desc.maxGroups              = maxGroups;
 		desc.tickSeconds            = c_Tick;
 		desc.solver.velocityInertia = velocityInertia;
 		desc.debugAgentReadback     = true;
@@ -270,12 +271,46 @@ TEST_CASE("Reports arrive by polling, with ticks in flight and no wait", "[crowd
 	if (early.has_value())
 		CHECK(early->tick <= crowd->GetCompletedTick());
 
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
 	while (crowd->GetCompletedTick() < crowd->GetSubmittedTick())
-	{}
+		REQUIRE(std::chrono::steady_clock::now() < deadline);
 	const auto report = crowd->GetReport(group);
 	REQUIRE(report.has_value());
 	CHECK(report->tick == crowd->GetSubmittedTick());
 	CHECK(report->agentCount == 50);
+}
+
+TEST_CASE("A read made while newer ticks run holds the tick it names", "[crowd][movement]")
+{
+	// A group joins before every tick, so tick t holds t + 1 groups: a read that returned a newer
+	// tick's rows under an older tick's number would miscount. The large group keeps each tick on
+	// the GPU long enough for Steps to land while one is in flight.
+	constexpr uint32_t c_Large = 150000;
+	auto               crowd   = MakeCrowd(0.01f, c_Large + 100, 100);
+	const auto         large   = crowd->CreateGroup(
+		{ .agentType = 0, .agentCount = c_Large, .orders = Orders(glm::vec2(0.0f)) });
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+	while (crowd->GetSubmittedTick() < 60 || crowd->GetCompletedTick() < 60)
+	{
+		REQUIRE(std::chrono::steady_clock::now() < deadline);
+		if (crowd->GetSubmittedTick() < 60 && crowd->CanStep())
+		{
+			static_cast<void>(crowd->CreateGroup(
+				{ .agentType = 0, .agentCount = 1, .orders = Orders(glm::vec2(20.0f)) }));
+			crowd->Step();
+		}
+
+		const auto readback = crowd->ReadDebugAgents();
+		if (!readback.has_value())
+			continue;
+		CHECK(readback->groups.size() == readback->tick + 1);
+		CHECK(readback->agents.size() == c_Large + readback->tick);
+		const auto report = crowd->GetReport(large);
+		REQUIRE(report.has_value());
+		CHECK(report->tick >= readback->tick);
+		CHECK(report->agentCount == c_Large);
+	}
 }
 
 TEST_CASE("The same commands give the same bits on one machine", "[crowd][movement]")
@@ -313,7 +348,13 @@ TEST_CASE("The same commands give the same bits on one machine", "[crowd][moveme
 				firstFrames[i].data(),
 				secondFrames[i].data(),
 				firstFrames[i].size() * sizeof(crowd::debug::AgentReadback)) == 0);
-		CHECK(std::memcmp(&firstSums[i].meanPosition, &secondSums[i].meanPosition, 8) == 0);
-		CHECK(std::memcmp(&firstSums[i].meanFacing, &secondSums[i].meanFacing, 8) == 0);
+		CHECK(
+			std::memcmp(
+				&firstSums[i].meanPosition,
+				&secondSums[i].meanPosition,
+				sizeof(glm::vec2)) == 0);
+		CHECK(
+			std::memcmp(&firstSums[i].meanFacing, &secondSums[i].meanFacing, sizeof(glm::vec2)) ==
+			0);
 	}
 }

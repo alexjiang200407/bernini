@@ -31,8 +31,8 @@ namespace crowd
 	/**
 	 * ICrowd on bgpu's RHI, the same code on every backend: a device, resource manager and compute
 	 * queue of its own on the application's context. Each Step uploads what CrowdPlan laid out and
-	 * records one tick into the ring slot `tick % maxTicksInFlight`, whose readbacks hold that
-	 * tick's reports (and agents) until the slot is recorded into again.
+	 * records one tick into the ring slot `tick % (maxTicksInFlight + 1)`, whose readbacks hold
+	 * that tick's reports (and agents) until the slot is recorded into again.
 	 */
 	class Crowd final : public core::RefCounter<ICrowd>
 	{
@@ -113,6 +113,14 @@ namespace crowd
 			const void* mappedSums   = nullptr;
 			const void* mappedAgents = nullptr;
 		};
+
+		/** Everything made from the device after its queue; on a throw, what was made is released. */
+		void
+		CreateResources();
+
+		/** Drains the queue and frees what CreateResources made, however far it got. */
+		void
+		FreeResources() noexcept;
 
 		void
 		Record(TickSlot& slot, uint64_t tick, const TickPlan& plan);

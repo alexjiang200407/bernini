@@ -41,12 +41,12 @@ void main(uint3 groupId: SV_GroupID, uint3 threadId: SV_GroupThreadID)
     gFacings[thread] = facing;
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint half = c_Threads / 2u; half > 0u; half /= 2u)
+    for (uint stride = c_Threads / 2u; stride > 0u; stride /= 2u)
     {
-        if (thread < half)
+        if (thread < stride)
         {
-            gPositions[thread] += gPositions[thread + half];
-            gFacings[thread] += gFacings[thread + half];
+            gPositions[thread] += gPositions[thread + stride];
+            gFacings[thread] += gFacings[thread + stride];
         }
         GroupMemoryBarrierWithGroupSync();
     }

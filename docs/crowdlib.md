@@ -130,10 +130,10 @@ each refuses; what follows is why it is shaped as it is.
   thread sums a fixed stride of its agents and the sums are halved in a fixed order, so the same
   agents give the same bits. No atomics: D3D12 has no float ones, and their order is the
   scheduler's. `meanFacing` is the orders' front when the agents' facings cancel.
-* **A ring of ticks, never a wait.** Tick `t` records into slot `t % maxTicksInFlight`: its command
-  list, and readbacks of the group sums and (with the debug readback on) every agent. A slot is
-  recorded into again only once its tick has completed, which `CanStep` guarantees, so what a read
-  returns stays valid until then. `GetCompletedTick` polls the queue's fence; nothing but `Wait`
+* **A ring of ticks, never a wait.** Tick `t` records into slot `t % (maxTicksInFlight + 1)`: its
+  command list, and readbacks of the group sums and (with the debug readback on) every agent. The
+  extra slot is the last completed tick's, which reads return while `maxTicksInFlight` newer ticks
+  run, so what a read returns outlives the next `Step`. `GetCompletedTick` polls the queue's fence; nothing but `Wait`
   and teardown blocks.
 * **The contract is a test suite.** `tests/src/Crowd_test.cpp` runs every case against each factory
   in `CrowdFactories`: the fake and the GPU crowd. The cases tagged `[fake]` need what only the fake
