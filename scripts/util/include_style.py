@@ -11,7 +11,7 @@ touched, and the bracket becomes a fact about the header rather than an artefact
 tool wrote the line.
 
 The decision is the resolved path, never the spelling: the same `"util.h"` is core's public
-header from one directory and bgl_extended's internal one from another. Resolution uses the
+header from one directory and bgl's internal one from another. Resolution uses the
 translation unit's own search path out of `compile_commands.json`, in the order the compiler
 would, so a spelling this preset cannot resolve -- a Windows-only header on macOS -- is left
 exactly as it was rather than guessed at.

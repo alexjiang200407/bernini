@@ -1,6 +1,6 @@
 // The whole point of this translation unit is what it does NOT link. It compiles the public surface
-// against bgl alone, so a public header that reaches into libs/bgl_extended/src stops the build here
-// rather than when a second renderer is written.
+// against bgl_headers alone, so a public header that reaches into src/ stops the build here rather
+// than in the first client that includes it.
 //
 // It proves the *include* closure and nothing else: the public surface declares symbols only a
 // renderer defines (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this

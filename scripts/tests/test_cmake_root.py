@@ -64,7 +64,7 @@ def test_the_scan_reaches_the_files_it_claims_to():
     for expected in ("CMakeLists.txt",
                      os.path.join("cmake", "enable_compiler_cache.cmake"),
                      os.path.join("libs", "core", "CMakeLists.txt"),
-                     os.path.join("libs", "bgl_extended", "idl", "CMakeLists.txt"),
+                     os.path.join("libs", "bgl", "idl", "CMakeLists.txt"),
                      os.path.join("apps", "editor", "CMakeLists.txt"),
                      os.path.join("examples", "util", "CMakeLists.txt")):
         assert expected in found

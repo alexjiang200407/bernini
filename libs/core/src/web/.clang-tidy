@@ -5,7 +5,7 @@
 #
 # Turn this off again once the sweep has been run from a preset that builds them
 # (`just build --preset windows-clang-dx12-debug`, then `just tidy libs/core/src/web`), which is
-# the same deferral libs/bgl_extended/src/d3d12 gets. Naming still applies here: it needs no
+# the same deferral libs/bgl/src/d3d12 gets. Naming still applies here: it needs no
 # compile command this preset lacks.
 InheritParentConfig: true
 

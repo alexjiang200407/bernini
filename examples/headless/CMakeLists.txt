@@ -13,7 +13,7 @@ add_library(example_headless STATIC ${EXAMPLE_HEADLESS_SOURCES} ${EXAMPLE_HEADLE
 target_link_libraries(example_headless
     PUBLIC
         core
-        bgl_extended
+        bgl
         gamelib
         assetlib
 )

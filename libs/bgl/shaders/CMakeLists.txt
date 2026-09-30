@@ -12,8 +12,8 @@ if(NOT SLANG_EXECUTABLE)
     message(FATAL_ERROR "Slang compiler not found. Please install Slang and put 'slang' or 'slangc' on PATH.")
 endif()
 
-# The DXC ../CMakeLists.txt found and stages beside the executable, so what validates here is what
-# compiles at runtime.
+# The DXC bgpu found and stages beside the executable, so what validates here is what compiles at
+# runtime.
 set(SLANG_DXC "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>")
 
 set(SLANG_COMPILE_OUTS "")

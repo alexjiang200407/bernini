@@ -10,7 +10,7 @@
 #include <vector>
 
 // What the Mesh Editor's level-of-detail selector lists of a mesh and says Auto draws, pinned without a
-// window or a device. That the level read here is the one the GPU draws is bgl_extended's
+// window or a device. That the level read here is the one the GPU draws is bgl's
 // LodSelect_test, against the same bgl/lod_select.h.
 
 namespace

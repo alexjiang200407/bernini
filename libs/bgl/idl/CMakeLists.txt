@@ -2,7 +2,7 @@
 # idl.<Name>; nothing is copied. What is generated is the C++ mirror, into the build tree, because a
 # struct's layout follows the backend it is generated for, so a committed copy would be right for one
 # and silently wrong for the other.
-set(IDL_SRC_ROOT           "${BERNINI_ROOT}/libs/bgl_extended/shaders/src/idl")
+set(IDL_SRC_ROOT           "${BERNINI_ROOT}/libs/bgl/shaders/src/idl")
 # The offset primitives (Entry, Range ...) and ErrorCode are bgpu's: a module here imports them as
 # siblings, which they are once staged, so the generator searches both.
 set(IDL_BGPU_ROOT          "${BERNINI_ROOT}/libs/bgpu/shaders/src/idl")
@@ -77,7 +77,7 @@ set(IDL_CPP_SOURCES
 # no `bgl::idl` copy of it -- a second, differently-namespaced definition of the same enum is a
 # duplicate waiting to be included by mistake.
 #
-# Keep this list to what a *client* names. An enum only bgl_extended's own passes switch on belongs above,
+# Keep this list to what a *client* names. An enum only bgl's own passes switch on belongs above,
 # however public its consumers feel: a renderer's pipeline permutations are not vocabulary a public
 # interface should carry.
 set(IDL_PUBLIC_CPP_SOURCES

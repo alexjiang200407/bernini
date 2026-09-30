@@ -1,6 +1,17 @@
+# Include hygiene is NOT switched on for the renderer's sources (include/ has its own config, and it
+# is on there), and the reason is their shape.
+#
+# The RHI's interfaces are reached through core::Ref / core::SharedRef, and a caller holds one via
+# `auto`:
+#
+#     auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+#
+# That file needs ICommandQueue complete -- SharedRef dereferences and destroys it inside the
+# template -- while naming nothing include-cleaner can see. So the unused-include half reports
+# <bgpu/cmd/CommandQueue.h>, <bgpu/resource/ResourceManager.h> and <bgpu/cmd/CommandAllocator.h>
+# as unused in dozens of files where deleting them does not compile.
+#
+# The missing-include half is sound and has been applied. Removals here need a human pass over
+# each one and are their own change; until then this subsystem is not gated, in the same way
+# src/d3d12 is not.
 InheritParentConfig: true
-
-# Include hygiene, on for this subsystem. See docs/naming.md; the root config enables it
-# nowhere and each subsystem opts itself in as it is swept.
-Checks: >
-  misc-include-cleaner

@@ -11,7 +11,7 @@
 #include <vector>
 
 // The cull's size test as a tool reads it. That the GPU chooses the same level is
-// bgl_extended_tests' LodSelect_test; this pins the arithmetic with no device.
+// bgl_tests' LodSelect_test; this pins the arithmetic with no device.
 
 namespace
 {

@@ -102,11 +102,11 @@ def report_cache(before, after):
 # --- Linkage ---------------------------------------------------------------
 
 # The engine's own libraries that are a separate file beside the executable in some builds.
-ENGINE_LIBRARIES = ("bgl_extended", "core_process")
+ENGINE_LIBRARIES = ("bgl", "core_process")
 
 
 def library_name(path):
-    """`bgl_extended` for `@rpath/libbgl_extended.dylib` or `bgl_extended.dll`."""
+    """`bgl` for `@rpath/libbgl.dylib` or `bgl.dll`."""
     name = os.path.basename(path).split(".", 1)[0]
     return name[3:] if name.startswith("lib") else name
 

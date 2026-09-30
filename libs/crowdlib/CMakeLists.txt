@@ -107,13 +107,13 @@ if (BUILD_TESTS)
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 	)
 
-	# bgl_extended for the case that runs beside a renderer on the same context; the library itself
+	# bgl for the case that runs beside a renderer on the same context; the library itself
 	# never links it.
 	target_link_libraries(crowdlib_tests
 		PRIVATE
 			crowdlib
 			bgpu
-			bgl_extended
+			bgl
 			core
 			Catch2::Catch2
 			Catch2::Catch2WithMain

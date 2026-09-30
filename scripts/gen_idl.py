@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the C++ headers from the .slang IDL modules.
 
-Drives the built `bgpu_idlgen` tool over the modules in `bgl_extended/shaders/src/idl` -- the
+Drives the built `bgpu_idlgen` tool over the modules in `bgl/shaders/src/idl` -- the
 shaders import those directly; nothing is copied -- writing a C++ header to one of two roots:
       * bgl/include/bgl/<rel>.h  in namespace `bgl`      (IDL_PUBLIC_CPP_SOURCES)
       * <build>/generated/bgl_idl/bgl/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
@@ -12,7 +12,7 @@ A header is written under its output root at the SAME path the module has relati
 the source root, so the import path, the #include and the .h location stay in lockstep
 (see bgpu/idl/idlgen.cpp).
 
-**The two lists are read from `bgl_extended/idl/CMakeLists.txt`, not restated here.**
+**The two lists are read from `bgl/idl/CMakeLists.txt`, not restated here.**
 This must produce byte-for-byte the same tree as the `bgl_idl_generate` CMake
 target, and the only way to guarantee that is to route from the same source. A
 copy of the lists here drifted once already: it emitted a `bgl::idl::PsoType`
@@ -26,7 +26,7 @@ Usage:
     just idl --config Release               # pick a configuration
     just idl --build                        # build bgpu_idlgen first
     just idl --dry-run                      # print commands, don't run
-    just idl libs/bgl_extended/shaders/src/idl/Meshlet.slang  # only these modules
+    just idl libs/bgl/shaders/src/idl/Meshlet.slang  # only these modules
 """
 
 import argparse
@@ -39,10 +39,10 @@ import util.cmake_tools as ct
 import util.config as cfg
 
 TOOL = "bgpu_idlgen"
-SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "shaders", "src", "idl")
-# The offset primitives a module imports as siblings are bgpu's (libs/bgl_extended/idl/CMakeLists.txt).
+SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
+# The offset primitives a module imports as siblings are bgpu's (libs/bgl/idl/CMakeLists.txt).
 BGPU_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgpu", "shaders", "src", "idl")
-# Mirrors libs/bgl_extended/idl/CMakeLists.txt: the private headers are a build artifact, because a
+# Mirrors libs/bgl/idl/CMakeLists.txt: the private headers are a build artifact, because a
 # struct's layout follows the backend it was generated for. Resolved per build dir.
 def layout_args(build_dir):
     """--metal-layout when this build dir was configured for Metal: the C++ mirror follows the
@@ -63,7 +63,7 @@ def cpp_out_dir(tool):
 
 
 PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
-IDL_CMAKE = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "idl", "CMakeLists.txt")
+IDL_CMAKE = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "CMakeLists.txt")
 
 
 def cmake_list(text, name):

@@ -50,7 +50,7 @@ endif()
 target_link_libraries(editor_lib
 	PUBLIC
 		core
-		bgl_extended
+		bgl
 		assetlib
 		gamelib
 		editor_plugin_api

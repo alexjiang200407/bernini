@@ -1,6 +1,6 @@
 # The GPU layer, owned by no renderer: the process's device and the compiler for it, which the
 # application creates and hands to every library that runs work on the device, and the RHI each of
-# them builds its own queues, resource managers and pipelines from -- bgl_extended, and a client that
+# them builds its own queues, resource managers and pipelines from -- bgl, and a client that
 # runs its own compute beside the frame. It names both backends, and it holds process-wide state, so
 # it is built as the renderer is (docs/core_process.md, "Linkage").
 file(GLOB_RECURSE BGPU_SOURCES CONFIGURE_DEPENDS
@@ -16,7 +16,7 @@ list(FILTER BGPU_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 # The backend's half: the device creation, the RHI's implementation, and on Metal the one
 # translation unit that emits metal-cpp's symbols for the whole process. Without a backend only the
-# compiler and the RHI's neutral half are built -- bgl_extended_objects still compiles against them
+# compiler and the RHI's neutral half are built -- bgl_objects still compiles against them
 # -- and CreateGpuContext and CreateDevice have no definition.
 set(BGPU_BACKEND_DIR "")
 if(RENDERER_BACKEND STREQUAL "DX12")
@@ -177,7 +177,6 @@ add_custom_command(
 )
 add_custom_target(bgpu_copy_shaders ALL DEPENDS "${BGPU_SHADER_STAMP}")
 add_dependencies(bgpu bgpu_copy_shaders)
-add_dependencies(bgl_copy_contract_shaders bgpu_copy_shaders)
 
 # Membership: every module here compiles with only this tree on the search path, so an import that
 # reaches into a renderer fails to resolve and stops the build -- what bgpu_selfcheck is for the
@@ -202,7 +201,7 @@ add_custom_target(bgpu_check_shaders ALL DEPENDS ${BGPU_SHADER_CHECKS})
 add_subdirectory(idl)
 
 # The C++ mirrors of bgpu's IDL, generated per backend into the build tree as the renderer's are
-# (libs/bgl_extended/idl/CMakeLists.txt). Only the modules with a concrete
+# (libs/bgl/idl/CMakeLists.txt). Only the modules with a concrete
 # layout: the offset primitives are generics, and their C++ halves are hand-written in include/bgpu/idl.
 set(BGPU_IDL_ROOT "${BGPU_SHADER_ROOT}/idl")
 set(BGPU_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/bgpu_idl")
@@ -243,7 +242,7 @@ add_dependencies(bgpu bgpu_idl_generate)
 target_include_directories(bgpu PUBLIC ${BGPU_IDL_OUT_ROOT} ${BGPU_IDL_OUT_ROOT}/bgpu/idl)
 
 # What this target does NOT link is the point: every public header compiles alone -- no PCH, and
-# bgpu's own closure only -- so one that reaches into the renderer (bgl, bgl_extended) or
+# bgpu's own closure only -- so one that reaches into the renderer (bgl) or
 # leans on an include it never wrote stops the build here, rather than in a compute client that
 # includes it first. A header per translation unit, generated from the glob, so a new header is
 # checked without anyone listing it.

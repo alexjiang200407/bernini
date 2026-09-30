@@ -25,7 +25,7 @@
 
 // What a street's verge of grass costs the grass pass at 4K and the shipped 0.667 render scale: two
 // strips of grass either side of a 71 m street, 82,176 clumps -- the count animal-run's baked
-// street grass carries. Not a test of behaviour: run by hand, `just run bgl_extended_tests --
+// street grass carries. Not a test of behaviour: run by hand, `just run bgl_tests --
 // "[.grasscost]"`, and read the numbers off the warnings it prints. The baked grass it replaces cost
 // 0.82 ms of Forward World on the same machine class (docs/plans/gpu-grass.md, Context).
 

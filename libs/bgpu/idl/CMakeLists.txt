@@ -2,7 +2,7 @@ find_package(slang CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 
 # The generator every IDL tree runs: bgpu's own below, and the renderer's
-# (libs/bgl_extended/idl/CMakeLists.txt). It lives with the lowest of them.
+# (libs/bgl/idl/CMakeLists.txt). It lives with the lowest of them.
 add_executable(bgpu_idlgen
     ${CMAKE_CURRENT_SOURCE_DIR}/idlgen.cpp
 )

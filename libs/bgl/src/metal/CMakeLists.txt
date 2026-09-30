@@ -31,6 +31,6 @@ target_precompile_headers(bgl_metal
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 
 target_link_libraries(bgl_metal
-    PUBLIC bgl bgl_idl bgpu core assetlib_structs glm::glm slang::slang
+    PUBLIC bgl_headers bgl_idl bgpu core assetlib_structs glm::glm slang::slang
     PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore"
 )

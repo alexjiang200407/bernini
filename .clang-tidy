@@ -123,7 +123,7 @@ CheckOptions:
   # it used neither -- so the header a file is *supposed* to include is excluded alongside the
   # library it stands for.
   #
-  # metal-cpp is the same shape again, and libs/bgl_extended/CLAUDE.md already names the way in:
+  # metal-cpp is the same shape again, and libs/bgl/CLAUDE.md already names the way in:
   # `metal_cpp.h` is the umbrella, and MetalImpl.cpp defines the *_PRIVATE_IMPLEMENTATION macros
   # before it to emit the out-of-line symbols exactly once. Left to itself the tool writes 136
   # per-class headers -- <Metal/MTLBuffer.hpp>, <Foundation/NSString.hpp> -- and reports the

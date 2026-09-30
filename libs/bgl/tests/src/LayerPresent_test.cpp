@@ -1,4 +1,4 @@
-// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to
+// bgl_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to
 // exclude itself: a CAMetalLayer is the Metal backend's window.
 #if defined(RENDERER_BACKEND_METAL)
 

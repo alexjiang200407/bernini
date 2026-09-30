@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the parity probe in Blender: a matte grey sphere under Blender's own forest.exr.
 
-The `[parity]` case in bgl_extended_tests renders the same sphere from the same camera under the
+The `[parity]` case in bgl_tests renders the same sphere from the same camera under the
 shipped `forest` environment and compares display luma over the same boxes. The numbers it checks
 against come from this script, so a change to the reference is re-measured here and copied there.
 

@@ -23,7 +23,7 @@
 
 // What blob-shadow discs cost the forward pass by where their volumes lie against the camera, at
 // 3840x2160: a runner's view down its track, with trees' discs on the section behind the camera
-// and on the one ahead. Not a test of behaviour: it is run by hand -- `just run bgl_extended_tests
+// and on the one ahead. Not a test of behaviour: it is run by hand -- `just run bgl_tests
 // -- "[.blobshadowcost]"` -- and the numbers are read off the warnings it prints.
 namespace
 {

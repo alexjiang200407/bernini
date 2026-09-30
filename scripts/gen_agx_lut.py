@@ -11,7 +11,7 @@ backend's texture upload fills a 3D texture yet (docs/plans/agx-lut.md).
 
 Needs numpy, which Blender's Python has and `just init` does not install.
 
-Writes libs/bgl_extended/shaders/src/luts/agx_base_srgb.bin: a 16-byte header (`BLUT`, version 1,
+Writes libs/bgl/shaders/src/luts/agx_base_srgb.bin: a 16-byte header (`BLUT`, version 1,
 size, 0) and size^3 RGBA16F texels in strip order, alpha 1. Re-run when the Blender reference
 changes, and re-measure `AgxCalibration_test`'s sweep with it.
 """
@@ -29,7 +29,7 @@ DEFAULT_OUT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "..",
     "libs",
-    "bgl_extended",
+    "bgl",
     "shaders",
     "src",
     "luts",

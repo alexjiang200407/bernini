@@ -18,7 +18,7 @@ find_package(SDL3 CONFIG REQUIRED)
 target_link_libraries(example_util
     PUBLIC
         core
-        bgl_extended
+        bgl
         SDL3::SDL3
         # RmlInput speaks Context::Process* directly: the engine declares no event type, so the
         # SDL translation lives here beside the window that produces the events.

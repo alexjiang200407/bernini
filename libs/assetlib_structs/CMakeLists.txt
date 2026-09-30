@@ -4,7 +4,7 @@
 # layout. No function lives here, so there is nothing to compile and this is an INTERFACE target --
 # which is what it always was in effect, since its one translation unit was an empty placeholder.
 #
-# The rule is about who can link what. bgl and bgl_extended link this and never assetlib, so a
+# The rule is about who can link what. bgl links this and never assetlib, so a
 # function placed here is one the renderer may call; keeping the surface to data is what makes
 # "the renderer cannot ask a container anything" true rather than merely observed. A question about
 # a container is answered in assetlib -- see the root CLAUDE.md.

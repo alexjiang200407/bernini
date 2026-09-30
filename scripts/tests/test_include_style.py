@@ -20,11 +20,11 @@ import util.include_style as st
 
 @pytest.fixture
 def tree(tmp_path):
-    """A repo-shaped tree, and the search path a file in bgl_extended/src would compile with."""
+    """A repo-shaped tree, and the search path a file in bgl/src would compile with."""
     for relative in [
         "libs/bgl/include/bgl/IScene.h",
-        "libs/bgl_extended/src/types/Rect.h",
-        "libs/bgl_extended/src/scene/Scene.h",
+        "libs/bgl/src/types/Rect.h",
+        "libs/bgl/src/scene/Scene.h",
         "examples/util/DemoWindow.h",
         "build/generated/bgl_idl/bgl/idl/Geom.h",
         "build/vcpkg_installed/include/Metal/MTLBuffer.hpp",
@@ -34,7 +34,7 @@ def tree(tmp_path):
         path.write_text("#pragma once\n", encoding="utf-8")
 
     dirs = [str(tmp_path / d) for d in (
-        "libs/bgl_extended/src",
+        "libs/bgl/src",
         "libs/bgl/include",
         "examples/util",
         "build/generated/bgl_idl",
@@ -43,7 +43,7 @@ def tree(tmp_path):
     return tmp_path, dirs
 
 
-def restyle(tree, text, source="libs/bgl_extended/src/scene/Scene.cpp"):
+def restyle(tree, text, source="libs/bgl/src/scene/Scene.cpp"):
     root, dirs = tree
     return st.restyle(text, str(root / source), dirs, str(root))
 
@@ -56,7 +56,7 @@ def test_a_published_header_is_angled(tree):
 
 
 def test_a_subsystems_own_src_header_is_quoted(tree):
-    """The case that must not move: `types/Rect.h` is bgl_extended's own internals."""
+    """The case that must not move: `types/Rect.h` is bgl's own internals."""
     fixed, changes = restyle(tree, '#include "types/Rect.h"\n')
     assert fixed == '#include "types/Rect.h"\n'
     assert changes == []
@@ -105,7 +105,7 @@ def test_line_endings_and_trailing_comments_survive(tree):
 def test_the_file_is_only_written_when_something_moved(tree):
     """restyle_file returns the changes, and leaves an already-correct file untouched."""
     root, dirs = tree
-    source = root / "libs/bgl_extended/src/scene/Scene.cpp"
+    source = root / "libs/bgl/src/scene/Scene.cpp"
     source.write_text('#include "types/Rect.h"\n', encoding="utf-8")
     before = source.stat().st_mtime_ns
 
