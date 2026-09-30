@@ -67,6 +67,8 @@ namespace bgpu
 				if (completed->status() != MTL::CommandBufferStatusError)
 					return;
 
+				// Metal's completion thread holds no pool, and the description below autoreleases.
+				const auto       pool  = ScopeAutoreleasePool();
 				const NS::Error* error = completed->error();
 				core::error("Metal command buffer failed: {}", GetErrorDescription(error));
 				LogEncoderInfo(error);
@@ -74,6 +76,7 @@ namespace bgpu
 		}
 	}
 
+	// no-pool: reached only from a scope that holds one (CommandList::Open, Flush).
 	MTL::CommandBuffer*
 	CommandQueue::NewCommandBuffer() const noexcept
 	{
@@ -109,6 +112,7 @@ namespace bgpu
 	double
 	CommandQueue::GetTimestampFrequency() const noexcept
 	{
+		const auto pool = ScopeAutoreleasePool();
 		if (m_TimestampFrequency != 0.0)
 		{
 			return m_TimestampFrequency;
@@ -156,18 +160,21 @@ namespace bgpu
 		return m_NextFenceValue++;
 	}
 
+	// no-pool: reads the shared event's value, a scalar.
 	bool
 	CommandQueue::IsFenceComplete(uint64_t fenceValue) noexcept
 	{
 		return m_Event->signaledValue() >= fenceValue;
 	}
 
+	// no-pool: reads the shared event's value, a scalar.
 	uint64_t
 	CommandQueue::PollCurrentFenceValue() noexcept
 	{
 		return m_Event->signaledValue();
 	}
 
+	// no-pool: reads the shared event's value, a scalar.
 	uint64_t
 	CommandQueue::GetLastCompletedFence() const noexcept
 	{
@@ -247,6 +254,7 @@ namespace bgpu
 		InsertWaitForQueueFence(otherQueue, otherQueue->GetNextFenceValue() - 1);
 	}
 
+	// no-pool: reached only from a scope that holds one (CommandList::Open, Flush).
 	void
 	CommandQueue::BeginCommandBuffer(MTL::CommandBuffer* cmdBuffer) noexcept
 	{

@@ -57,7 +57,11 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   device's factories, the resource manager's creates and destroys, the queue's submit and waits,
   `CommandList::Open`..`Close` — and a caller needs no pool of its own: the renderer's net
   (`AutoreleaseNet_metal.h`, in `bgl_extended`) catches nothing from here, and a compute client with
-  no net leaks nothing. `OBJC_DEBUG_MISSING_POOLS=YES` names any that escape. What Metal itself
+  no net leaks nothing. **The build enforces it:** `scripts/build.py` fails on any out-of-line
+  member function under `src/metal` that neither holds a pool nor carries a `// no-pool: <why>`
+  line above it (`scripts/util/autorelease_scope.py`; a file whose every call runs inside another
+  pool says so once with `// no-pool-file: <why>`), and `scripts_tests` runs `bgpu_tests` under
+  `OBJC_DEBUG_MISSING_POOLS=YES` and fails on anything of ours autoreleased with no pool. What Metal itself
   autoreleases on its own completion threads (the device, as a finished command buffer releases
   the resources it held) is outside any code here, and harmless: the device is never freed.
   Committing a command buffer before the pool drains is safe: the driver holds its own reference

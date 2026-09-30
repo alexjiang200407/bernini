@@ -41,6 +41,8 @@
 #include <utility>
 #include <vector>
 
+// no-pool-file: a list is made by Device::CreateCommandList, which holds one, and every other call
+// records between Open and Close, inside the pool Open pushes.
 namespace bgpu
 {
 	namespace

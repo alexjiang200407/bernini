@@ -226,6 +226,7 @@ namespace bgpu
 		}
 	}
 
+	// no-pool: program-cache bytes, or a callback from pipeline construction, which holds one.
 	void
 	ShaderCache::WithArchive(const std::function<void(MTL::BinaryArchive*)>& build)
 	{
@@ -239,12 +240,14 @@ namespace bgpu
 		build(m_Archive.get());
 	}
 
+	// no-pool: program-cache bytes, or a callback from pipeline construction, which holds one.
 	uint64_t
 	ShaderCache::ComputeKey(std::vector<bgpu::ProgramEntryPoint> moduleEntries) const
 	{
 		return m_Programs.ComputeKey(c_Owner, std::move(moduleEntries));
 	}
 
+	// no-pool: program-cache bytes, or a callback from pipeline construction, which holds one.
 	bool
 	ShaderCache::TryLoad(uint64_t key, CachedProgram& out) const
 	{
@@ -264,6 +267,7 @@ namespace bgpu
 		}
 	}
 
+	// no-pool: program-cache bytes, or a callback from pipeline construction, which holds one.
 	void
 	ShaderCache::Store(uint64_t key, const CachedProgram& program) const
 	{

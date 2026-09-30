@@ -1,3 +1,4 @@
+#include "autorelease_scope.h"
 #include <bgpu/metal/MetalErrorChecker.h>
 
 #include <core/err/util.h>
@@ -41,6 +42,7 @@ namespace bgpu
 	bool
 	MetalErrorChecker::ReportError() const
 	{
+		const auto pool = ScopeAutoreleasePool();
 		if (m_Error != nullptr)
 		{
 			core::fatal("Metal operation failed with error: {}", GetErrorDescription(m_Error));
