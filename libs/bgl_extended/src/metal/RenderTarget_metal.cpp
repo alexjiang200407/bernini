@@ -5,15 +5,16 @@
 #include <bgl/IRenderTarget.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
-#include <bgpu/metal/native_device.h>
-#include <bgpu/metal/native_rhi.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/Format.h>
+#include <bgpu/types/NativeObject.h>
+#include <bgpu/types/QueueType.h>
 #include <core/err/util.h>
 #include <cstdint>
 #include <format>
@@ -62,11 +63,20 @@ namespace bgl
 			}
 
 			m_Layer = static_cast<CA::MetalLayer*>(desc.wnd);
-			m_Layer->setDevice(bgpu::GetMtlDevice(m_Device->GetGpuContext()));
+			m_Layer->setDevice(
+				m_Device->GetNativeObject(bgpu::NativeObjectType::kMtlDevice).As<MTL::Device>());
 
 			// Must match the ring's colour format: the present path is a blit, and Metal requires
 			// both sides of one to agree.
 			m_Layer->setPixelFormat(c_BackbufferPixelFormat);
+
+			// The present blit rides a command list of its own, so the queue sets its buffer up to
+			// report a failure as it does every other.
+			auto listDesc      = bgpu::CommandListDesc();
+			listDesc.type      = bgpu::QueueType::kGraphics;
+			m_PresentAllocator = m_Device->CreateCommandAllocator();
+			m_PresentList =
+				m_Device->CreateCommandList(listDesc, m_PresentAllocator, m_ResourceManager);
 
 			// A drawable is a blit destination here, not only an attachment, which framebufferOnly
 			// would forbid.
@@ -115,8 +125,12 @@ namespace bgl
 
 			m_Backbuffers[i].texture = m_ResourceManager->CreateTexture(texDesc);
 			core::ensure(
-				bgpu::GetMtlTexture(*m_ResourceManager, m_Backbuffers[i].texture)->pixelFormat() ==
-					c_BackbufferPixelFormat,
+				m_ResourceManager
+						->GetNativeTexture(
+							m_Backbuffers[i].texture,
+							bgpu::NativeObjectType::kMtlTexture)
+						.As<MTL::Texture>()
+						->pixelFormat() == c_BackbufferPixelFormat,
 				"the present blit needs the layer and the ring in one format");
 
 			auto rtvDesc      = bgpu::RtvDesc();
@@ -365,18 +379,23 @@ namespace bgl
 		if (drawable == nullptr)
 			return;
 
-		const bgpu::TextureHandle src  = m_Backbuffers[m_FrameIndex].texture;
-		MTL::Texture*             from = bgpu::GetMtlTexture(*m_ResourceManager, src);
-		MTL::Texture*             to   = drawable->texture();
+		auto*         from = m_ResourceManager
+		                         ->GetNativeTexture(
+									 m_Backbuffers[m_FrameIndex].texture,
+									 bgpu::NativeObjectType::kMtlTexture)
+		                         .As<MTL::Texture>();
+		MTL::Texture* to   = drawable->texture();
 
 		// Encoded on the renderer's queue, so it is ordered after the frame that filled the ring.
-		MTL::CommandBuffer*      cmd  = bgpu::NewMtlCommandBuffer(*m_Queue);
+		m_PresentList->Open(m_Queue.Get(), m_PresentAllocator.Get());
+		auto* cmd = m_PresentList->GetNativeObject(bgpu::NativeObjectType::kMtlCommandBuffer)
+		                .As<MTL::CommandBuffer>();
 		MTL::BlitCommandEncoder* blit = cmd->blitCommandEncoder();
 		blit->copyFromTexture(from, to);
 		blit->endEncoding();
-
 		cmd->presentDrawable(drawable);
-		cmd->commit();
+		m_PresentList->Close();
+		(void)m_Queue->ExecuteCommandList(m_PresentList.Get());
 	}
 
 	void

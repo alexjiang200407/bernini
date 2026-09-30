@@ -9,6 +9,7 @@
 #include "resource/Texture_d3d12.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/resource/ResourceManager.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
 
@@ -66,6 +67,25 @@ namespace bgpu
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12Resource ?
+			           NativeObject{ GetTexture(handle).GetD3D12Resource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] TextureHandle
+		ImportNativeTexture(
+			NativeObjectType   type,
+			NativeObject       object,
+			const TextureDesc& desc) noexcept override
+		{
+			if (type != NativeObjectType::kD3D12Resource || !object)
+				return {};
+			return CreateTexture(wrl::ComPtr<ID3D12Resource>(object.As<ID3D12Resource>()), desc);
+		}
+
 		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);
 
 		ResourceManager(const ResourceManager&)     = delete;

@@ -6,6 +6,7 @@
 
 #include "gfx/RenderTargetBase.h"
 #include <bgpu/cmd/CommandAllocator.h>
+#include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
@@ -315,6 +316,10 @@ namespace bgl
 		bgpu::DeviceRef          m_Device;
 		bgpu::CommandQueueRef    m_Queue;
 		bgpu::ResourceManagerRef m_ResourceManager;
+
+		// Windowed only: the present blit's own list, recorded once per present.
+		bgpu::CommandAllocatorRef m_PresentAllocator;
+		bgpu::CommandListRef      m_PresentList;
 
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;

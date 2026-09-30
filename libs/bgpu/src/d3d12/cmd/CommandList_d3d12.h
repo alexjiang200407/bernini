@@ -8,6 +8,7 @@
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/ComputeState.h>
 #include <bgpu/types/MeshletState.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -22,6 +23,14 @@ namespace bgpu
 	class CommandList : public core::RefCounter<ICommandList>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12GraphicsCommandList ?
+			           NativeObject{ m_CommandList.Get() } :
+			           NativeObject{};
+		}
+
 		CommandList(
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,

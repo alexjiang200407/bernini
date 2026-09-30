@@ -4,8 +4,11 @@ The Render Hardware Interface (RHI) is `bgpu`'s API-agnostic graphics abstractio
 pure-virtual interfaces (`bgpu::I*`) plus plain-old-data descriptors and state structs, public under
 `libs/bgpu/include/bgpu/`. Two backends implement it — `libs/bgpu/src/d3d12` and `libs/bgpu/src/metal`
 — chosen at configure time by `RENDERER_BACKEND` ([libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt))
-and built into `bgpu` itself. Neither is ever visible to a caller: a backend object is reached only
-through `<bgpu/{d3d12,metal}/native_rhi.h>`, beside the native device accessors.
+and built into `bgpu` itself. Neither is ever visible to a caller, and no RHI header names a backend
+type: what a caller needs of the API underneath -- a swapchain presents on the native queue and adopts
+its backbuffers -- it asks for as nvrhi does, with `GetNativeObject(NativeObjectType)` on the device,
+a queue or a command list, `GetNativeTexture` and `ImportNativeTexture` on the resource manager.
+The answer is an untyped `NativeObject` the caller casts, and null for a type the backend has none of.
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is

@@ -1,6 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 #include <bgpu/device/Device.h>
+#include <bgpu/types/NativeObject.h>
 
 #include "resource/Buffer_metal.h"
 #include "resource/Dsv_metal.h"
@@ -53,6 +54,14 @@ namespace bgpu
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlTexture ?
+			           NativeObject{ GetTexture(handle).GetMTLResource() } :
+			           NativeObject{};
+		}
+
 		ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc);
 
 		[[nodiscard]] MTL::Device*

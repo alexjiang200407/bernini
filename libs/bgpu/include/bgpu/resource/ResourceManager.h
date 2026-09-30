@@ -8,6 +8,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/ClearValue.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 
@@ -221,6 +222,37 @@ namespace bgpu
 		[[nodiscard]]
 		virtual TextureDesc
 		GetTextureDesc(TextureHandle handle) const noexcept = 0;
+
+		/**
+		 * The native texture behind `handle` as `type`, or null when this backend has none of that
+		 * type. Borrowed: destroying the texture ends it.
+		 */
+		[[nodiscard]] virtual NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept
+		{
+			(void)handle;
+			(void)type;
+			return {};
+		}
+
+		/**
+		 * Adopts a texture made outside this manager -- a swapchain's backbuffer -- so it is viewed,
+		 * barriered and destroyed like any other. The manager adds its own reference, and destroying
+		 * the texture releases only that. Null when this backend cannot adopt a `type`.
+		 *
+		 * @pre `desc` describes the object, and `desc.initialLayout` is the layout it is in now.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		ImportNativeTexture(
+			NativeObjectType   type,
+			NativeObject       object,
+			const TextureDesc& desc) noexcept
+		{
+			(void)type;
+			(void)object;
+			(void)desc;
+			return {};
+		}
 
 		[[nodiscard]]
 		virtual const Sampler&

@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgpu/types/NativeObject.h>
 
 #include <bgpu/cmd/CommandQueue.h>
 
@@ -25,6 +26,13 @@ namespace bgpu
 	class CommandQueue final : public core::RefCounter<ICommandQueue>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlCommandQueue ? NativeObject{ m_Queue.get() } :
+			                                                    NativeObject{};
+		}
+
 		explicit CommandQueue(MTL::Device* device);
 
 		uint64_t

@@ -63,10 +63,12 @@ rm->RegisterQueue(queue.Get());
   `bgpu::CreateDevice` on the shared context and makes everything else from that device -- the list
   above is what keeps owners isolated. A resource manager is not tied to a frame loop: queues
   register themselves with it, and its owner calls `CleanupExpiredResources` when it likes. What
-  the RHI cannot say portably the backend headers do --
-  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h),
-  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h), and `native_rhi.h`
-  beside each, through which the renderer's swapchain reaches a queue or a texture.
+  the RHI cannot say portably its objects hand out as `GetNativeObject(NativeObjectType)` -- an
+  untyped pointer, so no RHI header names a backend type ([rhi.md](rhi.md)). The context's device
+  is also reachable without an `IDevice`, through
+  [d3d12/native_device.h](../libs/bgpu/include/bgpu/d3d12/native_device.h) and
+  [metal/native_device.h](../libs/bgpu/include/bgpu/metal/native_device.h), which forward-declare
+  the native type rather than include the SDK.
 * **Its Slang half is staged first.** The offset primitives (`idl.Entry`, `idl.Range` ...), the
   buffer family (`lib.types.EntryBuffer` ...) and the GPU assert channel (`lib.debug.dbg`,
   `idl.ErrorCode`, `idl.DebugRecord`) live under `libs/bgpu/shaders/src` and stage into the one

@@ -3,6 +3,7 @@
 #include <bgpu/api.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/file/file.h>
@@ -77,6 +78,17 @@ namespace bgpu
 		/** The GPU context this device draws on and compiles through. */
 		[[nodiscard]] virtual bgpu::GpuContext&
 		GetGpuContext() const noexcept = 0;
+
+		/**
+		 * This object's native counterpart as `type`, or null when this backend has none of that type.
+		 * Borrowed; see `NativeObject`.
+		 */
+		[[nodiscard]] virtual NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept
+		{
+			(void)type;
+			return {};
+		}
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

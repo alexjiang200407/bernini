@@ -12,7 +12,8 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
   binary. Nothing outside `src/<backend>` includes a backend header (d3d12 or metal-cpp) — what a
-  caller needs of a backend is in `include/bgpu/{d3d12,metal}/native_*.h`.
+  caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
+  an untyped `NativeObject`, so no RHI header names a backend type.
 - **Nothing here names the renderer.** `bgpu_selfcheck` compiles every public header alone, with no
   PCH, against `bgpu` only, so an `#include <bgl/...>` or `<bgl_common/...>` — or an include a header
   leaned on the PCH for — stops the build. `bgpu_check_shaders` does the same for every Slang module

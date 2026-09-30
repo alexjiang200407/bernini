@@ -5,6 +5,7 @@
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/ComputeState.h>
 #include <bgpu/types/MeshletState.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 
 #include <core/ref/RefCounter.h>
@@ -258,6 +259,17 @@ namespace bgpu
 		[[nodiscard]]
 		virtual QueueType
 		GetType() const noexcept = 0;
+
+		/**
+		 * This object's native counterpart as `type`, or null when this backend has none of that type.
+		 * Borrowed; see `NativeObject`. A Metal command buffer exists only while the list is open.
+		 */
+		[[nodiscard]] virtual NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept
+		{
+			(void)type;
+			return {};
+		}
 	};
 
 	using CommandListRef = core::SharedRef<ICommandList>;

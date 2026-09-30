@@ -1,6 +1,7 @@
 #pragma once
 #include <bgpu/GpuContext.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/types/NativeObject.h>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -14,6 +15,13 @@ namespace bgpu
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12Device ? NativeObject{ m_Device.Get() } :
+			                                                NativeObject{};
+		}
+
 		/**
 		 * The RHI device over the context's D3D12 device, compiling through the context's sessions
 		 * and caching in its program cache, when it has one.

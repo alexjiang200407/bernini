@@ -7,7 +7,7 @@ and is a target of its own; nothing here is part of it.
 
 - CMake target: bgl_extended
 - It is compiled to a Dynamic Linked Library.
-- bgl_extended is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: `Graphics_*` and `RenderTarget_*`, in `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any other source here; the backend objects are reached through `<bgpu/{d3d12,metal}/native_*.h>`.
+- bgl_extended is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: `Graphics_*` and `RenderTarget_*`, in `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any other source here; the backend's native objects are reached through the RHI's `GetNativeObject` / `GetNativeTexture` / `ImportNativeTexture`.
 - Put all plain old data inside `./libs/bgl_extended/src/types`
 - PCH is `./libs/bgl_extended/src/pch.h`. Don't `#include` the headers in here.
 - Error Handling: For internal problems, use `core::ensure`. For caller (code that links to bgl_extended) problems, throw an exception so the caller can handle them

@@ -1,5 +1,6 @@
 #pragma once
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <cstdint>
 
@@ -8,6 +9,14 @@ namespace bgpu
 	class CommandQueue : public core::RefCounter<ICommandQueue>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12CommandQueue ?
+			           NativeObject{ m_CommandQueue.Get() } :
+			           NativeObject{};
+		}
+
 		CommandQueue(QueueType type, ID3D12Device* device);
 		~CommandQueue() noexcept override;
 

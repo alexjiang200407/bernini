@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgpu/types/NativeObject.h>
 #include <core/ref/SharedRef.h>
 
 #include <bgpu/cmd/CommandList.h>
@@ -40,6 +41,13 @@ namespace bgpu
 	class CommandList final : public core::RefCounter<ICommandList>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlCommandBuffer ? NativeObject{ m_CmdBuffer.get() } :
+			                                                     NativeObject{};
+		}
+
 		CommandList(
 			const CommandListDesc& desc,
 			ICommandAllocator*     commandAllocator,

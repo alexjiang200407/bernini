@@ -2,8 +2,8 @@
 #include "gfx/frame_constants.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
-#include <bgpu/d3d12/native_rhi.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/types/NativeObject.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -90,7 +90,9 @@ namespace bgl
 
 		wrl::ComPtr<IDXGISwapChain1> swap;
 
-		auto* d3d12CommandQueue = bgpu::GetD3d12CommandQueue(*m_CommandQueue);
+		auto* d3d12CommandQueue =
+			m_CommandQueue->GetNativeObject(bgpu::NativeObjectType::kD3D12CommandQueue)
+				.As<ID3D12CommandQueue>();
 		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
 			d3d12ErrChecker;
 
@@ -121,8 +123,10 @@ namespace bgl
 				wrl::ComPtr<ID3D12Resource> backBuffer;
 				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
-				m_BackBuffers[i].textureHandle =
-					bgpu::ImportD3d12Texture(*m_ResourceManager, backBuffer.Get(), textureDesc);
+				m_BackBuffers[i].textureHandle = m_ResourceManager->ImportNativeTexture(
+					bgpu::NativeObjectType::kD3D12Resource,
+					bgpu::NativeObject{ backBuffer.Get() },
+					textureDesc);
 
 				bgpu::RtvDesc rtvDesc;
 				rtvDesc.format    = bgpu::Format::SBGRA8_UNORM;

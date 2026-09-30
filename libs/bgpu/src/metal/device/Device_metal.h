@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgpu/types/NativeObject.h>
 #include <core/ref/SharedRef.h>
 
 #include <bgpu/GpuContext.h>
@@ -26,6 +27,13 @@ namespace bgpu
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlDevice ? NativeObject{ m_Device.get() } :
+			                                              NativeObject{};
+		}
+
 		/**
 		 * The RHI device over the context's Metal device, compiling through the context's sessions
 		 * and caching in its program cache, when it has one.

@@ -13,7 +13,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/metal/MetalErrorChecker.h>
-#include <bgpu/metal/native_device.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
 #include <span>
@@ -234,7 +234,7 @@ namespace bgl
 		{
 			if (!m_Opts.gpuCapturePath.empty() && m_Capture.Wanted())
 				m_Capture.Begin(
-					bgpu::GetMtlDevice(m_Device->GetGpuContext()),
+					m_Device->GetNativeObject(bgpu::NativeObjectType::kMtlDevice).As<MTL::Device>(),
 					m_Opts.gpuCapturePath);
 
 			m_Context->BeginFrame(target);

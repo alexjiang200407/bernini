@@ -1,4 +1,5 @@
 #pragma once
+#include <bgpu/types/NativeObject.h>
 
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -63,6 +64,17 @@ namespace bgpu
 		 */
 		[[nodiscard]] virtual double
 		GetTimestampFrequency() const noexcept = 0;
+
+		/**
+		 * This object's native counterpart as `type`, or null when this backend has none of that type.
+		 * Borrowed; see `NativeObject`.
+		 */
+		[[nodiscard]] virtual NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept
+		{
+			(void)type;
+			return {};
+		}
 	};
 
 	using CommandQueueRef = core::SharedRef<ICommandQueue>;
