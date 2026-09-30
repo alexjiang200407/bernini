@@ -5,6 +5,7 @@
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
 #include "cmd/TimestampHeap_metal.h"
+#include "native_device_metal.h"
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
@@ -12,7 +13,6 @@
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/device/Device.h>
-#include <bgpu/metal/native_device.h>
 #include <core/ref/SharedRef.h>
 
 #include <bgpu/cmd/CommandList.h>

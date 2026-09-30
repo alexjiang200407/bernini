@@ -1,8 +1,8 @@
 #include "ContextBase.h"
+#include "native_device_d3d12.h"
 #include <atomic>
 #include <bgpu/GpuContext.h>
 #include <bgpu/d3d12/D3d12ErrorChecker.h>
-#include <bgpu/d3d12/native_device.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>

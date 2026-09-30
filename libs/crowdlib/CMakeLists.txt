@@ -1,33 +1,26 @@
 # The crowd simulation's library: compute on a queue of its own, on the device the application's
 # bgpu context owns and the renderer borrows too. It links bgpu, which carries the RHI, and never the
-# renderer; the hash-fill job drives D3D12 and Metal itself from src/d3d12 and src/metal. It shares
-# the context's process-wide state, so it is built as the renderer is (docs/core_process.md,
+# renderer. It shares the context's process-wide state, so it is built as the renderer is (docs/core_process.md,
 # "Linkage"). The editor does not link it. See docs/crowdlib.md.
 file(GLOB_RECURSE CROWDLIB_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
-list(FILTER CROWDLIB_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 file(GLOB_RECURSE CROWDLIB_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/crowdlib/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 )
 
-if(RENDERER_BACKEND STREQUAL "DX12")
-	file(GLOB CROWDLIB_BACKEND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/*.cpp)
-elseif(RENDERER_BACKEND STREQUAL "METAL")
-	file(GLOB CROWDLIB_BACKEND_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/metal/*.cpp)
-else()
+if(NOT RENDERER_BACKEND STREQUAL "DX12" AND NOT RENDERER_BACKEND STREQUAL "METAL")
 	message(FATAL_ERROR "crowdlib needs a device: RENDERER_BACKEND must be DX12 or METAL")
 endif()
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files"
-	FILES ${CROWDLIB_SOURCES} ${CROWDLIB_HEADERS} ${CROWDLIB_BACKEND_SOURCES})
+	FILES ${CROWDLIB_SOURCES} ${CROWDLIB_HEADERS})
 
 add_library(crowdlib ${BERNINI_RENDERER_LIBRARY_TYPE}
 	${CROWDLIB_SOURCES}
 	${CROWDLIB_HEADERS}
-	${CROWDLIB_BACKEND_SOURCES}
 )
 
 if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
@@ -111,10 +104,6 @@ target_include_directories(crowdlib PRIVATE ${CROWDLIB_IDL_OUT_ROOT})
 target_link_libraries(crowdlib PUBLIC bgpu core)
 
 target_precompile_headers(crowdlib PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
-
-if(RENDERER_BACKEND STREQUAL "DX12")
-	target_link_libraries(crowdlib PRIVATE d3d12)
-endif()
 
 # The kernels are compiled at runtime through the context's sessions, which resolve modules from
 # ./shaders/src, so they are staged there -- under crowd/, which no other copier writes. Ordered

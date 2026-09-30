@@ -4,21 +4,20 @@ The crowd simulation's library (`libs/crowdlib`, namespace `crowd`). Every item 
 § Crowd Simulation & Pathfinding is GPU work, and none of it belongs to the renderer's frame, so it
 lives here: on the device the application's `bgpu::GpuContext` owns, compiled through that
 context's Slang sessions, and submitted to a queue the renderer does not know about. Today it holds
-the foundation — one kernel, its buffer and its readback on the async queue — and the crowd:
-`crowd::ICrowd`, created by `crowd::CreateCrowd` on `bgpu`'s RHI, whose agents walk to their
-formation slots but do not yet keep out of each other's way (§ The crowd interface).
+the crowd: `crowd::ICrowd`, created by `crowd::CreateCrowd` on `bgpu`'s RHI, whose agents walk to
+their formation slots but do not yet keep out of each other's way (§ The crowd interface).
 
 ```cpp
 auto context  = bgpu::CreateGpuContext(ctxDesc);
-auto graphics = bgl::CreateGraphics(context, gfxOpts);            // one owner
-auto job      = crowd::CreateHashFillJob(context, { .count = 4096 });  // another
+auto graphics = bgl::CreateGraphics(context, gfxOpts);         // one owner
+auto crowd    = crowd::CreateCrowd(context, crowdDesc);        // another
 
-job->Submit(seed);                    // returns at once
 while (running)
 {
 	graphics->DrawFrame(target, renderJob);
-	if (!job->InFlight())             // polled, never waited on
-		Use(job->GetReadback()), job->Submit(++seed);
+	if (crowd->CanStep())             // polled, never waited on
+		crowd->Step();
+	Use(crowd->GetReport(group));     // the last completed tick's
 }
 ```
 
@@ -27,33 +26,21 @@ while (running)
 * **It links `bgpu`, never the renderer.** `bgpu` carries the RHI the renderer is built on
   ([bgpu.md](bgpu.md) § Design Choices), so a device, a compute queue, pipelines and the buffer
   family of this library's own are one `bgpu::CreateDevice` away, with nothing of `bgl` in the
-  process. The hash-fill job drives each API itself, through `<bgpu/d3d12/native_device.h>` and
-  `<bgpu/metal/native_device.h>`, from `src/d3d12/` and `src/metal/`: the slice of an RHI it wrote
-  before `bgpu` carried one -- a queue, a fence, a pipeline, two buffers.
+  process. crowdlib holds no code per backend.
 * **The async queue is a second queue, on both backends.** On D3D12 it is a
   `D3D12_COMMAND_LIST_TYPE_COMPUTE` queue with a fence. Metal has no compute-typed queue; its form of
   the same thing is a second `MTLCommandQueue`, whose command buffers the GPU may run concurrently
   with every other queue's, with a shared event as its fence. Nothing on either queue waits on the
   other, and the result reaches the CPU by a readback, never through a buffer the renderer reads.
-* **Submit, then poll.** `Submit` records the kernel and the copy into the readback, signals the
-  fence and returns. `GetCompletedFence` reads it without blocking, and `GetReadback` is legal once
-  the fence has passed the submission. One submission is in flight at a time, since there is one
-  readback. Caller misuse throws `std::runtime_error`; nothing here ends the process for it.
-* **Kernels compile through the context's sessions.** `crowd.CSHashFill` is staged under
-  `./shaders/src/crowd/` beside the executable, like every engine module, and loaded with
-  `GpuContext::LoadModule`: DXIL on D3D12, MSL on Metal, compiled at runtime. On D3D12 the build also
-  compiles it to DXIL once, as validation. Where each parameter is bound is read from reflection, not
-  written into the shader: Metal counts a constant buffer and a structured buffer in one
-  `[[buffer(N)]]` space, so a `register(b0)` and a `register(u0)` collide there. The D3D12 root
-  signature is two root parameters — root constants and a root UAV — with no descriptor heap.
-* **The kernel is cached in the context's program cache.** `LoadKernel` keys it under the owner
-  tag `crowd`, and on a hit decodes the code and the two bindings without reaching a Slang session;
-  on a miss it compiles and stores. It skips the Slang front-end only: crowdlib keeps no driver
-  pipeline library, so Metal's MSL compile is paid every run ([shader_cache.md](shader_cache.md)).
+* **Kernels compile through the context's sessions.** `crowd.CSStep`, `crowd.CSReduce` and
+  `crowd.CSReadAgents` are staged under `./shaders/src/crowd/` beside the executable, like every
+  engine module, and built as `bgpu` compute kernels on the crowd's device: DXIL on D3D12, MSL on
+  Metal, compiled at runtime and kept in the context's program cache when it has one. On D3D12 the build also
+  compiles each to DXIL once, as validation.
 * **Built as the renderer is.** It shares the context's process-wide state, so
   `BERNINI_RENDERER_LIBRARY_TYPE` decides its kind as it does `bgpu`'s
-  ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its two exports, `CreateHashFillJob` and `CreateCrowd`. It
-  is in the build-tree package; the editor does not link it.
+  ([core_process.md § Linkage](core_process.md#linkage)), and `CROWD_API` marks its one export,
+  `CreateCrowd`. It is in the build-tree package; the editor does not link it.
 
 ## The crowd interface
 
@@ -102,8 +89,7 @@ each refuses; what follows is why it is shaped as it is.
   renderer's tree: its mirrors belong to `bgl`, which crowdlib does not link.
 * **A formation has one CPU reference.** `SlotPosition` (`src/formation.h`) is where each slot of
   a group stands — ranks front to back, files from the facing's left, the block centred on the goal
-  and each rank across the facing — and the kernels compute the same function, as
-  `HashFillReference` is `CSHashFill`'s CPU half. It is internal: a game orders a formation and
+  and each rank across the facing — and the kernels compute the same function. It is internal: a game orders a formation and
   reads its report, and never needs a slot's position.
 * **One per-agent read, for seeing the crowd.** `ReadDebugAgents` hands back every agent's position
   and facing and each group's range of them, as the last completed tick left them. It is in every
@@ -143,24 +129,19 @@ each refuses; what follows is why it is shaped as it is.
 
 ## Threading & Synchronization
 
-* **One thread**, like the renderer, for a job and a crowd alike. A job compiles on the thread that creates it, which may create
-  that thread's Slang session, so creation keeps `ReleaseSlangSessions`'s precondition; it holds no
-  `slang::` object afterwards.
-* **A job has one submission in flight.** `Submit` while `InFlight()` throws, since the readback it would
-  overwrite is the one the caller has not read yet; so does `GetReadback` before a result exists.
-* **Teardown drains.** The job waits for its own last submission before it drops its context
-  reference ([bgpu.md](bgpu.md) § Threading & Synchronization), and a crowd waits for its ticks in
-  flight (`ICrowd.h`). Neither waits on the renderer's queue, and the renderer never waits on theirs.
-  A crowd allows `CrowdDesc::maxTicksInFlight` ticks at once, and `Step` past them throws.
+* **One thread**, like the renderer. A crowd compiles its kernels on the thread that creates it,
+  which may create that thread's Slang session, so creation keeps `ReleaseSlangSessions`'s
+  precondition; it holds no `slang::` object afterwards.
+* **Teardown drains.** A crowd waits for its ticks in flight before it drops its context reference
+  ([bgpu.md](bgpu.md) § Threading & Synchronization, `ICrowd.h`). It never waits on the renderer's
+  queue, and the renderer never waits on its. A crowd allows `CrowdDesc::maxTicksInFlight` ticks at
+  once, and `Step` past them throws.
 
 ## Verification
 
-`crowdlib_tests` `[render]`: the readback equals `HashFillReference` element for element, over a
-count that is not a multiple of the kernel's group, and a second seed replaces the first result; the
-job runs its queue while a renderer on the same context draws a cube, each polled and neither
-waiting; and a job destroyed mid-flight lets its context go, so the next context can be created.
-`[shadercache]`: the kernel stored once cold, loaded on a fresh context with no entry rewritten, and
-a torn entry compiled again. `[crowd]`: `ICrowd`'s contract, against the fake and the GPU crowd — a group absent from
+`crowdlib_tests` `[render]`: a crowd steps on its queue while a renderer on the same context draws a
+cube, each polled and neither waiting; and a crowd destroyed mid-flight lets its context go, so the
+next context can be created. `[crowd]`: `ICrowd`'s contract, against the fake and the GPU crowd — a group absent from
 every report until a tick that includes it completes, handles refused once released and after their
 slot is reused, capacities and invalid descriptions refused (agent types, the solver, pace,
 obstacles), a split and a merge conserving agents
@@ -175,11 +156,6 @@ turned velocity; a standing group faces its front; a split, a merge and a destro
 further than a tick's walk; reports arrive by polling with ticks in flight; and the same commands
 give the same bits twice. On Metal the suite also runs clean under
 `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1`.
-
-`examples/bgl_async_compute` is the same shape as a program: a cube drawn every frame while the
-kernel runs on the async queue, the fence logged before and after each draw, and every readback's
-checksum against the CPU's. `--frames N` exits non-zero on a mismatch or no readback at all, and
-`--headless` draws offscreen.
 
 `examples/bgl_crowd` draws the crowd: two infantry and two cavalry groups march across a field,
 one box per agent from the debug readback. At tick 60 a group splits off its rear under new orders,

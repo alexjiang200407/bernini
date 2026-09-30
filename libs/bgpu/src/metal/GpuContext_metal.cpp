@@ -1,7 +1,7 @@
 #include "ContextBase.h"
 #include "metal_cpp.h"
+#include "native_device_metal.h"
 #include <bgpu/GpuContext.h>
-#include <bgpu/metal/native_device.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/platform/util.h>

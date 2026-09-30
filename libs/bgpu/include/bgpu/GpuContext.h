@@ -81,9 +81,8 @@ namespace bgpu
 	 * nothing here flushes "the device", because no owner has all of its queues.
 	 *
 	 * The Slang sessions are per thread, created on a thread's first compile and dropped by
-	 * ReleaseSlangSessions, whose precondition is shared by every owner. A backend's native handle
-	 * is reached through that backend's header: bgpu/d3d12/native_device.h,
-	 * bgpu/metal/native_device.h.
+	 * ReleaseSlangSessions, whose precondition is shared by every owner. An owner reaches the
+	 * native device through its own IDevice's GetNativeObject.
 	 */
 	class GpuContext : public core::Ref
 	{

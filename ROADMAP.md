@@ -248,7 +248,7 @@ and portability.
     `bgpu`, whose RHI it shares as classes, never the renderer (`docs/crowdlib.md`).
   - [x] **The async-compute path** — a kernel on a second queue beside the frame, read back to the
     CPU: a compute queue and fence on D3D12, a second `MTLCommandQueue` and a shared event on Metal.
-    `examples/bgl_async_compute` runs it under a rendered cube.
+    `examples/bgl_crowd` runs the crowd on it under the renderer's frame.
   - [ ] **Shared-source kernel harness** — one kernel body per pass, compiled as both a Slang entry
     point and a C++ loop; the IDL codegen is already half of this.
     - [ ] Type shims (`float3`/`clamp`/`lerp`/`saturate`) + macro layer for genuine divergences.
