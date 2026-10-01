@@ -110,10 +110,19 @@ struct Vec3 {
 ```
 
 
-# Fluent setters
+# Descs
 
-A setter that returns its object for chaining takes it as an explicit object parameter, so one
-function serves a named desc and a temporary alike. Never write a `&` / `&&` overload pair.
+A `<Thing>Desc` is the plain data a call takes to make or adopt a `<Thing>`. Name it after what it
+describes, never after the transaction: `NativeBufferDesc`, not `ExportedBuffer`.
+
+A desc has no lifetime of its own. It holds values, handles, pointers the caller keeps alive, or
+shared references to inputs the result keeps too. Anything with a lifetime is a `Ref` or a handle.
+
+Public fields with defaults, and one `Set<Field>` setter per field that returns the object. Setters
+are `noexcept` and never validate; the call that takes the desc does.
+
+Setters take the object as an explicit object parameter, so one function serves a named desc and a
+temporary alike. Never write a `&` / `&&` overload pair.
 
 ```cpp
 template <typename Self>
@@ -124,10 +133,6 @@ SetDebugName(this Self&& self, std::string value) noexcept
 	return std::forward<Self>(self);
 }
 ```
-
-A chain on a named object returns that object; a chain on a temporary stays an rvalue, so it moves
-into whatever takes it. A setter that delegates to another forwards too:
-`return std::forward<Self>(self).SetName(...)`.
 
 # Macros
 
