@@ -36,6 +36,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ranges>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -131,10 +132,9 @@ namespace bgpu
 		{
 			if (a.colorAttachments.size() != b.colorAttachments.size())
 				return false;
-			for (size_t i = 0; i < a.colorAttachments.size(); ++i)
+			for (const auto& [lhs, rhs] : std::views::zip(a.colorAttachments, b.colorAttachments))
 			{
-				if (a.colorAttachments[i].idx != b.colorAttachments[i].idx ||
-				    a.colorAttachments[i].generation != b.colorAttachments[i].generation)
+				if (lhs.idx != rhs.idx || lhs.generation != rhs.generation)
 					return false;
 			}
 			return a.depthAttachment.idx == b.depthAttachment.idx &&

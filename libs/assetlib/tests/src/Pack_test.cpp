@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <ranges>
 #include <vector>
 
 #include "CacheTamper.h"
@@ -408,8 +409,8 @@ TEST_CASE("pack bakes down a grown rig's re-addressing", "[pak][remap]")
 		skeleton.bones.push_back(grip);
 
 		const auto binds = bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, binds))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		store.Save(skeleton, "Derived/Skeletons/unit.glb-0000000000000001.bskel");
 	}

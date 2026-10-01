@@ -12,6 +12,7 @@
 #include <ios>
 #include <iostream>
 #include <map>
+#include <ranges>
 #include <set>
 #include <slang-com-ptr.h>
 #include <slang.h>
@@ -1193,11 +1194,9 @@ main(int argc, char** argv)
 			externRoots.emplace_back(fs::absolute(spec.substr(0, eq)), spec.substr(eq + 1));
 			searchPaths.push_back(externRoots.back().first.string());
 		}
-		std::vector<const char*> searchPathPtrs;
-		for (const std::string& p : searchPaths)
-		{
-			searchPathPtrs.push_back(p.c_str());
-		}
+		const auto searchPathPtrs =
+			searchPaths | std::views::transform([](const std::string& p) { return p.c_str(); }) |
+			std::ranges::to<std::vector>();
 
 		slang::SessionDesc session{};
 		session.targets         = &target;

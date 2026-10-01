@@ -5,6 +5,7 @@
 #include <headless/PassCosts.h>
 #include <optional>
 #include <ostream>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,11 +49,10 @@ namespace headless
 			return a.median > b.median;
 		});
 
-		std::vector<double> totals;
-		for (std::size_t sample = 0; sample < history.SampleCount(); ++sample)
-		{
-			totals.push_back(history.TotalAt(sample));
-		}
+		auto totals =
+			std::views::iota(std::size_t{ 0 }, history.SampleCount()) |
+			std::views::transform([&](std::size_t sample) { return history.TotalAt(sample); }) |
+			std::ranges::to<std::vector>();
 		if (!totals.empty())
 			costs.frame = Summarise("frame", std::move(totals));
 

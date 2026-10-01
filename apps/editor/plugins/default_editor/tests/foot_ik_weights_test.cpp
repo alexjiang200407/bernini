@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <ranges>
 
 // The Animation panel's IK weight sliders, lifted clear of the window: what a slider commits is a
 // constant record on every leg, because the panel's clock wraps and a ramp in it would never hold.
@@ -35,10 +36,10 @@ TEST_CASE("Full sliders are the default record", "[animation][footik]")
 		CHECK(a.start == b.start);
 		CHECK(a.end == b.end);
 	};
-	for (size_t i = 0; i < desc.leg.size(); ++i)
+	for (const auto& [leg, freshLeg] : std::views::zip(desc.leg, fresh.leg))
 	{
-		same(desc.leg[i].position, fresh.leg[i].position);
-		same(desc.leg[i].rotation, fresh.leg[i].rotation);
+		same(leg.position, freshLeg.position);
+		same(leg.rotation, freshLeg.rotation);
 	}
 }
 

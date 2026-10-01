@@ -23,6 +23,7 @@
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -460,11 +461,8 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 	CHECK(report->count == 2);
 	CHECK_FALSE(report->overflow);
 
-	auto raised = std::vector<uint32_t>();
-	for (const auto& record : report->records)
-	{
-		raised.push_back(record.errcode);
-	}
+	const auto raised = report->records | std::views::transform(&bgpu::idl::DebugRecord::errcode) |
+	                    std::ranges::to<std::vector>();
 
 	CHECK(
 		std::count(

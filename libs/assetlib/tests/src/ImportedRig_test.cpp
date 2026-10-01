@@ -36,6 +36,7 @@
 #include <fstream>
 #include <ios>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -452,8 +453,8 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		grown.bones.push_back(grip);
 
 		const auto binds = assetlib::bindPoseModelTransforms(grown);
-		for (size_t i = 0; i < grown.bones.size(); ++i)
-			grown.bones[i].inverseBind = glm::inverse(binds[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(grown.bones, binds))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		// The project now holds only the grown rig, which is what an editor append leaves behind.
 		SaveAt(grown, root.Bskel());

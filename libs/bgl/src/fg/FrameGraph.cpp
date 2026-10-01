@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <ranges>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -690,13 +691,8 @@ namespace bgl
 	{
 		const std::vector<size_t>& order = m_Scheduler.Order();
 
-		std::vector<std::string> names;
-		names.reserve(order.size());
-		for (const size_t p : order)
-		{
-			names.push_back(m_Passes[p].desc.name);
-		}
-		return names;
+		return order | std::views::transform([&](size_t p) { return m_Passes[p].desc.name; }) |
+		       std::ranges::to<std::vector>();
 	}
 
 	bool

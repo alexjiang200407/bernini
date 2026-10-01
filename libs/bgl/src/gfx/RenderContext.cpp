@@ -54,6 +54,7 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -416,12 +417,9 @@ namespace bgl
 		{
 			spdlog::error("{}", msg);
 
-			std::vector<uint32_t> errcodes;
-			errcodes.reserve(report->records.size());
-			for (const bgpu::idl::DebugRecord& rec : report->records)
-			{
-				errcodes.push_back(rec.errcode);
-			}
+			auto errcodes = report->records |
+			                std::views::transform(&bgpu::idl::DebugRecord::errcode) |
+			                std::ranges::to<std::vector>();
 
 			GpuAssertionReport pub;
 			pub.raisedCount = report->count;

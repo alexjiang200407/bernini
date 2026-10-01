@@ -39,6 +39,7 @@
 #include <ios>
 #include <iterator>
 #include <map>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -217,8 +218,8 @@ TEST_CASE("migrate discards stale geometry no import document owns", "[migrate][
 		std::array{ std::string("Derived/Meshes/unit.glb-952d395a7e24a405.bmesh"),
 		            std::string("Derived/Skeletons/unit.glb-952d395a7e24a405.bskel"),
 		            std::string("Derived/Animations/unit.glb-952d395a7e24a405.banim") };
-	for (size_t i = 0; i < orphans.size(); ++i)
-		std::filesystem::copy_file(project.root / owned[i], project.root / orphans[i]);
+	for (const auto& [ownedKey, orphan] : std::views::zip(owned, orphans))
+		std::filesystem::copy_file(project.root / ownedKey, project.root / orphan);
 
 	const auto discarded = [](const MigrateReport& report) {
 		auto names = std::vector<std::string>();
@@ -339,8 +340,8 @@ TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migr
 		skeleton.bones.push_back(grip);
 
 		const auto binds = bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, binds))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		AssetStore(project.root).Save(skeleton, importOutputKey(identity, AssetType::kSkeleton));
 	}

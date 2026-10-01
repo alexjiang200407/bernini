@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <tuple>
@@ -556,6 +557,6 @@ TEMPLATE_LIST_TEST_CASE(
 	static_cast<void>(crowd->GetCompletedTick());
 	static_cast<void>(crowd->GetReport(kept));
 	REQUIRE(readback->agents.size() == agents.size());
-	for (size_t i = 0; i < agents.size(); ++i)
-		CHECK(readback->agents[i].position == agents[i].position);
+	for (const auto& [got, want] : std::views::zip(readback->agents, agents))
+		CHECK(got.position == want.position);
 }

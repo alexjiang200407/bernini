@@ -13,6 +13,7 @@
 #include <cstring>
 #include <filesystem>
 #include <memory>
+#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -123,11 +124,11 @@ namespace
 		CHECK(mounted.vkFormat == direct.vkFormat);
 
 		REQUIRE(mounted.subresources.size() == direct.subresources.size());
-		for (size_t i = 0; i < direct.subresources.size(); ++i)
+		for (const auto& [got, want] : std::views::zip(mounted.subresources, direct.subresources))
 		{
-			CHECK(mounted.subresources[i].offset == direct.subresources[i].offset);
-			CHECK(mounted.subresources[i].rowPitch == direct.subresources[i].rowPitch);
-			CHECK(mounted.subresources[i].slicePitch == direct.subresources[i].slicePitch);
+			CHECK(got.offset == want.offset);
+			CHECK(got.rowPitch == want.rowPitch);
+			CHECK(got.slicePitch == want.slicePitch);
 		}
 
 		CHECK(SamePixels(mounted, direct));

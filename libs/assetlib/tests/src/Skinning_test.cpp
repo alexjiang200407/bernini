@@ -22,6 +22,7 @@
 #include <cstring>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <utility>
@@ -526,8 +527,8 @@ TEST_CASE("The posed box holds every vertex the exact walk finds", "[skinning][b
 	skeleton.bones.push_back(elbow);
 
 	const std::vector<glm::mat4> bind = bindPoseModelTransforms(skeleton);
-	for (size_t i = 0; i < skeleton.bones.size(); ++i)
-		skeleton.bones[i].inverseBind = glm::inverse(bind[i]);
+	for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, bind))
+		bone.inverseBind = glm::inverse(bindModel);
 
 	// Thirds, not halves: 65535 is odd, so two quantized halves sum to 1.0000305 and the exact walk
 	// blends fractionally past the hull the box is built to hold. Thirds divide 65535 exactly, which
@@ -952,8 +953,8 @@ namespace
 		}
 
 		const std::vector<glm::mat4> model = bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(model[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, model))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		return skeleton;
 	}

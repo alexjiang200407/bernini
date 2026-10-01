@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -125,11 +126,10 @@ namespace assetlib
 	std::vector<std::string>
 	skeletonBoneNames(const Skeleton& skeleton)
 	{
-		auto names = std::vector<std::string>();
-		names.reserve(skeleton.bones.size());
-		for (const Bone& bone : skeleton.bones)
-			names.emplace_back(skeleton.stringPool.at(bone.nameOffset));
-		return names;
+		return skeleton.bones | std::views::transform([&](const Bone& bone) {
+				   return std::string(skeleton.stringPool.at(bone.nameOffset));
+			   }) |
+		       std::ranges::to<std::vector>();
 	}
 
 	bool
@@ -424,8 +424,8 @@ namespace assetlib
 				skeleton.bones.size());
 
 		std::vector<glm::mat4> skinning(skeleton.bones.size());
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skinning[i] = modelTransforms[i] * skeleton.bones[i].inverseBind;
+		for (auto&& [out, model, bone] : std::views::zip(skinning, modelTransforms, skeleton.bones))
+			out = model * bone.inverseBind;
 
 		return skinning;
 	}
